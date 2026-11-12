@@ -38,13 +38,17 @@ Read it instead of guessing.
 Two path groups need attention:
 
 - `docs/**`, `scripts/**`, and the root lint, format, and tsconfig files select the `Tooling and docs` leg.
-  They do not select the App Server leg.
-- `package.json` or `pnpm-lock.yaml` select every source leg.
+  Some shared inputs also select server checks. Read each filter that matches the diff.
+- `package.json` or `pnpm-lock.yaml` select every source quality leg.
 
-A PR outside the [light tier](../../../docs/contributor/ci-cd.mdx#light-tier-for-stacked-layers) runs the fast tier, with the `review` integration shard.
-Those PRs also run the database tests and drills when migrations change.
-The merge queue runs the other integration shards, database tests, drills and browser suites for every change.
-Use the `ci:full` label to reproduce a queue-tier failure
+A PR outside the [light tier](../../../docs/contributor/ci-cd.mdx#light-tier-for-stacked-layers) uses the fast tier.
+For PRs and merge groups, `application-server` or `test-config` must match to select server suites.
+A selected PR runs `review`. A selected merge group also runs the numbered integration shards.
+Database tests, drills and browser suites have their own path conditions.
+Migration changes also select database tests and drills on PRs outside the light tier.
+
+Use the `ci:full` label to reproduce a queue-tier failure.
+It enables the queue tier but keeps path selection
 ([Two verification tiers](../../../docs/contributor/ci-cd.mdx#two-verification-tiers)).
 
 Reconcile changed dependency inputs before local gates.

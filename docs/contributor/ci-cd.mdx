@@ -754,16 +754,23 @@ action does not persist configuration-cache entries across jobs.
 
 ## Two verification tiers
 
-A pull request runs the **fast tier**. A merge group, a push and a dispatch also run the **queue tier**.
+A pull request outside the [light tier](#light-tier-for-stacked-layers) uses the **fast tier**.
+A merge group, a push and a dispatch also enable the **queue tier**.
 `detect-changes` publishes the decision once as `queue-tier`, and each queue-tier job adds it to its path condition.
-The integration job adds it for every shard except `review`.
+The numbered integration shards require the queue tier. The `review` shard does not.
 
-| Tier | Jobs |
+The table lists eligible jobs. Path filters and event guards still select which jobs run.
+
+| Tier | Eligible jobs |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Fast (pull request and queue) | Changes, Quality, Unit, Architecture ([migration exception](#migration-checks-on-prs)), `review`, packaging, generated-artifact drift, [images](#the-preview-label), Security, Release notes, Workflow lint |
 | Queue (merge group, push, dispatch) | Numbered integration shards, Webapp and Extension browser suites, Database migrations, PostgreSQL drills ([migration exception](#migration-checks-on-prs)) |
 
-Path filters and the main-push rules in [Path filters](#path-filters) still select within each tier.
+[Path filters](#path-filters) and the main-push rules still select within each tier.
+For PRs and merge groups, the application-server or test-config filter must match for `server-tests` to select server suites.
+The light tier skips those suites. Thus, a docs-only diff that matches neither filter runs no `review` or numbered integration shard.
+Database tests, drills and browser suites have their own path conditions.
+
 Kubernetes qualification stays on same-repository pull requests, because it boots this run's own images. A draft does not select it.
 
 The drills of the latest-minor `amd64` Kubernetes leg run on the pull request's own head and each night on `main`, not in the merge group:
@@ -780,7 +787,7 @@ The drills of the latest-minor `amd64` Kubernetes leg run on the pull request's 
 
 The `review` shard holds `ReviewEndToEndIntegrationTest`: one review of a real pull request, from its request to its admitted results.
 Only the sandbox container and the model provider are stubbed.
-Each pull request that changes the server runs it.
+It runs when the server suites are selected under the tier and path rules above.
 A change to capture, the gateway, the proxy or admission can stop every review while each unit test still passes.
 The stub fixes the model's judgement, its read receipts and its coverage, so the test does not check how the runner derives them.
 
@@ -798,7 +805,8 @@ Main changes only through the merge queue, and the queue runs the required check
 bors and Prow's Tide apply the same rule. They test the merge candidate and advance the branch only when it passes
 ([Rust forge: bors and rollups](https://forge.rust-lang.org/release/rollups.html),
 [Tide](https://docs.prow.k8s.io/docs/components/core/tide/maintainers/)).
-Thus, the queue tier guards main for every change, and a pull request does not repeat it.
+The merge group runs the selected queue-tier checks before main advances.
+A PR normally defers those checks. `ci:full` and the [migration exception](#migration-checks-on-prs) select them earlier.
 
 Google's presubmit applies the same split. It runs only fast, reliable tests before submission and the larger tests after
 ([Software Engineering at Google, ch. 23](https://abseil.io/resources/swe-book/html/ch23.html)).
@@ -810,16 +818,17 @@ A queue-tier failure removes the entry from the queue, and the failure comment l
 So does an image build or scan failure, because a pull request builds images only for the `preview` label, Kubernetes qualification or release evidence.
 Fix the failure and queue the pull request again.
 
-A draft pull request runs the fast tier and builds no image. So it gets no cluster qualification and no image
-scan. The `preview` label still builds its images, and a release candidate always builds its evidence.
+A draft pull request keeps its selected tier.
+Without `preview` or release evidence, it builds no image and gets no cluster qualification or image scan.
+The [image selection rules](#the-preview-label) apply to drafts too.
 
 `ci:full` selects the queue tier on a draft too.
 `CI Status Gate` still reports, so required checks resolve on a draft.
 Marking the pull request ready for review (`ready_for_review`) starts an ordinary pull-request run,
 with the images that such a run builds ([The `preview` label](#the-preview-label)). That run is never skipped as a duplicate of the draft's run.
 
-A re-run replays the event of its run, so a re-run of a draft's run builds no image, even after
-the pull request is ready. Re-run the ready run instead.
+A re-run replays the event of its run, including the draft state.
+Re-run the ready run to use its ready state.
 
 Changes to workflows, build scripts, shard durations or browser tests do not select the full queue tier on a pull request.
 The merge group checks the complete selected queue tier before the change reaches `main`.
@@ -840,6 +849,7 @@ The Database tier and `review` do not replace those classes. An explicit full ru
 ### Reproduce a queue-tier failure
 
 Use `ci:full` to reproduce a queue-tier failure on the pull request.
+It enables the queue tier but keeps path selection.
 It is not the default for a workflow or migration change. Remove the label after the reproduction.
 Then push, or use **Re-run all jobs** on the latest CI/CD run.
 
@@ -866,11 +876,13 @@ should have caught. Then run the queue tier on pull requests again: change `queu
 ### Light tier for stacked layers
 
 A layer of a stack is a pull request whose base is another pull request's branch.
-It never merges on its own: it enters the queue as part of its stack, and the merge group runs everything.
+It never merges on its own: it enters the queue as part of its stack.
+The merge group runs the checks selected for the combined diff.
+
 Thus, such a layer runs the **light tier**: `Changes`, the quality legs except Windows and Webapp stories, Security, Release notes and Workflow lint.
 These are format, lint, types, prose and the quality legs' own tests.
 It packages no server, so it runs no server suite, no artifact gate, no image build and no cluster leg.
-`CI Status Gate` passes on that result.
+`CI Status Gate` evaluates the selected checks.
 
 `Changes` reads the base from the pull request when it runs, not from the event, and publishes `light-tier`.
 The `ci:full` label runs the full tier on a layer too.
@@ -1243,7 +1255,9 @@ Right after a merge, that run is still building, so the pull request builds ever
 
 ### Integration shards
 
-The `review` shard holds `ReviewEndToEndIntegrationTest`, which the fast tier also runs.
+The `review` shard holds `ReviewEndToEndIntegrationTest`.
+The [tier and path rules](#two-verification-tiers) select it and the numbered shards.
+
 The numbered shards split every other integration class by the seconds that it took.
 Gradle sorts the classes from the longest to the shortest and puts each class on the shard with the least total so far.
 A class without recorded seconds, such as a new class, goes to shard `hash(class) mod n + 1`.
@@ -1261,10 +1275,11 @@ A test that relies on a row of an earlier test would then fail in some unrelated
 When a shard drifts towards its timeout, refresh the seconds from a recent merge group with
 `node scripts/integration-test-durations.ts refresh <run-id>`.
 The command keeps the mean of each class's committed and measured seconds and drops classes that no longer ran.
-The Architecture selection check verifies the partition on the pull request. The merge group runs every shard with the new partition.
+When selected, the Architecture check verifies the partition on the pull request.
+A merge group with selected server suites runs every shard with the new partition.
 
 `vp run test:server:selection` proves that `review` and the numbered shards hold each integration test exactly once.
-The merge group runs every shard, so a partition never removes a test from it.
+When server suites are selected, the merge group runs every shard, so a partition never removes a test from that run.
 Each shard's job summary lists its classes and their seconds.
 To repeat a failure locally, run its class with `--tests`, or run the shard with `HEPHAESTUS_INTEGRATION_SHARD=<n>`.
 
