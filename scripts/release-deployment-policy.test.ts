@@ -16,12 +16,15 @@ const reconciler = readFileSync("scripts/reconcile-deployment.ts", "utf8");
 const upgradeDrill = readFileSync("scripts/release-upgrade-test.ts", "utf8");
 
 const upgrade = readFileSync(".github/workflows/release-upgrade.yml", "utf8");
+const publicationNeeds = asStringArray(
+	at(parseDocument(release).toJS(), ["jobs", "publish-release", "needs"], "release workflow"),
+	"publication dependencies",
+);
 
 await test("release publication requires the seeded upgrade gate", () => {
-	assert.match(
-		release,
-		/publish-release:\n\s+needs: \[release, tag-images, upgrade-test, k3s-host-smoke\]/u,
-	);
+	for (const dependency of ["release", "tag-images", "upgrade-test"]) {
+		assert.ok(publicationNeeds.includes(dependency), `publication must require ${dependency}`);
+	}
 	assert.match(release, /previous-version: \$\{\{ needs\.release\.outputs\.previous_version \}\}/u);
 	assert.match(upgrade, /INPUT_PREVIOUS_VERSION: \$\{\{ inputs\.previous-version \}\}/u);
 	assert.match(
@@ -207,7 +210,10 @@ await test("release publication requires native k3s smokes and receipts for both
 	assert.match(smoke, /architecture: arm64\n\s+runner: ubuntu-24\.04-arm/u);
 	assert.match(smoke, /kubernetes-cluster\.ts release-smoke/u);
 	assert.match(smoke, /--receipt "\$RUNNER_TEMP\/host-smoke-k3s-\$ARCHITECTURE\.json"/u);
-	assert.match(release, /needs: \[release, tag-images, upgrade-test, k3s-host-smoke\]/u);
+	assert.ok(
+		publicationNeeds.includes("k3s-host-smoke"),
+		"publication must require native host smokes",
+	);
 	assert.match(release, /gh release upload "\$TAG_NAME" host-smoke-k3s\/\*\.json/u);
 	assert.doesNotMatch(release, /docker compose|supported-host-smoke:|sandbox-isolation-probe\.ts/u);
 });
