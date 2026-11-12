@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -20,6 +21,17 @@ import org.jspecify.annotations.Nullable;
  * @see de.tum.cit.aet.hephaestus.integration.core.webhook.IntegrationKindRouting the HTTP-path router
  */
 public final class ConsumerSubjectMath {
+
+    private static final Set<String> INSTALLATION_CONTROL_EVENTS =
+            Set.of("installation", "installation_repositories", "installation_target");
+
+    /** Control events can create or repair a connection; work events must pass its ACTIVE admission fence. */
+    public static boolean isInstallationControlSubject(String subject) {
+        int event = subject.lastIndexOf('.');
+        return subject.startsWith("github.")
+                && event >= 0
+                && INSTALLATION_CONTROL_EVENTS.contains(subject.substring(event + 1));
+    }
 
     /** Subject-prefix allow-list — the kinds that publish to JetStream. */
     private static final Map<String, IntegrationKind> PREFIX_TO_KIND = Map.of(

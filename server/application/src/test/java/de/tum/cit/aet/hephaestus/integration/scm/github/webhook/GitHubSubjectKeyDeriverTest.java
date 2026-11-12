@@ -1,12 +1,16 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.webhook;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Objects;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -33,7 +37,7 @@ class GitHubSubjectKeyDeriverTest extends BaseUnitTest {
 
     @Test
     void buildsInstallationSubjectWhenNeitherPresent() throws Exception {
-        JsonNode payload = objectMapper.readTree("{}");
+        JsonNode payload = fixture("installation.created.json");
         String subject = deriver.deriveSubject(payload, Map.of("X-GitHub-Event", "installation"));
 
         assertThat(subject).isEqualTo("github.?.?.installation");
@@ -66,9 +70,44 @@ class GitHubSubjectKeyDeriverTest extends BaseUnitTest {
 
         assertThat(deriver.deriveSubject(payload, Map.of("X-GitHub-Event", "issues")))
                 .isEqualTo("github.acme.web.issues");
-        // `repositories` / `installation_repositories` must NOT be caught by the prefix-free match.
-        assertThat(deriver.deriveSubject(payload, Map.of("X-GitHub-Event", "installation_repositories")))
-                .isEqualTo("github.acme.web.installation_repositories");
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "installation.created.json",
+                "installation.deleted.json",
+                "installation.deleted-empty.json",
+                "installation.suspend.json",
+                "installation.unsuspend.json",
+                "installation_repositories.added.json",
+                "installation_repositories.removed.json",
+                "installation_target.json",
+                "installation_target_no_changes.json",
+                "installation_target_user.json"
+            })
+    void acceptsTheProvidersInstallationControlPayloads(String file) throws Exception {
+        String event =
+                file.startsWith("installation_target") ? "installation_target" : file.substring(0, file.indexOf('.'));
+        assertThat(deriver.deriveSubject(fixture(file), Map.of("X-GitHub-Event", event)))
+                .startsWith("github.")
+                .endsWith("." + event);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"issues.opened.json", "pull_request.opened.json", "push.json"})
+    void refusesWorkPayloadsRetaggedWithAnUnsignedInstallationControlHeader(String file) throws Exception {
+        JsonNode payload = fixture(file);
+        for (String event : new String[] {"installation", "installation_repositories", "installation_target"}) {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> deriver.deriveSubject(payload, Map.of("X-GitHub-Event", event)));
+        }
+    }
+
+    private JsonNode fixture(String file) throws Exception {
+        try (var input = Objects.requireNonNull(getClass().getResourceAsStream("/github/" + file))) {
+            return objectMapper.readTree(input);
+        }
     }
 
     @Test

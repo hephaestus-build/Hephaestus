@@ -937,15 +937,17 @@ export type ConsentStatus = {
 	researchOrganization?: string;
 };
 
+/**
+ * A provider event that failed for good: its provider, why, and whether someone replayed it.
+ */
 export type ConsumerDeadLetter = {
 	errorClass: string;
 	failedAt: string;
 	id: number;
+	provider: string;
 	receivedAt: string;
 	replayedAt?: string;
 	replayedBy?: number;
-	sequence: number;
-	stream: string;
 };
 
 /**

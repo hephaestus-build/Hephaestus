@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.workspace.adapter;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ConsumerSubjectMath;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -12,8 +12,11 @@ import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,7 +34,7 @@ public class WorkspaceEventSubscriptions implements ProviderEventSubscriptions {
     private final WorkspaceRepository workspaceRepository;
     private final RepositoryToMonitorRepository monitors;
     private final WorkspaceScopeFilter workspaceScopeFilter;
-    private final ConnectionService connectionService;
+    private final ConnectionRepository connections;
     private final boolean outlineEnabled;
     private final boolean slackEnabled;
     private final boolean gitlabEnabled;
@@ -40,14 +43,14 @@ public class WorkspaceEventSubscriptions implements ProviderEventSubscriptions {
             WorkspaceRepository workspaceRepository,
             RepositoryToMonitorRepository monitors,
             WorkspaceScopeFilter workspaceScopeFilter,
-            ConnectionService connectionService,
+            ConnectionRepository connections,
             @Value("${hephaestus.integration.outline.enabled:false}") boolean outlineEnabled,
             @Value("${hephaestus.integration.slack.enabled:false}") boolean slackEnabled,
             @Value("${hephaestus.integration.gitlab.enabled:false}") boolean gitlabEnabled) {
         this.workspaceRepository = workspaceRepository;
         this.monitors = monitors;
         this.workspaceScopeFilter = workspaceScopeFilter;
-        this.connectionService = connectionService;
+        this.connections = connections;
         this.outlineEnabled = outlineEnabled;
         this.slackEnabled = slackEnabled;
         this.gitlabEnabled = gitlabEnabled;
@@ -55,23 +58,42 @@ public class WorkspaceEventSubscriptions implements ProviderEventSubscriptions {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Long> subscribers(String subject) {
+    public List<Subscription> subscribers(String subject) {
         Optional<IntegrationKind> kind = ConsumerSubjectMath.kindFromSubjectPrefix(subject);
-        if (kind.isEmpty()) {
-            return List.of();
-        }
+        if (kind.isEmpty() || !enabled(kind.get())) return List.of();
         return candidates(kind.get(), subject).stream()
                 .distinct()
                 .sorted()
-                .filter(workspaceId -> filters(workspaceId).stream()
-                        .anyMatch(filter -> ConsumerSubjectMath.matchesFilter(filter, subject)))
+                .flatMap(workspaceId -> workspaceRepository
+                        .findById(workspaceId)
+                        .filter(workspace -> workspace.getStatus() == Workspace.WorkspaceStatus.ACTIVE)
+                        .filter(workspaceScopeFilter::isWorkspaceAllowed)
+                        .stream()
+                        .flatMap(workspace -> connections.findByWorkspaceId(workspaceId).stream()
+                                .filter(connection -> connection.getKind() == kind.get())
+                                .filter(connection -> filters(workspace, connection).stream()
+                                        .anyMatch(filter -> ConsumerSubjectMath.matchesFilter(filter, subject)))
+                                .sorted(Comparator.comparing(connection -> Objects.requireNonNull(connection.getId())))
+                                .map(connection ->
+                                        new Subscription(workspaceId, Objects.requireNonNull(connection.getId())))))
                 .toList();
+    }
+
+    private boolean enabled(IntegrationKind kind) {
+        return switch (kind) {
+            case GITHUB -> true;
+            case GITLAB -> gitlabEnabled;
+            case SLACK -> slackEnabled;
+            case OUTLINE -> outlineEnabled;
+        };
     }
 
     /** The workspaces that may subscribe to {@code subject}: few, so each one's full filter check stays cheap. */
     private List<Long> candidates(IntegrationKind kind, String subject) {
         if (kind != IntegrationKind.GITHUB) {
-            return connectionService.findWorkspaceIdsWithConnection(kind, IntegrationState.ACTIVE);
+            return Arrays.stream(IntegrationState.values())
+                    .flatMap(state -> connections.findWorkspaceIdsByKindAndState(kind, state).stream())
+                    .toList();
         }
         String[] tokens = subject.split("\\.", -1);
         if (tokens.length != 4 || "?".equals(tokens[1])) {
@@ -86,98 +108,38 @@ public class WorkspaceEventSubscriptions implements ProviderEventSubscriptions {
         return monitors.findWorkspaceIdsByNameWithOwner(owner + "/" + tokens[2].replace('~', '.'));
     }
 
-    /** The subject filters of an active workspace in scope, or none. */
-    private Set<String> filters(long workspaceId) {
-        return workspaceRepository
-                .findById(workspaceId)
-                .filter(workspace -> workspace.getStatus() == Workspace.WorkspaceStatus.ACTIVE)
-                .filter(workspaceScopeFilter::isWorkspaceAllowed)
-                .map(this::toFilters)
-                .orElse(Set.of());
-    }
-
-    private Set<String> toFilters(Workspace workspace) {
-        Set<String> filters = new HashSet<>();
-        addScmSubscription(workspace, filters);
-        addOutlineSubscription(workspace, filters);
-        addSlackSubscription(workspace, filters);
-        return filters;
-    }
-
-    /**
-     * The SCM stream subscription. Added only when the workspace has an ACTIVE SCM connection: without one there is no
-     * stream to bind, so an Outline-only workspace is never mislabeled onto the {@code github} stream. GitHub subscribes
-     * to its monitored repositories and its organization; GitLab to everything the connection's own hook delivers,
-     * including projects not monitored yet, since route admission decides.
-     */
-    private void addScmSubscription(Workspace workspace, Set<String> out) {
-        Optional<IntegrationKind> scmKind = connectionService.findActiveProviderKind(workspace.getId());
-        if (scmKind.isEmpty()) {
-            return;
-        }
-        if (scmKind.get() == IntegrationKind.GITLAB && !gitlabEnabled) return;
-        String streamName = ConsumerSubjectMath.streamNameFor(scmKind.get())
-                .orElseThrow(() -> new IllegalStateException("No NATS stream for SCM kind=" + scmKind.get()));
-
+    /** Route membership and lifecycle admission are separate: the receiver locks and checks the latter. */
+    private Set<String> filters(Workspace workspace, Connection connection) {
         Set<String> subjects = new HashSet<>();
-        if (scmKind.get() == IntegrationKind.GITLAB) {
-            connectionService
-                    .findActive(workspace.getId(), IntegrationKind.GITLAB)
-                    .map(Connection::getId)
-                    .ifPresent(connectionId ->
-                            subjects.add(ConsumerSubjectMath.connectionFilter(streamName, connectionId)));
-        } else {
-            workspace.getRepositoriesToMonitor().stream()
-                    .map(RepositoryToMonitor::getNameWithOwner)
-                    .filter(workspaceScopeFilter::isRepositoryAllowed)
-                    .forEach(nameWithOwner ->
-                            subjects.add(ConsumerSubjectMath.repositoryFilter(streamName, nameWithOwner)));
-            String organizationLogin = workspace.getAccountLogin();
-            if (organizationLogin != null && !organizationLogin.isBlank()) {
-                subjects.add(ConsumerSubjectMath.organizationFilter(streamName, organizationLogin));
+        switch (connection.getKind()) {
+            case GITHUB -> {
+                workspace.getRepositoriesToMonitor().stream()
+                        .map(RepositoryToMonitor::getNameWithOwner)
+                        .filter(workspaceScopeFilter::isRepositoryAllowed)
+                        .forEach(name -> subjects.add(ConsumerSubjectMath.repositoryFilter("github", name)));
+                String login = workspace.getAccountLogin();
+                if (login != null && !login.isBlank()) {
+                    subjects.add(ConsumerSubjectMath.organizationFilter("github", login));
+                }
+            }
+            case GITLAB ->
+                subjects.add(
+                        ConsumerSubjectMath.connectionFilter("gitlab", Objects.requireNonNull(connection.getId())));
+            case SLACK -> {
+                if (connection.getConfig() instanceof ConnectionConfig.SlackConfig config
+                        && config.teamId() != null
+                        && !config.teamId().isBlank()) {
+                    subjects.add(ConsumerSubjectMath.teamFilter("slack", config.teamId()));
+                }
+            }
+            case OUTLINE -> {
+                if (connection.getConfig() instanceof ConnectionConfig.OutlineConfig config
+                        && config.webhookSubscriptionId() != null
+                        && !config.webhookSubscriptionId().isBlank()) {
+                    subjects.add(ConsumerSubjectMath.subscriptionFilter("outline", config.webhookSubscriptionId()));
+                }
             }
         }
-        out.addAll(subjects);
-    }
-
-    /**
-     * The Outline stream subscription. Added when the workspace has an ACTIVE Outline connection with
-     * a registered change-notification subscription id, filtered to {@code outline.<subId>.>}.
-     *
-     * <p>Gated on {@code hephaestus.integration.outline.enabled}: with the flag off, every Outline
-     * message handler bean is absent, so a durable consumer bound here would pull messages and
-     * dispatch them to nothing (redelivery → dead-letter). A stale ACTIVE connection row left over
-     * from an enabled deployment must not resurrect the binding.
-     */
-    private void addOutlineSubscription(Workspace workspace, Set<String> out) {
-        if (!outlineEnabled) {
-            return;
-        }
-        connectionService
-                .findActiveOutlineConfig(workspace.getId())
-                .map(ConnectionConfig.OutlineConfig::webhookSubscriptionId)
-                .filter(subscriptionId -> subscriptionId != null && !subscriptionId.isBlank())
-                .ifPresent(
-                        subscriptionId -> out.add(ConsumerSubjectMath.subscriptionFilter("outline", subscriptionId)));
-    }
-
-    /**
-     * The Slack stream subscription. Added when the workspace has an ACTIVE Slack connection with a
-     * team id, filtered to {@code slack.<team>.>}: one consumer per workspace, so one team's message
-     * burst never delays another workspace's ingest and per-workspace ordering is preserved.
-     *
-     * <p>Gated on {@code hephaestus.integration.slack.enabled} for the same reason as the Outline arm
-     * above: the Slack message handlers are themselves flag-gated, so binding the consumer while the
-     * flag is off produces deliveries with no handler.
-     */
-    private void addSlackSubscription(Workspace workspace, Set<String> out) {
-        if (!slackEnabled) {
-            return;
-        }
-        connectionService
-                .findSlackConfig(workspace.getId())
-                .map(ConnectionConfig.SlackConfig::teamId)
-                .filter(teamId -> teamId != null && !teamId.isBlank())
-                .ifPresent(teamId -> out.add(ConsumerSubjectMath.teamFilter("slack", teamId)));
+        return subjects;
     }
 }

@@ -3,11 +3,14 @@ package de.tum.cit.aet.hephaestus.integration.core.spi;
 import java.util.List;
 
 /**
- * Which workspaces receive a provider delivery. The receiver stores one event for each, in the transaction that stores
- * the delivery, so a workspace receives every delivery that arrives after its subscription commits.
+ * Which connection routes match a provider delivery. The receiver checks their current lifecycle state before it
+ * stores anything, in the same transaction as this subscription read.
  */
 public interface ProviderEventSubscriptions {
 
-    /** The workspaces whose subscription matches {@code subject}, in ascending id order; empty when none does. */
-    List<Long> subscribers(String subject);
+    /** A connection whose configured route matches, before the receiver checks its lifecycle state. */
+    record Subscription(long workspaceId, long connectionId) {}
+
+    /** Matching connections in workspace/id order, including inactive ones whose rejection must be recorded. */
+    List<Subscription> subscribers(String subject);
 }

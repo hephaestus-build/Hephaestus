@@ -40,6 +40,9 @@ hephaestus:
     # Enable Slack/Outline admin endpoints so they surface in the generated client. The vendor
     # clients themselves aren't called during the spec run — just the controllers are loaded.
     integration:
+        consumer:
+            # Contract generation has no inbox to claim.
+            claimers: 0
         slack:
             enabled: true
             # This profile exposes the contract only; it never receives real Slack requests.

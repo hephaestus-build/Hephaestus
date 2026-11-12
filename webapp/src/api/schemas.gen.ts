@@ -2099,6 +2099,8 @@ export const ConsentStatusSchema = {
 
 export const ConsumerDeadLetterSchema = {
 	type: "object",
+	description:
+		"A provider event that failed for good: its provider, why, and whether someone replayed it.",
 	properties: {
 		errorClass: {
 			type: "string",
@@ -2110,6 +2112,9 @@ export const ConsumerDeadLetterSchema = {
 		id: {
 			type: "integer",
 			format: "int64",
+		},
+		provider: {
+			type: "string",
 		},
 		receivedAt: {
 			type: "string",
@@ -2123,15 +2128,8 @@ export const ConsumerDeadLetterSchema = {
 			type: "integer",
 			format: "int64",
 		},
-		sequence: {
-			type: "integer",
-			format: "int64",
-		},
-		stream: {
-			type: "string",
-		},
 	},
-	required: ["errorClass", "failedAt", "id", "receivedAt", "sequence", "stream"],
+	required: ["errorClass", "failedAt", "id", "provider", "receivedAt"],
 } as const;
 
 export const ContributorSchema = {

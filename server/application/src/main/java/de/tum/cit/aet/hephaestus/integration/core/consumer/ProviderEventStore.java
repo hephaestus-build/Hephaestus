@@ -228,6 +228,9 @@ public class ProviderEventStore {
 
     /** One workspace and one subject without its event token. */
     static String scopeKey(@Nullable Long workspaceId, String subject) {
+        if (workspaceId == null && ConsumerSubjectMath.isInstallationControlSubject(subject)) {
+            return "installation:github.?.?";
+        }
         int lastDot = subject.lastIndexOf('.');
         String resource = lastDot > 0 ? subject.substring(0, lastDot) : subject;
         return (workspaceId == null ? "installation" : workspaceId.toString()) + ":" + resource;

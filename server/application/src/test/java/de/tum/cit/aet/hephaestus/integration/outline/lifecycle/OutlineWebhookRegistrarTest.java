@@ -234,8 +234,6 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
                         outlineApiClient,
                         credential(""),
                         new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(API_ORIGIN), "/api")),
-                        providerOf(natsConsumer),
-                        providerOf(routes),
                         connectionRepository,
                         ClusterLocks.free(),
                         meters)

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.webhook;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectKeyDeriver;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -13,7 +14,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
 /**
- * GitHub adapter for {@link SubjectKeyDeriver}. Produces JetStream subjects of the
+ * GitHub adapter for {@link SubjectKeyDeriver}. Produces provider event subjects of the
  * shape {@code github.<org>.<repo>.<event>} where {@code <org>} and {@code <repo>}
  * are sourced from {@code repository.full_name} (or {@code organization.login} for
  * org-tier events) and {@code <event>} comes from the {@code X-GitHub-Event} header.
@@ -27,8 +28,8 @@ import tools.jackson.databind.JsonNode;
  *
  * <p>Dedup keys reuse GitHub's {@code X-GitHub-Delivery} UUID (prefixed with
  * {@code github-}); when the header is absent the key falls back to a SHA-256 hex
- * digest of {@code body || event} truncated to 32 hex characters — JetStream's
- * {@code Nats-Msg-Id} dedup gives us idempotency without per-request state.
+ * digest of {@code body || event} truncated to 32 hex characters. The inbox stores
+ * each delivery identifier once per workspace.
  */
 @Component
 public class GitHubSubjectKeyDeriver implements SubjectKeyDeriver {
@@ -47,6 +48,8 @@ public class GitHubSubjectKeyDeriver implements SubjectKeyDeriver {
     public String deriveSubject(JsonNode payload, Map<String, String> headers) {
         String event = headerCaseInsensitive(headers, HEADER_EVENT);
         String eventSegment = sanitize(event == null || event.isBlank() ? PLACEHOLDER : event);
+
+        validateInstallationControl(payload, eventSegment);
 
         String org = PLACEHOLDER;
         String repo = PLACEHOLDER;
@@ -84,6 +87,48 @@ public class GitHubSubjectKeyDeriver implements SubjectKeyDeriver {
         }
 
         return SUBJECT_PREFIX + org + "." + repo + "." + eventSegment;
+    }
+
+    /**
+     * GitHub signs the body, but not X-GitHub-Event. The system-scoped installation handlers must not
+     * admit an ordinary work payload whose unsigned header was changed to a control event.
+     */
+    private static void validateInstallationControl(JsonNode payload, String event) {
+        boolean installation = GitHubEventType.INSTALLATION.getValue().equals(event);
+        boolean repositories =
+                GitHubEventType.INSTALLATION_REPOSITORIES.getValue().equals(event);
+        boolean target = GitHubEventType.INSTALLATION_TARGET.getValue().equals(event);
+        if (!installation && !repositories && !target) return;
+        JsonNode detail = payload.path("installation");
+        String action = payload.path("action").asString("");
+        boolean valid = positiveId(detail.path("id"));
+        if (target) {
+            String targetType = payload.path("target_type").asString("");
+            valid &= account(payload.path("account"))
+                    && GitHubEventAction.InstallationTarget.fromString(action)
+                            != GitHubEventAction.InstallationTarget.UNKNOWN
+                    && ("User".equals(targetType) || "Organization".equals(targetType));
+        } else {
+            valid &= account(detail.path("account")) && positiveId(detail.path("app_id"));
+            if (installation) {
+                valid &= GitHubEventAction.Installation.fromString(action) != GitHubEventAction.Installation.UNKNOWN;
+            } else {
+                valid &= GitHubEventAction.InstallationRepositories.fromString(action)
+                                != GitHubEventAction.InstallationRepositories.UNKNOWN
+                        && payload.path("repositories_added").isArray()
+                        && payload.path("repositories_removed").isArray();
+            }
+        }
+        if (!valid) throw new IllegalArgumentException("Invalid GitHub installation control event");
+    }
+
+    private static boolean account(JsonNode account) {
+        return positiveId(account.path("id"))
+                && !account.path("login").asString("").isBlank();
+    }
+
+    private static boolean positiveId(JsonNode id) {
+        return id.isIntegralNumber() && id.canConvertToLong() && id.asLong(0L) > 0;
     }
 
     @Override

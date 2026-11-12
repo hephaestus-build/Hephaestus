@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.webhook;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectKeyDeriver;
@@ -245,14 +246,35 @@ public class WebhookIngestPipeline {
             }
         }
 
-        String subject = route != null
-                ? route.subject().apply(payload)
-                : Objects.requireNonNull(deriver).deriveSubject(payload, headers);
-        String dedupId = route != null
-                ? route.dedupId()
-                : Objects.requireNonNull(deriver).deriveDedupKey(body, headers);
+        String subject;
+        String dedupId;
+        try {
+            subject = route != null
+                    ? route.subject().apply(payload)
+                    : Objects.requireNonNull(deriver).deriveSubject(payload, headers);
+            dedupId = route != null
+                    ? route.dedupId()
+                    : Objects.requireNonNull(deriver).deriveDedupKey(body, headers);
+        } catch (IllegalArgumentException invalid) {
+            meterRegistry
+                    .counter(
+                            IntegrationCoreMetrics.WEBHOOK_REJECTED,
+                            "provider",
+                            kind.name().toLowerCase(Locale.ROOT),
+                            "reason",
+                            "invalid-event-route")
+                    .increment();
+            log.info("Refused webhook route: kind={}, reason=invalid-event-route", kind);
+            return problem(HttpStatus.BAD_REQUEST, "invalid-event-route");
+        }
 
         Map<String, String> storedHeaders = new LinkedHashMap<>();
+        if (kind == IntegrationKind.GITHUB) {
+            JsonNode installation = payload.path("installation").path("id");
+            if (installation.isIntegralNumber() && installation.canConvertToLong() && installation.asLong(0L) > 0) {
+                storedHeaders.put(ProviderEvent.GITHUB_INSTALLATION_ID, Long.toString(installation.asLong()));
+            }
+        }
         passthroughHeader(storedHeaders, headers, "X-GitHub-Event");
         passthroughHeader(storedHeaders, headers, "X-GitHub-Delivery");
         passthroughHeader(storedHeaders, headers, "X-Gitlab-Event");

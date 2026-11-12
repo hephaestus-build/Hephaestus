@@ -7,9 +7,10 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderEventSubscriptions.Subscription;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
@@ -40,7 +41,7 @@ class WorkspaceEventSubscriptionsTest extends BaseUnitTest {
     private WorkspaceScopeFilter scope;
 
     @Mock
-    private ConnectionService connections;
+    private ConnectionRepository connections;
 
     @Mock
     private Workspace workspace;
@@ -65,14 +66,16 @@ class WorkspaceEventSubscriptionsTest extends BaseUnitTest {
         lenient().when(workspace.getRepositoriesToMonitor()).thenReturn(Set.of(monitor));
         lenient().when(scope.isRepositoryAllowed("acme/app")).thenReturn(true);
         lenient().when(monitors.findWorkspaceIdsByNameWithOwner("acme/app")).thenReturn(List.of(WS));
-        lenient().when(connections.findActiveProviderKind(WS)).thenReturn(Optional.of(IntegrationKind.GITHUB));
+        connection(
+                IntegrationKind.GITHUB,
+                new ConnectionConfig.GitHubAppConfig(1L, "acme", "https://github.com", Set.of()));
     }
 
     @Test
     void shouldReachTheWorkspaceThatMonitorsTheRepository() {
         monitorsGitHubRepository();
 
-        assertThat(subscriptions.subscribers("github.acme.app.issues")).containsExactly(WS);
+        assertThat(subscriptions.subscribers("github.acme.app.issues")).containsExactly(new Subscription(WS, 42L));
         assertThat(subscriptions.subscribers("github.acme.other.issues")).isEmpty();
     }
 
@@ -81,7 +84,7 @@ class WorkspaceEventSubscriptionsTest extends BaseUnitTest {
         monitorsGitHubRepository();
         when(workspaces.findAllByAccountLoginIgnoreCase("acme")).thenReturn(List.of(workspace));
 
-        assertThat(subscriptions.subscribers("github.acme.?.organization")).containsExactly(WS);
+        assertThat(subscriptions.subscribers("github.acme.?.organization")).containsExactly(new Subscription(WS, 42L));
     }
 
     @Test
@@ -110,47 +113,50 @@ class WorkspaceEventSubscriptionsTest extends BaseUnitTest {
 
     @Test
     void shouldReachTheWorkspaceOfTheGitLabConnectionAlone() {
-        Connection connection = mock(Connection.class);
-        when(connection.getId()).thenReturn(42L);
-        when(connections.findWorkspaceIdsWithConnection(IntegrationKind.GITLAB, IntegrationState.ACTIVE))
-                .thenReturn(List.of(WS));
-        when(connections.findActiveProviderKind(WS)).thenReturn(Optional.of(IntegrationKind.GITLAB));
-        when(connections.findActive(WS, IntegrationKind.GITLAB)).thenReturn(Optional.of(connection));
+        connection(
+                IntegrationKind.GITLAB,
+                new ConnectionConfig.GitLabConfig("https://gitlab.test", 1L, null, Set.of(), null));
 
-        assertThat(subscriptions.subscribers("gitlab.?connection.42.push")).containsExactly(WS);
+        assertThat(subscriptions.subscribers("gitlab.?connection.42.push")).containsExactly(new Subscription(WS, 42L));
         assertThat(subscriptions.subscribers("gitlab.?connection.43.push")).isEmpty();
     }
 
     @Test
     void shouldNotReachAGitLabWorkspaceWhenTheAdapterIsDisabled() {
         subscriptions = new WorkspaceEventSubscriptions(workspaces, monitors, scope, connections, true, true, false);
-        when(connections.findWorkspaceIdsWithConnection(IntegrationKind.GITLAB, IntegrationState.ACTIVE))
-                .thenReturn(List.of(WS));
-        when(connections.findActiveProviderKind(WS)).thenReturn(Optional.of(IntegrationKind.GITLAB));
 
         assertThat(subscriptions.subscribers("gitlab.?connection.42.push")).isEmpty();
     }
 
     @Test
     void shouldReachTheWorkspaceOfTheOutlineSubscription() {
-        when(connections.findWorkspaceIdsWithConnection(IntegrationKind.OUTLINE, IntegrationState.ACTIVE))
-                .thenReturn(List.of(WS));
-        when(connections.findActiveOutlineConfig(WS))
-                .thenReturn(
-                        Optional.of(new ConnectionConfig.OutlineConfig("https://o.test", "sub-1", "secret", Set.of())));
+        connection(
+                IntegrationKind.OUTLINE,
+                new ConnectionConfig.OutlineConfig("https://o.test", "sub-1", "route", Set.of()));
 
-        assertThat(subscriptions.subscribers("outline.sub-1.documents~update")).containsExactly(WS);
+        assertThat(subscriptions.subscribers("outline.sub-1.documents~update"))
+                .containsExactly(new Subscription(WS, 42L));
         assertThat(subscriptions.subscribers("outline.sub-2.documents~update")).isEmpty();
     }
 
     @Test
     void shouldReachTheWorkspaceOfTheSlackTeam() {
-        when(connections.findWorkspaceIdsWithConnection(IntegrationKind.SLACK, IntegrationState.ACTIVE))
-                .thenReturn(List.of(WS));
-        when(connections.findSlackConfig(WS))
-                .thenReturn(Optional.of(new ConnectionConfig.SlackConfig("T1", null, null, Set.of())));
+        connection(IntegrationKind.SLACK, new ConnectionConfig.SlackConfig("T1", null, null, Set.of()));
 
-        assertThat(subscriptions.subscribers("slack.T1.C1.message")).containsExactly(WS);
+        assertThat(subscriptions.subscribers("slack.T1.C1.message")).containsExactly(new Subscription(WS, 42L));
         assertThat(subscriptions.subscribers("slack.T2.C1.message")).isEmpty();
+    }
+
+    private void connection(IntegrationKind kind, ConnectionConfig config) {
+        Connection connection = mock(Connection.class);
+        lenient().when(connection.getId()).thenReturn(42L);
+        lenient().when(connection.getKind()).thenReturn(kind);
+        lenient().when(connection.getConfig()).thenReturn(config);
+        lenient().when(connections.findByWorkspaceId(WS)).thenReturn(List.of(connection));
+        for (IntegrationState state : IntegrationState.values()) {
+            lenient()
+                    .when(connections.findWorkspaceIdsByKindAndState(kind, state))
+                    .thenReturn(List.of(WS));
+        }
     }
 }

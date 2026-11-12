@@ -65,6 +65,24 @@ class ProviderEventStoreIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldSerializeEveryInstallationControlEventEvenWhenItsSubjectNamesAnOrganization() {
+        store.store(List.of(
+                arrival("github.?.?.installation", "global-install"),
+                arrival("github.?.?.installation_repositories", "global-repositories"),
+                arrival("github.org.?.installation_target", "global-target")));
+
+        Claimed first = store.claim(LEASE).orElseThrow();
+        assertThat(store.claim(LEASE)).isEmpty();
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(DISTINCT scope_key) FROM provider_event WHERE delivery_key LIKE ?",
+                        Integer.class,
+                        "global-%"))
+                .isEqualTo(1);
+        assertThat(store.complete(first.id(), first.leaseEpoch())).isTrue();
+        assertThat(store.claim(LEASE)).isPresent();
+    }
+
+    @Test
     void shouldKeepTheOrderOfAScopeAndRunOtherScopesBesideIt() {
         store.store(List.of(
                 arrival("github.?.?.installation", "a-1"),

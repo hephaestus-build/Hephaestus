@@ -76,8 +76,8 @@ The Job is a plain part of the release and not a Helm hook, because a hook would
 [Runtime roles](./runtime-roles) describes the run mode and the wait.
 
 The server has at most one replica and uses `Recreate`.
-JetStream replay fences belong to one process, so two servers can process a replay and a live event for the same item at once.
-A rolling update is refused until the provider-event inbox supplies ordering across replicas.
+The schema refuses a rolling update or a larger replica count.
+[Ingest durability](/contributor/ingest-durability) describes the database leases that order provider events.
 Two server versions never serve the schema at the same time.
 
 The server also runs the sandboxes when `sandbox.enabled` is on.

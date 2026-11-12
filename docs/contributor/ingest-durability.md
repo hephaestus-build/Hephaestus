@@ -8,8 +8,21 @@ The receiver stores a verified delivery in `provider_event` in the request's tra
 The receiver requires UTF-8 JSON without raw NUL bytes, so person erasure can read every stored payload as PostgreSQL text.
 Each stored row keeps the connection's exact source URL in `Hephaestus-Source-Server-Url`.
 The receiver sets that header from the connection, and person erasure matches its registered source namespace.
-It reads the subscriptions in the same transaction through `ProviderEventSubscriptions` and stores one row for each subscribing workspace.
-A GitHub App installation subject (`github.?.?.<event>`) also gets one row with a NULL workspace, because its handler can create the workspace.
+It reads the matching connection routes through `ProviderEventSubscriptions` in the same transaction.
+It then takes each connection's scoped lifecycle lock and reads its current state again.
+Only an `ACTIVE` connection can admit a workspace row.
+A concurrent suspension commits before this check or waits until the inbox insert commits.
+A refused connection adds no payload or dedupe row. Its refusal reason is recorded in `webhook.rejected` and the admission log.
+GitHub App deliveries match the installation ID from the signed body. A request header cannot set that ID.
+The source App connection must be ACTIVE, including when the event also matches a PAT workspace.
+Admission locks the source and recipient connections in connection-ID order across workspaces.
+GitLab and Outline deliveries must also match their connection's verified route.
+If the connection configuration changed while admission waited, the receiver fails the request so the provider can retry against the current route.
+The receiver stores one row for each admitted workspace.
+GitHub installation, installation-repositories and installation-target control events get one row with a NULL workspace, because their handlers can create or repair a connection.
+GitHub signs the body, not its event-type header. The adapter validates the control payload before it can enter the system scope.
+A signed work payload relabeled as a control event is refused with `invalid-event-route`.
+A work event without an organization or repository does not fall back into that system scope. Its payload is dropped.
 A subscription change is visible to every delivery that the receiver stores after the change commits.
 No consumer has to start or attach first, so a new repository or connection misses no event.
 
@@ -22,7 +35,8 @@ The inbox opens no `LISTEN` connection, so the chart's connection budget stays a
 
 ## Claim, lease and order
 
-A row's `scope_key` is its workspace, or `installation`, and its subject without the event token.
+Every installation control event shares one system `scope_key`, including a subject that names an organization.
+Other rows use their workspace and their subject without the event token.
 One scope is one resource of one workspace, such as a repository or a Slack channel.
 Order is serial per scope, in row id order, not provider event time.
 All installation events share one scope.

@@ -63,7 +63,8 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     Optional<Connection> findByWorkspaceIdAndKindAndInstanceKey(
             long workspaceId, IntegrationKind kind, @Nullable String instanceKey);
 
-    @WorkspaceAgnostic("A connect refuses a Slack team or GitHub App installation that another workspace holds")
+    @WorkspaceAgnostic(
+            "Connect checks shared ownership; webhook admission locks the source GitHub App installation before fan-out")
     List<Connection> findAllByKindAndInstanceKeyAndStateIn(
             IntegrationKind kind, String instanceKey, Collection<IntegrationState> states);
 

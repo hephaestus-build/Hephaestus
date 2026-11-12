@@ -15,6 +15,9 @@ public record ProviderEvent(String subject, Map<String, String> headers, byte[] 
     /** Exact source namespace from the verified connection, retained after that connection is removed. */
     public static final String SOURCE_SERVER_URL = "Hephaestus-Source-Server-Url";
 
+    /** Installation identity copied from the verified GitHub payload, never from an HTTP header. */
+    public static final String GITHUB_INSTALLATION_ID = "Hephaestus-GitHub-Installation-Id";
+
     public ProviderEvent {
         headers = Map.copyOf(headers);
     }

@@ -37,7 +37,7 @@ The server creates sandbox Pods and sandbox claims through its Kubernetes servic
 No application Pod needs a Docker socket.
 
 While no server is available, providers cannot deliver.
-The chart uses `Recreate` and permits one server until provider-event processing has per-item ordering across replicas.
+The chart uses `Recreate` and permits one server.
 An upgrade stops reception for the time of the restart.
 GitHub deliveries that fail in that time are redelivered (`GitHubWebhookRedelivery`).
 Slack retries a failed event.
@@ -230,7 +230,8 @@ API-contract generation and CDS training do not run sandbox maintenance, server 
 The server has a separate private management listener on port **9090**.
 Management does not run on `SERVER_PORT`. See [Set up monitoring](./monitoring#scrape-metrics) for network restrictions.
 
-The server publishes provider deliveries to NATS and consumes them from it. No setting changes `sync.nats.enabled`.
+The server stores admitted provider deliveries in the PostgreSQL inbox and claims them there.
+[Webhook ingestion operations](./webhook-ingestion-operations) owns admission, retention, and recovery.
 
 `hephaestus.agent.enabled` (`AGENT_ENABLED`) controls submission and execution.
 Server maintenance runs independently of this flag:

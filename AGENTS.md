@@ -106,8 +106,8 @@ State which entries applied:
 
 One JAR boots as the server, or runs the migration and exits.
 See ADR 0005 and `docs/admin/runtime-roles.mdx`.
-The server receives provider events and publishes them to NATS JetStream.
-It consumes them, syncs the work, runs practice reviews in sandboxed containers, and delivers the resulting feedback.
+The server receives verified provider events into a PostgreSQL inbox.
+It claims them, syncs the work, runs practice reviews in sandboxed containers, and delivers the resulting feedback.
 
 The SPA talks to the server only through the generated client.
 `docs/contributor/system-design.mdx` has the diagrams.

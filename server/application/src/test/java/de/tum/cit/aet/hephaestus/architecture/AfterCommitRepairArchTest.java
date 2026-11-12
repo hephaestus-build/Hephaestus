@@ -20,7 +20,7 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * The 20 plain after-commit listeners reviewed for ADR 0099, including the two repaired here.
+ * The plain after-commit listeners reviewed for ADR 0099, including the repaired listeners.
  * Other module listeners already declare their registry repair through {@link ApplicationModuleListener}.
  * A new plain listener, including one using the default phase or a composed annotation, needs its own repair entry.
  */
@@ -36,7 +36,11 @@ class AfterCommitRepairArchTest extends HephaestusArchitectureTest {
 
     private record Unrepaired(String owner, String reason) {}
 
-    private static final Map<String, Unrepaired> UNREPAIRED = Map.of();
+    private static final Map<String, Unrepaired> UNREPAIRED = Map.of(
+            "integration.outline.lifecycle.OutlineConnectionStateListener.onDeactivated",
+            new Unrepaired(
+                    "INBOX cross-provider lifecycle repair",
+                    "Inbox admission refuses inactive connections without storing payloads. ProviderTeardown durably removes UNINSTALLED hooks; lost SUSPENDED deletion still needs the planned cross-provider repair."));
 
     private static final Map<String, Repair> REPAIRS = Map.ofEntries(
             Map.entry(
@@ -103,39 +107,11 @@ class AfterCommitRepairArchTest extends HephaestusArchitectureTest {
                             "integration.slack.sync.SlackDataSyncScheduler.syncDataCron",
                             true)),
             Map.entry(
-                    "integration.slack.channel.SlackChannelConsentProjection.onConsentChanged",
-                    new Repair(
-                            RepairKind.RECONCILE,
-                            "SlackChannelConsentProjection.rebuild replaces the consent projection at startup and every minute from ACTIVE channel rows.",
-                            "integration.slack.channel.SlackChannelConsentProjection.rebuild",
-                            true)),
-            Map.entry(
-                    "integration.slack.lifecycle.SlackScopeConsumerReconciler.onActivated",
-                    new Repair(
-                            RepairKind.RECONCILE,
-                            "WorkspaceConsumerReconciler.reconcile starts and updates broker consumers for each active workspace every minute.",
-                            "workspace.WorkspaceConsumerReconciler.reconcile",
-                            true)),
-            Map.entry(
-                    "integration.slack.lifecycle.SlackScopeConsumerReconciler.onDeactivated",
-                    new Repair(
-                            RepairKind.RECONCILE,
-                            "WorkspaceConsumerReconciler.reconcile rebuilds active workspaces' consumer subjects every minute from current connections.",
-                            "workspace.WorkspaceConsumerReconciler.reconcile",
-                            true)),
-            Map.entry(
                     "integration.outline.lifecycle.OutlineConnectionStateListener.onActivated",
                     new Repair(
                             RepairKind.POLL,
                             "OutlineDocumentSyncScheduler.syncAll repeats document sync; OutlineDocumentSyncService calls ensureSubscription on a full reconcile.",
                             "integration.outline.sync.OutlineDocumentSyncScheduler.syncAll",
-                            true)),
-            Map.entry(
-                    "integration.outline.lifecycle.OutlineConnectionStateListener.onDeactivated",
-                    new Repair(
-                            RepairKind.RECONCILE,
-                            "ProviderTeardown durably owns disconnect deletion; OutlineRouteProjection.rebuild removes inactive routes, so an orphan cannot deliver and Outline disables it.",
-                            "integration.outline.lifecycle.OutlineRouteProjection.rebuild",
                             true)),
             Map.entry(
                     "integration.outline.collection.OutlineCollectionAdminService.onCollectionResumed",

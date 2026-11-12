@@ -16,12 +16,8 @@ public final class WebhookPropertiesFixture {
     }
 
     /** Receiver and routing settings as a deployment that registers provider hooks has them. */
-    public static WebhookProperties configured(
-            @Nullable String secret, WebhookProperties.Routing routing) {
+    public static WebhookProperties configured(@Nullable String secret, WebhookProperties.Routing routing) {
         return new WebhookProperties(
-                secret,
-                new WebhookProperties.TokenRotation(7, 90),
-                new WebhookProperties.Http(26_214_400L),
-                routing);
+                secret, new WebhookProperties.TokenRotation(7, 90), new WebhookProperties.Http(26_214_400L), routing);
     }
 }

@@ -4613,7 +4613,6 @@ await test("each sandbox kind has a cold-start template of one container, behind
 	assert.equal(get(podSpec(holder), "automountServiceAccountToken"), false);
 });
 
-
 /** Kinds that have no namespace: a release without cluster-admin cannot create any of them. */
 const clusterScoped = new Set([
 	"PriorityClass",

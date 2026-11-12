@@ -26,7 +26,6 @@ import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -59,7 +58,6 @@ public class OutlineWebhookRegistrar {
     private final OutlineRouteCredential credential;
     private final PublicApiUrls publicApiUrls;
 
-    /** Absent when {@code hephaestus.sync.nats.enabled=false}, so every use goes through {@link ObjectProvider#ifAvailable}. */
     private final ConnectionRepository connections;
 
     private final ClusterLock locks;
@@ -253,8 +251,6 @@ public class OutlineWebhookRegistrar {
                 return false;
             }
             log.info("outline.webhook: registered subscription {} for workspaceId={}", subscriptionId, workspaceId);
-            // The subject the scope consumer filters on is derived from this id — reconcile now instead of
-            // waiting for a restart (fresh register) or the next 6h reconcile (self-heal re-register).
             return true;
         } catch (RuntimeException e) {
             // Best-effort: the periodic reconcile still keeps the mirror fresh without a subscription.

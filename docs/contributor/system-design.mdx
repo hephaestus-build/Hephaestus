@@ -10,9 +10,9 @@ description: Runtime roles, module boundaries, and the paths from connected work
 ```mermaid
 flowchart TB
     accTitle: Hephaestus runtime topology
-    accDescr: The webapp calls the server. The server's receiver verifies provider events and publishes them to NATS. The server consumes events and writes jobs and conversation turns to PostgreSQL. With sandboxes enabled, the server claims them from PostgreSQL and runs reviews in sandboxes. The conversation loop pulls conversation turns from the servers and runs their tools in tools Pods.
+    accDescr: The webapp calls the server. The server's receiver verifies provider events and stores admitted events in PostgreSQL. The server claims them and writes jobs and conversation turns to PostgreSQL. With sandboxes enabled, the server claims them from PostgreSQL and runs reviews in sandboxes. The conversation loop pulls conversation turns from the servers and runs their tools in tools Pods.
     Providers[GitHub, GitLab, Slack, Outline] --> Server[Server role]
-    Server <--> NATS[NATS JetStream]
+    Server <-->|Sync push| NATS[NATS]
     SPA[React webapp] --> Server
     Server --> DB[(PostgreSQL)]
     Server --> Sandbox[Review sandboxes and tools Pods]
@@ -54,16 +54,11 @@ A long job holds one thread.
 
 No server migrates at start: the [migrate run mode](/admin/runtime-roles#database-migrations) migrates once per release.
 
-Every server pulls from the same durable consumer of a scope (`IntegrationNatsConsumer`).
-The consumer allows one unacknowledged message (`MaxAckPending=1`).
-Thus, the broker gives the next event of a scope to a server only after the previous event is acknowledged.
-A handler that runs sends an in-progress acknowledgement at a third of the ack wait.
-Thus, the broker does not give its message to another server while the handler runs.
+Servers claim provider events from the PostgreSQL inbox with fenced leases.
+Events of one resource in one workspace run serially, including a replay.
+All GitHub installation control events share one system scope.
+[Ingest durability](./ingest-durability#claim-lease-and-order) owns the claim, renewal, retry and replay rules.
 
-A replay does not come through the consumer, so it uses a fence (NATS 2.11 or later).
-The fence pauses the consumer and waits until no server holds a message of the consumer.
-After the replay, the fence resumes the consumer.
-`ServerReplicasConsumerIntegrationTest` checks the order and the fence with two consumers on one broker.
 Work that must run one at a time on every server takes a `ClusterLock` ([Transactions](./transactions.md#6-concurrent-writers)).
 The chart still runs one server.
 
