@@ -44,7 +44,13 @@ class SandboxRuntimeSelectionTest {
     /**
      * The environment of a test JVM must not select a runtime here. The client's own configuration would read the
      * machine's kubeconfig and service account; for each context these system properties, which the client reads
-     * before either, turn both off and name a loopback address that nothing calls, and the runner restores them after.
+     * before either, turn both off and name a loopback address that refuses every connection, and the runner restores
+     * them after.
+     *
+     * <p>The sandbox cache's informers list that address as the context starts. The client retries a refused request on
+     * its own scheduler, and closing the client does not end those retries: they keep failing after this test, and the
+     * stopped informers log each failure into later tests. With no request retries, a refused
+     * list fails at once, and a stopped informer schedules nothing.
      */
     private final ApplicationContextRunner runner = new ApplicationContextRunner(() -> {
                 var context = new AnnotationConfigApplicationContext();
@@ -55,7 +61,8 @@ class SandboxRuntimeSelectionTest {
                     Config.KUBERNETES_AUTH_TRYKUBECONFIG_SYSTEM_PROPERTY + "=false",
                     Config.KUBERNETES_AUTH_TRYSERVICEACCOUNT_SYSTEM_PROPERTY + "=false",
                     Config.KUBERNETES_TRYNAMESPACE_PATH_SYSTEM_PROPERTY + "=false",
-                    Config.KUBERNETES_MASTER_SYSTEM_PROPERTY + "=https://127.0.0.1:9")
+                    Config.KUBERNETES_MASTER_SYSTEM_PROPERTY + "=https://127.0.0.1:9",
+                    Config.KUBERNETES_REQUEST_RETRY_BACKOFFLIMIT_SYSTEM_PROPERTY + "=0")
             .withUserConfiguration(
                     SandboxRuntimeConfiguration.class,
                     KubernetesSandboxConfiguration.class,
@@ -77,6 +84,11 @@ class SandboxRuntimeSelectionTest {
         runner.withPropertyValues(KUBERNETES).run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context.getBean(KubernetesClient.class).getHttpClient()).isInstanceOf(OkHttpClientImpl.class);
+            assertThat(context.getBean(KubernetesClient.class)
+                            .getConfiguration()
+                            .getRequestRetryBackoffLimit())
+                    .as("no request retries outlive this test's client")
+                    .isZero();
             assertThat(context.getBean(ToolsPods.class)).isInstanceOf(KubernetesToolsPods.class);
             assertThat(context)
                     .hasSingleBean(KubernetesSandboxJobs.class)
