@@ -331,8 +331,10 @@ class ProviderEventErasureIntegrationTest extends BaseIntegrationTest {
             write.commitAfter(CompletableFuture.completedFuture(null));
         }
         store.reapExpired(1);
-        assertThat(jdbc.queryForObject("SELECT state FROM provider_event WHERE id=?", String.class, held.id())).isEqualTo("LEASED");
-        assertThat(jdbc.queryForObject("SELECT failures FROM provider_event WHERE id=?", Integer.class, held.id())).isZero();
+        assertThat(jdbc.queryForObject("SELECT state FROM provider_event WHERE id=?", String.class, held.id()))
+                .isEqualTo("LEASED");
+        assertThat(jdbc.queryForObject("SELECT failures FROM provider_event WHERE id=?", Integer.class, held.id()))
+                .isZero();
         assertThat(store.complete(held.id(), 1)).isTrue();
     }
 

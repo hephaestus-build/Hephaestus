@@ -162,7 +162,7 @@ Its existing natural keys, state transitions or delivery protocol own its idempo
 The inbox fence covers Spring write transactions on the dispatch thread. It does not cover autocommit writes or another thread.
 Provider handlers must delegate database writes to transactional services and must not send raw inbox envelopes to async jobs.
 Architecture guards both boundaries. `CommitEnrichmentEventListener`, `SyncPushService` and Modulith jobs are separate work.
-Their person-data contracts are recorded in the [personal-data map](../admin/dsms/personal-data-map.md).
+Their person-data contracts are recorded in the [personal-data map](/admin/dsms/personal-data-map).
 Do not carry an inbox step into a later job by thread-local context.
 
 ## Other ingestion listeners
