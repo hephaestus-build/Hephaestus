@@ -647,6 +647,12 @@ That workspace supplies the TypeScript 6 compiler API required by the stable gen
 The applications and root tooling keep TypeScript 7.
 The generator pin lives in `scripts/api-generator/package.json`.
 
+Both configurations disable the generated root entry file.
+The webapp's owned `src/api.ts` exports types without listing each schema.
+Oxfmt runs on each generated directory with `scripts/api-generator/oxfmt.generated.json`,
+so one API addition does not rewrite a single long import or export line.
+All generated outputs stay committed. CI regenerates them and requires a clean tree.
+
 - Schema names carry no `DTO` suffix. The server strips it when it publishes the spec.
 - Pair every new endpoint with its generated TanStack Query options. Never hand-roll `fetch` — the
   generated client is configured once and carries the cookie session.

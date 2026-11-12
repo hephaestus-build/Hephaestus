@@ -293,6 +293,9 @@ file is covered.
 ## Generated files
 
 `src/api/**` and `src/routeTree.gen.ts` are generated — the repo-root `AGENTS.md` has the commands.
+
+`src/api.ts` is the owned type facade. See `docs/contributor/local-development.mdx` § OpenAPI client.
+
 Regenerating **empties** `src/api/`, so nothing hand-written survives there, not even a test about the
 generated client. `src/test/response-transformers.test.ts` lives outside that directory for exactly
 this reason.

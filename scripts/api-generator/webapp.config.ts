@@ -36,7 +36,16 @@ function operationModule(symbol: { name: string; meta?: Readonly<Record<string, 
 
 export default defineConfig({
 	input: "../../server/openapi.yaml",
-	output: "../../webapp/src/api",
+	output: {
+		path: "../../webapp/src/api",
+		entryFile: false,
+		postProcess: [
+			{
+				command: "oxfmt",
+				args: ["--config", "./oxfmt.generated.json", "--disable-nested-config", "{{path}}"],
+			},
+		],
+	},
 	parser: {
 		hooks: {
 			symbols: {
