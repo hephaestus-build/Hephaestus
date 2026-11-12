@@ -3,7 +3,15 @@ package de.tum.cit.aet.hephaestus.agent.run;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.agent.job.ReviewComposeRunKind;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
+import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
+import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.observability.LogCapture;
+import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -18,6 +26,11 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +38,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @DisplayName("Agent runs over PostgreSQL Integration")
@@ -44,6 +58,12 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private LlmUsageRecorder usage;
+
+    @Autowired
+    private ReviewComposeRunKind composeKind;
 
     private long workspace;
     private long other;
@@ -326,13 +346,16 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
         AgentRunLease lease = claim().orElseThrow();
         transactions.executeWithoutResult(status -> runs.end(lease.fence()));
 
+        Duration window = Duration.ofMinutes(11);
         AgentRunRef next = Objects.requireNonNull(transactions.execute(status -> {
-            AgentRunRef continued = runs.continueAfter(run, lease.epoch());
+            AgentRunRef continued = runs.continueAfter(run, lease.epoch(), Duration.ZERO, window);
             runs.retire(run);
             return continued;
         }));
 
         AgentRunLease continued = claim().orElseThrow();
+        assertThat(continued.deadline())
+                .isEqualTo(runs.find(next).orElseThrow().getAvailableAt().plus(window));
         assertThat(continued.epoch()).isEqualTo(lease.epoch() + 1);
         assertThat(continued.attempt())
                 .as("the continuation spends one attempt")
@@ -347,8 +370,9 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
         AgentRunLease measured = claim().orElseThrow();
         transactions.executeWithoutResult(status -> runs.end(measured.fence()));
 
-        Objects.requireNonNull(
-                transactions.execute(status -> runs.continueAs(run, measured.epoch(), AgentRunKind.REVIEW_COMPOSE)));
+        Duration window = Duration.ofMinutes(11);
+        Objects.requireNonNull(transactions.execute(
+                status -> runs.continueAs(run, measured.epoch(), AgentRunKind.REVIEW_COMPOSE, window)));
 
         assertThat(claim())
                 .as("the measuring kind's claim does not offer the composition")
@@ -356,14 +380,229 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
         AgentRunLease composing = Objects.requireNonNull(transactions.execute(
                         status -> runs.claimSubject(workspace, "review:composed", Set.of(AgentRunKind.REVIEW_COMPOSE))))
                 .orElseThrow();
+        assertThat(composing.deadline())
+                .isEqualTo(runs.find(composing.fence().run())
+                        .orElseThrow()
+                        .getAvailableAt()
+                        .plus(window));
         assertThat(composing.kind()).isEqualTo(AgentRunKind.REVIEW_COMPOSE);
         assertThat(composing.epoch()).isEqualTo(measured.epoch() + 1);
         assertThat(composing.attempt()).as("the next step is no retry").isEqualTo(measured.attempt());
         assertThat(jdbc.queryForObject("SELECT band FROM agent_run WHERE id = ?", String.class, composing.runId()))
                 .isEqualTo("INTERACTIVE");
         assertThatThrownBy(() -> transactions.executeWithoutResult(
-                        status -> runs.continueAs(run, measured.epoch(), AgentRunKind.REVIEW)))
+                        status -> runs.continueAs(run, measured.epoch(), AgentRunKind.REVIEW, window)))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void shouldKeepTheComposeDeadlineWhenAFreeRequeueRestoresALostLocalDecision() {
+        AgentRunRef measured = enqueue(workspace, AgentRunBand.BATCH, "review:compose-reclaimed");
+        var first = claim().orElseThrow();
+        AgentRunRef composing = Objects.requireNonNull(transactions.execute(tx -> {
+            runs.end(first.fence());
+            return runs.continueAs(measured, first.epoch(), AgentRunKind.REVIEW_COMPOSE, Duration.ofMinutes(11));
+        }));
+        var leased = Objects.requireNonNull(transactions.execute(tx ->
+                        runs.claimSubject(workspace, "review:compose-reclaimed", Set.of(AgentRunKind.REVIEW_COMPOSE))))
+                .orElseThrow();
+        var deadline = leased.deadline();
+        transactions.executeWithoutResult(
+                tx -> assertThat(runs.requeue(leased.fence(), AgentRuns.Charge.FREE, Duration.ZERO, null))
+                        .isTrue());
+        var reclaimed = Objects.requireNonNull(transactions.execute(tx ->
+                        runs.claimSubject(workspace, "review:compose-reclaimed", Set.of(AgentRunKind.REVIEW_COMPOSE))))
+                .orElseThrow();
+        assertThat(reclaimed.runId()).isEqualTo(composing.id());
+        assertThat(reclaimed.deadline()).isNotNull().isEqualTo(deadline);
+        assertThat(reclaimed.attempt()).isEqualTo(leased.attempt());
+        assertThat(reclaimed.epoch()).isEqualTo(leased.epoch() + 1);
+    }
+
+    @Test
+    void shouldContinueAnExpiredRunOnceWhenTwoReapersCompete() throws Exception {
+        AgentRunRef old = enqueue(workspace, AgentRunBand.BATCH, "review:competing-continuation");
+        AgentRunLease lease = claim().orElseThrow();
+        Instant originalDeadline = Instant.now().plus(Duration.ofHours(1)).truncatedTo(ChronoUnit.MICROS);
+        transactions.executeWithoutResult(
+                tx -> assertThat(runs.limit(lease.fence(), originalDeadline)).isTrue());
+        UUID call = openCall(lease);
+        expire(old.id());
+        var ready = new CountDownLatch(2);
+        var start = new CountDownLatch(1);
+        var window = Duration.ofMinutes(11);
+        var delay = Duration.ofMinutes(12);
+        var outcomes = new ConcurrentLinkedQueue<AgentRunRef>();
+        var meters = new SimpleMeterRegistry();
+        try (var workers = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<?>> futures = new ArrayList<>();
+            for (int i = 0; i < 2; i++)
+                futures.add(workers.submit(() -> {
+                    var handler = new RecordingHandler(5) {
+                        @Override
+                        public void lock(AgentRunRef run) {
+                            ready.countDown();
+                            try {
+                                assertThat(start.await(10, TimeUnit.SECONDS)).isTrue();
+                            } catch (InterruptedException interrupted) {
+                                Thread.currentThread().interrupt();
+                                throw new IllegalStateException(interrupted);
+                            }
+                        }
+
+                        @Override
+                        public LossOutcome lost(AgentRunFence fence) {
+                            var next = runs.continueExpired(fence, delay, window);
+                            outcomes.add(next);
+                            return new Continued(next);
+                        }
+                    };
+                    new AgentRunReaper(repository, transactions, List.of(handler), meters).reap();
+                }));
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            for (var future : futures) future.get(10, TimeUnit.SECONDS);
+        }
+        assertThat(meters.counter(AgentMetrics.AGENT_RUN_REAPER_FAILURE).count())
+                .isZero();
+        assertThat(meters.counter(AgentMetrics.AGENT_RUN_REAPED, "kind", "review", "outcome", "continued")
+                        .count())
+                .isEqualTo(1);
+        assertThat(outcomes).singleElement().satisfies(next -> {
+            var successor = runs.find(next).orElseThrow();
+            assertThat(successor.getAttempt()).isEqualTo(lease.attempt() + 1);
+            assertThat(successor.getLeaseEpoch()).isEqualTo(lease.epoch());
+            assertThat(successor.getAvailableAt())
+                    .isEqualTo(successor.getCreatedAt().plus(delay));
+            assertThat(successor.getDeadline())
+                    .isEqualTo(successor.getAvailableAt().plus(window));
+            assertThat(successor.getKind()).isEqualTo(lease.kind());
+            assertThat(successor.getBand()).isEqualTo(AgentRunBand.BATCH);
+            assertThat(successor.getConcurrencyKey()).isEqualTo("review:competing-continuation");
+        });
+        assertThat(state(old.id())).isEqualTo("ENDED");
+        assertThat(stopReason(old.id())).isEqualTo("CANCELLED");
+        assertThat(deadline(old.id())).isEqualTo(originalDeadline);
+        assertThat(attempt(old.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM agent_run WHERE workspace_id = ? AND state = 'QUEUED'",
+                        Long.class,
+                        workspace))
+                .isEqualTo(1);
+        assertThat(jdbc.queryForMap("SELECT call_state, unreported_calls FROM llm_usage_event WHERE id = ?", call))
+                .containsEntry("call_state", "SETTLED")
+                .containsEntry("unreported_calls", 1);
+        assertThat(runs.isCurrent(old, lease.epoch())).isFalse();
+        transactions.executeWithoutResult(
+                tx -> assertThat(runs.renew(lease.fence())).isEmpty());
+        assertThatThrownBy(() -> transactions.executeWithoutResult(tx -> runs.requireCurrent(lease.fence())))
+                .isInstanceOf(StaleRunException.class);
+    }
+
+    @Test
+    void shouldTreatARenewalThatWinsAContinuationAsANoopWithoutAReaperFailure() {
+        AgentRunRef old = enqueue(workspace, AgentRunBand.BATCH, "review:continued-renewal");
+        AgentRunLease lease = claim().orElseThrow();
+        UUID call = openCall(lease);
+        expire(old.id());
+        var renewal = new TransactionTemplate(Objects.requireNonNull(transactions.getTransactionManager()));
+        renewal.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        var handler = new RecordingHandler(5) {
+            @Override
+            public LossOutcome lost(AgentRunFence fence) {
+                renewal.executeWithoutResult(tx -> jdbc.update(
+                        "UPDATE agent_run SET leased_until = now() + interval '1 minute' WHERE id = ?", fence.runId()));
+                return new Continued(runs.continueExpired(fence, Duration.ZERO, Duration.ofMinutes(11)));
+            }
+        };
+        var meters = new SimpleMeterRegistry();
+        try (var logs = new LogCapture(AgentRunReaper.class)) {
+            new AgentRunReaper(repository, transactions, List.of(handler), meters).reap();
+            assertThat(logs.events("agent.run.reaper.failed")).isEmpty();
+            assertThat(logs.events("agent.run.continued")).isEmpty();
+        }
+        assertThat(meters.counter(AgentMetrics.AGENT_RUN_REAPER_FAILURE).count())
+                .isZero();
+        assertThat(state(old.id())).isEqualTo("LEASED");
+        assertThat(attempt(old.id())).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM agent_run WHERE workspace_id = ?", Long.class, workspace))
+                .isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT call_state FROM llm_usage_event WHERE id = ?", String.class, call))
+                .isEqualTo("OPEN");
+    }
+
+    @Test
+    void shouldRollBackTheSuccessorAndSettlementWhenDomainRelinkFailsAndKeepTheFailureSignal() {
+        AgentRunRef old = enqueue(workspace, AgentRunBand.BATCH, "review:continued-rollback");
+        AgentRunLease lease = claim().orElseThrow();
+        UUID call = openCall(lease);
+        expire(old.id());
+        var handler = new RecordingHandler(5) {
+            @Override
+            public LossOutcome lost(AgentRunFence fence) {
+                runs.continueExpired(fence, Duration.ZERO, Duration.ofMinutes(11));
+                throw new IllegalStateException("domain relink refused");
+            }
+        };
+        var meters = new SimpleMeterRegistry();
+        new AgentRunReaper(repository, transactions, List.of(handler), meters).reap();
+        assertThat(meters.counter(AgentMetrics.AGENT_RUN_REAPER_FAILURE).count())
+                .isEqualTo(1);
+        assertThat(meters.counter(AgentMetrics.AGENT_RUN_REAPED, "kind", "review", "outcome", "continued")
+                        .count())
+                .isZero();
+        assertThat(state(old.id())).isEqualTo("LEASED");
+        assertThat(attempt(old.id())).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM agent_run WHERE workspace_id = ?", Long.class, workspace))
+                .isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT call_state FROM llm_usage_event WHERE id = ?", String.class, call))
+                .isEqualTo("OPEN");
+    }
+
+    @Test
+    void shouldSignalAnExpiredCompositionWithNoDomainInsteadOfHidingItAsAStaleFence() {
+        AgentRunRef orphan = Objects.requireNonNull(transactions.execute(tx -> runs.enqueue(
+                workspace, AgentRunKind.REVIEW_COMPOSE, AgentRunBand.BATCH, "review:missing-domain", null)));
+        var lease = Objects.requireNonNull(transactions.execute(tx ->
+                        runs.claimSubject(workspace, "review:missing-domain", Set.of(AgentRunKind.REVIEW_COMPOSE))))
+                .orElseThrow();
+        UUID call = openCall(lease);
+        expire(orphan.id());
+        var meters = new SimpleMeterRegistry();
+        try (var logs = new LogCapture(AgentRunReaper.class)) {
+            new AgentRunReaper(repository, transactions, List.of(composeKind), meters).reap();
+            assertThat(logs.events("agent.run.reaper.failed"))
+                    .singleElement()
+                    .satisfies(fields -> assertThat(fields)
+                            .containsEntry("run.id", orphan.id().toString())
+                            .containsEntry("error.type", IllegalStateException.class.getName()));
+        }
+        assertThat(meters.counter(AgentMetrics.AGENT_RUN_REAPER_FAILURE).count())
+                .isEqualTo(1);
+        assertThat(state(orphan.id())).isEqualTo("LEASED");
+        assertThat(attempt(orphan.id())).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM agent_run WHERE workspace_id = ?", Long.class, workspace))
+                .isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT call_state FROM llm_usage_event WHERE id = ?", String.class, call))
+                .isEqualTo("OPEN");
+    }
+
+    private UUID openCall(AgentRunLease lease) {
+        return Objects.requireNonNull(transactions.execute(tx -> usage.open(new LlmUsageRecorder.OpenCall(
+                workspace,
+                lease.runId(),
+                lease.epoch(),
+                "PRACTICE_REVIEW",
+                UsageSourceType.REVIEW_JOB,
+                UUID.randomUUID(),
+                lease.epoch() - 1,
+                null,
+                ModelKind.CHAT,
+                null,
+                "compose-test",
+                new LlmPriceSnapshot(
+                        UsageFundingSource.INSTANCE, UsagePricingState.UNPRICED, null, null, null, null, null, null),
+                null))));
     }
 
     @Test
@@ -441,9 +680,9 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
     void shouldEndTheRunWhenItsKindEndedTheDomainRowInsteadOfQueuingItAgain() {
         var handler = new RecordingHandler(5) {
             @Override
-            public boolean lost(AgentRunFence fence) {
+            public LossOutcome lost(AgentRunFence fence) {
                 super.lost(fence);
-                return false;
+                return new End();
             }
         };
         var reaper = reaper(handler);
@@ -461,7 +700,7 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
     void shouldRollTheDomainBackWhenTheLeaseWasRenewedBeforeTheReaperWroteTheRun() {
         var renewing = new RecordingHandler(5) {
             @Override
-            public boolean lost(AgentRunFence fence) {
+            public LossOutcome lost(AgentRunFence fence) {
                 // The holder renews between the reaper's read and its write.
                 jdbc.update(
                         "UPDATE agent_run SET leased_until = now() + interval '1 minute' WHERE id = ?", fence.runId());
@@ -490,7 +729,7 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
         expire(behind.runId());
         var handler = new RecordingHandler(5) {
             @Override
-            public boolean lost(AgentRunFence fence) {
+            public LossOutcome lost(AgentRunFence fence) {
                 if (fence.runId().equals(failing.runId())) throw new IllegalStateException("the domain row is broken");
                 return super.lost(fence);
             }
@@ -747,13 +986,13 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
         }
 
         @Override
-        public boolean lost(AgentRunFence fence) {
+        public LossOutcome lost(AgentRunFence fence) {
             assertThat(locked).isEqualTo(fence.run());
             assertThat(state(fence.runId()))
                     .as("the domain moves before the run")
                     .isEqualTo("LEASED");
             requeued.add(fence);
-            return true;
+            return new Requeue();
         }
 
         @Override

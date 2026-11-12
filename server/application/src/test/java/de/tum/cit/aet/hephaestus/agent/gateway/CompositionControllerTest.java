@@ -24,6 +24,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -36,6 +38,7 @@ import tools.jackson.databind.node.JsonNodeFactory;
 @Tag("unit")
 class CompositionControllerTest {
     private static final Instant RUN_ENDS = Instant.now().plus(Duration.ofMinutes(20));
+    private static final Instant WORK_ENDS = RUN_ENDS.minus(Duration.ofMinutes(1));
 
     private final ReviewComposeSandboxKind kind = mock(ReviewComposeSandboxKind.class);
     private final CompositionSessions sessions = mock(CompositionSessions.class);
@@ -95,6 +98,22 @@ class CompositionControllerTest {
     }
 
     @Test
+    void shouldKeepOneWorkDeadlineAndReserveTimeToClose() {
+        when(kind.prepare(run)).thenReturn(composing);
+        when(sessions.next(composing.job(), composing.identity(), Set.of()))
+                .thenReturn(Optional.of(new CompositionSessions.Unavailable(CompositionStop.INPUTS_GONE)));
+
+        var first = controller.next(run, new CompositionController.NextRequest(List.of()));
+        var second = controller.next(run, new CompositionController.NextRequest(List.of()));
+
+        assertThat(first.getBody())
+                .isNotNull()
+                .extracting(CompositionController.NextAnswer::deadline)
+                .isEqualTo(WORK_ENDS);
+        assertThat(second.getBody()).isEqualTo(first.getBody());
+    }
+
+    @Test
     void shouldNeverLetAToolWaitPastTheRunsDeadline() {
         when(kind.prepare(run)).thenReturn(composing);
         var calls = ArgumentCaptor.forClass(CompositionSessions.ToolCall.class);
@@ -103,7 +122,7 @@ class CompositionControllerTest {
 
         controller.tool(run, "publish_package", request(RUN_ENDS.plus(Duration.ofHours(1))));
 
-        assertThat(calls.getValue().deadline()).isEqualTo(RUN_ENDS);
+        assertThat(calls.getValue().deadline()).isEqualTo(WORK_ENDS);
         assertThat(calls.getValue().name()).isEqualTo("publish_package");
     }
 

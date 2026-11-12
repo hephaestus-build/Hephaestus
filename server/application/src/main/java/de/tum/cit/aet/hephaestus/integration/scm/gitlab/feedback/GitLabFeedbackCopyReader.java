@@ -29,11 +29,13 @@ import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 @Component
 @ConditionalOnServerRole
 @ConditionalOnProperty(name = "hephaestus.integration.gitlab.enabled", havingValue = "true", matchIfMissing = false)
 public class GitLabFeedbackCopyReader implements FeedbackCopyReader {
+    private static final JsonMapper PROVIDER_JSON = new JsonMapper();
     private static final int PAGE_SIZE = 100;
     private static final int MAX_PAGES = 3;
     private final GitLabGraphQlClientProvider provider;
@@ -96,7 +98,7 @@ public class GitLabFeedbackCopyReader implements FeedbackCopyReader {
                 author = viewer;
                 Object payload = response.field(issue ? "project.issue.notes" : "project.mergeRequest.notes")
                         .getValue();
-                JsonNode notes = mapper.valueToTree(payload);
+                JsonNode notes = PROVIDER_JSON.valueToTree(payload);
                 if (!notes.path("nodes").isArray()
                         || !notes.path("pageInfo").path("hasPreviousPage").isBoolean()) return unavailable(copies);
                 for (var note : notes.path("nodes")) {

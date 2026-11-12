@@ -126,7 +126,10 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
                         fence.workspaceId(),
                         fence.epoch(),
                         fence.runId(),
-                        runs.find(ref).map(AgentRun::getDeadline).orElse(null)));
+                        runs.find(ref)
+                                .map(AgentRun::getDeadline)
+                                .map(ReviewRunKind::compositionWorkDeadline)
+                                .orElse(null)));
     }
 
     @Override
@@ -189,7 +192,7 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
         try {
             boolean held = switch (outcome) {
                 case COMPLETED -> terminal.completeComposed(jobId, fence);
-                case HANDED_ON -> reviewRuns.requeue(jobId, fence, AgentRuns.Charge.SPEND, Duration.ZERO, null);
+                case HANDED_ON -> reviewRuns.retryComposition(jobId, fence);
             };
             custody.release(composing.identity());
             var decision = decisions.remove(fence);

@@ -662,6 +662,25 @@ The open item "Ordered provider events across server replicas" closes with that 
 
 The JVM composer, `ReviewModelGateway` and `CompositionCapacity` are removed, as § Decision says. A review's feedback is composed only in a `REVIEW_COMPOSE` run in the review's sandbox. [ADR 0061](0061-review-seals-then-feedback-composes.md), update of 2026-11-10, has the details. `ModelSession` stays for product feedback drafting only.
 
+## Update — 2026-11-11: compose deadlines and expired-run continuation
+
+A composition run gets a deadline when it is created.
+Its work window starts after the retry delay, and its run reserves one minute after the work deadline to record its stop and close.
+Model calls, composer tools and provider readback share the work deadline.
+A free requeue keeps the deadline.
+A charged retry or lost lease continues on a new run with the same attempt budget.
+
+The reaper's handler returns an explicit `Requeue`, `End` or `Continued(next)` outcome.
+For a continuation, `AgentRuns.continueExpired` conditionally ends the expired lease as `CANCELLED`, settles its open calls and creates the successor.
+The domain relink is in that transaction.
+A stale conditional write rolls it all back as an expected no-op.
+Other failures keep their failure signal.
+[Agent runs](../contributor/agent-runs.mdx#reaper) owns the contract.
+
+[PostgreSQL's read committed rules](https://www.postgresql.org/docs/current/transaction-iso.html#XACT-READ-COMMITTED) state that a concurrent update rechecks its condition after the earlier writer commits.
+That makes the workspace, id, epoch and expired-state condition the winner check.
+[Java 21's sealed interfaces and record cases](https://docs.oracle.com/en/java/javase/21/language/sealed-classes-and-interfaces.html) keep the three outcomes explicit and carry the successor reference without a second state flag.
+
 ## Sources
 
 Fetched 2026-11-09.

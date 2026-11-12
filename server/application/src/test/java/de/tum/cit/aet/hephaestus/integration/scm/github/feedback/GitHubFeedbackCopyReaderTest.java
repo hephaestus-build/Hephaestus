@@ -142,7 +142,7 @@ class GitHubFeedbackCopyReaderTest {
         var subjects = mock(GitHubPrNodeIdResolver.class);
         when(subjects.resolve(1, "group", "repo", 3)).thenReturn("PR_3");
         when(subjects.resolveIssue(1, "group", "repo", 3)).thenReturn("I_3");
-        return new GitHubFeedbackCopyReader(provider, subjects, ScmFeedbackFixtures.resolver(), MAPPER);
+        return new GitHubFeedbackCopyReader(provider, subjects, ScmFeedbackFixtures.resolver());
     }
 
     private static ObjectNode thread() {

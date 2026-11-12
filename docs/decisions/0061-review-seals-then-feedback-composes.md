@@ -114,3 +114,8 @@ The update of 2026-11-09 is implemented.
 - A claim of a review run never composes. An admitted review that a review run claims again, as after a lost lease, is handed on at once and measures nothing.
 - The worker step is gone: `WorkerFeedbackComposer`, `CompositionHandedOnException`, `ReviewModelGateway`, `CompositionCapacity`, and the settings `hephaestus.agent.max-active-compositions` and `hephaestus.agent.max-concurrent-compositions`.
 - Correction to the update of 2026-11-09: the `review_compose` run continues the job's attempt count. A hand-on spends no attempt, and a lost composition spends one, as § Retry says.
+
+## Update — 2026-11-11: the compose run owns its deadline
+
+[ADR 0079](0079-one-agent-system.md#update--2026-11-11-compose-deadlines-and-expired-run-continuation) defines composition's fixed work deadline, closing reserve and atomic continuation after a lost lease.
+The retry budget still spans the review and its composition.

@@ -4,7 +4,7 @@ import java.time.Duration;
 
 /**
  * The domain side of one {@link AgentRunKind}. The reaper calls it in the transaction that takes a run back, before it
- * writes the run, so the domain row moves with its run or neither moves, and the domain still reads the run as the lost
+ * writes the run, unless the handler atomically continues it. The domain moves with its run or neither moves, and the domain reads the run as the lost
  * holder left it: first {@link #lock}, then {@link #lost} or {@link #ended}.
  */
 public interface AgentRunHandler {
@@ -26,14 +26,18 @@ public interface AgentRunHandler {
     void lock(AgentRunRef run);
 
     /**
-     * The lease under {@code fence} expired, and the run has retries left. The holder of that epoch can no longer
-     * write.
-     *
-     * @return true when the domain row went back to the queue, so the run is queued again for its next claim; false
-     *     when the kind's own budget for the work is spent and it ended the domain row, so the run ends with {@link
-     *     AgentRunStopReason#ATTEMPTS_EXHAUSTED}
+     * The lease expired with retries left. The domain either queues the same run, ends, or atomically replaces the run.
+     * A continuation already ended the old run and relinked its successor; the reaper must not write it again.
      */
-    boolean lost(AgentRunFence fence);
+    LossOutcome lost(AgentRunFence fence);
+
+    sealed interface LossOutcome permits Requeue, End, Continued {}
+
+    record Requeue() implements LossOutcome {}
+
+    record End() implements LossOutcome {}
+
+    record Continued(AgentRunRef next) implements LossOutcome {}
 
     /** The run ends without its holder: its leases were lost too often, or its deadline passed. */
     void ended(AgentRunRef run, int lastEpoch, AgentRunStopReason reason);

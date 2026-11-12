@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.SandboxReviewClaims;
 import de.tum.cit.aet.hephaestus.agent.proxy.ConversationLoopProperties;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
+import de.tum.cit.aet.hephaestus.agent.proxy.SandboxModelProxy;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
@@ -96,6 +97,19 @@ public final class ComposeRunGateway implements AutoCloseable {
             ReviewMemberAiPolicy policy,
             ReviewAttemptCustody custody,
             UnaryOperator<JsonNode> model) {
+        this(context, policy, custody, modelRoute(model));
+    }
+
+    /** The real model proxy, with delivery advanced by the test instead of a background worker. */
+    public ComposeRunGateway(ApplicationContext context, ReviewMemberAiPolicy policy, ReviewAttemptCustody custody) {
+        this(context, policy, custody, SandboxModelProxy.controller(context));
+    }
+
+    private ComposeRunGateway(
+            ApplicationContext context,
+            ReviewMemberAiPolicy policy,
+            ReviewAttemptCustody custody,
+            Object modelEndpoint) {
         var runs = context.getBean(AgentRuns.class);
         var transactions = context.getBean(TransactionTemplate.class);
         var jobs = context.getBean(ReviewJobRepository.class);
@@ -145,7 +159,7 @@ public final class ComposeRunGateway implements AutoCloseable {
             factory.registerSingleton(
                     "agentRunController", new AgentRunController(runs, sandboxes, transactions, List.of(kind)));
             factory.registerSingleton("compositionController", new CompositionController(kind, sessions));
-            factory.registerSingleton("modelRoute", modelRoute(model));
+            factory.registerSingleton("modelEndpoint", modelEndpoint);
             factory.registerSingleton("sandboxRunArguments", new WebMvcConfigurer() {
                 @Override
                 public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {

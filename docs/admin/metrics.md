@@ -224,7 +224,7 @@ A turn has a second attempt only after a lease expiry ([Runtime Roles](./runtime
 | `llm_proxy_upstream_stalled_total`         | Counter   | `apiProtocol` | conversation model calls and streamed review model calls that the worker's LLM proxy cut after the first-byte or the idle bound |
 | `resilience4j_circuitbreaker_state`        | Gauge     | `name`, `state` | The provider breaker of each connection, named `llm-connection-<scope>-<connection id>`. `state="open"` is 1 while it refuses calls |
 | `resilience4j_circuitbreaker_not_permitted_calls_total` | Counter | `name`, `kind` | Model calls that a provider breaker refused |
-| `agent_run_reaped_total`                   | Counter   | `kind`, `outcome` | Expired run leases taken back, by kind, and whether the run was `requeued` or ended (`attempts_exhausted`, `deadline`) |
+| `agent_run_reaped_total`                   | Counter   | `kind`, `outcome` | Expired run leases taken back, by kind, and whether the run was `requeued`, `continued` on a successor, or ended (`attempts_exhausted`, `deadline`, `not_started`) |
 | `agent_run_reaper_failure_total`           | Counter   | none      | Runs that the reaper failed to take back. It tries each again next pass  |
 | `agent_sandbox_reaped_total`             | Counter   | `reason`  | Sandboxes that the reaper took back: `expired`, `start_limit`, `idle`, or `orphan` for a claim that no sandbox row names |
 | `agent_sandbox_dispatch_failure_total`   | Counter   | none      | Dispatch passes that failed to request the sandbox of a due run. It tries again at the next pass |

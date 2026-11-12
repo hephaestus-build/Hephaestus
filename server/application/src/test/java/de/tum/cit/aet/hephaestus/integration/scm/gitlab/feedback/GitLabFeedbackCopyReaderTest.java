@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReadRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyReadback;
@@ -28,7 +29,11 @@ import tools.jackson.databind.node.ObjectNode;
 
 @Tag("unit")
 class GitLabFeedbackCopyReaderTest {
-    private static final JsonMapper MAPPER = new JsonMapper();
+    private static final JsonMapper MAPPER = JsonMapper.builder()
+            .changeDefaultPropertyInclusion(inclusion -> inclusion
+                    .withValueInclusion(JsonInclude.Include.NON_NULL)
+                    .withContentInclusion(JsonInclude.Include.NON_NULL))
+            .build();
     private static final UUID COPY = UUID.fromString("32000000-0000-4000-8000-000000000001");
     private static final String MARKER = "<!-- hephaestus-feedback-copy:" + COPY + " -->";
     private static final String HEAD = "b".repeat(40);

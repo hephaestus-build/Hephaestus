@@ -165,6 +165,7 @@ These are fields, not metric labels.
 
 | `event.name` | Emitted when | Fields |
 | --- | --- | --- |
+| `agent.run.continued` | The reaper replaces an expired composition run and relinks its review in one transaction | `run.id`, `run.epoch`, `subject.key`, `workspace.id`, `run.kind`, `run.next_id` |
 | `agent.run.requeued` | The reaper takes back an expired lease, and the run has retries left | `run.id`, `run.epoch`, `subject.key`, `workspace.id`, `run.kind` |
 | `agent.run.ended` | The reaper ends a run: its lease expired at its retry limit, or it passed its deadline | The same, and `run.stop_reason` |
 | `agent.run.reaper.failed` | The reaper cannot take back one run. It tries the run again on the next pass | The same, and `error.type` |

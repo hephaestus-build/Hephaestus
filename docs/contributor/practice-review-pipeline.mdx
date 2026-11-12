@@ -462,6 +462,13 @@ The review run measures and admits, and never composes.
 A review that admitted results then hands on to a `review_compose` run in the same review sandbox.
 That run's composer loop calls the model and every composer tool through the gateway.
 The composition run continues the review's attempt count.
+
+Its creation sets the work deadline from `composition-timeout`, after any retry backoff.
+Every destination, model call and provider readback uses that deadline.
+The run reserves one more minute for the composer to record its stop and close before the driver aborts.
+A resumed composition or a retry gets a new run with its own deadline.
+A retry keeps the review's attempt limit and backoff.
+
 It reads the inputs that admission retained, the admitted results, and the server's reads of routing and history.
 It first composes the review on the work, then the private feedback, which reads the review it follows.
 
