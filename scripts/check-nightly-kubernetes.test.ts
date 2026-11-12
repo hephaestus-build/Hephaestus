@@ -74,6 +74,18 @@ void test("a cancelled newest run is passed over for the newest run that ran", a
 	assert.match(result.refusal ?? "", /k3s 1\.37 amd64/u);
 });
 
+void test("a failed parallel roll and eviction leg refuses release admission", async () => {
+	const name = "Kubernetes / k3s 1.37 amd64 roll and eviction";
+	const result = await nightlyRefusal(
+		repository,
+		api([run(8, "failure")], {
+			8: [...passingLegs, { name, conclusion: "failure" }],
+		}),
+		now,
+	);
+	assert.equal(result.refusal?.includes(name), true);
+});
+
 void test("a stale run, a run with no cluster leg and no run at all refuse the release", async () => {
 	const stale = await nightlyRefusal(
 		repository,

@@ -3012,7 +3012,7 @@ void describe("CI contract", () => {
 		assert.match(reusable, /kubernetes-cluster\.ts verify/u);
 		assert.match(reusable, /kubernetes-cluster\.ts request/u);
 		assert.match(reusable, /kubernetes-cluster\.ts live --packaged/u);
-		assert.match(reusable, /inputs\.application-artifact != '' && env\.DRILLS == 'true'/u);
+		assert.match(reusable, /inputs\.application-artifact != '' && env\.QUALIFY == 'true'/u);
 		assert.doesNotMatch(source, /sandbox-isolation-probe\.ts/u);
 	});
 
@@ -6166,29 +6166,32 @@ void test("a cluster leg is named for its distribution, minor and architecture, 
 
 function clusterMatrix(queue: boolean, arm64 = false) {
 	const workflow = parseDocument(readFileSync(".github/workflows/ci-kubernetes.yml", "utf8"));
-	const include = ["k3d-1-35-amd64", "k3d-1-35-arm64", "k3d", "calico"].flatMap((key) => {
-		if (
-			!jobRuns(workflow, key, "pull_request", { schema: { result: "success" } }, false, {
-				queue,
-				arm64,
-			})
-		) {
-			return [];
-		}
-		return [
-			{
-				leg: key === "calico" ? "calico" : "k3d",
-				minor:
-					key === "calico"
-						? "1.35"
-						: String(workflow.getIn(["jobs", key, "env", "KUBERNETES_MINOR"])),
-				arch:
-					key === "calico"
-						? "amd64"
-						: String(workflow.getIn(["jobs", key, "env", "KUBERNETES_ARCH"])),
-			},
-		];
-	});
+	const include = ["k3d-1-35-amd64", "k3d-1-35-arm64", "k3d", "k3d-drills", "calico"].flatMap(
+		(key) => {
+			if (
+				!jobRuns(workflow, key, "pull_request", { schema: { result: "success" } }, false, {
+					queue,
+					arm64,
+				})
+			) {
+				return [];
+			}
+			const distribution = key === "calico" ? "calico" : "k3d";
+			return [
+				{
+					leg: key === "k3d-drills" ? "drills" : distribution,
+					minor:
+						key === "calico"
+							? "1.35"
+							: String(workflow.getIn(["jobs", key, "env", "KUBERNETES_MINOR"])),
+					arch:
+						key === "calico"
+							? "amd64"
+							: String(workflow.getIn(["jobs", key, "env", "KUBERNETES_ARCH"])),
+				},
+			];
+		},
+	);
 	return { include };
 }
 
@@ -6223,9 +6226,14 @@ void test("a pull request runs the chart and the latest k3s on amd64; the queue 
 	const kubernetes = parseDocument(await readFile(".github/workflows/ci-kubernetes.yml", "utf8"));
 	const cicd = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 	const queue = String(cicd.getIn(["jobs", "Kubernetes", "with", "queue"]));
-	assert.doesNotMatch(queue, /pull_request/u, "a pull request must not run the queue's legs");
-	for (const event of ["merge_group", "push", "workflow_dispatch"]) {
-		assert.match(queue, new RegExp(`github\\.event_name == '${event}'`, "u"));
+	assert.equal(queue, `\${{ needs.detect-changes.outputs.queue-tier == 'true' }}`);
+	for (const full of ["true", "false"]) {
+		assert.equal(
+			expandExpressions(queue, {
+				needs: { "detect-changes": { outputs: { "queue-tier": full } } },
+			}),
+			full,
+		);
 	}
 	// A push that a merge group tested runs no leg; a push with no merge-group run, such as a direct
 	// push, runs them all. The nightly run on main runs every leg on the newest build that passed CI.
@@ -6292,11 +6300,17 @@ void test("a pull request runs the chart and the latest k3s on amd64; the queue 
 	assert.deepEqual(clusterLegs(false, true), ["k3d 1.37 amd64"]);
 	// The floor is the version of the cluster that the first operator runs (ADR 0060), so kind with
 	// Calico runs there.
-	assert.deepEqual(clusterLegs(true), ["k3d 1.35 amd64", "k3d 1.37 amd64", "calico 1.35 amd64"]);
+	assert.deepEqual(clusterLegs(true), [
+		"k3d 1.35 amd64",
+		"k3d 1.37 amd64",
+		"drills 1.37 amd64",
+		"calico 1.35 amd64",
+	]);
 	assert.deepEqual(clusterLegs(true, true), [
 		"k3d 1.35 amd64",
 		"k3d 1.35 arm64",
 		"k3d 1.37 amd64",
+		"drills 1.37 amd64",
 		"calico 1.35 amd64",
 	]);
 	for (const caller of [cicd, nightly]) {
@@ -6318,24 +6332,87 @@ void test("a pull request runs the chart and the latest k3s on amd64; the queue 
 	);
 });
 
-void test("a merge group runs no Kubernetes drill, and no release ships past a failed nightly run", async () => {
+void test("roll and eviction run in a separate parallel queue cluster while PR adapters keep their own artifact", async () => {
 	const kubernetes = parseDocument(await readFile(".github/workflows/ci-kubernetes.yml", "utf8"));
-	assert.equal(
-		kubernetes.getIn(["jobs", "k3d", "env", "DRILLS"]),
-		`\${{ github.event_name != 'merge_group' }}`,
-	);
-	const steps = kubernetes.getIn(["jobs", "k3d", "steps"]);
+	const rootEnv = kubernetes.get("env");
+	assert.ok(isMap(rootEnv));
+	const jobs = kubernetes.get("jobs");
+	assert.ok(isMap(jobs));
+	for (const event of ["pull_request", "merge_group", "workflow_dispatch", "schedule"]) {
+		for (const queue of [false, true]) {
+			assert.equal(jobRuns(kubernetes, "k3d-drills", event, {}, false, { queue }), queue);
+			for (const key of ["k3d", "k3d-drills", "k3d-1-35-amd64", "k3d-1-35-arm64"]) {
+				const localEnv = jobs.getIn([key, "env"]);
+				assert.ok(isMap(localEnv));
+				const rootValues = asRecord(rootEnv.toJSON(), "global cluster environment");
+				const jobValues = asRecord(localEnv.toJSON(), `${key} environment`);
+				const environment = Object.fromEntries(
+					Object.entries({ ...rootValues, ...jobValues }).map(
+						([name, value]) =>
+							[name, expandExpressions(value, { github: { event_name: event } })] as const,
+					),
+				);
+				const steps = jobs.getIn([key, "steps"]);
+				assert.ok(isSeq(steps));
+				const selected = (name: string, artifact = "server-build") => {
+					const worker = namedStep(kubernetes, ["jobs", key], name);
+					const condition = asString(
+						worker.get("if") ?? "true",
+						"cluster step condition",
+					).replaceAll(/^\$\{\{\s*|\s*\}\}$/gu, "");
+					return (
+						expandExpressions(`\${{ ${condition} }}`, {
+							env: environment,
+							inputs: { "application-artifact": artifact, "backup-drill": true },
+						}) === "true"
+					);
+				};
+				const drills = key === "k3d-drills";
+				assert.equal(
+					selected("Keep a conversation turn through a server roll and a loop roll"),
+					drills,
+				);
+				assert.equal(selected("Verify kubelet memory eviction order on a disposable node"), drills);
+				assert.equal(
+					selected("Qualify the sandbox adapters in the chart server Pod"),
+					key === "k3d" && event !== "merge_group",
+				);
+				assert.equal(selected("Qualify the sandbox adapters in the chart server Pod", ""), false);
+				assert.equal(selected("Install, upgrade and verify"), !drills);
+				assert.equal(
+					selected("Start a sandbox on a new node without an image pull"),
+					key === "k3d",
+				);
+				assert.equal(selected("Back up, then restore to a point in time"), key === "k3d");
+			}
+		}
+	}
+	const drillJob = jobs.get("k3d-drills");
+	assert.ok(isMap(drillJob));
+	assert.equal(drillJob.has("needs"), false, "the drill cluster starts alongside qualification");
+	const permissions = drillJob.get("permissions");
+	assert.ok(isMap(permissions));
+	assert.deepEqual(permissions.toJSON(), { contents: "read", packages: "read" });
+	const steps = drillJob.get("steps");
 	assert.ok(isSeq(steps));
-	const drillSteps = steps.items.filter(isMap);
-	for (const drill of [
+	const join = steps.items.findIndex((item) => isMap(item) && item.get("wait-all") === true);
+	for (const name of [
 		"Keep a conversation turn through a server roll and a loop roll",
-		"Qualify the sandbox adapters in the chart server Pod",
 		"Verify kubelet memory eviction order on a disposable node",
 	]) {
-		const drillStep = drillSteps.find((item) => item.get("name") === drill);
-		assert.match(String(drillStep?.get("if")), /env\.DRILLS == 'true'/u, drill);
+		const index = steps.items.findIndex((item) => isMap(item) && item.get("name") === name);
+		const worker = namedStep(kubernetes, ["jobs", "k3d-drills"], name);
+		assert.equal(worker.get("background"), true);
+		assert.equal(worker.has("continue-on-error"), false);
+		assert.ok(index < join, "both native results must join before the job passes");
 	}
 	const cicd = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	const filter = step(cicd, ["jobs", "detect-changes"], "dorny/paths-filter");
+	const filters = asRecord(parseDocument(String(filter.get("filters"))).toJSON(), "CI filters");
+	assert.ok(
+		asArray(filters.kubernetes, "Kubernetes paths").includes("scripts/kubernetes-memory-drill.ts"),
+		"an eviction-drill change must select its blocking cluster jobs",
+	);
 	assert.equal(cicd.getIn(["jobs", "Release-preflight", "permissions", "actions"]), "read");
 	const preflight = cicd.getIn(["jobs", "Release-preflight", "steps"]);
 	assert.ok(isSeq(preflight));

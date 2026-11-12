@@ -565,6 +565,7 @@ jobs:
               - 'deploy/chart/**'
               - 'deploy/platform/**'
               - 'scripts/kubernetes-cluster.ts'
+              - 'scripts/kubernetes-memory-drill.ts'
               - 'scripts/sandbox-isolation.ts'
               - 'scripts/sandbox-prepull-drill.ts'
               - 'scripts/crd-schemas.ts'
@@ -1147,8 +1148,9 @@ jobs:
     with:
       commit: ${{ github.event.pull_request.head.sha || github.sha }}
       # A pull request runs the chart and latest k3s on amd64. The queue adds the floor on amd64 and
-      # kind, using the commit that main receives. Only the nightly run adds arm64.
-      queue: ${{ github.event_name == 'merge_group' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+      # kind and parallel roll/eviction, using the commit that main receives. ci:full reproduces
+      # those legs on a PR too. Only the nightly run adds arm64.
+      queue: ${{ needs.detect-changes.outputs.queue-tier == 'true' }}
       application-artifact: ${{ needs.server-package.result == 'success' && format('server-build-{0}', github.run_id) || '' }}
       backup-drill: ${{ needs.detect-changes.outputs.kubernetes-recovery == 'true' }}
 

@@ -29,6 +29,7 @@ import { bundle as generatedBundle, CONTROLLER } from "./cluster-admin-bundle.ts
 import { grants as ruleGrants } from "./cluster-preflight.ts";
 import { parseInventory } from "./commit-image-lock.ts";
 import { chartValues } from "./kubernetes-chart.ts";
+import { pressureNodeTaint, priorityClassResources } from "./kubernetes-memory-drill.ts";
 import { asArray, asRecord, isRecord, parseJson, readJsonFileSync } from "./lib/json.ts";
 import { packageReleaseChart } from "./release-chart.ts";
 import { parseReleaseImageLock } from "./release-image-lock.ts";
@@ -4927,4 +4928,43 @@ await test("the controller's Roles grant exactly what the pinned controller's up
 		)
 		.flatMap((role) => ruleGrants(role));
 	assert.deepEqual([...new Set(ours)].toSorted(), [...new Set(upstream)].toSorted());
+});
+
+await test("the parallel pressure drill waits for the chart's priorities and excludes role and sandbox Pods from its node", () => {
+	const resources = rendered([
+		...layersFor("dev"),
+		{
+			worker: {
+				enabled: true,
+				sandbox: { namespace: sandboxNamespace },
+				runtime: { runtimeClassName: "gvisor" },
+			},
+			networkPolicy: { kubernetesApi },
+		},
+	]);
+	const priorities = resources.filter((resource) => kindOf(resource) === "PriorityClass");
+	assert.deepEqual(
+		priorities.map((resource) => `priorityclass/${nameOf(resource)}`).toSorted(),
+		priorityClassResources.toSorted(),
+	);
+	const pods = [
+		...workloads(resources).map(podSpec),
+		...resources
+			.filter((resource) => kindOf(resource) === "SandboxTemplate")
+			.map((resource) => get(resource, "spec", "podTemplate", "spec")),
+	];
+	assert.ok(pods.length > 0);
+	for (const pod of pods) {
+		const tolerations = list(get(pod, "tolerations") ?? []);
+		assert.equal(
+			tolerations.some(
+				(toleration) =>
+					(get(toleration, "effect") === undefined || get(toleration, "effect") === "NoSchedule") &&
+					(get(toleration, "key") === pressureNodeTaint ||
+						(get(toleration, "key") === undefined && get(toleration, "operator") === "Exists")),
+			),
+			false,
+			"the pressure node must not admit production role or sandbox Pods",
+		);
+	}
 });
