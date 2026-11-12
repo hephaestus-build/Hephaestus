@@ -155,6 +155,26 @@ void test("the revert criterion counts groups a queue-tier job failed, apart fro
 	);
 });
 
+void test("native worker failures survive fail-fast cancellation; regrouping and reporter-only failures do not", () => {
+	const groups = [
+		...Array.from({ length: 20 }, () => ({ conclusion: "success", failedJobs: [] })),
+		{
+			conclusion: "cancelled",
+			failedJobs: ["Server tests / Integration (1 of 8)", "CI Status Gate"],
+		},
+		{ conclusion: "cancelled", failedJobs: ["Security / Dependencies, secrets and policy"] },
+		{ conclusion: "cancelled", failedJobs: [] },
+		{ conclusion: "cancelled", failedJobs: ["CI Status Gate"] },
+		{ conclusion: "cancelled", failedJobs: ["Server tests / Stop the merge group early"] },
+	];
+	assert.deepEqual(queueTierFailures(groups), {
+		groups: 22,
+		queueTierFailed: 1,
+		fastTierFailed: 1,
+		queueTierShare: 1 / 22,
+	});
+});
+
 const verificationJobs = [
 	"Test / App Server: Unit and architecture",
 	"Quality / Webapp",
@@ -302,3 +322,77 @@ void test("latency summaries preserve exceeded targets and distinguish absent ev
 		/\*\*within-budget\*\*/u,
 	);
 });
+
+void test(
+	"the CLI reads cancelled merge-group jobs before it reports their failure share",
+	{
+		skip: process.platform === "win32",
+	},
+	async (context) => {
+		const directory = await mkdtemp(path.join(tmpdir(), "ci-native-failure-"));
+		context.after(async () => rm(directory, { recursive: true, force: true }));
+		const timestamp = new Date().toISOString();
+		const runs = JSON.stringify([
+			{
+				workflow_runs: [
+					{
+						id: 1,
+						event: "merge_group",
+						status: "completed",
+						conclusion: "cancelled",
+						run_attempt: 1,
+						created_at: timestamp,
+					},
+				],
+			},
+		]);
+		const jobs = JSON.stringify([
+			{
+				total_count: 2,
+				jobs: [
+					{ name: "Server tests / Integration (1 of 8)", conclusion: "failure" },
+					{ name: "CI Status Gate", conclusion: "cancelled" },
+				],
+			},
+		]);
+		const calls = path.join(directory, "calls.log");
+		await writeFile(
+			path.join(directory, "gh"),
+			`#!/bin/sh
+printf '%s\\n' "$*" >> "$CI_REPORT_API_LOG"
+case "$*" in
+  *event=merge_group*) printf '%s\\n' '${runs}' ;;
+  */runs/1/attempts/1/jobs*) printf '%s\\n' '${jobs}' ;;
+  *) printf '%s\\n' '[{"workflow_runs":[]}]' ;;
+esac
+`,
+			{ mode: 0o755 },
+		);
+		const result = spawnSync(
+			process.execPath,
+			[fileURLToPath(new URL("report-ci-latency.ts", import.meta.url))],
+			{
+				cwd: directory,
+				encoding: "utf8",
+				env: {
+					...process.env,
+					GITHUB_REPOSITORY: "owner/repo",
+					CI_REPORT_API_LOG: calls,
+					PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
+				},
+			},
+		);
+		assert.equal(result.status, 0, result.stderr);
+		assert.match(await readFile(calls, "utf8"), /runs\/1\/attempts\/1\/jobs/u);
+		const report: unknown = JSON.parse(
+			await readFile(path.join(directory, "tmp/ci-metrics/ci-latency.json"), "utf8"),
+		);
+		assert.ok(typeof report === "object" && report !== null && "failures" in report);
+		assert.deepEqual(report.failures, {
+			groups: 1,
+			queueTierFailed: 1,
+			fastTierFailed: 0,
+			queueTierShare: null,
+		});
+	},
+);

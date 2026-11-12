@@ -1396,6 +1396,8 @@ Migration PRs remain in that cohort when they run Database and the drills.
 It reports the median and p90 as an observation, with no target.
 It counts the merge groups of the last 14 days in which a queue-tier job failed,
 for the [revert criterion](#two-verification-tiers).
+A failed worker still counts when fail-fast cancellation gives the workflow a cancelled conclusion.
+A cancelled group with no failed worker, or only a failed gate or cancellation helper, does not count as a failure.
 
 Budget misses produce warnings and a job summary, not workflow failures. Fewer than ten
 qualifying runs produces an insufficient-data notice, not a pass or a regression.
