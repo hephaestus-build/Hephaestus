@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineRouteCredential;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
@@ -31,6 +32,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -293,6 +296,50 @@ class OutlineFrameworkRegistrationIntegrationTest extends BaseIntegrationTest {
                             "SELECT count(*) FROM provider_event WHERE workspace_id = ?", Integer.class, workspaceId))
                     .isEqualTo(1);
         }
+    }
+
+    @Test
+    void shouldReturnRetryableFailureWithoutPayloadWhenTheOutlineRouteChangesDuringAdmission() throws Exception {
+        var workspace = workspaces.save(WorkspaceTestFixtures.activeWorkspace("route-race-" + UUID.randomUUID()));
+        long workspaceId = workspace.getId();
+        var originalRoute = outlineRoutes.issue();
+        var replacementRoute = outlineRoutes.issue();
+        String subscription = UUID.randomUUID().toString();
+        var connection = new Connection(
+                workspace,
+                IntegrationKind.OUTLINE,
+                "https://outline.example",
+                new ConnectionConfig.OutlineConfig(
+                        "https://outline.example", subscription, originalRoute.route(), Set.of()));
+        connection.setState(IntegrationState.ACTIVE);
+        long id = Objects.requireNonNull(connections.saveAndFlush(connection).getId());
+        String body = """
+                {"id":"%s","webhookSubscriptionId":"%s","event":"documents.update",
+                 "payload":{"id":"private-document","text":"private work"}}
+                """.formatted(UUID.randomUUID(), subscription);
+        String time = Long.toString(Instant.now().toEpochMilli());
+        var headers = Map.of(
+                "Outline-Signature", "t=" + time + ",s=" + hmac(originalRoute.signingSecret(), time + ".", body));
+        HeldTransaction changing = HeldTransaction.holdIn(transactions, jdbc, () -> {
+            connections.acquireLifecycleLock(id, workspaceId);
+            var current = connections.findByIdAndWorkspaceId(id, workspaceId).orElseThrow();
+            current.setConfig(new ConnectionConfig.OutlineConfig(
+                    "https://outline.example", subscription, replacementRoute.route(), Set.of()));
+            connections.saveAndFlush(current);
+        });
+        var receiving =
+                CompletableFuture.runAsync(() -> post("/webhooks/outline/" + originalRoute.route(), headers, body)
+                        .expectStatus()
+                        .isEqualTo(503)
+                        .expectBody()
+                        .jsonPath("$.detail")
+                        .isEqualTo("store-failed"));
+        changing.commitAfter(receiving);
+        receiving.get(10, TimeUnit.SECONDS);
+
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM provider_event WHERE workspace_id = ?", Integer.class, workspaceId))
+                .isZero();
     }
 
     private void signedPost(String path, Map<String, String> headers, String body) {

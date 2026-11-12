@@ -133,6 +133,12 @@ public class ProviderEventReceiver {
             List<ProviderEventStore.Arrival> arrivals = new ArrayList<>();
             boolean installation =
                     kind == IntegrationKind.GITHUB && ConsumerSubjectMath.isInstallationControlSubject(subject);
+            String installationId =
+                    kind == IntegrationKind.GITHUB ? stored.get(ProviderEvent.GITHUB_INSTALLATION_ID) : null;
+            if (kind == IntegrationKind.GITHUB && !installation && installationId == null) {
+                rejected(provider, "work-event-without-source");
+                return 0;
+            }
             if (installation) {
                 var installationHeaders = new LinkedHashMap<>(stored);
                 installationHeaders.put(ProviderEvent.SOURCE_SERVER_URL, PersonSourceNamespace.GITHUB_DEFAULT_URL);
@@ -152,8 +158,6 @@ public class ProviderEventReceiver {
             }
             // An App delivery can fan out to PAT workspaces that monitor the same repository. Its source
             // installation must still be active, even when its own workspace does not monitor this repository.
-            String installationId =
-                    kind == IntegrationKind.GITHUB ? stored.get(ProviderEvent.GITHUB_INSTALLATION_ID) : null;
             var sources = !installation && installationId != null
                     ? connections.findAllByKindAndInstanceKeyAndStateIn(
                             kind, installationId, Arrays.asList(IntegrationState.values()))
@@ -172,16 +176,23 @@ public class ProviderEventReceiver {
                         });
             }
             // All fan-out and source locks use the same global order, including cross-workspace deliveries.
-            for (var entry : locked.entrySet()) {
+            for (var remaining = locked.entrySet().iterator(); remaining.hasNext(); ) {
+                var entry = remaining.next();
                 Connection connection = entry.getValue();
-                connections.acquireLifecycleLock(
-                        entry.getKey(), connection.getWorkspace().getId());
+                if (connections
+                        .findAndLockLifecycleConnection(
+                                entry.getKey(), connection.getWorkspace().getId())
+                        .isEmpty()) {
+                    remaining.remove();
+                    continue;
+                }
                 // Selection may have loaded this entity before a concurrent suspension committed.
                 Objects.requireNonNull(entityManager).refresh(connection);
             }
             if (!installation
                     && installationId != null
                     && sources.stream()
+                            .filter(source -> locked.containsKey(Objects.requireNonNull(source.getId())))
                             .noneMatch(source -> source.getState() == IntegrationState.ACTIVE
                                     && source.getConfig() instanceof ConnectionConfig.GitHubAppConfig config
                                     && config.installationId() != null

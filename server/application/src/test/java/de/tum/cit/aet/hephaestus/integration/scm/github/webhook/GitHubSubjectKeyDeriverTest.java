@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.webhook;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
+import de.tum.cit.aet.hephaestus.integration.core.consumer.ConsumerSubjectMath;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.nio.charset.StandardCharsets;
@@ -102,6 +103,14 @@ class GitHubSubjectKeyDeriverTest extends BaseUnitTest {
             assertThatIllegalArgumentException()
                     .isThrownBy(() -> deriver.deriveSubject(payload, Map.of("X-GitHub-Event", event)));
         }
+    }
+
+    @Test
+    void shouldNotTreatACapitalizedInstallationHeaderOnWorkAsASystemControl() throws Exception {
+        String subject = deriver.deriveSubject(fixture("issues.opened.json"), Map.of("X-GitHub-Event", "Installation"));
+
+        assertThat(subject).endsWith(".Installation");
+        assertThat(ConsumerSubjectMath.isInstallationControlSubject(subject)).isFalse();
     }
 
     private JsonNode fixture(String file) throws Exception {

@@ -39,8 +39,12 @@ class AfterCommitRepairArchTest extends HephaestusArchitectureTest {
     private static final Map<String, Unrepaired> UNREPAIRED = Map.of(
             "integration.outline.lifecycle.OutlineConnectionStateListener.onDeactivated",
             new Unrepaired(
-                    "INBOX cross-provider lifecycle repair",
-                    "Inbox admission refuses inactive connections without storing payloads. ProviderTeardown durably removes UNINSTALLED hooks; lost SUSPENDED deletion still needs the planned cross-provider repair."));
+                    "INBOX",
+                    "An Outline SUSPENDED hook DELETE lost after commit is not retried. "
+                            + "UNINSTALLED deletion remains durable through ProviderTeardown. "
+                            + "Close with INBOX-LR-OUTLINE-SUSPENDED-DELETE in "
+                            + "[the approved option 1 repair](lanes/inbox/LIFECYCLE-REPAIR-DESIGN.md) "
+                            + "([task list](lanes/inbox/LIFECYCLE-REPAIR-TASKS.md#outline))."));
 
     private static final Map<String, Repair> REPAIRS = Map.ofEntries(
             Map.entry(

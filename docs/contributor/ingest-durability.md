@@ -15,6 +15,7 @@ A concurrent suspension commits before this check or waits until the inbox inser
 A refused connection adds no payload or dedupe row. Its refusal reason is recorded in `webhook.rejected` and the admission log.
 GitHub App deliveries match the installation ID from the signed body. A request header cannot set that ID.
 The source App connection must be ACTIVE, including when the event also matches a PAT workspace.
+A GitHub work event without a signed installation ID is dropped with `work-event-without-source`.
 Admission locks the source and recipient connections in connection-ID order across workspaces.
 GitLab and Outline deliveries must also match their connection's verified route.
 If the connection configuration changed while admission waited, the receiver fails the request so the provider can retry against the current route.

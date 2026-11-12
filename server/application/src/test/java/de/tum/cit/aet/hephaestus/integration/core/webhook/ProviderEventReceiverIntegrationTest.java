@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
+import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -15,6 +16,7 @@ import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.Statement;
@@ -30,6 +32,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -45,6 +48,9 @@ class ProviderEventReceiverIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private WorkspaceRepository workspaces;
+
+    @Autowired
+    private MeterRegistry meters;
 
     @Autowired
     private ConnectionRepository connections;
@@ -218,6 +224,81 @@ class ProviderEventReceiverIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(1);
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM provider_event WHERE workspace_id = ?", Integer.class, foreign.getId()))
+                .isZero();
+    }
+
+    @Test
+    void shouldRejectWorkWithoutAnInstallationBeforePatFanout() {
+        Workspace recipient = patWorkspace("missing-installation", 20008L, "https://github.com");
+        var refused = meters.counter(
+                IntegrationCoreMetrics.WEBHOOK_REJECTED, "provider", "github", "reason", "work-event-without-source");
+        double before = refused.count();
+
+        assertThat(receiver.receive(IntegrationKind.GITHUB, SUBJECT, "missing-installation", Map.of(), BODY))
+                .isZero();
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM provider_event WHERE workspace_id = ?", Integer.class, recipient.getId()))
+                .isZero();
+        assertThat(refused.count()).isEqualTo(before + 1);
+    }
+
+    @Test
+    void shouldSkipAConnectionDeletedWhileAdmissionWaitsWithoutLosingOtherWorkspaces() throws Exception {
+        Workspace source = workspace("delete-recipient-source", 20009L);
+        Workspace recipient = patWorkspace("deleted-recipient", 20010L, "https://github.com");
+        var connection = connections
+                .findActive(recipient.getId(), IntegrationKind.GITHUB)
+                .orElseThrow();
+        long id = Objects.requireNonNull(connection.getId());
+        HeldTransaction deleting = HeldTransaction.holdIn(transactions, jdbc, () -> {
+            connections.acquireLifecycleLock(id, recipient.getId());
+            jdbc.update("DELETE FROM connection WHERE id = ? AND workspace_id = ?", id, recipient.getId());
+        });
+        var receiving = CompletableFuture.supplyAsync(() -> receiver.receive(
+                IntegrationKind.GITHUB,
+                SUBJECT,
+                "deleted-recipient",
+                Map.of(ProviderEvent.GITHUB_INSTALLATION_ID, "20009"),
+                BODY));
+        deleting.commitAfter(receiving);
+
+        assertThat(receiving.get(10, TimeUnit.SECONDS)).isEqualTo(1);
+        assertThat(jdbc.queryForList(
+                        "SELECT workspace_id FROM provider_event WHERE delivery_key = ?",
+                        Long.class,
+                        "deleted-recipient"))
+                .containsExactly(source.getId());
+        assertThatThrownBy(
+                        () -> transactions.execute(status -> connections.acquireLifecycleLock(id, recipient.getId())))
+                .as("Existing lifecycle callers still require a present row")
+                .isInstanceOf(EmptyResultDataAccessException.class);
+    }
+
+    @Test
+    void shouldRejectFanoutWhenTheSourceInstallationIsDeletedWhileAdmissionWaits() throws Exception {
+        Workspace source = workspace("deleted-app-source", 20011L);
+        Workspace recipient = patWorkspace("deleted-app-pat", 20012L, "https://github.com");
+        var connection =
+                connections.findActive(source.getId(), IntegrationKind.GITHUB).orElseThrow();
+        long id = Objects.requireNonNull(connection.getId());
+        HeldTransaction deleting = HeldTransaction.holdIn(transactions, jdbc, () -> {
+            connections.acquireLifecycleLock(id, source.getId());
+            jdbc.update("DELETE FROM connection WHERE id = ? AND workspace_id = ?", id, source.getId());
+        });
+        var receiving = CompletableFuture.supplyAsync(() -> receiver.receive(
+                IntegrationKind.GITHUB,
+                SUBJECT,
+                "deleted-app-source",
+                Map.of(ProviderEvent.GITHUB_INSTALLATION_ID, "20011"),
+                BODY));
+        deleting.commitAfter(receiving);
+
+        assertThat(receiving.get(10, TimeUnit.SECONDS)).isZero();
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM provider_event WHERE workspace_id IN (?, ?)",
+                        Integer.class,
+                        source.getId(),
+                        recipient.getId()))
                 .isZero();
     }
 
