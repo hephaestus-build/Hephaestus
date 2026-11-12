@@ -1043,6 +1043,24 @@ tests:
               summary: A server could not build a captured checkout again, so a review attempt ended as a capture failure
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: a checkout failure before the first scrape fires only while the series is new
+    interval: 1m
+    input_series:
+      - series: 'evidence_checkout_copies_total{job="hephaestus",instance="replacement:9090",outcome="mismatch"}'
+        values: "1x90"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HephaestusCheckoutUnverified
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: A server could not build a captured checkout again, so a review attempt ended as a capture failure
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 70m
+        alertname: HephaestusCheckoutUnverified
+        exp_alerts: []
+
   - name: a job that waits more than an hour fires, a shorter wait does not
     interval: 1m
     input_series:

@@ -79,7 +79,9 @@ import org.apache.commons.io.FileUtils;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.TransactionException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -251,6 +253,10 @@ public class JobEvidenceFiles implements SandboxResultListener {
             });
             cleanups.add(personCopies.finishCapture(job));
             return new PreparedJobInputs(staged, directories, cleanups, inputs.manifest(), report);
+        } catch (DataAccessException | TransactionException exception) {
+            if (staging != null) delete(staging);
+            inputs.close();
+            throw exception;
         } catch (IOException | RuntimeException exception) {
             if (staging != null) delete(staging);
             inputs.close();
@@ -1024,7 +1030,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
      * Removes the folders of ended attempts and of deleted jobs.
      *
      * @return the folders of deleted jobs that stay because they could not be removed now, and the folders whose
-     *     removal failed: the reconcile counts them, and a later pass retries them
+     *     removal failed, including expired transcripts: the reconcile counts them, and a later pass retries them
      */
     public int cleanEndedAttempts() {
         return cleanAttempts(false);
@@ -1100,7 +1106,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
                     remaining++;
                 }
             }
-            traces.forEach(this::cleanTrace);
+            for (Path trace : traces) if (!cleanTrace(trace)) remaining++;
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);
         }
@@ -1113,13 +1119,13 @@ public class JobEvidenceFiles implements SandboxResultListener {
      * runtime that wrote it no longer holds the job. The first pass after the expiry that gets the job's lease removes
      * it, so the removal lags the expiry by up to the sweep interval or a lease holder's work.
      */
-    private void cleanTrace(Path trace) {
+    private boolean cleanTrace(Path trace) {
         try {
             var acquired = leaseJob(trace);
-            if (acquired.isEmpty()) return;
+            if (acquired.isEmpty()) return true;
             var lease = acquired.get();
             try (lease) {
-                if (!Files.exists(trace, LinkOption.NOFOLLOW_LINKS)) return;
+                if (!Files.exists(trace, LinkOption.NOFOLLOW_LINKS)) return true;
                 Path record = trace.resolve(TRACE_RECORD);
                 if (trace.getFileName().toString().startsWith(".")
                         || !Files.isRegularFile(record, LinkOption.NOFOLLOW_LINKS)
@@ -1127,8 +1133,10 @@ public class JobEvidenceFiles implements SandboxResultListener {
                     delete(trace);
                 }
             }
+            return true;
         } catch (RuntimeException | IOException exception) {
             log.warn("Could not clean review transcript {}", trace, exception);
+            return false;
         }
     }
 

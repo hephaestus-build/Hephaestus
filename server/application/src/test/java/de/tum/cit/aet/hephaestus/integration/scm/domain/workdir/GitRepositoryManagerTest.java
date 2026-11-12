@@ -547,6 +547,29 @@ class GitRepositoryManagerTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldKeepASingleNewlinePathDistinctFromTwoSeparateScanPaths() throws Exception {
+        try (Git git = repository()) {
+            Files.writeString(source.resolve("a\nb"), "single path");
+            Files.writeString(source.resolve("a"), "first path");
+            Files.writeString(source.resolve("b"), "second path");
+            String commit = commit(git, "Paths with a newline");
+            prepare();
+            String tree;
+            try (var snapshot = manager.readTreeSnapshot(KEY, commit)) {
+                tree = snapshot.treeSha();
+            }
+            Path single = temporary.resolve("single");
+            Path separate = temporary.resolve("separate");
+            manager.copyCheckout(KEY, commit, tree, List.of("a\nb"), single);
+            manager.copyCheckout(KEY, commit, tree, List.of("a", "b"), separate);
+            assertThat(single.resolve("a\nb")).hasContent("single path");
+            assertThat(separate.resolve("a")).hasContent("first path");
+            assertThat(separate.resolve("b")).hasContent("second path");
+            assertThat(separate.resolve("a\nb")).doesNotExist();
+        }
+    }
+
+    @Test
     void shouldRestoreTheOriginalCheckoutFromItsOwnCommitsAfterTheBranchesMoved() throws Exception {
         try (Git git = repository()) {
             String base = head(git);

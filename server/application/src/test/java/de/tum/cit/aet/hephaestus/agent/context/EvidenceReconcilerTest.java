@@ -1,9 +1,11 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
@@ -11,7 +13,6 @@ import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog.E
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,6 +56,8 @@ class EvidenceReconcilerTest {
 
         assertThat(failures()).isEqualTo(1);
         assertThat(lastSuccess()).isZero();
+        verify(files).cleanEndedAttempts();
+        verify(inputs).removeEnded();
     }
 
     @Test
@@ -80,9 +83,20 @@ class EvidenceReconcilerTest {
     }
 
     @Test
-    void shouldStateAnErasureBoundThatHoldsTheIntervalAndOnePass() {
-        assertThat(EvidenceReconciler.ERASURE_BOUND)
-                .isGreaterThanOrEqualTo(EvidenceReconciler.INTERVAL.plus(Duration.ofMinutes(1)));
+    void shouldCountIndependentFailuresAndRunEveryCleanup() {
+        when(copies.removeErasedFolders()).thenThrow(new IllegalStateException("receipts unavailable"));
+        when(files.cleanEndedAttempts()).thenThrow(new IllegalStateException("disk unavailable"));
+        when(inputs.removeEnded()).thenThrow(new IllegalStateException("inputs unavailable"));
+        reconciler.reconcile();
+        assertThat(failures()).isEqualTo(3);
+        assertThat(lastSuccess()).isZero();
+
+        doReturn(new ErasedFolders(0, 0)).when(copies).removeErasedFolders();
+        doReturn(0).when(files).cleanEndedAttempts();
+        doReturn(100).when(inputs).removeEnded();
+        reconciler.reconcile();
+        assertThat(lastSuccess()).isEqualTo((double) NOW.getEpochSecond());
+        assertThat(failures()).isEqualTo(3);
     }
 
     private double lastSuccess() {

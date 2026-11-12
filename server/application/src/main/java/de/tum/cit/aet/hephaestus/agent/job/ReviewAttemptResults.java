@@ -412,7 +412,8 @@ public class ReviewAttemptResults {
                     preparation.capturedAt(),
                     preparation.exceptionTypes());
         }
-        if (isRetryable(failure)
+        boolean retryable = preparation != null ? isRetryablePreparation(failure) : isRetryable(failure);
+        if (retryable
                 && requeueForAnotherAttempt(
                         job, fence, preparation != null ? RequeueCause.PREPARATION : RequeueCause.SANDBOX)) {
             if (preparation != null) jobTelemetry.preparationFailed(job, preparation, "REQUEUED");
@@ -444,6 +445,15 @@ public class ReviewAttemptResults {
                 || failure instanceof IOException
                 || failure instanceof UncheckedIOException
                 || transientCapture(PreparationFailure.captureOf(failure));
+    }
+
+    /** Database failures before execution may requeue the preparation, without replaying terminal accounting. */
+    static boolean isRetryablePreparation(Throwable failure) {
+        return isRetryable(failure)
+                || failure instanceof TransientDataAccessException
+                || failure instanceof RecoverableDataAccessException
+                || failure instanceof DataAccessResourceFailureException
+                || failure instanceof CannotCreateTransactionException;
     }
 
     /**

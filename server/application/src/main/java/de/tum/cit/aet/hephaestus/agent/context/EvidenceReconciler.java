@@ -10,6 +10,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.IntSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -17,8 +18,8 @@ import org.springframework.stereotype.Component;
 /**
  * Brings this server's evidence folders in line with PostgreSQL. One pass removes the folders of erased copies, the
  * folders of ended attempts and of removed jobs, and the recorded inputs of attempts that no longer run. A pass runs
- * every {@link #INTERVAL} and on each erasure's wake-up, so an erased copy leaves every running server within
- * {@link #ERASURE_BOUND}. A server that is gone took its folders with its Pod's volume.
+ * every {@link #INTERVAL} and on each erasure's wake-up. A held lease or failed cleanup keeps a copy for a later pass.
+ * No failed step prevents the other cleanups, and no incomplete pass advances the last-success signal.
  */
 @Component
 @ConditionalOnServerRole
@@ -27,12 +28,6 @@ public class EvidenceReconciler {
     private static final Logger log = LoggerFactory.getLogger(EvidenceReconciler.class);
 
     public static final Duration INTERVAL = Duration.ofSeconds(30);
-
-    /**
-     * The time from an erasure's commit until no running server holds the erased copy: one interval and one pass, and
-     * the stop of a sandbox whose job the erasure cancelled. The privacy documentation states it.
-     */
-    public static final Duration ERASURE_BOUND = Duration.ofMinutes(2);
 
     private final JobEvidenceFiles files;
     private final EvidenceFolderPersonDataCatalog copies;
@@ -56,7 +51,7 @@ public class EvidenceReconciler {
                 .baseUnit("seconds")
                 .register(meters);
         failures = Counter.builder(AgentMetrics.EVIDENCE_RECONCILE_FAILURES)
-                .description("Evidence copies that a reconcile pass could not remove, and passes that failed")
+                .description("Evidence copies that a reconcile pass could not remove, and cleanup steps that failed")
                 .register(meters);
     }
 
@@ -66,18 +61,26 @@ public class EvidenceReconciler {
      * stays where it was, so the stalled-reconcile alert sees an erasure that does not reach this server.
      */
     public synchronized void reconcile() {
+        int remaining = step(() -> copies.removeErasedFolders().remaining())
+                + step(files::cleanEndedAttempts)
+                + step(() -> {
+                    inputs.removeEnded();
+                    return 0;
+                });
+        if (remaining > 0) {
+            failures.increment(remaining);
+            log.warn("Evidence reconcile left copies for the next pass: count={}", remaining);
+            return;
+        }
+        lastSuccess.set(clock.instant().getEpochSecond());
+    }
+
+    private static int step(IntSupplier cleanup) {
         try {
-            int remaining = copies.removeErasedFolders().remaining() + files.cleanEndedAttempts();
-            inputs.removeEnded();
-            if (remaining > 0) {
-                failures.increment(remaining);
-                log.warn("Evidence reconcile left copies for the next pass: count={}", remaining);
-                return;
-            }
-            lastSuccess.set(clock.instant().getEpochSecond());
+            return cleanup.getAsInt();
         } catch (RuntimeException failure) {
-            failures.increment();
             log.warn("Evidence reconcile failed: error={}", failure.getClass().getSimpleName(), failure);
+            return 1;
         }
     }
 }

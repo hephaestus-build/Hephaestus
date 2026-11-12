@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -20,6 +21,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService.AdmissionI
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
@@ -73,6 +75,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Answers;
 import org.mockito.Mockito;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.scheduling.config.ScheduledTask;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 import tools.jackson.databind.json.JsonMapper;
@@ -122,6 +125,51 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                 .hasMessageContaining("WORKSPACE_BUDGET_EXCEEDED");
         assertThat(released.get()).isTrue();
         assertThat(root.resolve("jobs")).doesNotExist();
+    }
+
+    @Test
+    void shouldPreserveATransientDatabaseFailureWhileRecordingInputs() {
+        var inputs = mock(AttemptInputs.class);
+        var unavailable = new TransientDataAccessResourceException("database unavailable");
+        doThrow(unavailable).when(inputs).record(Mockito.any(), Mockito.anyLong(), Mockito.anyInt(), Mockito.anyMap());
+        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock, personCopies(), inputs);
+        assertThatThrownBy(() ->
+                        files.prepare(job(), new PreparedEvidence(Map.of("context/item", new byte[] {1}), null), null))
+                .isSameAs(unavailable);
+    }
+
+    @Test
+    void shouldKeepReconcileUnsuccessfulUntilAnExpiredTranscriptCanBeRemoved() throws Exception {
+        var layout = new FabricLayout(root.toString());
+        var copies = personCopies();
+        var inputs = mock(AttemptInputs.class);
+        var files = new JobEvidenceFiles(layout, jobs, clock, copies, inputs);
+        Path trace = traceOf(layout, job(), 0);
+        Files.createDirectories(trace);
+        Path record = Files.writeString(trace.resolve("record.json"), "{}");
+        Files.setLastModifiedTime(record, FileTime.from(clock.instant().minus(Duration.ofDays(2))));
+        Path obstruction = Files.writeString(root.resolve(".person-evidence-locks"), "not a directory");
+        var meters = new SimpleMeterRegistry();
+        var reconcile = new EvidenceReconciler(files, copies, inputs, clock, meters);
+
+        reconcile.reconcile();
+        assertThat(trace).exists();
+        assertThat(meters.get(AgentMetrics.EVIDENCE_RECONCILE_LAST_SUCCESS)
+                        .gauge()
+                        .value())
+                .isZero();
+        assertThat(meters.get(AgentMetrics.EVIDENCE_RECONCILE_FAILURES)
+                        .counter()
+                        .count())
+                .isEqualTo(1);
+
+        Files.delete(obstruction);
+        reconcile.reconcile();
+        assertThat(trace).doesNotExist();
+        assertThat(meters.get(AgentMetrics.EVIDENCE_RECONCILE_LAST_SUCCESS)
+                        .gauge()
+                        .value())
+                .isEqualTo((double) clock.instant().getEpochSecond());
     }
 
     @Test

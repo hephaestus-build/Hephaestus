@@ -19,7 +19,7 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * The receipt of one attempt's copy of people's data in its folder. Erasure marks it {@code ERASED} in PostgreSQL, and
- * every server then removes its own folders of the attempt within one reconcile pass. These stable coordinates
+ * each server retries removal of its own folders until cleanup succeeds. These stable coordinates
  * deliberately have no cascading foreign keys: retention deletes a receipt only once it is erased. Content and exact
  * identities are cleared when the erasure completes.
  */

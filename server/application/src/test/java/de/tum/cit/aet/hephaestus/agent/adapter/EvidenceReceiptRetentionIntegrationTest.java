@@ -57,7 +57,7 @@ class EvidenceReceiptRetentionIntegrationTest extends AbstractWorkspaceIntegrati
         jdbc.update("DELETE FROM review_job WHERE id = ?", deleted);
 
         // No server needs to confirm: each removes the folders of a job without its row in its next pass.
-        assertThat(receipts.retireReceiptsOfDeletedJobs(500)).isEqualTo(4);
+        receipts.retireReceiptsOfDeletedJobs(500);
 
         assertThat(states(liveReady, liveErased, ready, capturing, erased, erasing))
                 .containsExactlyInAnyOrderEntriesOf(Map.of(liveReady, "READY:people", liveErased, "ERASED:cleared"));

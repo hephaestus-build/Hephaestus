@@ -43,7 +43,7 @@ Each server keeps these files under `/data/git-repos`, on its `git-cache` volume
 | Data | Retention | Setting | Deleted by |
 | --- | --- | --- | --- |
 | Debug transcript of an agent run | 24 hours. It goes earlier when the job's evidence expires. | None | A server sweep every minute |
-| Inputs of an attempt | Until the result is admitted. Otherwise, 1 hour after the attempt ends. A server restart deletes them. An erased copy goes within 2 minutes on every running server. | None | A server reconcile pass every 30 seconds, and at once after each erasure |
+| Inputs of an attempt | Until the result is admitted. Otherwise, 1 hour after the attempt ends. A server restart deletes them. An erased copy is removed by reconciliation once its lease is released and removal succeeds. | None | A server reconcile pass every 30 seconds, and at once after each erasure |
 | Checkouts that a server built for another server's capture | As their mirror: they are kept inside it | None | The mirror check every minute |
 | Repository mirrors, one for each workspace and repository | As [Git repository history and short-lived attempts](./dsms/personal-data-map.md#git-repository-history-and-short-lived-attempts) describes | None | A server check every minute |
 
@@ -56,7 +56,7 @@ The jobs that delete review job data run only when `AGENT_ENABLED` is `true`.
 | Capture and output of a review job | 14 days after the job ends. A job that waits for delivery keeps them. | `hephaestus.agent.payload-retention` | A server job every 6 hours |
 | Review job rows, with their script runs | 90 days after the job ends | `hephaestus.agent.row-retention` | The same job |
 | Original review inputs and composition tool trace | Until their one-day expiry. An ended job deletes inputs with no pending delivery or tool trace. | None | The same job |
-| Evidence-copy receipts | As long as their review job row. A pending sandbox cleanup identity stays until sandbox deletion succeeds. | `hephaestus.agent.row-retention` | The same job. Person erasure and workspace purge clear the identities earlier, and each running server removes its copies within 2 minutes. |
+| Evidence-copy receipts | As long as their review job row. A pending sandbox cleanup identity stays until sandbox deletion succeeds. | `hephaestus.agent.row-retention` | The same job. Person erasure and workspace purge clear the identities earlier, and each server retries physical removal until it succeeds. |
 | Recorded files of a running attempt, for a server that rebuilds its folder | While the attempt runs | None | A server reconcile pass every 30 seconds. Person erasure and workspace purge delete them at once. |
 | Evidence of an item event | Replaced by a marker 30 days after it is recorded | `hephaestus.item-event-ledger.retain-for` | A server job every 15 minutes |
 | Item events that nothing references | 30 days after their decision | `hephaestus.item-event-ledger.retain-for` | The same job |

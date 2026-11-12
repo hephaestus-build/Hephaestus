@@ -19,7 +19,9 @@ import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedException;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.List;
@@ -57,6 +59,16 @@ class JobEvidenceRebuildTest {
         recorded(job);
 
         assertThat(files().readText(job, "context/item.json", SHA)).contains(RECORD);
+    }
+
+    @Test
+    void shouldReportARebuildDiskFailureAsIoRatherThanAnInvalidCapture() throws Exception {
+        var job = runningJob();
+        recorded(job);
+        when(copies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt()))
+                .thenReturn(true);
+        Files.writeString(root.resolve("jobs"), "obstructed volume path");
+        assertThatThrownBy(() -> files().ensureAttemptFolder(job)).isInstanceOf(UncheckedIOException.class);
     }
 
     @Test

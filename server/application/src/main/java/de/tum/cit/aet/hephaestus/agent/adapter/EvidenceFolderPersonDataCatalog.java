@@ -63,7 +63,8 @@ import tools.jackson.databind.node.ObjectNode;
 /**
  * The receipts of people's data that review attempts copy into their folders. Erasure and purge mark a receipt
  * {@code ERASED} in PostgreSQL and notify {@link EvidenceErasureNotifications#CHANNEL}; every server then removes its own
- * folders of the receipt's job within one reconcile pass ({@link #removeErasedFolders}). No erasure waits for a server.
+ * folders of the receipt's job once its leases are released and removal succeeds ({@link #removeErasedFolders}).
+ * No erasure waits for a server.
  */
 @Component
 @PersonDataStores({"person_evidence_copy", "review_attempt_input"})
@@ -959,7 +960,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
     /**
      * Cancels the selected copies' running jobs, marks the copies erased and deletes their jobs' attempt inputs. From
      * the commit on, no attempt can admit or retain the copies, and each server removes its folders of their jobs
-     * within one reconcile pass.
+     * in a later reconcile pass once leases are released and cleanup succeeds.
      */
     private void requestRemoval(PersonDataSelection selection) {
         var jobs = new LinkedHashMap<UUID, Long>();
@@ -1023,8 +1024,8 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
     /**
      * Removes this server's folders of every job with an erased copy, except the folders of its attempts whose copy is
      * still live, and stops a sandbox that this server runs for such a job. The reconcile pass runs it every 30 seconds
-     * and on each {@link EvidenceErasureNotifications} wake-up, so an erased copy leaves every running server within
-     * one pass after its erasure commits.
+     * and on each {@link EvidenceErasureNotifications} wake-up. Held leases and failed removal defer cleanup to a later
+     * pass; an erasure commit has no physical-deletion deadline.
      *
      * @return the job folders it removed erased attempts from, and those it could not remove them from now
      */

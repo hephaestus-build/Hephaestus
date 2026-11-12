@@ -27,8 +27,9 @@ CREATE INDEX idx_review_attempt_input_job ON review_attempt_input (workspace_id,
     <changeSet id="1794283093097-2" author="hephaestus">
         <comment>Erasure no longer waits for the server that wrote a copy: copies are erased in PostgreSQL, and each server removes its own folders.</comment>
         <sql>
-UPDATE person_evidence_copy SET state = 'ERASED' WHERE state = 'ERASE_REQUESTED';
-UPDATE person_evidence_copy SET state = 'ERASED', payload = jsonb_strip_nulls(jsonb_build_object('sandboxId', payload->'sandboxId')) WHERE state = 'PURGE_REQUESTED';
+UPDATE person_evidence_copy SET state = 'ERASED',
+    payload = jsonb_strip_nulls(jsonb_build_object('sandboxId', payload->'sandboxId'))
+WHERE state IN ('ERASE_REQUESTED', 'PURGE_REQUESTED');
 ALTER TABLE person_evidence_copy DROP CONSTRAINT ck_person_evidence_copy_state;
 ALTER TABLE person_evidence_copy ADD CONSTRAINT ck_person_evidence_copy_state CHECK (state IN ('CAPTURING', 'READY', 'ERASED'));
 DROP INDEX idx_person_evidence_copy_store;

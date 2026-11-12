@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedException;
 import jakarta.validation.Valid;
+import java.io.UncheckedIOException;
 import java.util.function.Supplier;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -72,6 +73,9 @@ public class ResultAdmissionController {
         } catch (AttemptFolderBusyException busy) {
             // Infrastructure, never a judgement of the results: the sandbox calls again.
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "The evidence folder is busy", busy);
+        } catch (UncheckedIOException unavailable) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE, "The evidence folder is unavailable", unavailable);
         } catch (CheckoutUnverifiedException unverified) {
             // A capture failure, never a judgement of the results: the attempt ends with it as its recorded reason,
             // and the sandbox stops as it does for any attempt that no longer holds its job.

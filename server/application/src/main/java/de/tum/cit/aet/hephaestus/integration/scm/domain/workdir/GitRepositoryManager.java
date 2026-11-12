@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange.
 import java.io.IOException;
 import java.io.Serial;
 import java.io.Writer;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.FileAlreadyExistsException;
@@ -920,8 +921,10 @@ public class GitRepositoryManager {
         try {
             var digest = MessageDigest.getInstance("SHA-256");
             for (String path : paths) {
-                digest.update(path.getBytes(StandardCharsets.UTF_8));
-                digest.update((byte) '\n');
+                byte[] bytes = path.getBytes(StandardCharsets.UTF_8);
+                digest.update(
+                        ByteBuffer.allocate(Integer.BYTES).putInt(bytes.length).array());
+                digest.update(bytes);
             }
             return commit + "-" + tree + "-" + HexFormat.of().formatHex(digest.digest());
         } catch (NoSuchAlgorithmException e) {
