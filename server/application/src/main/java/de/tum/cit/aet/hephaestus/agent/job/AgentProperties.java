@@ -8,7 +8,7 @@ import org.springframework.validation.annotation.Validated;
 
 /**
  * Configuration for agent jobs: the {@code review_job} rows of practice reviews, which review sandboxes run, and the
- * liveness and retention of the worker that serves them.
+ * retention of their rows and payloads.
  *
  * @param enabled           Turns on agent jobs, which run practice reviews. The server role submits jobs and the
  *                          worker role runs them, so set it on both.

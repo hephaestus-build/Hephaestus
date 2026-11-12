@@ -30,16 +30,14 @@ class AgentPropertiesTest extends BaseUnitTest {
         return Stream.of(
                 Arguments.of(Duration.ZERO, VALID_ROW_RETENTION, "payload-retention", "zero"),
                 Arguments.of(Duration.ofDays(-1), VALID_ROW_RETENTION, "payload-retention", "negative"),
-                Arguments.of(Duration.ofDays(90), Duration.ofDays(14), "row-retention", "shorter than payload-retention"));
+                Arguments.of(
+                        Duration.ofDays(90), Duration.ofDays(14), "row-retention", "shorter than payload-retention"));
     }
 
     @ParameterizedTest(name = "{2}: {3}")
     @MethodSource("invalidConfigurations")
     void rejectsAnUnusableConfiguration(
-            Duration payloadRetention,
-            Duration rowRetention,
-            String offendingProperty,
-            String why) {
+            Duration payloadRetention, Duration rowRetention, String offendingProperty, String why) {
         assertThatThrownBy(() -> props(payloadRetention, rowRetention))
                 .as(why)
                 .isInstanceOf(IllegalArgumentException.class)
@@ -54,18 +52,14 @@ class AgentPropertiesTest extends BaseUnitTest {
 
     @ParameterizedTest(name = "accepts {2}")
     @MethodSource("validConfigurations")
-    void acceptsAUsableConfiguration(
-            Duration payloadRetention, Duration rowRetention, String why) {
-        assertThatCode(() -> props(payloadRetention, rowRetention))
-                .as(why)
-                .doesNotThrowAnyException();
+    void acceptsAUsableConfiguration(Duration payloadRetention, Duration rowRetention, String why) {
+        assertThatCode(() -> props(payloadRetention, rowRetention)).as(why).doesNotThrowAnyException();
     }
 
     @Test
     @DisplayName("the constructor preserves what it was given")
     void preservesConfiguredValues() {
-        AgentProperties properties =
-                props(VALID_PAYLOAD_RETENTION, VALID_ROW_RETENTION);
+        AgentProperties properties = props(VALID_PAYLOAD_RETENTION, VALID_ROW_RETENTION);
 
         assertThat(properties.payloadRetention()).isEqualTo(VALID_PAYLOAD_RETENTION);
         assertThat(properties.rowRetention()).isEqualTo(VALID_ROW_RETENTION);
