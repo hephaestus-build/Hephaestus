@@ -700,7 +700,9 @@ lockfiles, the version catalog, the wrapper, the generated-client sources and th
 
 The producer resolves every dependency configuration of the server build. It also runs the Gradle work of the
 server jobs: packaging, the test classes, Spotless, PMD and a test inventory that does not execute tests.
-The Gradle action keeps only what a job used, so this producer uses everything a consumer can need.
+The cache keeps raw POM and module metadata with the resolved binaries.
+Consumers need those files for dependency verification, even when a warm build uses binary metadata.
+The action does not prune files after each job.
 
 A main push does not build the server, because it reuses the merge group's packaged server (§ Build once).
 Thus, without this producer, nothing would refresh the dependencies that consumers restore.

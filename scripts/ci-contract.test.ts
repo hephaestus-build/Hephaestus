@@ -1544,6 +1544,11 @@ void describe("CI contract", () => {
 		const action = parseDocument(await readFile(".github/actions/setup-caches/action.yml", "utf8"));
 		assert.equal(action.getIn(["inputs", "cache-write", "default"]), "false");
 		assert.equal(
+			namedStep(action, ["runs"], "Set up Gradle").getIn(["with", "cache-cleanup"]),
+			"never",
+			"raw verification metadata must survive the producer's save",
+		);
+		assert.equal(
 			namedStep(action, ["runs"], "Set up JDK").getIn(["with", "java-version-file"]),
 			".java-version",
 		);

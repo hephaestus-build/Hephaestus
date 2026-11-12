@@ -46,8 +46,8 @@ jobs:
       - uses: ./.github/actions/setup-caches
         with:
           cache-write: "true"
-      # Every configuration, plus the tasks whose tools resolve outside them: the action's cache
-      # cleanup keeps only what this build used. The inventory is a dry run of the test runtime.
+      # Every configuration, plus the tasks whose tools resolve outside them.
+      # The inventory discovers the test runtime without executing tests.
       - name: Build what the server jobs restore
         working-directory: server
         run: ./gradlew resolveDependencies :application:bootJar :application:testClasses :application:testInventory :spotlessCheck :application:spotlessCheck :application:pmdMain
