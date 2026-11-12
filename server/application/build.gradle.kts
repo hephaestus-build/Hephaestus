@@ -500,6 +500,20 @@ for ((taskName, tag) in testTiers.filterKeys { it != "test" }) {
     }
 }
 
+// Stable promotion keeps the candidate manifest. This task must use the planned release version.
+tasks.register<Test>("releaseRatchetTest") {
+    description = "Requires empty architecture ratchets for the planned stable release."
+    group = "verification"
+    selectTestTier("architecture & release-ratchet")
+    failOnNoDiscoveredTests.set(true)
+    val plannedVersion = releaseVersion.orNull
+    doFirst {
+        require(!plannedVersion.isNullOrBlank()) {
+            "releaseRatchetTest requires -Phephaestus.releaseVersion=<planned stable version>"
+        }
+    }
+}
+
 tasks.jacocoTestReport {
     dependsOn(tasks.test)
     reports {

@@ -592,9 +592,16 @@ Record the decision with the release evidence. Do not change a check or label to
 ### Promote the qualified candidate
 
 Freeze `main` at the last qualified candidate's source commit.
-Before stable publication, run the architecture ratchets against the planned version with `-Phephaestus.releaseVersion=<version>`.
 Do not exit prerelease mode or merge a stable Version PR before promotion.
 If `main` advances, publish and qualify another candidate.
+
+Before stable publication, the workflow runs `:application:releaseRatchetTest` against the candidate source with `-Phephaestus.releaseVersion=<planned stable version>`.
+The task runs the architecture tests tagged `release-ratchet`. Any remaining allowlist entry blocks publication.
+The task requires the explicit version and refuses empty test discovery.
+It compiles verification classes without repackaging the candidate JAR or images. The candidate manifest keeps its prerelease version.
+
+A candidate source tree without this task cannot pass the preflight. Publish and qualify a new candidate that includes it.
+An allowlist failure needs the same remedy: remove the debt and qualify a new candidate.
 
 Run **Release / Publish** manually on `main` with `promote-candidate` set to the complete tag, for example `v1.0.0-rc.2`.
 A repository writer can request this publication. The candidate has already passed the reviewed main merge and every release gate.
