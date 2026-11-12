@@ -7,8 +7,6 @@ import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import java.sql.DriverManager;
 import java.util.List;
 import java.util.UUID;
-import liquibase.Contexts;
-import liquibase.LabelExpression;
 import liquibase.Liquibase;
 import liquibase.database.DatabaseFactory;
 import liquibase.database.jvm.JdbcConnection;
@@ -59,15 +57,7 @@ class UsageCallFailureMigrationTest {
                         new ClassLoaderResourceAccessor(),
                         DatabaseFactory.getInstance()
                                 .findCorrectDatabaseImplementation(new JdbcConnection(connection)))) {
-            var contexts = new Contexts(context);
-            var labels = new LabelExpression();
-            liquibase.tag("before-call-failure");
-            // This rollback proves this migration, not later stopped upgrades that require backup recovery.
-            int changes = (int) liquibase.listUnrunChangeSets(contexts, labels).stream()
-                    .takeWhile(change -> change.getFilePath().endsWith(CHANGELOG))
-                    .count();
-            assertThat(changes).isPositive();
-            liquibase.update(changes, contexts, labels);
+            PracticeMigrationFixture.upgradeOnly(liquibase, context, CHANGELOG);
 
             assertThat(PracticeMigrationFixture.column(database, retained)).isEqualTo(before);
             assertThat(PracticeMigrationFixture.column(
@@ -110,7 +100,7 @@ class UsageCallFailureMigrationTest {
                 assertThat(PracticeMigrationFixture.column(database, retained)).isEqualTo(before);
             }
 
-            liquibase.rollback("before-call-failure", contexts, labels);
+            PracticeMigrationFixture.rollbackOnly(liquibase, context, CHANGELOG);
             assertThat(PracticeMigrationFixture.column(database, retained)).isEqualTo(before);
             assertThat(PracticeMigrationFixture.column(
                             database,

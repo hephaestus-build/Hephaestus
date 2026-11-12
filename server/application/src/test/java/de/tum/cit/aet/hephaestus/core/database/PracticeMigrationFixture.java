@@ -14,6 +14,7 @@ import liquibase.LabelExpression;
 import liquibase.Liquibase;
 import liquibase.database.DatabaseFactory;
 import liquibase.database.jvm.JdbcConnection;
+import liquibase.exception.LiquibaseException;
 import liquibase.resource.ClassLoaderResourceAccessor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -71,6 +72,41 @@ public final class PracticeMigrationFixture {
                     .orElseThrow(() -> new IllegalStateException(changelog + " has no pending changeset"));
             liquibase.update(before, contexts, labels);
         }
+    }
+
+    /** Applies only the named changelog after {@link #upgradeBefore}, leaving every later migration pending. */
+    static void upgradeOnly(Liquibase liquibase, String context, String changelog) throws LiquibaseException {
+        var contexts = new Contexts(context);
+        var labels = new LabelExpression();
+        var pending = liquibase.listUnrunChangeSets(contexts, labels);
+        int count = (int) pending.stream()
+                .takeWhile(change -> change.getFilePath().endsWith(changelog))
+                .count();
+        long own = pending.stream()
+                .filter(change -> change.getFilePath().endsWith(changelog))
+                .count();
+        if (count == 0 || count != own) {
+            throw new IllegalStateException("The next pending changesets must belong to " + changelog);
+        }
+        liquibase.update(count, contexts, labels);
+    }
+
+    /** Rolls back only this changelog; refuses before any rollback if a later migration has run. */
+    static void rollbackOnly(Liquibase liquibase, String context, String changelog) throws LiquibaseException {
+        var history = liquibase.getDatabase().getRanChangeSetList();
+        int count = 0;
+        for (int index = history.size() - 1;
+                index >= 0 && history.get(index).getChangeLog().endsWith(changelog);
+                index--) {
+            count++;
+        }
+        long own = history.stream()
+                .filter(change -> change.getChangeLog().endsWith(changelog))
+                .count();
+        if (count == 0 || count != own) {
+            throw new IllegalStateException("Cannot roll back " + changelog + " while later changesets remain");
+        }
+        liquibase.rollback(count, new Contexts(context), new LabelExpression());
     }
 
     private static DriverManagerDataSource dataSource(TestDatabase database) {
