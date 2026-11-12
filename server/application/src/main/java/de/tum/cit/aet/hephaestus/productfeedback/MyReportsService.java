@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
+import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssueUpdates;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssues;
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.EditProductFeedbackDraftDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.MyProductFeedbackDTO;
@@ -10,8 +10,8 @@ import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.ProductFeedbackShari
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.ReportRoute;
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.ReportState;
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.UpdateProductFeedbackSharingDTO;
-import de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackUpdatedEvent;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,8 +38,7 @@ class MyReportsService {
     private final RoutingService routing;
     private final GitHubLogins logins;
     private final ProductFeedbackIssues issues;
-    private final ProductFeedbackIssueUpdates updates;
-    private final ApplicationEventPublisher events;
+    private final IssueTransfers transfers;
     private final TransactionTemplate transactions;
     private final ProductFeedbackMeters meters;
     private final Clock clock;
@@ -53,8 +51,7 @@ class MyReportsService {
             RoutingService routing,
             GitHubLogins logins,
             ProductFeedbackIssues issues,
-            ProductFeedbackIssueUpdates updates,
-            ApplicationEventPublisher events,
+            IssueTransfers transfers,
             TransactionTemplate transactions,
             ProductFeedbackMeters meters,
             Clock clock) {
@@ -65,8 +62,7 @@ class MyReportsService {
         this.routing = routing;
         this.logins = logins;
         this.issues = issues;
-        this.updates = updates;
-        this.events = events;
+        this.transfers = transfers;
         this.transactions = transactions;
         this.meters = meters;
         this.clock = clock;
@@ -250,7 +246,11 @@ class MyReportsService {
                     Objects.requireNonNull(filing.getIssueNumber()),
                     Objects.requireNonNull(filing.getIssueNodeId()),
                     Objects.requireNonNull(filing.getIssueUrl()),
-                    privateRepository);
+                    privateRepository,
+                    // A published report's issue carries the promotion marker; its old private issue, the report's.
+                    filing.getPredecessorIssueNumber() == null
+                            ? id.toString()
+                            : IssueRenderer.promotionMarker(id).toString());
         }));
         var from =
                 issues.repository(target.from()).orElseThrow(() -> conflict("The public repository is unreachable."));
@@ -258,32 +258,35 @@ class MyReportsService {
                 .filter(ProductFeedbackIssues.Repository::isPrivate)
                 .orElseThrow(() -> conflict("The private repository is unreachable or not private."));
         if (from.id() == to.id()) throw conflict("The public and private repositories are the same.");
-        var moved =
-                updates.transfer(new ProductFeedbackIssues.Issue(target.number(), target.nodeId(), target.url()), to);
-        meters.step("transfer", "ok");
-        return Objects.requireNonNull(transactions.execute(status -> {
-            ProductFeedback report = owned(accountId, id);
-            ProductFeedbackFiling filing = filings.lock(id).orElseThrow();
-            Instant now = clock.instant();
-            filing.apply(FilingLifecycle.Event.ROUTE_CHANGED_ON_GITHUB);
-            filing.setRoute(FilingRoute.PRIVATE);
-            filing.setReason(FilingReason.OPTED_OUT);
-            filing.setAllowPublic(false);
-            filing.setRepository(to.fullName());
-            filing.setRepositoryId(to.id());
-            filing.setRepositoryNodeId(to.nodeId());
-            filing.setInstallationId(to.installationId());
-            filing.setIssueNumber(moved.number());
-            filing.setIssueNodeId(moved.nodeId());
-            filing.setIssueUrl(moved.url());
-            filing.setUpdatedAt(now);
-            events.publishEvent(new ProductFeedbackUpdatedEvent(
-                    id, accountId, ProductFeedbackUpdatedEvent.Kind.MADE_PRIVATE, null, false, null, now));
-            return dto(report, filing);
-        }));
+        // The move's end takes the filing to the private repository (TransferIssueAdapter.ended).
+        Instant now = clock.instant();
+        var result = transfers
+                .move(new TransferIssueAdapter.Payload(
+                        id,
+                        accountId,
+                        target.marker(),
+                        now,
+                        to,
+                        target.number(),
+                        target.nodeId(),
+                        target.url(),
+                        // GitHub filters by the last update, and the move updates the issue.
+                        now.minus(Duration.ofHours(1))))
+                .orElseThrow(
+                        () -> conflict("Another change of this report is on its way to GitHub. Try again shortly."));
+        switch (result) {
+            case ActionResult.Done done -> meters.step("transfer", "ok");
+            case ActionResult.Failed failed -> throw conflict("GitHub refused to move the issue.");
+            default ->
+                throw new ResponseStatusException(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        "GitHub did not confirm the move. Hephaestus checks it again and finishes it.");
+        }
+        return Objects.requireNonNull(transactions.execute(
+                status -> dto(owned(accountId, id), filings.findById(id).orElseThrow())));
     }
 
-    private record MoveTarget(String from, long number, String nodeId, String url, String to) {}
+    private record MoveTarget(String from, long number, String nodeId, String url, String to, String marker) {}
 
     private ProductFeedback owned(long accountId, UUID id) {
         return feedback.findById(id)

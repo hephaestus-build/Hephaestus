@@ -115,6 +115,9 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
     private FileIssueQueue queue;
 
     @Autowired
+    private MyReportsService myReports;
+
+    @Autowired
     private DestinationService destinationService;
 
     @Autowired
@@ -366,6 +369,107 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
                 destinationRows.save(destination);
             }
         }
+    }
+
+    @Test
+    void shouldMoveAPublicIssueToThePrivateRepositoryWhenTheReporterMakesItPrivate() {
+        Account reporter = account(Account.AppRole.USER);
+        UUID report = makePrivateSetUp(reporter);
+        when(updates.transfer(any(), eq(PRIVATE_REPOSITORY)))
+                .thenReturn(new ProductFeedbackIssues.Issue(
+                        88, "I_88", "https://github.com/acme/feedback-private/issues/88"));
+        try {
+            myReports.makePrivate(Objects.requireNonNull(reporter.getId()), report);
+
+            var moved = filings.findById(report).orElseThrow();
+            assertThat(moved.getRoute()).isEqualTo(FilingRoute.PRIVATE);
+            assertThat(moved.getRepository()).isEqualTo(PRIVATE_REPOSITORY.fullName());
+            assertThat(moved.getIssueNumber()).isEqualTo(88L);
+        } finally {
+            privateRepository(null);
+        }
+    }
+
+    @Test
+    void shouldFinishAMoveWhoseAnswerWasLostWithoutMovingTheIssueAgain() {
+        Account reporter = account(Account.AppRole.USER);
+        UUID report = makePrivateSetUp(reporter);
+        when(updates.transfer(any(), eq(PRIVATE_REPOSITORY)))
+                .thenThrow(new ProductFeedbackIssues.Unknown("read timed out", null));
+        try {
+            assertThatThrownBy(() -> myReports.makePrivate(Objects.requireNonNull(reporter.getId()), report))
+                    .isInstanceOfSatisfying(
+                            ResponseStatusException.class,
+                            unclear -> assertThat(unclear.getReason()).contains("did not confirm the move"));
+            assertThat(filings.findById(report).orElseThrow().getRoute()).isEqualTo(FilingRoute.PUBLIC);
+
+            when(issues.findByMarker(eq(PRIVATE_REPOSITORY), eq(report.toString()), any()))
+                    .thenReturn(Optional.of(new ProductFeedbackIssues.Issue(
+                            88, "I_88", "https://github.com/acme/feedback-private/issues/88")));
+            ActionTestSupport.due(jdbc, "file_issue:" + report);
+            executor.runDue();
+
+            verify(updates, times(1)).transfer(any(), eq(PRIVATE_REPOSITORY));
+            var moved = filings.findById(report).orElseThrow();
+            assertThat(moved.getRoute()).isEqualTo(FilingRoute.PRIVATE);
+            assertThat(moved.getIssueNumber()).isEqualTo(88L);
+        } finally {
+            privateRepository(null);
+        }
+    }
+
+    @Test
+    void shouldFindAPublishedReportsMovedIssueByItsPromotionMarkerNotItsClosedPrivateOne() {
+        Account reporter = account(Account.AppRole.USER);
+        UUID report = makePrivateSetUp(reporter);
+        // Published from a private issue (#5), which stays closed in the private repository with the report's marker.
+        jdbc.update("UPDATE product_feedback_filing SET predecessor_issue_number = 5 WHERE feedback_id = ?", report);
+        when(updates.transfer(any(), eq(PRIVATE_REPOSITORY)))
+                .thenThrow(new ProductFeedbackIssues.Unknown("read timed out", null));
+        try {
+            assertThatThrownBy(() -> myReports.makePrivate(Objects.requireNonNull(reporter.getId()), report))
+                    .isInstanceOf(ResponseStatusException.class);
+            when(issues.findByMarker(eq(PRIVATE_REPOSITORY), eq(report.toString()), any()))
+                    .thenReturn(Optional.of(new ProductFeedbackIssues.Issue(
+                            5, "I_5", "https://github.com/acme/feedback-private/issues/5")));
+            when(issues.findByMarker(
+                            eq(PRIVATE_REPOSITORY),
+                            eq(IssueRenderer.promotionMarker(report).toString()),
+                            any()))
+                    .thenReturn(Optional.of(new ProductFeedbackIssues.Issue(
+                            88, "I_88", "https://github.com/acme/feedback-private/issues/88")));
+            ActionTestSupport.due(jdbc, "file_issue:" + report);
+            executor.runDue();
+
+            assertThat(filings.findById(report).orElseThrow().getIssueNumber())
+                    .as("the moved public issue, never the closed private one")
+                    .isEqualTo(88L);
+        } finally {
+            privateRepository(null);
+        }
+    }
+
+    /** A reporter's filed public issue, with a private repository to move it to. */
+    private UUID makePrivateSetUp(Account reporter) {
+        UUID report = filedPublicReport(reporter);
+        jdbc.update(
+                "UPDATE product_feedback_filing SET issue_url = 'https://github.com/acme/feedback/issues/77'"
+                        + " WHERE feedback_id = ?",
+                report);
+        when(issues.repository("acme/feedback"))
+                .thenReturn(
+                        Optional.of(new ProductFeedbackIssues.Repository(40, "R_public", "acme/feedback", 7, false)));
+        when(issues.repository(PRIVATE_REPOSITORY.fullName())).thenReturn(Optional.of(PRIVATE_REPOSITORY));
+        privateRepository(PRIVATE_REPOSITORY.fullName());
+        return report;
+    }
+
+    private void privateRepository(@Nullable String name) {
+        ProductFeedbackDestination destination = destinationRows
+                .findById(ProductFeedbackDestination.SINGLETON)
+                .orElseGet(ProductFeedbackDestination::new);
+        destination.setPrivateRepository(name);
+        destinationRows.save(destination);
     }
 
     @Test
