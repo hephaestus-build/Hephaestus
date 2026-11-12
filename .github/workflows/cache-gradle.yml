@@ -55,16 +55,19 @@ jobs:
 
   replay:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ci3/probe-r-offline-18b'
-    name: Producer metadata retention
+    name: Restored producer cache offline
     strategy:
       fail-fast: false
       matrix:
-        resolution: [cached, refreshed]
-    defaults:
-      run:
-        working-directory: candidate
+        include:
+          - resolution: cached
+            home: "gradle-home-v2|Linux-X64|replay[5ac0c9c9235e6d5707f66717986f957c]-ad6ceee97db73b1d59ffcc7b7ab258b6e268106d"
+            dependencies: gradle-dependencies-v2-06945f3cf31652e27e146cb124a26e3f
+          - resolution: refreshed
+            home: "gradle-home-v2|Linux-X64|replay[570d1c98bbfac4b4e391a0046c638b2f]-ad6ceee97db73b1d59ffcc7b7ab258b6e268106d"
+            dependencies: gradle-dependencies-v2-83f38a424ca2b3d4e9455deb158708a0
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 20
     permissions:
       contents: read
       actions: read
@@ -72,8 +75,6 @@ jobs:
     env:
       GRADLE_USER_HOME: /home/runner/.gradle
       CI: "true"
-      R_RESOLUTION: ${{ matrix.resolution }}
-      R_WARM_FLAGS: ${{ matrix.resolution == 'refreshed' && '--refresh-dependencies' || '' }}
       POSTGRES_HOST: localhost
       POSTGRES_PORT: "5432"
       POSTGRES_DB: hephaestus
@@ -98,21 +99,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: 02ae140b9070cfa6d9640e23868750d7672859a1
           persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: b29fb05f410d7aced1f1093975809f27db3c072d
-          path: candidate
-          persist-credentials: false
-      - uses: ./.github/actions/r-cache-observer
       - uses: ./.github/actions/setup-toolchain
         with:
           install: "frozen"
-      - name: Share the identical frozen dependency installation with the nested producer source
-        run: |
-          cmp package.json ../package.json
-          cmp pnpm-lock.yaml ../pnpm-lock.yaml
-          ln -s "$GITHUB_WORKSPACE/node_modules" node_modules
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad
         with:
           distribution: temurin
@@ -120,16 +111,30 @@ jobs:
           cache-jdk: false
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c
         with:
-          cache-provider: enhanced
-          cache-write-only: true
-          cache-read-only: false
-          cache-overwrite-existing: true
+          cache-provider: external
+          cache-read-only: true
           dependency-graph: disabled
       - name: Bootstrap only the checksum-pinned wrapper before the cache restore
-        working-directory: candidate/server
+        working-directory: server
         run: |
           ./gradlew --version
           test ! -d "$GRADLE_USER_HOME/caches/modules-2/files-2.1"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          artifact-ids: "13931930778"
+          run-id: "43191621296"
+          repository: hephaestus-build/Hephaestus
+          github-token: ${{ github.token }}
+          path: server
+          merge-multiple: true
+      - name: Download this producer variant's pre-cleanup inventory
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: r-producer-pre-cleanup-${{ matrix.resolution }}-43223087437
+          run-id: "43223087437"
+          repository: hephaestus-build/Hephaestus
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/pre-cleanup
       - name: Install the typed diagnostic helper
         run: |
           mkdir -p "$RUNNER_TEMP/r-proof"
@@ -223,7 +228,7 @@ jobs:
         id: restore-0
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: "gradle-home-v2|Linux-X64|gradle[e105edf49fd01f4befaf1fab3c2af2b2]-b29fb05f410d7aced1f1093975809f27db3c072d"
+          key: ${{ matrix.home }}
           fail-on-cache-miss: true
           path: |
             /home/runner/.gradle/caches
@@ -233,7 +238,7 @@ jobs:
         id: restore-1
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: "gradle-build-cache-v2-ee486cacb26e4cd06a253074bda8239b"
+          key: "gradle-build-cache-v2-517ed657c636d41705a2aeece7002b8e"
           fail-on-cache-miss: true
           path: |
             /home/runner/.gradle/caches/build-cache-*/*
@@ -258,7 +263,7 @@ jobs:
         id: restore-4
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: "gradle-dependencies-v2-18b3019ae4430915e37b40f65cba3340"
+          key: ${{ matrix.dependencies }}
           fail-on-cache-miss: true
           path: |
             /home/runner/.gradle/caches/modules-*/files-*/*/*/*/*/
@@ -295,28 +300,49 @@ jobs:
           assert.equal(hits.length, 7);
           for (const [name, value] of hits) assert.equal(value, 'true', `${name}: no exact archive; replay is inconclusive`);
           TYPESCRIPT
-      - name: Repair the stripped metadata, then model a fresh cache restore
-        working-directory: candidate/server
-        run: |
-          set -euo pipefail
-          ./gradlew help --refresh-dependencies --no-configuration-cache
-          # This disposable runner owns its only Gradle daemon. Cache archives exclude this journal.
-          ./gradlew --stop
-          rm -rf "$GRADLE_USER_HOME/caches/journal-1"
-      - name: Replay the producer with cached or refreshed metadata
-        working-directory: candidate/server
-        run: |
-          set -euo pipefail
-          # R_WARM_FLAGS is empty or one fixed workflow flag, not event text.
-          # shellcheck disable=SC2086
-          ./gradlew resolveDependencies :application:bootJar :application:testClasses :application:testInventory :spotlessCheck :application:spotlessCheck :application:pmdMain $R_WARM_FLAGS
-      - name: Snapshot metadata and the producer's unshipped JARs before cleanup
+      - name: Record the restored root artifacts and binary metadata
         run: node "$RUNNER_TEMP/r-proof/snapshot.mts" snapshot
+      - name: Compare the restored archives with the producer inventory
+        run: |
+          node --input-type=module-typescript <<'TYPESCRIPT'
+          import assert from 'node:assert/strict';
+          import { readFile, writeFile } from 'node:fs/promises';
+          import path from 'node:path';
+          import { asArray, asRecord, asString, parseJson } from './scripts/lib/json.ts';
+          const temporary = process.env.RUNNER_TEMP;
+          assert.ok(temporary);
+          function artifacts(source: unknown): Map<string, string> {
+            return new Map(asArray(asRecord(source, 'inventory').coordinates, 'coordinates').flatMap((coordinate) =>
+              asArray(asRecord(coordinate, 'coordinate').artifacts, 'artifacts').map((artifact) => {
+                const file = asRecord(artifact, 'artifact');
+                return [asString(file.file, 'file'), asString(file.sha256, 'sha256')] as const;
+              })));
+          }
+          const before = artifacts(parseJson(await readFile(path.join(temporary, 'pre-cleanup/cache-inventory.json'), 'utf8')));
+          const restored = artifacts(parseJson(await readFile(path.join(temporary, 'r-proof/cache-inventory.json'), 'utf8')));
+          const absent: string[] = [];
+          for (const [file, digest] of before) {
+            const actual = restored.get(file);
+            if (actual === undefined) absent.push(file);
+            else assert.equal(actual, digest, `restored bytes differ: ${file}`);
+          }
+          const report = { before: before.size, restored: restored.size, absent };
+          console.log('R_ARCHIVE_DIFF', JSON.stringify(report));
+          await writeFile(path.join(temporary, 'r-proof/archive-diff.json'), JSON.stringify(report, null, 2));
+          TYPESCRIPT
+      - name: Run the failed schema invocation offline
+        working-directory: server
+        run: |
+          set -euo pipefail
+          ./gradlew :application:liquibaseUpdate :application:liquibaseDiff -PpostgresPort=5432 -PpackagedServer=true --offline --no-configuration-cache --stacktrace --info 2>&1 | tee "$RUNNER_TEMP/r-proof/offline-gradle.log"
+      - name: Prove that neither packaged JAR changed
+        if: always()
+        run: node "$RUNNER_TEMP/r-proof/snapshot.mts" verify
       - name: Retain probe evidence even when the resolver refuses
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: r-producer-pre-cleanup-${{ matrix.resolution }}-${{ github.run_id }}
+          name: r-restored-proof-${{ matrix.resolution }}-${{ github.run_id }}
           path: ${{ runner.temp }}/r-proof
           retention-days: 7
           if-no-files-found: warn
