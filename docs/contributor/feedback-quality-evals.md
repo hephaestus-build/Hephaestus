@@ -253,6 +253,78 @@ The labels file holds one label for each composed review, with the rubric codes.
 The good rate needs a label for every composed review. With fewer labels, the report lists the unlabelled cases and gives no rate.
 Without a labels file, the report gives only the raise decisions, main's acceptance and the mechanical codes.
 
+## Feedback eval gate
+
+The feedback eval gate stops a change that weakens what the prompts tell the model.
+It runs in CI when a change touches what it measures.
+That is a prompt, the writing guide, the practice catalog or its scripts, the composer, or the gate itself.
+[Path filters](./ci-cd.mdx#path-filters) list the paths.
+`scripts/feedback-eval/gate.json` holds its fixed case set, its prompt clauses and its floors.
+
+### Deterministic checks
+
+These checks send no model request. Each check must pass exactly.
+
+| Check | Fails when |
+| --- | --- |
+| G1 | A pinned case changed or is missing. A pin is the SHA-256 of the case as the fixture file holds it. |
+| G2 | The composition set or the claim corpus does not parse. |
+| G3 | A quote check does not match, or an absence check finds its text and the claim label is not `false`. |
+| G4 | A prompt file no longer contains a clause that `gate.json` names. Line breaks do not count. |
+| G5 | An automated practice states no occasion: no `appliesWhen`, and its criteria never say when it does not apply. |
+
+Each G4 clause carries one occasion criterion (O1–O8) or one evidence-bound criterion (E1–E15).
+The criterion ID is in `gate.json` beside the clause.
+To reword a clause, change the prompt and its entry in `gate.json` in the same pull request.
+The diff then shows the reviewer which rule changed.
+
+G5 keeps a list of known gaps: automated practices whose criteria state no occasion.
+The check also fails when a listed practice gets an occasion. Then remove it from the list.
+
+To change a pinned case, change the case, put its new digest in `gate.json`, and increase `version`.
+A G1 failure prints the new digest.
+
+### Model panel
+
+The model panel composes 20 fixed public cases with the production composer, one run each.
+The panel holds every case with an expected withhold, the capture-limit case and two instruction cases.
+It scores the output against the case labels. It does not use a judge model.
+
+| Measure | Floor |
+| --- | --- |
+| P1. Cases composed and accepted by main's check | 18 of 20 |
+| P2. Cases with no mechanical code (Q6, Q9) | 18 of 20 |
+| P3. Raise recall | 11 of 13 |
+| P4. Withhold decisions correct | 8 of 17 |
+
+Each floor is the one-sided binomial quantile at the rate of the rc.5 measurement, at a false-alarm level of 1.25 %.
+The four floors share a 5 % budget.
+A floor finds only a large regression. The [release eval](#release-feedback-eval) remains the quality bar.
+
+The panel runs only on a pull request, with the three live-test variables as repository secrets.
+Each case is one `CompositionEvalLiveTest` invocation, with 16,384 output tokens and medium reasoning effort.
+The composer loop sends at most 12 model calls for each case. Thus, one run sends at most 240 calls.
+The job stops after 40 minutes.
+
+### A skipped panel
+
+The panel is skipped when the run has no credential, or when the endpoint gives no composition for a panel case.
+A forked pull request never gets secrets. An endpoint failure is never retried.
+A skip is not a pass: the job fails and names the reason.
+
+To accept a skip, a maintainer adds the label that `gate.json` names as `acceptLabel`, then re-runs the job.
+The job reads the labels from the pull request, so the re-run sees the new label.
+A merge group and a push run the deterministic checks only. The pull request already ran the panel or accepted its skip.
+
+The job keeps `feedback-eval-gate.json` as the `feedback-eval-gate` artifact for 14 days.
+The file holds each check, each measure, the model name and the SHA-256 of the endpoint. It never holds the endpoint or the key.
+
+The gate runs locally without a model:
+
+```bash
+node scripts/feedback-eval-gate.ts
+```
+
 ## Composition replay cases
 
 A replay case fixes what the composer loop admits for one sealed review and one sequence of model answers.
