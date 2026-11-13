@@ -2,7 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import type { ProviderResourceRepair } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
@@ -46,6 +46,15 @@ async function confirm() {
 	await user.click(within(dialog).getByRole("checkbox"));
 	await user.click(within(dialog).getByRole("button", { name: "Release block" }));
 }
+
+beforeEach(() => {
+	server.use(
+		http.get("*/workspaces", () => HttpResponse.json([])),
+		http.get("*/admin/settings", () =>
+			HttpResponse.json({ silentModeEngaged: false, etag: '"0"' }),
+		),
+	);
+});
 
 describe("provider removal routes", () => {
 	it("releases an orphan by its exact identity and reloads the instance list", async () => {

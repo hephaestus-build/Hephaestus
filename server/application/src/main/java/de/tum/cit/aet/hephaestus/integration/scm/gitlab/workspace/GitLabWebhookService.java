@@ -229,7 +229,7 @@ public class GitLabWebhookService {
             log.info("Registered webhook: workspaceId={}, groupId={}, webhookId={}", scopeId, groupId, webhookId);
             return WebhookSetupResult.success(webhookId, groupId);
         } catch (ObjectOptimisticLockingFailureException changed) {
-            return WebhookSetupResult.skipped("The connection changed during registration");
+            return WebhookSetupResult.skipped(WebhookSetupResult.Reason.SUPERSEDED);
         } catch (WebClientResponseException e) {
             int status = e.getStatusCode().value();
             // A provider error response can echo the webhook secret or private request data.
