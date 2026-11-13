@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionEnded;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionRequest;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
+import de.tum.cit.aet.hephaestus.core.action.ActionVariants;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Instant;
 import java.util.UUID;
@@ -52,6 +53,11 @@ class CleanupIssueAdapter implements ActionAdapter {
     @Override
     public ActionKind kind() {
         return ActionKind.CLEANUP_ISSUE;
+    }
+
+    @Override
+    public ActionVariants variants() {
+        return ActionVariants.one(Payload.class);
     }
 
     @Override

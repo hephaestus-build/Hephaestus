@@ -93,8 +93,8 @@ class ActionStore {
 
     /** Takes one admitted lane head now ({@link AgentActionRepository#claimById}). */
     @Transactional
-    public Optional<Claim> claim(UUID id, Duration lease) {
-        return actions.claimById(id, lease.toSeconds()).map(ActionStore::claim);
+    public Optional<Claim> claim(UUID id, Duration lease, ActionAdmission admission) {
+        return actions.claimById(id, lease.toSeconds(), admission.json()).map(ActionStore::claim);
     }
 
     @Transactional(readOnly = true)
@@ -127,8 +127,8 @@ class ActionStore {
 
     /** Takes up to {@code limit} due lane heads under a new lease ({@link AgentActionRepository#claim}). */
     @Transactional
-    public List<Claim> claim(int limit, Duration lease) {
-        return actions.claim(limit, lease.toSeconds(), AT_MOST_ONCE).stream()
+    public List<Claim> claim(int limit, Duration lease, ActionAdmission admission) {
+        return actions.claim(limit, lease.toSeconds(), AT_MOST_ONCE, admission.json()).stream()
                 .map(ActionStore::claim)
                 .toList();
     }
@@ -204,8 +204,8 @@ class ActionStore {
 
     /** Up to {@code limit} actions that {@link #endStale} can end. */
     @Transactional(readOnly = true)
-    public List<UUID> findStale(int limit) {
-        return actions.findStale(AT_MOST_ONCE, limit);
+    public List<UUID> findStale(int limit, ActionAdmission admission) {
+        return actions.findStale(AT_MOST_ONCE, admission.json(), limit);
     }
 
     /**
@@ -213,9 +213,9 @@ class ActionStore {
      * runs in this transaction, so a failing domain row holds back only its own action.
      */
     @Transactional
-    public Optional<Settled> endStale(UUID id, Consumer<ActionEnded> onEnd) {
-        Optional<Settled> settled = actions.endExpired(id)
-                .or(() -> actions.endLost(id, AT_MOST_ONCE))
+    public Optional<Settled> endStale(UUID id, ActionAdmission admission, Consumer<ActionEnded> onEnd) {
+        Optional<Settled> settled = actions.endExpired(id, admission.json())
+                .or(() -> actions.endLost(id, AT_MOST_ONCE, admission.json()))
                 .map(ActionStore::settled);
         settled.flatMap(Settled::ended).ifPresent(onEnd);
         return settled;
@@ -232,7 +232,7 @@ class ActionStore {
     /** Deletes what ended more than {@code retention} ago. */
     @Transactional
     public int deleteEnded(Duration retention) {
-        return actions.deleteEndedBefore((int) retention.toDays());
+        return actions.deleteEndedBefore((int) retention.toDays(), ActionKind.names());
     }
 
     private static Settled settled(AgentActionRepository.SettledRow row) {

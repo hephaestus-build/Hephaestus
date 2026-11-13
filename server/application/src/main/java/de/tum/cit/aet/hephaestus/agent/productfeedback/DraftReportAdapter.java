@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
+import de.tum.cit.aet.hephaestus.core.action.ActionVariants;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDrafts;
@@ -67,6 +68,11 @@ class DraftReportAdapter implements ActionAdapter {
     @Override
     public ActionKind kind() {
         return ActionKind.DRAFT_REPORT;
+    }
+
+    @Override
+    public ActionVariants variants() {
+        return ActionVariants.one(ProductFeedbackDrafts.Payload.class);
     }
 
     @Override
