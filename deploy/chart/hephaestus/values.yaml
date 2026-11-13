@@ -322,8 +322,8 @@ sandbox:
 # Application settings. Each key maps to one setting of docs/admin/production-setup.mdx.
 config:
   releaseCheckEnabled: true
-  # Corrects commit links from GitHub's own answer. docs/admin/production-operations-runbook.mdx has the steps.
-  commitIdentityResolutionEnabled: false
+  # Corrects commit links from GitHub's or GitLab's own answer. docs/admin/production-operations-runbook.mdx has the steps.
+  commitIdentityResolutionEnabled: true
   llmUsageRetention: P400D
   # Age at which what Hephaestus says about a person is erased: conversation entries, feedback and practice
   # results. docs/admin/data-retention.mdx.

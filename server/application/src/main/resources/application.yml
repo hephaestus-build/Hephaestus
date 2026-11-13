@@ -278,7 +278,7 @@ springdoc:
 
 hephaestus:
     commit-identity-resolution:
-        enabled: ${HEPHAESTUS_COMMIT_IDENTITY_RESOLUTION_ENABLED:false}
+        enabled: ${HEPHAESTUS_COMMIT_IDENTITY_RESOLUTION_ENABLED:true}
         batch-size: ${HEPHAESTUS_COMMIT_IDENTITY_RESOLUTION_BATCH_SIZE:50}
     scm:
         egress:
