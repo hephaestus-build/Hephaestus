@@ -300,6 +300,10 @@ export default defineConfig({
 			"gate:openapi-lint": run(
 				"node --test scripts/check-openapi-lint.test.ts && node scripts/check-openapi-lint.ts",
 			),
+			// Docker and a JDK, then two generators and two compilers: CI runs it when its inputs change.
+			"gate:client-generators": run(
+				"node --test scripts/check-client-generators.test.ts && node scripts/check-client-generators.ts",
+			),
 			"gate:public-contract": run(
 				"node --test scripts/check-public-contract.test.ts && node scripts/check-public-contract.ts",
 			),

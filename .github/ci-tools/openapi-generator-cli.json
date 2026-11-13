@@ -1,0 +1,10 @@
+{
+	"version": "7.27.0",
+	"url": "https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/7.27.0/",
+	"assets": {
+		"all": {
+			"name": "openapi-generator-cli-7.27.0.jar",
+			"sha256": "db9c4b738727698748746144394cb7ee96512fe50166555baaeeca9311ee1dba"
+		}
+	}
+}
