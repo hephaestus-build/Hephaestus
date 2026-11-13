@@ -136,6 +136,7 @@ Boot work uses the one connection included in each server pool. It has no separa
 With `cluster.yaml`, four servers at overlap with pools of 63 give `max_connections` of 300.
 An explicit `postgresql.parameters.max_connections` must hold the required slots. The chart refuses a smaller one.
 An external database must hold the same budget beside its own reserved slots ([PostgreSQL connection settings](https://www.postgresql.org/docs/18/runtime-config-connection.html#GUC-SUPERUSER-RESERVED-CONNECTIONS)).
+Helm does not check its limit. Add your operator margin and the clients of any other tenant that shares it.
 
 When all pooled connections are busy, a caller waits up to 45 seconds for one, then gets an error.
 `HephaestusDatabaseConnectionTimeouts` fires on such errors.

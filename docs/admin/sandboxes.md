@@ -24,7 +24,8 @@ With sandboxes on, the chart needs `sandbox.namespace` and `networkPolicy.kubern
 | `sandbox.runtime.nodeSelector`, `sandbox.runtime.tolerations` | The sandbox nodes. |
 | `sandbox.gateway.maxConnections` | The connections that the sandbox gateway of each server holds open. |
 
-Sandboxes call the server on port 8081, the sandbox gateway.
+Sandboxes call the server on port 8081, the sandbox gateway. Any ready server can serve the call.
+Before the first upgrade from a release with gateway affinity, [drain legacy reviews](./upgrade#drain-legacy-reviews-before-removing-gateway-affinity).
 A stopping server takes no new claims, and keeps its gateway open during its [graceful drain](./runtime-roles#graceful-drain).
 
 The chart writes these objects into the sandbox namespace:

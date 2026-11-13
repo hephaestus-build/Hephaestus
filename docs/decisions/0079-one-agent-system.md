@@ -744,10 +744,23 @@ Busy or unavailable serialization returns 503 with `Retry-After`. It changes no 
 
 A withholding composition begins a real capture, so it can hold the capture lease, the session lock and a transaction. The chart's connection budget reserves three connections for each concurrent capture.
 
-Compositions that were active under the previous release have no recorded decision. Their first upgrade requires the one-time drain in [Upgrade](../admin/upgrade.mdx#drain-legacy-review-compositions).
+Compositions that were active under the previous release have no recorded decision. Their first upgrade requires the one-time drain in [Upgrade](../admin/upgrade.mdx#drain-legacy-reviews-before-removing-gateway-affinity).
 
 `ReviewCompositionGatewayReplicasIntegrationTest` runs separate HTTP gateway applications over one database.
 In one case, a stopped server A hands the same claim to server B.
 In the other case, server A ends the run and server B releases it naturally.
 This update does not change the gateway Service, which still pins a sandbox to one server by client IP.
 A later, separate step can remove that affinity.
+
+## Update — 2026-11-13: the gateway Service has no client-IP affinity
+
+A review's published preparation checkpoint fixes its program, inputs, database start time and deadline ([Review preparation recovery](../contributor/agent-runs.mdx#review-preparation-recovery)). Each server's folders, archives and sessions are caches of that checkpoint. The sandbox supplies its current token and routes, and the checkpoint holds no gateway credential.
+
+The existing PostgreSQL `ClusterLock` serializes preparation, with no transaction over provider reads. Busy or unavailable serialization returns 503 with `Retry-After` and changes no run decision. Lease and result-admission checks remain authoritative.
+The gateway Service therefore uses ready endpoints without client-IP affinity or not-ready addresses.
+
+The chart's connection budget in [Database connections](../admin/sizing.mdx#database-connections) counts the holders of a preparation.
+The sandbox's input archive has the same bytes on every server: entries in name order, with no time or host user.
+[PostgreSQL advisory locks](https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS) and [Kubernetes Service session affinity](https://kubernetes.io/docs/reference/networking/virtual-ips/#session-affinity) define these platform mechanisms.
+
+Old active reviews have no checkpoint. Their first upgrade requires the one-time drain in [Upgrade](../admin/upgrade.mdx#drain-legacy-reviews-before-removing-gateway-affinity).

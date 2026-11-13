@@ -100,6 +100,9 @@ The migrations need no superuser: `citext` and `btree_gist` are trusted extensio
 The chart connects with `sslmode=verify-full`.
 It has no setting for a connection without TLS or without certificate verification.
 
+Helm does not check the connection limit of your server.
+[Database connections](./sizing#database-connections) gives the clients that a release needs, and what your server must add to them.
+
 ## Check that it worked
 
 1. Read the log of the migration Job of the revision. It logs `Database migration completed`.
