@@ -308,6 +308,9 @@ export default defineConfig({
 			}),
 			"gate:pmd-canary": run("node scripts/check-pmd-canary.ts"),
 			"gate:api-compatibility": run("node scripts/check-api-compatibility.ts"),
+			"gate:openapi-lint": run(
+				"node --test scripts/check-openapi-lint.test.ts && node scripts/check-openapi-lint.ts",
+			),
 			"gate:public-contract": run(
 				"node --test scripts/check-public-contract.test.ts && node scripts/check-public-contract.ts",
 			),
@@ -441,8 +444,9 @@ export default defineConfig({
 
 			// What each CI job runs.
 			// The package job compiles the tests without the analysis; this leg runs it.
+			// Build → Generated API lints the spec that it generates from the packaged server.
 			"ci:server": group([
-				...serverGates,
+				...serverGates.filter((gate) => gate !== "gate:openapi-lint"),
 				"gate:adr-confirmation",
 				"gate:owned-code",
 				"gate:server-test-analysis",

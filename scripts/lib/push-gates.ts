@@ -15,7 +15,7 @@ export const extensionGates = [
 	"gate:components",
 	"gate:stories",
 ];
-export const serverStaticGates = ["gate:java-nullness"];
+export const serverStaticGates = ["gate:java-nullness", "gate:openapi-lint"];
 export const changesetGates = ["gate:changesets", "gate:docs-lint", "gate:prose"];
 
 // Each scope runs what `check:affected` runs for it, except the exclusions that
