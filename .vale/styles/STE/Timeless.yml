@@ -4,12 +4,7 @@ level: suggestion
 ignorecase: true
 tokens:
   - currently
-  - no longer
-  - used to
-  - previously
   - formerly
-  - not yet
-  - for now
   - at the moment
   - coming soon
   - new in

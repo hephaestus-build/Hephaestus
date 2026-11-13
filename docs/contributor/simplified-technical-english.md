@@ -228,7 +228,7 @@ Keep a technical verb's meaning and object clear.
 - Use a list to show three or more separate items.
 - Write full words instead of contractions.
 - Write separate sentences instead of a semicolon.
-- Do not start a sentence with **Thus** or **Therefore** only to join it to the one before. If the reason matters, use **because** or **if**. If it does not, delete the word.
+- Do not start a sentence with **Thus** or **Therefore** only to join it to the one before. If the reason matters, join the two sentences with **because**. If it does not, delete the word.
 
 Some contractions have more than one full form.
 Choose the form that keeps the original meaning.
@@ -320,7 +320,7 @@ The lint configuration of each tree runs it as an error on all of `src`, except 
 
 Vocabulary, passive voice, and noun or adjective `-ing` checks give suggestions, not errors.
 They apply to STE prose only.
-Words that go stale, such as `currently` and `no longer`, give suggestions in all docs.
+Words that go stale, such as `currently` and `formerly`, give suggestions in all docs except decision records.
 The open word list is not the ASD dictionary and does not cover every valid technical word or inflected form.
 A part-of-speech tagger can also be wrong.
 

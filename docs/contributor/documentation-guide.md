@@ -4,14 +4,14 @@ description: The reader of each docs guide, its page types, the template of each
 page_type: reference
 ---
 
-This guide owns the shape of a docs page.
+This guide sets the shape of a docs page.
 It gives the guide that a fact goes in, the page type, the template, and the rules for images, callouts, code, and file names.
-The [writing standard](./simplified-technical-english.md) owns the sentences: voice, words, and sentence length.
-The [product vocabulary](./practice-feedback-language.md) owns the product terms.
+Write the sentences by the [writing standard](./simplified-technical-english.md): voice, words, and sentence length.
+Use the product terms of the [product vocabulary](./practice-feedback-language.md).
 Read this guide before you add a page or move a fact to another guide.
 
 The rules apply to a guide when all of its pages declare a `page_type`.
-Today, that is the user guide and the admin guide.
+The user guide and the admin guide meet this condition.
 In the contributor guide, a new page and a page that declares its type follow the rules.
 
 ## The three guides
@@ -39,9 +39,9 @@ Langfuse uses the same line: its [self-hosting docs](https://langfuse.com/self-h
 
 ### One home for each fact
 
-Give each fact one page, and link to it where the reader needs it: `Hephaestus keeps feedback for 400 days after delivery ([Data retention](/admin/data-retention))`.
-Do not write a sentence that only says which page owns a fact.
-Do not start a page with what it does not cover.
+Give each fact one page, and link to it where the reader needs it: `Hephaestus deletes feedback after its retention period ([Data retention](/admin/data-retention))`.
+On a docs page, do not write a sentence that only says which page owns a fact.
+Start a page with what it covers.
 
 ## Current release only
 
@@ -52,11 +52,15 @@ The release note carries the steps that an operator takes to upgrade.
 
 - Do not name a release version, such as `1.0` or `rc.5`, on a page.
   Release notes, upgrade pages, and the [compatibility policy](/admin/compatibility-policy) are the exceptions.
-  A minimum version of a dependency is a fact, such as `PostgreSQL 18 or later`.
-- Do not use time words that go stale: `now`, `new` for a feature, `currently`, `no longer`, `still`, `yet`, `used to`, `previously`, `soon`.
-  `STE.Timeless` suggests a change for the most common of these words.
+  A version that the product requires is a fact, such as `PostgreSQL 18`.
+  A version in a path or a tag is part of a name. Write it as code.
+- Do not compare the product with an earlier or a later release.
+  Avoid words such as `now`, `new`, `currently`, `no longer`, `used to`, and `soon`.
+  A change of state at run time is correct: `Check that the service no longer runs`.
+  `STE.Timeless` flags some of these words.
 - Do not describe a feature that is planned. State what the product does not do as a plain fact.
 - These rules also apply to diagrams, captions, alt text, anchors, and file names.
+- Decision records and dated audit records describe their date. These rules do not apply to them.
 
 [Google](https://developers.google.com/style/timeless-documentation), [Kubernetes](https://kubernetes.io/docs/contribute/style/style-guide/), and [Grafana](https://grafana.com/docs/writers-toolkit/contribute/release-notes/) use the same rules.
 

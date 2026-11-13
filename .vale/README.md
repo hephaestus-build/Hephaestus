@@ -1,6 +1,6 @@
 # Prose checks
 
-The [writing standard](../docs/contributor/simplified-technical-english.md) owns the project policy.
+The [writing standard](../docs/contributor/simplified-technical-english.md) is the project policy.
 This directory contains the inputs for the checks.
 
 ## Word source
