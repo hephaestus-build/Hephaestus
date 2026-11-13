@@ -138,8 +138,12 @@ void test(
 			await mkdir(volume);
 
 			await extract(archive, volume, []);
-			// The defect: the next attempt extracting over the first attempt's tree fails.
-			assert.notEqual(spawnSync("tar", extractArguments(archive, volume, [])).status, 0);
+			// The defect: the next attempt extracting over the first attempt's tree fails, because review
+			// sandboxes run as a non-root user (the chart's runAsUser 1000). Root bypasses file modes, so
+			// only a non-root run can show the failure that emptying the volume prevents.
+			if (process.getuid?.() !== 0) {
+				assert.notEqual(spawnSync("tar", extractArguments(archive, volume, [])).status, 0);
+			}
 
 			await emptyDirectory(volume);
 			await extract(archive, volume, []);
