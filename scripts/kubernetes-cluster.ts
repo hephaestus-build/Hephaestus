@@ -817,9 +817,7 @@ export async function install(
 	]);
 }
 
-const STATEFUL = new Set(["postgresql"]);
-
-/** The UID of each running PostgreSQL Pod, by Pod name, from `kubectl get pods -o json`. */
+/** The UID of each qualification PostgreSQL Pod, by namespace/name, from `kubectl get pods -A -o json`. */
 export function statefulPods(listed: unknown): Map<string, string> {
 	const pods = asArray(asRecord(listed, "Pod list").items, "Pods")
 		.map((pod) => asRecord(asRecord(pod, "Pod").metadata, "Pod metadata"))
@@ -827,11 +825,13 @@ export function statefulPods(listed: unknown): Map<string, string> {
 			(metadata) =>
 				metadata.deletionTimestamp === undefined &&
 				isRecord(metadata.labels) &&
-				STATEFUL.has(String(metadata.labels["app.kubernetes.io/component"])),
+				((metadata.namespace === NAMESPACE &&
+					metadata.labels["app.kubernetes.io/component"] === "postgresql") ||
+					(metadata.namespace === EXTERNAL_POSTGRESQL && metadata.labels.app === "postgresql")),
 		);
 	return new Map(
 		pods.map((metadata) => [
-			asString(metadata.name, "Pod name"),
+			`${asString(metadata.namespace, "Pod namespace")}/${asString(metadata.name, "Pod name")}`,
 			asString(metadata.uid, "Pod UID"),
 		]),
 	);
@@ -846,7 +846,7 @@ export function restartedPods(
 }
 
 async function listStatefulPods(): Promise<Map<string, string>> {
-	return statefulPods(parseJson(await kubectl(["-n", NAMESPACE, "get", "pods", "-o", "json"])));
+	return statefulPods(parseJson(await kubectl(["get", "pods", "--all-namespaces", "-o", "json"])));
 }
 
 /**

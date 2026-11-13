@@ -381,6 +381,7 @@ await test("the summary gives the address, the trust steps for the system, and t
 const statefulPod = (name: string, component: string, uid: string, deleting = false) => ({
 	metadata: {
 		name,
+		namespace: "hephaestus",
 		uid,
 		labels: { "app.kubernetes.io/component": component },
 		...(deleting ? { deletionTimestamp: "2026-10-26T18:00:00Z" } : {}),
@@ -394,12 +395,42 @@ await test("an upgrade check names each PostgreSQL Pod that it replaced or lost"
 			statefulPod("heph-server-1", "server", "c"),
 		],
 	});
-	assert.deepEqual([...before], [["heph-postgresql-0", "a"]]);
+	assert.deepEqual([...before], [["hephaestus/heph-postgresql-0", "a"]]);
 	assert.deepEqual(restartedPods(before, before), []);
 	const after = statefulPods({
 		items: [statefulPod("heph-postgresql-0", "postgresql", "d")],
 	});
-	assert.deepEqual(restartedPods(before, after), ["heph-postgresql-0"]);
+	assert.deepEqual(restartedPods(before, after), ["hephaestus/heph-postgresql-0"]);
+});
+
+const externalPostgresqlPod = (uid: string) => ({
+	metadata: {
+		namespace: "external-postgresql",
+		name: "postgresql-0",
+		uid,
+		labels: { app: "postgresql" },
+	},
+});
+
+await test("the external-database upgrade checks the PostgreSQL Pod outside the release namespace", () => {
+	const database = externalPostgresqlPod("database-before");
+	const before = statefulPods({
+		items: [
+			database,
+			statefulPod("heph-server-1", "server", "server"),
+			statefulPod("heph-postgresql-0", "postgresql", "terminating", true),
+			{ metadata: { ...database.metadata, namespace: "unrelated" } },
+		],
+	});
+	assert.deepEqual([...before], [["external-postgresql/postgresql-0", "database-before"]]);
+	assert.deepEqual(restartedPods(before, statefulPods({ items: [database] })), []);
+	assert.deepEqual(
+		restartedPods(before, statefulPods({ items: [externalPostgresqlPod("database-after")] })),
+		["external-postgresql/postgresql-0"],
+	);
+	assert.deepEqual(restartedPods(before, statefulPods({ items: [] })), [
+		"external-postgresql/postgresql-0",
+	]);
 });
 
 await test("the retired live qualifier invokes no cluster or build tool", () => {
