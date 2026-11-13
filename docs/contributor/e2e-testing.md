@@ -144,7 +144,8 @@ The drill uses two stand-ins in the pod network, and it runs the product's own p
 - The capacity benchmark's fake model provider (`scripts/capacity-provider.ts`) answers the model calls.
 - `scripts/slack-fake.ts` is a Slack Web API. The server installs the app through its own OAuth callback against it, and it takes the posted messages.
   The server reaches it through `hephaestus.integration.slack.api-base`.
-- The Events API request is signed with a signing secret that the drill generates for each run in the release's Secret.
+- The drill signs the Events API request.
+  It generates the signing secret for each run in the release's Secret.
   The fake issues a new bot token each time it starts.
 
 ## Caveats

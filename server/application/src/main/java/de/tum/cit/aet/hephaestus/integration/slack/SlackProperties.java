@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.slack;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Locale;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -46,13 +47,20 @@ public record SlackProperties(
                 + (uri.getPort() < 0 ? "" : ":" + uri.getPort());
     }
 
-    private static String validated(String value) {
-        URI uri;
+    /**
+     * The parsed value, or empty when it is no URI. The syntax error is not kept: its message repeats the value, which
+     * can carry user information.
+     */
+    private static Optional<URI> parsed(String value) {
         try {
-            uri = new URI(value.strip());
+            return Optional.of(new URI(value.strip()));
         } catch (URISyntaxException invalid) {
-            throw refused();
+            return Optional.empty();
         }
+    }
+
+    private static String validated(String value) {
+        URI uri = parsed(value).orElseThrow(SlackProperties::refused);
         String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
         if (!uri.isAbsolute()
                 || !(scheme.equals("http") || scheme.equals("https"))
