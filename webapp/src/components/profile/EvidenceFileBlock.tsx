@@ -1,22 +1,25 @@
-import { cn } from "cn";
+import { useId } from "react";
 
+import { DotSeparator } from "@/components/common/DotSeparator";
 import {
 	DIFF_SIDE_LABELS,
 	evidenceSourceDef,
 } from "@/components/practice-vocabulary/evidence-source-defs";
+import {
+	CodeBlock,
+	CodeBlockActions,
+	CodeBlockContent,
+	CodeBlockCopyButton,
+	CodeBlockFooter,
+	CodeBlockHeader,
+	CodeBlockLine,
+	CodeBlockTitle,
+} from "@/components/ui/code-block";
+import { useHighlightedCode } from "@/hooks/use-highlighted-code";
+import { codeLanguage } from "@/lib/code-language";
 import { hasText } from "@/lib/text";
 
 import { type EvidenceLocation, evidenceLineRangeLabel, splitPath } from "./evidence";
-
-const DIFF_SIDES = ["OLD", "NEW"] as const;
-
-/** What the line was and what it became, told apart by the wash the status colours give them. */
-const DIFF_SIDE_TINTS = {
-	// The heavier alpha in dark is the registry badges' own: at /10 a wash on the dark ground is
-	// not there at all.
-	OLD: "bg-destructive/10 dark:bg-destructive/20",
-	NEW: "bg-success/10 dark:bg-success/20",
-} satisfies Record<(typeof DIFF_SIDES)[number], string>;
 
 interface EvidenceFileBlockProps {
 	location: EvidenceLocation;
@@ -24,121 +27,99 @@ interface EvidenceFileBlockProps {
 
 // Non-code locators point into serialized runner input, not coordinates in the source app.
 export function EvidenceFileBlock({ location }: EvidenceFileBlockProps) {
+	const titleId = useId();
 	const source = evidenceSourceDef(location.sourceKind);
 	const locatedByLine = source.locator === "code" && hasText(location.path);
 	const { directory, fileName } = splitPath(location.path ?? "");
-	const lineRange = evidenceLineRangeLabel(location);
-	const { change } = location;
-	const { side } = location;
-	const lines = location.snippet?.split("\n") ?? [];
-	const firstLineNumber = location.startLine ?? 1;
-	const hasSnippet = change !== undefined || lines.length > 0;
+	const { change, side, snippet } = location;
+	// A range over the two sides of a change would be true of one of them only.
+	const lineRange =
+		locatedByLine && change === undefined ? evidenceLineRangeLabel(location) : undefined;
+	const sideLabel = change === undefined && side !== undefined ? DIFF_SIDE_LABELS[side] : undefined;
+	const language = locatedByLine ? codeLanguage(location.path) : "";
+	// Each side of a change is a passage of a different version of the file, so each is read alone.
+	const before = useHighlightedCode(change?.before ?? "", language);
+	const after = useHighlightedCode(change?.after ?? "", language);
+	const quoted = useHighlightedCode(snippet ?? "", language);
+	const copyText = change === undefined ? snippet : unifiedDiff(change);
 	const SourceIcon = source.icon;
-	/**
-	 * The side of the diff on the first line it covers, the line number on a code quote, or nothing
-	 * at all.
-	 */
-	const gutterOf = (index: number, quotedSide = side): number | string | undefined => {
-		if (quotedSide) {
-			return index === 0 ? DIFF_SIDE_LABELS[quotedSide] : "";
-		}
-		return locatedByLine && location.startLine !== undefined ? firstLineNumber + index : undefined;
-	};
 
 	return (
-		<figure className="min-w-0 overflow-hidden rounded-xl border">
-			<figcaption
-				className={cn(
-					"flex min-w-0 flex-wrap items-center gap-2 bg-code-header px-2.5 py-1.5",
-					hasSnippet && "border-b",
-				)}
-			>
-				<SourceIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-				{locatedByLine ? (
-					<span className="flex min-w-0 flex-1 font-mono text-xs" title={location.path}>
-						{/* The directory gives way first; at the reflow width the file name alone must fit. */}
-						{hasText(directory) && (
-							<span className="hidden truncate text-muted-foreground sm:inline">{directory}</span>
-						)}
-						<span className="min-w-0 truncate font-medium sm:shrink-0">{fileName}</span>
+		<CodeBlock size="sm" role="figure" aria-labelledby={titleId}>
+			<CodeBlockHeader>
+				<CodeBlockTitle id={titleId} className="flex items-center">
+					<SourceIcon className="shrink-0 text-muted-foreground" aria-hidden />
+					{locatedByLine ? (
+						<span className="flex min-w-0 font-mono" title={location.path}>
+							{/* The directory gives way first; at the reflow width the file name alone must fit. */}
+							{hasText(directory) && (
+								<span className="hidden truncate font-normal text-muted-foreground sm:inline">
+									{directory}
+								</span>
+							)}
+							<span className="min-w-0 truncate sm:shrink-0">{fileName}</span>
+						</span>
+					) : (
+						<span className="min-w-0 truncate">{source.label}</span>
+					)}
+				</CodeBlockTitle>
+				{(lineRange !== undefined || sideLabel !== undefined) && (
+					<span className="flex shrink-0 items-center">
+						{lineRange !== undefined && <span className="font-mono">{lineRange}</span>}
+						{lineRange !== undefined && sideLabel !== undefined && <DotSeparator inline />}
+						{sideLabel}
 					</span>
-				) : (
-					<span className="min-w-0 flex-1 truncate text-xs font-medium">{source.label}</span>
 				)}
-				{locatedByLine && change === undefined && lineRange !== undefined && (
-					<span className="shrink-0 font-mono text-xs text-muted-foreground">{lineRange}</span>
+				{copyText !== undefined && (
+					<CodeBlockActions>
+						<CodeBlockCopyButton
+							value={copyText}
+							aria-label={locatedByLine ? `Copy passage from ${fileName}` : "Copy passage"}
+						/>
+					</CodeBlockActions>
 				)}
-				{hasText(location.commit) && (
-					<p className="min-w-0 basis-full text-xs break-all text-muted-foreground">
+			</CodeBlockHeader>
+			{change !== undefined && (
+				// max-h-36 shows about six code lines before the region scrolls on its own.
+				<CodeBlockContent className="max-h-36">
+					{before.map((line, index) => (
+						<CodeBlockLine key={`OLD-${index}`} variant="removed">
+							{line}
+						</CodeBlockLine>
+					))}
+					{after.map((line, index) => (
+						<CodeBlockLine key={`NEW-${index}`} variant="added">
+							{line}
+						</CodeBlockLine>
+					))}
+				</CodeBlockContent>
+			)}
+			{change === undefined && snippet !== undefined && (
+				<CodeBlockContent
+					className="max-h-36"
+					lineNumbers={locatedByLine && location.startLine !== undefined}
+					startLine={location.startLine}
+				>
+					{quoted.map((line, index) => (
+						<CodeBlockLine key={index}>{line}</CodeBlockLine>
+					))}
+				</CodeBlockContent>
+			)}
+			{hasText(location.commit) && (
+				<CodeBlockFooter>
+					<p className="min-w-0 break-all">
 						Commit <code>{location.commit}</code>
 					</p>
-				)}
-			</figcaption>
-			{hasSnippet && (
-				<pre
-					// oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Keyboard users must be able to scroll this region.
-					tabIndex={0}
-					// max-h-36 shows about six code lines before the region scrolls on its own.
-					className="max-h-36 overflow-auto bg-code py-2 font-mono text-xs leading-4"
-				>
-					<code>
-						{change
-							? DIFF_SIDES.flatMap((diffSide) =>
-									(diffSide === "OLD" ? change.before : change.after)
-										.split("\n")
-										.map((line, index) => (
-											<QuoteLine
-												key={`${diffSide}-${index}`}
-												gutter={gutterOf(index, diffSide)}
-												tint={DIFF_SIDE_TINTS[diffSide]}
-											>
-												{line}
-											</QuoteLine>
-										)),
-								)
-							: lines.map((line, index) => (
-									<QuoteLine key={firstLineNumber + index} gutter={gutterOf(index)}>
-										{line}
-									</QuoteLine>
-								))}
-					</code>
-				</pre>
+				</CodeBlockFooter>
 			)}
-		</figure>
+		</CodeBlock>
 	);
 }
 
-/** One line of a quote: what the gutter says about it, then the line itself. */
-function QuoteLine({
-	gutter,
-	tint,
-	children,
-}: {
-	/** The line's number, the side of the diff it was read from, or nothing at all. */
-	gutter?: number | string;
-	/** The wash the side of the diff gives the line, for a quote that shows both. */
-	tint?: string;
-	children: string;
-}) {
-	return (
-		<span className={cn("grid", gutter === undefined ? "grid-cols-1" : "grid-cols-[auto_1fr]")}>
-			{gutter !== undefined && (
-				<span
-					className={cn(
-						"sticky left-0 bg-inherit ps-2.5 pe-3 text-muted-foreground select-none",
-						// The two side words are not the same width, so their column is fixed and the code
-						// beside them starts in the same place on both lines.
-						typeof gutter === "string" ? "w-20" : "text-end tabular-nums",
-					)}
-				>
-					{gutter}
-				</span>
-			)}
-			{/* The wash is the line's, not the gutter's: over the tint the muted label would fall
-			    under the contrast the gutter keeps everywhere else. */}
-			<span className={cn("pe-2.5", gutter === undefined && "ps-2.5", tint)}>
-				{children || " "}
-			</span>
-		</span>
-	);
+/** A change as a diff reads: every line before it marked `-`, every line after it marked `+`. */
+function unifiedDiff({ before, after }: { before: string; after: string }): string {
+	return [
+		...before.split("\n").map((line) => `-${line}`),
+		...after.split("\n").map((line) => `+${line}`),
+	].join("\n");
 }

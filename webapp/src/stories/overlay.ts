@@ -24,8 +24,9 @@ export const POSITIONED_POPUPS = [
  * animation of its own and would otherwise look settled the moment it mounts.
  */
 function enteringAnimationsOf(element: Element): Animation[] {
-	return document.getAnimations().filter(({ effect }) => {
-		if (!(effect instanceof KeyframeEffect)) {
+	return document.getAnimations().filter(({ effect, timeline }) => {
+		// A scroll-driven animation, such as a scroll fade, follows its scroller and never finishes.
+		if (!(effect instanceof KeyframeEffect) || timeline !== document.timeline) {
 			return false;
 		}
 		return effect.target instanceof Element && effect.target.contains(element);
