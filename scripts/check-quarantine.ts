@@ -55,6 +55,47 @@ export function isUnconditional(text: string, end: number): boolean {
 	return comma !== null && /^(?:\(|async\b|function\b)/u.test(args.slice(comma[0].length));
 }
 
+const SKIP_NAMES = new Set(["skip", "fixme", "todo"]);
+const BASE_NAMES = new Set(["describe", "it", "test", "bench", "suite"]);
+
+interface Name {
+	readonly name: string;
+	readonly start: number;
+}
+
+/**
+ * The identifiers of the non-computed member chain that ends at `member`, such as `foo.test.skip`.
+ * A computed member ends the chain: `api["it.skip"].skip` names only `skip`, never the quoted key.
+ */
+function chainNames(member: Record<string, unknown>): Name[] {
+	const names: Name[] = [];
+	let node: unknown = member;
+	while (
+		isRecord(node) &&
+		node.type === "MemberExpression" &&
+		node.computed === false &&
+		isIdentifier(node.property)
+	) {
+		names.unshift({ name: node.property.name, start: node.property.start });
+		node = node.object;
+	}
+	if (isIdentifier(node)) {
+		names.unshift({ name: node.name, start: node.start });
+	}
+	return names;
+}
+
+function isIdentifier(
+	node: unknown,
+): node is Record<string, unknown> & { name: string; start: number } {
+	return (
+		isRecord(node) &&
+		node.type === "Identifier" &&
+		typeof node.name === "string" &&
+		typeof node.start === "number"
+	);
+}
+
 function callStarts(file: string, text: string): ReadonlySet<number> {
 	const parsed = parseSync(file, text);
 	if (parsed.errors.length > 0) {
@@ -76,16 +117,21 @@ function callStarts(file: string, text: string): ReadonlySet<number> {
 			) {
 				starts.add(value.callee.start);
 			}
-			if (
-				value.type === "MemberExpression" &&
-				value.computed === false &&
-				isRecord(value.property) &&
-				["skip", "fixme", "todo"].includes(String(value.property.name)) &&
-				typeof value.start === "number" &&
-				typeof value.end === "number"
-			) {
-				for (const match of text.slice(value.start, value.end).matchAll(TS_SKIP)) {
-					starts.add(value.start + match.index);
+			if (value.type === "MemberExpression") {
+				// The first test-runner name before the skip, as `TS_SKIP` reads it in the text.
+				const names = chainNames(value);
+				const last = names.length - 1;
+				if (SKIP_NAMES.has(names[last]?.name ?? "")) {
+					const base = names.findIndex(
+						({ name }, index) =>
+							index < last &&
+							BASE_NAMES.has(name) &&
+							names.slice(index + 1, last).every((link) => !SKIP_NAMES.has(link.name)),
+					);
+					const first = names[base];
+					if (first !== undefined) {
+						starts.add(first.start);
+					}
 				}
 			}
 			for (const item of Object.values(value)) {

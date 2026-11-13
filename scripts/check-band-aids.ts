@@ -164,27 +164,75 @@ function testControl(
 	};
 }
 
+/**
+ * Local names that `node:test` binds. Its `test(name, options, callback)` takes a callback where
+ * Vitest can take a timeout in that position; the import distinguishes these APIs without types.
+ */
+function nodeTestBindings(program: Record<string, unknown>, file: string): ReadonlySet<string> {
+	const names = new Set<string>();
+	for (const statement of asArray(program.body, `${file} program body`)) {
+		if (
+			isRecord(statement) &&
+			statement.type === "ImportDeclaration" &&
+			isRecord(statement.source) &&
+			statement.source.value === "node:test"
+		) {
+			for (const specifier of asArray(statement.specifiers, `${file} import specifiers`)) {
+				if (isRecord(specifier) && isRecord(specifier.local)) {
+					names.add(asString(specifier.local.name, `${file} import binding`));
+				}
+			}
+		}
+	}
+	return names;
+}
+
+const wrapperTypes = new Set([
+	"ParenthesizedExpression",
+	"TSAsExpression",
+	"TSSatisfiesExpression",
+	"TSNonNullExpression",
+]);
+// An options object has its own property path; a function is the test body, not a timeout.
+const notTimeoutTypes = new Set([
+	"ObjectExpression",
+	"ArrowFunctionExpression",
+	"FunctionExpression",
+	"SpreadElement",
+]);
+
 function positionalTimeout(
 	node: Record<string, unknown>,
 	caller: string | undefined,
 	content: string,
+	nodeTest: ReadonlySet<string>,
 ): TestControl | undefined {
 	if (
 		node.type !== "CallExpression" ||
 		caller === undefined ||
 		!frameworkCall(caller) ||
+		nodeTest.has(/^[\w$]*/u.exec(caller)?.[0] ?? "") ||
 		!Array.isArray(node.arguments)
 	) {
 		return undefined;
 	}
+	const options: unknown = node.arguments[1];
 	const argument: unknown = node.arguments[2];
+	let inner = argument;
+	while (isRecord(inner) && wrapperTypes.has(String(inner.type))) {
+		inner = inner.expression;
+	}
 	if (
 		!isRecord(argument) ||
-		typeof argument.value !== "number" ||
-		typeof argument.start !== "number" ||
-		typeof argument.end !== "number"
+		!isRecord(inner) ||
+		notTimeoutTypes.has(String(inner.type)) ||
+		(inner.type === "Identifier" && inner.name === "undefined") ||
+		(isRecord(options) && options.type === "ObjectExpression")
 	) {
 		return undefined;
+	}
+	if (typeof argument.start !== "number" || typeof argument.end !== "number") {
+		throw new Error("test timeout has no source range");
 	}
 	return {
 		category: "test-timeout",
@@ -259,6 +307,7 @@ function scriptViews(file: string, content: string): SourceViews {
 	const code = content.split("");
 	const comments = blank(content).split("");
 	const controls: TestControl[] = [];
+	const nodeTest = nodeTestBindings(asRecord(parsed.program, `${file} program`), file);
 	const mask = (start: number, end: number): void => {
 		for (let i = start; i < end; i += 1) {
 			const character = content[i];
@@ -296,7 +345,7 @@ function scriptViews(file: string, content: string): SourceViews {
 			if (control !== undefined) {
 				controls.push(control);
 			}
-			const timeout = positionalTimeout(value, caller, content);
+			const timeout = positionalTimeout(value, caller, content, nodeTest);
 			if (timeout !== undefined) {
 				controls.push(timeout);
 			}
@@ -467,7 +516,12 @@ function configurationFindings(file: string, content: string): Finding[] {
 			}
 		} else if (node.type === "array") {
 			for (const [index, child] of (node.children ?? []).entries()) {
-				visit(child, [...parts, String(index)]);
+				// A files-scoped object is named by its selector, so removing a sibling keeps its identity.
+				const scoped =
+					key === "overrides" &&
+					child.type === "object" &&
+					asRecord(getNodeValue(child), file).files !== undefined;
+				visit(child, scoped ? parts : [...parts, String(index)]);
 			}
 		}
 	}
@@ -627,6 +681,10 @@ export function scanSource(file: string, content: string): Finding[] {
 		}
 	}
 	for (const control of views.controls) {
+		// A helper named `describe` in a production file is no test framework call.
+		if (control.category === "test-timeout" && !applies(control.category, file)) {
+			continue;
+		}
 		findings.push({
 			file,
 			line: content.slice(0, control.start).split("\n").length,

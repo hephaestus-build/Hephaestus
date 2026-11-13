@@ -138,3 +138,23 @@ void test("reading or wrapping a disabled test method keeps its quarantine oblig
 	}
 	assert.deepEqual(lines("src/a.test.ts", 'api["it.skip"]();'), []);
 });
+
+void test("a quoted key in a member chain is no test runner name", () => {
+	for (const source of [
+		'api["it.skip"].skip;',
+		'api["it.skip"].skip();',
+		'api["test.fixme"].todo("case");',
+	]) {
+		assert.deepEqual(lines("src/a.test.ts", source), [], source);
+	}
+	for (const source of [
+		"const alias = it.skip;",
+		'it.skip`table`("case", () => {});',
+		'it.skip.each([1])("case", () => {});',
+		'test.describe.skip("suite", () => {});',
+		'api["suite"].it.skip("case", () => {});',
+		`const text = \`result: \${it.skip()}\`;`,
+	]) {
+		assert.deepEqual(lines("src/a.test.ts", source), [{ line: 1, problem: missing }], source);
+	}
+});

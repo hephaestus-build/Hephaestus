@@ -993,7 +993,7 @@
 		"file": ".oxlintrc.json",
 		"category": "lint-configuration",
 		"source": "\"off\"",
-		"context": "overrides/0/files=[\"**/*.test.ts\",\"**/*.test.tsx\"]/rules/no-script-url",
+		"context": "overrides/files=[\"**/*.test.ts\",\"**/*.test.tsx\"]/rules/no-script-url",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "root-cause: State the specific framework constraint for this path-scoped rule exclusion or remove the configuration suppression."
@@ -1002,7 +1002,7 @@
 		"file": ".oxlintrc.json",
 		"category": "lint-configuration",
 		"source": "\"off\"",
-		"context": "overrides/1/files=[\"server/application/src/test/resources/agent/**\"]/rules/import/no-relative-parent-imports",
+		"context": "overrides/files=[\"server/application/src/test/resources/agent/**\"]/rules/import/no-relative-parent-imports",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "root-cause: State the specific framework constraint for this path-scoped rule exclusion or remove the configuration suppression."
@@ -1011,7 +1011,7 @@
 		"file": ".oxlintrc.json",
 		"category": "lint-configuration",
 		"source": "\"off\"",
-		"context": "overrides/2/files=[\"server/application/src/main/resources/practices/scripts/**\",\"docker/agents/practice-scripts/fixtures/**\",\"docker/agents/practice-scripts/lib/core/**\",\"docker/agents/practice-scripts/kits/**\"]/rules/import/no-relative-parent-imports",
+		"context": "overrides/files=[\"server/application/src/main/resources/practices/scripts/**\",\"docker/agents/practice-scripts/fixtures/**\",\"docker/agents/practice-scripts/lib/core/**\",\"docker/agents/practice-scripts/kits/**\"]/rules/import/no-relative-parent-imports",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "root-cause: State the specific framework constraint for this path-scoped rule exclusion or remove the configuration suppression."
@@ -1020,7 +1020,7 @@
 		"file": ".oxlintrc.json",
 		"category": "lint-configuration",
 		"source": "\"off\"",
-		"context": "overrides/3/files=[\"server/application/src/main/resources/agent/**\",\"server/application/src/test/resources/agent/**\",\"server/application/src/main/resources/practices/scripts/**\",\"docker/agents/practice-scripts/**\",\"scripts/**\"]/rules/unicorn/no-process-exit",
+		"context": "overrides/files=[\"server/application/src/main/resources/agent/**\",\"server/application/src/test/resources/agent/**\",\"server/application/src/main/resources/practices/scripts/**\",\"docker/agents/practice-scripts/**\",\"scripts/**\"]/rules/unicorn/no-process-exit",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "root-cause: State the specific framework constraint for this path-scoped rule exclusion or remove the configuration suppression."
@@ -1029,7 +1029,7 @@
 		"file": ".oxlintrc.json",
 		"category": "lint-configuration",
 		"source": "\"off\"",
-		"context": "overrides/5/files=[\"server/application/src/test/resources/agent/*.spec.ts\"]/rules/complexity",
+		"context": "overrides/files=[\"server/application/src/test/resources/agent/*.spec.ts\"]/rules/complexity",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "root-cause: State the specific framework constraint for this path-scoped rule exclusion or remove the configuration suppression."
@@ -1038,7 +1038,7 @@
 		"file": ".oxlintrc.json",
 		"category": "lint-configuration",
 		"source": "\"off\"",
-		"context": "overrides/6/files=[\".changeset/*.cjs\"]/rules/import/no-commonjs",
+		"context": "overrides/files=[\".changeset/*.cjs\"]/rules/import/no-commonjs",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "root-cause: State the specific framework constraint for this path-scoped rule exclusion or remove the configuration suppression."
@@ -1047,7 +1047,7 @@
 		"file": ".oxlintrc.json",
 		"category": "lint-configuration",
 		"source": "\"off\"",
-		"context": "overrides/6/files=[\".changeset/*.cjs\"]/rules/unicorn/prefer-module",
+		"context": "overrides/files=[\".changeset/*.cjs\"]/rules/unicorn/prefer-module",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "root-cause: State the specific framework constraint for this path-scoped rule exclusion or remove the configuration suppression."
@@ -1056,7 +1056,7 @@
 		"file": ".oxlintrc.json",
 		"category": "lint-configuration",
 		"source": "\"off\"",
-		"context": "overrides/7/files=[\"load-tests/**/*.js\",\".changeset/*.cjs\"]/rules/jsdoc/require-param-description",
+		"context": "overrides/files=[\"load-tests/**/*.js\",\".changeset/*.cjs\"]/rules/jsdoc/require-param-description",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "root-cause: State the specific framework constraint for this path-scoped rule exclusion or remove the configuration suppression."
@@ -1065,7 +1065,7 @@
 		"file": ".oxlintrc.json",
 		"category": "lint-configuration",
 		"source": "\"off\"",
-		"context": "overrides/7/files=[\"load-tests/**/*.js\",\".changeset/*.cjs\"]/rules/jsdoc/require-returns-description",
+		"context": "overrides/files=[\"load-tests/**/*.js\",\".changeset/*.cjs\"]/rules/jsdoc/require-returns-description",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "root-cause: State the specific framework constraint for this path-scoped rule exclusion or remove the configuration suppression."
@@ -1074,7 +1074,7 @@
 		"file": ".oxlintrc.json",
 		"category": "lint-configuration",
 		"source": "\"off\"",
-		"context": "overrides/8/files=[\"scripts/check-lint-contract.ts\"]/rules/import/no-relative-parent-imports",
+		"context": "overrides/files=[\"scripts/check-lint-contract.ts\"]/rules/import/no-relative-parent-imports",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "root-cause: State the specific framework constraint for this path-scoped rule exclusion or remove the configuration suppression."
@@ -2082,7 +2082,7 @@
 		"file": "docs/.oxlintrc.json",
 		"category": "lint-configuration",
 		"source": "\"off\"",
-		"context": "overrides/0/files=[\"vite.config.ts\"]/rules/import/no-relative-parent-imports",
+		"context": "overrides/files=[\"vite.config.ts\"]/rules/import/no-relative-parent-imports",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "root-cause: State the specific framework constraint for this path-scoped rule exclusion or remove the configuration suppression."
@@ -2190,7 +2190,7 @@
 		"file": "extension/.oxlintrc.json",
 		"category": "lint-configuration",
 		"source": "\"off\"",
-		"context": "overrides/0/files=[\"vite.config.ts\",\"wxt.config.ts\"]/rules/import/no-relative-parent-imports",
+		"context": "overrides/files=[\"vite.config.ts\",\"wxt.config.ts\"]/rules/import/no-relative-parent-imports",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "root-cause: State the specific framework constraint for this path-scoped rule exclusion or remove the configuration suppression."
@@ -2199,7 +2199,7 @@
 		"file": "extension/.oxlintrc.json",
 		"category": "lint-configuration",
 		"source": "\"off\"",
-		"context": "overrides/2/files=[\"**/*.test.ts\",\"**/*.test.tsx\"]/rules/hephaestus/ui-text-voice",
+		"context": "overrides/files=[\"**/*.test.ts\",\"**/*.test.tsx\"]/rules/hephaestus/ui-text-voice",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "constraint: Tests and wire fixtures must assert exact external or deliberately invalid text; product-voice checks apply to the shipped UI source."
@@ -2748,7 +2748,7 @@
 		"file": "oxlint.app.jsonc",
 		"category": "lint-configuration",
 		"source": "\"off\"",
-		"context": "overrides/1/files=[\"e2e/**\"]/rules/react-hooks/rules-of-hooks",
+		"context": "overrides/files=[\"e2e/**\"]/rules/react-hooks/rules-of-hooks",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "root-cause: State the specific framework constraint for this path-scoped rule exclusion or remove the configuration suppression."
@@ -16032,7 +16032,7 @@
 		"file": "webapp/.oxlintrc.json",
 		"category": "lint-configuration",
 		"source": "\"off\"",
-		"context": "overrides/1/files=[\"**/*.test.ts\",\"**/*.test.tsx\",\"src/mocks/**\"]/rules/hephaestus/ui-text-voice",
+		"context": "overrides/files=[\"**/*.test.ts\",\"**/*.test.tsx\",\"src/mocks/**\"]/rules/hephaestus/ui-text-voice",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "constraint: Tests and wire fixtures must assert exact external or deliberately invalid text; product-voice checks apply to the shipped UI source."
@@ -16041,7 +16041,7 @@
 		"file": "webapp/.oxlintrc.json",
 		"category": "lint-configuration",
 		"source": "\"off\"",
-		"context": "overrides/3/files=[\"src/components/ui/**\"]/rules/hephaestus/focus-outline-in-forced-colors",
+		"context": "overrides/files=[\"src/components/ui/**\"]/rules/hephaestus/focus-outline-in-forced-colors",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "root-cause: State the specific framework constraint for this path-scoped rule exclusion or remove the configuration suppression."
@@ -16050,7 +16050,7 @@
 		"file": "webapp/.oxlintrc.json",
 		"category": "lint-configuration",
 		"source": "\"off\"",
-		"context": "overrides/5/files=[\"tools/**\"]/rules/import/no-relative-parent-imports",
+		"context": "overrides/files=[\"tools/**\"]/rules/import/no-relative-parent-imports",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "root-cause: State the specific framework constraint for this path-scoped rule exclusion or remove the configuration suppression."
@@ -16059,7 +16059,7 @@
 		"file": "webapp/.oxlintrc.json",
 		"category": "lint-configuration",
 		"source": "\"off\"",
-		"context": "overrides/6/files=[\"e2e/conversation.live.spec.ts\"]/rules/import/no-relative-parent-imports",
+		"context": "overrides/files=[\"e2e/conversation.live.spec.ts\"]/rules/import/no-relative-parent-imports",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "root-cause: State the specific framework constraint for this path-scoped rule exclusion or remove the configuration suppression."
@@ -16068,7 +16068,7 @@
 		"file": "webapp/.oxlintrc.json",
 		"category": "lint-configuration",
 		"source": "\"off\"",
-		"context": "overrides/9/files=[\"src/components/ui/**\"]/rules/shadcn/no-restyle",
+		"context": "overrides/files=[\"src/components/ui/**\"]/rules/shadcn/no-restyle",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "constraint: A registry file styles the primitives it composes; the contract is with callers outside it."
@@ -16077,7 +16077,7 @@
 		"file": "webapp/.oxlintrc.json",
 		"category": "lint-configuration",
 		"source": "\"off\"",
-		"context": "overrides/11/files=[\"src/lib/toast.ts\",\"src/components/ui/sonner.tsx\"]/rules/no-restricted-imports",
+		"context": "overrides/files=[\"src/lib/toast.ts\",\"src/components/ui/sonner.tsx\"]/rules/no-restricted-imports",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "root-cause: State the specific framework constraint for this path-scoped rule exclusion or remove the configuration suppression."
@@ -16086,7 +16086,7 @@
 		"file": "webapp/.oxlintrc.json",
 		"category": "lint-configuration",
 		"source": "\"off\"",
-		"context": "overrides/13/files=[\"src/routes/**\"]/rules/unicorn/filename-case",
+		"context": "overrides/files=[\"src/routes/**\"]/rules/unicorn/filename-case",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "root-cause: State the specific framework constraint for this path-scoped rule exclusion or remove the configuration suppression."

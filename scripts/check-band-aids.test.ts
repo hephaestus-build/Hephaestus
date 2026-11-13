@@ -340,6 +340,81 @@ await test("test framework settings are distinct from provider and parameterized
 	);
 });
 
+const timeouts = (source: string) =>
+	scanSource("src/a.test.ts", source).map(({ category, source: text }) => [category, text]);
+const nodeTest = (source: string) =>
+	scanSource("src/a.test.ts", `import { test } from "node:test";\n${source}`).map(
+		({ category, source: text }) => [category, text],
+	);
+const scope = (files: string, rule: string) => ({ files: [files], rules: { [rule]: "off" } });
+const configuration = (...overrides: object[]) =>
+	scanSource(".oxlintrc.json", JSON.stringify({ overrides }));
+
+await test("a positional test timeout counts whether it is a literal or an expression", () => {
+	assert.deepEqual(timeouts('const timeout=20_000; it("bounded",()=>{},timeout);'), [
+		["test-timeout", "timeout"],
+	]);
+	for (const expression of ["5 * 1000", "limit()", "slow ? 30_000 : 5_000", "limits.slow"]) {
+		assert.deepEqual(
+			timeouts(`it("bounded", () => {}, ${expression});`),
+			[["test-timeout", expression]],
+			expression,
+		);
+	}
+	assert.deepEqual(timeouts('it("body", () => {});'), []);
+	assert.deepEqual(timeouts('it("default", () => {}, undefined);'), []);
+	assert.deepEqual(timeouts('it("options", () => {}, { timeout: 500 });'), [
+		["test-timeout", "500"],
+	]);
+	assert.deepEqual(timeouts('it("options", { timeout: 500 }, handler);'), [
+		["test-timeout", "500"],
+	]);
+	assert.deepEqual(timeouts('it("options", {}, () => {});'), []);
+	assert.deepEqual(scanSource("src/report.ts", "describe(field, before, after);"), []);
+});
+
+await test("a node:test callback is not a timeout", () => {
+	assert.deepEqual(nodeTest('test("a", options, handler);'), []);
+	assert.deepEqual(nodeTest('test("a", { concurrency: true }, () => {});'), []);
+	assert.deepEqual(nodeTest('test("a", options, () => {});'), []);
+	assert.deepEqual(nodeTest('test("a", { timeout: 1000 }, handler);'), [["test-timeout", "1000"]]);
+	assert.deepEqual(
+		scanSource("src/a.test.ts", 'import { it } from "vitest";\nit("a", options, handler);').map(
+			({ category }) => category,
+		),
+		["test-timeout"],
+	);
+});
+
+await test("a files-scoped override keeps its identity when a sibling override is removed", () => {
+	const baseline = configuration(scope("a.ts", "no-debugger"), scope("b.ts", "no-alert")).map(
+		(finding): Allowance => ({
+			...finding,
+			count: 1,
+			owner: allowance.owner,
+			reason: allowance.reason,
+		}),
+	);
+	assert.equal(baseline.length, 2);
+	assert.deepEqual(
+		reconcile(configuration(scope("b.ts", "no-alert")), baseline, true),
+		baseline.slice(1),
+	);
+	assert.throws(
+		() =>
+			reconcile(
+				configuration(scope("b.ts", "no-debugger"), scope("b.ts", "no-alert")),
+				baseline,
+				true,
+			),
+		/New lint-configuration/u,
+	);
+	assert.notDeepEqual(
+		configuration(scope("a.ts", "no-debugger"))[0]?.context,
+		configuration(scope("b.ts", "no-debugger"))[0]?.context,
+	);
+});
+
 await test("diagnostic browser retries still reject flaky passes on CI", () => {
 	const output = execFileSync(
 		process.execPath,
