@@ -314,10 +314,10 @@ class GitLabCommitIdentityLiveTest extends BaseIntegrationTest {
                 .isPositive();
         assertThat(resolutions.findNextRepository().orElseThrow().getRepositoryId())
                 .isEqualTo(scope.repositoryId());
-        // Respect the production lock's one-minute minimum when these cases share a test context.
+        // ShedLock stores UTC without a zone; this test session uses Europe/Berlin.
         await().atMost(Duration.ofSeconds(70))
                 .until(() -> Boolean.TRUE.equals(jdbc.queryForObject(
-                        "SELECT coalesce(max(lock_until),now()) <= now() FROM shedlock WHERE name='commit-identity-resolution'",
+                        "SELECT coalesce(max(lock_until),timezone('utc',now())) <= timezone('utc',now()) FROM shedlock WHERE name='commit-identity-resolution'",
                         Boolean.class)));
         // As on the scheduled path: no ambient transaction or tenant is held by this caller.
         job.run();
