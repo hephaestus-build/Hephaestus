@@ -76,6 +76,24 @@ void test("an authored draft keeps its preconditions, SQL and rollback while pro
 
 const wrap = (inner: string): string => `<databaseChangeLog>${inner}</databaseChangeLog>`;
 
+void test("promotion preserves explicit transaction modes for native changesets", () => {
+	for (const mode of ["true", "false"]) {
+		const draft = native.replace('author="draft"', `author="draft" runInTransaction='${mode}'`);
+		validateDraft(draft);
+		const first = promoteDraft(draft, 1_700_000_000_000);
+		assert.ok(first.includes(`author="hephaestus" runInTransaction="${mode}">`));
+		const appended = promoteDraft(draft, 1_700_000_000_000, first);
+		assert.equal([...appended.matchAll(new RegExp(`runInTransaction="${mode}"`, "gu"))].length, 2);
+	}
+	assert.throws(
+		() =>
+			validateDraft(
+				native.replace('author="draft"', 'author="draft" runInTransaction="sometimes"'),
+			),
+		/runInTransaction/u,
+	);
+});
+
 void test("an authored draft that promotion would silently change is refused", () => {
 	for (const [draft, reason] of [
 		[wrap(nativeSet.replace("</comment>", "")), /comment/u],
@@ -97,10 +115,7 @@ void test("an authored draft that promotion would silently change is refused", (
 		["<databaseChangeLog/>", /no change sets/u],
 		[wrap(`<include file="other.xml"/>${nativeSet}`), /Only change sets/u],
 		[wrap(`<!-- kept nowhere -->${nativeSet}`), /Only change sets/u],
-		[
-			wrap(nativeSet.replace('author="draft"', 'author="draft" runInTransaction="false"')),
-			/runInTransaction/u,
-		],
+		[wrap(nativeSet.replace('author="draft"', 'author="draft" context="prod"')), /context/u],
 		[wrap('<changeSet id="a" author="b"></changeSet>'), /makes no change/u],
 		[wrap(`<changeSet id="a" author="b"/>${nativeSet}`), /closing tag/u],
 	] as const) {
