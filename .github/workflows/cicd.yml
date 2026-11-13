@@ -372,8 +372,10 @@ jobs:
               - 'scripts/generate-configuration-reference.ts'
               - 'scripts/lib/configuration-reference.ts'
               - 'scripts/lib/application-jar.ts'
-              # The API compatibility gate runs on this leg.
+              # The API compatibility gate and the OpenAPI lint run on this leg.
               - 'scripts/check-api-compatibility.ts'
+              - 'scripts/check-openapi-lint.ts'
+              - 'scripts/openapi-lint/**'
               - 'scripts/lib/pinned-binary.ts'
               - 'scripts/plan-release.ts'
               - '!server/**/AGENTS.md'

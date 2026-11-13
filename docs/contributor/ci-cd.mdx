@@ -114,7 +114,7 @@ The job's own limit cancels the run and can lose its log, so the list is the evi
 | Quality → Windows                                                       | Every gate that needs neither Gradle, Docker nor the agent sandbox, on `windows-latest`, uncached                                                                                                         | `vp run --no-cache ci:windows`                                           |
 | Quality → Clean install                                                 | `vp install --frozen-lockfile` on a runner with Node and the launcher and nothing else, then `gate:toolchain` and the hooks path                                                                          | `vp install`                                                             |
 | Build → Server package                                             | `./gradlew :application:bootJar :application:testClasses`. Uploads the classes and JARs once                                                                                                              | —                                                                        |
-| Build → Generated API                                 | `generate:api` diff against the packaged JAR. [API compatibility](#api-compatibility) with the previous stable release. `db:check-drift`, which replays `master.xml` and diffs the JPA model. ERD diff | `vp run generate:api`, `gate:api-compatibility`, `db:check-drift`, `db:generate-erd-docs` |
+| Build → Generated API                                 | `generate:api` diff against the packaged JAR. [API compatibility](#api-compatibility) with the previous stable release. The [OpenAPI lint](#openapi-lint). `db:check-drift`, which replays `master.xml` and diffs the JPA model. ERD diff | `vp run generate:api`, `gate:api-compatibility`, `gate:openapi-lint`, `db:check-drift`, `db:generate-erd-docs` |
 | Build → Database migrations                                            | Gradle `databaseTest` task against PostgreSQL                                                                                                                                                             | —                                                                        |
 | Build → PostgreSQL drills                                   | `test:postgres-restore`, then `test:postgres-pitr`, in one job beside `databaseTest`. **Re-run failed jobs** repeats both drills                                                                          | `vp run test:postgres-restore`, `test:postgres-pitr`                     |
 | Browser tests → Webapp                                                     | Playwright against the packaged JAR                                                                                                                                                                       | `vp run --filter webapp test:e2e`                                        |
@@ -303,6 +303,29 @@ The Version PR cannot remove them, because its own runs still compare with the p
 A published release moves the base, so a run that passed can fail when it runs again, for example in the merge queue.
 This occurs when `main` removes an endpoint that the new base added.
 List the break or restore the endpoint, then run the job again.
+
+#### OpenAPI lint
+
+`vp run gate:openapi-lint` lints `server/openapi.yaml` with [Redocly CLI](https://redocly.com/docs/cli/) and the rules in `server/redocly.yaml`.
+It is part of `check`, so the pre-push hook runs it for a server change.
+In CI, `Build → Generated API` runs it on the spec that the job generates from the packaged JAR.
+The gate turns off the telemetry and the update check of Redocly.
+
+Each rule in `server/redocly.yaml` has the `error` level.
+The file turns off all other built-in rules.
+Thus, a Redocly update cannot add a rule that we did not review.
+
+| Rule | The gate fails on |
+| --- | --- |
+| `struct` | A spec that does not obey the OpenAPI 3.1 structure, for example a header without a schema |
+| `no-duplicated-tag-names`, `operation-tag-defined` | A tag that the spec declares twice, or an operation tag that it does not declare |
+| `operation-operationId-unique`, `operation-operationId-url-safe` | An operation ID that is not unique, or that is not safe in a URL |
+| `no-unresolved-refs`, `no-unused-components` | A `$ref` that points to nothing, or a component that nothing uses |
+| `path-parameters-defined`, `no-identical-paths` | A path variable without its parameter, or two paths that differ only in the names of their variables |
+| `hephaestus/deprecation-header` | A deprecated operation with a success response that does not declare the `Deprecation` header ([ADR 0103](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0103-the-public-api-grows-only-by-addition-and-every-client-tolerates-what-it-does-not-know.md) rule 7) |
+
+`scripts/openapi-lint/plugin.ts` contains the `hephaestus/deprecation-header` rule.
+`scripts/check-openapi-lint.test.ts` lints small fixture specs to prove the rules.
 
 ### Merge policy
 

@@ -1,0 +1,18 @@
+# The OpenAPI lint that `vp run gate:openapi-lint` runs on `openapi.yaml`.
+# Each rule here is enforced at error level. Every other built-in rule is off, so a Redocly
+# update cannot add a rule without a review of this file.
+# docs/contributor/ci-cd.mdx § API compatibility owns the rules.
+extends: []
+plugins:
+  - ../scripts/openapi-lint/plugin.ts
+rules:
+  struct: error
+  no-duplicated-tag-names: error
+  operation-tag-defined: error
+  operation-operationId-unique: error
+  operation-operationId-url-safe: error
+  no-unresolved-refs: error
+  no-unused-components: error
+  path-parameters-defined: error
+  no-identical-paths: error
+  hephaestus/deprecation-header: error
