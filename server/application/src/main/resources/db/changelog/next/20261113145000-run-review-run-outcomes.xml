@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794581400547-1" author="hephaestus">
+        <comment>A holder can report that its subject failed. Adding the check without validation keeps its row scan outside the exclusive schema lock.</comment>
+        <sql>
+ALTER TABLE agent_run DROP CONSTRAINT ck_agent_run_stop_reason;
+ALTER TABLE agent_run ADD CONSTRAINT ck_agent_run_stop_reason CHECK (stop_reason IS NULL
+    OR stop_reason IN ('COMPLETED','FAILED','CANCELLED','ATTEMPTS_EXHAUSTED','NOT_STARTED','DEADLINE')) NOT VALID;
+        </sql>
+        <rollback>
+            <sql splitStatements="false">
+DO $$ BEGIN
+ IF EXISTS (SELECT 1 FROM agent_run WHERE stop_reason='FAILED') THEN
+  RAISE EXCEPTION 'Restore the verified pre-upgrade backup before removing failed run outcomes';
+ END IF;
+END $$;
+ALTER TABLE agent_run DROP CONSTRAINT ck_agent_run_stop_reason;
+ALTER TABLE agent_run ADD CONSTRAINT ck_agent_run_stop_reason CHECK (stop_reason IS NULL
+    OR stop_reason IN ('COMPLETED','CANCELLED','ATTEMPTS_EXHAUSTED','NOT_STARTED','DEADLINE'));
+            </sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1794581400547-2" author="hephaestus">
+        <comment>Validate the run outcome check while ordinary row writes can continue.</comment>
+        <sql>ALTER TABLE agent_run VALIDATE CONSTRAINT ck_agent_run_stop_reason;</sql>
+        <rollback><sql>SELECT 1;</sql></rollback>
+    </changeSet>
+    <changeSet id="1794581400547-3" author="hephaestus">
+        <comment>Correct old holder outcomes without changing run identity, epoch, times or usage. A terminal subject and its run must agree when their transaction commits. Ended runs remain immutable outside this one migration transaction.</comment>
+        <sql splitStatements="false">
+DO $$ BEGIN
+ IF EXISTS (SELECT 1 FROM agent_run r JOIN review_job j ON j.run_id=r.id AND j.workspace_id=r.workspace_id
+            WHERE r.state='ENDED' AND r.stop_reason='COMPLETED' AND j.status IN ('FAILED','TIMED_OUT','CANCELLED'))
+ OR EXISTS (SELECT 1 FROM agent_run r JOIN mentor_turn t ON t.run_id=r.id AND t.workspace_id=r.workspace_id
+            WHERE r.state='ENDED' AND r.stop_reason='COMPLETED' AND t.status IN ('FAILED','STOPPED')) THEN
+  ALTER TABLE agent_run DISABLE TRIGGER agent_run_transition;
+  UPDATE agent_run r SET stop_reason=CASE j.status WHEN 'FAILED' THEN 'FAILED'
+      WHEN 'TIMED_OUT' THEN 'DEADLINE' WHEN 'CANCELLED' THEN 'CANCELLED' END
+  FROM review_job j WHERE j.run_id=r.id AND j.workspace_id=r.workspace_id
+      AND r.state='ENDED' AND r.stop_reason='COMPLETED' AND j.status IN ('FAILED','TIMED_OUT','CANCELLED');
+  UPDATE agent_run r SET stop_reason=CASE t.status WHEN 'FAILED' THEN 'FAILED' ELSE 'CANCELLED' END
+  FROM mentor_turn t WHERE t.run_id=r.id AND t.workspace_id=r.workspace_id
+      AND r.state='ENDED' AND r.stop_reason='COMPLETED' AND t.status IN ('FAILED','STOPPED');
+  ALTER TABLE agent_run ENABLE TRIGGER agent_run_transition;
+ END IF;
+END $$;
+DO $$ BEGIN
+ IF EXISTS (SELECT 1 FROM agent_run r JOIN review_job j ON j.run_id=r.id AND j.workspace_id=r.workspace_id
+            WHERE r.state='ENDED' AND r.stop_reason='COMPLETED' AND j.status &lt;&gt; 'COMPLETED')
+ OR EXISTS (SELECT 1 FROM agent_run r JOIN mentor_turn t ON t.run_id=r.id AND t.workspace_id=r.workspace_id
+            WHERE r.state='ENDED' AND r.stop_reason='COMPLETED' AND t.status &lt;&gt; 'DONE') THEN
+  RAISE EXCEPTION 'A subject still disagrees with its completed run; restore the verified pre-upgrade backup'
+    USING ERRCODE='23514';
+ END IF;
+END $$;
+CREATE FUNCTION enforce_agent_run_subject_outcome() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+ subject_run uuid;
+BEGIN
+ IF TG_TABLE_NAME='agent_run' THEN
+  subject_run := NEW.id;
+ ELSE
+  subject_run := NEW.run_id;
+ END IF;
+ IF NOT EXISTS (SELECT 1 FROM agent_run r WHERE r.id=subject_run AND r.workspace_id=NEW.workspace_id
+                AND r.state='ENDED' AND r.stop_reason='COMPLETED') THEN
+  RETURN NULL;
+ END IF;
+ IF EXISTS (SELECT 1 FROM review_job j WHERE j.run_id=subject_run AND j.workspace_id=NEW.workspace_id
+            AND j.status &lt;&gt; 'COMPLETED') THEN
+  RAISE EXCEPTION 'a review that did not complete cannot have a completed run' USING ERRCODE='23514';
+ END IF;
+ IF EXISTS (SELECT 1 FROM mentor_turn t WHERE t.run_id=subject_run AND t.workspace_id=NEW.workspace_id
+            AND t.status &lt;&gt; 'DONE') THEN
+  RAISE EXCEPTION 'a turn that did not complete cannot have a completed run' USING ERRCODE='23514';
+ END IF;
+ RETURN NULL;
+END $$;
+CREATE CONSTRAINT TRIGGER agent_run_subject_outcome AFTER INSERT OR UPDATE OF state,stop_reason ON agent_run
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.state='ENDED' AND NEW.stop_reason='COMPLETED')
+ EXECUTE FUNCTION enforce_agent_run_subject_outcome();
+CREATE CONSTRAINT TRIGGER review_job_run_outcome AFTER INSERT OR UPDATE OF status,run_id ON review_job
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION enforce_agent_run_subject_outcome();
+CREATE CONSTRAINT TRIGGER mentor_turn_run_outcome AFTER INSERT OR UPDATE OF status,run_id ON mentor_turn
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION enforce_agent_run_subject_outcome();
+        </sql>
+        <rollback><stop>Restore the verified pre-upgrade database backup. Failed run outcomes cannot be read by the previous server.</stop></rollback>
+    </changeSet>
+</databaseChangeLog>

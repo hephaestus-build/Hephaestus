@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
@@ -352,7 +353,7 @@ class SandboxTokenOutOfTurnIntegrationTest extends BaseIntegrationTest {
         @Override
         public boolean end(SandboxRun run, Outcome outcome) {
             return switch (outcome) {
-                case COMPLETED -> runs.end(run.fence()) == AgentRuns.EndOutcome.ENDED;
+                case COMPLETED -> runs.end(run.fence(), AgentRunStopReason.COMPLETED) == AgentRuns.EndOutcome.ENDED;
                 case HANDED_ON -> runs.requeue(run.fence(), AgentRuns.Charge.SPEND, Duration.ZERO, null);
             };
         }

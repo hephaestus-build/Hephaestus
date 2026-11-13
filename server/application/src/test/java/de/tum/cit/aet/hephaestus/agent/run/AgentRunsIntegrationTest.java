@@ -99,7 +99,8 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
         assertThat(state(composition.id())).isEqualTo("LEASED");
         transactions.executeWithoutResult(status -> {
             assertThat(runs.renew(measureLease.fence())).isPresent();
-            assertThat(runs.end(measureLease.fence())).isEqualTo(AgentRuns.EndOutcome.ENDED);
+            assertThat(runs.end(measureLease.fence(), AgentRunStopReason.COMPLETED))
+                    .isEqualTo(AgentRuns.EndOutcome.ENDED);
         });
         assertThat(state(measuring.id())).isEqualTo("ENDED");
         assertThat(runs.leasedReviews()).isEqualTo(1);
@@ -201,8 +202,8 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
                 .as("the subject's next run waits for the leased one")
                 .isEmpty();
 
-        transactions.executeWithoutResult(
-                status -> assertThat(runs.end(lease.fence())).isEqualTo(AgentRuns.EndOutcome.ENDED));
+        transactions.executeWithoutResult(status -> assertThat(runs.end(lease.fence(), AgentRunStopReason.COMPLETED))
+                .isEqualTo(AgentRuns.EndOutcome.ENDED));
         assertThat(claim()).map(AgentRunLease::runId).contains(second.id());
     }
 
@@ -300,7 +301,7 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
             assertThat(runs.renew(stale)).isEmpty();
             assertThat(runs.requeue(stale, AgentRuns.Charge.FREE, Duration.ZERO, null))
                     .isFalse();
-            assertThat(runs.end(stale)).isEqualTo(AgentRuns.EndOutcome.STALE);
+            assertThat(runs.end(stale, AgentRunStopReason.COMPLETED)).isEqualTo(AgentRuns.EndOutcome.STALE);
             assertThat(runs.renew(new AgentRunFence(current.runId(), other, current.epoch())))
                     .as("another workspace")
                     .isEmpty();
@@ -346,7 +347,7 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
         assertRefused("UPDATE agent_run SET attempt = attempt + 1 WHERE id = ?", run.id());
         assertRefused("UPDATE agent_run SET concurrency_key = 'review:other' WHERE id = ?", run.id());
         assertRefused("UPDATE agent_run SET state = 'QUEUED' WHERE id = ?", run.id());
-        transactions.executeWithoutResult(status -> runs.end(lease.fence()));
+        transactions.executeWithoutResult(status -> runs.end(lease.fence(), AgentRunStopReason.COMPLETED));
         assertRefused(
                 "UPDATE agent_run SET state = 'QUEUED', stop_reason = NULL, ended_at = NULL WHERE id = ?", run.id());
         assertRefused("UPDATE agent_run SET available_at = now() WHERE id = ?", run.id());
@@ -369,7 +370,7 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
     void shouldContinueTheEpochsAndSpentAttemptsOfAnEndedRunOnTheRunThatGoesOn() {
         AgentRunRef run = enqueue(workspace, AgentRunBand.BATCH, "review:continued");
         AgentRunLease lease = claim().orElseThrow();
-        transactions.executeWithoutResult(status -> runs.end(lease.fence()));
+        transactions.executeWithoutResult(status -> runs.end(lease.fence(), AgentRunStopReason.COMPLETED));
 
         Duration window = Duration.ofMinutes(11);
         AgentRunRef next = Objects.requireNonNull(transactions.execute(status -> {
@@ -393,7 +394,7 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
     void shouldContinueAnEndedRunAsTheNextStepOfItsWorkWithoutSpendingAnAttempt() {
         AgentRunRef run = enqueue(workspace, AgentRunBand.INTERACTIVE, "review:composed");
         AgentRunLease measured = claim().orElseThrow();
-        transactions.executeWithoutResult(status -> runs.end(measured.fence()));
+        transactions.executeWithoutResult(status -> runs.end(measured.fence(), AgentRunStopReason.COMPLETED));
 
         Duration window = Duration.ofMinutes(11);
         Objects.requireNonNull(transactions.execute(
@@ -425,7 +426,7 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
         AgentRunRef measured = enqueue(workspace, AgentRunBand.BATCH, "review:compose-reclaimed");
         var first = claim().orElseThrow();
         AgentRunRef composing = Objects.requireNonNull(transactions.execute(tx -> {
-            runs.end(first.fence());
+            runs.end(first.fence(), AgentRunStopReason.COMPLETED);
             return runs.continueAs(measured, first.epoch(), AgentRunKind.REVIEW_COMPOSE, Duration.ofMinutes(11));
         }));
         var leased = Objects.requireNonNull(transactions.execute(tx ->
@@ -825,8 +826,8 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
         AgentRunLease taken = claimCapped(leased + 1).orElseThrow();
         assertThat(List.of(first.id(), second.id())).contains(taken.runId());
         assertThat(claimCapped(leased + 1)).as("the cap is taken").isEmpty();
-        transactions.executeWithoutResult(
-                status -> assertThat(runs.end(taken.fence())).isEqualTo(AgentRuns.EndOutcome.ENDED));
+        transactions.executeWithoutResult(status -> assertThat(runs.end(taken.fence(), AgentRunStopReason.COMPLETED))
+                .isEqualTo(AgentRuns.EndOutcome.ENDED));
         assertThat(claimCapped(leased + 1)).isPresent();
     }
 
@@ -888,9 +889,12 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
         AgentRunLease lease = claimSubject(workspace, "review:ends").orElseThrow();
 
         transactions.executeWithoutResult(status -> {
-            assertThat(runs.end(lease.fence())).isEqualTo(AgentRuns.EndOutcome.ENDED);
-            assertThat(runs.end(lease.fence())).isEqualTo(AgentRuns.EndOutcome.ALREADY_ENDED);
-            assertThat(runs.end(new AgentRunFence(lease.runId(), lease.workspaceId(), lease.epoch() + 1)))
+            assertThat(runs.end(lease.fence(), AgentRunStopReason.COMPLETED)).isEqualTo(AgentRuns.EndOutcome.ENDED);
+            assertThat(runs.end(lease.fence(), AgentRunStopReason.COMPLETED))
+                    .isEqualTo(AgentRuns.EndOutcome.ALREADY_ENDED);
+            assertThat(runs.end(
+                            new AgentRunFence(lease.runId(), lease.workspaceId(), lease.epoch() + 1),
+                            AgentRunStopReason.COMPLETED))
                     .isEqualTo(AgentRuns.EndOutcome.STALE);
         });
     }

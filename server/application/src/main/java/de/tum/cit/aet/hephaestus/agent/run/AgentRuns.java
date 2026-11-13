@@ -341,12 +341,14 @@ public class AgentRuns {
      * arrived twice, not late.
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public EndOutcome end(AgentRunFence fence) {
-        if (runs.end(fence.runId(), fence.workspaceId(), fence.epoch(), AgentRunStopReason.COMPLETED.name()) == 1) {
+    public EndOutcome end(AgentRunFence fence, AgentRunStopReason reason) {
+        if (reason == AgentRunStopReason.ATTEMPTS_EXHAUSTED || reason == AgentRunStopReason.NOT_STARTED)
+            throw new IllegalArgumentException("Only the run reaper ends work with this reason");
+        if (runs.end(fence.runId(), fence.workspaceId(), fence.epoch(), reason.name()) == 1) {
             settled(runs.settleOpenCalls(fence.runId(), fence.workspaceId(), fence.epoch()));
             return EndOutcome.ENDED;
         }
-        return runs.endedBy(fence.runId(), fence.workspaceId(), fence.epoch())
+        return runs.endedBy(fence.runId(), fence.workspaceId(), fence.epoch(), reason.name())
                 ? EndOutcome.ALREADY_ENDED
                 : EndOutcome.STALE;
     }

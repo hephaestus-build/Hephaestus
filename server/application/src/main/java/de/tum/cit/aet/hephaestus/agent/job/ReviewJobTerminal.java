@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
@@ -70,15 +72,31 @@ public class ReviewJobTerminal {
     public int refuse(UUID jobId, AgentRunFence fence, JsonNode output) {
         int updated = jobs.transitionToEvidenceRefused(
                 jobId, fence.runId(), ReviewRunKind.attempt(fence.epoch()), Instant.now(), output);
-        if (updated > 0) runs.end(fence);
+        if (updated > 0) endRun(runs, fence, ReviewJobStatus.FAILED);
         return updated;
     }
 
     private int end(UUID jobId, AgentRunFence fence, ReviewJobStatus status, Instant at, @Nullable String error) {
         int updated = jobs.transitionStatusOwnedBy(
                 jobId, status, at, error, fence.runId(), ReviewRunKind.attempt(fence.epoch()));
-        if (updated > 0) runs.end(fence);
+        if (updated > 0) endRun(runs, fence, status);
         return updated;
+    }
+
+    /** The terminal job and run agree, or their transaction rolls back together. */
+    static void endRun(AgentRuns runs, AgentRunFence fence, ReviewJobStatus status) {
+        if (runs.end(fence, endReason(status)) == AgentRuns.EndOutcome.STALE) throw new StaleRunException(fence);
+    }
+
+    /** The one mapping for a review holder's terminal result. Reaper reasons retain their machinery diagnosis. */
+    static AgentRunStopReason endReason(ReviewJobStatus status) {
+        return switch (status) {
+            case COMPLETED -> AgentRunStopReason.COMPLETED;
+            case FAILED -> AgentRunStopReason.FAILED;
+            case TIMED_OUT -> AgentRunStopReason.DEADLINE;
+            case CANCELLED -> AgentRunStopReason.CANCELLED;
+            case QUEUED, RUNNING -> throw new IllegalArgumentException("An unfinished review cannot end its run");
+        };
     }
 
     /**

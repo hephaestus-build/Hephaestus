@@ -53,6 +53,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.ComposeRunGateway;
@@ -2902,7 +2903,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     private UUID queuedComposition(ReviewJob job, Instant deadline) {
         return Objects.requireNonNull(transactions.execute(status -> {
             var fence = RuntimeJobTestData.fence(jdbc, job);
-            assertThat(agentRuns.end(fence)).isEqualTo(AgentRuns.EndOutcome.ENDED);
+            assertThat(agentRuns.end(fence, AgentRunStopReason.COMPLETED)).isEqualTo(AgentRuns.EndOutcome.ENDED);
             var composing = agentRuns.continueAs(
                     fence.run(),
                     fence.epoch(),

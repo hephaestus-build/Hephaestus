@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.mentor.spi;
 
 import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import java.time.Duration;
 import java.util.UUID;
 
@@ -25,7 +26,7 @@ public interface TurnRuns {
     void requireCurrent(long workspaceId, UUID turnId, UUID runId, int epoch);
 
     /** Ends the run of a turn whose holder ended it under {@code epoch}; the caller checked the claim before. */
-    void ended(long workspaceId, UUID runId, int epoch);
+    void ended(long workspaceId, UUID runId, int epoch, MentorTurn.Status outcome);
 
     /**
      * A queued turn stopped: its run ends, since nothing ran. A running turn stopped: its run may still be renewed for

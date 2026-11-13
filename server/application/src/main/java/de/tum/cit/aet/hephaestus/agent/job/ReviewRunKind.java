@@ -235,7 +235,7 @@ public class ReviewRunKind implements AgentRunHandler {
         jobs.lockParentOfJob(jobId);
         ReviewJob job = jobs.lockById(jobId).orElse(null);
         if (job == null || !holds(job, fence)) return Optional.empty();
-        if (runs.end(fence) != AgentRuns.EndOutcome.ENDED) return Optional.empty();
+        if (runs.end(fence, AgentRunStopReason.COMPLETED) != AgentRuns.EndOutcome.ENDED) return Optional.empty();
         AgentRunRef ended = new AgentRunRef(fence.runId(), fence.workspaceId());
         AgentRunRef composing =
                 runs.continueAs(ended, fence.epoch(), AgentRunKind.REVIEW_COMPOSE, compositionExecutionWindow());
@@ -253,7 +253,7 @@ public class ReviewRunKind implements AgentRunHandler {
         jobs.lockParentOfJob(jobId);
         var job = jobs.lockById(jobId).orElse(null);
         if (job == null || !holds(job, fence) || !ResultAdmissionService.isAdmitted(job)) return false;
-        if (runs.end(fence) != AgentRuns.EndOutcome.ENDED) return false;
+        if (runs.end(fence, AgentRunStopReason.FAILED) != AgentRuns.EndOutcome.ENDED) return false;
         var ended = fence.run();
         var delay = AgentRuns.backoff(job.spentAttempts() + 1);
         var next = runs.continueAfter(ended, fence.epoch(), delay, compositionExecutionWindow());

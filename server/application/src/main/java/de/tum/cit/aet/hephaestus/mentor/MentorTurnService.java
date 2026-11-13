@@ -295,7 +295,7 @@ public class MentorTurnService {
                 endedAt);
         if (contextErased) turn.recordFailure("context_changed", null);
         turns.flush();
-        runs.ended(workspaceId, runId, epoch);
+        runs.ended(workspaceId, runId, epoch, turn.getStatus());
         changed(turn, true);
         return new EndedTurn(turn, accountId(turn), contextErased ? Set.of() : feedbackCalled);
     }
@@ -424,7 +424,7 @@ public class MentorTurnService {
                             boolean stopped = turn.getStatus() == MentorTurn.Status.STOPPED;
                             LostAttempt taken =
                                     takeBack(turn, !stopped, clock.instant(), LEASE_EXPIRED, LEASE_EXPIRED_CAUSE);
-                            if (stopped) runs.ended(workspaceId, turn.getRunId(), epoch);
+                            if (stopped) runs.ended(workspaceId, turn.getRunId(), epoch, turn.getStatus());
                             else runs.requeue(workspaceId, turn.getId(), turn.getRunId(), epoch);
                             return taken;
                         });

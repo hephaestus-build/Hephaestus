@@ -154,7 +154,7 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
                 .doesNotContain(digest);
         var blocked = transactions.execute(status -> capped.claimSubject(workspace, subject, offered));
         assertThat(blocked).isEmpty();
-        transactions.executeWithoutResult(status -> runs.end(lease.fence()));
+        transactions.executeWithoutResult(status -> runs.end(lease.fence(), AgentRunStopReason.COMPLETED));
         var claimed = transactions.execute(status -> capped.claimSubject(workspace, subject, offered));
         assertThat(claimed).get().extracting(AgentRunLease::runId).isEqualTo(question.id());
         assertThat(rows.findByRef(digest.id(), workspace))
@@ -189,7 +189,7 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
                     .isEmpty();
             assertThat(rows.findByRef(second.id(), workspace).orElseThrow().getState())
                     .isEqualTo(AgentRunState.QUEUED);
-            transactions.executeWithoutResult(status -> runs.end(claimed.fence()));
+            transactions.executeWithoutResult(status -> runs.end(claimed.fence(), AgentRunStopReason.COMPLETED));
             assertThat(sandboxes.lease(secondSandbox, Set.of(secondKind), ignored -> true))
                     .map(AgentRunLease::runId)
                     .contains(second.id());
@@ -235,7 +235,7 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
             }
             var lease = first.get(5, TimeUnit.SECONDS).orElseThrow();
             assertThat(lease.runId()).isEqualTo(digest.id());
-            transactions.executeWithoutResult(status -> runs.end(lease.fence()));
+            transactions.executeWithoutResult(status -> runs.end(lease.fence(), AgentRunStopReason.COMPLETED));
             assertThat(owner.lease(sandbox, offered, ignored -> true))
                     .get()
                     .extracting(AgentRunLease::runId)

@@ -40,6 +40,8 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.modulith.events.FailedEventPublications;
@@ -109,6 +111,22 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
         workspace = createWorkspace("heph-billing", "Hephaestus", "heph-org", AccountType.ORG, developer);
         account = accountId(developer);
         main = conversations.findOrCreateMain(workspace.getId(), account);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"DONE,COMPLETED", "FAILED,FAILED", "STOPPED,CANCELLED"})
+    void shouldEndTheRunWithItsTurnsOutcome(MentorTurn.Status outcome, String reason) {
+        MentorTurn turn = admittedTurn(Duration.ofMinutes(5));
+        if (outcome == MentorTurn.Status.STOPPED) turns.stop(workspace.getId(), turn.getId());
+        end(turn, outcome, List.of());
+        assertThat(turnRepository.findById(turn.getId()).orElseThrow().getStatus())
+                .isEqualTo(outcome);
+        assertThat(jdbc.queryForObject(
+                        "SELECT stop_reason FROM agent_run WHERE id=? AND workspace_id=?",
+                        String.class,
+                        turn.getRunId(),
+                        turn.getWorkspaceId()))
+                .isEqualTo(reason);
     }
 
     /** Feedback the attempt claimed through {@code show_feedback}. */

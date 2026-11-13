@@ -494,12 +494,16 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
     @Query(value = "SELECT 1 FROM (SELECT pg_notify(:channel, :kind)) sent", nativeQuery = true)
     int notifyQueued(@Param("channel") String channel, @Param("kind") String kind);
 
-    /** Whether the claim {@code epoch} ended the run itself; read from the table, never from a cached entity. */
+    /** Whether the claim already ended with this outcome; read from the table, never from a cached entity. */
     @Query(value = """
             SELECT EXISTS (SELECT 1 FROM agent_run WHERE id = :runId AND workspace_id = :workspaceId
-                             AND state = 'ENDED' AND stop_reason = 'COMPLETED' AND lease_epoch = :epoch)
+                             AND state = 'ENDED' AND stop_reason = :reason AND lease_epoch = :epoch)
             """, nativeQuery = true)
-    boolean endedBy(@Param("runId") UUID runId, @Param("workspaceId") long workspaceId, @Param("epoch") int epoch);
+    boolean endedBy(
+            @Param("runId") UUID runId,
+            @Param("workspaceId") long workspaceId,
+            @Param("epoch") int epoch,
+            @Param("reason") String reason);
 
     @Query("SELECT r FROM AgentRun r WHERE r.id = :id AND r.workspaceId = :workspaceId")
     Optional<AgentRun> findByRef(@Param("id") UUID id, @Param("workspaceId") long workspaceId);

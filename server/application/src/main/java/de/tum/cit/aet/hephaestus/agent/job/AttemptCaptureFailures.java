@@ -53,8 +53,11 @@ public class AttemptCaptureFailures {
                     identity.runId(),
                     identity.attempt());
             if (updated == 0) return false;
-            runs.end(new AgentRunFence(
-                    identity.runId(), identity.workspaceId(), ReviewRunKind.epoch(identity.attempt())));
+            ReviewJobTerminal.endRun(
+                    runs,
+                    new AgentRunFence(
+                            identity.runId(), identity.workspaceId(), ReviewRunKind.epoch(identity.attempt())),
+                    ReviewJobStatus.FAILED);
             jobs.recordPreparationFailure(
                     identity.jobId(),
                     identity.workspaceId(),

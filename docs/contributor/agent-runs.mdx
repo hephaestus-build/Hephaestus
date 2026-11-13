@@ -105,6 +105,27 @@ The capped claims of one kind take an advisory lock in turn, so the cap holds ac
 A claim leases a turn for `hephaestus.agent.capacity.turn-lease-ttl` (60 seconds), and any other run for `lease-ttl`.
 A person waits for a turn, so a lost turn is taken back sooner.
 
+## Subject outcomes
+
+`ReviewJobTerminal` owns the mapping from a review job's terminal state to its run reason.
+The job and run end in one transaction.
+A lost run fence rolls that transaction back.
+
+| Review job state | Holder's run reason |
+| --- | --- |
+| `COMPLETED` | `COMPLETED` |
+| `FAILED` | `FAILED` |
+| `TIMED_OUT` | `DEADLINE` |
+| `CANCELLED` | `CANCELLED` |
+
+`TurnRunsAdapter` maps a turn's `DONE`, `FAILED` and `STOPPED` states to `COMPLETED`, `FAILED` and `CANCELLED`.
+Each holder supplies its outcome to `AgentRuns.end`; there is no default success path.
+The database rejects a completed run whose review job or turn did not complete.
+A measurement handoff completes the measuring run's work and retires that run in the same transaction.
+The next composing run carries the review's terminal outcome, including a failed or timed-out measurement.
+A reaper reason, such as `ATTEMPTS_EXHAUSTED`, retains its own diagnosis.
+A repeated holder end succeeds only for the same epoch and reason.
+
 ## Clocks
 
 A run has two clocks, and the reaper enforces both:
