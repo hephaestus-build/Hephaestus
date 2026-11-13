@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { SlackMonitoredChannel } from "@/api/types.gen";
@@ -41,6 +41,24 @@ const revoked: SlackMonitoredChannel = {
 	slackChannelId: "C03REVOKED03",
 	channelName: "team-legacy",
 	consentState: "REVOKED",
+	optedOutMemberCount: 0,
+};
+
+const activating: SlackMonitoredChannel = {
+	...base,
+	id: "5",
+	slackChannelId: "C05ACTIVAT05",
+	channelName: "team-announcements",
+	consentState: "ACTIVATING",
+	optedOutMemberCount: 0,
+};
+
+const failed: SlackMonitoredChannel = {
+	...base,
+	id: "6",
+	slackChannelId: "C06FAILED006",
+	channelName: "team-alerts",
+	consentState: "FAILED",
 	optedOutMemberCount: 0,
 };
 
@@ -121,5 +139,39 @@ describe("WorkspaceSlackChannelsSettings — Slack channel picker", () => {
 			slackChannelId: revoked.slackChannelId,
 			channelName: revoked.channelName,
 		});
+	});
+});
+
+describe("WorkspaceSlackChannelsSettings — ACTIVATING state", () => {
+	it("keeps removal and history available while activation is in progress", async () => {
+		setup({ channels: [activating] });
+		openRowMenu("team-announcements");
+		await screen.findByRole("menuitem", { name: /view history/iu });
+		screen.getByRole("menuitem", { name: /remove and erase/iu });
+		expect(
+			screen.queryByRole("menuitem", { name: /activate monitoring|retry activation/iu }),
+		).toBeNull();
+	});
+});
+
+describe("WorkspaceSlackChannelsSettings — FAILED state retry", () => {
+	it("opens the activation dialog with retry copy and queues the request on confirm", async () => {
+		const { props } = setup({ channels: [failed] });
+		openRowMenu("team-alerts");
+
+		fireEvent.click(await screen.findByRole("menuitem", { name: /retry activation/iu }));
+
+		const dialog = await screen.findByRole("dialog");
+		expect(dialog.textContent).toMatch(/retry activation for/iu);
+		expect(dialog.textContent).toMatch(/confirm or post a visible announcement/iu);
+
+		fireEvent.click(within(dialog).getByRole("button", { name: /^retry activation$/iu }));
+
+		await waitFor(() =>
+			expect(props.onUpdateConsent).toHaveBeenCalledWith({
+				slackChannelId: failed.slackChannelId,
+				consentState: "ACTIVE",
+			}),
+		);
 	});
 });

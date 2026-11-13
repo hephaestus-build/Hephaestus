@@ -6430,7 +6430,7 @@ export type SlackChannelCandidate = {
 	/**
 	 * Existing Hephaestus monitoring state, if already allow-listed
 	 */
-	consentState?: "PENDING" | "ACTIVE" | "PAUSED" | "REVOKED";
+	consentState?: "PENDING" | "ACTIVATING" | "ACTIVE" | "FAILED" | "PAUSED" | "REVOKED";
 	/**
 	 * Whether the app bot is already a member
 	 */
@@ -6460,7 +6460,7 @@ export type SlackChannelConsentEvent = {
 	/**
 	 * State the channel left (absent for the very first record)
 	 */
-	fromState: "PENDING" | "ACTIVE" | "PAUSED" | "REVOKED" | null;
+	fromState: "PENDING" | "ACTIVATING" | "ACTIVE" | "FAILED" | "PAUSED" | "REVOKED" | null;
 	/**
 	 * Audit entry id
 	 */
@@ -6476,7 +6476,7 @@ export type SlackChannelConsentEvent = {
 	/**
 	 * State the channel entered
 	 */
-	toState: "PENDING" | "ACTIVE" | "PAUSED" | "REVOKED";
+	toState: "PENDING" | "ACTIVATING" | "ACTIVE" | "FAILED" | "PAUSED" | "REVOKED";
 };
 
 /**
@@ -6494,7 +6494,7 @@ export type SlackMonitoredChannel = {
 	/**
 	 * Current per-channel consent lifecycle state
 	 */
-	consentState: "PENDING" | "ACTIVE" | "PAUSED" | "REVOKED";
+	consentState: "PENDING" | "ACTIVATING" | "ACTIVE" | "FAILED" | "PAUSED" | "REVOKED";
 	/**
 	 * When the channel was first discovered / allow-listed
 	 */
@@ -7202,7 +7202,7 @@ export type UpdateSlackChannelConsentRequest = {
 	/**
 	 * Target consent state
 	 */
-	consentState: "PENDING" | "ACTIVE" | "PAUSED" | "REVOKED";
+	consentState: "ACTIVE" | "PAUSED" | "REVOKED";
 	/**
 	 * Optional free-text reason recorded in the immutable audit trail
 	 */

@@ -1,10 +1,20 @@
-import { BanIcon, CheckIcon, ClockIcon, type LucideIcon, PauseIcon } from "lucide-react";
+import {
+	AlertCircleIcon,
+	BanIcon,
+	CheckIcon,
+	ClockIcon,
+	Loader2Icon,
+	type LucideIcon,
+	PauseIcon,
+} from "lucide-react";
 
-import type { SlackMonitoredChannel } from "@/api/types.gen";
+import type { SlackMonitoredChannel, UpdateSlackChannelConsentRequest } from "@/api/types.gen";
 import { Badge } from "@/components/ui/badge";
 
-/** The consent lifecycle states, sourced from the generated DTO so they never drift. */
-export type SlackConsentState = SlackMonitoredChannel["consentState"];
+export type SlackConsentState = NonNullable<SlackMonitoredChannel["consentState"]>;
+
+/** The outcomes an admin can request; delivery states belong to the server. */
+export type SlackConsentTarget = NonNullable<UpdateSlackChannelConsentRequest["consentState"]>;
 
 interface ConsentTerm {
 	/** The word an admin reads. The wire enum (PENDING/ACTIVE/…) is never shown. */
@@ -25,6 +35,8 @@ const CONSENT_TERMS: Record<SlackConsentState, ConsentTerm> = {
 	ACTIVE: { label: "Monitoring", Icon: CheckIcon, variant: "success" },
 	PAUSED: { label: "Paused", Icon: PauseIcon, variant: "outline" },
 	REVOKED: { label: "Revoked", Icon: BanIcon, variant: "destructive" },
+	ACTIVATING: { label: "Activating", Icon: Loader2Icon, variant: "secondary" },
+	FAILED: { label: "Activation failed", Icon: AlertCircleIcon, variant: "destructive" },
 };
 
 export function consentTerm(state: SlackConsentState): ConsentTerm {

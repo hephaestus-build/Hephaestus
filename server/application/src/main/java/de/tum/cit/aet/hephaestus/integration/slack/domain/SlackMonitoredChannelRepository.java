@@ -1,10 +1,12 @@
 package de.tum.cit.aet.hephaestus.integration.slack.domain;
 
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -16,6 +18,11 @@ import org.springframework.transaction.annotation.Transactional;
  */
 public interface SlackMonitoredChannelRepository extends JpaRepository<SlackMonitoredChannel, Long> {
     Optional<SlackMonitoredChannel> findByWorkspaceIdAndSlackChannelId(Long workspaceId, String slackChannelId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM SlackMonitoredChannel c WHERE c.workspaceId=:workspaceId AND c.slackChannelId=:channelId")
+    Optional<SlackMonitoredChannel> findForUpdate(
+            @Param("workspaceId") long workspaceId, @Param("channelId") String channelId);
 
     /**
      * The consent lifecycle state of one allow-listed channel, if the row exists. Read by the ingest
@@ -68,16 +75,23 @@ public interface SlackMonitoredChannelRepository extends JpaRepository<SlackMoni
     /** Every allow-listed channel for a workspace that is not terminally revoked — the metadata-refresh set. */
     List<SlackMonitoredChannel> findByWorkspaceIdAndConsentStateNot(Long workspaceId, ConsentState consentState);
 
+    /** The start of the current monitoring period, independent of completed history windows. */
+    @Query(
+            "SELECT c.ingestAfter FROM SlackMonitoredChannel c WHERE c.workspaceId=:workspaceId AND c.slackChannelId=:channelId AND c.consentAnnouncedAt IS NOT NULL")
+    Optional<Instant> readIngestAfter(@Param("workspaceId") long workspaceId, @Param("channelId") String channelId);
+
     /**
      * Advance a channel's history-reconciliation watermark after a completed sync window. Separate from the entity
      * setters so the sync never has to hold a managed entity across its (long, rate-limited) fetch loop.
+     * A late window cannot lower the floor set by a subsequent activation or resume.
      */
     @Modifying
     @Transactional
     @Query(
             "UPDATE SlackMonitoredChannel c SET c.lastHistorySyncedTs = :lastTs, c.historySyncedAt = :syncedAt, c.lastSyncError = null "
                     + "WHERE c.workspaceId = :workspaceId AND c.slackChannelId = :slackChannelId AND c.consentState = "
-                    + "de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState.ACTIVE")
+                    + "de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState.ACTIVE "
+                    + "AND (c.lastHistorySyncedTs IS NULL OR c.lastHistorySyncedTs <= :lastTs)")
     int advanceHistoryWatermark(
             @Param("workspaceId") Long workspaceId,
             @Param("slackChannelId") String slackChannelId,

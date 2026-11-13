@@ -18,8 +18,8 @@ import org.hibernate.annotations.Immutable;
 import org.jspecify.annotations.Nullable;
 
 /**
- * One append-only audit row per Slack channel consent-state transition ({@code PENDING → ACTIVE},
- * {@code ACTIVE ⇄ PAUSED}, {@code * → REVOKED}), written by {@code SlackChannelConsentService.transition}. The row
+ * One append-only audit row per channel consent-state change. The activation request and the outbox confirmation
+ * have separate rows, written by {@code SlackChannelConsentService}. The row
  * captures the GDPR-accountability record — who changed a channel to what, when, and why — independently of the
  * mutable current state on {@link SlackMonitoredChannel}.
  *

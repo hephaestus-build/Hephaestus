@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794600768253-1" author="hephaestus">
+    <addColumn tableName="agent_action"><column name="native_recipient" type="JSONB"/></addColumn>
+    <addColumn tableName="slack_monitored_channel"><column name="consent_announcement_id" type="UUID"/></addColumn>
+    <addColumn tableName="slack_monitored_channel"><column name="ingest_after" type="TIMESTAMP WITH TIME ZONE"/></addColumn>
+  </changeSet>
+    <changeSet id="1794600768253-2" author="hephaestus">
+    <sql splitStatements="false"><![CDATA[
+UPDATE slack_monitored_channel c
+SET ingest_after = GREATEST(c.consent_announced_at, (
+  SELECT MAX(e.created_at) FROM slack_channel_consent_event e
+  WHERE e.workspace_id=c.workspace_id AND e.slack_channel_id=c.slack_channel_id
+    AND e.from_state='PAUSED' AND e.to_state='ACTIVE'))
+WHERE c.consent_state IN ('ACTIVE','PAUSED') AND c.consent_announced_at IS NOT NULL;
+CREATE INDEX idx_agent_action_native_recipient_subject ON agent_action ((native_recipient->>'subject')) WHERE native_recipient IS NOT NULL;
+ALTER TABLE agent_action DROP CONSTRAINT ck_agent_action_kind,
+  ADD CONSTRAINT ck_agent_action_kind CHECK (kind IN ('EMAIL','FILE_ISSUE','DELIVER_FEEDBACK','EDIT_FEEDBACK','RETRACT_FEEDBACK','SLACK_POST','SLACK_NOTICE','SLACK_JOIN','SLACK_CONSENT','PUBLISH_REPORT','CLEANUP_ISSUE','TRANSFER_ISSUE','DRAFT_REPORT'));
+ALTER TABLE slack_monitored_channel DROP CONSTRAINT chk_slack_monitored_channel_consent,
+  ADD CONSTRAINT chk_slack_monitored_channel_consent CHECK (consent_state IN ('PENDING','ACTIVATING','ACTIVE','FAILED','PAUSED','REVOKED'));
+ALTER TABLE slack_channel_consent_event DROP CONSTRAINT chk_slack_channel_consent_event_from_state,
+  DROP CONSTRAINT chk_slack_channel_consent_event_to_state,
+  ADD CONSTRAINT chk_slack_channel_consent_event_from_state CHECK (from_state IS NULL OR from_state IN ('PENDING','ACTIVATING','ACTIVE','FAILED','PAUSED','REVOKED')),
+  ADD CONSTRAINT chk_slack_channel_consent_event_to_state CHECK (to_state IN ('PENDING','ACTIVATING','ACTIVE','FAILED','PAUSED','REVOKED'));
+CREATE OR REPLACE FUNCTION guard_agent_action() RETURNS trigger LANGUAGE plpgsql AS $_$
+BEGIN
+ IF ROW(NEW.id,NEW.workspace_id,NEW.kind,NEW.lane_key,NEW.idempotency_key,NEW.subject_account_id,NEW.native_recipient,NEW.max_attempts,NEW.created_at)
+    IS DISTINCT FROM ROW(OLD.id,OLD.workspace_id,OLD.kind,OLD.lane_key,OLD.idempotency_key,OLD.subject_account_id,OLD.native_recipient,OLD.max_attempts,OLD.created_at) THEN
+  RAISE EXCEPTION 'an action identity is immutable' USING ERRCODE='55000';
+ END IF;
+ IF OLD.state IN ('DONE','UNCERTAIN','FAILED','CANCELLED') THEN
+  RAISE EXCEPTION 'an ended action is immutable' USING ERRCODE='55000';
+ END IF;
+ IF NEW.state <> OLD.state AND NOT (
+    (OLD.state = 'PROPOSED' AND NEW.state IN ('ADMITTED','CANCELLED')) OR
+    (OLD.state = 'ADMITTED' AND NEW.state IN ('EXECUTING','CANCELLED')) OR
+    (OLD.state = 'EXECUTING' AND NEW.state IN ('ADMITTED','DONE','UNCERTAIN','FAILED','CANCELLED'))) THEN
+  RAISE EXCEPTION 'action transition % -> % is not allowed', OLD.state, NEW.state USING ERRCODE='23514';
+ END IF;
+ IF NEW.lease_epoch <> OLD.lease_epoch THEN
+  IF NEW.state <> 'EXECUTING' OR NEW.lease_epoch <> OLD.lease_epoch + 1 OR NEW.attempts <> OLD.attempts + 1 THEN
+   RAISE EXCEPTION 'a claim takes the next epoch and the next attempt' USING ERRCODE='23514';
+  END IF;
+  IF OLD.state = 'EXECUTING' AND OLD.leased_until > clock_timestamp() THEN
+   RAISE EXCEPTION 'a live lease cannot be taken' USING ERRCODE='55000';
+  END IF;
+  IF OLD.state = 'EXECUTING' AND OLD.write_started_at IS NOT NULL AND OLD.kind IN ('EMAIL') THEN
+   RAISE EXCEPTION 'an at-most-once action whose write started is never taken again' USING ERRCODE='55000';
+  END IF;
+ ELSIF NEW.state = 'EXECUTING' AND OLD.state <> 'EXECUTING' THEN
+  RAISE EXCEPTION 'a claim takes the next epoch' USING ERRCODE='23514';
+ END IF;
+ IF NEW.payload IS DISTINCT FROM OLD.payload AND NEW.payload IS NOT NULL THEN
+  RAISE EXCEPTION 'an action payload never changes' USING ERRCODE='55000';
+ END IF;
+ IF NEW.write_started_at IS DISTINCT FROM OLD.write_started_at AND NOT (
+    (OLD.write_started_at IS NULL AND OLD.state = 'EXECUTING' AND NEW.state = 'EXECUTING' AND NEW.lease_epoch = OLD.lease_epoch) OR
+    (NEW.write_started_at IS NULL AND OLD.state = 'EXECUTING' AND NEW.state = 'ADMITTED')) THEN
+  RAISE EXCEPTION 'a write fence is set under the lease and cleared only by a proven retry' USING ERRCODE='55000';
+ END IF;
+ RETURN NEW;
+END $_$;
+]]></sql>
+    <rollback><stop>Restore the verified pre-upgrade database backup to reverse the Slack outbox cutover.</stop></rollback>
+  </changeSet>
+</databaseChangeLog>

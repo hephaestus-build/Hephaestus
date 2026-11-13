@@ -1,9 +1,23 @@
 package de.tum.cit.aet.hephaestus.integration.slack.messaging;
 
 import java.io.Serial;
+import java.util.Set;
 
 /** Raised by {@link SlackMessageService} when Slack refuses a call or cannot be reached; carries the Slack error code. */
 public class SlackSendException extends RuntimeException {
+
+    private static final Set<String> UNKNOWN_OUTCOME = Set.of(
+            "transport_failure",
+            "invalid_receipt",
+            "internal_error",
+            "fatal_error",
+            "service_unavailable",
+            "request_timeout",
+            "unknown");
+
+    public boolean isOutcomeUnknown() {
+        return UNKNOWN_OUTCOME.contains(slackError);
+    }
 
     @Serial
     private static final long serialVersionUID = 1L;

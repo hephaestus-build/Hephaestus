@@ -57,8 +57,11 @@ class SlackIngestServiceTest extends BaseUnitTest {
     @Mock
     private ConversationFeedbackErasure conversationFeedbackErasure;
 
-    /** A consent-announcement stamp well before the test messages (ts "100.1"), so the forward-only gate passes. */
-    private static final Instant ANNOUNCED_BEFORE = Instant.ofEpochSecond(1);
+    /**
+     * The start of the current monitoring period ({@code ingest_after}), well before the test messages (ts "100.1"),
+     * so the live floor passes. Live ingest reads only this floor, never the reconciliation watermark.
+     */
+    private static final Instant INGEST_AFTER = Instant.ofEpochSecond(1);
 
     private SlackIngestService service;
 
@@ -127,12 +130,47 @@ class SlackIngestServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void lateProviderMessageFromBeforeTheMonitoringPeriodFloorIsNotStored() {
+        // A failed activation's gap, or a pause, leaves messages that predate the current monitoring period. A late
+        // provider delivery of one must not enter, even though the channel is ACTIVE again.
+        when(workspaceResolver.resolveWorkspaceId("T1")).thenReturn(Optional.of(7L));
+        when(consentGate.ingestAllowed(7L, "C1")).thenReturn(true);
+        when(monitoredChannelRepository.readIngestAfter(7L, "C1")).thenReturn(Optional.of(Instant.ofEpochSecond(200)));
+
+        service.ingestChannelMessage("T1", "C1", "150.000000", null, "U1", "written while monitoring was off");
+
+        verifyNoInteractions(participantConsentGate);
+        verify(messageRepository, never()).insertIfAbsent(anyLong(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void delayedReplyToOldThreadAfterTheFloorIsStoredWhileReconciliationHasAdvancedPastIt() {
+        // The reconciliation watermark advances to the newest message of a synced window (here far past the reply).
+        // A reply to an old thread can still arrive late with a ts between the monitoring-period floor and that
+        // watermark. It was posted while monitoring was on, so it is stored. Live ingest cannot read the watermark:
+        // the repository has no such read, and this test stubs only the floor.
+        when(workspaceResolver.resolveWorkspaceId("T1")).thenReturn(Optional.of(7L));
+        when(consentGate.ingestAllowed(7L, "C1")).thenReturn(true);
+        when(monitoredChannelRepository.readIngestAfter(7L, "C1")).thenReturn(Optional.of(INGEST_AFTER));
+        when(participantConsentGate.ingestionAllowed(7L, "U1")).thenReturn(true);
+        when(identityResolver.displayName(7L, "T1", "U1")).thenReturn(Optional.of("A person"));
+        when(identityResolver.humanAccountId(7L, "T1", "U1", "A person")).thenReturn(Optional.of(42L));
+        when(messageRepository.insertIfAbsent(7L, "T1", "C1", "300.000000", "100.000000", "U1", 42L, "late reply"))
+                .thenReturn(1);
+
+        service.ingestChannelMessage("T1", "C1", "300.000000", "100.000000", "U1", "late reply");
+
+        verify(messageRepository).insertIfAbsent(7L, "T1", "C1", "300.000000", "100.000000", "U1", 42L, "late reply");
+        verify(threadRepository).upsertOnMessage(7L, "C1", "100.000000", "300.000000", 42L);
+    }
+
+    @Test
     void activeChannel_authorOptedOut_isNotStored_evenOnActiveChannel() {
         // The person firewall: capability ON + channel ACTIVE, but this individual opted out of ingestion → nothing
         // is stored.
         when(workspaceResolver.resolveWorkspaceId("T1")).thenReturn(Optional.of(7L));
         when(consentGate.ingestAllowed(7L, "C1")).thenReturn(true);
-        when(monitoredChannelRepository.findConsentAnnouncedAt(7L, "C1")).thenReturn(Optional.of(ANNOUNCED_BEFORE));
+        when(monitoredChannelRepository.readIngestAfter(7L, "C1")).thenReturn(Optional.of(INGEST_AFTER));
         when(participantConsentGate.ingestionAllowed(7L, "U1")).thenReturn(false);
 
         service.ingestChannelMessage("T1", "C1", "100.1", "99.0", "U1", "hi");
@@ -143,15 +181,14 @@ class SlackIngestServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void activeChannel_preAnnouncementMessage_isNotStored_andPersonGateNotEvenConsulted() {
-        // Forward-only invariant: on an ACTIVE channel, a message whose ts predates consent_announced_at is never
-        // stored — pre-announcement history stays out. The check fires BEFORE the person firewall, so the participant
-        // gate is not even consulted.
+    void activeChannel_messageBeforeIngestFloor_isNotStored_andPersonGateNotEvenConsulted() {
+        // Forward-only invariant: on an ACTIVE channel, a message whose ts predates ingest_after is never stored —
+        // history from before the current monitoring period stays out. The check fires BEFORE the person firewall,
+        // so the participant gate is not even consulted.
         when(workspaceResolver.resolveWorkspaceId("T1")).thenReturn(Optional.of(7L));
         when(consentGate.ingestAllowed(7L, "C1")).thenReturn(true);
-        // Announcement is AFTER the message ts (100.1) → the message predates consent and must not enter.
-        when(monitoredChannelRepository.findConsentAnnouncedAt(7L, "C1"))
-                .thenReturn(Optional.of(Instant.ofEpochSecond(200)));
+        // The floor is AFTER the message ts (100.1) → the message predates the monitoring period and must not enter.
+        when(monitoredChannelRepository.readIngestAfter(7L, "C1")).thenReturn(Optional.of(Instant.ofEpochSecond(200)));
 
         service.ingestChannelMessage("T1", "C1", "100.1", null, "U1", "old");
 
@@ -160,14 +197,13 @@ class SlackIngestServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void activeChannel_messageTsEqualsAnnouncement_isNotStored_forwardOnlyIsStrict() {
-        // Forward-only is STRICT (ts > announced), not ts >= announced. A message posted at the exact instant of the
-        // announcement (ts == consent_announced_at) is pre-consent and must NOT be stored.
+    void activeChannel_messageTsEqualsIngestFloor_isNotStored_forwardOnlyIsStrict() {
+        // Forward-only is STRICT (ts > floor), not ts >= floor. A message posted at the exact instant of the floor
+        // (ts == ingest_after) is outside the monitoring period and must NOT be stored.
         when(workspaceResolver.resolveWorkspaceId("T1")).thenReturn(Optional.of(7L));
         when(consentGate.ingestAllowed(7L, "C1")).thenReturn(true);
-        // Announcement stamped at epoch-second 100; the message ts "100.0" parses to the same fractional epoch.
-        when(monitoredChannelRepository.findConsentAnnouncedAt(7L, "C1"))
-                .thenReturn(Optional.of(Instant.ofEpochSecond(100)));
+        // Floor stamped at epoch-second 100; the message ts "100.0" parses to the same fractional epoch.
+        when(monitoredChannelRepository.readIngestAfter(7L, "C1")).thenReturn(Optional.of(Instant.ofEpochSecond(100)));
 
         service.ingestChannelMessage("T1", "C1", "100.0", null, "U1", "at the announcement instant");
 
@@ -176,12 +212,12 @@ class SlackIngestServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void activeChannel_missingAnnouncementStamp_failsClosed() {
-        // An ACTIVE channel is always stamped at activation; a missing stamp is an inconsistency and must fail closed
-        // (store nothing) rather than fall through to ingest unbounded history.
+    void activeChannel_missingIngestFloor_failsClosed() {
+        // An ACTIVE channel always has a floor from activation or resume; a missing floor is an inconsistency and must
+        // fail closed (store nothing) rather than fall through to ingest unbounded history.
         when(workspaceResolver.resolveWorkspaceId("T1")).thenReturn(Optional.of(7L));
         when(consentGate.ingestAllowed(7L, "C1")).thenReturn(true);
-        when(monitoredChannelRepository.findConsentAnnouncedAt(7L, "C1")).thenReturn(Optional.empty());
+        when(monitoredChannelRepository.readIngestAfter(7L, "C1")).thenReturn(Optional.empty());
 
         service.ingestChannelMessage("T1", "C1", "100.1", null, "U1", "hi");
 
@@ -193,7 +229,7 @@ class SlackIngestServiceTest extends BaseUnitTest {
     void activeChannel_stampsResolvedMemberIdAndUpsertsThread() {
         when(workspaceResolver.resolveWorkspaceId("T1")).thenReturn(Optional.of(7L));
         when(consentGate.ingestAllowed(7L, "C1")).thenReturn(true);
-        when(monitoredChannelRepository.findConsentAnnouncedAt(7L, "C1")).thenReturn(Optional.of(ANNOUNCED_BEFORE));
+        when(monitoredChannelRepository.readIngestAfter(7L, "C1")).thenReturn(Optional.of(INGEST_AFTER));
         when(participantConsentGate.ingestionAllowed(7L, "U1")).thenReturn(true);
         when(identityResolver.displayName(7L, "T1", "U1")).thenReturn(Optional.of("A person"));
         when(identityResolver.humanAccountId(7L, "T1", "U1", "A person")).thenReturn(Optional.of(42L));
@@ -211,7 +247,7 @@ class SlackIngestServiceTest extends BaseUnitTest {
     void activeChannel_rootMessageUsesOwnTsAsThreadTs() {
         when(workspaceResolver.resolveWorkspaceId("T1")).thenReturn(Optional.of(7L));
         when(consentGate.ingestAllowed(7L, "C1")).thenReturn(true);
-        when(monitoredChannelRepository.findConsentAnnouncedAt(7L, "C1")).thenReturn(Optional.of(ANNOUNCED_BEFORE));
+        when(monitoredChannelRepository.readIngestAfter(7L, "C1")).thenReturn(Optional.of(INGEST_AFTER));
         when(participantConsentGate.ingestionAllowed(7L, "U1")).thenReturn(true);
         when(identityResolver.displayName(7L, "T1", "U1")).thenReturn(Optional.of("A person"));
         when(identityResolver.humanAccountId(7L, "T1", "U1", "A person")).thenReturn(Optional.of(42L));
@@ -246,7 +282,7 @@ class SlackIngestServiceTest extends BaseUnitTest {
     void duplicateMessage_doesNotBumpThread() {
         when(workspaceResolver.resolveWorkspaceId("T1")).thenReturn(Optional.of(7L));
         when(consentGate.ingestAllowed(7L, "C1")).thenReturn(true);
-        when(monitoredChannelRepository.findConsentAnnouncedAt(7L, "C1")).thenReturn(Optional.of(ANNOUNCED_BEFORE));
+        when(monitoredChannelRepository.readIngestAfter(7L, "C1")).thenReturn(Optional.of(INGEST_AFTER));
         when(participantConsentGate.ingestionAllowed(7L, "U1")).thenReturn(true);
         when(identityResolver.displayName(7L, "T1", "U1")).thenReturn(Optional.of("A person"));
         when(identityResolver.humanAccountId(7L, "T1", "U1", "A person")).thenReturn(Optional.of(42L));

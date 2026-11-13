@@ -252,7 +252,8 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
                 JsonNodeFactory.instance.objectNode().put("n", 1),
                 null,
                 3,
-                Instant.now().minusSeconds(1)));
+                Instant.now().minusSeconds(1),
+                null));
 
         assertThat(endStale(ActionStoreIntegrationTest::ignore))
                 .filteredOn(settled -> settled.id().equals(id))
@@ -314,7 +315,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
             var payload = JsonNodeFactory.instance.objectNode().put("kind", "ROLE_CHANGED");
             payload.putObject("event").putObject("change").put(field, accountId);
             mentioned.add(
-                    actions.enqueue(new ActionRequest(ActionKind.EMAIL, null, key, key, payload, recipient, 3, null)));
+                    actions.enqueue(new ActionRequest(ActionKind.EMAIL, null, key, key, payload, recipient, 3, null, null)));
         }
         UUID unrelated =
                 actions.enqueue(request("lane:" + UUID.randomUUID(), "key:" + UUID.randomUUID(), recipient, 3));
@@ -359,7 +360,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
                 .put("actorAccountId", actor);
         String otherKey = "role-export:" + UUID.randomUUID();
         UUID other = actions.enqueue(
-                new ActionRequest(ActionKind.EMAIL, null, otherKey, otherKey, payload, recipient, 3, null));
+                new ActionRequest(ActionKind.EMAIL, null, otherKey, otherKey, payload, recipient, 3, null, null));
         String ownKey = "own-export:" + UUID.randomUUID();
         UUID own = actions.enqueue(request(ownKey, ownKey, actor, 3));
         var scope = new PersonScope(actor, List.of(), List.of());
@@ -395,7 +396,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
                 .put("accountId", recipient)
                 .put("role", "ADMIN");
         String key = "role-immutable:" + UUID.randomUUID();
-        UUID id = actions.enqueue(new ActionRequest(ActionKind.EMAIL, null, key, key, payload, recipient, 3, null));
+        UUID id = actions.enqueue(new ActionRequest(ActionKind.EMAIL, null, key, key, payload, recipient, 3, null, null));
 
         assertThatThrownBy(() -> jdbc.update(
                         "UPDATE agent_action SET payload = jsonb_set(payload, '{event,change,role}', '\"OWNER\"'::jsonb) WHERE id = ?",
@@ -584,6 +585,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
                 JsonNodeFactory.instance.objectNode().put("n", 1),
                 null,
                 maxAttempts,
+                null,
                 null);
     }
 
@@ -596,6 +598,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
                 JsonNodeFactory.instance.objectNode().put("n", 1),
                 subject,
                 maxAttempts,
+                null,
                 null);
     }
 }

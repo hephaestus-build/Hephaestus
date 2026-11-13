@@ -140,6 +140,7 @@ class SlackHistoryReconcilerIntegrationTest extends BaseIntegrationTest {
         monitored.setSlackChannelId(CHANNEL);
         monitored.setConsentState(ConsentState.ACTIVE);
         monitored.setConsentAnnouncedAt(ANNOUNCED);
+        monitored.setIngestAfter(ANNOUNCED);
         monitored.setLastHistorySyncedTs(WATERMARK);
         return channels.save(monitored);
     }

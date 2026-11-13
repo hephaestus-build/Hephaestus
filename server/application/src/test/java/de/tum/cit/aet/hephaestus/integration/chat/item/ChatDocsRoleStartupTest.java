@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.chat.item;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
@@ -87,6 +88,7 @@ class ChatDocsRoleStartupTest extends BaseUnitTest {
                 .withBean(SlackConversationProjector.class, () -> mock(SlackConversationProjector.class))
                 .withBean(OutlineDocumentRepository.class, () -> mock(OutlineDocumentRepository.class))
                 .withBean(OutlineDocumentProjector.class, () -> mock(OutlineDocumentProjector.class))
+                .withBean(AgentActions.class, () -> mock(AgentActions.class))
                 .withBean(ConnectionService.class, () -> mock(ConnectionService.class))
                 .withBean(EntityManagerFactory.class, () -> mock(EntityManagerFactory.class))
                 .withBean(GitProviderRegistry.class, () -> mock(GitProviderRegistry.class))

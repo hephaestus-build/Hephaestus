@@ -114,6 +114,44 @@ Monitoring starts after a visible announcement is posted.
 1. Open **Administration → Integrations → Slack**.
 2. Connect the Slack workspace through OAuth.
 3. Use the channel picker to add channels for monitoring.
+4. Select **Activate monitoring** and confirm the announcement.
+
+The channel shows **Activating** while the announcement waits for Slack confirmation.
+Hephaestus does not read channel messages in this state.
+After Slack confirms the post, the channel shows **Monitoring** and reads only messages after that post.
+
+If the announcement cannot be confirmed, the channel shows **Activation failed**.
+Check the Slack connection and bot membership, then select **Retry activation**.
+If a member removed the bot, invite it again before retrying.
+A retry checks for the previous announcement before it can post another one.
+Messages sent while monitoring was off stay unread.
+
+You can remove a channel while activation is in progress.
+If Slack is already processing the announcement, it can still appear after removal.
+Monitoring stays off.
+
+If a retry cannot confirm the announcement, check that the bot can read channel history.
+If confirmation still fails, remove the channel and add it again.
+This starts a new setup and posts a new announcement.
+
+```mermaid
+stateDiagram-v2
+    accTitle: Slack channel activation and removal
+    accDescr: A channel waits for Slack to confirm its announcement before monitoring starts. Failed announcements can be retried. Active channels can pause, resume or be removed.
+    [*] --> PENDING: Add channel
+    PENDING --> ACTIVATING: Request activation
+    ACTIVATING --> ACTIVE: Slack confirms post
+    ACTIVATING --> FAILED: Post unconfirmed, bot removed or channel archived
+    FAILED --> ACTIVATING: Retry activation
+    ACTIVE --> PAUSED: Pause
+    PAUSED --> ACTIVE: Resume
+    PENDING --> REVOKED: Remove
+    ACTIVATING --> REVOKED: Remove
+    FAILED --> REVOKED: Remove
+    ACTIVE --> REVOKED: Remove and erase
+    PAUSED --> REVOKED: Remove and erase
+    REVOKED --> PENDING: Set up again
+```
 
 Channel monitoring and a member's permission to use their messages are separate:
 [User settings → Slack](/user/user-settings#slack) lets members control their new channel messages.

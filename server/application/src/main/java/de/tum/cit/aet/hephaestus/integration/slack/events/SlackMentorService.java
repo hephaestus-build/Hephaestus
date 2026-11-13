@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
-import com.slack.api.model.block.LayoutBlock;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAdmission;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorRefusal;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
@@ -8,9 +7,8 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorPosts;
-import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
-import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
-import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackOnboardingService;
+import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackNotice;
+import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackNoticeActions;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
@@ -20,7 +18,6 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTimeline;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.practices.spi.MentorReadinessQuery;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -44,15 +41,15 @@ import org.springframework.stereotype.Service;
 public class SlackMentorService {
 
     private static final Logger log = LoggerFactory.getLogger(SlackMentorService.class);
+    private static final String SUBMISSION_RECEIPT = "slack.mentor.submit";
 
     static final String NOT_LINKED =
             "Hephaestus cannot reply yet. Check that your Hephaestus account is active, linked to Slack, and a member of this workspace.";
 
     private final SlackWorkspaceResolver workspaceResolver;
-    private final SlackMessageService slackMessageService;
+    private final SlackNoticeActions notices;
     private final SlackMentorIdentityResolver identityResolver;
     private final SlackMentorInputGuard inputGuard;
-    private final SlackOnboardingService onboardingService;
     private final MentorReadinessQuery mentorReadinessQuery;
     private final MentorAdmission mentorAdmission;
     private final MentorConversationService conversations;
@@ -62,10 +59,9 @@ public class SlackMentorService {
 
     public SlackMentorService(
             SlackWorkspaceResolver workspaceResolver,
-            SlackMessageService slackMessageService,
+            SlackNoticeActions notices,
             SlackMentorIdentityResolver identityResolver,
             SlackMentorInputGuard inputGuard,
-            SlackOnboardingService onboardingService,
             MentorReadinessQuery mentorReadinessQuery,
             MentorAdmission mentorAdmission,
             MentorConversationService conversations,
@@ -73,10 +69,9 @@ public class SlackMentorService {
             MentorTurnService turns,
             MentorTimeline timeline) {
         this.workspaceResolver = workspaceResolver;
-        this.slackMessageService = slackMessageService;
+        this.notices = notices;
         this.identityResolver = identityResolver;
         this.inputGuard = inputGuard;
-        this.onboardingService = onboardingService;
         this.mentorReadinessQuery = mentorReadinessQuery;
         this.mentorAdmission = mentorAdmission;
         this.conversations = conversations;
@@ -105,30 +100,57 @@ public class SlackMentorService {
         SlackMentorInputGuard.Verdict verdict = inputGuard.decide(text);
         if (!verdict.allowsMentorTurn()) {
             if (verdict.responseText() != null && !verdict.responseText().isBlank()) {
-                reply(workspaceId, channelId, replyTs, verdict.responseText());
+                reply(
+                        workspaceId,
+                        teamId,
+                        slackUserId,
+                        channelId,
+                        replyTs,
+                        messageTs,
+                        verdict.responseText(),
+                        false,
+                        null);
             }
             log.info("Slack DM diverted by input guard: workspace={} action={}", workspaceId, verdict.action());
             return;
         }
         if (!mentorReadinessQuery.isReady(workspaceId)) {
-            reply(workspaceId, channelId, replyTs, MentorRefusal.UNAVAILABLE.userMessage());
+            reply(
+                    workspaceId,
+                    teamId,
+                    slackUserId,
+                    channelId,
+                    replyTs,
+                    messageTs,
+                    MentorRefusal.UNAVAILABLE.userMessage(),
+                    false,
+                    null);
             return;
         }
         Optional<Long> account = identityResolver.resolveActiveAccountId(workspaceId, teamId, slackUserId);
         if (account.isEmpty()) {
-            send(workspaceId, channelId, replyTs, onboardingService.linkCtaBlocks(), NOT_LINKED);
+            reply(workspaceId, teamId, slackUserId, channelId, replyTs, messageTs, NOT_LINKED, true, null);
             return;
         }
         long accountId = account.get();
         Optional<MentorRefusal> refusal = mentorAdmission.refusal(workspaceId, accountId);
         if (refusal.isPresent()) {
-            reply(workspaceId, channelId, replyTs, refusal.get().userMessage());
+            reply(
+                    workspaceId,
+                    teamId,
+                    slackUserId,
+                    channelId,
+                    replyTs,
+                    messageTs,
+                    refusal.get().userMessage(),
+                    false,
+                    accountId);
             return;
         }
         try {
             // A disconnect either commits first, and nothing is stored, or waits and then erases what this stored.
             Optional<Boolean> accepted = workspaceResolver.whileConnected(workspaceId, teamId, () -> {
-                if (!DeliveryInbox.claim("slack.mentor.submit")) return false;
+                if (!DeliveryInbox.claim(SUBMISSION_RECEIPT)) return false;
                 UUID conversationId = replyTs == null
                         ? topLevel(workspaceId, accountId, teamId, slackUserId, channelId)
                         : thread(workspaceId, accountId, teamId, slackUserId, channelId, replyTs);
@@ -155,7 +177,16 @@ public class SlackMentorService {
                         workspaceId);
             }
         } catch (MentorRejectedException rejected) {
-            reply(workspaceId, channelId, replyTs, rejected.reason().userMessage());
+            reply(
+                    workspaceId,
+                    teamId,
+                    slackUserId,
+                    channelId,
+                    replyTs,
+                    messageTs,
+                    rejected.reason().userMessage(),
+                    false,
+                    accountId);
         }
     }
 
@@ -255,17 +286,25 @@ public class SlackMentorService {
         return "slack:" + teamId + ":" + channelId + ":" + messageTs;
     }
 
-    private void reply(long workspaceId, String channelId, @Nullable String threadTs, String text) {
-        send(workspaceId, channelId, threadTs, List.of(), text);
-    }
-
-    private void send(
-            long workspaceId, String channelId, @Nullable String threadTs, List<LayoutBlock> blocks, String text) {
-        try {
-            slackMessageService.postMessage(
-                    workspaceId, channelId, threadTs, blocks, text, SlackMentorPosts.noticeMetadata());
-        } catch (SlackSendException e) {
-            log.warn("Slack reply to a Hephaestus DM failed: workspace={}, error={}", workspaceId, e.slackError());
-        }
+    private void reply(
+            long workspaceId,
+            String teamId,
+            String slackUserId,
+            String channelId,
+            @Nullable String threadTs,
+            String messageTs,
+            String text,
+            boolean linkAccount,
+            @Nullable Long accountId) {
+        workspaceResolver.whileConnected(workspaceId, teamId, () -> {
+            if (!DeliveryInbox.claim(SUBMISSION_RECEIPT)) return false;
+            notices.reply(
+                    workspaceId,
+                    teamId,
+                    slackUserId,
+                    accountId,
+                    new SlackNotice(channelId, threadTs, messageTs, text, linkAccount));
+            return true;
+        });
     }
 }

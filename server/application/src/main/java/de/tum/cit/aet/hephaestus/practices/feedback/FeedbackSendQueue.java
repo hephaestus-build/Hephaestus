@@ -100,6 +100,7 @@ public class FeedbackSendQueue {
                 mapper.createObjectNode().put("feedbackId", row.getId().toString()),
                 row.getDeveloperId(),
                 MAX_ATTEMPTS,
+                null,
                 null));
     }
 

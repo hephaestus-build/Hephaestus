@@ -66,7 +66,8 @@ class FeedbackSendServiceTest {
             1,
             false,
             null,
-            () -> true);
+            () -> true,
+            null);
     final Feedback feedback = Feedback.builder()
             .id(id)
             .workspaceId(1)

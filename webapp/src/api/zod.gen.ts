@@ -5169,7 +5169,9 @@ export const zSetReviewScheduleEnabledRequest = z.object({
 export const zSlackChannelCandidate = z.object({
 	archived: z.boolean().optional(),
 	channelName: z.string(),
-	consentState: z.enum(["PENDING", "ACTIVE", "PAUSED", "REVOKED"]).optional(),
+	consentState: z
+		.enum(["PENDING", "ACTIVATING", "ACTIVE", "FAILED", "PAUSED", "REVOKED"])
+		.optional(),
 	member: z.boolean().optional(),
 	privateChannel: z.boolean().optional(),
 	slackChannelId: z.string(),
@@ -5184,11 +5186,11 @@ export const zSlackChannelConsentEvent = z.object({
 		.regex(/^[1-9][0-9]*$/)
 		.nullable(),
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	fromState: z.enum(["PENDING", "ACTIVE", "PAUSED", "REVOKED"]).nullable(),
+	fromState: z.enum(["PENDING", "ACTIVATING", "ACTIVE", "FAILED", "PAUSED", "REVOKED"]).nullable(),
 	id: z.string().regex(/^[1-9][0-9]*$/),
 	reason: z.string().nullable(),
 	slackChannelId: z.string(),
-	toState: z.enum(["PENDING", "ACTIVE", "PAUSED", "REVOKED"]),
+	toState: z.enum(["PENDING", "ACTIVATING", "ACTIVE", "FAILED", "PAUSED", "REVOKED"]),
 });
 
 /**
@@ -5197,7 +5199,7 @@ export const zSlackChannelConsentEvent = z.object({
 export const zSlackMonitoredChannel = z.object({
 	channelName: z.string().nullable(),
 	consentAnnouncedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	consentState: z.enum(["PENDING", "ACTIVE", "PAUSED", "REVOKED"]),
+	consentState: z.enum(["PENDING", "ACTIVATING", "ACTIVE", "FAILED", "PAUSED", "REVOKED"]),
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	id: z.string().regex(/^[1-9][0-9]*$/),
 	optedOutMemberCount: z.int(),
@@ -5702,7 +5704,7 @@ export const zUpdateSilentModeRequest = z.object({
  * Transition a Slack channel to a target consent state
  */
 export const zUpdateSlackChannelConsentRequest = z.object({
-	consentState: z.enum(["PENDING", "ACTIVE", "PAUSED", "REVOKED"]),
+	consentState: z.enum(["ACTIVE", "PAUSED", "REVOKED"]),
 	reason: z.string().min(0).max(2000).optional(),
 });
 

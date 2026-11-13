@@ -89,8 +89,8 @@ public class SlackChannelAdminController {
             WorkspaceContext workspace,
             @PathVariable String slackChannelId,
             @Valid @RequestBody UpdateSlackChannelConsentRequestDTO request) {
-        return ResponseEntity.ok(
-                consentService.transition(workspace.id(), slackChannelId, request.consentState(), request.reason()));
+        return ResponseEntity.ok(consentService.transition(
+                workspace.id(), slackChannelId, request.consentState().state(), request.reason()));
     }
 
     @GetMapping("/{slackChannelId}/consent-events")

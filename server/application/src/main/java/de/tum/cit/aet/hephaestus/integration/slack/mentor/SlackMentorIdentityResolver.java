@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class SlackMentorIdentityResolver {
 
     /** The canonical Slack server URL the seeded {@code identity_provider} row is keyed by. */
-    static final String SLACK_SERVER_URL = "https://slack.com";
+    public static final String SLACK_SERVER_URL = "https://slack.com";
 
     private final GitProviderRegistry gitProviderRegistry;
     private final AccountIdentityQuery accountIdentityQuery;

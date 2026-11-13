@@ -236,7 +236,7 @@ A turn has a second attempt only after a lease expiry ([Server runtime](./runtim
 | `mentor_live_streams`                      | Gauge     | none      | Live Hephaestus streams that the app holds open on this server                |
 
 `outcome` is one of `success`, `stopped`, `failed`, or `lease_expired`.
-Slack delivery uses the [outbox metrics](#outbox-metrics), with `kind="SLACK_POST"`.
+Slack delivery uses the [outbox metrics](#outbox-metrics). The kinds are `SLACK_POST` for answers and digests, `SLACK_NOTICE` for direct-message notices, `SLACK_JOIN` for channel joins, and `SLACK_CONSENT` for consent announcements.
 [Slack replies](/contributor/unified-pi-runtime#slack-replies) describes its metadata readback and unknown outcomes.
 
 Web and Slack turns both count.
@@ -628,7 +628,7 @@ The hash is the last eight characters of the script's file name, which name one 
 
 ## Outbox metrics
 
-The outbox carries out every effect that Hephaestus has on a provider, such as an email.
+[Effect boundary](../contributor/outbox.md#effect-boundary) defines which provider writes use the outbox.
 Each server replica samples the backlog every 30 seconds.
 A failed sample keeps the last values.
 

@@ -4,13 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackConversationTestSupport;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEventRepository;
@@ -38,6 +41,8 @@ import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
@@ -46,6 +51,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
@@ -53,10 +59,10 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  * End-to-end tests for {@link SlackChannelAdminController} — the per-workspace channel activation control plane. The
  * whole Slack surface is enabled ({@code hephaestus.integration.slack.enabled=true}) so the guarded controller +
  * service + audit repository run against a real Postgres via {@link WebTestClient}. {@link SlackMessageService} is
- * mocked so the activation announcement side effect is observable without a live Slack workspace.
+ * mocked so no test contacts a live Slack workspace. The lifecycle test drives outbox confirmation.
  *
- * <p>Each test asserts a real behavior that would fail if the guard or side effect were removed: activation posts the
- * announcement + stamps the forward-only boundary + writes an audit row; a non-admin is 403; an illegal edge is 409;
+ * <p>Each test asserts a real behavior that would fail if the guard or side effect were removed: activation queues one
+ * announcement and writes an audit row without enabling ingestion; a non-admin is 403; an illegal edge is 409;
  * revoke erases raw + derived data; the audit trail lists chronologically; and another workspace's channel is 404.
  */
 @TestPropertySource(
@@ -108,6 +114,12 @@ class SlackChannelAdminControllerIntegrationTest extends AbstractWorkspaceIntegr
     @Autowired
     private SlackMessageService slackMessageService;
 
+    @Autowired
+    private ConnectionRepository connections;
+
+    @Autowired
+    private JdbcTemplate jdbc;
+
     private Workspace workspace;
     private User owner;
 
@@ -122,11 +134,15 @@ class SlackChannelAdminControllerIntegrationTest extends AbstractWorkspaceIntegr
         owner = persistUser("slack-chan-owner-" + System.nanoTime());
         workspace = createWorkspace(
                 "slack-chan-" + System.nanoTime(), "Slack Channel Test", "slack-chan-org", AccountType.ORG, owner);
+        var connection = new Connection(
+                workspace, IntegrationKind.SLACK, "T1", new ConnectionConfig.SlackConfig("T1", null, null, Set.of()));
+        connection.setState(IntegrationState.ACTIVE);
+        connections.saveAndFlush(connection);
     }
 
     @Test
     @WithAdminUser
-    @DisplayName("admin activates PENDING → ACTIVE: announcement posted, announced_at stamped, audit row written")
+    @DisplayName("admin requests activation: durable announcement queued, ingestion remains off")
     void activatePendingChannel_asAdmin() {
         ensureAdminMembership(workspace);
         seedChannel(workspace.getId(), "C1", ConsentState.PENDING, null);
@@ -139,25 +155,22 @@ class SlackChannelAdminControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .getResponseBody();
 
         assertThat(result).isNotNull();
-        assertThat(result.consentState()).isEqualTo(ConsentState.ACTIVE);
-        assertThat(result.consentAnnouncedAt()).isNotNull();
+        assertThat(result.consentState()).isEqualTo(ConsentState.ACTIVATING);
+        assertThat(result.consentAnnouncedAt()).isNull();
+        assertThat(currentState("C1")).isEqualTo(ConsentState.ACTIVATING);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM agent_action WHERE workspace_id=? AND kind='SLACK_CONSENT'",
+                        Long.class,
+                        workspace.getId()))
+                .isEqualTo(1L);
+        verify(slackMessageService, never()).postMessage(anyLong(), any(), any(), anyList(), any(), any());
 
-        // Announcement side effect fired for this channel.
-        verify(slackMessageService).postMessage(eq(workspace.getId()), eq("C1"), isNull(), anyList(), any(), isNull());
-
-        // Persisted state: ACTIVE + stamped.
-        SlackMonitoredChannel stored = monitoredChannelRepository
-                .findByWorkspaceIdAndSlackChannelId(workspace.getId(), "C1")
-                .orElseThrow();
-        assertThat(stored.getConsentState()).isEqualTo(ConsentState.ACTIVE);
-        assertThat(stored.getConsentAnnouncedAt()).isNotNull();
-
-        // Audit row: PENDING → ACTIVE by the admin.
+        // Audit row: the admin requested activation; the action must confirm it separately.
         var events = consentEventRepository.findByWorkspaceIdAndSlackChannelIdOrderByCreatedAtAscIdAsc(
                 workspace.getId(), "C1");
         assertThat(events).hasSize(1);
         assertThat(events.get(0).getFromState()).isEqualTo(ConsentState.PENDING);
-        assertThat(events.get(0).getToState()).isEqualTo(ConsentState.ACTIVE);
+        assertThat(events.get(0).getToState()).isEqualTo(ConsentState.ACTIVATING);
         assertThat(events.get(0).getActorAccountId()).isEqualTo(adminUserId());
         assertThat(events.get(0).getReason()).isEqualTo("pilot go");
     }
@@ -240,13 +253,13 @@ class SlackChannelAdminControllerIntegrationTest extends AbstractWorkspaceIntegr
     @DisplayName("consent-events lists the channel's transition history chronologically")
     void auditListReturnsHistory() {
         ensureAdminMembership(workspace);
-        seedChannel(workspace.getId(), "C1", ConsentState.PENDING, null);
+        seedChannel(workspace.getId(), "C1", ConsentState.ACTIVE, Instant.parse("2020-01-01T00:00:00Z"));
 
-        patchConsent("C1", ConsentState.ACTIVE, "go").expectStatus().isOk().expectBody(Void.class);
         patchConsent("C1", ConsentState.PAUSED, "pause for review")
                 .expectStatus()
                 .isOk()
                 .expectBody(Void.class);
+        patchConsent("C1", ConsentState.ACTIVE, "resume").expectStatus().isOk().expectBody(Void.class);
 
         List<SlackChannelConsentEventDTO> events = webTestClient
                 .get()
@@ -262,7 +275,7 @@ class SlackChannelAdminControllerIntegrationTest extends AbstractWorkspaceIntegr
         assertThat(events).hasSize(2);
         assertThat(events)
                 .extracting(SlackChannelConsentEventDTO::toState)
-                .containsExactly(ConsentState.ACTIVE, ConsentState.PAUSED);
+                .containsExactly(ConsentState.PAUSED, ConsentState.ACTIVE);
         assertThat(events.get(0).actorAccountId()).isEqualTo(Long.toString(adminUserId()));
     }
 
@@ -302,6 +315,23 @@ class SlackChannelAdminControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .isEqualTo(ConsentState.PENDING);
     }
 
+    @Test
+    @WithAdminUser
+    void clientsCannotSetDeliveryOwnedConsentStates() {
+        ensureAdminMembership(workspace);
+        seedChannel(workspace.getId(), "C1", ConsentState.PENDING, null);
+        webTestClient
+                .patch()
+                .uri("/workspaces/{slug}/slack/channels/C1", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of("consentState", "ACTIVATING"))
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
+        assertThat(currentState("C1")).isEqualTo(ConsentState.PENDING);
+    }
+
     // --- helpers ---
 
     private WebTestClient.ResponseSpec patchConsent(String channelId, ConsentState target, @Nullable String reason) {
@@ -310,7 +340,8 @@ class SlackChannelAdminControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .uri("/workspaces/{slug}/slack/channels/{c}", workspace.getWorkspaceSlug(), channelId)
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new UpdateSlackChannelConsentRequestDTO(target, reason))
+                .bodyValue(new UpdateSlackChannelConsentRequestDTO(
+                        SlackChannelConsentTarget.valueOf(target.name()), reason))
                 .exchange();
     }
 
@@ -333,6 +364,7 @@ class SlackChannelAdminControllerIntegrationTest extends AbstractWorkspaceIntegr
         channel.setSlackChannelId(channelId);
         channel.setConsentState(state);
         channel.setConsentAnnouncedAt(announcedAt);
+        channel.setIngestAfter(announcedAt);
         monitoredChannelRepository.save(channel);
     }
 

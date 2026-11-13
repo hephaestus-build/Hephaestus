@@ -24,12 +24,12 @@ import { IntegrationCardHeading } from "./IntegrationCardHeading";
 import { ActivateChannelDialog } from "./slack-channels/ActivateChannelDialog";
 import { AddChannelDialog, type AddChannelDialogProps } from "./slack-channels/AddChannelDialog";
 import { type ChannelHistory, ChannelHistorySheet } from "./slack-channels/ChannelHistorySheet";
-import type { SlackConsentState } from "./slack-channels/consent-terms";
+import type { SlackConsentTarget } from "./slack-channels/consent-terms";
 import { RemoveChannelAlertDialog } from "./slack-channels/RemoveChannelAlertDialog";
 import { SlackChannelRow } from "./slack-channels/SlackChannelRow";
 import { swallow } from "./swallow";
 
-export type { SlackConsentState } from "./slack-channels/consent-terms";
+export type { SlackConsentState, SlackConsentTarget } from "./slack-channels/consent-terms";
 
 export type SlackChannelCandidate = ApiSlackChannelCandidate;
 
@@ -74,10 +74,10 @@ export interface WorkspaceSlackChannelsSettingsProps {
 		slackChannelId: string;
 		channelName?: string;
 	}) => Promise<void> | void;
-	/** Drive activate / pause / resume via the target consent state. */
+	/** Drive activate / pause / resume via the target consent state (ACTIVE / PAUSED / REVOKED only). */
 	onUpdateConsent: (input: {
 		slackChannelId: string;
-		consentState: SlackConsentState;
+		consentState: SlackConsentTarget;
 		reason?: string;
 	}) => Promise<void> | void;
 	/** Terminal revoke + erase. Resolves on success, rejects to keep the dialog open. */

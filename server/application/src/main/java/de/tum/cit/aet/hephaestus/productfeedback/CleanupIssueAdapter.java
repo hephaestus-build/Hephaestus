@@ -47,7 +47,8 @@ class CleanupIssueAdapter implements ActionAdapter {
                 mapper.valueToTree(new Payload(recordId)),
                 null,
                 MAX_ATTEMPTS,
-                until);
+                until,
+                null);
     }
 
     @Override

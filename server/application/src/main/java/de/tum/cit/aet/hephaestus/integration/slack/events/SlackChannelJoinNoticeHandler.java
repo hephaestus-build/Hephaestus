@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackChannelConsentService;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackConsentBlocks;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackInteractiveReplyAdapter;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
 import java.util.Optional;
@@ -39,6 +40,7 @@ public class SlackChannelJoinNoticeHandler {
     private final SlackChannelConsentGate consentGate;
     private final SlackParticipantConsentGate participantConsentGate;
     private final SlackMessageService messageService;
+    private final SlackInteractiveReplyAdapter replies;
     private final SlackChannelConsentService consentService;
 
     public SlackChannelJoinNoticeHandler(
@@ -46,11 +48,13 @@ public class SlackChannelJoinNoticeHandler {
             SlackChannelConsentGate consentGate,
             SlackParticipantConsentGate participantConsentGate,
             SlackMessageService messageService,
+            SlackInteractiveReplyAdapter replies,
             SlackChannelConsentService consentService) {
         this.workspaceResolver = workspaceResolver;
         this.consentGate = consentGate;
         this.participantConsentGate = participantConsentGate;
         this.messageService = messageService;
+        this.replies = replies;
         this.consentService = consentService;
     }
 
@@ -99,7 +103,7 @@ public class SlackChannelJoinNoticeHandler {
         }
 
         try {
-            messageService.sendEphemeralForWorkspace(
+            replies.sendEphemeralForWorkspace(
                     workspaceId,
                     channelId,
                     joinerUserId,

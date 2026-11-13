@@ -9,9 +9,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestSubscriptions;
+import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
+import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -26,7 +29,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsen
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackPersonErasureService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
-import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackInteractiveReplyAdapter;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackAppHomeService;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
@@ -164,8 +167,14 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
                 identityResolver,
                 mock(SlackAppHomeService.class),
                 new SlackParticipantConsentService(participantConsentRepository),
-                new SlackPersonErasureService(messageRepository, threadRepository, conversationFeedbackErasure),
-                mock(SlackMessageService.class),
+                new SlackPersonErasureService(
+                        messageRepository,
+                        threadRepository,
+                        conversationFeedbackErasure,
+                        mock(AgentActions.class),
+                        mock(ConnectionService.class),
+                        mock(GitProviderRegistry.class)),
+                mock(SlackInteractiveReplyAdapter.class),
                 mock(SlackMentorService.class),
                 mock(WeeklyDigestSubscriptions.class));
     }

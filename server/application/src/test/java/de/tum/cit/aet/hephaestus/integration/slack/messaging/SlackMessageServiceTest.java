@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 import mockwebserver3.Dispatcher;
 import mockwebserver3.MockResponse;
@@ -83,24 +84,17 @@ class SlackMessageServiceTest extends BaseUnitTest {
                 Arguments.of("sendEphemeralForWorkspace", (ThrowingSend)
                         s -> s.sendEphemeralForWorkspace(7L, "C1ABCDEFGH", "U123", List.of(), "f")),
                 Arguments.of("postMessage", (ThrowingSend)
-                        s -> s.postMessage(7L, "D1ABCDEFGH", null, List.of(), "hi", null)));
-    }
-
-    /** These ride inbound events whose handlers do not catch, so a throw would NAK into the poison alarm. */
-    @ParameterizedTest(name = "{0} is skipped, not refused, while silent mode is engaged")
-    @MethodSource("decorationCalls")
-    void silentModeSkipsDecorationCallsWithoutThrowing(String name, ThrowingSend call) {
-        silentModeEngaged = true;
-
-        assertThatCode(() -> call.run(service)).doesNotThrowAnyException();
-        verifyNoInteractions(credentialProvider);
-    }
-
-    private static Stream<Arguments> decorationCalls() {
-        return Stream.of(
-                Arguments.of("publishHomeView", (ThrowingSend)
-                        s -> s.publishHomeView(7L, "U123", View.builder().build())),
+                        s -> s.postMessage(7L, "D1ABCDEFGH", null, List.of(), "hi", null)),
                 Arguments.of("joinPublicChannel", (ThrowingSend) s -> s.joinPublicChannel(7L, "C1ABCDEFGH")));
+    }
+
+    /** App Home is a direct interaction reply; Silent Mode skips it without failing the inbound event. */
+    @Test
+    void shouldSkipTheDirectHomeReplyWhileSilentModeIsEngaged() {
+        silentModeEngaged = true;
+        assertThatCode(() -> service.publishHomeView(7L, "U123", View.builder().build()))
+                .doesNotThrowAnyException();
+        verifyNoInteractions(credentialProvider);
     }
 
     @Test
@@ -304,5 +298,122 @@ class SlackMessageServiceTest extends BaseUnitTest {
         assertThat(SlackMessageService.Matches.holdsMore(false, next)).isTrue();
         assertThat(SlackMessageService.Matches.holdsMore(false, last)).isFalse();
         assertThat(SlackMessageService.Matches.holdsMore(false, null)).isFalse();
+    }
+
+    @Test
+    void consentReadbackFindsAnAnnouncementAfterTheFirstPage() throws Exception {
+        try (MockWebServer api = new MockWebServer()) {
+            var pages = new AtomicInteger();
+            api.setDispatcher(new Dispatcher() {
+                @Override
+                public MockResponse dispatch(RecordedRequest request) {
+                    if (request.getUrl().encodedPath().equals("/api/auth.test"))
+                        return json("{\"ok\":true,\"team_id\":\"T1\"}");
+                    pages.incrementAndGet();
+                    return bodyOf(request).contains("cursor=older")
+                            ? json(
+                                    "{\"ok\":true,\"messages\":[{\"ts\":\"100.000001\",\"text\":\"announcement\"}],\"has_more\":false}")
+                            : json(
+                                    "{\"ok\":true,\"messages\":[{\"ts\":\"200.0\",\"text\":\"later chat\"}],\"has_more\":true,\"response_metadata\":{\"next_cursor\":\"older\"}}");
+                }
+            });
+            api.start();
+            var local = localService(api, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
+            try {
+                var found =
+                        local.readWorkspaceMessages(7L, "C1", null, "1.0", m -> "announcement".equals(m.getText()), 20);
+                assertThat(found.ts()).containsExactly("100.000001");
+                assertThat(pages).hasValue(2);
+            } finally {
+                local.close();
+            }
+        }
+    }
+
+    @Test
+    void completePagedAbsenceCanBeDistinguishedFromABoundedSearch() throws Exception {
+        try (MockWebServer api = new MockWebServer()) {
+            api.setDispatcher(new Dispatcher() {
+                @Override
+                public MockResponse dispatch(RecordedRequest request) {
+                    if (request.getUrl().encodedPath().equals("/api/auth.test"))
+                        return json("{\"ok\":true,\"team_id\":\"T1\"}");
+                    return bodyOf(request).contains("cursor=older")
+                            ? json("{\"ok\":true,\"messages\":[],\"has_more\":false}")
+                            : json(
+                                    "{\"ok\":true,\"messages\":[],\"has_more\":true,\"response_metadata\":{\"next_cursor\":\"older\"}}");
+                }
+            });
+            api.start();
+            var local = localService(api, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
+            try {
+                assertThat(local.readWorkspaceMessages(7L, "C1", null, "1.0", m -> false, 20))
+                        .isEqualTo(new SlackMessageService.Matches(List.of(), false));
+                assertThat(local.readWorkspaceMessages(7L, "C1", null, "1.0", m -> false, 1))
+                        .isEqualTo(new SlackMessageService.Matches(List.of(), true));
+            } finally {
+                local.close();
+            }
+        }
+    }
+
+    @Test
+    void aThrottledLaterReadbackPageCannotSpendTheWriteFenceBudget() throws Exception {
+        try (MockWebServer api = new MockWebServer()) {
+            var pages = new AtomicInteger();
+            api.setDispatcher(new Dispatcher() {
+                @Override
+                public MockResponse dispatch(RecordedRequest request) {
+                    if (request.getUrl().encodedPath().equals("/api/auth.test"))
+                        return json("{\"ok\":true,\"team_id\":\"T1\"}");
+                    pages.incrementAndGet();
+                    return bodyOf(request).contains("cursor=older")
+                            ? new MockResponse.Builder()
+                                    .code(429)
+                                    .addHeader("Retry-After", "60")
+                                    .addHeader("Content-Type", "application/json")
+                                    .body("{\"ok\":false,\"error\":\"ratelimited\"}")
+                                    .build()
+                            : json(
+                                    "{\"ok\":true,\"messages\":[],\"has_more\":true,\"response_metadata\":{\"next_cursor\":\"older\"}}");
+                }
+            });
+            api.start();
+            var local = localService(api, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
+            try {
+                assertThatThrownBy(() -> local.readWorkspaceMessages(7L, "C1", null, "1.0", m -> false, 20))
+                        .isInstanceOf(SlackSendException.class);
+                assertThat(pages).hasValue(2);
+            } finally {
+                local.close();
+            }
+        }
+    }
+
+    @Test
+    void aFailureOnALaterReadbackPageCannotProveAbsence() throws Exception {
+        try (MockWebServer api = new MockWebServer()) {
+            api.setDispatcher(new Dispatcher() {
+                @Override
+                public MockResponse dispatch(RecordedRequest request) {
+                    if (request.getUrl().encodedPath().equals("/api/auth.test"))
+                        return json("{\"ok\":true,\"team_id\":\"T1\"}");
+                    return bodyOf(request).contains("cursor=older")
+                            ? json("{\"ok\":false,\"error\":\"missing_scope\"}")
+                            : json(
+                                    "{\"ok\":true,\"messages\":[],\"has_more\":true,\"response_metadata\":{\"next_cursor\":\"older\"}}");
+                }
+            });
+            api.start();
+            var local = localService(api, SlackMessageService.NATIVE_CALL_TIMEOUT_MS);
+            try {
+                assertThatThrownBy(() -> local.readWorkspaceMessages(7L, "C1", null, "1.0", m -> false, 20))
+                        .isInstanceOfSatisfying(
+                                SlackSendException.class,
+                                failure -> assertThat(failure.slackError()).isEqualTo("missing_scope"));
+            } finally {
+                local.close();
+            }
+        }
     }
 }

@@ -41,9 +41,11 @@ export function RemoveChannelAlertDialog({
 
 	const label = channel ? (channel.channelName ?? channel.slackChannelId) : "";
 	const channelId = channel?.slackChannelId ?? "";
-	// Nothing has been collected from a channel that never got past PENDING — the consent
-	// announcement (and therefore any reading) only happens on first activation.
-	const nothingCollected = channel?.consentState === "PENDING";
+	// Reading starts only after the announcement is confirmed and the channel becomes active.
+	const nothingCollected =
+		channel?.consentState === "PENDING" ||
+		channel?.consentState === "ACTIVATING" ||
+		channel?.consentState === "FAILED";
 	const matches = nothingCollected || confirmText.trim() === channelId;
 
 	// Reset the fields on close rather than remounting via a changing `key`, which would break the
