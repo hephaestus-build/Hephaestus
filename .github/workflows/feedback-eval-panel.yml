@@ -88,20 +88,6 @@ jobs:
           HEPHAESTUS_LIVE_LLM_API_KEY: ${{ secrets.FEEDBACK_EVAL_API_KEY }}
         run: node scripts/feedback-eval-gate.ts --model --output "$RUNNER_TEMP/feedback-eval-panel"
 
-      # The last night that measured and passed is state, not a search through run history: a cache
-      # entry whose key carries this run and commit (scripts/feedback-eval-night.ts reads the newest).
-      # These steps run only when the panel step passed.
-      - name: Record the measured green night
-        if: github.event_name == 'schedule'
-        run: echo "$GITHUB_SHA" > .feedback-eval-last-green
-
-      - name: Keep the measured green night
-        if: github.event_name == 'schedule'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .feedback-eval-last-green
-          key: feedback-eval-last-green-${{ github.run_id }}-${{ github.sha }}
-
       - name: Keep the panel result
         id: keep
         if: ${{ !cancelled() }}
@@ -111,6 +97,26 @@ jobs:
           path: ${{ runner.temp }}/feedback-eval-panel
           retention-days: 14
           if-no-files-found: warn
+
+  # The last night that measured and passed is state, not a search through run history: a cache
+  # entry whose key carries this run and commit (scripts/feedback-eval-night.ts reads the newest on
+  # main). Only a scheduled night on main whose whole panel job succeeded saves it.
+  record-green:
+    name: Record the measured green night
+    needs: [panel]
+    if: needs.panel.result == 'success' && github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions: {}
+    steps:
+      - name: Write the commit
+        run: echo "$GITHUB_SHA" > .feedback-eval-last-green
+
+      - name: Keep the measured green night
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .feedback-eval-last-green
+          key: feedback-eval-last-green-${{ github.run_id }}-${{ github.sha }}
 
   # A night has no pull request to fail, so it keeps one tracking issue (scripts/feedback-eval-night.ts).
   # A night without a provider runs no panel, so it never reaches this job. CI / Scheduled failures

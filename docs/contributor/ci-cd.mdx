@@ -596,9 +596,12 @@ The deterministic gate in `cicd.yml` still covers every pull request.
 GitHub Models, which needed no key, was retired on 2026-07-30, so the panel has no default provider.
 
 The last night whose panel measured and passed is kept as state, not searched for in run history.
-That night saves an Actions cache entry with the key `feedback-eval-last-green-<run ID>-<commit>`.
-A red or unfinished night reads the newest such entry and links the commits since that commit.
-GitHub evicts a cache entry that nobody used for 7 days. Without an entry, the comment says that the last green night is unknown and that the range is not computed.
+A scheduled night on `main` saves an Actions cache entry with the key `feedback-eval-last-green-<run ID>-<commit>`.
+A separate job saves it after the whole panel job succeeded. Thus, a later failing step of the panel job cannot record a failed night.
+
+A red or unfinished night reads the newest such entry on `main` and links the commits since that commit. An entry from another ref does not count.
+GitHub evicts a cache entry that nobody used for 7 days.
+Without an entry, or when the lookup fails, the comment says that the last green night is unknown and why. It does not compute the range.
 
 ## The `preview` label
 

@@ -63,24 +63,44 @@ const WHAT: Record<string, string> = {
 
 const GREEN_KEY = new RegExp(`^${LAST_GREEN_PREFIX}\\d+-(?<sha>[0-9a-f]{40})$`, "u");
 
-/** The last night whose panel measured and passed, from the newest cache entry under the prefix. */
-export async function lastGreen(
-	github: GitHub,
-	repo: Repo,
-): Promise<{ sha: string; date: string } | null> {
-	const response = record(
-		await github.rest.actions.getActionsCacheList({
-			...repo,
-			key: LAST_GREEN_PREFIX,
-			sort: "created_at",
-			direction: "desc",
-			per_page: 10,
-		}),
-	);
+/** Names a failed API call by its HTTP status, or its message. */
+function lookupFailure(error: unknown): string {
+	const { status } = record(error);
+	if (typeof status === "number") {
+		return `HTTP ${status}`;
+	}
+	return error instanceof Error ? error.message : "unknown error";
+}
+
+/** Only a scheduled night on the default branch saves the state, so only its entries count. */
+const MAIN_REF = "refs/heads/main";
+
+type Green = { sha: string; date: string } | { failure: string } | null;
+
+/**
+ * The last night whose panel measured and passed: the newest cache entry under the prefix on the default branch. A
+ * failed lookup is returned as such, so that the report still goes out.
+ */
+export async function lastGreen(github: GitHub, repo: Repo): Promise<Green> {
+	let response: Record<string, unknown>;
+	try {
+		response = record(
+			await github.rest.actions.getActionsCacheList({
+				...repo,
+				key: LAST_GREEN_PREFIX,
+				ref: MAIN_REF,
+				sort: "created_at",
+				direction: "desc",
+				per_page: 10,
+			}),
+		);
+	} catch (error) {
+		return { failure: lookupFailure(error) };
+	}
 	const caches = record(response.data).actions_caches;
 	for (const entry of Array.isArray(caches) ? caches.map(record) : []) {
 		const sha = typeof entry.key === "string" ? GREEN_KEY.exec(entry.key)?.groups?.sha : undefined;
-		if (sha !== undefined && typeof entry.created_at === "string") {
+		if (sha !== undefined && entry.ref === MAIN_REF && typeof entry.created_at === "string") {
 			return { sha, date: entry.created_at };
 		}
 	}
@@ -104,62 +124,82 @@ async function artifactOf(github: GitHub, repo: Repo, night: Night): Promise<str
 
 async function range(github: GitHub, repo: Repo, night: Night): Promise<string> {
 	const green = await lastGreen(github, repo);
-	if (green === null) {
+	if (green === null || "failure" in green) {
 		const since = new Date(Date.parse(night.date) - CACHE_LIFETIME_DAYS * 86_400_000)
 			.toISOString()
 			.slice(0, 10);
-		return `Last measured green night unknown (cache expired); range from ${since} not computed. This night ran on \`${night.sha}\`.`;
+		const why = green === null ? "cache expired" : `cache lookup failed: ${green.failure}`;
+		return `Last measured green night unknown (${why}); range from ${since} not computed. This night ran on \`${night.sha}\`.`;
 	}
 	const compare = `${night.serverUrl}/${repo.owner}/${repo.repo}/compare`;
 	return `Commits since the last night that measured and passed (${green.date.slice(0, 10)}): ${compare}/${green.sha}...${night.sha}`;
 }
 
+/** Whether an issue's body or one of its bot comments already holds the marker of this attempt. */
+async function holds(
+	github: GitHub,
+	repo: Repo,
+	issue: Record<string, unknown>,
+	marker: string,
+): Promise<boolean> {
+	if (typeof issue.body === "string" && issue.body.includes(marker)) {
+		return true;
+	}
+	const comments = await github.paginate(github.rest.issues.listComments, {
+		...repo,
+		issue_number: issue.number,
+		per_page: 100,
+	});
+	return comments
+		.map(record)
+		.some(
+			(comment) =>
+				record(comment.user).login === "github-actions[bot]" &&
+				typeof comment.body === "string" &&
+				comment.body.includes(marker),
+		);
+}
+
 /**
  * Keeps the one tracking issue in step with a night: a night that measured and passed closes it, and any other night
- * comments on it, or opens it, with the commits since the last night that measured and passed. A replay of an attempt
- * that the issue already holds adds nothing.
+ * comments on it, or opens it, with the commits since the last night that measured and passed. Each comment carries the
+ * attempt's marker, so a replay of an attempt that any of the panel's issues already holds, open or closed, adds
+ * nothing.
  */
 export async function reportNight(
 	github: GitHub,
 	repo: Repo,
 	night: Night,
 ): Promise<"closed" | "commented" | "created" | "unchanged"> {
-	const issues = await github.paginate(github.rest.issues.listForRepo, {
+	const listed = await github.paginate(github.rest.issues.listForRepo, {
 		...repo,
 		creator: "github-actions[bot]",
-		state: "open",
+		state: "all",
 		per_page: 100,
 	});
-	const open = issues
+	const issues = listed
 		.map(record)
-		.find((issue) => issue.pull_request === undefined && issue.title === ISSUE_TITLE);
+		.filter((issue) => issue.pull_request === undefined && issue.title === ISSUE_TITLE);
+	const open = issues.find((issue) => issue.state === "open");
 	const number = typeof open?.number === "number" ? open.number : null;
+	const marker = `<!-- run:${night.runId}:${night.attempt} -->`;
 	if (night.result === "success" && night.status === "passed") {
-		if (number === null) {
+		if (open === undefined || number === null) {
 			return "unchanged";
 		}
-		await github.rest.issues.createComment({
-			...repo,
-			issue_number: number,
-			body: `The panel measured and passed again on \`${night.sha}\`: ${night.runUrl}`,
-		});
+		// A replay after a failed close finds its own comment and only closes.
+		if (!(await holds(github, repo, open, marker))) {
+			await github.rest.issues.createComment({
+				...repo,
+				issue_number: number,
+				body: `${marker}\nThe panel measured and passed again on \`${night.sha}\`: ${night.runUrl}`,
+			});
+		}
 		await github.rest.issues.update({ ...repo, issue_number: number, state: "closed" });
 		return "closed";
 	}
-	const marker = `<!-- run:${night.runId}:${night.attempt} -->`;
-	if (number !== null) {
-		const comments = await github.paginate(github.rest.issues.listComments, {
-			...repo,
-			issue_number: number,
-			per_page: 100,
-		});
-		const told = [open, ...comments.map(record)].some(
-			(entry) =>
-				typeof entry?.body === "string" &&
-				entry.body.includes(marker) &&
-				(entry === open || record(entry.user).login === "github-actions[bot]"),
-		);
-		if (told) {
+	for (const issue of issues) {
+		if (await holds(github, repo, issue, marker)) {
 			return "unchanged";
 		}
 	}

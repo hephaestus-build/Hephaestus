@@ -167,6 +167,7 @@ async function panelFallback(
 						{
 							key: `feedback-eval-last-green-41-${"a".repeat(40)}`,
 							created_at: "2026-11-18T03:50:00Z",
+							ref: "refs/heads/main",
 						},
 					],
 				},
@@ -261,7 +262,7 @@ void test("the panel's fallback writes the panel's one issue with its commit ran
 	assert.ok(body.includes(`compare/${"a".repeat(40)}...${"c".repeat(40)}`), body);
 	assert.match(body, /did not finish \(cancelled\)/u);
 	// With the panel's issue open, the fallback comments on it and opens no second issue.
-	const open = [{ number: 5, title: PANEL_TITLE, body: "" }];
+	const open = [{ number: 5, title: PANEL_TITLE, state: "open", body: "" }];
 	const writes = await panelFallback("failure", reporterDied, open);
 	assert.deepEqual(
 		writes.map((write) => [write.kind, write.input.issue_number]),

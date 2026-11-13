@@ -15,17 +15,19 @@ import { asArray, asRecord, asString } from "./lib/json.ts";
 
 const SHA = "c".repeat(40);
 const GREEN = "a".repeat(40);
+const MAIN = "refs/heads/main";
 const repo = { owner: "owner", repo: "repo" };
 
 interface Fixture {
-	caches?: { key: string; created_at: string }[];
-	open?: { number: number; title: string; body?: string }[];
-	comments?: { user: { login: string }; body: string }[];
+	caches?: { key: string; created_at: string; ref: string }[];
+	cacheError?: number;
+	issues?: { number: number; title: string; state: string; body?: string }[];
+	comments?: Record<number, { user: { login: string }; body: string }[]>;
 	artifacts?: object[];
 }
 
-/** A client over a fixed repository state that records each write. */
-function client({ caches = [], open = [], comments = [], artifacts = [] }: Fixture) {
+/** A client over a fixed repository state, which filters caches by ref as the REST API does, and records writes. */
+function client({ caches = [], cacheError, issues = [], comments = {}, artifacts = [] }: Fixture) {
 	const writes: { kind: string; input: Record<string, unknown> }[] = [];
 	const cacheQueries: Record<string, unknown>[] = [];
 	const route = (kind: string) => async (input: Record<string, unknown>) => {
@@ -36,12 +38,13 @@ function client({ caches = [], open = [], comments = [], artifacts = [] }: Fixtu
 	const listComments = route("listComments");
 	const listWorkflowRunArtifacts = route("listWorkflowRunArtifacts");
 	const github: GitHub = {
-		paginate: async (endpoint: unknown) => {
+		paginate: async (endpoint: unknown, input: Record<string, unknown>) => {
 			if (endpoint === listForRepo) {
-				return open.map((issue) => ({ body: "", ...issue }));
+				assert.equal(input.state, "all");
+				return issues.map((issue) => ({ body: "", ...issue }));
 			}
 			if (endpoint === listComments) {
-				return comments;
+				return comments[Number(input.issue_number)] ?? [];
 			}
 			assert.equal(endpoint, listWorkflowRunArtifacts);
 			return artifacts;
@@ -57,7 +60,13 @@ function client({ caches = [], open = [], comments = [], artifacts = [] }: Fixtu
 			actions: {
 				getActionsCacheList: async (input: Record<string, unknown>) => {
 					cacheQueries.push(input);
-					return { data: { actions_caches: caches } };
+					if (cacheError !== undefined) {
+						throw Object.assign(new Error("Service Unavailable"), { status: cacheError });
+					}
+					const matching = caches.filter(
+						(entry) => input.ref === undefined || entry.ref === input.ref,
+					);
+					return { data: { actions_caches: matching } };
 				},
 				listWorkflowRunArtifacts,
 			},
@@ -84,17 +93,26 @@ const night = (
 	artifactUrl,
 });
 
-void test("a red night takes its commit range from the newest last-green cache entry", async () => {
+const bodyOf = (write: { input: Record<string, unknown> } | undefined) =>
+	asString(write?.input.body, "body");
+
+void test("a red night takes its range from main's newest last-green entry, never a pull request's", async () => {
 	const { github, written, cacheQueries } = client({
 		caches: [
-			{ key: `${LAST_GREEN_PREFIX}98-${GREEN}`, created_at: "2026-11-18T03:50:00Z" },
-			{ key: `${LAST_GREEN_PREFIX}90-${"b".repeat(40)}`, created_at: "2026-11-10T03:50:00Z" },
+			// A labelled pull request could save a matching key under its merge ref; it is newer.
+			{
+				key: `${LAST_GREEN_PREFIX}120-${"e".repeat(40)}`,
+				created_at: "2026-11-19T10:00:00Z",
+				ref: "refs/pull/7/merge",
+			},
+			{ key: `${LAST_GREEN_PREFIX}98-${GREEN}`, created_at: "2026-11-18T03:50:00Z", ref: MAIN },
 		],
 	});
 	assert.equal(await reportNight(github, repo, night("failure", "failed")), "created");
 	assert.deepEqual(cacheQueries[0], {
 		...repo,
 		key: LAST_GREEN_PREFIX,
+		ref: MAIN,
 		sort: "created_at",
 		direction: "desc",
 		per_page: 10,
@@ -102,7 +120,8 @@ void test("a red night takes its commit range from the newest last-green cache e
 	const [created] = written();
 	assert.ok(created);
 	assert.equal(created.input.title, ISSUE_TITLE);
-	const body = asString(created.input.body, "body");
+	const body = bodyOf(created);
+	assert.match(body, /^<!-- run:99:1 -->/u);
 	assert.match(body, /fell below a floor/u);
 	assert.ok(
 		body.includes(`(2026-11-18): https://github.com/owner/repo/compare/${GREEN}...${SHA}`),
@@ -111,12 +130,14 @@ void test("a red night takes its commit range from the newest last-green cache e
 	assert.match(body, /https:\/\/example\.org\/artifact/u);
 });
 
-void test("without a last-green cache entry, the report says the range is unknown, never that no night passed", async () => {
+void test("without a last-green entry, the report says the range is unknown, never that no night passed", async () => {
 	const { github, written } = client({
-		caches: [{ key: `${LAST_GREEN_PREFIX}not-a-run`, created_at: "2026-11-18T03:50:00Z" }],
+		caches: [
+			{ key: `${LAST_GREEN_PREFIX}not-a-run`, created_at: "2026-11-18T03:50:00Z", ref: MAIN },
+		],
 	});
 	await reportNight(github, repo, night("cancelled", ""));
-	const body = asString(written()[0]?.input.body, "body");
+	const body = bodyOf(written()[0]);
 	assert.match(body, /did not finish \(cancelled\)/u);
 	assert.ok(
 		body.includes(
@@ -127,18 +148,28 @@ void test("without a last-green cache entry, the report says the range is unknow
 	assert.doesNotMatch(body, /No night has measured and passed/u);
 });
 
+void test("a failed cache lookup still posts the report and names the failure", async () => {
+	const { github, written } = client({ cacheError: 503 });
+	assert.equal(await reportNight(github, repo, night("failure", "failed")), "created");
+	assert.ok(
+		bodyOf(written()[0]).includes(
+			"Last measured green night unknown (cache lookup failed: HTTP 503); range from 2026-11-13 not computed.",
+		),
+	);
+});
+
 void test("the fallback finds the kept result on the run when it was not told it", async () => {
 	const { github, written } = client({ artifacts: [{ id: 5, name: "feedback-eval-panel" }] });
 	await reportNight(github, repo, night("timed_out", "", ""));
 	assert.match(
-		asString(written()[0]?.input.body, "body"),
+		bodyOf(written()[0]),
 		/Result: https:\/\/github\.com\/owner\/repo\/actions\/runs\/99\/artifacts\/5/u,
 	);
 });
 
 void test("a red night comments on the open issue, and a replay of the same attempt adds nothing", async () => {
-	const open = [{ number: 7, title: ISSUE_TITLE }];
-	const first = client({ open });
+	const issues = [{ number: 7, title: ISSUE_TITLE, state: "open" }];
+	const first = client({ issues });
 	assert.equal(
 		await reportNight(first.github, repo, night("failure", "ceiling-reached")),
 		"commented",
@@ -146,59 +177,90 @@ void test("a red night comments on the open issue, and a replay of the same atte
 	const [comment] = first.written();
 	assert.ok(comment);
 	assert.equal(comment.input.issue_number, 7);
-	const body = asString(comment.input.body, "body");
-	assert.match(body, /^<!-- run:99:1 -->/u);
-	assert.match(body, /stopped at its call ceiling/u);
+	assert.match(bodyOf(comment), /stopped at its call ceiling/u);
 
-	const replay = client({ open, comments: [{ user: { login: "github-actions[bot]" }, body }] });
+	const told = { 7: [{ user: { login: "github-actions[bot]" }, body: bodyOf(comment) }] };
+	const replay = client({ issues, comments: told });
 	assert.equal(
 		await reportNight(replay.github, repo, night("failure", "ceiling-reached")),
 		"unchanged",
 	);
 	assert.deepEqual(replay.written(), []);
 
-	const quoted = client({ open, comments: [{ user: { login: "contributor" }, body }] });
+	const quoted = client({
+		issues,
+		comments: { 7: [{ user: { login: "contributor" }, body: bodyOf(comment) }] },
+	});
 	assert.equal(
 		await reportNight(quoted.github, repo, night("failure", "ceiling-reached")),
 		"commented",
 	);
 });
 
-void test("a night that measured and passed closes the open issue", async () => {
-	const { github, written } = client({ open: [{ number: 7, title: ISSUE_TITLE }] });
+void test("a replay of an attempt that a closed issue already holds opens no new issue", async () => {
+	const reported = `<!-- run:99:1 -->\n@hephaestus-build/maintainer: the nightly feedback eval panel fell below a floor.`;
+	const { github, written } = client({
+		issues: [{ number: 3, title: ISSUE_TITLE, state: "closed", body: reported }],
+	});
+	assert.equal(await reportNight(github, repo, night("failure", "failed")), "unchanged");
+	assert.deepEqual(written(), []);
+});
+
+void test("a night that measured and passed closes the open issue with a marked comment, once", async () => {
+	const issues = [{ number: 7, title: ISSUE_TITLE, state: "open" }];
+	const { github, written } = client({ issues });
 	assert.equal(await reportNight(github, repo, night("success", "passed")), "closed");
+	const [recovered, close] = written();
+	assert.equal(recovered?.kind, "comment");
+	assert.match(bodyOf(recovered), /^<!-- run:99:1 -->\nThe panel measured and passed again/u);
+	assert.deepEqual(close?.input.state, "closed");
+
+	// A replay after a failed close finds its own comment and only closes.
+	const replay = client({
+		issues,
+		comments: { 7: [{ user: { login: "github-actions[bot]" }, body: bodyOf(recovered) }] },
+	});
+	assert.equal(await reportNight(replay.github, repo, night("success", "passed")), "closed");
 	assert.deepEqual(
-		written().map((write) => [write.kind, write.input.state ?? null]),
-		[
-			["comment", null],
-			["update", "closed"],
-		],
+		replay.written().map((write) => write.kind),
+		["update"],
 	);
+
 	const quiet = client({});
 	assert.equal(await reportNight(quiet.github, repo, night("success", "passed")), "unchanged");
 	assert.deepEqual(quiet.written(), []);
 });
 
-void test("only a passed scheduled panel saves the last-green entry, under the prefix the report reads", async () => {
+void test("only a scheduled night on main whose whole panel job succeeded saves the last-green entry", async () => {
 	const workflow = asRecord(
 		parse(await readFile(".github/workflows/feedback-eval-panel.yml", "utf8")),
 		"panel",
 	);
 	const jobs = asRecord(workflow.jobs, "jobs");
-	const steps = asArray(asRecord(jobs.panel, "panel").steps, "steps").map((step) =>
+	const panelSteps = asArray(asRecord(jobs.panel, "panel").steps, "steps").map((step) =>
 		asRecord(step, "step"),
 	);
-	const gate = steps.findIndex((step) => step.name === "Compose the panel");
-	const save = steps.findIndex((step) => step.name === "Keep the measured green night");
-	assert.ok(gate !== -1 && save > gate);
-	const saved = steps[save];
-	assert.ok(saved);
-	// No status function, so the step runs only after the panel step passed.
-	assert.equal(saved.if, "github.event_name == 'schedule'");
+	assert.ok(
+		panelSteps.every(
+			(step) => typeof step.uses !== "string" || !step.uses.startsWith("actions/cache"),
+		),
+		"the panel job saves no state: a later failing step would leave a failed night as green",
+	);
+	const record = asRecord(jobs["record-green"], "record-green");
+	assert.deepEqual(record.needs, ["panel"]);
 	assert.equal(
-		asRecord(saved.with, "with").key,
+		record.if,
+		"needs.panel.result == 'success' && github.event_name == 'schedule' && github.ref == 'refs/heads/main'",
+	);
+	const save = asArray(record.steps, "steps")
+		.map((step) => asRecord(step, "step"))
+		.find((step) => typeof step.uses === "string" && step.uses.startsWith("actions/cache/save@"));
+	assert.ok(save);
+	assert.equal(
+		asRecord(save.with, "with").key,
 		`${LAST_GREEN_PREFIX}\${{ github.run_id }}-\${{ github.sha }}`,
 	);
+
 	const report = asArray(asRecord(jobs.report, "report").steps, "steps").map((step) =>
 		asRecord(step, "step"),
 	);
