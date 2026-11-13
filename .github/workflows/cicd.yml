@@ -1313,7 +1313,9 @@ jobs:
         Release-preflight,
         Database-upgrade,
       ]
-    if: always()
+    # A superseded run must stop with GitHub's native cancellation. Merge groups still evaluate
+    # native worker failures after the isolated fail-fast jobs cancel their run.
+    if: ${{ !cancelled() || github.event_name == 'merge_group' }}
     steps:
       - name: Evaluate CI results
         id: evaluate

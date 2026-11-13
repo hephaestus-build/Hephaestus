@@ -1,0 +1,104 @@
+{
+	"event": "pull_request",
+	"head_sha": "f400451d68a535bdd62edf31f83b606047776e79",
+	"cancelled_run": 43514613797,
+	"replacement_run": 43515828718,
+	"conclusion": "cancelled",
+	"needs": {
+		"detect-changes": {
+			"result": "success"
+		},
+		"vulnerability-database": {
+			"result": "skipped"
+		},
+		"workflow-lint": {
+			"result": "skipped"
+		},
+		"Quality": {
+			"result": "cancelled"
+		},
+		"server-package": {
+			"result": "success"
+		},
+		"Build": {
+			"result": "cancelled"
+		},
+		"Browser-tests": {
+			"result": "skipped"
+		},
+		"upstream-images": {
+			"result": "skipped"
+		},
+		"Security": {
+			"result": "success"
+		},
+		"Test": {
+			"result": "cancelled"
+		},
+		"Changesets": {
+			"result": "success"
+		},
+		"Docker": {
+			"result": "skipped"
+		},
+		"Kubernetes": {
+			"result": "skipped"
+		},
+		"Release-preflight": {
+			"result": "skipped"
+		},
+		"Database-upgrade": {
+			"result": "skipped"
+		}
+	},
+	"jobs": [
+		{
+			"id": 132195886129,
+			"name": "Server tests / Unit",
+			"conclusion": "cancelled",
+			"steps": [
+				{
+					"name": "Run the tier's tests",
+					"conclusion": "cancelled"
+				},
+				{
+					"name": "Upload test results",
+					"conclusion": "failure"
+				}
+			]
+		},
+		{
+			"id": 132195886294,
+			"name": "Server tests / Architecture",
+			"conclusion": "cancelled",
+			"steps": [
+				{
+					"name": "Run the tier's tests",
+					"conclusion": "cancelled"
+				},
+				{
+					"name": "Upload test results",
+					"conclusion": "failure"
+				}
+			]
+		},
+		{
+			"id": 132197548435,
+			"name": "CI Status Gate",
+			"conclusion": "failure",
+			"steps": [
+				{
+					"name": "Evaluate CI results",
+					"conclusion": "failure"
+				}
+			]
+		}
+	],
+	"cancellation_witness": {
+		"id": 132197732447,
+		"name": "Report unsuccessful merge group",
+		"conclusion": "cancelled",
+		"started_at": "2026-11-13T22:02:34Z",
+		"completed_at": "2026-11-13T22:02:33Z"
+	}
+}

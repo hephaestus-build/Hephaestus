@@ -319,6 +319,14 @@ Read the `Changes` log for filters matched by the diff.
 A superseded run on the same commit does not replace the current result.
 The watcher reports cancellations separately from failures.
 
+When a new event supersedes a pull-request run, its gate uses GitHub's native cancellation.
+It does not evaluate cancelled prerequisites as a failed validation.
+
+Test report publishers stop on cancellation.
+A passing job must produce test reports. A job that already failed can lack them.
+The test command still owns its native failure result.
+Merge-group gates still evaluate after a fail-fast cancel, so a real worker failure blocks the queue.
+
 A cancelled required check needs action.
 On a base with required checks, an optional cancellation does not block readiness.
 On a base without required checks, every reported check must pass.
