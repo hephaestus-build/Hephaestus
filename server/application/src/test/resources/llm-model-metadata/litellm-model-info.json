@@ -1,0 +1,19 @@
+{
+  "data": [
+    {
+      "model_name": "team-gpt",
+      "litellm_params": {"model": "azure/gpt-deployment", "api_base": "https://example.openai.azure.com/"},
+      "model_info": {"id": "a1", "mode": "chat", "max_tokens": 16384, "max_input_tokens": 128000, "max_output_tokens": 16384}
+    },
+    {
+      "model_name": "team-gpt",
+      "litellm_params": {"model": "openai/gpt-deployment"},
+      "model_info": {"id": "a2", "mode": "chat", "max_tokens": 32768, "max_input_tokens": 200000, "max_output_tokens": 32768}
+    },
+    {
+      "model_name": "self-hosted",
+      "litellm_params": {"model": "hosted_vllm/qwen"},
+      "model_info": {"id": "b1", "mode": "chat", "max_tokens": null, "max_input_tokens": null, "max_output_tokens": null}
+    }
+  ]
+}

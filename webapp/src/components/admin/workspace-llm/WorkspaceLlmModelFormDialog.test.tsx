@@ -72,6 +72,7 @@ describe("WorkspaceLlmModelFormDialog", () => {
 			reasoningEffort: "HIGH",
 			pricingMode: "UNPRICED",
 			currency: "USD",
+			limits: { contextWindow: 128000, maxOutputTokens: 16384, bounded: true },
 			createdAt: new Date("2026-07-01T00:00:00Z"),
 		};
 		render(
@@ -111,6 +112,7 @@ describe("WorkspaceLlmModelFormDialog", () => {
 			reasoningEffort: "MEDIUM",
 			pricingMode: "UNPRICED",
 			currency: "USD",
+			limits: { contextWindow: 128000, maxOutputTokens: 16384, bounded: true },
 			createdAt: new Date("2026-07-01T00:00:00Z"),
 		};
 		render(
@@ -144,6 +146,7 @@ describe("WorkspaceLlmModelFormDialog", () => {
 			per1mInputUsd: 1,
 			per1mOutputUsd: 2,
 			currency: "USD",
+			limits: { contextWindow: 128000, maxOutputTokens: 16384, bounded: true },
 			createdAt: new Date("2026-07-01T00:00:00Z"),
 		};
 		render(
@@ -182,6 +185,7 @@ describe("WorkspaceLlmModelFormDialog", () => {
 			enabled: false,
 			pricingMode: "UNPRICED",
 			currency: "USD",
+			limits: { contextWindow: 128000, maxOutputTokens: 16384, bounded: true },
 			createdAt: new Date("2026-07-01T00:00:00Z"),
 		};
 		render(

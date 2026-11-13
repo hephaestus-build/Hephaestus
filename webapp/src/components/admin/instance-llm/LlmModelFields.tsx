@@ -1,6 +1,7 @@
 import { AlertTriangle, ChevronDown, ChevronsUpDownIcon } from "lucide-react";
 import { useId, useState } from "react";
 
+import type { LlmModelLimits } from "@/api/types.gen";
 import { FactList } from "@/components/auth/FactList";
 import { definitionFor, type StatusDefs, statusValues } from "@/components/common/status-def";
 import {
@@ -235,6 +236,32 @@ function FactChoice<TValue extends string>({
 	);
 }
 
+const formatTokens = (count: number) => count.toLocaleString("en-US");
+
+/** Where a limit's value comes from, and what the field does to it. */
+function limitHint(
+	value: number | undefined,
+	source: LlmModelLimits["contextWindowSource"],
+): string {
+	if (value === undefined || source === undefined) {
+		return "Unknown. Test the connection to read it from the provider, or enter it.";
+	}
+	switch (source) {
+		case "ADMIN": {
+			return "You set this value. Clear it to use the provider's value, if it reports one.";
+		}
+		case "DISCOVERED": {
+			return `The provider reports ${formatTokens(value)}. Enter a value to override it.`;
+		}
+		case "CATALOG": {
+			return `The provider's documentation states ${formatTokens(value)}. Enter a value to override it.`;
+		}
+		case "DERIVED": {
+			return `${formatTokens(value)}: a quarter of the context window, at most 16,384. Enter a value to override it.`;
+		}
+	}
+}
+
 export interface LlmModelFieldsProps {
 	audience: LlmAudience;
 	idPrefix: string;
@@ -246,6 +273,8 @@ export interface LlmModelFieldsProps {
 	onChange: (value: LlmModelFieldsValue) => void;
 	errors: FieldErrors<LlmModelFormField>;
 	upstreamIdSuggestions?: string[];
+	/** The limits the saved model runs with, each with its source; absent while the model is created. */
+	limits?: LlmModelLimits;
 }
 
 export function LlmModelFields({
@@ -258,6 +287,7 @@ export function LlmModelFields({
 	onChange,
 	errors,
 	upstreamIdSuggestions,
+	limits,
 }: LlmModelFieldsProps) {
 	const copy = COPY[audience];
 	const update = (patch: Partial<LlmModelFieldsValue>) => onChange({ ...value, ...patch });
@@ -282,6 +312,10 @@ export function LlmModelFields({
 	const [showAdvanced, setShowAdvanced] = useState(false);
 	const advancedHasError =
 		errors.contextWindow !== undefined || errors.maxOutputTokens !== undefined;
+	// A model that cannot run shows why, and the two fields that fix it.
+	const unbounded = limits !== undefined && !limits.bounded;
+	const contextWindowHintId = `${idPrefix}-context-window-hint`;
+	const maxOutputHintId = `${idPrefix}-max-output-hint`;
 
 	return (
 		<>
@@ -490,7 +524,22 @@ export function LlmModelFields({
 				</div>
 			</FieldSet>
 
-			<Collapsible open={showAdvanced || advancedHasError} onOpenChange={setShowAdvanced}>
+			{unbounded && (
+				<Alert variant="warning">
+					<AlertTriangle aria-hidden />
+					<AlertTitle>This model cannot run yet</AlertTitle>
+					<AlertDescription>
+						Hephaestus does not know its output limit, so it refuses its calls. Set Max output
+						tokens or Context window under Limits and capabilities, or test the connection to read
+						them from the provider.
+					</AlertDescription>
+				</Alert>
+			)}
+
+			<Collapsible
+				open={showAdvanced || advancedHasError || unbounded}
+				onOpenChange={setShowAdvanced}
+			>
 				<CollapsibleTrigger
 					render={
 						<Button type="button" variant="ghost" size="sm" className="group/adv -ml-2">
@@ -516,12 +565,27 @@ export function LlmModelFields({
 									min={0}
 									step={1}
 									value={value.contextWindow}
+									placeholder={
+										limits?.contextWindowSource && limits.contextWindowSource !== "ADMIN"
+											? String(limits.contextWindow)
+											: undefined
+									}
 									onChange={(e) => update({ contextWindow: e.target.value })}
 									aria-invalid={Boolean(errors.contextWindow)}
 									aria-describedby={
-										hasText(errors.contextWindow) ? contextWindowErrorId : undefined
+										[
+											limits ? contextWindowHintId : "",
+											hasText(errors.contextWindow) ? contextWindowErrorId : "",
+										]
+											.filter(Boolean)
+											.join(" ") || undefined
 									}
 								/>
+								{limits && (
+									<FieldDescription id={contextWindowHintId}>
+										{limitHint(limits.contextWindow, limits.contextWindowSource)}
+									</FieldDescription>
+								)}
 								{hasText(errors.contextWindow) && (
 									<FieldError id={contextWindowErrorId}>{errors.contextWindow}</FieldError>
 								)}
@@ -537,12 +601,27 @@ export function LlmModelFields({
 									min={0}
 									step={1}
 									value={value.maxOutputTokens}
+									placeholder={
+										limits?.maxOutputTokensSource && limits.maxOutputTokensSource !== "ADMIN"
+											? String(limits.maxOutputTokens)
+											: undefined
+									}
 									onChange={(e) => update({ maxOutputTokens: e.target.value })}
 									aria-invalid={Boolean(errors.maxOutputTokens)}
 									aria-describedby={
-										hasText(errors.maxOutputTokens) ? maxOutputTokensErrorId : undefined
+										[
+											limits ? maxOutputHintId : "",
+											hasText(errors.maxOutputTokens) ? maxOutputTokensErrorId : "",
+										]
+											.filter(Boolean)
+											.join(" ") || undefined
 									}
 								/>
+								{limits && (
+									<FieldDescription id={maxOutputHintId}>
+										{limitHint(limits.maxOutputTokens, limits.maxOutputTokensSource)}
+									</FieldDescription>
+								)}
 								{hasText(errors.maxOutputTokens) && (
 									<FieldError id={maxOutputTokensErrorId}>{errors.maxOutputTokens}</FieldError>
 								)}

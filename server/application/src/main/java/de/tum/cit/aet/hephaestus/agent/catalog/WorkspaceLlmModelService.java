@@ -138,12 +138,10 @@ public class WorkspaceLlmModelService {
         if (request.displayName() != null) {
             model.setDisplayName(request.displayName());
         }
-        if (request.contextWindow() != null) {
-            model.setContextWindow(request.contextWindow());
-        }
-        if (request.maxOutputTokens() != null) {
-            model.setMaxOutputTokens(request.maxOutputTokens());
-        }
+        if (Boolean.TRUE.equals(request.clearContextWindow())) model.setContextWindow(null);
+        else if (request.contextWindow() != null) model.setContextWindow(request.contextWindow());
+        if (Boolean.TRUE.equals(request.clearMaxOutputTokens())) model.setMaxOutputTokens(null);
+        else if (request.maxOutputTokens() != null) model.setMaxOutputTokens(request.maxOutputTokens());
         if (Boolean.TRUE.equals(request.clearReasoningEffort())) {
             model.setReasoningEffort(null);
         } else if (request.reasoningEffort() != null) {

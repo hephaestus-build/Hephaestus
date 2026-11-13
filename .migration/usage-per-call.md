@@ -4,11 +4,13 @@ The usage ledger `llm_usage_event` gets one row for each model call.
 The measurements of each review attempt and conversation attempt move into it, and their tables are dropped.
 The previous release cannot write a model call's usage to the new ledger.
 
-1. Make sure that each chat model has **Max output tokens** or **Context window**.
-   After the upgrade, the proxy refuses calls to a chat model without either.
-   It clamps the output limit of each request to this value.
+1. After the upgrade, the proxy refuses calls to a chat model without an output limit.
+   When a server starts, it reads missing limits from each model's provider.
+   After the upgrade, check that no model in **AI providers** is marked **Limits missing**.
+   For such a model, set **Max output tokens** or **Context window**.
+   The proxy clamps the output limit of each request to the model's limit.
    An OpenAI-compatible server that ignores the output-limit field can write past the upper bound of a call.
-   See [Output limit](https://docs.hephaestus.build/admin/ai-providers#output-limit).
+   See [Model limits](https://docs.hephaestus.build/admin/ai-providers#model-limits).
 2. Stop the server, worker, and webhook roles.
 3. Back up the database.
 4. Upgrade. The migration does these steps:

@@ -352,6 +352,11 @@ class LlmProxyService {
             try {
                 outputBound = OutputLimit.bound(protocol, routing.outputLimit(), objectMapper.readTree(body));
             } catch (OutputLimit.Refused unbounded) {
+                if (routing.outputLimit() == null)
+                    log.warn(
+                            "Model call refused: the model has no output limit, scope={}, modelId={}",
+                            routing.connectionScope(),
+                            routing.modelId());
                 return ResponseEntity.badRequest().body(unbounded.getMessage());
             } catch (JacksonException unreadable) {
                 return ResponseEntity.badRequest().body("Request body must be valid JSON");

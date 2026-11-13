@@ -47,6 +47,7 @@ public class LlmConnectionAdminController {
     private final LlmConnectionService connectionService;
     private final PublicApiUrls publicApiUrls;
     private final LlmConnectionProbeService probeService;
+    private final LlmModelLimitDiscovery limitDiscovery;
 
     @GetMapping
     @Operation(summary = "List LLM connections", operationId = "adminListLlmConnections")
@@ -108,9 +109,10 @@ public class LlmConnectionAdminController {
     @RecentSignInExempt(reason = "tests a stored credential; stores no configuration")
     @PostMapping("/{id}/probe")
     @Operation(summary = "Test a stored connection and fetch its models", operationId = "adminProbeLlmConnection")
-    @AuditExempt(reason = "tests a stored credential; stores no configuration")
+    @AuditExempt(
+            reason = "tests a stored credential; stores only the limits the provider reports, never an admin's value")
     public ResponseEntity<LlmProbeResultDTO> probe(@PathVariable Long id) {
-        return ResponseEntity.ok(probeService.probeStored(id));
+        return ResponseEntity.ok(limitDiscovery.probeInstanceConnection(id));
     }
 
     @RecentSignInExempt(reason = "tests a draft credential the caller already holds; stores no configuration")

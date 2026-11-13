@@ -38,7 +38,10 @@ function readiness(model: WorkspaceLlmModel, connectionEnabled: boolean): ModelR
 	if (!connectionEnabled) {
 		return "CONNECTION_OFF";
 	}
-	return model.enabled ? null : "OFF";
+	if (!model.enabled) {
+		return "OFF";
+	}
+	return model.limits.bounded ? null : "LIMITS_MISSING";
 }
 
 export function WorkspaceLlmModelsTable({

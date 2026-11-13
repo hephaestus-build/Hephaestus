@@ -37,11 +37,14 @@ public record LlmModelDTO(
         @Nullable @Schema(description = "Probed forced_tool_choice capability; null until established")
         Boolean forcedToolChoice,
 
-        @Nullable @Schema(description = "Context window in tokens")
+        @Nullable @Schema(description = "Context window an admin set; null leaves it to the provider's metadata")
         Integer contextWindow,
 
-        @Nullable @Schema(description = "Maximum output tokens")
+        @Nullable @Schema(description = "Maximum output tokens an admin set; null leaves it to the provider's metadata")
         Integer maxOutputTokens,
+
+        @NonNull @Schema(description = "Token limits the model runs with, each with its source")
+        LlmModelLimitsDTO limits,
 
         @Nullable
         @Schema(
@@ -89,6 +92,7 @@ public record LlmModelDTO(
                 model.getForcedToolChoice(),
                 model.getContextWindow(),
                 model.getMaxOutputTokens(),
+                LlmModelLimitsDTO.from(model.limits()),
                 model.getReasoningEffort(),
                 model.getDataHandling().getOperatedBy(),
                 model.getDataHandling().getNote(),

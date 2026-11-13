@@ -568,10 +568,15 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         }
     }
 
+    /**
+     * The model's output limit is 100 tokens in each case: an admin's value; a quarter of the context window that the
+     * provider reported, when no one set a maximum output; and an admin's value over a larger one the provider reported.
+     * The proxy writes it into the call and holds the call's bound with it.
+     */
     @ParameterizedTest
-    @CsvSource({"200,100", "429,100", "200,0"})
-    void shouldDraftThroughTheRealInstanceResolverAndLedgerAndSettleTheAction(int providerStatus, int dailyLimit)
-            throws Exception {
+    @CsvSource({"200,100,ADMIN", "429,100,ADMIN", "200,0,ADMIN", "200,100,DISCOVERED", "200,100,OVERRIDE"})
+    void shouldDraftThroughTheRealInstanceResolverAndLedgerAndSettleTheAction(
+            int providerStatus, int dailyLimit, String limits) throws Exception {
         try (var upstream = new MockWebServer()) {
             upstream.start();
             upstream.enqueue(new MockResponse.Builder()
@@ -588,8 +593,20 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             connection = connectionRepository.saveAndFlush(connection);
             var model = modelRepository.saveAndFlush(LlmCatalogTestFixtures.model(
                     connection, "draft-live-" + UUID.randomUUID(), "draft-live", ModelVisibility.GRANTED, true));
-            model.setMaxOutputTokens(100);
-            modelRepository.saveAndFlush(model);
+            if (!limits.equals("DISCOVERED")) {
+                model.setMaxOutputTokens(100);
+                model = modelRepository.saveAndFlush(model);
+            }
+            if (!limits.equals("ADMIN")) {
+                long connectionId = connection.getId();
+                String upstreamId = model.getUpstreamModelId();
+                Integer discoveredOutput = limits.equals("OVERRIDE") ? 5_000 : null;
+                transactionTemplate.executeWithoutResult(
+                        tx -> modelRepository.recordDiscoveredLimits(connectionId, upstreamId, 400, discoveredOutput));
+                var stored = modelRepository.findById(model.getId()).orElseThrow();
+                assertThat(stored.getDiscoveredContextWindow()).isEqualTo(400);
+                assertThat(stored.getMaxOutputTokens()).isEqualTo(limits.equals("OVERRIDE") ? 100 : null);
+            }
             var price = new LlmModelPrice();
             price.setModel(model);
             price.setPricingMode(PricingMode.PRICED);

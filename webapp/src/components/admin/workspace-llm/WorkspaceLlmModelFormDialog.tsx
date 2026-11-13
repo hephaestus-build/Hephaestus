@@ -125,6 +125,9 @@ function WorkspaceLlmModelFormDialogContent({
 			onUpdate(editing.id, {
 				...shared,
 				clearBrand: fields.brand === undefined,
+				// A blank limit field hands the limit back to the provider's metadata.
+				clearContextWindow: !fields.contextWindow.trim(),
+				clearMaxOutputTokens: !fields.maxOutputTokens.trim(),
 				clearDataHandling: fields.operatedBy === undefined,
 				...reasoningEffortUpdateOf(fields.reasoningEffort),
 			} satisfies UpdateWorkspaceLlmModelRequest);
@@ -161,6 +164,7 @@ function WorkspaceLlmModelFormDialogContent({
 						value={fields}
 						onChange={setFields}
 						errors={errors}
+						limits={editing?.limits}
 					/>
 					{isEdit && capabilities && (
 						<>

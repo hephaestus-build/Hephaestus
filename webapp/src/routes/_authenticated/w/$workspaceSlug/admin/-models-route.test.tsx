@@ -905,6 +905,7 @@ function ownModel(id: number, displayName: string): Wire<WorkspaceLlmModel> {
 		enabled: true,
 		pricingMode: "NO_CHARGE",
 		currency: "USD",
+		limits: { contextWindow: 128000, maxOutputTokens: 16384, bounded: true },
 		createdAt: "2026-07-01T00:00:00Z",
 	};
 }

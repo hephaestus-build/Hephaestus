@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794575015072-1" author="hephaestus">
+        <addColumn tableName="llm_model">
+            <column name="discovered_context_window" type="INTEGER"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1794575015072-2" author="hephaestus">
+        <addColumn tableName="workspace_llm_model">
+            <column name="discovered_context_window" type="INTEGER"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1794575015072-3" author="hephaestus">
+        <addColumn tableName="llm_model">
+            <column name="discovered_max_output_tokens" type="INTEGER"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1794575015072-4" author="hephaestus">
+        <addColumn tableName="workspace_llm_model">
+            <column name="discovered_max_output_tokens" type="INTEGER"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

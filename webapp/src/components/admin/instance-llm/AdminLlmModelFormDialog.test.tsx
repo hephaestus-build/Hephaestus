@@ -59,6 +59,7 @@ describe("AdminLlmModelFormDialog", () => {
 			reasoningEffort: "MEDIUM",
 			visibility: "PUBLIC",
 			grantedWorkspaceIds: [],
+			limits: { contextWindow: 128000, maxOutputTokens: 16384, bounded: true },
 			createdAt: new Date("2026-07-01T00:00:00Z"),
 		};
 		render(
@@ -178,6 +179,7 @@ describe("AdminLlmModelFormDialog", () => {
 				currency: "USD",
 				effectiveFrom: new Date("2026-07-01T00:00:00Z"),
 			},
+			limits: { contextWindow: 128000, maxOutputTokens: 16384, bounded: true },
 			createdAt: new Date("2026-07-01T00:00:00Z"),
 		};
 		render(

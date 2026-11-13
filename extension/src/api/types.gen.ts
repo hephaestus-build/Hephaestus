@@ -2679,7 +2679,7 @@ export type LlmModel = {
 	 */
 	connectionId: number;
 	/**
-	 * Context window in tokens
+	 * Context window an admin set; null leaves it to the provider's metadata
 	 */
 	contextWindow?: number;
 	/**
@@ -2719,7 +2719,11 @@ export type LlmModel = {
 	 */
 	id: number;
 	/**
-	 * Maximum output tokens
+	 * Token limits the model runs with, each with its source
+	 */
+	limits: LlmModelLimits;
+	/**
+	 * Maximum output tokens an admin set; null leaves it to the provider's metadata
 	 */
 	maxOutputTokens?: number;
 	/**
@@ -2756,6 +2760,32 @@ export type LlmModelCapabilities = {
 	 * forced_tool_choice; null when the probe could not establish support
 	 */
 	forcedToolChoice?: boolean;
+};
+
+/**
+ * Token limits the model runs with, each with where its value comes from
+ */
+export type LlmModelLimits = {
+	/**
+	 * Whether calls can run: false until an admin sets a maximum output or a context window, or the provider reports one
+	 */
+	bounded: boolean;
+	/**
+	 * Context window in tokens; null when unknown
+	 */
+	contextWindow?: number;
+	/**
+	 * Where the context window comes from; null when unknown
+	 */
+	contextWindowSource?: "ADMIN" | "DISCOVERED" | "CATALOG" | "DERIVED";
+	/**
+	 * Maximum output tokens of one call; null when unknown
+	 */
+	maxOutputTokens?: number;
+	/**
+	 * Where the maximum output comes from; null when unknown
+	 */
+	maxOutputTokensSource?: "ADMIN" | "DISCOVERED" | "CATALOG" | "DERIVED";
 };
 
 /**
@@ -6920,9 +6950,17 @@ export type UpdateLlmModelRequest = {
 	 */
 	clearBrand?: boolean;
 	/**
+	 * True clears the admin's context window, so the provider's value applies
+	 */
+	clearContextWindow?: boolean;
+	/**
 	 * Clear the data-handling declaration, so the model is undeclared
 	 */
 	clearDataHandling?: boolean;
+	/**
+	 * True clears the admin's maximum output, so the provider's value applies
+	 */
+	clearMaxOutputTokens?: boolean;
 	/**
 	 * True clears the reasoning effort, so the provider's own default applies
 	 */
@@ -7215,9 +7253,17 @@ export type UpdateWorkspaceLlmModelRequest = {
 	 */
 	clearBrand?: boolean;
 	/**
+	 * True clears the admin's context window, so the provider's value applies
+	 */
+	clearContextWindow?: boolean;
+	/**
 	 * Clear the data-handling declaration, so the model is undeclared
 	 */
 	clearDataHandling?: boolean;
+	/**
+	 * True clears the admin's maximum output, so the provider's value applies
+	 */
+	clearMaxOutputTokens?: boolean;
 	/**
 	 * True clears the reasoning effort, so the provider's own default applies
 	 */
@@ -7904,7 +7950,7 @@ export type WorkspaceLlmModel = {
 	 */
 	connectionId: number;
 	/**
-	 * Context window in tokens
+	 * Context window an admin set; null leaves it to the provider's metadata
 	 */
 	contextWindow?: number;
 	/**
@@ -7940,7 +7986,11 @@ export type WorkspaceLlmModel = {
 	 */
 	id: number;
 	/**
-	 * Maximum output tokens
+	 * Token limits the model runs with, each with its source
+	 */
+	limits: LlmModelLimits;
+	/**
+	 * Maximum output tokens an admin set; null leaves it to the provider's metadata
 	 */
 	maxOutputTokens?: number;
 	/**

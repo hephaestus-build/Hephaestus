@@ -53,6 +53,9 @@ function readiness(model: LlmModel, connectionEnabled: boolean): ModelReadiness 
 	if (!model.enabled) {
 		return "OFF";
 	}
+	if (!model.limits.bounded) {
+		return "LIMITS_MISSING";
+	}
 	if (model.visibility === "GRANTED" && model.grantedWorkspaceIds.length === 0) {
 		return "NO_WORKSPACE_ACCESS";
 	}

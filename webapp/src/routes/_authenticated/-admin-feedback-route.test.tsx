@@ -88,6 +88,7 @@ const draftingModel = {
 	connectionId: 1,
 	createdAt: "2026-09-01T09:00:00.000Z",
 	dataHandlingTier: "IN_HOUSE",
+	limits: { contextWindow: 128000, maxOutputTokens: 16384, bounded: true },
 	enabled: true,
 	grantedWorkspaceIds: [],
 	upstreamModelId: "drafting-1",

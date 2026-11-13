@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.config;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.catalog.ModelLimits;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
@@ -152,11 +153,9 @@ public class AgentBindingService {
     private static void requireModelFitsHeph(WorkspaceAgentBinding binding) {
         LlmModel instance = binding.getInstanceModel();
         WorkspaceLlmModel own = binding.getWorkspaceModel();
-        Optional<String> tooSmall = instance != null
-                ? AgentBindingLimits.tooSmallForHeph(instance.getContextWindow(), instance.getMaxOutputTokens())
-                : own != null
-                        ? AgentBindingLimits.tooSmallForHeph(own.getContextWindow(), own.getMaxOutputTokens())
-                        : Optional.empty();
+        ModelLimits limits = instance != null ? instance.limits() : own != null ? own.limits() : ModelLimits.NONE;
+        Optional<String> tooSmall =
+                AgentBindingLimits.tooSmallForHeph(limits.contextWindow(), limits.maxOutputTokens());
         tooSmall.ifPresent(reason -> {
             throw new IllegalArgumentException(reason);
         });

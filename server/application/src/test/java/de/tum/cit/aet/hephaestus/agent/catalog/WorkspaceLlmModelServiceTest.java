@@ -285,6 +285,8 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
                     null,
                     null,
                     null,
+                    null,
+                    null,
                     null);
 
             WorkspaceLlmModel result = modelService.update(workspaceContext, 7L, request);
@@ -324,6 +326,8 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
                             null,
                             null,
                             null,
+                            null,
+                            null,
                             null));
             assertThat(renamed.getDataHandlingTier()).isEqualTo(DataHandlingTier.CLOUD);
             assertThat(renamed.getDataHandling().getNote()).isEqualTo("EU");
@@ -333,7 +337,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
                     7L,
                     new UpdateWorkspaceLlmModelRequestDTO(
                             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                            null, true));
+                            null, true, null, null));
             assertThat(cleared.getDataHandlingTier()).isEqualTo(DataHandlingTier.UNDECLARED);
             assertThat(cleared.getDataHandling().getNote()).isNull();
         }
@@ -353,7 +357,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
                     7L,
                     new UpdateWorkspaceLlmModelRequestDTO(
                             "Renamed", null, null, null, null, null, null, null, null, null, null, null, null, null,
-                            null, null, null));
+                            null, null, null, null, null));
             assertThat(existing.getBrand()).isEqualTo(AiModelBrand.QWEN);
 
             modelService.update(
@@ -361,7 +365,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
                     7L,
                     new UpdateWorkspaceLlmModelRequestDTO(
                             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                            true, null));
+                            true, null, null, null));
             assertThat(existing.getBrand()).isNull();
         }
     }
@@ -409,7 +413,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
 
             UpdateWorkspaceLlmModelRequestDTO request = new UpdateWorkspaceLlmModelRequestDTO(
                     "Renamed", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                    null);
+                    null, null, null);
 
             WorkspaceLlmModel result = modelService.update(workspaceContext, 7L, request);
 

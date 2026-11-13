@@ -43,8 +43,9 @@ final class OutputLimit {
         return switch (protocol) {
             case ANTHROPIC_MESSAGES, OPENAI_COMPLETIONS, OPENAI_RESPONSES -> {
                 if (limit == null)
-                    throw new Refused("This model has no output limit. An admin must set its maximum output tokens"
-                            + " or its context window.");
+                    throw new Refused("This model has no output limit. In AI providers, an admin sets its Max output"
+                            + " tokens or Context window, or tests its connection so Hephaestus reads them from the"
+                            + " provider.");
                 // The same rule as the forwarded body, on a copy: the bound is the limit that the provider receives.
                 long effective =
                         request instanceof ObjectNode object ? clamp(object.deepCopy(), protocol, limit) : limit;

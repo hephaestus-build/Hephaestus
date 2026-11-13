@@ -5,15 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.SsrfGuardedResolverGroup;
-import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -28,7 +24,6 @@ import tools.jackson.databind.ObjectMapper;
 class LlmConnectionProbeServiceTest extends BaseUnitTest {
 
     private MockWebServer upstream;
-    private LlmConnectionRepository connectionRepository;
     private EgressPolicy egressPolicy;
     private LlmConnectionProbeService service;
 
@@ -36,12 +31,10 @@ class LlmConnectionProbeServiceTest extends BaseUnitTest {
     void setUp() throws IOException {
         upstream = new MockWebServer();
         upstream.start();
-        connectionRepository = mock(LlmConnectionRepository.class);
         egressPolicy = mock(EgressPolicy.class);
         // Loopback allowed: the probe target is a MockWebServer on localhost.
         when(egressPolicy.resolverGroup()).thenReturn(SsrfGuardedResolverGroup.LOOPBACK_EXEMPT_INSTANCE);
-        service = new LlmConnectionProbeService(
-                connectionRepository, egressPolicy, new ObjectMapper(), RestClient.builder());
+        service = new LlmConnectionProbeService(egressPolicy, new ObjectMapper(), RestClient.builder());
     }
 
     @AfterEach
@@ -100,32 +93,6 @@ class LlmConnectionProbeServiceTest extends BaseUnitTest {
         assertThat(result.models()).containsExactly("valid-model");
     }
 
-    @Test
-    void shouldProbeAStoredConnectionFromAProjectionRatherThanTheEntity() {
-        // The probe blocks for up to its full network timeout, so it runs with no transaction and no
-        // JDBC connection held — a few admins testing one stalled provider must not starve the pool.
-        when(connectionRepository.findProbeTargetById(5L))
-                .thenReturn(Optional.of(new LlmProbeTarget(
-                        upstream.url("/v1").toString(),
-                        LlmAuthMode.BEARER,
-                        "sk-abc",
-                        LlmApiProtocol.OPENAI_COMPLETIONS)));
-        upstream.enqueue(jsonResponse("{\"data\":[{\"id\":\"gpt-5\"}]}"));
-
-        LlmProbeResultDTO result = service.probeStored(5L);
-
-        assertThat(result.reachable()).isTrue();
-        assertThat(result.models()).containsExactly("gpt-5");
-        verify(connectionRepository, never()).findById(any());
-    }
-
-    @Test
-    void shouldReportNotFoundForAnUnknownStoredConnection() {
-        when(connectionRepository.findProbeTargetById(9L)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.probeStored(9L)).isInstanceOf(EntityNotFoundException.class);
-    }
-
     /**
      * Asserted on the upstream's request count rather than on the mock: "the guard was consulted" is not
      * the invariant — "no packet left the process" is.
@@ -142,24 +109,6 @@ class LlmConnectionProbeServiceTest extends BaseUnitTest {
         assertThat(upstream.getRequestCount())
                 .as("the forbidden host must never be contacted")
                 .isZero();
-    }
-
-    @Test
-    void aStoredProbeRefusesAForbiddenUrlWithoutDiallingIt() {
-        // A connection stored before the allowlist tightened is re-checked on every probe, not trusted
-        // because it once passed.
-        when(connectionRepository.findProbeTargetById(5L))
-                .thenReturn(Optional.of(new LlmProbeTarget(
-                        upstream.url("/v1").toString(),
-                        LlmAuthMode.BEARER,
-                        "sk-abc",
-                        LlmApiProtocol.OPENAI_COMPLETIONS)));
-        doThrow(new IllegalArgumentException("Provider host must be a public HTTPS URL"))
-                .when(egressPolicy)
-                .validate(any());
-
-        assertThatThrownBy(() -> service.probeStored(5L)).isInstanceOf(IllegalArgumentException.class);
-        assertThat(upstream.getRequestCount()).isZero();
     }
 
     private ProbeLlmConnectionRequestDTO request() {

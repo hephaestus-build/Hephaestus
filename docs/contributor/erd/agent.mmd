@@ -135,6 +135,8 @@ erDiagram
         VARCHAR(16) brand
         BIGINT call_pool_id FK "NOT NULL"
         BOOLEAN forced_tool_choice
+        INTEGER discovered_context_window
+        INTEGER discovered_max_output_tokens
     }
 
     LlmModelPrice {
@@ -332,6 +334,8 @@ erDiagram
         VARCHAR(16) brand
         BIGINT call_pool_id FK "NOT NULL"
         BOOLEAN forced_tool_choice
+        INTEGER discovered_context_window
+        INTEGER discovered_max_output_tokens
     }
 
     Account["Account · Core"]

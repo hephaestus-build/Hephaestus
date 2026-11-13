@@ -5451,7 +5451,7 @@ export const LlmModelSchema = {
 		contextWindow: {
 			type: "integer",
 			format: "int32",
-			description: "Context window in tokens",
+			description: "Context window an admin set; null leaves it to the provider's metadata",
 		},
 		createdAt: {
 			type: "string",
@@ -5496,10 +5496,14 @@ export const LlmModelSchema = {
 			format: "int64",
 			description: "Model id",
 		},
+		limits: {
+			$ref: "#/components/schemas/LlmModelLimits",
+			description: "Token limits the model runs with, each with its source",
+		},
 		maxOutputTokens: {
 			type: "integer",
 			format: "int32",
-			description: "Maximum output tokens",
+			description: "Maximum output tokens an admin set; null leaves it to the provider's metadata",
 		},
 		operatedBy: {
 			type: "string",
@@ -5540,6 +5544,7 @@ export const LlmModelSchema = {
 		"enabled",
 		"grantedWorkspaceIds",
 		"id",
+		"limits",
 		"slug",
 		"upstreamModelId",
 		"visibility",
@@ -5555,6 +5560,39 @@ export const LlmModelCapabilitiesSchema = {
 			description: "forced_tool_choice; null when the probe could not establish support",
 		},
 	},
+} as const;
+
+export const LlmModelLimitsSchema = {
+	type: "object",
+	description: "Token limits the model runs with, each with where its value comes from",
+	properties: {
+		bounded: {
+			type: "boolean",
+			description:
+				"Whether calls can run: false until an admin sets a maximum output or a context window, or the provider reports one",
+		},
+		contextWindow: {
+			type: "integer",
+			format: "int32",
+			description: "Context window in tokens; null when unknown",
+		},
+		contextWindowSource: {
+			type: "string",
+			description: "Where the context window comes from; null when unknown",
+			enum: ["ADMIN", "DISCOVERED", "CATALOG", "DERIVED"],
+		},
+		maxOutputTokens: {
+			type: "integer",
+			format: "int32",
+			description: "Maximum output tokens of one call; null when unknown",
+		},
+		maxOutputTokensSource: {
+			type: "string",
+			description: "Where the maximum output comes from; null when unknown",
+			enum: ["ADMIN", "DISCOVERED", "CATALOG", "DERIVED"],
+		},
+	},
+	required: ["bounded"],
 } as const;
 
 export const LlmModelPriceSchema = {
@@ -15587,9 +15625,17 @@ export const UpdateLlmModelRequestSchema = {
 			type: "boolean",
 			description: "Clear the declared model brand",
 		},
+		clearContextWindow: {
+			type: "boolean",
+			description: "True clears the admin's context window, so the provider's value applies",
+		},
 		clearDataHandling: {
 			type: "boolean",
 			description: "Clear the data-handling declaration, so the model is undeclared",
+		},
+		clearMaxOutputTokens: {
+			type: "boolean",
+			description: "True clears the admin's maximum output, so the provider's value applies",
 		},
 		clearReasoningEffort: {
 			type: "boolean",
@@ -16059,9 +16105,17 @@ export const UpdateWorkspaceLlmModelRequestSchema = {
 			type: "boolean",
 			description: "Clear the declared model brand",
 		},
+		clearContextWindow: {
+			type: "boolean",
+			description: "True clears the admin's context window, so the provider's value applies",
+		},
 		clearDataHandling: {
 			type: "boolean",
 			description: "Clear the data-handling declaration, so the model is undeclared",
+		},
+		clearMaxOutputTokens: {
+			type: "boolean",
+			description: "True clears the admin's maximum output, so the provider's value applies",
 		},
 		clearReasoningEffort: {
 			type: "boolean",
@@ -17112,7 +17166,7 @@ export const WorkspaceLlmModelSchema = {
 		contextWindow: {
 			type: "integer",
 			format: "int32",
-			description: "Context window in tokens",
+			description: "Context window an admin set; null leaves it to the provider's metadata",
 		},
 		createdAt: {
 			type: "string",
@@ -17149,10 +17203,14 @@ export const WorkspaceLlmModelSchema = {
 			format: "int64",
 			description: "Model id",
 		},
+		limits: {
+			$ref: "#/components/schemas/LlmModelLimits",
+			description: "Token limits the model runs with, each with its source",
+		},
 		maxOutputTokens: {
 			type: "integer",
 			format: "int32",
-			description: "Maximum output tokens",
+			description: "Maximum output tokens an admin set; null leaves it to the provider's metadata",
 		},
 		operatedBy: {
 			type: "string",
@@ -17217,6 +17275,7 @@ export const WorkspaceLlmModelSchema = {
 		"displayName",
 		"enabled",
 		"id",
+		"limits",
 		"pricingMode",
 		"slug",
 		"upstreamModelId",
