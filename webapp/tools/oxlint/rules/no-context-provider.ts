@@ -5,7 +5,7 @@ const isCreateContext = (node: ESTree.Node | null | undefined): boolean => {
 	if (!node || node.type !== "CallExpression") {
 		return false;
 	}
-	const callee = node.callee;
+	const { callee } = node;
 	return (
 		(callee.type === "Identifier" && callee.name === "createContext") ||
 		(callee.type === "MemberExpression" &&
@@ -42,7 +42,7 @@ export const noContextProvider = defineRule({
 				}
 			},
 			JSXOpeningElement(node) {
-				const name = node.name;
+				const { name } = node;
 				if (
 					name.type === "JSXMemberExpression" &&
 					name.property.name === "Provider" &&
@@ -53,7 +53,7 @@ export const noContextProvider = defineRule({
 			},
 			"Program:exit"() {
 				for (const name of providers) {
-					const object = name.object;
+					const { object } = name;
 					if (object.type !== "JSXIdentifier") {
 						continue;
 					}
