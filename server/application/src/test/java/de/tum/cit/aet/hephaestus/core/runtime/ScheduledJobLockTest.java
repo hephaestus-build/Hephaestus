@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.Application;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.util.HashMap;
@@ -93,13 +94,34 @@ class ScheduledJobLockTest {
                 .allSatisfy((name, count) -> assertThat(count).isOne());
     }
 
+    /**
+     * ShedLock's method proxy refuses a locked method that returns a primitive: each call then throws
+     * {@code LockingNotSupportedException} before the method runs. A locked method returns nothing. A caller that needs
+     * a result calls the unlocked method that the locked one delegates to.
+     */
+    @Test
+    void shouldLockOnlyMethodsThatReturnNothing() {
+        List<String> returning = annotatedMethods(SchedulerLock.class).entrySet().stream()
+                .filter(method -> method.getValue().getReturnType() != void.class)
+                .map(Map.Entry::getKey)
+                .sorted()
+                .toList();
+
+        assertThat(returning).as("@SchedulerLock methods that return a value").isEmpty();
+    }
+
     /** Every {@code @Scheduled} method of the application's own classes, by class and method name. */
     static Map<String, Method> scheduledJobs() {
+        return annotatedMethods(Scheduled.class);
+    }
+
+    /** Every method of the application's own classes that carries the annotation, by class and method name. */
+    private static Map<String, Method> annotatedMethods(Class<? extends Annotation> annotation) {
         // Overridden rather than filtered: the default check also drops beans whose conditions this profile turns off.
         var scanner = new ClassPathScanningCandidateComponentProvider(false) {
             @Override
             protected boolean isCandidateComponent(MetadataReader reader) {
-                return reader.getAnnotationMetadata().hasAnnotatedMethods(Scheduled.class.getName());
+                return reader.getAnnotationMetadata().hasAnnotatedMethods(annotation.getName());
             }
         };
         Map<String, Method> jobs = new HashMap<>();
@@ -108,8 +130,8 @@ class ScheduledJobLockTest {
             if (!MAIN_CLASSES.equals(type.getProtectionDomain().getCodeSource().getLocation())) {
                 continue;
             }
-            MethodIntrospector.selectMethods(type, (MethodIntrospector.MetadataLookup<Boolean>) method ->
-                            AnnotatedElementUtils.hasAnnotation(method, Scheduled.class) ? Boolean.TRUE : null)
+            MethodIntrospector.selectMethods(type, (MethodIntrospector.MetadataLookup<Boolean>)
+                            method -> AnnotatedElementUtils.hasAnnotation(method, annotation) ? Boolean.TRUE : null)
                     .keySet()
                     .forEach(method -> jobs.put(type.getSimpleName() + "#" + method.getName(), method));
         }
