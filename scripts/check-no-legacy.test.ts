@@ -205,9 +205,10 @@ await it("rejects the common permanent redirect forms and component disguises", 
 		assert.ok(findings(file, source).length > 0, source);
 	}
 	const current = 'if ($workspace_redirect != "") { return 308 $workspace_redirect; }';
-	assert.deepEqual(
-		findings("deploy/chart/hephaestus/templates/workspace-routing.yaml", current),
-		[],
+	assert.ok(
+		findings("deploy/chart/hephaestus/templates/workspace-routing.yaml", current).some(
+			(finding) => finding.rule === "path-alias",
+		),
 	);
 });
 await it("scans an untracked HTML redirect stub through the real git boundary", () => {
@@ -320,5 +321,30 @@ await it("numeric Java redirects and absolute redirect views are refused", () =>
 		'return "redirect:https://example.test/current";',
 	]) {
 		assert.ok(findings(server, source).some((finding) => finding.rule === "path-alias"));
+	}
+});
+
+await it("parentheses cannot hide route redirect expression bodies", () => {
+	for (const expression of [
+		'redirect({to: "/current"})',
+		'(redirect({to: "/current"}))',
+		'( ( redirect({to: "/current"}) ) )',
+	]) {
+		assert.ok(
+			findings(route, `const Route = {beforeLoad: () => ${expression}};`).some(
+				(finding) => finding.rule === "route-alias",
+			),
+		);
+	}
+});
+
+await it("a changed canonical workspace source or destination is refused", () => {
+	const file = "deploy/chart/hephaestus/templates/workspace-routing.yaml";
+	const original = readFileSync(path.join(import.meta.dirname, "../", file), "utf8");
+	for (const changed of [
+		original.replace("(?:GET|HEAD):/w/", "(?:GET|HEAD):/retired/"),
+		original.replace("https://$workspace_slug.", "https://old.$workspace_slug."),
+	]) {
+		assert.ok(findings(file, changed).some((finding) => finding.rule === "path-alias"));
 	}
 });

@@ -58,7 +58,10 @@ function redirectOnlyRoute(
 	}
 	const alias = /\bredirect\s+as\s+(?<name>\w+)/u.exec(source)?.groups?.name ?? "redirect";
 	const open = source.indexOf("{", arrow);
-	const expression = source.slice(arrow + 2).trimStart();
+	const expression = source
+		.slice(arrow + 2)
+		.trimStart()
+		.replace(/^(?:\(\s*)+/u, "");
 	if (new RegExp(`^${alias}\\s*\\(`, "u").test(expression)) {
 		return alias;
 	}
@@ -93,15 +96,15 @@ function canonicalWorkspaceRedirect(file: string, source: string, statement: str
 	}
 	const map = /map[^\n]*\$workspace_redirect\s*\{(?<body>[\s\S]*?)^\s*\}/mu.exec(source);
 	if (map === null) {
-		return true;
+		return false;
 	}
 	const entries = (map.groups?.body ?? "")
 		.split("\n")
 		.map((line) => line.trim())
 		.filter((line) => line !== "" && line !== 'default "";');
-	return (
-		entries.length === 1 && entries[0]?.startsWith('"~^{{ $domain }}:(?:GET|HEAD):/w/') === true
-	);
+	const canonicalEntry =
+		'"~^{{ $domain }}:(?:GET|HEAD):/w/(?<workspace_slug>(?!(?:{{ $reserved }})(?:/|[?]|$))(?![a-z0-9-]*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9])(?:/(?<workspace_tail>[^?]*))?(?<workspace_query>[?].*)?$" "https://$workspace_slug.{{ .Values.host }}/$workspace_tail$workspace_query";';
+	return entries.length === 1 && entries[0] === canonicalEntry;
 }
 
 /** Find obsolete paths, not authentication, current landing pages or provider schema directives. */
