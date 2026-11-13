@@ -511,7 +511,7 @@ That run differs from your install in these points:
 - Traefik has no request body limit on this platform. Its default idle timeout is 180 seconds.
 - The k3s default Pod network is `10.42.0.0/16`. `trustedProxies` in `k3s-values.yaml` matches it. If you change the network of k3s, change `trustedProxies` too.
 - The platform issues a separate backup client certificate, `hephaestus-postgresql-backup-tls`. Enable backups after you configure the off-host repository ([Backup and restore](./backup-restore#back-up-the-database)).
-- If the model endpoint resolves to this host's own Gateway, set `networkPolicy.workerGatewayPorts: [8443, 8000]` in `site.yaml`, as [Network policy](./helm-chart#network-policy) describes.
+- If the model endpoint resolves to this host's own Gateway, set `networkPolicy.modelGatewayPorts: [8443, 8000]` in `site.yaml`, as [Network policy](./helm-chart#network-policy) describes.
 - CI's clusters run no cert-manager. Only the release workflow's install tests the cert-manager pin.
 
 ## Troubleshooting

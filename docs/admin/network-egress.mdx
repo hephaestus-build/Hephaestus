@@ -30,6 +30,8 @@ A [one-host install on k3s](./k3s) also needs these destinations:
 | --- | --- |
 | `github.com`, `raw.githubusercontent.com`, and the GitHub release-asset download hosts | Download the k3s installer, k3s, and the release assets. |
 | `charts.jetstack.io` | Download the cert-manager chart. |
+| `storage.googleapis.com` | Download the pinned gVisor release, which runs the sandboxes. |
+| `registry.k8s.io` and the hosts that it redirects to | Pull the agent-sandbox controller image by digest. |
 | `traefik.github.io` | Download the Traefik chart. |
 | `quay.io` | Pull the cert-manager images by digest. |
 | `docker.io` | Pull the Traefik image by digest, and the images that k3s ships. |
@@ -37,7 +39,7 @@ A [one-host install on k3s](./k3s) also needs these destinations:
 
 A server reaches a model endpoint through `networkPolicy.externalEgress`, which leaves out private addresses.
 If this host's own Gateway serves the model endpoint, the connection ends at the Traefik Pod, a private address.
-Then set `networkPolicy.workerGatewayPorts: [8443, 8000]` in `site.yaml` ([Network policy](./helm-chart#network-policy)).
+Then set `networkPolicy.modelGatewayPorts: [8443, 8000]` in `site.yaml` ([Network policy](./helm-chart#network-policy)).
 
 ## Containers
 

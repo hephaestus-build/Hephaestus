@@ -1,6 +1,6 @@
 ---
 title: Connect to services on a private network
-description: Let the server and the worker reach a model endpoint or a Git provider on a private network or behind a private CA.
+description: Let the server reach a model endpoint or a Git provider on a private network or behind a private CA.
 page_type: how-to
 ---
 
@@ -10,40 +10,22 @@ Use these procedures when a model endpoint or a Git provider is on your own netw
 
 ## Reach a model endpoint on the cluster's own ingress
 
-The worker reaches AI providers through `networkPolicy.externalEgress`, which leaves out private address ranges.
-The host name of a model endpoint can resolve to the cluster's own ingress.
-Then the connection ends at an ingress Pod with a private address, and the policy refuses it.
-An example is a model proxy that the same cluster serves.
+The server reaches AI providers through `networkPolicy.externalEgress`, which leaves out private address ranges.
+The host name of a model endpoint can resolve to the cluster's own Gateway, for example a model proxy that the same cluster serves.
+Then the connection ends at a Gateway Pod with a private address, and the policy refuses it.
 
-Add a NetworkPolicy that lets the worker Pods reach the ingress Pods.
-NetworkPolicies add up, so this policy does not change the chart's policies.
-Use the container ports of the ingress Pods, not the Service ports: the policy applies after address translation.
-For Traefik in the namespace `traefik`, with container ports 8000 and 8443:
+1. Set `networkPolicy.modelGatewayPorts` to the container ports of the Gateway Pods.
+   Use the container ports, not the Service ports, because the policy applies after address translation.
+   For the Traefik of the one-host platform:
 
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: worker-to-ingress
-  namespace: hephaestus
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: hephaestus
-      app.kubernetes.io/component: worker
-  policyTypes: ["Egress"]
-  egress:
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: traefik
-          podSelector:
-            matchLabels:
-              app.kubernetes.io/name: traefik
-      ports:
-        - { port: 8443, protocol: TCP }
-        - { port: 8000, protocol: TCP }
-```
+   ```yaml title="values.yaml"
+   networkPolicy:
+     modelGatewayPorts: [8443, 8000]
+   ```
+
+2. Run the install command again.
+
+The chart then lets the server reach the `networkPolicy.gateway` Pods on these ports.
 
 ## Trust a Git provider's private CA
 
@@ -65,8 +47,8 @@ Sign-in, API calls and Git fetches all use the same trust.
        key: ca.crt
    ```
 
-The server and the worker add this CA at start, and the public CAs stay trusted.
-After you replace the CA, restart the server and the worker.
+The server adds this CA at start, and the public CAs stay trusted.
+After you replace the CA, restart the server.
 This option does not change what GitLab trusts. If Hephaestus uses a private certificate, add its CA to the trusted certificates of your GitLab, so that GitLab can deliver webhooks.
 
 The server also uses this trust bundle for an external broker whose `nats.external.url` uses `tls://`.
@@ -96,7 +78,7 @@ A listed host name can also use a private TLD such as `.internal`.
 Each GitLab API call and sign-in request checks the address when it connects.
 Thus, a name that later resolves elsewhere gets no access.
 Loopback, link-local, and known cloud metadata addresses stay refused, and so do the addresses of the Pod itself.
-A range that covers the address of the Pod stops the server or the worker at startup.
+A range that covers the address of the Pod stops the server at startup.
 
 These requests never follow a redirect.
 Git fetches check the connected address before they send the request, and they follow no redirect either.
@@ -107,7 +89,35 @@ Git fetches with certificate verification turned off are refused too.
 If you remove a host from the list, sign-in and API calls to it stop after the next restart.
 
 If your GitLab runs in this cluster, an `ipBlock` does not reliably match its Pod addresses.
-Use a policy with a `podSelector` for the server and the worker instead, as [Reach a model endpoint on the cluster's own ingress](#reach-a-model-endpoint-on-the-clusters-own-ingress) shows.
+Add a NetworkPolicy that lets the server Pods reach the GitLab Pods.
+NetworkPolicies add up, so this policy does not change the policies of the chart.
+Use the container ports of the GitLab Pods, because the policy applies after address translation:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: server-to-gitlab
+  namespace: hephaestus
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: hephaestus
+      app.kubernetes.io/component: server
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: <gitlab-namespace>
+          podSelector:
+            matchLabels:
+              <label>: <value>
+      ports:
+        - { port: <port>, protocol: TCP }
+```
+
+Replace `<gitlab-namespace>`, `<label>: <value>`, and `<port>` with the namespace, a pod label, and the container port of the GitLab web service.
 
 If your GitLab uses a certificate from a private CA, also follow [A Git provider with a private CA](#trust-a-git-providers-private-ca).
 
@@ -139,9 +149,13 @@ Thus, no item can open the link-local range of the cloud metadata service.
 Use `modelEndpoints` only for addresses outside the cluster.
 
 Do not list a range in `config.llmPrivateHosts` that covers the Pod or Service range of the cluster.
-A range that covers the Pod's own address stops the server or the worker at startup, but the server cannot detect the Service range.
+A range that covers the Pod's own address stops the server at startup, but the server cannot detect the Service range.
 A NetworkPolicy `ipBlock` does not reliably match Pod addresses.
-For an endpoint in this cluster, use `networkPolicy.workerGatewayPorts` or a policy with a `podSelector`, as [Reach a model endpoint on the cluster's own ingress](#reach-a-model-endpoint-on-the-clusters-own-ingress) shows.
+
+For an endpoint behind this cluster's Gateway, use `networkPolicy.modelGatewayPorts`, as [Reach a model endpoint on the cluster's own ingress](#reach-a-model-endpoint-on-the-clusters-own-ingress) shows.
+For another endpoint in this cluster, such as a model server behind a ClusterIP Service, add a NetworkPolicy.
+Use the example in [Admit a Git provider on a private network](#admit-a-git-provider-on-a-private-network) with the Pods and the port of the model server.
+Also list the host name of the Service in `config.llmPrivateHosts`. List the name, not an address range.
 
 ## Check that it worked
 

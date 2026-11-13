@@ -5,7 +5,7 @@ page_type: how-to
 ---
 
 Back up the database, the keys and the release identity of an instance, and restore the instance from them.
-The [operations runbook](./production-operations-runbook#backup-restore-and-postgresql--jetstream) owns the recovery gates and broker procedure.
+The [operations runbook](./production-operations-runbook#backup-and-restore) has the recovery gates.
 
 ## Backup policy for 1.0
 
@@ -26,7 +26,7 @@ Do not start the upgrade without that proof.
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | PostgreSQL                          | Preserve application state, encrypted provider credentials, JWT signing keys, practice results and delivery history.                                                                                         |
 | Encryption keys and configuration   | Keep the keys and required Secret values outside the cluster as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes. The database alone cannot recover encrypted values. |
-| NATS JetStream                      | Keep the matching broker snapshot or cold copy. Choose the [broker recovery strategy](./production-operations-runbook#choose-the-broker-recovery-strategy-before-starting-consumers) before consumers start. |
+| NATS                                | Nothing to keep. NATS holds no data that a restore needs, as [Restore the broker](./production-operations-runbook#restore-the-broker) describes. |
 | Signed release lock and site values | Restore the release and configuration that match the database. Verify its chart and image digests.                                                                                                           |
 | Platform recovery material          | Keep the k3s token, datastore, manifests, certificates, and storage configuration as [Platform recovery material](#platform-recovery-material) describes.                                                                                           |
 
@@ -43,7 +43,7 @@ The token decrypts confidential data in the k3s datastore.
 
 Follow the [k3s datastore backup procedure](https://docs.k3s.io/datastore/backup-restore) for the actual datastore type.
 SQLite and embedded etcd use different procedures.
-A datastore backup does not replace the PostgreSQL and JetStream recovery set.
+A datastore backup does not replace the PostgreSQL recovery set.
 Before relying on host recovery, rehearse both on an isolated replacement host.
 No replacement-host recovery time is qualified for 1.0.
 
@@ -56,7 +56,7 @@ Keep the repository passphrase outside the cluster.
 A configured schedule is not proof of a usable recovery point.
 Check WAL archival, completed backups and repository access.
 Rehearse an [isolated restore](#isolated-restore-drill), including clone lockdown, before relying on the backup.
-For an installation that uses backups, define recovery objectives with the [operations runbook](./production-operations-runbook#backup-restore-and-postgresql--jetstream).
+For an installation that uses backups, define recovery objectives with the [operations runbook](./production-operations-runbook#backup-and-restore).
 
 ### Backup retention
 
@@ -101,7 +101,7 @@ To prepare backups:
 A failed WAL archive keeps the WAL on the PostgreSQL volume until the volume is full.
 The [alert rules](./alert-rules.md) watch the WAL archive, the age of the latest backup and the free space of the volume.
 
-Preserve the database, broker recovery material, keys and signed release identity as one recovery set.
+Preserve the database, keys and signed release identity as one recovery set.
 Keep the originals until the recovery is verified.
 
 ## Restore
@@ -114,7 +114,7 @@ A restore replaces the bundled database with a backup.
 It loses every change after the backup or the time that you select.
 The restored database is readable only with the keys that sealed its values.
 Keep them as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes.
-Restore the NATS JetStream data separately, as the [broker recovery procedure](./production-operations-runbook#choose-the-broker-recovery-strategy-before-starting-consumers) describes.
+Do not restore NATS data, as [Restore the broker](./production-operations-runbook#restore-the-broker) describes.
 
 Before reducing application replicas, record `SHOW max_connections` and set `postgresql.parameters.max_connections` to that value.
 Keep this override until WAL replay finishes. Include it in the recovery set for a replacement host.
@@ -172,7 +172,7 @@ Use [Recover the live installation](#recover-the-live-installation) for a live r
    ```
 
 6. Read back silent mode, paused feedback and disabled conversation bindings. Keep external egress denied.
-7. Restore JetStream with a recovery point consistent with PostgreSQL. Resolve provider write receipts before consumers start.
+7. Do not restore NATS data. Resolve provider write receipts before the server starts.
 8. Set `migration.enabled=true` and start the server alone. Verify migrations, readiness and authenticated reads.
 9. Restore the other replica counts only after the isolated checks pass.
    Follow [Prove silence](./production-operations-runbook#silent-deployment-checklist) before opening any external destination.
@@ -193,9 +193,7 @@ Rehearse a restore on a copy of the instance before you need one.
    Keep provider and model egress denied. Wait for `pg_is_in_recovery()` to return `f`.
 4. Do not apply `restore-clone-lockdown.sql` to the live recovery database.
    Verify silent mode, delivery status, review triggers and conversation bindings against the intended live settings.
-5. Complete [Choose the broker recovery strategy](./production-operations-runbook#choose-the-broker-recovery-strategy-before-starting-consumers) before consumers start.
-   The default is to quarantine and recreate the instance's broker state, with recorded event loss.
-   Snapshot replay needs a separate drill. A matching timestamp or recovery fence alone does not make it safe.
+5. Do not restore NATS data. Plan the provider reconciliation, as [Restore the broker](./production-operations-runbook#restore-the-broker) describes.
 6. Enable migrations and start the server alone. Verify readiness, authenticated reads and encrypted values.
 7. Before access or delivery resumes, reapply post-backup security and privacy decisions from the restricted incident record.
    [Before restarting services](./backup-restore#before-restarting-services) gives the required suspension, session, consent and deletion checks.
@@ -209,7 +207,7 @@ Rehearse a restore on a copy of the instance before you need one.
 
 ### Reapply erasure decisions before processing resumes
 
-Keep the normal server Deployment stopped while PostgreSQL and JetStream are restored.
+Keep the normal server Deployment stopped while PostgreSQL is restored.
 Keep public access and provider egress closed.
 Before replay or normal processing, the server must pass the `erasure-recovery` startup profile.
 This profile runs the existing person-erasure service before lifecycle workers, scheduled tasks or broker consumers start.
@@ -230,7 +228,7 @@ A missing or invalid manifest, an unknown provider instance, or an incomplete er
    Before reuse, their servers must reconcile their folders against the recovered receipts.
    Keep provider egress denied.
    Follow [A server with evidence is offline](./production-operations-runbook#a-server-with-evidence-is-offline).
-4. Complete the broker recovery checks before you start the server.
+4. Do not restore NATS data.
 5. Start the server with `erasure-recovery` added to its normal active profiles.
    Set `HEPHAESTUS_PRIVACY_RECOVERY_MANIFEST` to the mounted path.
    Set `AGENT_ENABLED=false`.
@@ -242,7 +240,6 @@ A missing or invalid manifest, an unknown provider instance, or an incomplete er
    The Kubernetes procedure below restores the original Deployment.
 8. After normal server startup completes, open access and provider egress.
    Start the other roles.
-   An old broker message remains subject to the reapplied native-identity suppression controls.
 
 The manifest uses this structure:
 
@@ -359,7 +356,7 @@ Scheduled sync cannot recover all events in the gap.
 
 1. Reapply post-backup security and privacy decisions before access or delivery resumes.
 2. Keep the signing keys. Diagnose missing encryption keys separately from corrupt signing data.
-3. Complete broker recovery before consumers start.
+3. Do not restore NATS data. Recover the provider gap, as [Restore the broker](./production-operations-runbook#restore-the-broker) describes.
 4. Restore with the backup's signed release lock. Then upgrade.
 
 Do not restore into an older application version.
