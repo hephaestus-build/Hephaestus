@@ -65,6 +65,8 @@ public class WorkspaceScopedTables {
             "account_export",
             // Instance-wide rights requests and exact provider-identity controls.
             "person_data_request",
+            // ADR 0101: pseudonymous unresolved removal identities have no workspace/person pointer.
+            "provider_resource_repair",
             "identity_restriction",
             // Account-scoped consent evidence; spans workspaces
             "consent_decision",

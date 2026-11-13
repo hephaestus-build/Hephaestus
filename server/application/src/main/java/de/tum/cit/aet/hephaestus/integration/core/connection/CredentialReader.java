@@ -73,7 +73,7 @@ public class CredentialReader {
     }
 
     /** The credential a disconnect retained, read only to remove what it controls at the provider. */
-    Optional<CredentialBundle> retainedForTeardown(Connection connection) {
+    public Optional<CredentialBundle> retainedForTeardown(Connection connection) {
         return read(connection);
     }
 

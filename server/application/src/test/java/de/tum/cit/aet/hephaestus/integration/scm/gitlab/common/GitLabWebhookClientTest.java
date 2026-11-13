@@ -30,6 +30,7 @@ import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClient.RequestBodySpec;
 import org.springframework.web.reactive.function.client.WebClient.RequestBodyUriSpec;
@@ -271,7 +272,6 @@ class GitLabWebhookClientTest extends BaseUnitTest {
         @Test
         @SuppressWarnings("unchecked")
         void shouldDeregisterWebhook() {
-            stubTokenService();
             RequestHeadersUriSpec<?> uriSpec = mock(RequestHeadersUriSpec.class);
             RequestHeadersSpec<?> headersSpec = mock(RequestHeadersSpec.class);
             ResponseSpec responseSpec = mock(ResponseSpec.class);
@@ -281,15 +281,16 @@ class GitLabWebhookClientTest extends BaseUnitTest {
             doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
             lenient().doReturn(headersSpec).when(headersSpec).attributes(any());
             when(headersSpec.retrieve()).thenReturn(responseSpec);
-            when(responseSpec.toBodilessEntity()).thenReturn(Mono.empty());
+            when(responseSpec.toBodilessEntity())
+                    .thenReturn(Mono.just(ResponseEntity.noContent().build()));
 
-            webhookClient.deregisterGroupWebhook(SCOPE_ID, GROUP_ID, 99L);
+            assertThat(webhookClient.deregisterGroupWebhookWithCredentials(SERVER_URL, TOKEN, GROUP_ID, 99L))
+                    .isTrue();
         }
 
         @Test
         @SuppressWarnings("unchecked")
-        void shouldTreat404AsSuccess() {
-            stubTokenService();
+        void shouldRetainAHidden404AsUnconfirmedRemoval() {
             RequestHeadersUriSpec<?> uriSpec = mock(RequestHeadersUriSpec.class);
             RequestHeadersSpec<?> headersSpec = mock(RequestHeadersSpec.class);
 
@@ -301,14 +302,14 @@ class GitLabWebhookClientTest extends BaseUnitTest {
                     .thenThrow(WebClientResponseException.create(
                             404, "Not Found", HttpHeaders.EMPTY, new byte[0], StandardCharsets.UTF_8));
 
-            // Should complete without exception (404 is treated as already deleted)
-            webhookClient.deregisterGroupWebhook(SCOPE_ID, GROUP_ID, 999L);
+            assertThatThrownBy(() ->
+                            webhookClient.deregisterGroupWebhookWithCredentials(SERVER_URL, TOKEN, GROUP_ID, 999L))
+                    .isInstanceOf(WebClientResponseException.class);
         }
 
         @Test
         @SuppressWarnings("unchecked")
         void shouldRethrowNon404Errors() {
-            stubTokenService();
             RequestHeadersUriSpec<?> uriSpec = mock(RequestHeadersUriSpec.class);
             RequestHeadersSpec<?> headersSpec = mock(RequestHeadersSpec.class);
 
@@ -320,7 +321,8 @@ class GitLabWebhookClientTest extends BaseUnitTest {
                     .thenThrow(WebClientResponseException.create(
                             500, "Internal Server Error", HttpHeaders.EMPTY, new byte[0], StandardCharsets.UTF_8));
 
-            assertThatThrownBy(() -> webhookClient.deregisterGroupWebhook(SCOPE_ID, GROUP_ID, 99L))
+            assertThatThrownBy(
+                            () -> webhookClient.deregisterGroupWebhookWithCredentials(SERVER_URL, TOKEN, GROUP_ID, 99L))
                     .isInstanceOf(WebClientResponseException.class);
         }
     }

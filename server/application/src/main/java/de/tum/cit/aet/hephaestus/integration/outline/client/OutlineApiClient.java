@@ -64,8 +64,6 @@ public class OutlineApiClient implements OutlineTokenClient, OutlineContentClien
             WEBHOOK_SUBSCRIPTION_LIST = new ParameterizedTypeReference<>() {};
     private static final ParameterizedTypeReference<OutlineEnvelope<OutlineWebhookSubscription>> WEBHOOK_SUBSCRIPTION =
             new ParameterizedTypeReference<>() {};
-    private static final ParameterizedTypeReference<OutlineEnvelope<Void>> EMPTY =
-            new ParameterizedTypeReference<>() {};
 
     private final WebClient webClient;
     private final CircuitBreaker circuitBreaker;
@@ -339,15 +337,15 @@ public class OutlineApiClient implements OutlineTokenClient, OutlineContentClien
                     Map.of("offset", offset, "limit", PAGE_LIMIT),
                     WEBHOOK_SUBSCRIPTION_LIST);
             List<OutlineWebhookSubscription> pageData = body == null ? null : body.data();
-            if (pageData == null || pageData.isEmpty()) {
-                break;
+            if (pageData == null) {
+                throw new IllegalStateException("Outline returned no subscription listing");
             }
             all.addAll(pageData);
             if (pageData.size() < PAGE_LIMIT) {
-                break;
+                return all;
             }
         }
-        return all;
+        throw new IllegalStateException("Outline subscription listing exceeded its page limit");
     }
 
     /** A permanent failure whose wire cause was an HTTP 404 — the addressed resource is gone upstream. */
@@ -384,7 +382,7 @@ public class OutlineApiClient implements OutlineTokenClient, OutlineContentClien
             String signingSecret,
             List<String> events) {
         String resolvedUrl = resolveAndValidateServerUrl(serverUrl);
-        OutlineEnvelope<OutlineWebhookSubscription> body = post(
+        OutlineEnvelope<OutlineWebhookSubscription> body = executeOnce(
                 resolvedUrl,
                 token,
                 "/api/webhookSubscriptions.create",
@@ -394,16 +392,26 @@ public class OutlineApiClient implements OutlineTokenClient, OutlineContentClien
     }
 
     @Override
-    public void deleteWebhookSubscription(String serverUrl, String token, String subscriptionId) {
+    public boolean deleteWebhookSubscription(String serverUrl, String token, String subscriptionId) {
         String resolvedUrl = resolveAndValidateServerUrl(serverUrl);
-        try {
-            post(resolvedUrl, token, "/api/webhookSubscriptions.delete", Map.of("id", subscriptionId), EMPTY);
-        } catch (OutlineApiException e) {
-            if (!isNotFound(e)) {
-                throw e;
-            }
-        }
+        // One attempt only: every retry must return through the repair's ownership read and durable dispatch permit.
+        var response = executeCall(
+                resolvedUrl,
+                "/api/webhookSubscriptions.delete",
+                () -> webClient
+                        .post()
+                        .uri(resolvedUrl + "/api/webhookSubscriptions.delete")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .bodyValue(Map.of("id", subscriptionId))
+                        .retrieve()
+                        .toEntity(SubscriptionDeletion.class)
+                        .block(REQUEST_TIMEOUT));
+        if (response == null) return false;
+        SubscriptionDeletion body = response.getBody();
+        return response.getStatusCode().value() == 200 && body != null && Boolean.TRUE.equals(body.success());
     }
+
+    private record SubscriptionDeletion(@Nullable Boolean success) {}
 
     /** One {@code POST} through the retry decorator; each attempt goes through the circuit breaker so every failure counts toward the rate. */
     private <T> T post(
@@ -435,6 +443,10 @@ public class OutlineApiClient implements OutlineTokenClient, OutlineContentClien
                 .retrieve()
                 .bodyToMono(responseType)
                 .block(REQUEST_TIMEOUT);
+        return executeCall(resolvedUrl, path, call);
+    }
+
+    private <T> T executeCall(String resolvedUrl, String path, Supplier<T> call) {
         try {
             return circuitBreaker.executeSupplier(call);
         } catch (WebClientResponseException.TooManyRequests e) {

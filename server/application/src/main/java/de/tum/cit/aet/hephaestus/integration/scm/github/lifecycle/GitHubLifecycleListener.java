@@ -384,7 +384,11 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
         // (PAT or stale App) and reuses or creates the App row. Correlation id is stable per
         // installation so webhook redelivery is idempotent.
         connectionService.upsertGitHubAppConnection(
-                saved, installationId, accountLogin, "install-bind-" + installationId);
+                saved,
+                gitHubAppTokenService.getConfiguredAppId(),
+                installationId,
+                accountLogin,
+                "install-bind-" + installationId);
 
         return saved;
     }
@@ -447,7 +451,6 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
                                 IntegrationKind.GITHUB.name(),
                                 "provider-uninstall-github-" + installationId,
                                 "GitHub reported the installation was deleted"),
-                        () -> {},
                         () -> contentEraser.eraseWorkspaceScmMirror(workspace.getId())));
         Workspace purged = workspaceLifecycleService.purgeWorkspace(workspace.getWorkspaceSlug());
         log.info(

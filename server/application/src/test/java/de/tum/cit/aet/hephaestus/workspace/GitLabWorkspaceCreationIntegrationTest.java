@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
@@ -14,6 +16,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
@@ -22,12 +25,17 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialReader;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.connection.api.InitiateConnectionRequestDTO;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ConnectionProviderRepairRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookConfig;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookInfo;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabConnectionWebhookController;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabPreflightService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWebhookService;
 import de.tum.cit.aet.hephaestus.testconfig.OfflineNetwork;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
@@ -40,6 +48,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.jspecify.annotations.Nullable;
@@ -52,6 +62,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -79,6 +90,15 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
 
     @Autowired
     private GitLabWebhookClient webhookProvider;
+
+    @Autowired
+    private GitLabWebhookService webhookRegistration;
+
+    @Autowired
+    private PublicApiUrls publicApiUrls;
+
+    @Autowired
+    private ConnectionProviderRepairRepository providerRepairs;
 
     @BeforeAll
     static void declarePublicHosts() {
@@ -330,6 +350,25 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
         previous.setState(IntegrationState.ACTIVE);
         long previousId =
                 persistedId(connectionRepository.saveAndFlush(previous).getId());
+        // A pending removal cannot lend its hook ID to the reconnect. The provider creates a fresh hook.
+        var hooks = new ConcurrentHashMap<Long, WebhookInfo>();
+        String oldRoute = publicApiUrls
+                .originUri(GitLabConnectionWebhookController.PATH_PREFIX + "{id}/key/route", previousId)
+                .toString();
+        hooks.put(99L, new WebhookInfo(99L, oldRoute));
+        var nextHook = new AtomicLong(100);
+        doAnswer(call -> List.copyOf(hooks.values())).when(webhookProvider).listGroupWebhooks(workspace.getId(), 42L);
+        doAnswer(call -> List.copyOf(hooks.values()))
+                .when(webhookProvider)
+                .listGroupWebhooksWithCredentials(DEFAULT_INSTANCE, "previous-test-token", 42L);
+        doAnswer(call -> {
+                    WebhookConfig config = call.getArgument(2);
+                    var fresh = new WebhookInfo(nextHook.getAndIncrement(), config.url());
+                    hooks.put(fresh.id(), fresh);
+                    return fresh;
+                })
+                .when(webhookProvider)
+                .registerGroupWebhook(eq(workspace.getId()), eq(42L), any(WebhookConfig.class));
         // The pending-cleanup scenario needs an unconfirmed deletion, rather than the double's default success.
         doThrow(new IllegalStateException("GitLab webhook removal is unconfirmed"))
                 .when(webhookProvider)
@@ -370,6 +409,15 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                 .jsonPath("$.connectionId")
                 .isEqualTo(previousId);
 
+        assertThat(((ConnectionConfig.GitLabConfig) connectionRepository
+                                .findById(previousId)
+                                .orElseThrow()
+                                .getConfig())
+                        .gitlabWebhookId())
+                .isNull();
+        // Activation detaches the old hook. The registration job later assigns a fresh provider resource.
+        webhookRegistration.registerWebhook(workspace);
+
         assertThat(connectionRepository.findByWorkspaceId(workspace.getId()))
                 .singleElement()
                 .satisfies(connection -> {
@@ -382,9 +430,15 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                             .isInstanceOfSatisfying(ConnectionConfig.GitLabConfig.class, config -> {
                                 assertThat(config.serverUrl()).isEqualTo(DEFAULT_INSTANCE);
                                 assertThat(config.gitlabGroupId()).isEqualTo(42L);
-                                assertThat(config.gitlabWebhookId()).isEqualTo(99L);
+                                assertThat(config.gitlabWebhookId()).isNotNull().isNotEqualTo(99L);
+                                assertThat(hooks).containsKey(config.gitlabWebhookId());
+                                assertThat(config.webhookOwnershipHash()).isNotBlank();
                             });
                 });
+        assertThat(providerRepairs
+                        .readForConnection(workspace.getId(), previousId, PageRequest.of(0, 25))
+                        .getContent())
+                .anySatisfy(row -> assertThat(row.resourceId()).isEqualTo("99"));
     }
 
     @Test

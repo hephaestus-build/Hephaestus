@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.oauth;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
@@ -12,9 +13,11 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.connect.SlackOAuthClient;
 import de.tum.cit.aet.hephaestus.integration.slack.connect.SlackOAuthClient.OAuthV2Access;
+import de.tum.cit.aet.hephaestus.integration.slack.connect.SlackOAuthException;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -81,6 +84,8 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
     @BeforeEach
     void setUp() {
         team = "T" + System.nanoTime();
+        when(slackOAuthClient.botIdentity(any()))
+                .thenReturn(new SlackOAuthClient.BotIdentity(true, team, "U-BOT", null));
         when(slackOAuthClient.exchangeCode(any(), any()))
                 .thenReturn(new OAuthV2Access(
                         true, null, "xoxb-test", new OAuthV2Access.Team(team, "Intro Course"), null, null));
@@ -202,7 +207,13 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
         Connection refreshed = reauthorize(workspace, admin, existing);
 
         assertThat(refreshed.getConfig())
-                .isEqualTo(new ConnectionConfig.SlackConfig(team, "Intro Course", 90, Set.of("messages")));
+                .isEqualTo(new ConnectionConfig.SlackConfig(
+                        team,
+                        "U-BOT",
+                        ProviderResourceAdapter.slackTokenFingerprint("xoxb-test"),
+                        "Intro Course",
+                        90,
+                        Set.of("messages")));
     }
 
     @Test
@@ -214,7 +225,67 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
         Connection revived = reauthorize(workspace, admin, existing);
 
         assertThat(revived.getConfig())
-                .isEqualTo(new ConnectionConfig.SlackConfig(team, "Intro Course", null, Set.of()));
+                .isEqualTo(new ConnectionConfig.SlackConfig(
+                        team,
+                        "U-BOT",
+                        ProviderResourceAdapter.slackTokenFingerprint("xoxb-test"),
+                        "Intro Course",
+                        null,
+                        Set.of()));
+    }
+
+    @Test
+    void shouldRefuseAKnownDifferentTeamBeforeExchangingItsCodeAndCreateNoBotUserFence() {
+        User admin = accountHolder("different-team");
+        Workspace workspace = workspaceOwnedBy(admin, "Existing Slack team");
+        connectSlack(workspace, IntegrationState.ACTIVE);
+        String differentTeam = team + "-different";
+        String issued = state(workspace, admin);
+        webTestClient
+                .get()
+                .uri(uri -> uri.path("/oauth/callback/slack")
+                        .queryParam("state", issued)
+                        .queryParam("code", "code")
+                        .queryParam("team_id", differentTeam)
+                        .build())
+                .cookie(OAuthBrowserBinding.cookieName(issued), OAuthBrowserBinding.cookieValue(issued))
+                .accept(MediaType.APPLICATION_JSON)
+                .exchange()
+                .expectStatus()
+                .isEqualTo(409)
+                .expectBody(Void.class);
+        verifyNoInteractions(slackOAuthClient);
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT count(*) FROM provider_resource_repair WHERE kind = 'SLACK' AND (parent_id = ? OR observed_team_id = ?)",
+                        Long.class,
+                        differentTeam,
+                        differentTeam))
+                .isZero();
+    }
+
+    @Test
+    void shouldNotRevealAnotherWorkspaceFromAnUnverifiedTeamHint() {
+        Workspace source = workspaceOwnedBy(accountHolder("hint-source"), "Source");
+        connectSlack(source, IntegrationState.ACTIVE);
+        User stranger = accountHolder("hint-target");
+        Workspace target = workspaceOwnedBy(stranger, "Target");
+        when(slackOAuthClient.exchangeCode(any(), any())).thenThrow(new SlackOAuthException("invalid_code"));
+        String issued = state(target, stranger);
+        webTestClient
+                .get()
+                .uri(uri -> uri.path("/oauth/callback/slack")
+                        .queryParam("state", issued)
+                        .queryParam("code", "invalid")
+                        .queryParam("team_id", team)
+                        .build())
+                .cookie(OAuthBrowserBinding.cookieName(issued), OAuthBrowserBinding.cookieValue(issued))
+                .accept(MediaType.APPLICATION_JSON)
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody()
+                .jsonPath("$.callbackError")
+                .isEqualTo("finalize_failed");
     }
 
     private Connection reauthorize(Workspace workspace, User admin, Connection existing) {

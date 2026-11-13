@@ -446,6 +446,8 @@ import type {
 	ListAdoptablePracticesResponses,
 	ListAgentsData,
 	ListAgentsResponses,
+	ListConnectionProviderRepairsData,
+	ListConnectionProviderRepairsResponses,
 	ListConnectionSyncJobsData,
 	ListConnectionSyncJobsResponses,
 	ListConnectionSyncResourcesData,
@@ -470,6 +472,8 @@ import type {
 	ListIdentityProvidersResponses,
 	ListInstallationDeadLettersData,
 	ListInstallationDeadLettersResponses,
+	ListInstanceProviderRepairsData,
+	ListInstanceProviderRepairsResponses,
 	ListLinkedIdentitiesData,
 	ListLinkedIdentitiesResponses,
 	ListMembershipsData,
@@ -588,6 +592,10 @@ import type {
 	RegisterPasskeyResponses,
 	RegisterSlackChannelData,
 	RegisterSlackChannelResponses,
+	ReleaseConnectionProviderRepairData,
+	ReleaseConnectionProviderRepairResponses,
+	ReleaseOrphanProviderRepairData,
+	ReleaseOrphanProviderRepairResponses,
 	ReleaseResearchDatasetData,
 	ReleaseResearchDatasetResponses,
 	RemoveLabelFromTeamData,
@@ -1795,6 +1803,28 @@ export const retryProductFeedbackFiling = <ThrowOnError extends boolean = false>
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/admin/product-feedback/{feedbackId}/retry",
 		...options,
+	});
+
+export const listInstanceProviderRepairs = <ThrowOnError extends boolean = false>(
+	options?: Options<ListInstanceProviderRepairsData, ThrowOnError>,
+): RequestResult<ListInstanceProviderRepairsResponses, unknown, ThrowOnError> =>
+	(options?.client ?? client).get<ListInstanceProviderRepairsResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/admin/provider-resource-repairs",
+		...options,
+	});
+
+export const releaseOrphanProviderRepair = <ThrowOnError extends boolean = false>(
+	options: Options<ReleaseOrphanProviderRepairData, ThrowOnError>,
+): RequestResult<ReleaseOrphanProviderRepairResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).post<ReleaseOrphanProviderRepairResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/admin/provider-resource-repairs/{repairId}/release",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 /**
@@ -3298,6 +3328,28 @@ export const getOutlineTokenStatus = <ThrowOnError extends boolean = false>(
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/connections/outline/token",
 		...options,
+	});
+
+export const listConnectionProviderRepairs = <ThrowOnError extends boolean = false>(
+	options: Options<ListConnectionProviderRepairsData, ThrowOnError>,
+): RequestResult<ListConnectionProviderRepairsResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).get<ListConnectionProviderRepairsResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/connections/{connectionId}/provider-repairs",
+		...options,
+	});
+
+export const releaseConnectionProviderRepair = <ThrowOnError extends boolean = false>(
+	options: Options<ReleaseConnectionProviderRepairData, ThrowOnError>,
+): RequestResult<ReleaseConnectionProviderRepairResponses, unknown, ThrowOnError> =>
+	(options.client ?? client).post<ReleaseConnectionProviderRepairResponses, unknown, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/connections/{connectionId}/provider-repairs/{repairId}/release",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 /**

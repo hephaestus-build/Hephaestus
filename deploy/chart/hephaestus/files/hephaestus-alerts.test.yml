@@ -4,6 +4,40 @@ rule_files:
 evaluation_interval: 1m
 
 tests:
+  - name: unresolved removal stays overdue through a retry and clears after resolution
+    interval: 1m
+    input_series:
+      - series: 'integration_provider_repair_open{job="hephaestus",kind="outline",state="confirmation_required",instance="server-a:9090"}'
+        values: "1x70 0x20"
+      - series: 'integration_provider_repair_open{job="hephaestus",kind="outline",state="confirmation_required",instance="server-b:9090"}'
+        values: "1x70 0x20"
+      - series: 'integration_provider_repair_open{job="hephaestus",kind="gitlab",state="awaiting_confirmation",instance="server-a:9090"}'
+        values: "1x29 0 1x39 0x20"
+      - series: 'integration_provider_repair_open{job="hephaestus",kind="gitlab",state="checking",instance="server-a:9090"}'
+        values: "0x29 1 0x60"
+    alert_rule_test:
+      - eval_time: 59m
+        alertname: HephaestusProviderRemovalNeedsConfirmation
+        exp_alerts: []
+      - eval_time: 61m
+        alertname: HephaestusProviderRemovalNeedsConfirmation
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              kind: outline
+            exp_annotations:
+              summary: A provider removal or authorization has remained unresolved for an hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+          - exp_labels:
+              severity: warning
+              kind: gitlab
+            exp_annotations:
+              summary: A provider removal or authorization has remained unresolved for an hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 75m
+        alertname: HephaestusProviderRemovalNeedsConfirmation
+        exp_alerts: []
+
   - name: a stopped erasure fires, automatic recovery without a stopped erasure stays silent
     interval: 1m
     input_series:

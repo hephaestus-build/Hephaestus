@@ -32,6 +32,12 @@ const ADMIN_NAV_GROUPS = [
 	{
 		label: "Access",
 		items: [
+			{
+				to: "/admin/provider-removals",
+				label: "Provider removals",
+				icon: ShieldCheck,
+				tooltip: "Review unresolved provider removals",
+			},
 			{ to: "/admin/users", label: "Users", icon: Users, tooltip: "Manage accounts" },
 			{
 				to: "/admin/person-data",

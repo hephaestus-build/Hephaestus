@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ExternalLinkIcon, WebhookIcon } from "lucide-react";
+import { z } from "zod";
+import { WorkspaceProviderRepairs } from "@/routes/_authenticated/-provider-repairs";
 
 import { getWorkspaceOptions } from "@/api/@tanstack/react-query.gen";
 
@@ -24,6 +26,9 @@ import { scmProviderOf } from "@/lib/scm-provider";
 const SCM_ICONS = { GITHUB: GitHubIcon, GITLAB: GitLabIcon };
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/integrations/scm")({
+	validateSearch: z.object({
+		repairConnection: z.number().int().positive().optional().catch(undefined),
+	}),
 	// The tab names the provider, as the sidebar link and the heading do. The workspace gate usually
 	// knows it; when its list read failed, the scoped details the page reads anyway supply it.
 	loader: async ({ context, params }) => {
@@ -44,6 +49,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/int
 function ScmIntegrationPage() {
 	const { workspaceSlug: slug } = Route.useParams();
 	const scm = useScmIntegration(slug);
+	const repairId = Route.useSearch().repairConnection ?? scm.repairConnectionId;
 	const { kind, label, hasConnection, isConnectionActive, isAppInstallationWorkspace } = scm;
 	const ProviderIcon = kind === undefined ? WebhookIcon : SCM_ICONS[kind];
 
@@ -114,6 +120,13 @@ function ScmIntegrationPage() {
 			{scm.followsGitLabGroup && <WorkspaceStoppedGitLabProjects {...scm.stoppedProjectsProps} />}
 
 			{hasConnection && <JobHistoryCard {...scm.jobHistoryProps} />}
+			{typeof repairId === "number" && (
+				<WorkspaceProviderRepairs
+					key={`${slug}/${repairId}`}
+					workspaceSlug={slug}
+					connectionId={repairId}
+				/>
+			)}
 		</PageLayout>
 	);
 }

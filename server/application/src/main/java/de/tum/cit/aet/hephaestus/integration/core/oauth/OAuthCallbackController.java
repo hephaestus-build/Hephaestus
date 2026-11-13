@@ -37,6 +37,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.UriComponentsBuilder;
 
 /**
@@ -228,7 +229,7 @@ public class OAuthCallbackController {
 
         Connection connection;
         try {
-            connection = callbackService.findOrCreatePendingConnection(binding.workspaceId(), kind);
+            connection = callbackService.findAttemptConnection(binding);
         } catch (EntityNotFoundException e) {
             return failure(
                     kind.name(),
@@ -236,8 +237,30 @@ public class OAuthCallbackController {
                     "The workspace no longer exists.",
                     HttpStatus.NOT_FOUND,
                     wantsJson);
+        } catch (IllegalStateException superseded) {
+            return failure(
+                    kind.name(),
+                    "superseded",
+                    "This connection request was superseded. Start a new connection.",
+                    HttpStatus.CONFLICT,
+                    wantsJson);
         }
-        IntegrationRef ref = connection.toRef();
+        try {
+            callbackService.validateKnownCallbackTarget(connection, allParams == null ? Map.of() : allParams);
+        } catch (IllegalStateException | OAuthCallbackService.InstanceConnectedElsewhereException refused) {
+            return workspaceRedirect(
+                    failure(
+                            kind.name(),
+                            refused instanceof OAuthCallbackService.InstanceConnectedElsewhereException
+                                    ? "connected_elsewhere"
+                                    : "transition_conflict",
+                            refused.getMessage(),
+                            HttpStatus.CONFLICT,
+                            wantsJson),
+                    binding);
+        }
+        IntegrationRef ref =
+                new IntegrationRef(kind, binding.workspaceId(), connection.getInstanceKey(), connection.getId());
 
         ConnectFinalization result;
         try {
@@ -272,6 +295,14 @@ public class OAuthCallbackController {
             callbackService.completeConnection(connection, completed, binding.actorAccountId());
         } catch (OAuthCallbackService.InstanceConnectedElsewhereException e) {
             return failure(kind.name(), "connected_elsewhere", e.getMessage(), HttpStatus.CONFLICT, wantsJson);
+        } catch (ResponseStatusException pendingResource) {
+            if (pendingResource.getStatusCode().value() != 409) throw pendingResource;
+            return failure(
+                    kind.name(),
+                    "provider_resource_pending",
+                    pendingResource.getReason(),
+                    HttpStatus.CONFLICT,
+                    wantsJson);
         } catch (IllegalStateException e) {
             log.warn(
                     "OAuth complete rejected by transition guard for connection={}: {}",

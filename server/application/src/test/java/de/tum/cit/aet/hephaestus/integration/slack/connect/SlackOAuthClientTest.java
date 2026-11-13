@@ -15,6 +15,8 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.web.client.RestClient;
 
 class SlackOAuthClientTest extends BaseUnitTest {
@@ -98,14 +100,51 @@ class SlackOAuthClientTest extends BaseUnitTest {
     }
 
     @Test
-    void revokeStrict_treatsAnAlreadyRevokedTokenAsSuccess() {
+    void revokeStrict_doesNotTreatAnAlreadyRevokedTokenAsThisAttemptsTerminalReceipt() {
         slackMock.enqueue(new MockResponse.Builder()
                 .code(200)
                 .addHeader("Content-Type", "application/json")
                 .body("{\"ok\":false,\"error\":\"token_revoked\"}")
                 .build());
 
-        assertThatCode(() -> client.revokeStrict("xoxb-revoked")).doesNotThrowAnyException();
+        assertThatThrownBy(() -> client.revokeStrict("xoxb-revoked"))
+                .isInstanceOf(SlackOAuthException.class)
+                .hasMessage("token_revoked");
+    }
+
+    @Test
+    void shouldRequirePositiveRevocationInTheSlackReceipt() {
+        slackMock.enqueue(new MockResponse.Builder()
+                .code(200)
+                .addHeader("Content-Type", "application/json")
+                .body("{\"ok\":true,\"revoked\":true}")
+                .build());
+        assertThatCode(() -> client.revokeStrict("xoxb-spent")).doesNotThrowAnyException();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{\"ok\":true,\"revoked\":false}", "{\"ok\":true}"})
+    void shouldRetainUncertaintyWhenSlackDidNotRevokeTheToken(String body) {
+        slackMock.enqueue(new MockResponse.Builder()
+                .code(200)
+                .addHeader("Content-Type", "application/json")
+                .body(body)
+                .build());
+        assertThatThrownBy(() -> client.revokeStrict("xoxb-live"))
+                .isInstanceOf(SlackOAuthException.class)
+                .hasMessage("revocation_unconfirmed");
+    }
+
+    @Test
+    void shouldExposeARevokedIdentityAsAbsenceWithoutADeleteReceipt() {
+        slackMock.enqueue(new MockResponse.Builder()
+                .code(200)
+                .addHeader("Content-Type", "application/json")
+                .body("{\"ok\":false,\"error\":\"token_revoked\"}")
+                .build());
+        assertThatThrownBy(() -> client.botIdentity("xoxb-revoked"))
+                .isInstanceOf(SlackOAuthException.class)
+                .hasMessage("token_revoked");
     }
 
     @Test

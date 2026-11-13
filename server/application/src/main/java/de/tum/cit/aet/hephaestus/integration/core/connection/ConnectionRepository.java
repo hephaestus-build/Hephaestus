@@ -40,6 +40,9 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
         return findAndLockLifecycleConnection(id, workspaceId).orElseThrow(() -> new EmptyResultDataAccessException(1));
     }
 
+    @Query("SELECT c.version FROM Connection c WHERE c.id = :id AND c.workspace.id = :workspaceId")
+    Optional<Long> findLifecycleVersion(@Param("id") long id, @Param("workspaceId") long workspaceId);
+
     /** Locks an existing connection; admission can discard one removed while it waited for this lock. */
     @Query(
             value = "SELECT id FROM connection WHERE id = :id AND workspace_id = :workspaceId FOR UPDATE",
@@ -68,6 +71,9 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
 
     Optional<Connection> findByWorkspaceIdAndKindAndInstanceKey(
             long workspaceId, IntegrationKind kind, @Nullable String instanceKey);
+
+    @WorkspaceAgnostic("Identity ownership is coordinated across workspaces before provider removal")
+    List<Connection> findAllByKindAndStateIn(IntegrationKind kind, Collection<IntegrationState> states);
 
     @WorkspaceAgnostic(
             "Connect checks shared ownership; webhook admission locks the source GitHub App installation before fan-out")
@@ -111,12 +117,10 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
 
     record WorkspaceConfigRow(Long workspaceId, IntegrationKind kind, ConnectionConfig config) {}
 
-    /** Whether another workspace still removes what its disconnected connection to this instance left at the provider. */
-    @WorkspaceAgnostic("A connect refuses an instance whose removal another workspace has not finished")
-    boolean existsByKindAndInstanceKeyAndProviderTeardownRequestedAtNotNullAndWorkspace_IdNot(
-            IntegrationKind kind, String instanceKey, long workspaceId);
-
     /** Disconnected connections whose provider teardown was requested before {@code cutoff}, across workspaces. */
+    @WorkspaceAgnostic("Unresolved pre-cutover removals prohibit adoption until their durable identity is captured")
+    List<Connection> findByStateAndProviderTeardownRequestedAtNotNull(IntegrationState state);
+
     @WorkspaceAgnostic("The expiry of retained credentials runs across workspaces")
     List<Connection> findByStateAndProviderTeardownRequestedAtBefore(IntegrationState state, Instant cutoff);
 
@@ -128,6 +132,15 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
           AND c.state = de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.SUSPENDED
         """)
     List<WebhookCleanupCandidate> findSuspendedGitLabWebhookCandidates();
+
+    @Query("""
+        SELECT new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository$WebhookCleanupCandidate(
+            c.id, c.workspace.id)
+        FROM Connection c
+        WHERE c.kind = de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.OUTLINE
+          AND c.state = de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.SUSPENDED
+        """)
+    List<WebhookCleanupCandidate> findSuspendedOutlineWebhookCandidates();
 
     record WebhookCleanupCandidate(long connectionId, long workspaceId) {}
 

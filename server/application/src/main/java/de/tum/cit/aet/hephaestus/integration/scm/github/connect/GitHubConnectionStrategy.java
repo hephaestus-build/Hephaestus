@@ -2,13 +2,11 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.connect;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.scm.github.GitHubProperties;
-import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppUserAuthorizationClient;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppUserAuthorizationClient.UserInstallation;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubUserAuthorizationException;
@@ -46,23 +44,19 @@ public class GitHubConnectionStrategy implements ConnectionStrategy {
     private static final String SETUP_ACTION_INSTALL = "install";
 
     private final @Nullable String installationUrl;
+    private final long appId;
     private final OAuthStateService oauthStateService;
-    private final ConnectionService connectionService;
-    private final GitHubAppTokenService appTokenService;
     private final GitHubAppUserAuthorizationClient userAuthorization;
     private final ScmWorkspaceContentEraser contentEraser;
 
     public GitHubConnectionStrategy(
             GitHubProperties gitHubProperties,
             OAuthStateService oauthStateService,
-            ConnectionService connectionService,
-            GitHubAppTokenService appTokenService,
             GitHubAppUserAuthorizationClient userAuthorization,
             ScmWorkspaceContentEraser contentEraser) {
         this.installationUrl = gitHubProperties.app().installationUrl();
+        this.appId = gitHubProperties.app().id();
         this.oauthStateService = oauthStateService;
-        this.connectionService = connectionService;
-        this.appTokenService = appTokenService;
         this.userAuthorization = userAuthorization;
         this.contentEraser = contentEraser;
     }
@@ -167,7 +161,7 @@ public class GitHubConnectionStrategy implements ConnectionStrategy {
                     + "can connect its installation.");
         }
         ConnectionConfig.GitHubAppConfig config =
-                new ConnectionConfig.GitHubAppConfig(installationId, login, /* serverUrl */ null, Set.of());
+                new ConnectionConfig.GitHubAppConfig(installationId, appId, login, null, Set.of());
         return new ConnectFinalization.Completed(Long.toString(installationId), null, login, config);
     }
 
@@ -197,22 +191,5 @@ public class GitHubConnectionStrategy implements ConnectionStrategy {
     @Override
     public void eraseLocalData(IntegrationRef ref) {
         contentEraser.eraseWorkspaceScmMirror(ref.workspaceId());
-    }
-
-    /**
-     * Uninstalls the App only for a connection that recorded its installation, which the installation webhook and a
-     * verified connect do. A row without one never proved it controls the installation behind its key.
-     */
-    @Override
-    public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref, ProviderFootprint footprint) {
-        if (connectionService.hasOtherInstalledConnection(ref)
-                || !(footprint.config() instanceof ConnectionConfig.GitHubAppConfig config)) {
-            return Optional.empty();
-        }
-        Long installationId = config.installationId();
-        if (installationId == null || !installationId.toString().equals(ref.instanceKey())) {
-            return Optional.empty();
-        }
-        return Optional.of(() -> appTokenService.deleteInstallation(installationId));
     }
 }

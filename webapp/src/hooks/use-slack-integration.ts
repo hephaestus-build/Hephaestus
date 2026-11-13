@@ -245,6 +245,8 @@ export function useSlackIntegration(workspaceSlug: string) {
 	};
 
 	return {
+		repairConnectionId: entry?.connectionId,
+		connectionId,
 		hasConnection,
 		connectionState: entry?.connectionState,
 		credentialsUnreadableSince: entry?.credentialsUnreadableSince,

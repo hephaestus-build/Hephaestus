@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.SecurityRetentionDeletionProof;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -50,6 +51,8 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
      * {@code pull_request_requested_reviewers} carry a {@code user_id} and are mapped.
      */
     private static final Set<String> NOT_PERSONAL_DATA = Set.of(
+            // Scoped authorization reference, no provider identifier or local person; workspace purge cascades it.
+            "connection_provider_repair",
             // The queue points at a commit and holds no email and no user.
             "commit_identity_resolution",
             // GitHub locators left after a product feedback erasure: repository, installation, a random marker.
@@ -102,6 +105,75 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "workspace_team_label_filter",
             "workspace_team_repository_settings",
             "workspace_team_settings");
+
+    /** Closed list of personal data retained for security: every addition requires an accepted ADR. */
+    private static final Map<String, SecurityRetention> SECURITY_RETENTION = Map.of(
+            "provider_resource_repair",
+            new SecurityRetention(
+                    "docs/decisions/0101-a-connection-cannot-adopt-an-upstream-resource-whose-removal-is-unresolved.md",
+                    "Protect the integrity of adopted resources against unresolved provider removals and authorization exchanges",
+                    "Legitimate interest in integrity and security, GDPR Art. 6(1)(f)",
+                    "Delete when the fence resolves or an instance admin releases it",
+                    "de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairDeletionIntegrationTest"));
+
+    private record SecurityRetention(
+            String adr, String purpose, String legalBasis, String deletionTrigger, String deletionProof) {}
+
+    @Test
+    void securityRetentionIsExplicitPersonalDataWithAnAcceptedDecisionAndDeletionProof() throws Exception {
+        String map = Files.readString(MAP);
+        assertThat(SECURITY_RETENTION.keySet())
+                .as(
+                        "SECURITY_RETENTION is closed: adding a table requires an accepted ADR and deletion integration proofs")
+                .isSubsetOf(tableNames());
+        assertThat(map).contains("## Security retention");
+        for (var entry : SECURITY_RETENTION.entrySet()) {
+            SecurityRetention retention = entry.getValue();
+            assertThat(retention.adr()).startsWith("docs/decisions/").endsWith(".md");
+            assertThat(Files.readString(REPOSITORY_ROOT.resolve(retention.adr())))
+                    .contains("**Status:** Accepted");
+            assertThat(retention.purpose()).isNotBlank();
+            assertThat(retention.legalBasis()).contains("integrity", "security", "6(1)(f)");
+            assertThat(retention.deletionTrigger()).contains("resolves", "admin releases");
+            assertThat(map)
+                    .contains(
+                            "`" + entry.getKey() + "`",
+                            retention.purpose(),
+                            retention.legalBasis(),
+                            retention.deletionTrigger());
+            Class<?> proof = Class.forName(retention.deletionProof());
+            assertThat(BaseIntegrationTest.class.isAssignableFrom(proof)).isTrue();
+            SecurityRetentionDeletionProof declaration =
+                    proof.getDeclaredAnnotation(SecurityRetentionDeletionProof.class);
+            assertThat(declaration).isNotNull();
+            assertThat(declaration.table()).isEqualTo(entry.getKey());
+            assertThat(declaration.resolution()).isNotEqualTo(declaration.adminRelease());
+            assertThat(proof.getDeclaredMethod(declaration.resolution()).isAnnotationPresent(Test.class))
+                    .isTrue();
+            assertThat(proof.getDeclaredMethod(declaration.adminRelease()).isAnnotationPresent(Test.class))
+                    .isTrue();
+        }
+    }
+
+    @Test
+    void securityRetentionHasNoWorkspaceOrPersonPointer() {
+        for (String table : SECURITY_RETENTION.keySet()) {
+            assertThat(jdbc.queryForObject("""
+                    SELECT count(*) FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid
+                    JOIN pg_namespace n ON n.oid = t.relnamespace
+                    WHERE n.nspname = 'public' AND t.relname = ? AND c.contype = 'f'
+                    """, Long.class, table))
+                    .as("SECURITY_RETENTION holds provider identifiers, never foreign keys to owners: %s", table)
+                    .isZero();
+            assertThat(jdbc.queryForList("""
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_schema = 'public' AND table_name = ? AND column_name IN
+                    ('workspace_id', 'user_id', 'person_id', 'account_id', 'identity_id', 'subject_id', 'connection_id')
+                    """, String.class, table))
+                    .as("SECURITY_RETENTION has no workspace or person pointer: %s", table)
+                    .isEmpty();
+        }
+    }
 
     /**
      * The login of the provider account that a workspace is installed on is the namespace of its repositories, like a
@@ -202,6 +274,7 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
                 .containsExactlyInAnyOrderElementsOf(declared);
         Set<String> required = tableNames();
         required.removeAll(NOT_PERSONAL_DATA);
+        required.removeAll(SECURITY_RETENTION.keySet());
         assertThat(declared)
                 .as("every personal table must have a full contributor, not an operator path")
                 .containsAll(required);

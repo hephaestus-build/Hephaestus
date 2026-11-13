@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -12,15 +12,14 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.auth.AuthPropertiesFixture;
 import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy.ConnectFinalization;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy.ConnectInitiation.RedirectToVendor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy.InitiateRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
+import de.tum.cit.aet.hephaestus.integration.core.spi.OAuthExchangeRepair;
 import de.tum.cit.aet.hephaestus.integration.slack.connect.SlackOAuthClient.OAuthV2Access;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -29,7 +28,6 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -45,9 +43,6 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
     private OAuthStateService oauthStateService;
 
     @Mock
-    private ConnectionService connectionService;
-
-    @Mock
     private SlackOAuthClient oauthClient;
 
     @Mock
@@ -59,16 +54,11 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
     void setUp() {
         strategy = new SlackConnectionStrategy(
                 oauthStateService,
-                connectionService,
                 oauthClient,
+                mock(OAuthExchangeRepair.class),
                 workspaceContentEraser,
                 "client-id",
                 new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create("https://app.test"), "/api")));
-    }
-
-    private static ConnectionStrategy.ProviderFootprint footprint(String token) {
-        return new ConnectionStrategy.ProviderFootprint(
-                new ConnectionConfig.SlackConfig("T1", null, null, Set.of()), new BearerToken(token, null));
     }
 
     private static IntegrationRef ref() {
@@ -115,6 +105,8 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
 
     @Test
     void finalize_happyPath_returnsCompletedWithTeamConfigAndBearerToken() {
+        when(oauthClient.botIdentity(eq("xoxb-abc")))
+                .thenReturn(new SlackOAuthClient.BotIdentity(true, "T9", "U123", null));
         when(oauthClient.exchangeCode(eq("c"), eq("https://app.test/api/oauth/callback/slack")))
                 .thenReturn(new OAuthV2Access(
                         true, null, "xoxb-abc", new OAuthV2Access.Team("T9", "Hephaestus Test"), null, null));
@@ -166,43 +158,11 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
     }
 
     @Test
-    void prepareProviderTeardown_keepsATeamStillUsedByAnotherConnection() {
-        IntegrationRef ref = new IntegrationRef(IntegrationKind.SLACK, 42L, "T1", 7L);
-        when(connectionService.hasOtherInstalledConnection(ref)).thenReturn(true);
-
-        assertThat(strategy.prepareProviderTeardown(ref, footprint("xoxb-tok"))).isEmpty();
-        verifyNoInteractions(oauthClient);
-    }
-
-    @Test
-    void prepareProviderTeardown_revokesTheReadTokenOnlyWhenRun() {
-        IntegrationRef ref = new IntegrationRef(IntegrationKind.SLACK, 42L, "T1", 7L);
-        Runnable teardown =
-                strategy.prepareProviderTeardown(ref, footprint("xoxb-tok")).orElseThrow();
-        verifyNoInteractions(oauthClient);
-        teardown.run();
-
-        verify(oauthClient).revokeStrict("xoxb-tok");
-        verifyNoInteractions(workspaceContentEraser);
-    }
-
-    @Test
-    void prepareProviderTeardown_runPropagatesProviderFailure() {
-        IntegrationRef ref = new IntegrationRef(IntegrationKind.SLACK, 42L, "T1", 7L);
-        doThrow(new RuntimeException("slack unavailable")).when(oauthClient).revokeStrict("xoxb-tok");
-
-        Runnable teardown =
-                strategy.prepareProviderTeardown(ref, footprint("xoxb-tok")).orElseThrow();
-
-        assertThatThrownBy(teardown::run).hasMessage("slack unavailable");
-    }
-
-    @Test
     void initiate_withoutClientId_failsFast() {
         SlackConnectionStrategy misconfigured = new SlackConnectionStrategy(
                 oauthStateService,
-                connectionService,
                 oauthClient,
+                mock(OAuthExchangeRepair.class),
                 workspaceContentEraser,
                 "",
                 new PublicApiUrls(AuthPropertiesFixture.withApiBasePath("/api")));
@@ -224,8 +184,8 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
             String issuer, String prefix, String expected) {
         var callbackStrategy = new SlackConnectionStrategy(
                 oauthStateService,
-                connectionService,
                 oauthClient,
+                mock(OAuthExchangeRepair.class),
                 workspaceContentEraser,
                 "client-id",
                 new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(issuer), prefix)));

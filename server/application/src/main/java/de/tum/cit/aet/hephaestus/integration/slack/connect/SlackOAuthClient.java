@@ -101,22 +101,6 @@ public class SlackOAuthClient {
         return response;
     }
 
-    /**
-     * Best-effort {@code auth.revoke} — invalidates the bot token on Slack's side so a
-     * disconnect on our side doesn't leave a dangling credential. Returns true when Slack
-     * confirms the revocation; false on transport/HTTP failure or {@code ok=false}.
-     * Never throws — disconnect-from-vendor is fire-and-forget by design.
-     */
-    public boolean revoke(String botToken) {
-        try {
-            revokeStrict(botToken);
-            return true;
-        } catch (SlackOAuthException e) {
-            log.warn("Slack auth.revoke failed: {}", e.getClass().getSimpleName());
-            return false;
-        }
-    }
-
     public void revokeStrict(String botToken) {
         if (botToken == null || botToken.isBlank()) {
             throw new SlackOAuthException("missing_token");
@@ -136,9 +120,10 @@ public class SlackOAuthClient {
         if (response == null) {
             throw new SlackOAuthException("empty_response");
         }
-        if (!response.ok() && !"token_revoked".equals(response.error())) {
+        if (!response.ok()) {
             throw new SlackOAuthException(response.error() == null ? "unknown" : response.error());
         }
+        if (!Boolean.TRUE.equals(response.revoked())) throw new SlackOAuthException("revocation_unconfirmed");
     }
 
     /**
@@ -179,16 +164,48 @@ public class SlackOAuthClient {
                 .collect(Collectors.toUnmodifiableSet());
     }
 
+    /** The bot identity is required before an OAuth result can be adopted. */
+    public BotIdentity botIdentity(String token) {
+        BotIdentity identity = restClient
+                .post()
+                .uri("/api/auth.test")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .retrieve()
+                .body(BotIdentity.class);
+        if (identity == null) throw new SlackOAuthException("bot_identity_unavailable");
+        if (!identity.ok()) {
+            String code = switch (identity.error()) {
+                case "token_revoked" -> "token_revoked";
+                case "invalid_auth" -> "invalid_auth";
+                case "account_inactive" -> "account_inactive";
+                case null, default -> "bot_identity_unavailable";
+            };
+            throw new SlackOAuthException(code);
+        }
+        if (identity.teamId() == null || identity.userId() == null)
+            throw new SlackOAuthException("bot_identity_unavailable");
+        return identity;
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record BotIdentity(
+            @JsonProperty("ok") boolean ok,
+            @JsonProperty("team_id") @Nullable String teamId,
+            @JsonProperty("user_id") @Nullable String userId,
+            @JsonProperty("error") @Nullable String error) {}
+
     private static String stripTrailingSlash(String url) {
         if (url == null || url.isEmpty()) return "";
         return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
     }
 
-    /** The {@code ok} and {@code error} that {@code auth.revoke} and {@code auth.test} answer with. */
+    /** Slack authentication status and its explicit revocation receipt. */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record AuthResponse(
             @JsonProperty("ok") boolean ok,
-            @JsonProperty("error") @Nullable String error) {}
+            @JsonProperty("error") @Nullable String error,
+            @JsonProperty("revoked") @Nullable Boolean revoked) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record OAuthV2Access(
@@ -197,7 +214,18 @@ public class SlackOAuthClient {
             @JsonProperty("access_token") @Nullable String accessToken,
             @JsonProperty("team") @Nullable Team team,
             @JsonProperty("expires_in") @Nullable Integer expiresIn,
-            @JsonProperty("refresh_token") @Nullable String refreshToken) {
+            @JsonProperty("refresh_token") @Nullable String refreshToken,
+            @JsonProperty("bot_user_id") @Nullable String botUserId) {
+        public OAuthV2Access(
+                boolean ok,
+                @Nullable String error,
+                @Nullable String accessToken,
+                @Nullable Team team,
+                @Nullable Integer expiresIn,
+                @Nullable String refreshToken) {
+            this(ok, error, accessToken, team, expiresIn, refreshToken, null);
+        }
+
         @JsonIgnoreProperties(ignoreUnknown = true)
         public record Team(
                 @JsonProperty("id") @Nullable String id,

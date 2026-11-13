@@ -5,12 +5,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -20,7 +23,6 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.CredentialReaders;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeBlockedException;
 import java.lang.reflect.Field;
 import java.time.Clock;
 import java.util.List;
@@ -59,6 +61,7 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
 
     private CredentialBundleConverter credentialConverter;
     private ConnectionService connectionService;
+    private final ProviderResourceRepairs resourceRepairs = mock(ProviderResourceRepairs.class);
     private Workspace workspace;
 
     @BeforeEach
@@ -70,26 +73,32 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
                 credentialConverter,
                 eventPublisher,
                 syncJobService,
-                transactionManager,
                 CredentialReaders.forTests(credentialConverter),
                 mock(SourceProviderNamespaces.class),
-                Clock.systemUTC());
+                Clock.systemUTC(),
+                resourceRepairs);
         lenient().when(connectionRepository.save(any(Connection.class))).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         lenient().when(connectionStrategy.kind()).thenReturn(IntegrationKind.GITHUB);
         workspace = new Workspace();
         workspace.setId(WORKSPACE_ID);
+        lenient()
+                .when(connectionRepository.findLifecycleVersion(anyLong(), anyLong()))
+                .thenReturn(Optional.of(0L));
     }
 
     @Test
-    void purge_revokesSuspendedProviderBeforeScrubbingCredentialsWithoutConsultingTheSyncFence() throws Exception {
+    void purge_recordsRemovalBeforeScrubbingCredentialsWithoutConsultingTheSyncFence() throws Exception {
         Connection connection = activeConnectionWithCredentials();
         connection.setState(IntegrationState.SUSPENDED);
         when(connectionRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(connection));
         AtomicBoolean tornDownWithCredentials = new AtomicBoolean();
-        when(connectionStrategy.prepareProviderTeardown(eq(erasureRef(connection)), any()))
-                .thenReturn(
-                        Optional.of(() -> tornDownWithCredentials.set(connection.getCredentialsEncrypted() != null)));
+        doAnswer(invocation -> {
+                    tornDownWithCredentials.set(connection.getCredentialsEncrypted() != null);
+                    return null;
+                })
+                .when(resourceRepairs)
+                .requestRemoval(eq(connection), eq(false));
 
         contributor(List.of(connectionStrategy)).deleteWorkspaceData(WORKSPACE_ID);
 
@@ -101,18 +110,15 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
     }
 
     @Test
-    void purge_preservesCredentialsWhenProviderRevokeFails() throws Exception {
+    void purge_preservesCredentialsWhenRemovalIntentCannotBeRecorded() throws Exception {
         Connection connection = activeConnectionWithCredentials();
         when(connectionRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(connection));
-        when(connectionStrategy.prepareProviderTeardown(eq(erasureRef(connection)), any()))
-                .thenReturn(Optional.of(() -> {
-                    throw new RuntimeException("provider unavailable");
-                }));
-
+        doThrow(new IllegalStateException("cannot record removal intent"))
+                .when(resourceRepairs)
+                .requestRemoval(eq(connection), eq(false));
         assertThatThrownBy(() -> contributor(List.of(connectionStrategy)).deleteWorkspaceData(WORKSPACE_ID))
-                .isInstanceOf(WorkspacePurgeBlockedException.class)
-                .hasMessage(
-                        "Hephaestus could not confirm that GitHub is disconnected, so it deleted no local data. Try again when the provider is available.");
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("cannot record removal intent");
 
         assertThat(connection.getState()).isEqualTo(IntegrationState.ACTIVE);
         assertThat(connection.getCredentialsEncrypted()).isNotNull();
@@ -139,14 +145,13 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
         contributor(List.of(connectionStrategy)).deleteWorkspaceData(WORKSPACE_ID);
 
         verify(auditRepository, never()).save(any());
-        verify(connectionStrategy, never()).prepareProviderTeardown(any(), any());
+        verify(connectionStrategy, never()).eraseLocalData(any());
     }
 
     private ConnectionPurgeContributor contributor(List<ConnectionStrategy> strategies) {
         return new ConnectionPurgeContributor(
                 connectionRepository,
                 connectionService,
-                CredentialReaders.forTests(credentialConverter),
                 new StaticListableBeanFactory().getBeanProvider(ProviderTeardown.class),
                 strategies);
     }

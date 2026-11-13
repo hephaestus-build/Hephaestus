@@ -59,7 +59,7 @@ public record ConnectionDetailDTO(
      * reflects over every {@code ConnectionConfig} subtype and fails if a
      * new secret-shaped component is added without being listed here.
      */
-    public static final Set<String> SENSITIVE_CONFIG_KEYS = Set.of("tokenmetadata");
+    public static final Set<String> SENSITIVE_CONFIG_KEYS = Set.of("tokenmetadata", "bottokenfingerprint");
 
     @SuppressWarnings("unchecked")
     public static ConnectionDetailDTO from(Connection c, ObjectMapper mapper) {

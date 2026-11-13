@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.audit.spi;
 
 /** Enum values must match the database CHECK; retained append-only audit rows still require removed resource kinds. */
 public enum ConfigAuditEntityType {
+    PROVIDER_RESOURCE_RELEASE,
     PRACTICE_REVIEW_SETTINGS,
     /** Which model, with what limits, runs practice reviews / the mentor for a workspace. */
     AGENT_BINDING,

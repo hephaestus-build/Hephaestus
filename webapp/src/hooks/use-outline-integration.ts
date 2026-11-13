@@ -240,6 +240,7 @@ export function useOutlineIntegration(workspaceSlug: string) {
 		// Exposed even when SUSPENDED: reading job history is safe, and a suspended connection is when
 		// an admin most needs to see what the last run did. Sync controls stay gated (isConnectionActive).
 		connectionId,
+		repairConnectionId: reportingConnection?.id,
 		hasConnection,
 		isConnectionActive,
 		connectionState: outlineConnection?.state,

@@ -100,6 +100,7 @@ import type {
 	GetWorkspaceResponse,
 	JudgedScanReportItem,
 	KeepMyProductFeedbackPrivateResponse,
+	ListConnectionProviderRepairsResponse,
 	ListConnectionSyncJobsResponse,
 	ListConnectionSyncResourcesResponse,
 	ListConsumerDeadLettersResponse,
@@ -107,6 +108,7 @@ import type {
 	ListFeedbackDecisionsResponse,
 	ListGitHubInstallationsResponse,
 	ListInstallationDeadLettersResponse,
+	ListInstanceProviderRepairsResponse,
 	ListLinkedIdentitiesResponse,
 	ListMembershipsResponse,
 	ListMentorEntriesResponse,
@@ -554,6 +556,25 @@ export const adminTriageProductFeedbackResponseTransformer = async (
 	data: any,
 ): Promise<AdminTriageProductFeedbackResponse> => {
 	data = feedbackItemSchemaResponseTransformer(data);
+	return data;
+};
+
+const providerResourceRepairSchemaResponseTransformer = (data: any) => {
+	data.createdAt = new Date(data.createdAt);
+	return data;
+};
+
+const offsetPageDtoProviderResourceRepairSchemaResponseTransformer = (data: any) => {
+	data.content = data.content.map((item: any) =>
+		providerResourceRepairSchemaResponseTransformer(item),
+	);
+	return data;
+};
+
+export const listInstanceProviderRepairsResponseTransformer = async (
+	data: any,
+): Promise<ListInstanceProviderRepairsResponse> => {
+	data = offsetPageDtoProviderResourceRepairSchemaResponseTransformer(data);
 	return data;
 };
 
@@ -1144,6 +1165,13 @@ export const getOutlineTokenStatusResponseTransformer = async (
 	data: any,
 ): Promise<GetOutlineTokenStatusResponse> => {
 	data = outlineTokenStatusSchemaResponseTransformer(data);
+	return data;
+};
+
+export const listConnectionProviderRepairsResponseTransformer = async (
+	data: any,
+): Promise<ListConnectionProviderRepairsResponse> => {
+	data = offsetPageDtoProviderResourceRepairSchemaResponseTransformer(data);
 	return data;
 };
 

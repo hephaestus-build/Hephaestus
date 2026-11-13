@@ -16,6 +16,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionLifecycleEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
@@ -124,7 +125,6 @@ class ConnectionServiceTest extends BaseUnitTest {
                 credentialConverter,
                 eventPublisher,
                 syncJobService,
-                transactionManager,
                 new CredentialReader(
                         connectionRepository,
                         credentialConverter,
@@ -132,11 +132,15 @@ class ConnectionServiceTest extends BaseUnitTest {
                         new SyncTaskExecutor(),
                         Clock.systemUTC()),
                 mock(SourceProviderNamespaces.class),
-                Clock.fixed(Instant.parse("2026-11-03T12:00:00Z"), ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-11-03T12:00:00Z"), ZoneOffset.UTC),
+                mock(ProviderResourceRepairs.class));
         // Default: the connection is free. Only the disconnect fence ever asks.
         lenient().when(syncJobService.requestCancelForTeardown(anyLong())).thenReturn(Optional.empty());
         workspace = new Workspace();
         workspace.setId(7L);
+        lenient()
+                .when(connectionRepository.findLifecycleVersion(anyLong(), anyLong()))
+                .thenReturn(Optional.of(0L));
         // transition() returns the saved entity; echo it back so callers see the mutated row.
         lenient().when(connectionRepository.save(any(Connection.class))).thenAnswer(inv -> inv.getArgument(0));
     }
@@ -371,7 +375,6 @@ class ConnectionServiceTest extends BaseUnitTest {
         order.verify(syncJobService).requestCancelForTeardown(connection.getId());
         order.verify(strategy).eraseLocalData(ref);
         order.verify(auditRepository).save(any(ConnectionAudit.class));
-        verify(strategy, never()).prepareProviderTeardown(any(), any());
         assertThat(connection.getState()).isEqualTo(IntegrationState.UNINSTALLED);
         assertThat(connection.getCredentialsEncrypted()).isNotNull();
         assertThat(connection.getProviderTeardownRequestedAt()).isEqualTo(Instant.parse("2026-11-03T12:00:00Z"));

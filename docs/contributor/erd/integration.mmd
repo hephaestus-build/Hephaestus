@@ -76,6 +76,8 @@ erDiagram
         BIGINT attention_revision "NOT NULL"
         BIGINT credentials_generation "NOT NULL"
         TIMESTAMPTZ provider_teardown_requested_at
+        BIGINT lifecycle_generation "NOT NULL"
+        BIGINT provider_repair_capture_generation
     }
 
     ConnectionActivity {
@@ -98,6 +100,16 @@ erDiagram
         TIMESTAMPTZ occurred_at "NOT NULL"
         BIGINT actor_account_id FK
         BIGINT workspace_id FK "NOT NULL"
+    }
+
+    ConnectionProviderRepair {
+        UUID id PK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        BIGINT connection_id FK,UK "NOT NULL"
+        UUID repair_id FK,UK "NOT NULL"
+        BIGINT credentials_generation "NOT NULL"
+        BIGINT lifecycle_generation "NOT NULL"
+        BIGINT connection_version "NOT NULL"
     }
 
     GitCommit {
@@ -307,11 +319,13 @@ erDiagram
 
     OauthStateNonce {
         VARCHAR(32) nonce PK
-        BIGINT workspace_id "NOT NULL"
+        BIGINT workspace_id FK "NOT NULL"
         VARCHAR(48) kind "NOT NULL"
         TIMESTAMPTZ issued_at "NOT NULL"
         TIMESTAMPTZ consumed_at
         BIGINT actor_account_id FK
+        BIGINT connection_id FK "NOT NULL"
+        BIGINT lifecycle_generation "NOT NULL"
     }
 
     Organization {
@@ -408,6 +422,27 @@ erDiagram
         BIGINT event_id PK,FK
         VARCHAR(200) step_name PK
         TIMESTAMPTZ processed_at "NOT NULL"
+    }
+
+    ProviderResourceRepair {
+        UUID id PK
+        VARCHAR(64) identity_hash UK "NOT NULL"
+        VARCHAR(48) kind "NOT NULL"
+        VARCHAR(2048) origin "NOT NULL"
+        VARCHAR(32) resource_type "NOT NULL"
+        VARCHAR(256) parent_id "NOT NULL"
+        VARCHAR(256) resource_id "NOT NULL"
+        VARCHAR(96) ownership_hash
+        VARCHAR(32) state "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ updated_at "NOT NULL"
+        TIMESTAMPTZ next_attempt_at "NOT NULL"
+        BIGINT version "NOT NULL"
+        BIGINT attempt_epoch "NOT NULL"
+        BIGINT removal_attempts "NOT NULL"
+        VARCHAR(256) observed_team_id
+        VARCHAR(256) observed_bot_user_id
+        VARCHAR(64) observed_token_fingerprint
     }
 
     PullRequestClosingIssue {
@@ -681,6 +716,9 @@ erDiagram
     Connection ||--o{ ConnectionAudit : connection_id
     Account ||--o{ ConnectionAudit : has
     Connection ||--o{ ConnectionAudit : connection_id
+    ProviderResourceRepair ||--o{ ConnectionProviderRepair : has
+    Connection ||--o{ ConnectionProviderRepair : has
+    Workspace ||--o{ ConnectionProviderRepair : has
     User ||--o{ GitCommit : authored_by
     User ||--o{ GitCommit : references
     Repository ||--o{ GitCommit : has
@@ -709,6 +747,7 @@ erDiagram
     Repository ||--o{ Milestone : has
     User ||--o{ Milestone : created_by
     Account ||--o{ OauthStateNonce : has
+    Connection ||--o{ OauthStateNonce : has
     IdentityProvider ||--o{ Organization : references
     Connection ||--o{ OutlineCollection : has
     Workspace ||--o{ OutlineCollection : has

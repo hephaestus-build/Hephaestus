@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.integration.outline.connect;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.CredentialBundle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
@@ -13,10 +12,8 @@ import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineApiClient.Out
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineTokenClient;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollectionRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
-import de.tum.cit.aet.hephaestus.integration.outline.lifecycle.OutlineWebhookRegistrar;
 import de.tum.cit.aet.hephaestus.practices.spi.DocumentFeedbackErasure;
 import java.util.Map;
-import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -39,7 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Disconnect is a GDPR erase, not just a state flip: {@link #eraseLocalData} removes the workspace's
  * mirrored documents so no cached bodies outlive the connection (the workspace-purge path erases the
- * same rows for the full teardown), and {@link #prepareProviderTeardown} deletes the change-notification
+ * same rows for the full teardown), and The durable resource repair deletes the change-notification
  * subscription. The Outline API token itself is revoked from the owner's settings.
  */
 @ConditionalOnServerRole
@@ -53,7 +50,6 @@ public class OutlineConnectionStrategy implements ConnectionStrategy {
     static final String INPUT_TOKEN = "token";
 
     private final OutlineTokenClient outlineApiClient;
-    private final OutlineWebhookRegistrar webhookRegistrar;
     private final OutlineDocumentRepository outlineDocumentRepository;
     private final OutlineCollectionRepository outlineCollectionRepository;
     private final OutlineOriginPolicy originPolicy;
@@ -61,13 +57,11 @@ public class OutlineConnectionStrategy implements ConnectionStrategy {
 
     public OutlineConnectionStrategy(
             OutlineTokenClient outlineApiClient,
-            OutlineWebhookRegistrar webhookRegistrar,
             OutlineDocumentRepository outlineDocumentRepository,
             OutlineCollectionRepository outlineCollectionRepository,
             OutlineOriginPolicy originPolicy,
             DocumentFeedbackErasure documentFeedbackErasure) {
         this.outlineApiClient = outlineApiClient;
-        this.webhookRegistrar = webhookRegistrar;
         this.outlineDocumentRepository = outlineDocumentRepository;
         this.outlineCollectionRepository = outlineCollectionRepository;
         this.originPolicy = originPolicy;
@@ -130,17 +124,5 @@ public class OutlineConnectionStrategy implements ConnectionStrategy {
                     collections,
                     ref.workspaceId());
         }
-    }
-
-    @Override
-    public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref, ProviderFootprint footprint) {
-        if (ref.connectionId() == null) {
-            throw new IllegalArgumentException("Outline provider teardown requires a connection id");
-        }
-        if (!(footprint.config() instanceof ConnectionConfig.OutlineConfig config)) {
-            return Optional.empty();
-        }
-        return webhookRegistrar.deregistration(
-                ref.connectionId(), config, footprint.credentials() instanceof BearerToken bearer ? bearer : null);
     }
 }

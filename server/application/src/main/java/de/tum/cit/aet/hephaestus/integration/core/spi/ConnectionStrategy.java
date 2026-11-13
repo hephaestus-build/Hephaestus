@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.Cred
 import java.net.URI;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -44,20 +45,6 @@ public interface ConnectionStrategy {
      */
     void eraseLocalData(IntegrationRef ref);
 
-    /**
-     * Returns the call that removes this connection's provider-side footprint (app installation, token,
-     * webhook), built from {@code footprint}, the config and credential the connection holds. The call only
-     * talks to the provider: it holds no entity and opens no transaction, and it throws when the removal
-     * cannot be confirmed. Empty when there is nothing to remove, including an installation or token that
-     * another connection still uses. {@code ref} carries the connection id. This reads but never writes the
-     * connection row.
-     */
-    Optional<Runnable> prepareProviderTeardown(IntegrationRef ref, ProviderFootprint footprint);
-
-    /** What a connection holds at the provider: its config, and its credential while it has one. */
-    record ProviderFootprint(
-            ConnectionConfig config, @Nullable CredentialBundle credentials) {}
-
     record InitiateRequest(
             long workspaceId,
             IntegrationKind kind,
@@ -82,8 +69,17 @@ public interface ConnectionStrategy {
                 String instanceKey,
                 @Nullable CredentialBundle credentials,
                 @Nullable String displayName,
-                @Nullable ConnectionConfig config)
+                @Nullable ConnectionConfig config,
+                @Nullable UUID exchangeAttemptId)
                 implements ConnectFinalization {
+            public Completed(
+                    String instanceKey,
+                    @Nullable CredentialBundle credentials,
+                    @Nullable String displayName,
+                    @Nullable ConnectionConfig config) {
+                this(instanceKey, credentials, displayName, config, null);
+            }
+
             /** 3-arg overload for strategies that don't need to upgrade the config blob. */
             public Completed(String instanceKey, @Nullable CredentialBundle credentials, @Nullable String displayName) {
                 this(instanceKey, credentials, displayName, null);

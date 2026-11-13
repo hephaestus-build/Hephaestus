@@ -4,12 +4,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.core.auth.AuthPropertiesFixture;
+import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.connect.GitLabResourceAdapter;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.reactive.function.client.ClientResponse;
@@ -59,17 +67,32 @@ class GitLabWebhookCleanupClientTest extends BaseUnitTest {
                 mock(GitLabGraphQlClientProvider.class), mock(GitLabTokenService.class), () -> builder);
     }
 
+    private GitLabResourceAdapter adapter() {
+        var beans = new StaticListableBeanFactory();
+        beans.addBean("client", client());
+        return new GitLabResourceAdapter(
+                beans.getBeanProvider(GitLabWebhookClient.class),
+                new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create("https://app.example"), "/api")));
+    }
+
+    private static ProviderResourceAdapter.Resource target() {
+        return new ProviderResourceAdapter.Resource(
+                IntegrationKind.GITLAB,
+                "https://gitlab.example",
+                ProviderResourceAdapter.ResourceType.GROUP_HOOK,
+                "42",
+                "3",
+                ProviderResourceAdapter.fingerprint(OWN + "key/route"));
+    }
+
     @Test
     void shouldFindOwnedHooksOnLaterPagesAndPreserveOtherConnections() {
         hooks.put(1L, "https://other.example/webhooks/gitlab/connections/7/key/route");
         hooks.put(2L, "https://app.example/webhooks/gitlab/connections/70/key/route");
-        hooks.put(3L, OWN + "unknown-key/unrecorded-route");
+        hooks.put(3L, OWN + "key/route");
 
-        client().removeGroupWebhooksWithCredentials(
-                        "https://gitlab.example",
-                        "test-token",
-                        42L,
-                        hook -> hook.url().startsWith(OWN));
+        assertThat(adapter().remove(target(), new BearerToken("test-token", null), () -> true))
+                .isEqualTo(ProviderResourceAdapter.Removal.TERMINAL_SUCCESS);
 
         assertThat(hooks.keySet()).containsExactly(1L, 2L);
         assertThat(deleted).containsExactly(3L);
@@ -80,12 +103,8 @@ class GitLabWebhookCleanupClientTest extends BaseUnitTest {
         hooks.put(3L, OWN + "key/route");
         losePermissionDuringDelete = true;
 
-        assertThatThrownBy(() -> client().removeGroupWebhooksWithCredentials(
-                                "https://gitlab.example",
-                                "test-token",
-                                42L,
-                                hook -> hook.url().startsWith(OWN)))
-                .isInstanceOf(WebClientResponseException.Forbidden.class);
+        assertThatThrownBy(() -> adapter().remove(target(), new BearerToken("test-token", null), () -> true))
+                .isInstanceOf(WebClientResponseException.NotFound.class);
         assertThat(hooks).containsKey(3L);
     }
 
@@ -94,12 +113,8 @@ class GitLabWebhookCleanupClientTest extends BaseUnitTest {
         hooks.put(3L, OWN + "key/route");
         misleadingDelete404 = true;
 
-        assertThatThrownBy(() -> client().removeGroupWebhooksWithCredentials(
-                                "https://gitlab.example",
-                                "test-token",
-                                42L,
-                                hook -> hook.url().startsWith(OWN)))
-                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> adapter().remove(target(), new BearerToken("test-token", null), () -> true))
+                .isInstanceOf(WebClientResponseException.NotFound.class);
         assertThat(hooks).containsKey(3L);
     }
 }

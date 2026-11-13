@@ -119,6 +119,7 @@ import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryTarget;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepository;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryRepository;
+import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
@@ -426,9 +427,14 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                 .thenAnswer(invocation -> hooks.stream()
                         .filter(hook -> hook.id() == (long) invocation.getArgument(2))
                         .findFirst());
-        doAnswer(invocation -> hooks.removeIf(hook -> hook.id() == (long) invocation.getArgument(2)))
-                .when(gitLabWebhookClient)
-                .deregisterGroupWebhook(anyLong(), eq(GROUP_ID), anyLong());
+        when(gitLabWebhookClient.listGroupWebhooksWithCredentials(anyString(), anyString(), eq(GROUP_ID)))
+                .thenAnswer(invocation -> List.copyOf(hooks));
+        when(gitLabWebhookClient.deregisterGroupWebhookWithCredentials(
+                        anyString(), anyString(), eq(GROUP_ID), anyLong()))
+                .thenAnswer(invocation -> {
+                    hooks.removeIf(hook -> hook.id() == (long) invocation.getArgument(3));
+                    return true;
+                });
         ingress = new GitLabConnectionWebhookController(
                 new WebhookIngestPipeline(List.of(), List.of(), eventReceiver, objectMapper),
                 routeCredential,
@@ -1871,7 +1877,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     }
 
     private static String routeOf(GitLabWebhookClient.WebhookConfig hook) {
-        String[] segments = hook.url().split("/", -1);
+        String[] segments = URI.create(hook.url()).getRawPath().split("/", -1);
         return segments[segments.length - 2] + "/" + segments[segments.length - 1];
     }
 

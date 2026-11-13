@@ -10,14 +10,16 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
+import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService.StateBinding;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy.ConnectFinalization;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.integration.core.spi.OAuthExchangeRepair;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import jakarta.persistence.EntityNotFoundException;
+import java.io.Serial;
 import java.util.EnumSet;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -31,6 +33,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Application-layer facade for the OAuth callback flow. Owns all repository access so
@@ -72,6 +75,8 @@ public class OAuthCallbackService {
 
     private final ConnectionRepository connectionRepository;
     private final ConnectionService connectionService;
+    private final ProviderResourceRepairs repairs;
+    private final OAuthExchangeRepair exchangeRepairs;
     private final WorkspaceRepository workspaceRepository;
     private final CredentialBundleConverter credentialBundleConverter;
     private final AccountMembershipQuery membershipQuery;
@@ -90,7 +95,11 @@ public class OAuthCallbackService {
             WorkspaceRepository workspaceRepository,
             CredentialBundleConverter credentialBundleConverter,
             AccountMembershipQuery membershipQuery,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            ProviderResourceRepairs repairs,
+            OAuthExchangeRepair exchangeRepairs) {
+        this.repairs = repairs;
+        this.exchangeRepairs = exchangeRepairs;
         this.connectionRepository = connectionRepository;
         this.connectionService = connectionService;
         this.workspaceRepository = workspaceRepository;
@@ -99,31 +108,16 @@ public class OAuthCallbackService {
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
-    /**
-     * Resolve the Connection row that the in-flight OAuth should bind to. Look up an
-     * existing PENDING row first; fall back to ACTIVE (credential refresh on reconnect);
-     * create a fresh PENDING row only if neither exists. UNINSTALLED rows are
-     * intentionally NOT reused — they're terminal; a new row is correct.
-     */
-    @Transactional
-    public Connection findOrCreatePendingConnection(long workspaceId, IntegrationKind kind) {
-        Optional<Connection> pending = connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                workspaceId, kind, IntegrationState.PENDING);
-        if (pending.isPresent()) {
-            return pending.get();
+    @Transactional(readOnly = true)
+    public Connection findAttemptConnection(StateBinding binding) {
+        Connection owner = connectionRepository
+                .findByIdAndWorkspaceId(binding.connectionId(), binding.workspaceId())
+                .orElseThrow(() ->
+                        new IllegalStateException("This connection request was superseded. Start a new connection."));
+        if (owner.getKind() != binding.kind() || owner.getLifecycleGeneration() != binding.lifecycleGeneration()) {
+            throw new IllegalStateException("This connection request was superseded. Start a new connection.");
         }
-        Optional<Connection> active = connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                workspaceId, kind, IntegrationState.ACTIVE);
-        if (active.isPresent()) {
-            return active.get();
-        }
-        Workspace workspace = workspaceRepository
-                .findById(workspaceId)
-                .orElseThrow(
-                        () -> new EntityNotFoundException(
-                                "We could not find that workspace. It may have been deleted. Reload the page to see what is current."));
-        Connection fresh = new Connection(workspace, kind, /* instanceKey */ null, defaultConfig(kind));
-        return connectionRepository.save(fresh);
+        return owner;
     }
 
     /**
@@ -141,23 +135,50 @@ public class OAuthCallbackService {
         try {
             return Objects.requireNonNull(
                     transactionTemplate.execute(status -> complete(pending, completed, actorAccountId)));
-        } catch (DataIntegrityViolationException e) {
-            ExclusiveInstance exclusive = EXCLUSIVE_INSTANCES.get(pending.getKind());
-            if (exclusive == null || !DataIntegrityViolationConstraints.hasName(e, exclusive.index())) {
-                throw e;
+        } catch (RuntimeException rejected) {
+            RuntimeException failure = completionFailure(pending, completed, actorAccountId, rejected);
+            boolean deterministic = failure instanceof TargetRefusedException
+                    || failure instanceof InstanceConnectedElsewhereException
+                    || failure instanceof ResponseStatusException;
+            if (completed.exchangeAttemptId() != null) {
+                if (deterministic) exchangeRepairs.discard(completed.exchangeAttemptId());
+                else exchangeRepairs.uncertain(completed.exchangeAttemptId());
             }
+            // GitHub's installation predates this callback. A local adoption failure needs no upstream removal.
+            throw failure;
+        }
+    }
+
+    private RuntimeException completionFailure(
+            Connection pending,
+            ConnectFinalization.Completed completed,
+            @Nullable Long actorAccountId,
+            RuntimeException rejected) {
+        ExclusiveInstance exclusive = EXCLUSIVE_INSTANCES.get(pending.getKind());
+        if (!(rejected instanceof DataIntegrityViolationException violation)
+                || exclusive == null
+                || !DataIntegrityViolationConstraints.hasName(violation, exclusive.index())) return rejected;
+        try {
             // A concurrent connect can commit after the ownership check.
-            String conflict = connectedElsewhere(
+            return connectedElsewhere(
                             pending.getKind(), pending.getWorkspace().getId(), completed.instanceKey(), actorAccountId)
-                    .orElseThrow(() -> e);
-            throw new InstanceConnectedElsewhereException(conflict, e);
+                    .<RuntimeException>map(conflict -> new InstanceConnectedElsewhereException(conflict, violation))
+                    .orElse(violation);
+        } catch (RuntimeException unavailable) {
+            violation.addSuppressed(unavailable);
+            return violation;
         }
     }
 
     private Connection complete(
             Connection pending, ConnectFinalization.Completed completed, @Nullable Long actorAccountId) {
-        Connection connection = resolveCompletionTarget(pending, completed, actorAccountId);
-        deleteSupersededPending(pending, connection);
+        Connection current = repairs.prepareCredentialCompletion(
+                pending,
+                completed.config() == null ? pending.getConfig() : completed.config(),
+                completed.credentials(),
+                completed.exchangeAttemptId());
+        Connection connection = resolveCompletionTarget(current, completed, actorAccountId);
+        if (completed.exchangeAttemptId() != null) exchangeRepairs.discard(completed.exchangeAttemptId());
         applyVendorMetadata(connection, completed);
         connection.setCredentials(completed.credentials(), credentialBundleConverter);
         connection = connectionRepository.save(connection);
@@ -182,28 +203,53 @@ public class OAuthCallbackService {
         return connection;
     }
 
-    /**
-     * The row to complete. A kind whose instance one workspace holds refuses an instance another workspace holds, and
-     * reuses this workspace's own row for it rather than colliding with it on {@code (workspace, kind, instance_key)}.
-     */
+    /** Callback hints are unverified: preflight checks only this workspace's target before exchange. */
+    @Transactional(readOnly = true)
+    public void validateKnownCallbackTarget(Connection connection, Map<String, String> params) {
+        String claimed = connection.getKind() == IntegrationKind.GITHUB
+                ? params.get("installation_id")
+                : params.getOrDefault("team_id", params.get("team"));
+        if (claimed != null && !claimed.isBlank()) validateLocalTarget(connection, claimed);
+    }
+
+    private void validateTarget(Connection connection, String instanceKey, @Nullable Long actorAccountId) {
+        validateLocalTarget(connection, instanceKey);
+        if (!EXCLUSIVE_INSTANCES.containsKey(connection.getKind()) || instanceKey.isBlank()) return;
+        Optional<String> conflict = connectedElsewhere(
+                connection.getKind(), connection.getWorkspace().getId(), instanceKey, actorAccountId);
+        if (conflict.isPresent()) throw new InstanceConnectedElsewhereException(conflict.get(), null);
+    }
+
+    private void validateLocalTarget(Connection connection, String instanceKey) {
+        if (!EXCLUSIVE_INSTANCES.containsKey(connection.getKind()) || instanceKey.isBlank()) return;
+        long workspaceId = connection.getWorkspace().getId();
+        var existing = connectionRepository.findByWorkspaceIdAndKindAndInstanceKey(
+                workspaceId, connection.getKind(), instanceKey);
+        if (existing.isPresent() && !Objects.equals(existing.get().getId(), connection.getId())) {
+            throw new TargetRefusedException(
+                    "This authorization does not belong to that connection. Start the connection again.");
+        }
+        if (connection.getInstanceKey() != null
+                && !instanceKey.equals(connection.getInstanceKey())
+                && connection.getState() != IntegrationState.UNINSTALLED) {
+            throw new TargetRefusedException(
+                    "Disconnect the current connection before connecting a different provider instance.");
+        }
+    }
+
     private Connection resolveCompletionTarget(
             Connection connection, ConnectFinalization.Completed completed, @Nullable Long actorAccountId) {
-        if (!EXCLUSIVE_INSTANCES.containsKey(connection.getKind())) {
-            return connection;
-        }
         String instanceKey = completed.instanceKey();
-        if (instanceKey.isBlank()) {
-            return connection;
-        }
-        long workspaceId = connection.getWorkspace().getId();
-        Optional<String> conflict = connectedElsewhere(connection.getKind(), workspaceId, instanceKey, actorAccountId);
-        if (conflict.isPresent()) {
-            throw new InstanceConnectedElsewhereException(conflict.get(), null);
-        }
-        return connectionRepository
-                .findByWorkspaceIdAndKindAndInstanceKey(workspaceId, connection.getKind(), instanceKey)
-                .filter(existing -> !Objects.equals(existing.getId(), connection.getId()))
-                .orElse(connection);
+        validateTarget(connection, instanceKey, actorAccountId);
+        if (!EXCLUSIVE_INSTANCES.containsKey(connection.getKind())
+                || instanceKey.isBlank()
+                || connection.getInstanceKey() == null
+                || instanceKey.equals(connection.getInstanceKey())) return connection;
+        return connectionRepository.save(new Connection(
+                connection.getWorkspace(),
+                connection.getKind(),
+                instanceKey,
+                completed.config() == null ? connection.getConfig() : completed.config()));
     }
 
     /**
@@ -215,18 +261,6 @@ public class OAuthCallbackService {
         ExclusiveInstance exclusive = EXCLUSIVE_INSTANCES.get(kind);
         if (exclusive == null) {
             return Optional.empty();
-        }
-        // A disconnect elsewhere may still revoke this token or installation; connecting now would receive a dead one.
-        if (connectionRepository.existsByKindAndInstanceKeyAndProviderTeardownRequestedAtNotNullAndWorkspace_IdNot(
-                kind, instanceKey, workspaceId)) {
-            log.warn(
-                    "Rejected {} connect: instanceKey={} is still being disconnected elsewhere, target workspace={}",
-                    kind,
-                    sanitizeForLog(instanceKey),
-                    workspaceId);
-            return Optional.of("Another Hephaestus workspace is still disconnecting this "
-                    + exclusive.noun()
-                    + ". Try again in a few minutes.");
         }
         return connectionRepository
                 .findAllByKindAndInstanceKeyAndStateIn(kind, instanceKey, exclusive.holdingStates())
@@ -267,31 +301,6 @@ public class OAuthCallbackService {
         return membershipQuery.isAdministrator(workspaceId, actorAccountId);
     }
 
-    private void deleteSupersededPending(Connection original, Connection target) {
-        if (Objects.equals(original.getId(), target.getId())) {
-            return;
-        }
-        if (original.getState() != IntegrationState.PENDING || original.getInstanceKey() != null) {
-            return;
-        }
-        connectionRepository.delete(original);
-    }
-
-    /**
-     * Per-kind empty config seed for newly-created PENDING rows. The strategy's
-     * {@code finalizeConnect} may upgrade the config later — we just need a non-null
-     * config so JPA doesn't reject the INSERT.
-     */
-    private static ConnectionConfig defaultConfig(IntegrationKind kind) {
-        return switch (kind) {
-            case GITHUB -> new ConnectionConfig.GitHubAppConfig(null, null, null, new HashSet<>());
-            case GITLAB ->
-                throw new IllegalArgumentException("Create a GitLab workspace to connect its verified group.");
-            case SLACK -> new ConnectionConfig.SlackConfig(null, null, null, new HashSet<>());
-            case OUTLINE -> new ConnectionConfig.OutlineConfig(null, null, null, new HashSet<>());
-        };
-    }
-
     private static void applyVendorMetadata(Connection connection, ConnectFinalization.Completed completed) {
         if (completed.instanceKey() != null) {
             connection.bindInstanceKey(completed.instanceKey());
@@ -318,12 +327,26 @@ public class OAuthCallbackService {
                 && refreshed.teamId() != null
                 && refreshed.teamId().equals(current.teamId())) {
             return new ConnectionConfig.SlackConfig(
-                    refreshed.teamId(), refreshed.teamName(), current.retentionDays(), current.enabledStreams());
+                    refreshed.teamId(),
+                    refreshed.botUserId(),
+                    refreshed.botTokenFingerprint(),
+                    refreshed.teamName(),
+                    current.retentionDays(),
+                    current.enabledStreams());
         }
         return vendor;
     }
 
     /** A Slack team or GitHub App installation that another workspace holds; the message is safe to show the caller. */
+    private static final class TargetRefusedException extends IllegalStateException {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        private TargetRefusedException(String message) {
+            super(message);
+        }
+    }
+
     static final class InstanceConnectedElsewhereException extends RuntimeException {
 
         private static final long serialVersionUID = 1L;

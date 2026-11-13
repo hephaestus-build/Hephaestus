@@ -58,20 +58,42 @@ public class OAuthStateNonce {
     @Nullable
     private Long actorAccountId;
 
+    @Column(name = "connection_id", nullable = false, updatable = false)
+    private long connectionId;
+
+    @Column(name = "lifecycle_generation", nullable = false, updatable = false)
+    private long lifecycleGeneration;
+
     protected OAuthStateNonce() {}
 
     public OAuthStateNonce(
-            String nonce, long workspaceId, String kind, Instant issuedAt, @Nullable Long actorAccountId) {
+            String nonce,
+            long workspaceId,
+            String kind,
+            Instant issuedAt,
+            @Nullable Long actorAccountId,
+            long connectionId,
+            long lifecycleGeneration) {
         this.nonce = nonce;
         this.workspaceId = workspaceId;
         this.kind = kind;
         this.issuedAt = issuedAt;
         this.actorAccountId = actorAccountId;
+        this.connectionId = connectionId;
+        this.lifecycleGeneration = lifecycleGeneration;
     }
 
     @Nullable
     public Long getActorAccountId() {
         return actorAccountId;
+    }
+
+    public long getConnectionId() {
+        return connectionId;
+    }
+
+    public long getLifecycleGeneration() {
+        return lifecycleGeneration;
     }
 
     public String getNonce() {

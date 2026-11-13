@@ -430,23 +430,25 @@ The boundaries that make such requests, over 1 day:
 sort_desc(sum by (boundary) (increase(database_transaction_http_requests_total[1d])))
 ```
 
-## Provider teardown metrics
+## Provider removal repair metrics
 
-After a disconnect, the server role removes the app installation, token, or webhook at the provider, then deletes the stored credential.
+Removal records and credential expiry are independent.
+The [integration guide](./integrations.mdx#confirm-a-provider-removal) owns the repair procedure.
 
-| Prometheus name                         | Type    | Labels            | Meaning                                  |
-| --------------------------------------- | ------- | ----------------- | ---------------------------------------- |
-| `integration_provider_teardown_total`   | Counter | `kind`, `outcome` | Disconnects whose provider teardown ended |
+| Prometheus name | Type | Labels | Meaning |
+| --- | --- | --- | --- |
+| `integration_provider_repair_attempts_total` | Counter | `kind`, `outcome` | Ownership checks and removal attempts by their recorded outcome |
+| `integration_provider_repair_open` | Gauge | `kind`, `state` | Unresolved provider identities. Aggregate reads are cached for at most ten seconds |
 
 `kind` is `github`, `gitlab`, `slack`, or `outline`.
-`outcome` is one of these:
+`state` is `registering`, `pending`, `checking`, `dispatching`, `awaiting_confirmation`, `needs_authorization`, or `confirmation_required`.
+`outcome` is `verified_absent`, `different_owner`, `awaiting_confirmation`, `needs_authorization`, `terminal_success`, `admin_confirmation`, `cancelled`, or `discovery_unconfirmed`.
+An earlier uncertain attempt keeps its block even when a later read shows absence.
+Only a terminal receipt for that exact attempt or explicit admin confirmation can end that uncertainty.
+Metrics contain no workspace, person, token, callback URL or provider resource label.
 
-- `revoked`: the provider confirmed the removal, or the connection left nothing there.
-- `purged_unrevoked`: the provider failed for 24 hours, so Hephaestus deleted the credential without the removal.
-- `adopted`: the same connection was connected again before the removal succeeded, so it uses the footprint again.
-
-A `purged_unrevoked` outcome sets a note on the connection and emails the workspace admins.
-A credential or webhook can then still work at the provider until an admin removes it there.
+`HephaestusProviderRemovalNeedsConfirmation` identifies sustained authorization or confirmation needs.
+The [alert response](./production-operations-runbook.mdx#alert-response) states the action.
 
 ## WAL archive metrics
 

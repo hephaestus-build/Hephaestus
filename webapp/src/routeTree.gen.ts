@@ -33,6 +33,7 @@ import { Route as AuthenticatedAdminGithubInstallationsRouteImport } from './rou
 import { Route as AuthenticatedAdminLoginProvidersRouteImport } from './routes/_authenticated/admin.login-providers'
 import { Route as AuthenticatedAdminModelsRouteImport } from './routes/_authenticated/admin.models'
 import { Route as AuthenticatedAdminPersonDataRouteImport } from './routes/_authenticated/admin.person-data'
+import { Route as AuthenticatedAdminProviderRemovalsRouteImport } from './routes/_authenticated/admin.provider-removals'
 import { Route as AuthenticatedAdminResearchRouteImport } from './routes/_authenticated/admin.research'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin.settings'
 import { Route as AuthenticatedAdminUsageRouteImport } from './routes/_authenticated/admin.usage'
@@ -211,6 +212,12 @@ const AuthenticatedAdminPersonDataRoute =
   AuthenticatedAdminPersonDataRouteImport.update({
     id: '/person-data',
     path: '/person-data',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminProviderRemovalsRoute =
+  AuthenticatedAdminProviderRemovalsRouteImport.update({
+    id: '/provider-removals',
+    path: '/provider-removals',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
 const AuthenticatedAdminResearchRoute =
@@ -540,6 +547,7 @@ export interface FileRoutesByFullPath {
   '/admin/login-providers': typeof AuthenticatedAdminLoginProvidersRoute
   '/admin/models': typeof AuthenticatedAdminModelsRoute
   '/admin/person-data': typeof AuthenticatedAdminPersonDataRoute
+  '/admin/provider-removals': typeof AuthenticatedAdminProviderRemovalsRoute
   '/admin/research': typeof AuthenticatedAdminResearchRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/usage': typeof AuthenticatedAdminUsageRoute
@@ -614,6 +622,7 @@ export interface FileRoutesByTo {
   '/admin/login-providers': typeof AuthenticatedAdminLoginProvidersRoute
   '/admin/models': typeof AuthenticatedAdminModelsRoute
   '/admin/person-data': typeof AuthenticatedAdminPersonDataRoute
+  '/admin/provider-removals': typeof AuthenticatedAdminProviderRemovalsRoute
   '/admin/research': typeof AuthenticatedAdminResearchRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/usage': typeof AuthenticatedAdminUsageRoute
@@ -686,6 +695,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/login-providers': typeof AuthenticatedAdminLoginProvidersRoute
   '/_authenticated/admin/models': typeof AuthenticatedAdminModelsRoute
   '/_authenticated/admin/person-data': typeof AuthenticatedAdminPersonDataRoute
+  '/_authenticated/admin/provider-removals': typeof AuthenticatedAdminProviderRemovalsRoute
   '/_authenticated/admin/research': typeof AuthenticatedAdminResearchRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/_authenticated/admin/usage': typeof AuthenticatedAdminUsageRoute
@@ -764,6 +774,7 @@ export interface FileRouteTypes {
     | '/admin/login-providers'
     | '/admin/models'
     | '/admin/person-data'
+    | '/admin/provider-removals'
     | '/admin/research'
     | '/admin/settings'
     | '/admin/usage'
@@ -838,6 +849,7 @@ export interface FileRouteTypes {
     | '/admin/login-providers'
     | '/admin/models'
     | '/admin/person-data'
+    | '/admin/provider-removals'
     | '/admin/research'
     | '/admin/settings'
     | '/admin/usage'
@@ -909,6 +921,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/login-providers'
     | '/_authenticated/admin/models'
     | '/_authenticated/admin/person-data'
+    | '/_authenticated/admin/provider-removals'
     | '/_authenticated/admin/research'
     | '/_authenticated/admin/settings'
     | '/_authenticated/admin/usage'
@@ -1147,6 +1160,13 @@ declare module '@tanstack/react-router' {
       path: '/person-data'
       fullPath: '/admin/person-data'
       preLoaderRoute: typeof AuthenticatedAdminPersonDataRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/provider-removals': {
+      id: '/_authenticated/admin/provider-removals'
+      path: '/provider-removals'
+      fullPath: '/admin/provider-removals'
+      preLoaderRoute: typeof AuthenticatedAdminProviderRemovalsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
     '/_authenticated/admin/research': {
@@ -1531,6 +1551,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminLoginProvidersRoute: typeof AuthenticatedAdminLoginProvidersRoute
   AuthenticatedAdminModelsRoute: typeof AuthenticatedAdminModelsRoute
   AuthenticatedAdminPersonDataRoute: typeof AuthenticatedAdminPersonDataRoute
+  AuthenticatedAdminProviderRemovalsRoute: typeof AuthenticatedAdminProviderRemovalsRoute
   AuthenticatedAdminResearchRoute: typeof AuthenticatedAdminResearchRoute
   AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
   AuthenticatedAdminUsageRoute: typeof AuthenticatedAdminUsageRoute
@@ -1549,6 +1570,8 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminLoginProvidersRoute: AuthenticatedAdminLoginProvidersRoute,
   AuthenticatedAdminModelsRoute: AuthenticatedAdminModelsRoute,
   AuthenticatedAdminPersonDataRoute: AuthenticatedAdminPersonDataRoute,
+  AuthenticatedAdminProviderRemovalsRoute:
+    AuthenticatedAdminProviderRemovalsRoute,
   AuthenticatedAdminResearchRoute: AuthenticatedAdminResearchRoute,
   AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,
   AuthenticatedAdminUsageRoute: AuthenticatedAdminUsageRoute,

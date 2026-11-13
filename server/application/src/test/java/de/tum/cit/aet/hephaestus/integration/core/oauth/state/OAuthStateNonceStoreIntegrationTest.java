@@ -1,20 +1,31 @@
 package de.tum.cit.aet.hephaestus.integration.core.oauth.state;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.oauth.OAuthCallbackService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Single-use proof for the OAuth state nonce against a REAL Postgres. {@link OAuthStateNonceStoreTest}
@@ -32,12 +43,81 @@ class OAuthStateNonceStoreIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private OAuthStateNonceStore store;
 
+    private long fixtureWorkspaceId;
+
+    @BeforeEach
+    void ownWorkspace() {
+        fixtureWorkspaceId = workspaces
+                .save(WorkspaceTestFixtures.activeWorkspace(
+                        "nonce-" + UUID.randomUUID().toString().substring(0, 8)))
+                .getId();
+    }
+
+    @Autowired
+    private ConnectionRepository connections;
+
+    @Autowired
+    private WorkspaceRepository workspaces;
+
+    @Autowired
+    private OAuthCallbackService callbacks;
+
+    @Autowired
+    private TransactionTemplate transactions;
+
+    @ParameterizedTest
+    @EnumSource(
+            value = IntegrationKind.class,
+            names = {"GITHUB", "SLACK"})
+    void shouldRequireTheNewLifecycleBindingWhenStartingAgainAfterUninstall(IntegrationKind kind) {
+        var workspace = workspaces.save(WorkspaceTestFixtures.activeWorkspace(
+                "oauth-generation-" + UUID.randomUUID().toString().substring(0, 8)));
+        String nonce = UUID.randomUUID().toString().replace("-", "");
+        Instant issued = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        store.issue(nonce, workspace.getId(), kind, issued);
+        var verified = new OAuthStateService.StateBinding(workspace.getId(), kind, issued);
+        var original = store.boundAttempt(nonce, verified);
+        transactions.executeWithoutResult(status -> connections
+                .findByIdAndWorkspaceId(original.connectionId(), workspace.getId())
+                .orElseThrow()
+                .setState(IntegrationState.UNINSTALLED));
+        String replacementNonce = UUID.randomUUID().toString().replace("-", "");
+        store.issue(replacementNonce, workspace.getId(), kind, issued);
+        var replacement = store.boundAttempt(replacementNonce, verified);
+        assertThat(replacement.connectionId()).isEqualTo(original.connectionId());
+        assertThat(replacement.lifecycleGeneration()).isNotEqualTo(original.lifecycleGeneration());
+        assertThat(store.boundAttempt(nonce, verified)).isEqualTo(original);
+        assertThatThrownBy(() -> callbacks.findAttemptConnection(original)).isInstanceOf(IllegalStateException.class);
+        assertThat(callbacks.findAttemptConnection(replacement).getId()).isEqualTo(replacement.connectionId());
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = IntegrationKind.class,
+            names = {"GITHUB", "SLACK"})
+    void shouldRejectTheOldNonceEvenAfterTheSameConnectionResumes(IntegrationKind kind) {
+        var workspace = workspaces.save(WorkspaceTestFixtures.activeWorkspace(
+                "oauth-resume-" + UUID.randomUUID().toString().substring(0, 8)));
+        String nonce = UUID.randomUUID().toString().replace("-", "");
+        Instant issued = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        store.issue(nonce, workspace.getId(), kind, issued);
+        var original = store.boundAttempt(nonce, new OAuthStateService.StateBinding(workspace.getId(), kind, issued));
+        transactions.executeWithoutResult(status -> {
+            var owner = connections
+                    .findByIdAndWorkspaceId(original.connectionId(), workspace.getId())
+                    .orElseThrow();
+            owner.setState(IntegrationState.SUSPENDED);
+            owner.setState(IntegrationState.ACTIVE);
+        });
+        assertThatThrownBy(() -> callbacks.findAttemptConnection(original)).isInstanceOf(IllegalStateException.class);
+    }
+
     @Test
     void aNonceCanBeConsumedExactlyOnce() {
         String nonce = "seq-" + Long.toHexString(System.nanoTime()); // <= 32 chars (column limit)
         var binding = new OAuthStateService.StateBinding(
-                1, IntegrationKind.GITHUB, Instant.now().truncatedTo(ChronoUnit.SECONDS));
-        store.issue(nonce, 1L, IntegrationKind.GITHUB, binding.issuedAt());
+                fixtureWorkspaceId, IntegrationKind.GITHUB, Instant.now().truncatedTo(ChronoUnit.SECONDS));
+        store.issue(nonce, fixtureWorkspaceId, IntegrationKind.GITHUB, binding.issuedAt());
 
         assertThat(store.tryConsume(nonce, binding)).as("first consume wins").isTrue();
         assertThat(store.tryConsume(nonce, binding))
@@ -49,17 +129,25 @@ class OAuthStateNonceStoreIntegrationTest extends BaseIntegrationTest {
     void mismatchedSignedContextDoesNotConsumeNonce() {
         String nonce = "bound-" + Long.toHexString(System.nanoTime());
         Instant issued = Instant.now().truncatedTo(ChronoUnit.SECONDS);
-        store.issue(nonce, 1L, IntegrationKind.GITHUB, issued);
-        assertThat(store.tryConsume(nonce, new OAuthStateService.StateBinding(2, IntegrationKind.GITHUB, issued)))
-                .isFalse();
-        assertThat(store.tryConsume(nonce, new OAuthStateService.StateBinding(1, IntegrationKind.SLACK, issued)))
+        store.issue(nonce, fixtureWorkspaceId, IntegrationKind.GITHUB, issued);
+        assertThat(store.tryConsume(
+                        nonce,
+                        new OAuthStateService.StateBinding(fixtureWorkspaceId + 1, IntegrationKind.GITHUB, issued)))
                 .isFalse();
         assertThat(store.tryConsume(
-                        nonce, new OAuthStateService.StateBinding(1, IntegrationKind.GITHUB, issued.plusSeconds(1))))
+                        nonce, new OAuthStateService.StateBinding(fixtureWorkspaceId, IntegrationKind.SLACK, issued)))
                 .isFalse();
-        assertThat(store.tryConsume(nonce, new OAuthStateService.StateBinding(1, IntegrationKind.GITHUB, issued, 42L)))
+        assertThat(store.tryConsume(
+                        nonce,
+                        new OAuthStateService.StateBinding(
+                                fixtureWorkspaceId, IntegrationKind.GITHUB, issued.plusSeconds(1))))
                 .isFalse();
-        assertThat(store.tryConsume(nonce, new OAuthStateService.StateBinding(1, IntegrationKind.GITHUB, issued)))
+        assertThat(store.tryConsume(
+                        nonce,
+                        new OAuthStateService.StateBinding(fixtureWorkspaceId, IntegrationKind.GITHUB, issued, 42L)))
+                .isFalse();
+        assertThat(store.tryConsume(
+                        nonce, new OAuthStateService.StateBinding(fixtureWorkspaceId, IntegrationKind.GITHUB, issued)))
                 .isTrue();
     }
 
@@ -68,7 +156,7 @@ class OAuthStateNonceStoreIntegrationTest extends BaseIntegrationTest {
         // No backing row (e.g. a forged state whose HMAC somehow validated) → reject, never accept.
         assertThat(store.tryConsume(
                         "absent-" + Long.toHexString(System.nanoTime()),
-                        new OAuthStateService.StateBinding(1, IntegrationKind.GITHUB, Instant.now())))
+                        new OAuthStateService.StateBinding(fixtureWorkspaceId, IntegrationKind.GITHUB, Instant.now())))
                 .isFalse();
     }
 
@@ -76,8 +164,8 @@ class OAuthStateNonceStoreIntegrationTest extends BaseIntegrationTest {
     void concurrentConsumesOfOneNonceProduceExactlyOneWinner() throws Exception {
         String nonce = "race-" + Long.toHexString(System.nanoTime()); // <= 32 chars (column limit)
         var binding = new OAuthStateService.StateBinding(
-                1, IntegrationKind.GITHUB, Instant.now().truncatedTo(ChronoUnit.SECONDS));
-        store.issue(nonce, 1L, IntegrationKind.GITHUB, binding.issuedAt());
+                fixtureWorkspaceId, IntegrationKind.GITHUB, Instant.now().truncatedTo(ChronoUnit.SECONDS));
+        store.issue(nonce, fixtureWorkspaceId, IntegrationKind.GITHUB, binding.issuedAt());
 
         // Two OAuth callbacks land at once (a vendor retrying the redirect). The atomic conditional
         // UPDATE must let only ONE flip unconsumed→consumed; without the consumed_at IS NULL guard

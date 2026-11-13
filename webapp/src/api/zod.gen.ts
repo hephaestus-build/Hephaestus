@@ -427,6 +427,7 @@ export const zConfigAuditEntryView = z.object({
 	entityId: z.string().optional(),
 	entityType: z
 		.enum([
+			"PROVIDER_RESOURCE_RELEASE",
 			"PRACTICE_REVIEW_SETTINGS",
 			"AGENT_BINDING",
 			"AGENT_CONFIG",
@@ -2444,6 +2445,11 @@ export const zOwnItemEvent = z.object({
 	occurredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 });
 
+export const zOwner = z.object({
+	connectionId: z.int(),
+	workspaceSlug: z.string(),
+});
+
 export const zPasskeyCredential = z.object({
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	id: z.string(),
@@ -2909,6 +2915,59 @@ export const zFeedbackDecision = z.object({
 		.nullable(),
 });
 
+/**
+ * A repair's provider identity is pseudonymous security data, never an authorization credential.
+ */
+export const zProviderResourceRepair = z.object({
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	id: z.uuid(),
+	identityHash: z.string(),
+	kind: z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]),
+	origin: z.string(),
+	owners: z.array(zOwner),
+	parentId: z.string(),
+	replacementInUse: z.boolean(),
+	resourceId: z.string().optional(),
+	resourceType: z.enum([
+		"INSTALLATION",
+		"GROUP_HOOK",
+		"BOT_TOKEN",
+		"BOT_USER",
+		"SUBSCRIPTION",
+		"REGISTRATION",
+		"OAUTH_EXCHANGE",
+	]),
+	state: z.enum([
+		"REGISTERING",
+		"PENDING",
+		"CHECKING",
+		"DISPATCHING",
+		"AWAITING_CONFIRMATION",
+		"NEEDS_AUTHORIZATION",
+		"CONFIRMATION_REQUIRED",
+	]),
+});
+
+/**
+ * One numbered page of a list
+ */
+export const zOffsetPageDtoProviderResourceRepair = z.object({
+	content: z.array(zProviderResourceRepair),
+	page: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	size: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	totalElements: z.int(),
+	totalPages: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
 export const zPublicActivityChoice = z.object({
 	visible: z.boolean(),
 });
@@ -3159,6 +3218,11 @@ export const zRegisterSlackChannelRequest = z.object({
 		.min(0)
 		.max(32)
 		.regex(/^[CG][A-Z0-9]{8,}$/),
+});
+
+export const zReleaseProviderResourceRepairRequest = z.object({
+	confirmedGone: z.boolean(),
+	identityHash: z.string().regex(/[a-f0-9]{64}/),
 });
 
 export const zReleaseResearchDataset = z.object({

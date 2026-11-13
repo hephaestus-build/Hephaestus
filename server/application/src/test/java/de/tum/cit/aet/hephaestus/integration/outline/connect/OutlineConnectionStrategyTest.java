@@ -8,9 +8,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy.ConnectInitiation;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy.InitiateRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -24,7 +22,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.DocumentFeedbackErasure;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.OfflineNetwork;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -55,7 +52,6 @@ class OutlineConnectionStrategyTest extends BaseUnitTest {
     private OutlineConnectionStrategy strategy() {
         return new OutlineConnectionStrategy(
                 outlineApiClient,
-                webhookRegistrar,
                 outlineDocumentRepository,
                 outlineCollectionRepository,
                 new OutlineOriginPolicy(Set.of("https://app.getoutline.com")),
@@ -110,20 +106,5 @@ class OutlineConnectionStrategyTest extends BaseUnitTest {
         verify(outlineCollectionRepository).deleteByWorkspaceId(5L);
         // GDPR erase on disconnect covers the event log too — actor subjects are personal data.
         verifyNoInteractions(webhookRegistrar);
-    }
-
-    @Test
-    void prepareProviderTeardown_deletesTheRetainedSubscriptionWithTheRetainedToken() {
-        Runnable deletion = () -> {};
-        var config = new ConnectionConfig.OutlineConfig("https://docs.example", "sub-1", "route-1", Set.of());
-        var token = new BearerToken("ol_api_retained", null);
-        when(webhookRegistrar.deregistration(7L, config, token)).thenReturn(Optional.of(deletion));
-
-        assertThat(strategy()
-                        .prepareProviderTeardown(
-                                new IntegrationRef(IntegrationKind.OUTLINE, 5L, "team-9", 7L),
-                                new ConnectionStrategy.ProviderFootprint(config, token)))
-                .containsSame(deletion);
-        verifyNoInteractions(outlineDocumentRepository, outlineCollectionRepository);
     }
 }

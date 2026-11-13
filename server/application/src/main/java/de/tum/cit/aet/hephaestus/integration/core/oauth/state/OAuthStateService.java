@@ -40,7 +40,12 @@ public interface OAuthStateService {
             long workspaceId,
             IntegrationKind kind,
             Instant issuedAt,
-            @Nullable Long actorAccountId) {
+            @Nullable Long actorAccountId,
+            long connectionId,
+            long lifecycleGeneration) {
+        public StateBinding(long workspaceId, IntegrationKind kind, Instant issuedAt, @Nullable Long actorAccountId) {
+            this(workspaceId, kind, issuedAt, actorAccountId, 0, 0);
+        }
         /** Convenience constructor that defaults actorAccountId to null. */
         public StateBinding(long workspaceId, IntegrationKind kind, Instant issuedAt) {
             this(workspaceId, kind, issuedAt, null);

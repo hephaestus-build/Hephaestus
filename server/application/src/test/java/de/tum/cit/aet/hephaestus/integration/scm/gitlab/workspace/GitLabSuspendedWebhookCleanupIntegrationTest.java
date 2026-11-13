@@ -1,12 +1,10 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 
@@ -17,7 +15,8 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
-import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionLifecycleEvent;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ConnectionProviderRepairRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairDispatcher;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -28,8 +27,6 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import java.time.Duration;
-import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -38,7 +35,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,8 +45,6 @@ import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.modulith.events.FailedEventPublications;
-import org.springframework.modulith.events.ResubmissionOptions;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
@@ -87,7 +81,10 @@ class GitLabSuspendedWebhookCleanupIntegrationTest extends BaseIntegrationTest {
     private JdbcTemplate jdbc;
 
     @Autowired
-    private FailedEventPublications failedPublications;
+    private ProviderResourceRepairDispatcher dispatcher;
+
+    @Autowired
+    private ConnectionProviderRepairRepository references;
 
     @Autowired
     private GitLabWebhookClient provider;
@@ -99,21 +96,22 @@ class GitLabSuspendedWebhookCleanupIntegrationTest extends BaseIntegrationTest {
     @BeforeEach
     void providerRemovesOnlyOwnedHooks() {
         reset(provider);
-        doAnswer(call -> {
+        when(provider.listGroupWebhooksWithCredentials(anyString(), anyString(), anyLong()))
+                .thenAnswer(call -> {
                     if (unavailable.get()) throw new IllegalStateException("provider echoed cleanup-test-token");
-                    Predicate<WebhookInfo> owned = call.getArgument(3);
-                    upstreamHooks.forEach((id, url) -> {
-                        if (owned.test(new WebhookInfo(id, url))) {
-                            upstreamHooks.remove(id);
-                            deletions
-                                    .computeIfAbsent(id, ignored -> new AtomicInteger())
-                                    .incrementAndGet();
-                        }
-                    });
-                    return null;
-                })
-                .when(provider)
-                .removeGroupWebhooksWithCredentials(anyString(), anyString(), anyLong(), any());
+                    return upstreamHooks.entrySet().stream()
+                            .map(hook -> new WebhookInfo(hook.getKey(), hook.getValue()))
+                            .toList();
+                });
+        when(provider.deregisterGroupWebhookWithCredentials(anyString(), anyString(), anyLong(), anyLong()))
+                .thenAnswer(call -> {
+                    Long id = call.getArgument(3);
+                    upstreamHooks.remove(id);
+                    deletions
+                            .computeIfAbsent(id, ignored -> new AtomicInteger())
+                            .incrementAndGet();
+                    return true;
+                });
     }
 
     @Test
@@ -153,8 +151,6 @@ class GitLabSuspendedWebhookCleanupIntegrationTest extends BaseIntegrationTest {
                         .registered())
                 .isFalse();
         assertThat(config(connection).gitlabWebhookId()).isNull();
-        assertThat(upstreamHooks).containsKey(firstId);
-
         reconcile();
 
         assertThat(upstreamHooks).isEmpty();
@@ -182,6 +178,7 @@ class GitLabSuspendedWebhookCleanupIntegrationTest extends BaseIntegrationTest {
                         .registered())
                 .isTrue();
         cleanup.remove(workspace(connection), connection.getId());
+        reconcile();
 
         assertThat(config(connection).gitlabWebhookId()).isEqualTo(secondId);
         assertThat(upstreamHooks.keySet()).containsExactly(secondId);
@@ -190,11 +187,9 @@ class GitLabSuspendedWebhookCleanupIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldRetainTheStoredIdWhenTheProviderRejectsTheCredential() {
         Connection connection = connection(IntegrationState.SUSPENDED, firstId);
-        doAnswer(call -> {
-                    throw WebClientResponseException.create(401, "Unauthorized", HttpHeaders.EMPTY, new byte[0], null);
-                })
-                .when(provider)
-                .removeGroupWebhooksWithCredentials(anyString(), anyString(), anyLong(), any());
+        when(provider.listGroupWebhooksWithCredentials(anyString(), anyString(), anyLong()))
+                .thenThrow(
+                        WebClientResponseException.create(401, "Unauthorized", HttpHeaders.EMPTY, new byte[0], null));
 
         reconcile();
 
@@ -207,8 +202,8 @@ class GitLabSuspendedWebhookCleanupIntegrationTest extends BaseIntegrationTest {
         Connection suspended = connection(IntegrationState.SUSPENDED, firstId);
         unavailable.set(true);
 
-        assertThatThrownBy(() -> cleanup.remove(workspace(suspended), suspended.getId()))
-                .isInstanceOf(IllegalStateException.class);
+        cleanup.remove(workspace(suspended), suspended.getId());
+        reconcile();
         assertThat(config(suspended).gitlabWebhookId()).isEqualTo(firstId);
         assertThat(upstreamHooks.keySet()).containsExactly(firstId);
 
@@ -244,7 +239,7 @@ class GitLabSuspendedWebhookCleanupIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldFinishCleanupBeforeAReactivationCanReuseItsHook() throws Exception {
+    void shouldCaptureCleanupBeforeAReactivationCanRegisterAFreshHook() throws Exception {
         Connection resumed = connection(IntegrationState.SUSPENDED, firstId);
         HeldTransaction removing =
                 HeldTransaction.holdIn(transactions, jdbc, () -> cleanup.remove(workspace(resumed), resumed.getId()));
@@ -252,37 +247,30 @@ class GitLabSuspendedWebhookCleanupIntegrationTest extends BaseIntegrationTest {
         removing.commitAfter(activation);
         activation.get(20, TimeUnit.SECONDS);
 
+        reconcile();
         assertThat(upstreamHooks).isEmpty();
-        assertThat(config(resumed).gitlabWebhookId()).isNull();
+        // This fixture writes state directly. Production activation detaches this old metadata.
         assertThat(current(resumed).getState()).isEqualTo(IntegrationState.ACTIVE);
     }
 
     @Test
     @ExtendWith(OutputCaptureExtension.class)
-    void shouldKeepFailedDeactivationInTheRegistryUntilItIsRedelivered(CapturedOutput output) {
+    void shouldRetainDurableIntentWhenTheDeactivationWakeIsLost(CapturedOutput output) {
         Connection suspended = connection(IntegrationState.ACTIVE, firstId);
         unavailable.set(true);
         lifecycle.transition(
                 suspended,
                 new TransitionRequest(IntegrationState.SUSPENDED, "CREDENTIAL_REVOKED", "SYSTEM", null, null, null));
+        reconcile();
         assertThat(config(suspended).gitlabWebhookId()).isEqualTo(firstId);
-        assertThat(publications(suspended)).isEqualTo(1);
-
+        assertThat(references.findByWorkspaceIdAndConnection_Id(workspace(suspended), suspended.getId()))
+                .isNotEmpty();
+        // Even deleting the wake cannot delete the durable target or prevent the next sweep.
+        jdbc.update("DELETE FROM event_publication WHERE serialized_event LIKE ?", eventPattern(suspended));
         unavailable.set(false);
-        jdbc.update(
-                "UPDATE event_publication SET status = 'FAILED', publication_date = '2000-01-01' "
-                        + "WHERE listener_id LIKE '%GitLabConnectionStateListener%' AND serialized_event LIKE ?",
-                eventPattern(suspended));
-        failedPublications.resubmit(ResubmissionOptions.defaults()
-                .withMinAge(Duration.ZERO)
-                .withBatchSize(1)
-                .withMaxInFlight(1)
-                .withFilter(publication -> publication.getEvent() instanceof ConnectionLifecycleEvent.Deactivated event
-                        && event.connectionId() == suspended.getId()));
-
+        reconcile();
         assertThat(upstreamHooks).isEmpty();
         assertThat(config(suspended).gitlabWebhookId()).isNull();
-        assertThat(publications(suspended)).isZero();
         assertThat(output).doesNotContain("cleanup-test-token");
     }
 
@@ -303,6 +291,11 @@ class GitLabSuspendedWebhookCleanupIntegrationTest extends BaseIntegrationTest {
     private void reconcile() {
         releaseScheduledLeases();
         cleanup.reconcile();
+        jdbc.update("UPDATE provider_resource_repair SET next_attempt_at = TIMESTAMP '1970-01-01' WHERE id IN "
+                + "(SELECT repair_id FROM connection_provider_repair r JOIN connection c ON c.id = r.connection_id "
+                + "WHERE c.kind = 'GITLAB' AND c.config ->> 'serverUrl' = 'https://gitlab.example')");
+        jdbc.update("UPDATE shedlock SET lock_until = TIMESTAMP '1970-01-01' WHERE name = 'provider-resource-repair'");
+        dispatcher.reconcile();
     }
 
     @AfterEach
@@ -343,14 +336,6 @@ class GitLabSuspendedWebhookCleanupIntegrationTest extends BaseIntegrationTest {
 
     private GitLabConfig config(Connection connection) {
         return (GitLabConfig) current(connection).getConfig();
-    }
-
-    private int publications(Connection connection) {
-        Integer count = jdbc.queryForObject(
-                "SELECT count(*) FROM event_publication "
-                        + "WHERE listener_id LIKE '%GitLabConnectionStateListener%' AND serialized_event LIKE ?",
-                Integer.class, eventPattern(connection));
-        return Objects.requireNonNull(count);
     }
 
     private static String eventPattern(Connection connection) {

@@ -132,6 +132,8 @@ public class AuthEvent {
         WORKSPACE_OWNER_CHANGE,
         // A workspace deletion refused for want of a recent sign-in; the deletion itself is on the config audit trail.
         WORKSPACE_DELETION,
+        // Refusal of a provider adoption-fence release without a recent sign-in; success is on config audit.
+        PROVIDER_RESOURCE_RELEASE,
         // Instance LLM catalog: GLOBAL, so the workspace-scoped config trail cannot carry it.
         LLM_CONNECTION_CREATED,
         LLM_CONNECTION_UPDATED,

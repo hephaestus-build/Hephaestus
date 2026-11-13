@@ -10,11 +10,9 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabPreflightService;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWebhookService;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.ScmWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.util.Map;
-import java.util.Optional;
 import org.springframework.stereotype.Component;
 
 /**
@@ -24,7 +22,7 @@ import org.springframework.stereotype.Component;
  * token first. {@link #initiate} reconnects a disconnected workspace to that same group with a freshly
  * verified token; {@link #finalizeConnect} is never reached.
  *
- * <p>{@link #prepareProviderTeardown} cannot revoke the PAT itself (GitLab PATs are revocable only from the
+ * <p>The durable resource repair cannot revoke the PAT itself (GitLab PATs are revocable only from the
  * user's profile page — there is no third-party revoke API), but it DOES tear down the group
  * webhook we registered on connect, using the PAT it reads before the disconnect clears it.
  *
@@ -35,7 +33,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class GitLabConnectionStrategy implements ConnectionStrategy {
 
-    private final GitLabWebhookService webhookService;
     private final ScmWorkspaceContentEraser contentEraser;
     private final ConnectionRepository connections;
     private final WorkspaceRepository workspaces;
@@ -43,13 +40,11 @@ public class GitLabConnectionStrategy implements ConnectionStrategy {
     private final GitLabPreflightService preflight;
 
     public GitLabConnectionStrategy(
-            GitLabWebhookService webhookService,
             ScmWorkspaceContentEraser contentEraser,
             ConnectionRepository connections,
             WorkspaceRepository workspaces,
             GitLabWorkspaceInstance instance,
             GitLabPreflightService preflight) {
-        this.webhookService = webhookService;
         this.contentEraser = contentEraser;
         this.connections = connections;
         this.workspaces = workspaces;
@@ -97,20 +92,5 @@ public class GitLabConnectionStrategy implements ConnectionStrategy {
     @Override
     public void eraseLocalData(IntegrationRef ref) {
         contentEraser.eraseWorkspaceScmMirror(ref.workspaceId());
-    }
-
-    @Override
-    public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref, ProviderFootprint footprint) {
-        if (ref.connectionId() == null) {
-            throw new IllegalArgumentException("GitLab provider teardown requires a connection id");
-        }
-        if (!(footprint.config() instanceof ConnectionConfig.GitLabConfig config)) {
-            return Optional.empty();
-        }
-        return webhookService.webhookDeregistration(
-                ref.workspaceId(),
-                ref.connectionId(),
-                config,
-                footprint.credentials() instanceof BearerToken bearer ? bearer : null);
     }
 }

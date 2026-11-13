@@ -96,21 +96,4 @@ public class OutlineConnectionStateListener {
                     e.activeJob().getId());
         }
     }
-
-    @Async
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onDeactivated(ConnectionLifecycleEvent.Deactivated event) {
-        if (event.kind() != IntegrationKind.OUTLINE) {
-            return;
-        }
-        try {
-            // By connection id: the row already left ACTIVE, so the ACTIVE-scoped lookup cannot see it.
-            webhookRegistrar.deregister(event.workspaceId(), event.connectionId());
-        } catch (RuntimeException e) {
-            log.warn(
-                    "outline.lifecycle: deactivation teardown failed for connectionId={}: {}",
-                    event.connectionId(),
-                    e.toString());
-        }
-    }
 }

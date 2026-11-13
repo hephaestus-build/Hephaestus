@@ -48,6 +48,12 @@ function notFound() {
 }
 
 export const handlers = [
+	http.get("*/admin/provider-resource-repairs", () =>
+		HttpResponse.json({ content: [], page: 0, size: 25, totalElements: 0, totalPages: 0 }),
+	),
+	http.get("*/workspaces/:workspaceSlug/connections/:connectionId/provider-repairs", () =>
+		HttpResponse.json({ content: [], page: 0, size: 25, totalElements: 0, totalPages: 0 }),
+	),
 	http.get("*/workspaces/:workspaceSlug/sync/progress", () =>
 		HttpResponse.json({ syncing: false }),
 	),

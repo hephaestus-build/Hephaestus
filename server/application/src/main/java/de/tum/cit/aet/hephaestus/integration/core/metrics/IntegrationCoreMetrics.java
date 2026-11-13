@@ -13,7 +13,8 @@ public final class IntegrationCoreMetrics {
     public static final String INTEGRATION_MESSAGE_DROPPED = "integration.message.dropped";
     public static final String INTEGRATION_MESSAGE_LAG = "integration.message.lag";
     public static final String INTEGRATION_MESSAGE_PROCESS_DURATION = "integration.message.process.duration";
-    public static final String INTEGRATION_PROVIDER_TEARDOWN = "integration.provider.teardown";
+    public static final String INTEGRATION_PROVIDER_REPAIR_ATTEMPTS = "integration.provider.repair.attempts";
+    public static final String INTEGRATION_PROVIDER_REPAIR_OPEN = "integration.provider.repair.open";
     public static final String INTEGRATION_SYNC_PUSH_MESSAGES = "integration.sync.push.messages";
     public static final String INTEGRATION_SYNC_SSE_EVENTS = "integration.sync.sse.events";
     public static final String INTEGRATION_SYNC_SSE_SUBSCRIBERS = "integration.sync.sse.subscribers";
