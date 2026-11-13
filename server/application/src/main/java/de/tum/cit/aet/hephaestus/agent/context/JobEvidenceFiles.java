@@ -383,11 +383,8 @@ public class JobEvidenceFiles implements SandboxResultListener {
             if (Files.exists(root, LinkOption.NOFOLLOW_LINKS) || !live(job)) return;
             var files = attemptInputs.list(job);
             if (files.isEmpty()) {
-                throw unverified(
-                        job,
-                        new CheckoutUnverifiedException(
-                                CheckoutUnverifiedException.Reason.UNAVAILABLE,
-                                "The running attempt has no recorded files"));
+                throw new CheckoutUnverifiedException(
+                        CheckoutUnverifiedException.Reason.UNAVAILABLE, "The running attempt has no recorded files");
             }
             var lease = acquireForRebuild(job);
             try (lease) {
@@ -396,7 +393,13 @@ public class JobEvidenceFiles implements SandboxResultListener {
         } catch (CheckoutUnverifiedException failure) {
             // An erasure that committed during the rebuild keeps its own reason. The reconcile removes a folder that
             // was published after it.
-            if (live(job)) throw failure;
+            if (!live(job)) return;
+            log.warn(
+                    "Captured checkout cannot be built here: jobId={}, attempt={}, reason={}",
+                    job.getId(),
+                    job.getAttempt(),
+                    failure.reason().tag());
+            throw failure;
         } finally {
             rebuild.unlock();
             if (!rebuild.hasQueuedThreads()) rebuilds.remove(root, rebuild);
@@ -488,30 +491,17 @@ public class JobEvidenceFiles implements SandboxResultListener {
             } catch (FileAlreadyExistsException | DirectoryNotEmptyException concurrent) {
                 // Another process published the same folder first.
             }
-        } catch (CheckoutUnverifiedException failure) {
-            throw unverified(job, failure);
         } catch (IllegalArgumentException | IllegalStateException malformed) {
             // A recorded path or key that does not rebuild: a capture failure, never a coverage refusal.
-            throw unverified(
-                    job,
-                    new CheckoutUnverifiedException(
-                            CheckoutUnverifiedException.Reason.MISMATCH,
-                            "The recorded capture does not rebuild the folder",
-                            malformed));
+            throw new CheckoutUnverifiedException(
+                    CheckoutUnverifiedException.Reason.MISMATCH,
+                    "The recorded capture does not rebuild the folder",
+                    malformed);
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);
         } finally {
             if (staging != null) delete(staging);
         }
-    }
-
-    private static CheckoutUnverifiedException unverified(ReviewJob job, CheckoutUnverifiedException failure) {
-        log.warn(
-                "Captured checkout cannot be built here: jobId={}, attempt={}, reason={}",
-                job.getId(),
-                job.getAttempt(),
-                failure.reason().tag());
-        return failure;
     }
 
     /**

@@ -29,7 +29,6 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
-import de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedException;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
@@ -297,7 +296,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldAdmitWithAKeptBasisOnAServerThatCannotBuildTheMissingFolder() {
+    void shouldAdmitWithAKeptBasisWithoutBuildingTheMissingFolder() {
         var request = admissionWithRetainedInputs(null);
         var basis = new ReviewCompositionBasis();
         basis.setCopyId(UUID.randomUUID());
@@ -314,17 +313,12 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         when(bases.findByWorkspaceIdAndJobId(1L, job.getId())).thenReturn(Optional.of(basis));
         when(files.vouchesForOriginalCopy(basis.getCopyId(), job.getId(), 1L, 0))
                 .thenReturn(true);
-        // This server lacks the folder, and the provider no longer serves the checkout to build it.
-        lenient()
-                .doThrow(new CheckoutUnverifiedException(
-                        CheckoutUnverifiedException.Reason.FETCH_FAILED, "The captured checkout could not be built"))
-                .when(files)
-                .ensureAttemptFolder(identity());
 
         service.admit(identity(), request);
 
         assertThat(ResultAdmissionService.isAdmitted(job)).isTrue();
         assertThat(basis.getAdmissionDigest()).isEqualTo(job.getAdmissionDigest());
+        verify(files, never()).ensureAttemptFolder(any(ResultAdmissionService.AdmissionIdentity.class));
     }
 
     private SealResultsRequestDTO admissionWithRetainedInputs(@Nullable Instant deadline) {
