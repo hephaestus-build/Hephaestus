@@ -145,6 +145,18 @@ class BackgroundWorkArchTest extends HephaestusArchitectureTest {
                 .noneMatch(found -> found.contains("Gated"));
     }
 
+    @Test
+    void shouldRequireTheConditionOnEachBeanMethodThatReturnsAGatedClass() {
+        JavaClasses ungated = new ClassFileImporter().importClasses(GatedLifecycleThread.class, UngatedFactory.class);
+        JavaClasses gated = new ClassFileImporter().importClasses(GatedLifecycleThread.class, GatedFactory.class);
+
+        assertThat(startupThreads(ungated))
+                .singleElement()
+                .asString()
+                .startsWith(GatedLifecycleThread.class.getName() + ".start");
+        assertThat(startupThreads(gated)).isEmpty();
+    }
+
     private static List<String> scheduledTaskBeans(JavaClasses types) {
         return types.stream()
                 .flatMap(type -> type.getMethods().stream())
@@ -260,18 +272,24 @@ class BackgroundWorkArchTest extends HephaestusArchitectureTest {
         return type.isAnnotatedWith(ConditionalOnBackgroundWork.class);
     }
 
-    /** A bean method by its own condition; any other callback by the condition of its bean's class or bean methods. */
+    /**
+     * A bean method by its own condition; any other callback by each registration of its bean. Spring evaluates a
+     * {@code @Bean} method's condition, not the condition of the class that the method returns, so every bean method that
+     * returns the class needs the condition of its own. The class's condition counts for the scanned registration only.
+     */
     private static boolean gated(JavaCodeUnit unit, JavaClasses types) {
         if (unit instanceof JavaMethod method && method.isAnnotatedWith(Bean.class)) return gated(method);
         JavaClass bean = unit.getOwner();
-        if (gated(bean)) return true;
-        if (bean.isMetaAnnotatedWith("org.springframework.stereotype.Component")) return false;
         List<JavaMethod> definitions = types.stream()
                 .flatMap(type -> type.getMethods().stream())
                 .filter(method -> method.isAnnotatedWith(Bean.class)
                         && method.getRawReturnType().isEquivalentTo(bean.reflect()))
                 .toList();
-        return !definitions.isEmpty() && definitions.stream().allMatch(BackgroundWorkArchTest::gated);
+        if (!definitions.stream().allMatch(BackgroundWorkArchTest::gated)) return false;
+        boolean scanned = bean.isMetaAnnotatedWith("org.springframework.stereotype.Component");
+        // A class that is not scanned and has bean methods is registered only by them, and they carry the condition.
+        if (!scanned && !definitions.isEmpty()) return true;
+        return gated(bean);
     }
 
     static class Registrars {
@@ -326,6 +344,22 @@ class BackgroundWorkArchTest extends HephaestusArchitectureTest {
         @Override
         public void start() {
             Thread.ofVirtual().start(() -> {});
+        }
+    }
+
+    /** Registers a lifecycle whose class carries the condition, but Spring reads the condition of this method. */
+    static class UngatedFactory {
+        @Bean
+        GatedLifecycleThread lifecycle() {
+            return new GatedLifecycleThread();
+        }
+    }
+
+    static class GatedFactory {
+        @Bean
+        @ConditionalOnBackgroundWork
+        GatedLifecycleThread lifecycle() {
+            return new GatedLifecycleThread();
         }
     }
 
