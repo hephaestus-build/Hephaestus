@@ -6,6 +6,7 @@ import { parseCompositions, type Review, type RunFile } from "./feedback-eval/co
 import {
 	catalogPractices,
 	deterministic,
+	occasionStatement,
 	parseGateConfig,
 	ceilingReached,
 	practiceDigest,
@@ -180,18 +181,15 @@ void test("a practice without an Applicability section or an Applies when gate f
 		"new-practice has no Applicability section and no Applies when gate",
 		`new-practice has no pin (now ${practiceDigest(silent)})`,
 	]);
-	const [gap] = gate.occasionGaps;
-	assert.ok(gap !== undefined);
-	const fixed = catalog.map((practice) =>
-		practice.slug === gap
-			? {
-					...practice,
-					criteria: `${practice.criteria}\n\n## Applicability\nIt applies to every change.`,
-				}
-			: practice,
+	// A listed gap that states its occasion makes the list stale.
+	const stated = catalog.find(
+		(practice) => practice.automated && occasionStatement(practice) !== "",
 	);
-	const found = problems(deterministic(inputs({ catalog: fixed })), "G5");
-	assert.ok(found.includes(`${gap} now states its occasion: remove it from occasionGaps`));
+	assert.ok(stated);
+	const listed = { ...gate, occasionGaps: [stated.slug] };
+	assert.deepEqual(problems(deterministic(inputs({ gate: listed })), "G5"), [
+		`${stated.slug} now states its occasion: remove it from occasionGaps`,
+	]);
 });
 
 void test("an edit to a practice's criteria fails G5 until it is pinned again", () => {
