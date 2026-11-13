@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
+import de.tum.cit.aet.hephaestus.core.action.ActionVariants;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackOnboardingService;
@@ -29,6 +30,11 @@ class SlackNoticeAdapter implements ActionAdapter {
     @Override
     public ActionKind kind() {
         return ActionKind.SLACK_NOTICE;
+    }
+
+    @Override
+    public ActionVariants variants() {
+        return ActionVariants.one(SlackNotice.class);
     }
 
     @Override

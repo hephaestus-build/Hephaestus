@@ -83,6 +83,11 @@ class NativeActionRecipientIntegrationTest extends AbstractWorkspaceIntegrationT
             }
 
             @Override
+            public ActionVariants variants() {
+                return ActionVariants.one(ActionTestSupport.Untyped.class);
+            }
+
+            @Override
             public ActionResult execute(ActionAttempt attempt) {
                 assertThat(attempt.nativeRecipient()).isEqualTo(recipient);
                 if (!attempt.fence().beginWrite()) return new ActionResult.Abandoned();

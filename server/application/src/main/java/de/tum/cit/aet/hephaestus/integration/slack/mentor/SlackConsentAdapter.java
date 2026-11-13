@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.action.ActionState;
 import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
+import de.tum.cit.aet.hephaestus.core.action.ActionVariants;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackChannelActivation;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackConsentAnnouncement;
@@ -33,6 +34,11 @@ class SlackConsentAdapter implements ActionAdapter {
     @Override
     public ActionKind kind() {
         return ActionKind.SLACK_CONSENT;
+    }
+
+    @Override
+    public ActionVariants variants() {
+        return ActionVariants.one(SlackConsentAnnouncement.class);
     }
 
     @Override
