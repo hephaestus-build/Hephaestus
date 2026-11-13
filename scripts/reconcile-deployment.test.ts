@@ -15,8 +15,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
+import { parse } from "yaml";
+
 import { environmentForGitFixture, GIT_REPOSITORY_VARIABLES } from "./lib/git-environment.ts";
-import { asRecord, at, parseJson } from "./lib/json.ts";
+import { asArray, asRecord, at, parseJson } from "./lib/json.ts";
 import {
 	adoptTooling,
 	appliedCommit,
@@ -1005,6 +1007,31 @@ async function reconcilerFixture(directory: string, targetRelease = "v1.0.0") {
 			],
 		}),
 	);
+	const imageInventory = asRecord(
+		parseJson(await readFile(path.join(checkout, "security/release-images.json"), "utf8")),
+		"fixture inventory",
+	);
+	await writeFile(
+		path.join(checkout, "deploy/chart/hephaestus/values.schema.json"),
+		JSON.stringify({
+			properties: {
+				images: {
+					properties: Object.fromEntries(
+						Object.keys(chartChannelImages()).map((key) => [
+							key.slice("HEPHAESTUS_IMAGE_".length).toLowerCase().replaceAll("_", "-"),
+							{},
+						]),
+					),
+				},
+			},
+		}),
+	);
+	// A release inventory can include scan-only subjects that its chart must not receive.
+	imageInventory.images = [...asArray(imageInventory.images, "images"), "legacy-scan-only"];
+	await writeFile(
+		path.join(checkout, "security/release-images.json"),
+		JSON.stringify(imageInventory),
+	);
 	gitIn(checkout, "init", "--quiet", "--initial-branch=main");
 	gitIn(checkout, "config", "user.email", "host@example.invalid");
 	gitIn(checkout, "config", "user.name", "host");
@@ -1018,6 +1045,9 @@ async function reconcilerFixture(directory: string, targetRelease = "v1.0.0") {
 		commits.set(release, gitIn(checkout, "rev-parse", "HEAD"));
 	}
 	const releaseCommit = gitIn(checkout, "rev-parse", "HEAD");
+	// The installed tooling has its own source revision, separate from the runtime's applied record.
+	await rm(bootstrap, { recursive: true, force: true });
+	gitIn(checkout, "worktree", "add", "--quiet", "--detach", bootstrap, "v0.8.0");
 	gitIn(checkout, "checkout", "--quiet", "-b", "deploy-state");
 	await mkdir(path.join(checkout, "channels"));
 	await writeFile(
@@ -1192,6 +1222,131 @@ await test(
 			assert.match(calls, /git worktree add/u);
 			assert.match(calls, /git status[\s\S]*systemctl show[\s\S]*systemctl daemon-reload/u);
 			assert.doesNotMatch(calls, /git fetch|cosign|docker/u);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"startup preserves newer tooling installed by the operator",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-newer-tooling-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			await writeFile(path.join(fixture.checkout, "tooling-update"), "operator-reviewed update\n");
+			gitIn(fixture.checkout, "add", "tooling-update");
+			gitIn(fixture.checkout, "commit", "--quiet", "-m", "new tooling");
+			const toolingCommit = gitIn(fixture.checkout, "rev-parse", "HEAD");
+			const { tree } = await ensureReleaseTree(
+				fixture.checkout,
+				path.join(directory, "releases"),
+				toolingCommit,
+				toolingCommit,
+			);
+			await adoptTooling(path.join(directory, "tooling"), tree);
+			await writeFile(
+				path.join(directory, "applied.json"),
+				JSON.stringify({ ...fixture.record, commit: fixture.releaseCommit }),
+			);
+			for (let tick = 0; tick < 2; tick += 1) {
+				const result = fixture.run();
+				assert.equal(result.status, 0, result.stderr);
+				assert.match(result.stdout, /Keeping reconciler tooling/u);
+				assert.equal(await readlink(path.join(directory, "tooling")), tree);
+				const runtimeRecord = await readApplied(path.join(directory, "applied.json"));
+				assert.equal(runtimeRecord?.commit, fixture.releaseCommit);
+			}
+			assert.doesNotMatch(await fixture.calls(), /helm upgrade|systemctl daemon-reload/u);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"commit channels apply arbitrary image inventories and roll back without downgrading tooling",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-image-contract-"));
+		try {
+			const fixture = await reconcilerFixture(directory, "v0.95.1");
+			const promote = async (
+				sourceCommit: string,
+				channelImages: Record<string, string>,
+				allowRollback = false,
+			) => {
+				gitIn(fixture.checkout, "checkout", "--quiet", "deploy-state");
+				await writeFile(
+					path.join(fixture.checkout, "channels/chart.json"),
+					JSON.stringify({ commit: sourceCommit, images: channelImages, allowRollback }),
+				);
+				gitIn(fixture.checkout, "add", "channels/chart.json");
+				gitIn(fixture.checkout, "commit", "--quiet", "-m", "promote image contract");
+				gitIn(fixture.checkout, "push", "--quiet", "origin", "deploy-state");
+				gitIn(fixture.checkout, "checkout", "--quiet", "main");
+			};
+			const first = fixture.run({ channel: "chart" });
+			assert.equal(first.status, 0, first.stderr);
+			await writeFile(
+				path.join(fixture.checkout, "security/release-images.json"),
+				JSON.stringify({ images: ["engine", "executor"], upstream: [] }),
+			);
+			await writeFile(
+				path.join(fixture.checkout, "deploy/chart/hephaestus/values.schema.json"),
+				JSON.stringify({ properties: { images: { properties: { engine: {}, executor: {} } } } }),
+			);
+			gitIn(
+				fixture.checkout,
+				"add",
+				"security/release-images.json",
+				"deploy/chart/hephaestus/values.schema.json",
+			);
+			gitIn(fixture.checkout, "commit", "--quiet", "-m", "different image contract");
+			const candidate = gitIn(fixture.checkout, "rev-parse", "HEAD");
+			gitIn(fixture.checkout, "push", "--quiet", "origin", "main");
+			const candidateImages = {
+				HEPHAESTUS_IMAGE_ENGINE: `ghcr.io/example/custom-service@sha256:${"a".repeat(64)}`,
+				HEPHAESTUS_IMAGE_EXECUTOR: `ghcr.io/another-team/runtime@sha256:${"b".repeat(64)}`,
+			};
+			await promote(candidate, candidateImages);
+			const next = fixture.run({ channel: "chart" });
+			assert.equal(next.status, 0, next.stderr);
+			const values = asRecord(
+				parse(await readFile(path.join(directory, "chart", `${candidate}.images.yaml`), "utf8")),
+				"chart values",
+			);
+			assert.deepEqual(values.images, {
+				engine: candidateImages.HEPHAESTUS_IMAGE_ENGINE,
+				executor: candidateImages.HEPHAESTUS_IMAGE_EXECUTOR,
+			});
+			const candidateRecord = await readApplied(path.join(directory, "applied.json"));
+			assert.equal(candidateRecord?.commit, candidate);
+			const verifier = path.join(directory, "releases", candidate);
+			assert.equal(await readlink(path.join(directory, "tooling")), verifier);
+			await promote(fixture.releaseCommit, chartChannelImages(), true);
+			const rollback = fixture.run({ channel: "chart" });
+			assert.equal(rollback.status, 0, rollback.stderr);
+			const older = asRecord(
+				parse(
+					await readFile(
+						path.join(directory, "chart", `${fixture.releaseCommit}.images.yaml`),
+						"utf8",
+					),
+				),
+				"older values",
+			);
+			assert.equal(
+				asRecord(older.images, "older images")["application-server"],
+				chartChannelImages().HEPHAESTUS_IMAGE_APPLICATION_SERVER,
+			);
+			const rollbackRecord = await readApplied(path.join(directory, "applied.json"));
+			assert.equal(rollbackRecord?.commit, fixture.releaseCommit);
+			assert.equal(await readlink(path.join(directory, "tooling")), verifier);
+			const unchanged = fixture.run({ channel: "chart" });
+			assert.equal(unchanged.status, 0, unchanged.stderr);
+			assert.equal(await readlink(path.join(directory, "tooling")), verifier);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}
@@ -2332,7 +2487,10 @@ await test(
 			host.apply();
 			const tree = path.join(host.releases, first);
 			assert.equal(gitIn(tree, "rev-parse", "HEAD"), first);
-			assert.equal(await readlink(path.join(directory, "tooling")), tree);
+			assert.equal(
+				await readlink(path.join(directory, "tooling")),
+				path.join(host.releases, third),
+			);
 			const record = await host.record();
 			assert.equal(record?.release, first);
 			assert.equal(record.previous, third);
