@@ -29,7 +29,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Supplier;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -78,11 +77,7 @@ class PostedCopyCorrectorTest {
                 .build();
         var repository = mock(FeedbackCopyRepository.class);
         when(repository.incorrectCopyIds(1, id)).thenReturn(Set.of(copyId));
-        when(transactions.holdsLease(1, id, OWNER)).thenReturn(true);
-        when(transactions.recipientWrite(eq(2L), any())).thenAnswer(a -> {
-            Supplier<?> callback = a.getArgument(1);
-            return callback.get();
-        });
+        when(transactions.admitCorrection(1, id, OWNER)).thenReturn(true);
         when(writer.updateSummary(eq(target), any(), any()))
                 .thenReturn(new CopyUpdateReceipt(copyId, CopyUpdateKind.EDITED, "note-17", null, null));
         new PostedCopyCorrector(repository, visibility, List.of(writer), List.of(), transactions)

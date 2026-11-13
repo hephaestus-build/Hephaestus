@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
+import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyDisposition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyForm;
@@ -75,7 +76,11 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
+import org.springframework.dao.DataAccessException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFeedbackIntegrationTest {
     @Autowired
@@ -309,6 +314,65 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
                 id);
     }
 
+    /**
+     * What the next provider write sees of the database. The write runs no transaction, and another connection can
+     * take the developer's account row and every identity lock at once. Problems are recorded, not thrown, because a
+     * send swallows an exception from the provider.
+     */
+    protected final class WriteObservation {
+        final List<String> problems = new ArrayList<>();
+        int calls;
+        int identities;
+
+        void observe() {
+            calls++;
+            if (TransactionSynchronizationManager.isActualTransactionActive()) problems.add("a transaction is active");
+            // A failed statement aborts its transaction, so each probe has its own.
+            otherConnection(() -> {
+                try {
+                    jdbc.queryForObject(
+                            "SELECT id FROM account WHERE id = ? FOR UPDATE NOWAIT", Long.class, developerId);
+                } catch (DataAccessException locked) {
+                    problems.add("the account row is locked");
+                }
+            });
+            otherConnection(() -> {
+                for (var identity : jdbc.queryForList(
+                        "SELECT p.type, p.server_url, i.provider_user_key FROM identity i"
+                                + " JOIN identity_provider p ON p.id = i.provider_id WHERE i.account_id = ?",
+                        developerId)) {
+                    identities++;
+                    var origin =
+                            ScmOrigin.of((String) identity.get("server_url")).orElseThrow();
+                    boolean free = Boolean.TRUE.equals(jdbc.queryForObject(
+                            "SELECT pg_try_advisory_xact_lock(hashtextextended("
+                                    + "jsonb_build_array(CAST(? AS text), CAST(? AS text), CAST(? AS text))::text, 0))",
+                            Boolean.class,
+                            identity.get("type"),
+                            origin,
+                            identity.get("provider_user_key")));
+                    if (!free) problems.add("an identity lock is held");
+                }
+            });
+        }
+
+        private void otherConnection(Runnable probe) {
+            var other = new TransactionTemplate(transactionManager);
+            other.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+            other.executeWithoutResult(status -> {
+                probe.run();
+                status.setRollbackOnly();
+            });
+        }
+    }
+
+    /** Observes the provider's next write. */
+    protected WriteObservation observeNextWrite() {
+        var observation = new WriteObservation();
+        provider.duringWrite = observation::observe;
+        return observation;
+    }
+
     protected enum Failure {
         NONE,
         NOT_SENT,
@@ -320,6 +384,10 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
         int summaryCreates, noteCreates, updates;
         final List<UUID> retracted = new ArrayList<>();
         final List<UUID> restored = new ArrayList<>();
+
+        /** The copies that a correction wrote to, in the order of the calls. */
+        final List<UUID> corrected = new ArrayList<>();
+
         Failure summaryFailure = Failure.NONE, noteFailure = Failure.NONE, updateFailure = Failure.NONE;
         LookupPresence readback = LookupPresence.FOUND;
         CopyUpdateKind retraction = CopyUpdateKind.GONE;
@@ -327,6 +395,10 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
 
         @Nullable
         Runnable beforeNotes;
+
+        /** Runs once, at the start of the next provider write, as a concurrent action during the call. */
+        @Nullable
+        Runnable duringWrite;
 
         @Nullable
         String lastSummaryLookupMarker;
@@ -339,6 +411,12 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
             return IntegrationKind.GITHUB;
         }
 
+        private void during() {
+            var hook = duringWrite;
+            duringWrite = null;
+            if (hook != null) hook.run();
+        }
+
         private void committed(UUID id) {
             assertThat(copies.findById(id).orElseThrow().getState()).isEqualTo(FeedbackCopyState.WRITE_STARTED);
             assertThat(copies.findById(id).orElseThrow().getWriteStartedAt()).isNotNull();
@@ -346,6 +424,7 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
 
         @Override
         public SummaryHandle postSummary(FeedbackTarget target, SummaryContent content) {
+            during();
             committed(content.copyId());
             summaryCreates++;
             if (summaryFailure == Failure.BEFORE_CREATE)
@@ -369,7 +448,9 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
 
         @Override
         public CopyUpdateReceipt updateSummary(FeedbackTarget target, SummaryHandle existing, SummaryContent content) {
+            during();
             updates++;
+            corrected.add(content.copyId());
             if (updateFailure == Failure.BEFORE_CREATE)
                 throw new IllegalStateException("The quiet edit response was lost.");
             UUID id = UUID.fromString(existing.externalRef());
@@ -461,6 +542,7 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
 
         @Override
         public List<CopyUpdateReceipt> editOwn(FeedbackTarget target, List<OwnedEdit> notes) {
+            during();
             return notes.stream()
                     .map(note -> {
                         UUID id = UUID.fromString(note.copy().externalRef());
@@ -479,9 +561,11 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
 
         @Override
         public List<CopyUpdateReceipt> restore(FeedbackTarget target, List<RetractedNote> notes) {
+            during();
             return notes.stream()
                     .map(note -> {
                         restored.add(note.copy().copyId());
+                        corrected.add(note.copy().copyId());
                         var gone = !physical.containsKey(note.copy().copyId());
                         return new CopyUpdateReceipt(
                                 note.copy().copyId(),
@@ -495,9 +579,11 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
 
         @Override
         public List<CopyUpdateReceipt> retract(FeedbackTarget target, List<CopyReceipt> receipts) {
+            during();
             return receipts.stream()
                     .map(receipt -> {
                         retracted.add(receipt.copyId());
+                        corrected.add(receipt.copyId());
                         if (retraction == CopyUpdateKind.GONE) physical.remove(receipt.copyId());
                         return new CopyUpdateReceipt(
                                 receipt.copyId(), retraction, receipt.externalRef(), receipt.externalUrl(), null);

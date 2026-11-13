@@ -47,7 +47,7 @@ public class PostedCopyCorrector {
             boolean remove = visibility.withdrawn(workspaceId, feedbackId)
                     || copies.incorrectCopyIds(workspaceId, feedbackId).contains(copy.getId());
             if (remove == (copy.getState() == FeedbackCopyState.RETRACTED)) continue;
-            if (!owner.fence().beginWrite() || !transactions.holdsLease(workspaceId, feedbackId, owner)) return;
+            if (!owner.fence().beginWrite() || !transactions.admitCorrection(workspaceId, feedbackId, owner)) return;
             if (!remove) {
                 if (restoreAllowed == null) restoreAllowed = transactions.mayRestore(workspaceId, feedbackId, owner);
                 if (!restoreAllowed) continue;
@@ -64,7 +64,7 @@ public class PostedCopyCorrector {
                 continue;
             }
             if (copy.getKind() == FeedbackCopyKind.SUMMARY) correctSummary(feedback, copy, target, remove, owner);
-            else correctNote(feedback, copy, target, remove, owner);
+            else correctNote(copy, target, remove, owner);
         }
     }
 
@@ -89,22 +89,16 @@ public class PostedCopyCorrector {
             return;
         }
         String body = remove ? "This feedback was withdrawn." : Objects.requireNonNull(feedback.getBody());
-        var result = transactions.recipientWrite(
-                feedback.getDeveloperId(),
-                () -> matching.getFirst()
-                        .updateSummary(
-                                target,
-                                new SummaryHandle(Objects.requireNonNull(copy.getExternalRef()), copy.getExternalUrl()),
-                                new SummaryContent(
-                                        copy.getId(),
-                                        body,
-                                        Objects.requireNonNull(copy.getWriteKey()),
-                                        copy.getWriteMarker())));
+        var result = matching.getFirst()
+                .updateSummary(
+                        target,
+                        new SummaryHandle(Objects.requireNonNull(copy.getExternalRef()), copy.getExternalUrl()),
+                        new SummaryContent(
+                                copy.getId(), body, Objects.requireNonNull(copy.getWriteKey()), copy.getWriteMarker()));
         apply(copy, result, remove, owner);
     }
 
-    private void correctNote(
-            Feedback feedback, FeedbackCopy copy, FeedbackTarget target, boolean remove, ActionAttempt owner) {
+    private void correctNote(FeedbackCopy copy, FeedbackTarget target, boolean remove, ActionAttempt owner) {
         if (copies.hasNewerSummaryReceipt(
                 copy.getWorkspaceId(), copy.getFeedbackId(), Objects.requireNonNull(copy.getExternalRef()))) {
             transactions.correctionError(
@@ -136,13 +130,10 @@ public class PostedCopyCorrector {
         var receipt = new CopyReceipt(
                 copy.getId(), CopyDisposition.POSTED, copy.getExternalRef(), copy.getExternalUrl(), true, null);
         var writer = matching.getFirst();
-        var updates = transactions.recipientWrite(
-                feedback.getDeveloperId(),
-                () -> remove
-                        ? writer.retract(target, List.of(receipt))
-                        : writer.restore(
-                                target,
-                                List.of(new LineNoteWriter.RetractedNote(receipt, FeedbackSendService.line(copy)))));
+        var updates = remove
+                ? writer.retract(target, List.of(receipt))
+                : writer.restore(
+                        target, List.of(new LineNoteWriter.RetractedNote(receipt, FeedbackSendService.line(copy))));
         var update =
                 updates.stream().filter(r -> r.copyId().equals(copy.getId())).findFirst();
         if (update.isPresent()) apply(copy, update.get(), remove, owner);

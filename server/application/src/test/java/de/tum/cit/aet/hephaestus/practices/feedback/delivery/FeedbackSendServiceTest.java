@@ -42,7 +42,6 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
-import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -90,10 +89,6 @@ class FeedbackSendServiceTest {
         when(writer.kind()).thenReturn(IntegrationKind.GITHUB);
         when(targets.resolve(feedback)).thenReturn(target);
         when(targets.resolveExisting(feedback)).thenReturn(target);
-        when(transactions.recipientWrite(eq(2L), any())).thenAnswer(a -> {
-            Supplier<?> write = a.getArgument(1);
-            return write.get();
-        });
         sender = new FeedbackSendService(
                 transactions,
                 targets,

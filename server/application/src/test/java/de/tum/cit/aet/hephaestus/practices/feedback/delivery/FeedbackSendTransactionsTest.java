@@ -44,7 +44,6 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -61,7 +60,7 @@ class FeedbackSendTransactionsTest {
     final PersonDataWriteFence privacy = mock(PersonDataWriteFence.class);
     final Instant now = Instant.EPOCH;
     final UUID id = UUID.randomUUID(), copyId = UUID.randomUUID();
-    final Feedback row = Feedback.builder().id(id).workspaceId(1).build();
+    final Feedback row = Feedback.builder().id(id).workspaceId(1).developerId(2).build();
     final ActionAttempt owner = attempt(1), expired = attempt(2);
     final FeedbackSendTransactions transactions = new FeedbackSendTransactions(
             store,
@@ -83,6 +82,8 @@ class FeedbackSendTransactionsTest {
     @BeforeEach
     void setup() {
         when(store.lock(1, id)).thenReturn(row);
+        when(parents.developerOf(id, 1)).thenReturn(Optional.of(2L));
+        when(privacy.holdForAccountWrite(2)).thenReturn(true);
         when(actions.holds(owner)).thenReturn(true);
     }
 
@@ -197,10 +198,25 @@ class FeedbackSendTransactionsTest {
     }
 
     @Test
-    void shouldBlockNewPhysicalWritesWhileErasureHoldsTheAccount() {
-        var writes = new AtomicInteger();
-        assertThatThrownBy(() -> transactions.recipientWrite(2, writes::incrementAndGet))
-                .isInstanceOf(FeedbackSendTransactions.RecipientWriteRefused.class);
-        assertThat(writes).hasValue(0);
+    void shouldWithholdAsPersonSuppressedAndStartNoCopyWhenTheFenceCannotHoldTheRecipient() {
+        when(privacy.holdForAccountWrite(2)).thenReturn(false);
+        assertThat(transactions.fence(1, id, owner, List.of(copyId), List.of())).isFalse();
+        verify(store).withhold(row, FeedbackStopReason.PERSON_SUPPRESSED);
+        verify(copies, never()).beginWrite(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    void shouldWithholdACorrectionWhenItCannotHoldTheRecipient() {
+        when(privacy.holdForAccountWrite(2)).thenReturn(false);
+        assertThat(transactions.admitCorrection(1, id, owner)).isFalse();
+        verify(store).withhold(row, FeedbackStopReason.PERSON_SUPPRESSED);
+    }
+
+    @Test
+    void shouldAdmitACorrectionOnlyForTheCurrentLeaseHolder() {
+        when(privacy.holdForAccountWrite(2)).thenReturn(true);
+        assertThat(transactions.admitCorrection(1, id, owner)).isTrue();
+        assertThat(transactions.admitCorrection(1, id, expired)).isFalse();
+        verify(store, never()).withhold(any(), any());
     }
 }
