@@ -62,6 +62,8 @@ export interface DriverOptions {
 }
 
 const RENEW_EVERY_MS = 25_000;
+/** Retry a failed renewal while the replacement gateway starts accepting connections. */
+const RENEW_RETRY_WAIT_MS = 1000;
 const IDLE_WAIT_MS = 2000;
 /** The longest wait for one gateway call: a gateway that answers later has failed the call. */
 const CALL_TIMEOUT_MS = 30_000;
@@ -299,19 +301,28 @@ async function keepLease(
 	{ everyMs, log }: { everyMs: number; log: (line: string) => void },
 ): Promise<void> {
 	let until = initialUntil - LEASE_MARGIN_MS;
+	let delay = everyMs;
 	const stopped = () => signal.aborted;
 	while (!stopped()) {
-		const wait = await sleep(Math.min(everyMs, Math.max(0, until - Date.now())), true, {
+		const wait = await sleep(Math.min(delay, Math.max(0, (until - Date.now()) / 2)), true, {
 			signal,
 		}).catch(() => false);
 		if (!wait) {
 			return;
 		}
+		const remaining = until - Date.now();
+		if (remaining <= 0) {
+			log(`driver: the lease of ${runUrl} ran out without a renewal`);
+			lost.abort();
+			return;
+		}
+		delay = Math.min(everyMs, RENEW_RETRY_WAIT_MS);
 		try {
 			const response = await fetch(`${runUrl}/lease`, {
 				method: "POST",
 				headers,
-				signal: bounded(signal, Math.min(CALL_TIMEOUT_MS, until - Date.now())),
+				// A connection to a retiring server can stall. Leave time to reconnect before the lease ends.
+				signal: bounded(signal, Math.min(CALL_TIMEOUT_MS, Math.floor(remaining / 2))),
 			});
 			if (GONE.has(response.status)) {
 				await response.body?.cancel();
@@ -326,6 +337,7 @@ async function keepLease(
 				const renewed = isJsonObject(body) ? instant(body.leasedUntil) : Number.NaN;
 				if (!Number.isNaN(renewed)) {
 					until = renewed + clockOffset(response) - LEASE_MARGIN_MS;
+					delay = everyMs;
 				}
 			} else {
 				await response.body?.cancel();
