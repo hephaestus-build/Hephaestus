@@ -9,6 +9,7 @@ import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.domain.JavaModifier;
 import com.tngtech.archunit.core.domain.properties.HasAnnotations;
+import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
@@ -17,11 +18,14 @@ import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import java.lang.reflect.Method;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.data.jpa.repository.NativeQuery;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.scheduling.annotation.Async;
@@ -69,6 +73,144 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
     static final String INTEGRATION_GITHUB_PACKAGE = BASE_PACKAGE + ".integration.scm.github";
     static final String INTEGRATION_GITLAB_PACKAGE = BASE_PACKAGE + ".integration.scm.gitlab";
 
+    /**
+     * The SQL of a {@code @Query} or {@code @NativeQuery} method. ArchUnit exposes only directly declared
+     * annotations, so a check that reads {@code @Query} alone skips every {@code @NativeQuery} method.
+     */
+    static Optional<String> queryValue(JavaMethod method) {
+        if (method.isAnnotatedWith(Query.class)) {
+            return Optional.of(method.getAnnotationOfType(Query.class).value());
+        }
+        if (method.isAnnotatedWith(NativeQuery.class)) {
+            return Optional.of(method.getAnnotationOfType(NativeQuery.class).value());
+        }
+        return Optional.empty();
+    }
+
+    interface QueryAnnotationFixture {
+        @NativeQuery("SELECT id FROM practice_result WHERE workspace_id = :workspaceId")
+        long nativeSql();
+
+        @Query("SELECT r.id FROM Result r")
+        long jpql();
+    }
+
+    @Test
+    void shouldReadNativeQuerySqlWhenCheckingWorkspaceFiltering() {
+        JavaClass fixture = new ClassFileImporter().importClass(QueryAnnotationFixture.class);
+
+        assertThat(queryValue(fixture.getMethod("nativeSql")))
+                .contains("SELECT id FROM practice_result WHERE workspace_id = :workspaceId");
+        assertThat(queryValue(fixture.getMethod("jpql"))).contains("SELECT r.id FROM Result r");
+    }
+
+    interface UnscopedNativeQueryRepository {
+        @NativeQuery("SELECT id FROM practice_result")
+        long everyWorkspace();
+
+        @NativeQuery("SELECT id FROM practice_result WHERE workspace_id = :workspaceId")
+        long oneWorkspace();
+    }
+
+    @Test
+    void shouldReportAnUnscopedNativeQueryWhenCheckingRepositories() {
+        var report = repositoryQueriesFilterByWorkspace()
+                .evaluate(new ClassFileImporter().importClasses(UnscopedNativeQueryRepository.class))
+                .getFailureReport()
+                .getDetails();
+
+        assertThat(report).anyMatch(line -> line.contains("UnscopedNativeQueryRepository.everyWorkspace"));
+        assertThat(report).noneMatch(line -> line.contains("oneWorkspace"));
+    }
+
+    /** Every repository query outside the workspace-agnostic packages filters by workspace. */
+    static ArchRule repositoryQueriesFilterByWorkspace() {
+        ArchCondition<JavaMethod> includeWorkspaceFiltering =
+                new ArchCondition<>("include workspace filtering in their query") {
+                    @Override
+                    public void check(JavaMethod method, ConditionEvents events) {
+                        Optional<String> query = queryValue(method);
+                        if (query.isEmpty()) {
+                            return;
+                        }
+
+                        String repoName = method.getOwner().getSimpleName();
+
+                        // integration.scm is the inherently workspace-agnostic ETL layer
+                        if (isInWorkspaceAgnosticPackage(method.getOwner())) {
+                            return;
+                        }
+
+                        if (method.getOwner().isAnnotatedWith(WorkspaceAgnostic.class)) {
+                            return;
+                        }
+
+                        if (method.isAnnotatedWith(WorkspaceAgnostic.class)) {
+                            return;
+                        }
+
+                        String queryValue = query.get();
+
+                        boolean hasDirectWorkspaceFilter = queryValue.contains("workspaceId")
+                                || queryValue.contains("workspace.id")
+                                || queryValue.contains("workspace_id")
+                                || queryValue.contains("JOIN Workspace");
+
+                        // Implicit workspace through repository chain:
+                        // Repository -> Organization -> (Workspace.organization = Organization)
+                        // Queries filtering by repository.id or repositoryId are workspace-scoped
+                        // because the sync layer only processes entities for monitored repositories
+                        boolean hasRepositoryFilter = queryValue.contains("repository.id")
+                                || queryValue.contains("repositoryId")
+                                || queryValue.contains("p.repository.id")
+                                || queryValue.contains("i.repository.id")
+                                || queryValue.contains("r.id");
+
+                        // Implicit workspace through pull request chain:
+                        // PullRequest -> Repository -> Organization -> (Workspace.organization = Organization)
+                        // Queries filtering by pullRequest.id or pullRequestId are workspace-scoped
+                        boolean hasPullRequestFilter = queryValue.contains("pullRequest.id")
+                                || queryValue.contains("pullRequestId")
+                                || queryValue.contains("prr.pullRequest.id");
+
+                        // Implicit workspace through organization chain:
+                        // Organization -> (Workspace.organization = Organization)
+                        // Queries filtering by organization.id or organizationId are workspace-scoped
+                        boolean hasOrganizationFilter = queryValue.contains("organization.id")
+                                || queryValue.contains("organizationId")
+                                || queryValue.contains("orgId");
+
+                        boolean hasWorkspaceFilter = hasDirectWorkspaceFilter
+                                || hasRepositoryFilter
+                                || hasPullRequestFilter
+                                || hasOrganizationFilter;
+
+                        if (!hasWorkspaceFilter) {
+                            events.add(SimpleConditionEvent.violated(
+                                    method,
+                                    String.format(
+                                            "MULTI-TENANCY RISK: %s.%s has a query without workspace filtering."
+                                                    + " Query: %s... Mark it @WorkspaceAgnostic if"
+                                                    + " intentional.",
+                                            repoName,
+                                            method.getName(),
+                                            queryValue.substring(0, Math.min(80, queryValue.length())))));
+                        }
+                    }
+                };
+
+        ArchRule rule = methods()
+                .that()
+                .areDeclaredInClassesThat()
+                .haveSimpleNameEndingWith("Repository")
+                .and()
+                .areDeclaredInClassesThat()
+                .resideInAPackage(BASE_PACKAGE + "..")
+                .should(includeWorkspaceFiltering)
+                .because("Repository queries must filter by workspace to prevent cross-tenant data access");
+        return rule;
+    }
+
     private static boolean isInWorkspaceAgnosticPackage(JavaClass javaClass) {
         String pkg = javaClass.getPackageName();
         return (pkg.startsWith(SCM_PACKAGE)
@@ -101,7 +243,7 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
             assertThat(ResultRepository.class.isAnnotationPresent(WorkspaceAgnostic.class))
                     .isFalse();
             for (Method method : ResultRepository.class.getDeclaredMethods()) {
-                Query query = method.getAnnotation(Query.class);
+                Query query = AnnotatedElementUtils.getMergedAnnotation(method, Query.class);
                 if (query == null) continue;
                 if (method.isAnnotationPresent(WorkspaceAgnostic.class)) continue;
                 assertThat(method.getParameters())
@@ -118,91 +260,7 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
 
         @Test
         void queryMethodsIncludeWorkspaceFiltering() {
-            ArchCondition<JavaMethod> includeWorkspaceFiltering =
-                    new ArchCondition<>("include workspace filtering in @Query") {
-                        @Override
-                        public void check(JavaMethod method, ConditionEvents events) {
-                            if (!method.isAnnotatedWith(Query.class)) {
-                                return;
-                            }
-
-                            String repoName = method.getOwner().getSimpleName();
-
-                            // integration.scm is the inherently workspace-agnostic ETL layer
-                            if (isInWorkspaceAgnosticPackage(method.getOwner())) {
-                                return;
-                            }
-
-                            if (method.getOwner().isAnnotatedWith(WorkspaceAgnostic.class)) {
-                                return;
-                            }
-
-                            if (method.isAnnotatedWith(WorkspaceAgnostic.class)) {
-                                return;
-                            }
-
-                            Query queryAnnotation = method.getAnnotationOfType(Query.class);
-                            String queryValue = queryAnnotation.value();
-
-                            boolean hasDirectWorkspaceFilter = queryValue.contains("workspaceId")
-                                    || queryValue.contains("workspace.id")
-                                    || queryValue.contains("workspace_id")
-                                    || queryValue.contains("JOIN Workspace");
-
-                            // Implicit workspace through repository chain:
-                            // Repository -> Organization -> (Workspace.organization = Organization)
-                            // Queries filtering by repository.id or repositoryId are workspace-scoped
-                            // because the sync layer only processes entities for monitored repositories
-                            boolean hasRepositoryFilter = queryValue.contains("repository.id")
-                                    || queryValue.contains("repositoryId")
-                                    || queryValue.contains("p.repository.id")
-                                    || queryValue.contains("i.repository.id")
-                                    || queryValue.contains("r.id");
-
-                            // Implicit workspace through pull request chain:
-                            // PullRequest -> Repository -> Organization -> (Workspace.organization = Organization)
-                            // Queries filtering by pullRequest.id or pullRequestId are workspace-scoped
-                            boolean hasPullRequestFilter = queryValue.contains("pullRequest.id")
-                                    || queryValue.contains("pullRequestId")
-                                    || queryValue.contains("prr.pullRequest.id");
-
-                            // Implicit workspace through organization chain:
-                            // Organization -> (Workspace.organization = Organization)
-                            // Queries filtering by organization.id or organizationId are workspace-scoped
-                            boolean hasOrganizationFilter = queryValue.contains("organization.id")
-                                    || queryValue.contains("organizationId")
-                                    || queryValue.contains("orgId");
-
-                            boolean hasWorkspaceFilter = hasDirectWorkspaceFilter
-                                    || hasRepositoryFilter
-                                    || hasPullRequestFilter
-                                    || hasOrganizationFilter;
-
-                            if (!hasWorkspaceFilter) {
-                                events.add(SimpleConditionEvent.violated(
-                                        method,
-                                        String.format(
-                                                "MULTI-TENANCY RISK: %s.%s has @Query without workspace filtering."
-                                                        + " Query: %s... Mark it @WorkspaceAgnostic if"
-                                                        + " intentional.",
-                                                repoName,
-                                                method.getName(),
-                                                queryValue.substring(0, Math.min(80, queryValue.length())))));
-                            }
-                        }
-                    };
-
-            ArchRule rule = methods()
-                    .that()
-                    .areDeclaredInClassesThat()
-                    .haveSimpleNameEndingWith("Repository")
-                    .and()
-                    .areDeclaredInClassesThat()
-                    .resideInAPackage(BASE_PACKAGE + "..")
-                    .should(includeWorkspaceFiltering)
-                    .because("Repository queries must filter by workspace to prevent cross-tenant data access");
-
-            rule.check(classes);
+            repositoryQueriesFilterByWorkspace().check(classes);
         }
 
         /** Methods like findAll() are dangerous in multi-tenant systems without a scoped alternative. */
@@ -279,10 +337,8 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                             || m.getName().contains("AllById"));
 
                             boolean hasQueryWithWorkspaceFilter = javaClass.getMethods().stream()
-                                    .filter(m -> m.isAnnotatedWith(Query.class))
-                                    .anyMatch(m -> {
-                                        Query q = m.getAnnotationOfType(Query.class);
-                                        String queryValue = q.value();
+                                    .flatMap(m -> queryValue(m).stream())
+                                    .anyMatch(queryValue -> {
                                         boolean directFilter = queryValue.contains("workspaceId")
                                                 || queryValue.contains("workspace.id")
                                                 || queryValue.contains("JOIN Workspace");
