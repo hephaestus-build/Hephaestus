@@ -8,8 +8,8 @@ import SystemDiagram from "@site/src/components/SystemDiagram";
 
 Hephaestus is one server that runs as several replicas, with PostgreSQL as its only truth.
 The server receives provider events, syncs the work, and runs practice reviews and conversation turns in sandboxes.
-A sandbox runs the agent's code, so it holds no secret and reaches only the server.
-The server delivers every effect on the outside world through an outbox.
+A sandbox runs the agent's code. It holds no application secret, only a token for its own subject, and it reaches only the server's gateway.
+The server delivers feedback, Hephaestus's Slack answers, email, and product feedback issues through one outbox.
 
 The container view also shows one decided change that `main` does not have yet. The text below it names it.
 [Runtime roles](/admin/runtime-roles) describes what runs today.
@@ -116,8 +116,10 @@ Each interface carries the name of its Java type or route. "Provider SPI" is the
 Every part stores its state in PostgreSQL, so the view leaves that connection out.
 The view also leaves out `AgentRunHandler`: through it, the reaper moves a review or a turn together with its run ([Agent runs](./agent-runs.mdx)).
 
-One JAR boots in the server role, which also receives provider webhooks. Only a server with `AGENT_ENABLED` writes sandbox claims and runs conversation turns.
-Each conversation sandbox uses the same driver, run claim and gateway as review sandboxes.
+One JAR boots in the server role, which also receives provider webhooks.
+Only a server with `AGENT_ENABLED` runs the agent runtime: it writes sandbox claims and serves the gateway and the LLM proxy. The chart sets it from `sandbox.enabled`.
+Without it, no review and no conversation turn runs.
+Each conversation sandbox uses the same driver, run lease and gateway as review sandboxes.
 
 [Runtime roles](/admin/runtime-roles) owns role configuration, capacity, and drain behavior.
 [Set up monitoring](/admin/monitoring#scrape-metrics) owns the private management listener on port 9090.
@@ -162,7 +164,7 @@ GitLab, Slack, and Outline each have their own adapter. A deployment syncs one c
 instance.
 Additional login providers do not create additional GitLab sync instances.
 
-`agent` owns execution jobs and sandbox orchestration.
+`agent` owns the run queue, the sandboxes, the gateway and the LLM proxy.
 `practices` owns definitions, durable reviews, assignments, results, problems and feedback.
 Core uses neutral item, capture and citation-verifier ports.
 Domain modules own kind, version, role and evidence meaning.
@@ -178,18 +180,22 @@ The architecture tests enforce the core, domain and provider boundary.
 
 The server federates sign-in to GitHub or GitLab with Spring Security `oauth2Login`, then issues its own cookie-session JWT.
 Slack and Outline are link-only identity providers.
-[ADR 0088](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) records the sign-in model.
+[ADR 0088](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) records the sign-in model, and [Auth architecture](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/auth-architecture.md) shows the request flow.
 [Instance administration](./instance-admin) describes the recent-sign-in gate and the user view.
 
 ## Practice reviews
 
 Provider events wait in the PostgreSQL inbox. A server leases each event, syncs the work and records item events.
 An eligible review becomes a `REVIEW` run in the run queue ([Agent runs](./agent-runs.mdx)).
-A server with sandboxes leases the run and runs it in a sandbox.
+
+A server with `AGENT_ENABLED` starts the review's sandbox.
+The sandbox pulls the `REVIEW` run through the gateway, then the `REVIEW_COMPOSE` run that writes the feedback.
 Admission checks every result before composition and delivery, and missing required capture produces no result.
+[Agent runs § A review in its sandbox](./agent-runs.mdx#a-review-in-its-sandbox) gives the execution and retry boundaries.
 
 Feedback on the work waits for a workspace admin's approval by default.
 Delivery checks the feedback mode and silent mode again before it posts.
+Workspace review history gives no access to a member's private Practice profile or Hephaestus feedback ([ADR 0047](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0047-the-practice-profile-has-one-reader.md)).
 
 The [review pipeline](./practice-review-pipeline) describes selection, capture, admission, composition and delivery.
 The [workspace ABI](./agent/workspace-abi.mdx) describes the job folder, the capture manifest and the output contract.
@@ -293,9 +299,10 @@ context. [Conversation runtime](./unified-pi-runtime#delivery-of-shown-feedback)
 
 ## Repository scans
 
-A scan pins the default branch of a monitored repository and records which practices and files it covered.
+A scan is a `SCAN` review, so it runs as `REVIEW` runs. A workspace runs one scan at a time.
+It pins the default branch of a monitored repository and records which practices and files it covered.
 Its report keeps the problems that it recorded and, separately, the count of problems that are still open.
-The report stays after the run of the scan expires.
+After the feedback retention period, the raw proof and its exports go, and the aggregate report stays.
 The [scan guide](/admin/practice-scans) describes how to run a scan and export its report.
 
 ## Diagram map
