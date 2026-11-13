@@ -73,7 +73,6 @@ class AccountExportRetentionIntegrationTest extends BaseIntegrationTest {
         Account account = new Account("Export Retention Subject");
         account.setPrimaryEmail("export-retention@test.local");
         account.setPrimaryEmailVerifiedAt(clock.instant());
-        account.setStatus(Account.Status.ACTIVE);
         Long accountId = accountRepository.save(account).getId();
         assertThat(accountId).isNotNull();
 

@@ -188,6 +188,8 @@ class ClientSessionMigratedSchemaTest {
         ClientSession kept = session(otherId, Instant.now().plus(Duration.ofDays(7)));
         UUID keptToken = token(otherId, kept.getId(), false);
 
+        // The erasure starts the deletion before it purges, as PersonDataService does.
+        jdbc.update("UPDATE account SET status='DELETING',deleted_at=CURRENT_TIMESTAMP WHERE id=?", accountId);
         new TransactionTemplate(transactions)
                 .executeWithoutResult(status -> accountPurger.purgeInCurrentTransaction(accountId));
 

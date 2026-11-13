@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository;
+import de.tum.cit.aet.hephaestus.testconfig.AccountFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
@@ -30,9 +31,8 @@ class JwtPrincipalFactoryStatusGateTest extends BaseUnitTest {
     }
 
     private void assertRejected(Account.Status status) {
-        Account account = new Account("Test Account");
+        Account account = AccountFixtures.withStatus("Test Account", status);
         account.setId(1L);
-        account.setStatus(status);
         assertThatThrownBy(() -> principal(account))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("not active");

@@ -507,14 +507,12 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
     private Account persistAdmin(String displayName) {
         Account account = new Account(displayName);
         account.setAppRole(Account.AppRole.APP_ADMIN);
-        account.setStatus(Account.Status.ACTIVE);
         return accountRepository.save(account);
     }
 
     private Account persistUser(String displayName) {
         Account account = new Account(displayName);
         account.setAppRole(Account.AppRole.USER);
-        account.setStatus(Account.Status.ACTIVE);
         return accountRepository.save(account);
     }
 

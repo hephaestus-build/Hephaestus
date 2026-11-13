@@ -106,6 +106,33 @@ It keeps its budget pause until workspace funding permits another review.
 Its API rejects a fixed scan budget.
 The `review_batch` status CHECK includes `BUDGET_EXHAUSTED`.
 
+## Account status
+
+`Account.Status` owns the transition table of an account.
+`Account` changes its status only through `unclaimed`, `claim`, `block`, `unblock`, `startDeletion` and `markDeleted`.
+These methods refuse an illegal move.
+
+```mermaid
+stateDiagram-v2
+    accTitle: Lifecycle of an account
+    accDescr: A roster creates an account in UNCLAIMED, and a sign-in creates one in ACTIVE. The first verified sign-in claims an unclaimed account. An instance admin blocks and unblocks an active account. A deletion moves an unclaimed, active or blocked account to DELETING, and the purge moves it to DELETED, which has no exit.
+    [*] --> UNCLAIMED: roster
+    [*] --> ACTIVE: sign-in
+    UNCLAIMED --> ACTIVE: claim
+    ACTIVE --> BLOCKED: block
+    BLOCKED --> ACTIVE: unblock
+    UNCLAIMED --> DELETING: startDeletion
+    ACTIVE --> DELETING: startDeletion
+    BLOCKED --> DELETING: startDeletion
+    DELETING --> DELETED: markDeleted
+    DELETED --> [*]
+```
+
+A repeated purge finds the account deleted and leaves it so.
+The erasure in `PersonDataService` starts a deletion with SQL, because it locks the account row itself.
+That statement moves the account only to `DELETING` and raises its version, so a stale entity save fails instead of writing back an earlier status.
+The database trigger `guard_account` also refuses any move from `DELETING` other than to `DELETED`, and any change of a deleted account's status.
+
 ## Workspace status
 
 `Workspace.WorkspaceStatus` owns the transition table: a workspace is active or suspended, and a purge is final.

@@ -78,7 +78,7 @@ public class AccountPurger {
         if (account == null) {
             return;
         }
-        account.setStatus(Account.Status.DELETED);
+        account.markDeleted();
         account.setDisplayName(TOMBSTONE_DISPLAY_NAME);
         account.setPrimaryEmail(null);
         account.setPrimaryEmailVerifiedAt(null);

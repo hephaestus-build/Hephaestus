@@ -241,7 +241,7 @@ class CookieAuthenticationIntegrationTest extends RealAuthIntegrationTest {
     void shouldEndSessionAndCommitRevocationWhenAccountIsSuspendedBeforeRefresh() {
         IssuedAccount issued = issueRealTokenForNewAccount("Suspended Refresh");
         Account account = accountRepository.findById(issued.accountId()).orElseThrow();
-        account.setStatus(Account.Status.BLOCKED);
+        account.block();
         accountRepository.saveAndFlush(account);
         String csrf = TestAuthUtils.fetchCsrfToken(webTestClient);
 

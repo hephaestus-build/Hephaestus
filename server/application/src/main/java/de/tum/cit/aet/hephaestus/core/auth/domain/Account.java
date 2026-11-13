@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.domain;
 
+import de.tum.cit.aet.hephaestus.core.Lifecycle;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -10,6 +11,10 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -51,9 +56,11 @@ public class Account {
     @ColumnDefault("'USER'")
     private AppRole appRole = AppRole.USER;
 
+    /** Changes only through the transition methods below. */
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 16)
     @ColumnDefault("'ACTIVE'")
+    @Setter(AccessLevel.NONE)
     private Status status = Status.ACTIVE;
 
     @CreationTimestamp
@@ -70,6 +77,7 @@ public class Account {
      */
     @Column(name = "deleted_at")
     @Nullable
+    @Setter(AccessLevel.NONE)
     private Instant deletedAt;
 
     @Column(name = "passkey_user_handle", length = 64, unique = true)
@@ -118,19 +126,82 @@ public class Account {
         this.displayName = displayName;
     }
 
+    /** A person a roster names who has not signed in yet. */
+    public static Account unclaimed(String displayName) {
+        var account = new Account(displayName);
+        account.status = Status.UNCLAIMED;
+        return account;
+    }
+
+    /** The person's first verified sign-in takes the account over. */
+    public void claim() {
+        require(Status.UNCLAIMED);
+        moveTo(Status.ACTIVE);
+    }
+
+    public void block() {
+        require(Status.ACTIVE);
+        moveTo(Status.BLOCKED);
+    }
+
+    public void unblock() {
+        require(Status.BLOCKED);
+        moveTo(Status.ACTIVE);
+    }
+
+    /** Sessions end and sign-in stops now; the purge erases the rest. */
+    public void startDeletion(Instant at) {
+        moveTo(Status.DELETING);
+        this.deletedAt = at;
+    }
+
+    /** The purge has erased the account. A repeated purge finds it deleted already. */
+    public void markDeleted() {
+        if (status == Status.DELETED) {
+            return;
+        }
+        moveTo(Status.DELETED);
+    }
+
+    private void require(Status expected) {
+        if (status != expected) {
+            throw new IllegalStateException("The account is " + status + ", not " + expected);
+        }
+    }
+
+    private void moveTo(Status next) {
+        if (!status.canTransitionTo(next)) {
+            throw new IllegalStateException("An account cannot move from " + status + " to " + next);
+        }
+        status = next;
+    }
+
     public enum AppRole {
         USER,
         APP_ADMIN,
     }
 
+    /** The trigger {@code guard_account} keeps a deletion moving forward in the database too. */
     @NamedInterface("auth-types")
-    public enum Status {
+    public enum Status implements Lifecycle<Status> {
         UNCLAIMED,
         ACTIVE,
         /** An instance admin blocked the account: sessions are revoked and sign-in is refused until an unblock. */
         BLOCKED,
         /** Sessions are revoked and login blocked immediately; erasure follows once the deletion commits. */
         DELETING,
-        DELETED,
+        DELETED;
+
+        private static final Map<Status, Set<Status>> LEGAL = Map.of(
+                UNCLAIMED, Set.of(ACTIVE, DELETING),
+                ACTIVE, Set.of(BLOCKED, DELETING),
+                BLOCKED, Set.of(ACTIVE, DELETING),
+                DELETING, Set.of(DELETED),
+                DELETED, Set.of());
+
+        @Override
+        public boolean canTransitionTo(Status next) {
+            return Objects.requireNonNull(LEGAL.get(this)).contains(next);
+        }
     }
 }

@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.event.AccountDeletionRequestedEvent;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
+import de.tum.cit.aet.hephaestus.testconfig.AccountFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import java.time.Instant;
@@ -250,9 +251,8 @@ class AccountServiceTest extends BaseUnitTest {
     @Test
     void softDeleteIsIdempotentForAnAlreadyDeletingAccount() {
         Account account = accountWithRole(2L, Account.AppRole.USER);
-        account.setStatus(Account.Status.DELETING);
         Instant deletedAt = Instant.parse("2025-12-01T00:00:00Z");
-        account.setDeletedAt(deletedAt);
+        account.startDeletion(deletedAt);
 
         service.softDelete(2L);
 
@@ -300,7 +300,7 @@ class AccountServiceTest extends BaseUnitTest {
     @Test
     void shouldNotifyTheAccountWhenAnAdminUnblocksIt() {
         Account account = accountWithRole(2L, Account.AppRole.USER);
-        account.setStatus(Account.Status.BLOCKED);
+        account.block();
 
         service.adminSetStatus(2L, Account.Status.ACTIVE, 1L);
 
@@ -369,8 +369,9 @@ class AccountServiceTest extends BaseUnitTest {
     })
     void shouldRefuseAdminStatusChangesOutsideTheActiveAndBlockedStates(
             Account.Status previous, Account.Status requested) {
-        Account account = accountWithRole(2L, Account.AppRole.USER);
-        account.setStatus(previous);
+        Account account = AccountFixtures.withStatus("Account 2", previous);
+        account.setId(2L);
+        when(accountRepository.findById(2L)).thenReturn(Optional.of(account));
 
         assertThatThrownBy(() -> service.adminSetStatus(2L, requested, 1L))
                 .isInstanceOfSatisfying(
@@ -384,7 +385,7 @@ class AccountServiceTest extends BaseUnitTest {
     @Test
     void shouldChangeNothingWhenTheAccountIsAlreadyBlocked() {
         Account account = accountWithRole(2L, Account.AppRole.USER);
-        account.setStatus(Account.Status.BLOCKED);
+        account.block();
 
         service.adminSetStatus(2L, Account.Status.BLOCKED, 1L);
 

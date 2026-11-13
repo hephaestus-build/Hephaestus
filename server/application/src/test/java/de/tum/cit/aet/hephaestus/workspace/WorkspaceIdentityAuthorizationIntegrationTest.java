@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.testconfig.AccountFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.workspace.dto.CreateWorkspaceRequestDTO;
 import java.time.Instant;
@@ -252,8 +253,7 @@ class WorkspaceIdentityAuthorizationIntegrationTest extends AbstractWorkspaceInt
     void shouldAdmitNewInteractionsOnlyWhenTheLinkedAccountIsActive(Account.Status status) {
         var providerId = ensureGitLabProvider().getId();
         assertNotNull(providerId);
-        var account = new Account("Lifecycle identity");
-        account.setStatus(status);
+        var account = AccountFixtures.withStatus("Lifecycle identity", status);
         account = accounts.saveAndFlush(account);
         var accountId = account.getId();
         assertNotNull(accountId);

@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -217,7 +218,7 @@ class AccountProvisioningIntegrationTest extends RealAuthIntegrationTest {
                         AuthIntentCookie.Intent.login(null, null))
                 .account();
         long accountId = persistedId(account.getId());
-        account.setStatus(Account.Status.DELETING);
+        account.startDeletion(Instant.now());
         accountRepository.saveAndFlush(account);
 
         Assertions.assertThatThrownBy(() -> service.resolveOrProvision(
@@ -246,7 +247,7 @@ class AccountProvisioningIntegrationTest extends RealAuthIntegrationTest {
                         principal("blocked-subject", "blocked@example.test", true, "blocked"),
                         AuthIntentCookie.Intent.login(null, null))
                 .account();
-        account.setStatus(Account.Status.BLOCKED);
+        account.block();
         accountRepository.saveAndFlush(account);
 
         Assertions.assertThatThrownBy(() -> service.resolveOrProvision(

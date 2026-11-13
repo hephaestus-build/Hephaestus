@@ -81,8 +81,7 @@ public class AccountService {
             // Idempotent: only ACTIVE/BLOCKED → DELETING records ACCOUNT_DELETED and asks for the purge once.
             return;
         }
-        account.setStatus(Account.Status.DELETING);
-        account.setDeletedAt(clock.instant());
+        account.startDeletion(clock.instant());
         accountRepository.save(account);
         sessionRevocation.revokeAccount(accountId, IssuedJwt.RevokedReason.ACCOUNT_DELETED, null, null);
         authEventLogger
@@ -258,7 +257,8 @@ public class AccountService {
                     HttpStatus.CONFLICT,
                     "You cannot block the last instance admin. Grant admin to another account first.");
         }
-        account.setStatus(status);
+        if (block) account.block();
+        else account.unblock();
         accountRepository.save(account);
         if (block) {
             sessionRevocation.revokeAccount(accountId, IssuedJwt.RevokedReason.ADMIN_REVOKE, null, null);

@@ -80,7 +80,7 @@ class AccountMembershipQueryIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldAuthorizeOnlyActiveVisibleMembersInTheRequestedWorkspace() {
-        var account = accounts.saveAndFlush(new Account("History member"));
+        var account = accounts.saveAndFlush(Account.unclaimed("History member"));
         var member = membership(account, "history-membership");
         long workspaceId = member.getWorkspace().getId();
         long accountId = Objects.requireNonNull(account.getId());
@@ -94,12 +94,12 @@ class AccountMembershipQueryIntegrationTest extends BaseIntegrationTest {
         memberships.flush();
         assertThat(query.isActiveVisibleMember(workspaceId, accountId)).isFalse();
         member.setLeftAt(null);
-        account.setStatus(Account.Status.BLOCKED);
-        accounts.flush();
-        assertThat(query.isActiveVisibleMember(workspaceId, accountId)).isFalse();
-        account.setStatus(Account.Status.UNCLAIMED);
+        account.claim();
         accounts.flush();
         assertThat(query.isActiveVisibleMember(workspaceId, accountId)).isTrue();
+        account.block();
+        accounts.flush();
+        assertThat(query.isActiveVisibleMember(workspaceId, accountId)).isFalse();
     }
 
     @Test
@@ -208,7 +208,7 @@ class AccountMembershipQueryIntegrationTest extends BaseIntegrationTest {
         var second = accounts.saveAndFlush(new Account("Bravo developer"));
         var third = accounts.saveAndFlush(new Account("Charlie developer"));
         var deleting = accounts.saveAndFlush(new Account("Deleted developer"));
-        deleting.setStatus(Account.Status.DELETING);
+        deleting.startDeletion(Instant.now());
         accounts.saveAndFlush(deleting);
         var former = accounts.saveAndFlush(new Account("Former developer"));
         addMember(workspace, second, Membership.WorkspaceRole.MEMBER, null);
@@ -230,7 +230,7 @@ class AccountMembershipQueryIntegrationTest extends BaseIntegrationTest {
         member.setRole(Membership.WorkspaceRole.ADMIN);
         memberships.saveAndFlush(member);
         var suspended = accounts.saveAndFlush(new Account("Suspended administrator"));
-        suspended.setStatus(Account.Status.BLOCKED);
+        suspended.block();
         accounts.saveAndFlush(suspended);
         addMember(workspace, suspended, Membership.WorkspaceRole.OWNER, null);
         var former = accounts.saveAndFlush(new Account("Former administrator"));
@@ -256,9 +256,7 @@ class AccountMembershipQueryIntegrationTest extends BaseIntegrationTest {
         identity.setProviderId(Objects.requireNonNull(provider.getId()));
         identity.setProviderUserKey("batch-review-human");
         identities.saveAndFlush(identity);
-        var unclaimed = accounts.saveAndFlush(new Account("Unclaimed human"));
-        unclaimed.setStatus(Account.Status.UNCLAIMED);
-        accounts.saveAndFlush(unclaimed);
+        var unclaimed = accounts.saveAndFlush(Account.unclaimed("Unclaimed human"));
         addMember(member.getWorkspace(), unclaimed, Membership.WorkspaceRole.MEMBER, null);
         long humanId = Objects.requireNonNull(human.getId());
         long unclaimedId = Objects.requireNonNull(unclaimed.getId());

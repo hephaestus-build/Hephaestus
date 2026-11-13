@@ -354,7 +354,7 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         var account = accounts.findById(accountId(actor)).orElseThrow();
         account.setDisplayName("Member " + slug);
         account.setAppRole(role);
-        account.setStatus(Account.Status.ACTIVE);
+        if (account.getStatus() == Account.Status.UNCLAIMED) account.claim();
         account = accounts.save(account);
         return new Member(Objects.requireNonNull(account.getId()), role, workspace);
     }

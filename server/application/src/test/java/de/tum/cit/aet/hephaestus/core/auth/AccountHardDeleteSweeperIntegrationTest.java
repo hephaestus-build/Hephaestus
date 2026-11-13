@@ -285,7 +285,6 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
         Account account = new Account(displayName);
         account.setPrimaryEmail(email);
         account.setPrimaryEmailVerifiedAt(clock.instant());
-        account.setStatus(Account.Status.ACTIVE);
         return accountRepository.save(account);
     }
 
@@ -313,8 +312,7 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
      */
     private void markDeleting(Long accountId, Instant deletedAt) {
         Account account = accountRepository.findById(accountId).orElseThrow();
-        account.setStatus(Account.Status.DELETING);
-        account.setDeletedAt(deletedAt);
+        account.startDeletion(deletedAt);
         accountRepository.save(account);
     }
 

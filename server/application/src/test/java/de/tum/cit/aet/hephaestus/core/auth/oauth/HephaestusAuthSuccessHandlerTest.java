@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.stepup.StepUpRequiredException;
+import de.tum.cit.aet.hephaestus.testconfig.AccountFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -360,9 +361,8 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
     }
 
     private static Account account(Account.Status status) {
-        Account account = new Account("Logging-In User");
+        Account account = AccountFixtures.withStatus("Logging-In User", status);
         account.setId(42L);
-        account.setStatus(status);
         return account;
     }
 

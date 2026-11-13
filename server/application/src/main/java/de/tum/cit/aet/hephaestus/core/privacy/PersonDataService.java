@@ -166,8 +166,8 @@ public class PersonDataService {
         suppression.suppress(person, id);
         if (person.accountId() != null) {
             jdbc.update(
-                    "UPDATE account SET status='DELETING',deleted_at=CURRENT_TIMESTAMP WHERE id=?"
-                            + " AND status<>'DELETED'",
+                    "UPDATE account SET status='DELETING',deleted_at=CURRENT_TIMESTAMP,version=version+1"
+                            + " WHERE id=? AND status<>'DELETED'",
                     person.accountId());
             issuedTokens.revokeAllForAccount(
                     person.accountId(), Instant.now(), IssuedJwt.RevokedReason.ACCOUNT_DELETED);
@@ -222,9 +222,8 @@ public class PersonDataService {
             requests.saveAndFlush(request);
             suppression.suppress(person, request.getId());
             jdbc.update(
-                    "UPDATE account SET"
-                            + " status='DELETING',deleted_at=COALESCE(deleted_at,CURRENT_TIMESTAMP)"
-                            + " WHERE id=?",
+                    "UPDATE account SET status='DELETING',"
+                            + "deleted_at=COALESCE(deleted_at,CURRENT_TIMESTAMP),version=version+1 WHERE id=?",
                     accountId);
             issuedTokens.revokeAllForAccount(accountId, Instant.now(), IssuedJwt.RevokedReason.ACCOUNT_DELETED);
             if (!deliveries(selected).isEmpty()) {

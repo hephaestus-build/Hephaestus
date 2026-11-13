@@ -48,9 +48,7 @@ class SlackAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
         var workspace = workspaces.save(WorkspaceTestFixtures.activeWorkspace(
                 "slack-absorption-" + UUID.randomUUID().toString().substring(0, 8)));
         var claimed = accounts.save(new Account("Claimed human"));
-        var unclaimed = new Account("Roster human");
-        unclaimed.setStatus(Account.Status.UNCLAIMED);
-        unclaimed = accounts.save(unclaimed);
+        var unclaimed = accounts.save(Account.unclaimed("Roster human"));
         var untouched = accounts.save(new Account("Other human"));
         long claimedId = Objects.requireNonNull(claimed.getId());
         long unclaimedId = Objects.requireNonNull(unclaimed.getId());

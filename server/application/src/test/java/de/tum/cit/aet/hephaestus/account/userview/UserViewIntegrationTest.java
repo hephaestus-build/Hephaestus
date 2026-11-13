@@ -591,7 +591,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     /** The workspace owner signing in as themselves: a member, not an instance administrator. */
     private Account viewedUsersOwnAccount() {
         var account = accountRepository.findById(accountId(viewed)).orElseThrow();
-        account.setStatus(Account.Status.ACTIVE);
+        if (account.getStatus() == Account.Status.UNCLAIMED) account.claim();
         return accountRepository.saveAndFlush(account);
     }
 
