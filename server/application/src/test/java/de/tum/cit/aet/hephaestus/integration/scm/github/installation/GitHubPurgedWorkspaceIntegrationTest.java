@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceService;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
@@ -219,7 +220,7 @@ class GitHubPurgedWorkspaceIntegrationTest extends BaseIntegrationTest {
                 .getId());
         installations.handleEvent(withInstallation("installation.deleted", installationId));
         assertThat(row(id)).containsEntry("status", "PURGED");
-        return new Purged(id, row(id), workspaceCount());
+        return new Purged(id, installationId, row(id), workspacesOf(installationId, row(id).get("account_login")));
     }
 
     private GitHubInstallationEventDTO withInstallation(String name, long installationId) throws Exception {
@@ -230,7 +231,8 @@ class GitHubPurgedWorkspaceIntegrationTest extends BaseIntegrationTest {
 
     private void assertUnchanged(Purged purged) {
         assertThat(row(purged.id())).containsEntry("status", "PURGED").isEqualTo(purged.row());
-        assertThat(workspaceCount()).isEqualTo(purged.workspaces());
+        assertThat(workspacesOf(purged.installationId(), purged.row().get("account_login")))
+                .isEqualTo(purged.workspaces());
     }
 
     /** The startup reconciliation, with GitHub answering that the App has this one installation. */
@@ -264,8 +266,13 @@ class GitHubPurgedWorkspaceIntegrationTest extends BaseIntegrationTest {
         return jdbc.queryForMap("SELECT * FROM workspace WHERE id = ?", id);
     }
 
-    private long workspaceCount() {
-        return Objects.requireNonNull(jdbc.queryForObject("SELECT count(*) FROM workspace", Long.class));
+    /** The workspaces of this installation or its account: a replacement for the purged one would be among them. */
+    private List<Long> workspacesOf(long installationId, @Nullable Object accountLogin) {
+        return jdbc.query("""
+                SELECT id FROM workspace
+                WHERE account_login = ?
+                   OR id IN (SELECT workspace_id FROM connection WHERE kind = 'GITHUB' AND instance_key = ?)
+                ORDER BY id""", (row, number) -> row.getLong("id"), accountLogin, Long.toString(installationId));
     }
 
     private GitHubInstallationEventDTO installationEvent(String name) throws Exception {
@@ -284,5 +291,5 @@ class GitHubPurgedWorkspaceIntegrationTest extends BaseIntegrationTest {
         return Objects.requireNonNull(event.installation()).id();
     }
 
-    private record Purged(long id, Map<String, @Nullable Object> row, long workspaces) {}
+    private record Purged(long id, long installationId, Map<String, @Nullable Object> row, List<Long> workspaces) {}
 }
