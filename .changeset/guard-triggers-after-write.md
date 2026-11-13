@@ -2,4 +2,4 @@
 "hephaestus": patch
 ---
 
-The database checks on review, feedback, practice, item, agent and workspace records now run after each write, so a checked update no longer holds a row lock that delays other writes to related records.
+Updating a review, a feedback record, a practice or an agent run no longer delays other writes that refer to that record until the update commits. Database checks that only validate an update now run after the write.

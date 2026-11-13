@@ -88,6 +88,22 @@ node scripts/db-utils.ts draft-changelog --from-draft .context/<name>.xml
 The draft is one `<databaseChangeLog>` with only change sets.
 Promotion writes these into this branch's changelog with the usual ids and author.
 It replays the whole chain on a disposable database and refreshes the ERD, as above.
+
+### Trigger timing
+
+A trigger that only validates an UPDATE is an AFTER UPDATE row trigger.
+Some tables have a BEFORE UPDATE row trigger.
+On such a table, PostgreSQL locks the row FOR UPDATE if an UPDATE names a key column in its SET list.
+This occurs also if the value does not change, and also if the trigger is limited to other columns.
+`ExecUpdateLockMode` in the PostgreSQL executor sets this lock mode.
+
+The FOR UPDATE lock blocks each foreign-key write that refers to the row until the transaction ends.
+Without such a trigger, an UPDATE that does not change a key column takes FOR NO KEY UPDATE.
+That lock does not block those writes.
+
+`GuardTriggerTimingDatabaseTest` keeps a BEFORE UPDATE trigger only where it changes the row, orders locks, or blocks no write.
+The test records the reason for each one.
+INSERT and DELETE guards are not affected and stay BEFORE.
 It refuses a draft with any of these properties:
 
 - Malformed XML.
