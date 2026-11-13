@@ -81,6 +81,10 @@ spring:
             # exception message. The primary message, the SQLState and the constraint name stay.
             data-source-properties:
                 "[logServerErrorDetail]": false
+                # Every pooled session waits for a lock at most this long (SQLState 55P03), so a lock cycle fails with a
+                # recorded, retryable error instead of hanging. Only the pool gets it: Liquibase and the LISTEN
+                # listeners connect without it, and the copy fence lifts it for its own waits.
+                "[options]": "-c lock_timeout=10s"
             connection-timeout: 45000
             idle-timeout: 600000
             max-lifetime: 1800000
@@ -123,6 +127,11 @@ spring:
 
     liquibase:
         change-log: classpath:db/master.xml
+        # Its own connection settings give Liquibase its own data source, without the pool's lock bounds: a migration
+        # may wait for a lock as long as it needs.
+        url: ${spring.datasource.url}
+        user: ${spring.datasource.username}
+        password: ${spring.datasource.password}
         # Gates `context="backfill"` one-shot changesets; prod overrides to `prod`.
         contexts: dev
 

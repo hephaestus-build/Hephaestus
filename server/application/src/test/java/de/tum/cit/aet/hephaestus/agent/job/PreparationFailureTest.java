@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.RecoverableDataAccessException;
@@ -130,6 +131,17 @@ class PreparationFailureTest {
         assertThat(databaseFailure.message()).doesNotContain(privateText);
         assertThat(ReviewAttemptResults.isRetryable(io)).isFalse();
         assertThat(ReviewAttemptResults.isRetryable(database)).isFalse();
+    }
+
+    @Test
+    void shouldRequeueAnAttemptThatWaitedTooLongForALockBeforeOrAfterExecutionStarted() {
+        var lockTimeout = new CannotAcquireLockException("canceling statement due to lock timeout");
+
+        assertThat(ReviewAttemptResults.isRetryablePreparation(lockTimeout)).isTrue();
+        assertThat(ReviewAttemptResults.isRetryable(lockTimeout)).isTrue();
+        assertThat(PreparationFailure.of(PreparationFailure.Stage.INPUTS, lockTimeout)
+                        .kind())
+                .isEqualTo(PreparationFailure.Kind.DATABASE);
     }
 
     @Test

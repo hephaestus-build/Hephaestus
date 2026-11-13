@@ -117,6 +117,11 @@ This is the [transactional outbox](https://microservices.io/patterns/data/transa
 - Work that calls a network service and must run one at a time takes a `ClusterLock`, not `synchronized`.
   More than one server runs, and an in-memory lock serializes only one of them.
   `ClusterLock` holds a session lock on a dedicated connection and has no transaction.
+- A pooled session waits for a lock only for a bounded time.
+  The `options` of `spring.datasource.hikari.data-source-properties` in `application.yml` set the bound.
+  A lock cycle then fails with SQLState `55P03` instead of hanging, and every caller treats it as retryable contention.
+  Liquibase and the `LISTEN` listeners connect without the bound, and the person-data copy fence lifts it for its own waits.
+  Keep each lock wait far below it.
 - A queue claims rows with `FOR UPDATE SKIP LOCKED` and a lease.
   PostgreSQL: `SKIP LOCKED` "is not suitable for general purpose work, but can be used to avoid lock contention with multiple consumers accessing a queue-like table" ([SELECT](https://www.postgresql.org/docs/18/sql-select.html)).
 - Do not catch a constraint violation and then continue in the same transaction.

@@ -305,6 +305,19 @@ public class ProviderEventConsumer {
             failures.retry(claimed, false);
             return;
         }
+        if (IntegrationPoisonHandler.isLockTimeout(thrown)) {
+            // Another write held a row or advisory lock past the session's lock_timeout: contention, not a handler
+            // fault.
+            log.atDebug()
+                    .addKeyValue("event.name", "integration.message.retry")
+                    .addKeyValue("reason", "lock_timeout")
+                    .addKeyValue("integration.event.id", claimed.id())
+                    .addKeyValue("integration.scope.id", claimed.workspaceId())
+                    .log("Provider event waits for a lock");
+            meters.handled(event, IntegrationMessageMeters.Outcome.RETRIED, System.nanoTime() - start);
+            failures.retry(claimed, false);
+            return;
+        }
         // Exception messages can contain raw provider payloads. Log only the failure type.
         // One failed delivery is a retry, at WARN with its delivery count; the dead letter is the verdict, at ERROR.
         var logged = log.atWarn()

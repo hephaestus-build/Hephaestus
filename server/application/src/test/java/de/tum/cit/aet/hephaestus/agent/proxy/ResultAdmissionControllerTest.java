@@ -23,6 +23,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.web.server.ResponseStatusException;
@@ -92,6 +93,36 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
                 now.plusSeconds(30));
         when(admission.admit(new ResultAdmissionService.AdmissionIdentity(id, 1L, 0, LEASE), request))
                 .thenThrow(new UncheckedIOException(new IOException("disk temporarily unavailable")));
+        var authentication = new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes());
+        assertThatThrownBy(
+                        () -> new ResultAdmissionController(admission, failures).admitResults(request, authentication))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        error ->
+                                Assertions.assertThat(error.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+        verifyNoInteractions(failures);
+    }
+
+    @Test
+    void shouldAnswerALockTimeoutAsBusyAndNeverAsARefusalOrACaptureFailure() {
+        var admission = mock(ResultAdmissionService.class);
+        var failures = mock(AttemptCaptureFailures.class);
+        var id = UUID.randomUUID();
+        var request = new SealResultsRequestDTO(3, UUID.randomUUID(), id, 0);
+        var now = Instant.now();
+        var jwt = new AttemptJwt(
+                AttemptJwt.Kind.REVIEW,
+                id,
+                1L,
+                1,
+                LEASE,
+                Set.of("llm_proxy"),
+                "test",
+                now,
+                now.plusSeconds(60),
+                now.plusSeconds(30));
+        when(admission.admit(new ResultAdmissionService.AdmissionIdentity(id, 1L, 0, LEASE), request))
+                .thenThrow(new CannotAcquireLockException("canceling statement due to lock timeout"));
         var authentication = new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes());
         assertThatThrownBy(
                         () -> new ResultAdmissionController(admission, failures).admitResults(request, authentication))

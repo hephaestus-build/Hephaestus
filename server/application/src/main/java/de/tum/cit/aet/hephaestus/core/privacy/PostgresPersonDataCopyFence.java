@@ -63,6 +63,8 @@ public class PostgresPersonDataCopyFence implements PersonDataCopyFence {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void holdForErasure() {
+        // An erasure waits until every running copy releases its lease, however long that takes: not the pool's bound.
+        jdbc.execute("SET LOCAL lock_timeout = 0");
         jdbc.query("SELECT pg_advisory_xact_lock(2165,1)", rs -> {});
     }
 
@@ -86,6 +88,10 @@ public class PostgresPersonDataCopyFence implements PersonDataCopyFence {
         }
         try {
             connection.setAutoCommit(true);
+            // The lease waits for the other side to finish, not for the pool's lock bound; close() restores the bound.
+            try (var unbounded = connection.createStatement()) {
+                unbounded.execute("SET lock_timeout = 0");
+            }
             execute(connection, shared ? "pg_advisory_lock_shared" : "pg_advisory_lock");
         } catch (SQLException exception) {
             try {
@@ -112,6 +118,9 @@ public class PostgresPersonDataCopyFence implements PersonDataCopyFence {
                 SQLException unlockFailure = null;
                 try {
                     execute(connection, shared ? "pg_advisory_unlock_shared" : "pg_advisory_unlock");
+                    try (var bounded = connection.createStatement()) {
+                        bounded.execute("RESET lock_timeout");
+                    }
                 } catch (SQLException exception) {
                     unlockFailure = exception;
                     // Never return a session with an unknown lock state to the pool.
