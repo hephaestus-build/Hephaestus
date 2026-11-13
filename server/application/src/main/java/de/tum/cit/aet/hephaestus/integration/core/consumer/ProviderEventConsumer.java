@@ -294,13 +294,13 @@ public class ProviderEventConsumer {
     private void failed(ProviderEventStore.Claimed claimed, Throwable thrown, long start) {
         if (dropIfFenced(claimed, start)) return;
         ProviderEvent event = claimed.event();
-        if (IntegrationPoisonHandler.diagnosticCause(thrown) instanceof ProviderEventBusyException) {
+        if (IntegrationPoisonHandler.diagnosticCause(thrown) instanceof ProviderEventBusyException busy) {
             log.atDebug()
                     .addKeyValue("event.name", "integration.message.retry")
-                    .addKeyValue("reason", "lease-row-busy")
+                    .addKeyValue("reason", busy.reason().tag)
                     .addKeyValue("integration.event.id", claimed.id())
                     .addKeyValue("integration.scope.id", claimed.workspaceId())
-                    .log("Provider event waits for its row lock");
+                    .log("Provider event waits for its write fence");
             meters.handled(event, IntegrationMessageMeters.Outcome.RETRIED, System.nanoTime() - start);
             failures.retry(claimed, false);
             return;

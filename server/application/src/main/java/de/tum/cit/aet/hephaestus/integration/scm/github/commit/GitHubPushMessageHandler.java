@@ -214,6 +214,7 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
 
             log.info("Processed push commits via local git: repoName={}, failed={}", repoName, failed[0]);
         } catch (Exception e) {
+            DeliveryInbox.rethrowRejectedWrite();
             log.error(
                     "Failed to process commits via local git, falling back to webhook: repoName={}, error={}",
                     repoName,

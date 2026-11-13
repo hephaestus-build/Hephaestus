@@ -69,9 +69,10 @@ A session advisory lock would pin a pooled connection for that time and end with
 
 Database and provider transport failures retry with bounded exponential delay (`poison.base-delay` 2 s to `poison.max-delay` 5 min).
 They do not count against the unknown-failure budget.
-The commit fence uses `SKIP LOCKED` and distinguishes a busy event row from a deleted row.
-A lease renewal can briefly hold that row. The handler rolls back and the inbox retries it in the same order without using the failure budget.
-This expected contention has outcome `retried`, increments `integration_consumer_retry_total`, and logs only at DEBUG.
+The inbox uses `SKIP LOCKED` for workspace and event-row fences and distinguishes a busy event row from a deleted row.
+A renewal or a workspace operation can briefly hold a required row. Person erasure can also hold the copy fence. The handler rolls back and the inbox retries it in the same order without using the failure budget.
+This expected contention has outcome `retried` and increments `integration_consumer_retry_total`.
+The inbox logs it at DEBUG. Provider fallbacks rethrow a rejected inbox write before logging or trying another source.
 A missing row or a changed lease still drops the work through the erasure or epoch fence.
 Unknown exceptions retry up to `hephaestus.integration.consumer.poison.max-attempts` (default 10), then the row becomes DEAD.
 Only a `PayloadParsingException` in the cause chain proves a permanent failure and makes the row DEAD on its first attempt.

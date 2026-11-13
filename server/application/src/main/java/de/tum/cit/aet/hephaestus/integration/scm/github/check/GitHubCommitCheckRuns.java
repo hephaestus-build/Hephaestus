@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.check;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRuns;
 import de.tum.cit.aet.hephaestus.integration.scm.github.GitHubProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
@@ -76,6 +77,7 @@ public class GitHubCommitCheckRuns {
                         sha);
             return runs;
         } catch (RuntimeException e) {
+            DeliveryInbox.rethrowRejectedWrite();
             log.warn(
                     "Check run read failed: repoName={}, sha={}, error={}",
                     sanitizeForLog(nameWithOwner),

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.commit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -9,11 +10,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.RejectedInboxWrite;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetailsPersister.Outcome;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.PassThroughTransactionTemplate;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
@@ -26,6 +30,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.TransientDataAccessResourceException;
 
 class CommitDetailsPersisterTest extends BaseUnitTest {
     private static final String SHA = "a".repeat(40);
@@ -68,6 +73,17 @@ class CommitDetailsPersisterTest extends BaseUnitTest {
                 List.of(new CommitDetails.FileChange(filename, CommitFileChange.ChangeType.ADDED, 1, 0, 1, filename)),
                 List.of(),
                 message);
+    }
+
+    @Test
+    void shouldPropagateAnInboxRejectionWithoutReportingCaptureFailure() {
+        var rejected = new TransientDataAccessResourceException("fixture write rejected");
+        try (var logs = new LogCapture(CommitDetailsPersister.class)) {
+            assertThatThrownBy(() -> RejectedInboxWrite.during(
+                            rejected, () -> persister.persist(details("subject", "file"), repository, origin)))
+                    .isSameAs(rejected);
+            assertThat(logs.messagesAtLeast(Level.WARN)).isEmpty();
+        }
     }
 
     @Test

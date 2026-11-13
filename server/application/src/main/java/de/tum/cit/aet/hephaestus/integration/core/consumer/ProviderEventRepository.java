@@ -216,7 +216,7 @@ interface ProviderEventRepository extends Repository<ProviderEventRow, Long> {
     }
 
     String LEASE_ATTEMPT_START = "WITH held AS MATERIALIZED (" + LEASE_READ;
-    // A skipped row is busy, not erased. Both branches read the same statement snapshot.
+    // A skipped row is busy, not erased. The fallback snapshot never permits a write.
     String LEASE_ATTEMPT_END = """
             )
             SELECT state, "leaseEpoch", true AS acquired FROM held
@@ -227,11 +227,14 @@ interface ProviderEventRepository extends Repository<ProviderEventRow, Long> {
 
     @WorkspaceAgnostic("The workspace is read only through the trusted event id; no caller supplies another tenant")
     @Query(value = """
-            SELECT w.id FROM workspace w
-            WHERE w.id = (SELECT workspace_id FROM provider_event WHERE id = :id)
-            FOR KEY SHARE NOWAIT
+            WITH target AS MATERIALIZED (SELECT workspace_id FROM provider_event WHERE id = :id),
+                 held AS MATERIALIZED (
+                   SELECT w.id FROM workspace w
+                   WHERE w.id = (SELECT workspace_id FROM target)
+                   FOR KEY SHARE SKIP LOCKED)
+            SELECT (SELECT workspace_id FROM target) IS NULL OR EXISTS (SELECT 1 FROM held)
             """, nativeQuery = true)
-    Optional<Long> lockWorkspace(@Param("id") long id);
+    boolean lockWorkspace(@Param("id") long id);
 
     @WorkspaceAgnostic("The event id and epoch come from the trusted claim, never from a request")
     @Query(value = LEASE_ATTEMPT_START + " FOR KEY SHARE SKIP LOCKED" + LEASE_ATTEMPT_END, nativeQuery = true)
