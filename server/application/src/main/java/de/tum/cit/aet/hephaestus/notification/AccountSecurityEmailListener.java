@@ -67,7 +67,6 @@ public class AccountSecurityEmailListener implements EmailNotice<AccountSecurity
         String change = switch (event.kind()) {
             case IDENTITY_LINKED -> "A sign-in identity is now linked to your account.";
             case IDENTITY_UNLINKED -> "A sign-in identity is no longer linked to your account.";
-            case APP_ROLE_CHANGED -> "Your instance admin access changed.";
             case PASSKEY_CHANGED ->
                 "Your passkeys or passkey protection changed. If you did not make this change, contact your instance operator.";
             case ACCOUNT_UNBLOCKED -> "An instance admin unblocked your account. You can sign in again.";

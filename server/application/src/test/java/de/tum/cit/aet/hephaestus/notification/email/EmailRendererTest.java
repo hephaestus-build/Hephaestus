@@ -75,6 +75,20 @@ class EmailRendererTest extends BaseUnitTest {
                                 true);
                     case ACCOUNT_SECURITY_CHANGED ->
                         Map.of("change", "A sign-in identity is now linked to your account.");
+                    case ROLE_CHANGED ->
+                        Map.of(
+                                "summary",
+                                "Ada Lovelace became an owner of the workspace “Delivery team”.",
+                                "attribution",
+                                "Grace Hopper made this change on 10 November 2026 at 14:05 UTC.",
+                                "advice",
+                                "If you did not expect this change, review it and change the role back.",
+                                "reviewLabel",
+                                "Review the workspace audit log",
+                                "reviewPath",
+                                "/admin/audit",
+                                "workspaceSlug",
+                                "delivery-team");
                     case WORKSPACE_ALERT ->
                         Map.of(
                                 "integration",
@@ -102,6 +116,7 @@ class EmailRendererTest extends BaseUnitTest {
         String actionPath = switch (kind) {
             case TEST_MESSAGE -> "";
             case ACCOUNT_SECURITY_CHANGED -> "/settings";
+            case ROLE_CHANGED -> "/w/delivery-team/admin/audit";
             case PRODUCT_FEEDBACK -> "/admin/feedback";
             case PRODUCT_FEEDBACK_UPDATE -> "/product-feedback";
             case WORKSPACE_ALERT -> "/w/delivery-team/admin/settings";

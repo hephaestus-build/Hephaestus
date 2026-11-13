@@ -27,9 +27,6 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import jakarta.persistence.EntityManager;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -76,8 +73,7 @@ class WorkspaceOrganizationMembershipAdapterTest extends BaseUnitTest {
                 organizationRepository,
                 teamMembershipRepository,
                 actorSelector,
-                connections,
-                Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC));
+                connections);
         // The persistence context the container injects; refreshing a workspace the test built changes nothing.
         ReflectionTestUtils.setField(adapter, "entityManager", mock(EntityManager.class));
         Organization group = new Organization();

@@ -160,11 +160,34 @@ The [database prerequisites](../admin/compatibility-policy#database-baseline-pre
 
 ### Expand and contract
 
+These rolling rules apply from 1.0.0 on.
+Before 1.0.0, the stopped-cutover waiver in [ADR 0070](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0070-1-0-is-a-cutover-release.md#decision) permits replacement and removal in one change.
+[ADR 0096](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0096-1-0-is-one-stopped-cutover-from-1-0-0-rc-1-and-keeps-nothing-for-0-x.md#decision) keeps this cutover and the 1.0.0 boundary.
+A change that uses the waiver ships a **Stop every role** migration note and does not run old and new roles together.
+
 A change that the previous release cannot run beside takes two releases.
 Release *N* stops reads and writes, and migrates data if necessary.
 It adds the object to the [pending contractions](#pending-contractions).
 A later release drops the object.
 To rename a table or column, add the new one, copy the data, and drop the old one later.
+
+Persisted messages need the same ordering as schema objects.
+A queue consumer claims only the action and payload kinds that its build understands.
+An unknown kind stays pending for a compatible consumer.
+It does not spend an attempt or fail.
+Once the preceding release has this filter, a new kind can add its readers and producers in one release.
+For a replacement that the preceding consumer cannot safely ignore, prepare readers before changing writers:
+
+1. Release *N* adds the readers, erasure handling and supported-kind claim filter.
+   Keep the existing producers, notice kinds and queued messages unchanged.
+   Do not write a new kind while a replica from before *N* can claim it.
+2. Release *N+1* activates the new producers after every replica runs *N* or later.
+   Keep both readers during this roll.
+3. A later release removes the old reader and closes old queued copies only after no old producer remains.
+   A cleanup in the activation release can race a producer from *N* that is still draining.
+
+State this order in each release changeset.
+Prove that an unsupported queued kind stays unclaimed, and that the preceding release can still write and read after the expansion.
 
 The changelog compatibility guard checks each changelog that the latest release tag does not have.
 That tag is the latest published release merged into the head, a release candidate such as `v1.0.0-rc.1` included, but not a tag on the head itself.

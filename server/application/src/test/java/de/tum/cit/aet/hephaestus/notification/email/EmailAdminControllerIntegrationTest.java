@@ -10,17 +10,18 @@ import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
 import de.tum.cit.aet.hephaestus.notification.email.EmailDeliveryResult.Outcome;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
-import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -68,12 +69,11 @@ class EmailAdminControllerIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @WithAdminUser
     void shouldSendToTheGivenAddress() throws Exception {
         EmailTestResponseDTO response = webTestClient
                 .post()
                 .uri("/admin/email/test")
-                .headers(TestAuthUtils.withCurrentUser())
+                .headers(asInstanceAdmin())
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("to", "ops@hephaestus.test"))
                 .exchange()
@@ -92,12 +92,11 @@ class EmailAdminControllerIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @WithAdminUser
     void shouldRejectAMalformedAddressBeforeTouchingTheRelay() {
         webTestClient
                 .post()
                 .uri("/admin/email/test")
-                .headers(TestAuthUtils.withCurrentUser())
+                .headers(asInstanceAdmin())
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("to", "not-an-address"))
                 .exchange()
@@ -112,14 +111,13 @@ class EmailAdminControllerIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @WithAdminUser
     void shouldReportSilentModeInsteadOfSending() {
         setSilentMode(true);
         try {
             EmailTestResponseDTO response = webTestClient
                     .post()
                     .uri("/admin/email/test")
-                    .headers(TestAuthUtils.withCurrentUser())
+                    .headers(asInstanceAdmin())
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(Map.of("to", "ops@hephaestus.test"))
                     .exchange()
@@ -180,6 +178,17 @@ class EmailAdminControllerIntegrationTest extends BaseIntegrationTest {
         assertThat(response).isNotNull();
         assertThat(response.outcome()).isEqualTo(Outcome.NO_RECIPIENT);
         assertThat(response.to()).isNull();
+    }
+
+    /**
+     * An instance admin of this test's own. The seeded fixture admin does not outlive a workspace test that cleans the
+     * shared database between this context's start and this class.
+     */
+    private Consumer<HttpHeaders> asInstanceAdmin() {
+        Account admin = new Account("Email admin");
+        admin.setAppRole(Account.AppRole.APP_ADMIN);
+        long adminId = Objects.requireNonNull(accountRepository.save(admin).getId());
+        return headers -> headers.setBearerAuth("mock-jwt-admin-" + adminId);
     }
 
     private void setSilentMode(boolean engaged) {

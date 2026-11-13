@@ -12,6 +12,8 @@ public enum EmailKind {
     /** Sent by an instance admin from the settings page to prove the relay works end to end. */
     TEST_MESSAGE("test-message", false),
     ACCOUNT_SECURITY_CHANGED("account-security-changed", false),
+    /** Instance admin, or a workspace OWNER or ADMIN role, was granted or removed. */
+    ROLE_CHANGED("role-changed", false),
     PRODUCT_FEEDBACK("product-feedback", true),
     PRODUCT_FEEDBACK_UPDATE("product-feedback-update", true),
     /** The note that a weekly digest is ready, when the developer has no Slack identity. */

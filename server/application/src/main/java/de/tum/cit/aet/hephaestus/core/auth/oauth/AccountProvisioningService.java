@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.spi.PeopleRegistry;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
+import de.tum.cit.aet.hephaestus.core.event.RoleChangedEvent;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -249,12 +250,12 @@ public class AccountProvisioningService {
             Account account, String registrationId, String subject, @Nullable String login) {
         if (account.getAppRole() != Account.AppRole.APP_ADMIN
                 && adminBootstrapPolicy.shouldPromote(registrationId, subject, login)) {
+            boolean hadAdministrator = accountRepository.lockBootstrapAndCheckAdministratorHistory();
             account.setAppRole(Account.AppRole.APP_ADMIN);
             accountRepository.save(account);
-            eventPublisher.publishEvent(new AccountSecurityChangedEvent(
-                    Objects.requireNonNull(account.getId()),
-                    AccountSecurityChangedEvent.Kind.APP_ROLE_CHANGED,
-                    clock.instant()));
+            if (hadAdministrator)
+                eventPublisher.publishEvent(RoleChangedEvent.instanceAdmin(
+                        Objects.requireNonNull(account.getId()), false, true, null, clock.instant()));
             log.info(
                     "auth.bootstrap: promoted accountId={} to APP_ADMIN via bootstrap-admins"
                             + " allowlist (provider={})",

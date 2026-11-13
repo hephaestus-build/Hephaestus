@@ -26,7 +26,6 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
-import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -114,7 +113,6 @@ public class GitLabSelectedMembershipProjection {
     private final GitLabUserService userService;
     private final MembershipService membershipService;
     private final TransactionTemplate transactionTemplate;
-    private final Clock clock;
 
     @PersistenceContext
     private @Nullable EntityManager entityManager;
@@ -129,8 +127,7 @@ public class GitLabSelectedMembershipProjection {
             GitLabTeamSyncService teamSync,
             GitLabUserService userService,
             MembershipService membershipService,
-            TransactionTemplate transactionTemplate,
-            Clock clock) {
+            TransactionTemplate transactionTemplate) {
         this.workspaces = workspaces;
         this.monitors = monitors;
         this.connections = connections;
@@ -141,7 +138,6 @@ public class GitLabSelectedMembershipProjection {
         this.userService = userService;
         this.membershipService = membershipService;
         this.transactionTemplate = transactionTemplate;
-        this.clock = clock;
     }
 
     /**
@@ -307,8 +303,6 @@ public class GitLabSelectedMembershipProjection {
                             : Membership.WorkspaceRole.MEMBER);
         }
         membershipService.syncWorkspaceMembers(workspace, desired);
-        workspace.setMembersSyncedAt(clock.instant());
-        workspaces.save(workspace);
         log.info("Synced selected workspace members: workspaceId={}, memberCount={}", workspaceId, desired.size());
         return Outcome.APPLIED;
     }

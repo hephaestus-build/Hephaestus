@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.sql.SQLException;
 import java.time.Duration;
@@ -302,6 +303,110 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldKeepOtherRecipientsSecurityNoticesAndRemoveOnlyErasedIdentities() {
+        long accountId = Objects.requireNonNull(
+                accounts.save(new Account("Role subject")).getId());
+        long recipient = Objects.requireNonNull(
+                accounts.save(new Account("Role recipient")).getId());
+        var mentioned = new ArrayList<UUID>();
+        for (String field : List.of("accountId", "actorAccountId")) {
+            String key = "role-erasure:" + UUID.randomUUID();
+            var payload = JsonNodeFactory.instance.objectNode().put("kind", "ROLE_CHANGED");
+            payload.putObject("event").putObject("change").put(field, accountId);
+            mentioned.add(
+                    actions.enqueue(new ActionRequest(ActionKind.EMAIL, null, key, key, payload, recipient, 3, null)));
+        }
+        UUID unrelated =
+                actions.enqueue(request("lane:" + UUID.randomUUID(), "key:" + UUID.randomUUID(), recipient, 3));
+        UUID addressed =
+                actions.enqueue(request("lane:" + UUID.randomUUID(), "key:" + UUID.randomUUID(), accountId, 3));
+
+        erasure.eraseAccount(accountId);
+
+        for (UUID id : mentioned) {
+            assertThat(row(id)).containsEntry("state", "ADMITTED");
+            assertThat(jdbc.queryForObject(
+                            "SELECT payload #>> '{event,change,accountId}' FROM agent_action WHERE id = ?",
+                            String.class,
+                            id))
+                    .isNull();
+            assertThat(jdbc.queryForObject(
+                            "SELECT payload #>> '{event,change,actorAccountId}' FROM agent_action WHERE id = ?",
+                            String.class,
+                            id))
+                    .isNull();
+        }
+        assertThat(jdbc.queryForObject(
+                        "SELECT payload #>> '{event,change,actorAnonymized}' FROM agent_action WHERE id = ?",
+                        String.class,
+                        mentioned.get(1)))
+                .isEqualTo("true");
+        assertThat(jdbc.queryForList("SELECT id FROM agent_action WHERE id = ?", addressed))
+                .isEmpty();
+        assertThat(row(unrelated)).containsEntry("state", "ADMITTED");
+    }
+
+    @Test
+    void shouldExportOnlyCleanupProofForAnotherRecipientsNotice() {
+        long actor =
+                Objects.requireNonNull(accounts.save(new Account("Role actor")).getId());
+        long recipient = Objects.requireNonNull(
+                accounts.save(new Account("Role recipient")).getId());
+        var payload = JsonNodeFactory.instance.objectNode().put("kind", "ROLE_CHANGED");
+        payload.putObject("event")
+                .put("accountId", recipient)
+                .putObject("change")
+                .put("actorAccountId", actor);
+        String otherKey = "role-export:" + UUID.randomUUID();
+        UUID other = actions.enqueue(
+                new ActionRequest(ActionKind.EMAIL, null, otherKey, otherKey, payload, recipient, 3, null));
+        String ownKey = "own-export:" + UUID.randomUUID();
+        UUID own = actions.enqueue(request(ownKey, ownKey, actor, 3));
+        var scope = new PersonScope(actor, List.of(), List.of());
+        var contributor = erasure.contributors().getFirst();
+
+        var exported = contributor.export(contributor.select(scope), scope);
+
+        assertThat(exported)
+                .filteredOn(row -> row.path("id").asString().equals(other.toString()))
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.has("payload")).isFalse();
+                    assertThat(row.has("subject_account_id")).isFalse();
+                    assertThat(row.has("workspace_id")).isFalse();
+                    assertThat(row.path("kind").asString()).isEqualTo("EMAIL");
+                });
+        assertThat(exported)
+                .filteredOn(row -> row.path("id").asString().equals(own.toString()))
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.path("subject_account_id").asLong()).isEqualTo(actor);
+                    assertThat(row.has("payload")).isTrue();
+                });
+    }
+
+    @Test
+    void shouldRejectRoleNoticeChangesOtherThanIdentityErasure() {
+        long recipient = Objects.requireNonNull(
+                accounts.save(new Account("Role recipient")).getId());
+        var payload = JsonNodeFactory.instance.objectNode().put("kind", "ROLE_CHANGED");
+        payload.putObject("event")
+                .putObject("change")
+                .put("accountId", recipient)
+                .put("role", "ADMIN");
+        String key = "role-immutable:" + UUID.randomUUID();
+        UUID id = actions.enqueue(new ActionRequest(ActionKind.EMAIL, null, key, key, payload, recipient, 3, null));
+
+        assertThatThrownBy(() -> jdbc.update(
+                        "UPDATE agent_action SET payload = jsonb_set(payload, '{event,change,role}', '\"OWNER\"'::jsonb) WHERE id = ?",
+                        id))
+                .isInstanceOf(DataAccessException.class);
+        assertThat(jdbc.queryForObject(
+                        "SELECT payload #>> '{event,change,role}' FROM agent_action WHERE id = ?", String.class, id))
+                .isEqualTo("ADMIN");
+    }
+
+    @Test
     void shouldKeepTheFenceAndTakeTheActionAgainToReadBack() {
         UUID id = actions.enqueue(fileIssue("key:" + UUID.randomUUID(), 3));
         var first = claimOwn(List.of(id)).getFirst();
@@ -377,7 +482,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         UUID id = actions.enqueue(request("lane:" + UUID.randomUUID(), "key:" + UUID.randomUUID(), null, 3));
 
         assertThatThrownBy(() -> jdbc.update("UPDATE agent_action SET payload = '{\"n\":2}' WHERE id = ?", id))
-                .hasMessageContaining("payload never changes");
+                .hasMessageContaining("payload changes only to erase role-notice identities");
         assertThatThrownBy(() -> jdbc.update("UPDATE agent_action SET lane_key = 'other' WHERE id = ?", id))
                 .hasMessageContaining("identity is immutable");
     }
