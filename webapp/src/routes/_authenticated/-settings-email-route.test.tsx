@@ -11,6 +11,11 @@ import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
+// The page is not workspace-scoped, so the reader belongs to no workspace here.
+beforeEach(() => {
+	server.use(http.get("*/workspaces", () => HttpResponse.json([])));
+});
+
 const preferences = {
 	productFeedback: false,
 	productFeedbackUpdates: false,

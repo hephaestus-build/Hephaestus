@@ -1,11 +1,16 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type PathParams } from "msw";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import type { UpdateNotificationPreferences, UpdateUserSettings } from "@/api/types.gen";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+
+// The page is not workspace-scoped, so the reader belongs to no workspace here.
+beforeEach(() => {
+	server.use(http.get("*/workspaces", () => HttpResponse.json([])));
+});
 
 const preferences = {
 	productFeedback: false,

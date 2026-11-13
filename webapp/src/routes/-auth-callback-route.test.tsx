@@ -1,7 +1,7 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
@@ -11,6 +11,11 @@ beforeAll(
 	async () => loadRouteCode("/auth/callback", "/login", "/about"),
 	ROUTE_RENDER_WAIT.timeout,
 );
+
+// The page is not workspace-scoped, so the reader belongs to no workspace here.
+beforeEach(() => {
+	server.use(http.get("*/workspaces", () => HttpResponse.json([])));
+});
 
 const destination = "/about?source=invite#team";
 const callback = `/auth/callback?returnTo=${encodeURIComponent(destination)}`;

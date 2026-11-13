@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeAll, afterEach, assert, describe, expect, it, vi } from "vitest";
+import { afterEach, assert, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getPasskeyStatusOptions } from "@/api/@tanstack/react-query.gen";
 import type {
@@ -18,6 +18,11 @@ import { deferred } from "@/test/async";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
 beforeAll(async () => loadRouteCode("/admin/research"), ROUTE_RENDER_WAIT.timeout);
+
+// The page is not workspace-scoped, so the reader belongs to no workspace here.
+beforeEach(() => {
+	server.use(http.get("*/workspaces", () => HttpResponse.json([])));
+});
 
 const DATASET = "6f1c2b8e-4d3a-4f6b-9a1e-2c7d8e9f0a1b";
 const KEY = "p_abcdefghijklmnopqrstuvwxyz";

@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { type HttpHandler, HttpResponse, http } from "msw";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { Workspace } from "@/api/types.gen";
 import { isRecord } from "@/lib/is-record";
@@ -30,6 +30,11 @@ beforeAll(
 		),
 	ROUTE_RENDER_WAIT.timeout,
 );
+
+// The page is not workspace-scoped, so the reader belongs to no workspace here.
+beforeEach(() => {
+	server.use(http.get("*/workspaces", () => HttpResponse.json([])));
+});
 
 function newRouter(url?: string) {
 	return createRouter({

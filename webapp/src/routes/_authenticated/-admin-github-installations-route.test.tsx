@@ -1,7 +1,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GitHubInstallationRequest, InstanceSettings } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
@@ -10,6 +10,11 @@ import { server } from "@/mocks/server";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
 beforeAll(async () => loadRouteCode("/admin/github-installations"), ROUTE_RENDER_WAIT.timeout);
+
+// The page is not workspace-scoped, so the reader belongs to no workspace here.
+beforeEach(() => {
+	server.use(http.get("*/workspaces", () => HttpResponse.json([])));
+});
 
 // The route harness renders no toaster, so the outcome a toast reports is read from its call.
 vi.mock("@/lib/toast", () => ({
