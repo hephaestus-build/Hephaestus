@@ -385,7 +385,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
         try {
             published = preparation.published(job.getId(), run.fence());
         } catch (RuntimeException unreadable) {
-            if (unreadable != failure) unreadable.addSuppressed(failure);
+            if (!unreadable.equals(failure)) unreadable.addSuppressed(failure);
             return preparationUnavailable(unreadable);
         }
         if (published.isEmpty()) return new StaleRunException(run.fence(), failure);
