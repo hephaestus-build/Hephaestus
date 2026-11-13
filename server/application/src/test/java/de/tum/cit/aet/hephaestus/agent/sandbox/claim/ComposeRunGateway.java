@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunArgumentResolver;
 import de.tum.cit.aet.hephaestus.agent.gateway.testing.AgentReviewDrainFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.CompositionToolTrace;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionClaim;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
@@ -33,6 +34,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
+import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
@@ -151,7 +153,8 @@ public final class ComposeRunGateway implements AutoCloseable {
                 SandboxReviewClaims.terminal(context),
                 context.getBean(ReviewRunKind.class),
                 runs,
-                transactions,
+                new ReviewCompositionClaim(
+                        jobs, transactions, context.getBean(JsonMapper.class), context.getBean(ClusterLock.class)),
                 new SimpleMeterRegistry(),
                 Tracer.NOOP);
         var application = new SpringApplication(

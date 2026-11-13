@@ -40,7 +40,7 @@ Check the rendered requests against the allocatable resources of your nodes befo
 
 | To get | Change | Also needs |
 | --- | --- | --- |
-| More reviews at once | `sandbox.reviewMemory`: 512 MiB more for each review, plus the RuntimeClass overhead | That memory on the sandbox nodes. Each review also takes about 18 MiB of the server's memory and two database connections of its pool. |
+| More reviews at once | `sandbox.reviewMemory`: 512 MiB more for each review, plus the RuntimeClass overhead | That memory on the sandbox nodes. Each review also takes about 18 MiB of the server's memory and three database connections of its pool. |
 | More conversation turns at once | `sandbox.conversationTurns`, or with `auto` a larger `sandbox.budget` | 384 MiB and 100m CPU on the sandbox nodes for each turn ([Sandbox capacity budget](./helm-chart#sandbox-capacity-budget)) |
 | More API capacity, and reception during a restart | `server.replicas` | A server request for each replica, and its database connections. More servers do not add reviews or turns. |
 | Larger repositories | `server.gitCache.sizeLimit` | That much free ephemeral storage on each server's node |
@@ -92,20 +92,23 @@ Each chart role has `databasePool.maximumPoolSize` and `databasePool.minimumIdle
 With `maximumPoolSize: auto`, the chart derives the server pool from the caps that it gives the server:
 
 ```text
-pool = inbox handlers + 2 × reviews at once + 2 × long-load preparations
+pool = inbox handlers + 3 × reviews at once + 2 × long-load preparations
      + permit maintenance threads + sync reserve + HTTP/control reserve
 ```
 
 | Part | Connections | Source |
 | --- | --- | --- |
 | Inbox handlers | 8 | `server.inboxClaimers` |
-| Review captures | 2 for each review at once | `sandbox.reviewMemory` |
+| Review captures | 3 for each review at once | `sandbox.reviewMemory` |
 | Long-load preparations | 4, with sandboxes on | Fixed |
 | Permit maintenance | 2, with sandboxes on | Fixed |
 | Sync reserve | 8, for four syncs | Fixed |
 | HTTP and control reserve | 4 | Fixed |
 
-The result is 20 for `dev.yaml` and `preview.yaml`, 36 for `small.yaml`, 34 on one host, and 50 for `cluster.yaml`.
+The three connections of a review capture are its capture lease, a session lock and a transaction.
+A composition that withholds what is open holds the lock while it records the withholding.
+
+The result is 20 for `dev.yaml` and `preview.yaml`, 41 for `small.yaml`, 38 on one host, and 62 for `cluster.yaml`.
 An explicit `server.databasePool.maximumPoolSize` must hold the derived count. The chart refuses a smaller one.
 A model stream and a sandbox hold no pooled connection. Sandboxes reach the server through the gateway and have no database pool.
 
@@ -114,20 +117,24 @@ The chart derives `max_connections` for one rolling update, in which every old s
 | Client or reserve | `small.yaml` |
 | --- | --- |
 | Servers at overlap: twice `server.replicas` | 2 |
-| Server pools | 2 × 36 = 72 |
+| Server pools | 2 × 41 = 82 |
 | Five dedicated `LISTEN` sessions for each server | 2 × 5 = 10 |
+| One unpooled boot connection for each server process | 2 × 1 = 2 |
 | Migration Job | 2 |
 | PostgreSQL metrics exporter, the monitor role's connection limit | 2 |
 | Backup sessions | 2 |
 | PostgreSQL probes and role setup | 3 |
-| Client total | 91 |
+| Client total | 103 |
 | `superuser_reserved_connections` | 3 |
 | Operator margin | 4 |
-| Required slots | 98 |
+| Required slots | 110 |
 | `max_connections`: rounded up to a multiple of 20, at least 120 | 120 |
 
 The chart reserves the exporter and backup sessions also when they are off.
-With `cluster.yaml`, four servers at overlap with pools of 50 give `max_connections` of 240.
+It also reserves one unpooled boot connection for every possible server process, beside that process's full pool and listeners.
+Thus the budget does not depend on a boot ending before its server becomes ready.
+
+With `cluster.yaml`, four servers at overlap with pools of 62 give `max_connections` of 300.
 An explicit `postgresql.parameters.max_connections` must hold the required slots. The chart refuses a smaller one.
 An external database must hold the same budget beside its own reserved slots ([PostgreSQL connection settings](https://www.postgresql.org/docs/18/runtime-config-connection.html#GUC-SUPERUSER-RESERVED-CONNECTIONS)).
 

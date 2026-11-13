@@ -728,3 +728,26 @@ It cannot send a conversation again after the conversation got its answer, and i
 Copies of one request sent at the same time can each get an answer, so it can choose among several of the model's own answers.
 A composer whose answer is lost on the way after the gateway recorded it cannot send that request again, and its attempt ends `UNEXPECTED`.
 [Practice review pipeline](../contributor/practice-review-pipeline.mdx#compose-feedback) owns the behavior.
+
+## Update — 2026-11-13: composition claims survive a server replica change
+
+A composition claim records its decision in the existing PostgreSQL capture record.
+The decision says whether the claim composes or only withholds what is open, and whether the withholding is complete.
+The record is keyed by run and epoch.
+The claim uses the same SQL fence as the run, and `ReviewRunKind.ATTEMPT_OF_RUN` derives the attempt. `review_job` has no attempt column.
+
+The record holds no credential and no captured input. A server's input folder is a cache of the admitted, retained capture.
+
+A separate PostgreSQL advisory lock, not the review preparation lock, serializes withholding for one run and epoch.
+Busy or unavailable serialization returns 503 with `Retry-After`. It changes no run decision. The lease and result-admission checks stay authoritative.
+[PostgreSQL advisory locks](https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS) define the lock.
+
+A withholding composition begins a real capture, so it can hold the capture lease, the session lock and a transaction. The chart's connection budget reserves three connections for each concurrent capture.
+
+Compositions that were active under the previous release have no recorded decision. Their first upgrade requires the one-time drain in [Upgrade](../admin/upgrade.mdx#drain-legacy-review-compositions).
+
+`ReviewCompositionGatewayReplicasIntegrationTest` runs separate HTTP gateway applications over one database.
+In one case, a stopped server A hands the same claim to server B.
+In the other case, server A ends the run and server B releases it naturally.
+This update does not change the gateway Service, which still pins a sandbox to one server by client IP.
+A later, separate step can remove that affinity.

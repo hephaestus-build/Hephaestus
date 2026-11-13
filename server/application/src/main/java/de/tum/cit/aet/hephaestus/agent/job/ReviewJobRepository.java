@@ -274,6 +274,24 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     int markExecutionStarted(
             @Param("id") UUID id, @Param("runId") UUID runId, @Param("attempt") int attempt, @Param("now") Instant now);
 
+    /** Records only this run's descriptor; unrelated capture fields remain unchanged. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(
+            value = "UPDATE review_job j SET capture=jsonb_set(COALESCE(j.capture,'{}'::jsonb),"
+                    + "'{compositionClaim}',CAST(:snapshot AS jsonb)) FROM agent_run r"
+                    + " WHERE j.id=:id AND j.workspace_id=:workspaceId AND j.run_id=:runId AND j.status='RUNNING'"
+                    + " AND r.id=:runId AND r.workspace_id=:workspaceId AND " + ReviewRunKind.ATTEMPT_OF_RUN
+                    + "=:attempt"
+                    + " AND r.state='LEASED' AND r.lease_epoch=:epoch AND r.leased_until>clock_timestamp()",
+            nativeQuery = true)
+    int saveCompositionClaim(
+            @Param("id") UUID id,
+            @Param("workspaceId") long workspaceId,
+            @Param("runId") UUID runId,
+            @Param("attempt") int attempt,
+            @Param("epoch") int epoch,
+            @Param("snapshot") String snapshot);
+
     @WorkspaceAgnostic("ID-based evidence-refusal transition; job ID + owner from worker-local execution context")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(EVIDENCE_REFUSAL_TRANSITION)

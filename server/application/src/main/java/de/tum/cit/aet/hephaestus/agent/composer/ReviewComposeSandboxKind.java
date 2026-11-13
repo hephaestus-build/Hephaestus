@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionClaim;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobClaimService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
@@ -27,16 +28,11 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.tracing.Tracer;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.ReentrantLock;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.MDC;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 
@@ -44,10 +40,8 @@ import tools.jackson.databind.node.JsonNodeFactory;
  * A review's composition as a run of its review sandbox (ADR 0079, ADR 0069): the sandbox's composer loop calls the
  * model through the gateway and every composition route, and this kind claims the run, holds its inputs and ends it.
  *
- * <p>The claim decides whether the attempt composes or only withholds what is open with a cause, as for a member who
- * declined AI or a spent budget. That decision lives on the replica that claimed, as the attempt's inputs do
- * ({@link ReviewAttemptCustody}). A run whose decision this replica does not hold, as after a restart, is queued again
- * without spending an attempt, and its next claim decides again: the run never composes on a decision it lost.
+ * <p>The claim records its decision in the job's capture, in the claim transaction. Every replica reads that same
+ * decision. Its held input folder is a local cache of the admitted, retained capture.
  */
 @Component
 @ConditionalOnAgentRuntime
@@ -63,9 +57,8 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
     private final ReviewJobTerminal terminal;
     private final ReviewRunKind reviewRuns;
     private final AgentRuns runs;
-    private final TransactionTemplate transactions;
     private final ReviewStageTelemetry stages;
-    private final Map<AgentRunFence, Decision> decisions = new ConcurrentHashMap<>();
+    private final ReviewCompositionClaim gateway;
 
     public ReviewComposeSandboxKind(
             ReviewJobClaimService claims,
@@ -77,7 +70,7 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
             ReviewJobTerminal terminal,
             ReviewRunKind reviewRuns,
             AgentRuns runs,
-            TransactionTemplate transactions,
+            ReviewCompositionClaim gateway,
             MeterRegistry meters,
             Tracer tracer) {
         this.claims = claims;
@@ -89,7 +82,7 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
         this.terminal = terminal;
         this.reviewRuns = reviewRuns;
         this.runs = runs;
-        this.transactions = transactions;
+        this.gateway = gateway;
         this.stages = new ReviewStageTelemetry(meters, tracer);
     }
 
@@ -108,7 +101,10 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
         var fence = run.fence();
         return claims.claimLeased(fence)
                 .map(started -> {
-                    decisions.put(fence, new Decision(started.withholdOnly(), Instant.now()));
+                    gateway.save(
+                            run,
+                            started.job(),
+                            new ReviewCompositionClaim.Decision(Instant.now(), started.withholdOnly(), false));
                     return true;
                 })
                 .orElse(false);
@@ -116,21 +112,21 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
 
     @Override
     public Optional<ProxyAttempt> attempt(SandboxRun run) {
-        var decision = decisions.get(run.fence());
-        if (decision == null || decision.withholdOnly() != null) return Optional.empty();
         var fence = run.fence();
         var ref = new AgentRunRef(fence.runId(), fence.workspaceId());
-        return jobs.findIdByRun(fence.runId(), fence.workspaceId())
-                .map(jobId -> new ProxyAttempt(
-                        ProxyAttempt.Caller.REVIEW,
-                        jobId,
-                        fence.workspaceId(),
-                        fence.epoch(),
-                        fence.runId(),
-                        runs.find(ref)
-                                .map(AgentRun::getDeadline)
-                                .map(ReviewRunKind::compositionWorkDeadline)
-                                .orElse(null)));
+        return jobs.findByRunIdAndWorkspaceId(fence.runId(), fence.workspaceId())
+                .flatMap(job -> gateway.find(run, job)
+                        .filter(decision -> decision.withholdOnly() == null)
+                        .map(decision -> new ProxyAttempt(
+                                ProxyAttempt.Caller.REVIEW,
+                                job.getId(),
+                                fence.workspaceId(),
+                                fence.epoch(),
+                                fence.runId(),
+                                runs.find(ref)
+                                        .map(AgentRun::getDeadline)
+                                        .map(ReviewRunKind::compositionWorkDeadline)
+                                        .orElse(null))));
     }
 
     @Override
@@ -144,7 +140,7 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
      * erased or are gone. The first call of a claim that composes nothing withholds what is open, with the claim's
      * cause or the inputs' loss, so the loop's next session finds nothing open.
      *
-     * @throws StaleRunException when the run no longer holds its lease, or this replica lost its claim's decision
+     * @throws StaleRunException when the run no longer holds its lease
      */
     public ResultAdmissionService.Composing prepare(SandboxRun run) {
         var fence = run.fence();
@@ -154,18 +150,13 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
         } catch (ResultAdmissionService.StaleAttemptException stale) {
             throw new StaleRunException(fence, stale);
         }
-        var decision = decisions.get(fence);
-        if (decision == null) {
-            transactions.executeWithoutResult(status -> reviewRuns.requeue(
-                    composing.identity().jobId(), fence, AgentRuns.Charge.FREE, Duration.ZERO, null));
-            throw new StaleRunException(fence);
-        }
         var job = composing.job();
+        var decision = gateway.require(run, job);
         var identity = composing.identity();
         var cause = decision.withholdOnly();
         if (cause != null) {
             custody.hold(identity, () -> continuation.stageWithoutInputs(job).staged());
-            decision.withholdOnce(() -> sessions.withholdOpen(job, identity, cause));
+            if (!decision.withheld()) gateway.withholdOnce(run, job, () -> sessions.withholdOpen(job, identity, cause));
             return composing;
         }
         try {
@@ -173,7 +164,7 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
         } catch (ReviewCompositionContinuation.InputsUnavailableException unavailable) {
             var stop = unavailable.erased() ? CompositionStop.INPUTS_ERASED : CompositionStop.INPUTS_GONE;
             custody.hold(identity, () -> continuation.stageWithoutInputs(job).staged());
-            decision.withholdOnce(() -> sessions.withholdOpen(job, identity, stop));
+            if (!decision.withheld()) gateway.withholdOnce(run, job, () -> sessions.withholdOpen(job, identity, stop));
         }
         return composing;
     }
@@ -191,16 +182,16 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
         var previous = MDC.getCopyOfContextMap();
         MDC.put(StructuredLogKeys.JOB_ID, jobId.toString());
         try {
+            var decision = gateway.find(run, composing.job());
             boolean held = switch (outcome) {
                 case COMPLETED -> terminal.completeComposed(jobId, fence);
                 case HANDED_ON -> reviewRuns.retryComposition(jobId, fence);
             };
             custody.release(composing.identity());
-            var decision = decisions.remove(fence);
-            if (held && decision != null)
+            if (held && decision.isPresent())
                 stages.record(
                         ReviewStageTelemetry.Stage.COMPOSITION,
-                        Duration.between(decision.claimedAt(), Instant.now()),
+                        Duration.between(decision.get().started(), Instant.now()),
                         outcome == Outcome.COMPLETED
                                 ? ReviewStageTelemetry.Outcome.OK
                                 : ReviewStageTelemetry.Outcome.HANDED_ON);
@@ -216,44 +207,5 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
         return runs.find(new AgentRunRef(fence.runId(), fence.workspaceId()))
                 .filter(found -> found.getState() == AgentRunState.ENDED && found.getLeaseEpoch() == fence.epoch())
                 .isPresent();
-    }
-
-    /** What a claim decided: to compose, or to withhold what is open with a cause and make no model call. */
-    private static final class Decision {
-        private final @Nullable CompositionStop withholdOnly;
-        private final Instant claimedAt;
-        private boolean withheld;
-
-        /**
-         * A lock, not a monitor: withholding closes the open sessions in the database, and on Java 21 a virtual thread
-         * that blocks under a monitor pins its carrier.
-         */
-        private final ReentrantLock withholding = new ReentrantLock();
-
-        Decision(@Nullable CompositionStop withholdOnly, Instant claimedAt) {
-            this.withholdOnly = withholdOnly;
-            this.claimedAt = claimedAt;
-        }
-
-        @Nullable
-        CompositionStop withholdOnly() {
-            return withholdOnly;
-        }
-
-        Instant claimedAt() {
-            return claimedAt;
-        }
-
-        /** Withholds what is open once for the claim; a failed withholding is tried again by the next call. */
-        void withholdOnce(Runnable withhold) {
-            withholding.lock();
-            try {
-                if (withheld) return;
-                withhold.run();
-                withheld = true;
-            } finally {
-                withholding.unlock();
-            }
-        }
     }
 }
