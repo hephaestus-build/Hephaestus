@@ -28,8 +28,9 @@ If **Create workspace** is unavailable, ask an instance admin.
 
 For GitHub:
 
-1. Install the Hephaestus GitHub App on an organization or on your personal account.
-2. When GitHub returns you to Hephaestus, select **Continue**.
+1. Select **Create workspace**, then **GitHub**.
+2. Install the Hephaestus GitHub App on an organization or on your personal account.
+3. When GitHub returns you to Hephaestus, select **Continue**.
 
 By default, the page then says that an instance administrator must approve the installation.
 Ask your instance admin to adopt the installation.
@@ -190,9 +191,11 @@ Sync cannot continue until you replace the token.
 
 1. Under **Administration → Integrations**, open GitHub or GitLab.
 2. Enter the token in **New personal access token**.
-3. Select **Replace token**, or **Reconnect GitHub** or **Reconnect GitLab** when the token was refused.
+3. Select **Replace token**.
 
 Your repositories and synced work stay.
+If the GitLab connection was disconnected, the button reads **Reconnect GitLab**.
+Then Hephaestus syncs the work again, and you select your projects again.
 To get an email when a token needs replacement, turn on **Workspace connection alerts** in **User settings → Email notifications**.
 GitHub App tokens renew automatically.
 Hephaestus does not track the expiry of GitHub personal access tokens.
@@ -212,6 +215,12 @@ Otherwise, Hephaestus checks the repository again about once a day.
 A successful check clears the error and resumes sync.
 
 If the workspace does not need the repository, remove it as [Repositories](#repositories) describes.
+
+## More admin tasks
+
+- [Connect Slack or Outline](/admin/integrations#slack) to a workspace.
+- [Set up AI models and Member onboarding](/admin/ai-providers) for a workspace.
+- [Publish a public activity page](/admin/public-activity#workspace-administrators).
 
 ## Troubleshooting
 
