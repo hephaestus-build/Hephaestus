@@ -19,7 +19,7 @@ postgresql:
     shared_buffers: 256MB
     work_mem: 2MB
     hash_mem_multiplier: 1.0
-    max_connections: 80
+    # max_connections follows the rollout client budget, rounded up with a floor of 120.
     maintenance_work_mem: 64MB
     autovacuum_work_mem: 32MB
     autovacuum_max_workers: 3
@@ -31,10 +31,9 @@ nats:
   jetstream:
     maxFileBytes: 8589934592
 server:
-  databasePool: { maximumPoolSize: 40, minimumIdle: 2 }
-  # One node holds one server: the old server stops before its replacement starts. Each upgrade is an
-  # outage of the API. The gateway stays available while in-flight reviews finish.
-  rolloutStrategy: Recreate
+  databasePool: { maximumPoolSize: auto, minimumIdle: 2 }
+  # Reserve a replacement beside the draining server within the single node budget.
+  replicas: 1
   drainTimeoutSeconds: 600
   gitCache:
     sizeLimit: 20Gi

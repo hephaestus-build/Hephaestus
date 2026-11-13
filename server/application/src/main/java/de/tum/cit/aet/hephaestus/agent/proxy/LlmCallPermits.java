@@ -58,6 +58,7 @@ import reactor.core.publisher.Sinks;
 @ConditionalOnAgentRuntime
 @WorkspaceAgnostic("Instance-owned endpoint capacity, shared across all servers and workspaces.")
 public class LlmCallPermits {
+    static final int MAINTENANCE_THREADS = 2;
     private static final Logger log = LoggerFactory.getLogger(LlmCallPermits.class);
     static final Duration POLL = Duration.ofMillis(250);
     static final Duration DEFAULT_COOLDOWN = Duration.ofSeconds(5);
@@ -152,7 +153,7 @@ public class LlmCallPermits {
             thread.setDaemon(true);
             return thread;
         };
-        ScheduledExecutorService started = Executors.newScheduledThreadPool(2, daemons);
+        ScheduledExecutorService started = Executors.newScheduledThreadPool(MAINTENANCE_THREADS, daemons);
         long renewMillis = properties.renewEvery().toMillis();
         var unusedRenewal =
                 started.scheduleWithFixedDelay(this::renew, renewMillis, renewMillis, TimeUnit.MILLISECONDS);

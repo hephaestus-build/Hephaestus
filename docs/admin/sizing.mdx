@@ -42,7 +42,7 @@ The following effects still need measurement with the same workload:
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------- |
 | PostgreSQL and NATS backups | Throughput, first text, completion latency and resource pressure during a backup versus an idle control           | Unmeasured     |
 | Cold starts and image pulls | Startup delay, first text and memory peak with an empty image cache versus a warm cache                           | Unmeasured     |
-| Server deployments          | Failed or slow authenticated reads, user-visible outage and error-budget use during Recreate                      | Unmeasured     |
+| Server deployments          | Failed or slow authenticated reads, user-visible outage and error-budget use during server updates                      | Unmeasured     |
 | Provider throttles          | First text, call-grant waits and review throughput with deterministic 429 responses versus an unthrottled control | Unmeasured     |
 
 ### Deployment availability budget
@@ -75,7 +75,7 @@ The small profile uses these shared-node values:
 | `shared_buffers` | `256MB` |
 | `work_mem` | `2MB` |
 | `hash_mem_multiplier` | `1.0` |
-| `max_connections` | `80` |
+| `max_connections` | `120`, derived from the client budget |
 | `maintenance_work_mem` | `64MB` |
 | `autovacuum_work_mem` | `32MB` |
 | `autovacuum_max_workers` | `3` |
@@ -91,6 +91,15 @@ See [PostgreSQL resource consumption](https://www.postgresql.org/docs/18/runtime
 The small profile requests the PostgreSQL process's full 2 GiB memory limit.
 Its resident pgBackRest sidecar also requests its full 512 MiB memory limit.
 CPU can still burst. These Pods retain Burstable QoS.
+
+At 120 connection slots, a planning allowance of 5 MiB per backend totals 600 MiB.
+Add 256 MiB of shared buffers, 96 MiB for three autovacuum workers, 64 MiB of maintenance memory, and 256 MiB for other memory and cache.
+One 2 MiB work operation per slot brings that estimate to 1512 MiB. Two such operations per slot bring it to 1752 MiB.
+Both estimates fit the unchanged 2 GiB request and limit.
+
+These are planning estimates, not measured peaks or hard bounds.
+`work_mem` applies per operation. Temporary buffers and cache can add memory.
+The loaded qualification must check total container charge and OOM events at the permitted connection count.
 
 A lower 1536 MiB limit is a qualification target, not an enabled setting.
 Count the pgBackRest server sidecar separately, and count a backup or stanza Job in addition.
@@ -155,7 +164,7 @@ The small profile uses:
 
 | Client | Maximum / minimum idle |
 | --- | --- |
-| Server | 40 / 2 |
+| Server | `auto`: 36 / 2 with the small profile |
 | Migration Job | 2 / 1 |
 | Sandboxes | 0 / 0: use their gateway |
 
@@ -164,18 +173,57 @@ Bound capture concurrency separately. A larger pool does not authorize more simu
 The server's four scheduled workspace syncs can hold eight connections. The rest serve reviews, foreground and control work.
 Do not hold a database transaction while waiting for a model grant or provider response.
 
-The small profile updates the server with `Recreate`, so one server pool of 40 connections is open at a time.
-Budget one dedicated listener outside Hikari, four migration/backup sessions, four operator/monitor sessions, and three superuser-reserved slots.
-The total is 52 of 80.
-The chart permits one server and uses `Recreate` until provider-event processing has per-item ordering across replicas.
+The chart derives the server pool from the caps it gives the runtime:
 
-Without an explicit `max_connections`, the chart sets what the role pools, server surge, listeners, and maintenance reserves need on a bundled database.
-It rejects an explicit value that cannot hold them.
+```text
+pool = inbox handlers + 2 × review captures + 2 × long-load preparations
+     + permit maintenance threads + sync reserve + HTTP/control reserve
+small = 8 + 2 × 5 + 2 × 2 + 2 + (4 × 2) + 4 = 36
+```
+
+`server.inboxClaimers` sets the inbox handler count. The review cap comes from the sandbox template requests and review memory budget.
+Long loads have two preparation slots. The permit gate has two maintenance threads.
+
+The last twelve connections reserve eight for four syncs and four for HTTP and control requests.
+A model stream holds no pooled connection while it waits for the model.
+A review or turn at its sandbox cap does not hold a pooled connection for its full run.
+
+The same helper derives the PostgreSQL budget for one rolling update:
+
+| Client or reserve | Small-profile peak |
+| --- | --- |
+| Servers at overlap | 2 |
+| Server pools | 2 × 36 = 72 |
+| Four dedicated LISTEN sessions per server | 2 × 4 = 8 |
+| New revision's migration Job | 2 |
+| PostgreSQL metrics exporter | 2, the monitor role's cluster-wide connection limit |
+| Backup sessions | 2 |
+| PostgreSQL probes and role/monitor setup | 3 |
+| Ordinary client total | 89 |
+| `superuser_reserved_connections` | 3 |
+| Operator margin outside the reserved slots | 4 |
+| Required slots, including reserves | 96 |
+| Derived `max_connections` | 120 |
+| Extra slots after all clients and reserves | 24 |
+
+The owning helper is `hephaestus.databaseConnectionCapacity` in the chart. It reserves optional monitoring and backup clients even when they are off.
+The chart rounds the derived limit up to twenty slots, with a floor of 120. An explicit limit must hold the complete budget.
+
+The bundled database pins three superuser-reserved slots. An external database must also subtract its configured reserved slots.
+See [PostgreSQL connection settings](https://www.postgresql.org/docs/18/runtime-config-connection.html#GUC-SUPERUSER-RESERVED-CONNECTIONS).
+
+An explicit `server.databasePool.maximumPoolSize` must hold the derived holder count and reserve.
+When all pooled connections are busy, Hikari waits up to the configured `connection-timeout`, 45000 ms, then throws an SQL exception.
+This queue does not raise the connection limit. See [Hikari pool settings](https://github.com/brettwooldridge/HikariCP#frequently-used).
+
+The load qualification must measure `hikaricp_connections_pending`, acquisition timeouts and acquisition latency with inbox, capture, conversation and HTTP work together.
+That measurement qualifies the twelve-connection reserve. It does not replace the holder floor.
+
 Inventory dedicated listeners after runtime changes and recompute this budget if more exist.
 
 Agent sandboxes use the gateway and have no database connection pool.
 
-The chart defaults outside the small profile keep a server pool of 48 with minimum idle five.
+The other profiles derive their server pool from the same holder model, with minimum idle five.
 Recalculate the PostgreSQL budget if the server pool changes.
 Measure pool waits at the actual workload. A rendered connection count does not prove query latency or memory use.
 

@@ -15,7 +15,7 @@ Set `sandbox.namespace` and `networkPolicy.kubernetesApi` ([Install](./kubernete
 The chart refuses enabled sandboxes without both settings.
 
 The server also serves the API, syncs provider work, and delivers feedback.
-`server.replicas` is capped at one. It uses `Recreate` until provider events have ordering across replicas.
+[Helm chart](./helm-chart) owns the replica count, rolling update and overlap budget.
 A stopping server takes no new claims. It keeps its gateway available within the [review drain window](./runtime-roles#graceful-drain).
 Sandbox calls use port 8081.
 

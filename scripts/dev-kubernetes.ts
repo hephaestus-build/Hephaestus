@@ -111,7 +111,7 @@ export function hostValues(namespace: string, address: string): Record<string, u
 			api: { address, port: 6443 },
 		}),
 		// One host process uses the same quota contract as a deployed server.
-		server: { replicas: 1, rolloutStrategy: "Recreate", drainTimeoutSeconds: 0 },
+		server: { replicas: 1, drainTimeoutSeconds: 0 },
 		sandbox: { enabled: true, namespace, reviewMemory: oneReviewMemory() },
 	};
 }

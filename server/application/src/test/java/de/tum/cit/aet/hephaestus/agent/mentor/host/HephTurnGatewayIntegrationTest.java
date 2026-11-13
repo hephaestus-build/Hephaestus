@@ -8,48 +8,65 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.gateway.AgentGatewayErrorFixtures;
 import de.tum.cit.aet.hephaestus.agent.gateway.AgentRunController;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConfiguration;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunArgumentResolver;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
+import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnAdmission;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.TurnRunsAdapter;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
+import de.tum.cit.aet.hephaestus.agent.proxy.SandboxModelProxy;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.SandboxOwnerFixtures;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
+import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -73,6 +90,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -133,16 +151,21 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
         turn = MentorTurnStarts.askAndStart(
                 beans, metrics, workspace.getId(), conversation.getId(), "How should I pin the image?");
 
-        var usage = beans.getBean(LlmUsageRecorder.class);
         sandboxes = SandboxOwnerFixtures.owner(beans, issuer);
+        sandbox = sandboxes.ensure(
+                workspace.getId(), TurnRunsAdapter.subject(conversation.getId()), AgentSandboxKind.CONVERSATION);
+        gateway = newGateway();
+        gatewayPort = gateway.getBean(SandboxGatewayConnector.class).port();
+    }
+
+    private ConfigurableApplicationContext newGateway() throws Exception {
+        var usage = beans.getBean(LlmUsageRecorder.class);
         HephTurns served = HephTurnFixtures.turns(beans, sandboxes);
         HephTurnContexts contexts = HephTurnFixtures.contexts(beans);
         var controller = new HephTurnController(contexts, completion, served, usage);
         var sandboxController =
                 new TurnContextController(contexts, served, HephTurnFixtures.folder(beans), beans.getBean(Clock.class));
         var transactions = beans.getBean(TransactionTemplate.class);
-        sandbox = sandboxes.ensure(
-                workspace.getId(), TurnRunsAdapter.subject(conversation.getId()), AgentSandboxKind.CONVERSATION);
         var kind = new TurnSandboxRunKind(
                 MentorTurnStarts.admitting(beans, metrics),
                 beans.getBean(TurnRunsAdapter.class),
@@ -170,7 +193,7 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
             factory.registerSingleton("agentGatewayErrors", AgentGatewayErrorFixtures.errors());
             factory.registerSingleton("reviewJobRepository", jobRepository);
             factory.registerSingleton("agentRuns", agentRuns);
-            // The turn endpoints read no turn row on the gateway; a model call would.
+            factory.registerSingleton("llmProxyController", SandboxModelProxy.controller(beans));
             factory.registerSingleton("attemptTokenVerifier", verifier);
 
             factory.registerSingleton("proxyAccounting", mock(ProxyAccounting.class));
@@ -179,19 +202,140 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
             factory.registerSingleton("agentControllerAdvice", new AgentControllerAdvice());
             factory.registerSingleton("globalControllerAdvice", new GlobalControllerAdvice());
         });
-        gateway = application.run(
+        return application.run(
                 "--server.port=0",
+                "--server.shutdown=immediate",
                 "--spring.main.banner-mode=off",
                 "--spring.mvc.problemdetails.enabled=true",
                 // The test profile turns agent jobs off; the gateway belongs to the agent runtime.
                 "--" + RuntimeRole.AGENT_ENABLED_PROPERTY + "=true",
                 "--hephaestus.sandbox.gateway.port=0");
-        gatewayPort = gateway.getBean(SandboxGatewayConnector.class).port();
     }
 
     @AfterEach
     void stopTheGateway() {
         gateway.close();
+    }
+
+    @Test
+    void shouldRetryACutModelStreamOnAnotherServerAndAdmitAndChargeTheAnswerOnce() throws Exception {
+        var mapper = beans.getBean(ObjectMapper.class);
+        var jdbc = beans.getBean(JdbcTemplate.class);
+        var driver = new ProcessBuilder(
+                        "node",
+                        Path.of("src/test/resources/agent/turn-proxy-restart.ts")
+                                .toString())
+                .redirectError(ProcessBuilder.Redirect.INHERIT)
+                .start();
+        var reader = Executors.newVirtualThreadPerTaskExecutor();
+        var output = driver.inputReader(StandardCharsets.UTF_8);
+        try (var input = driver.outputWriter(StandardCharsets.UTF_8);
+                var survivingServer = newGateway()) {
+            var ready = mapper.readTree(nextEvent(output, reader));
+            String upstream = ready.required("modelUrl").asString();
+            admitModel(upstream);
+            int survivorPort =
+                    survivingServer.getBean(SandboxGatewayConnector.class).port();
+            input.write(mapper.writeValueAsString(Map.of(
+                    "first", "http://localhost:" + gatewayPort,
+                    "second", "http://localhost:" + survivorPort,
+                    "runId", turn.getRunId(),
+                    "epoch", turn.getAttempt(),
+                    "token", credential())));
+            input.newLine();
+            input.flush();
+
+            assertThat(mapper.readTree(nextEvent(output, reader))
+                            .required("streaming")
+                            .asBoolean())
+                    .isTrue();
+            // The cut happens only after the native runtime reported the first server's streamed text.
+            assertThat(jdbc.queryForList(
+                            "SELECT call_state FROM llm_usage_event WHERE workspace_id = ? AND run_id = ?",
+                            String.class,
+                            workspace.getId(),
+                            turn.getRunId()))
+                    .containsExactly("OPEN");
+            gateway.close();
+
+            assertThat(mapper.readTree(nextEvent(output, reader))
+                            .required("recovered")
+                            .asBoolean())
+                    .isTrue();
+            assertThat(driver.waitFor(1, TimeUnit.MINUTES)).isTrue();
+            assertThat(driver.exitValue()).isZero();
+
+            var calls = jdbc.queryForList(
+                    "SELECT call_state, measurement_verification, cost_usd, input_tokens, output_tokens,"
+                            + " unreported_calls, settle_after FROM llm_usage_event"
+                            + " WHERE workspace_id = ? AND run_id = ? ORDER BY started_at, id",
+                    workspace.getId(),
+                    turn.getRunId());
+            assertThat(calls).hasSize(2);
+            assertThat(calls).allSatisfy(call -> {
+                assertThat(call.get("call_state")).isNotEqualTo("OPEN");
+                // Run-bound calls settle when the run ends; settle_after belongs to runless callers.
+                assertThat(call.get("settle_after")).isNull();
+            });
+            assertThat(calls.getFirst().get("measurement_verification")).isEqualTo("UNVERIFIABLE");
+            assertThat(calls.getFirst().get("unreported_calls")).isEqualTo(1);
+            assertThat(calls.getFirst().get("cost_usd")).isNull();
+            assertThat(calls.getLast())
+                    .containsEntry("call_state", "ENDED")
+                    .containsEntry("measurement_verification", "VERIFIED")
+                    .containsEntry("input_tokens", 13L)
+                    .containsEntry("output_tokens", 7L);
+            assertThat((BigDecimal) calls.getLast().get("cost_usd")).isEqualByComparingTo("0.000130");
+            var stored = beans.getBean(MentorTurnRepository.class)
+                    .findByIdAndWorkspaceId(turn.getId(), workspace.getId())
+                    .orElseThrow();
+            assertThat(stored.getStatus()).isEqualTo(MentorTurn.Status.DONE);
+            var answers = beans.getBean(MentorEntryRepository.class)
+                    .findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
+                            workspace.getId(), turn.getId(), MentorEntry.Kind.HEPH);
+            assertThat(answers)
+                    .extracting(MentorEntry::getText)
+                    .containsExactly("Here is the whole answer. " + "More of it. ".repeat(20));
+        } finally {
+            if (driver.isAlive()) driver.destroyForcibly();
+            reader.shutdownNow();
+            output.close();
+        }
+    }
+
+    private static String nextEvent(BufferedReader output, ExecutorService reader) throws Exception {
+        return Objects.requireNonNull(reader.submit(output::readLine).get(1, TimeUnit.MINUTES), "The runtime exited");
+    }
+
+    private void admitModel(String upstream) {
+        String slug = "restart-" + UUID.randomUUID();
+        var connection = LlmCatalogTestFixtures.connection(slug);
+        connection.setBaseUrl(upstream);
+        connection = beans.getBean(LlmConnectionRepository.class).saveAndFlush(connection);
+        var model = beans.getBean(LlmModelRepository.class)
+                .saveAndFlush(LlmCatalogTestFixtures.model(connection, slug, "restart-model"));
+        var defaults = LlmCatalogTestFixtures.admittedMentorConfig();
+        var price = Objects.requireNonNull(defaults.priceSnapshot());
+        var llm = new MentorLlmConfig(
+                "openai-completions",
+                upstream,
+                "restart-model",
+                128_000,
+                256,
+                null,
+                UsageFundingSource.INSTANCE,
+                connection.getId(),
+                model.getId(),
+                workspace.getId(),
+                price,
+                defaults.timeoutSeconds());
+        beans.getBean(MentorTurnService.class)
+                .admit(
+                        workspace.getId(),
+                        turn.getId(),
+                        turn.getAttempt(),
+                        turn.getRunId(),
+                        MentorTurnAdmission.of(llm, price).toJson());
     }
 
     /** Each host endpoint, the body the host sends ({@code null} for none), and the status the gateway answers. */
