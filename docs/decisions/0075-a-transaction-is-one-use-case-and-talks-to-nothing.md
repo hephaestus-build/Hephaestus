@@ -74,6 +74,8 @@ Reopen it also if Spring Modulith changes how it resubmits failed publications.
 
 ## Bounded lifecycle calls
 
+[ADR 0101](0101-a-connection-cannot-adopt-an-upstream-resource-whose-removal-is-unresolved.md) amends this section: durable adoption fences replace reliance on the network-call lock.
+
 `GitLabSuspendedWebhookCleanup` holds the connection lifecycle row lock while it deletes a suspended connection's group hook.
 Reactivation takes the same lock before it can adopt that hook.
 A state check followed by an unlocked DELETE would allow reactivation to commit between the check and the deletion.
