@@ -115,7 +115,7 @@ const changesRequested = (work: Review): boolean =>
  * requested changes, or the decision is approved and someone other than the person approved. The
  * person's own entry never covers their own request. It cannot see that a provider's decision may
  * still count the person's own earlier approval; which providers and versions do is in
- * `docs/user/activity.mdx` § Needs you. There is no decision where the branch requires no review,
+ * `docs/user/activity.mdx` § Troubleshooting. There is no decision where the branch requires no review,
  * or where Hephaestus has not read a merge request's approvals yet.
  */
 function isCovered(work: Review, login: string): boolean {

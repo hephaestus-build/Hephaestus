@@ -1,292 +1,236 @@
 ---
 title: User settings
-description: Manage your AI choice, connected accounts, notifications, sessions, and account data.
+description: Change your AI choice, comments on your work, connected accounts, notifications, and sessions, and export or delete your account.
 page_type: feature
 ---
 
-User settings hold the choices that apply to your account, not to one workspace.
-They cover your AI choice, connected accounts, notifications, sessions, and account data.
-Select **User settings** at the bottom of the sidebar to open them.
-
-## Your AI choice
-
-Your AI choice sets which models may handle your work and your Hephaestus requests across this instance.
-It does not select a specific model or grant workspace membership.
-
-| Answer       | What it allows                                                         |
-| ------------ | ---------------------------------------------------------------------- |
-| **In-house** | Only models declared as operated by your organization                  |
-| **Cloud**    | In-house models and models declared as operated by a provider          |
-| **No AI**    | No new practice reviews about you, Hephaestus requests, or feedback delivery |
-
-**Cloud** allows In-house models too.
-**In-house** does not allow Cloud models.
-Hephaestus never changes your answer to allow more AI processing.
-It checks your saved answer on each request, even if workspace models change.
-
-With **No AI**, existing feedback and your conversation stay readable.
-You cannot send Hephaestus a message.
-Hephaestus cannot recall requests already sent.
-**No AI** does not stop source sync or remove stored work.
-Your choice does not remove work from shared repositories or change other members’ choices.
-Research participation is separate.
-
-No answer starts selected on your first visit.
-You can choose any answer, including one that no workspace has set up yet.
-
-### Models in a workspace
-
-The cards in User settings show no model or service.
-In a workspace, open **Your AI choice** in the sidebar.
-There, each answer’s card shows the first model for a new request, its maker’s logo, and the service that receives requests.
-If more models are ready, the card shows their count.
-Below the cards, a list names each model for your selected answer with its declared data use.
-
-If no model meets an answer in the current workspace, its card says *not set up here yet*.
-[A card says not set up here yet](#a-card-says-not-set-up-here-yet) explains what that means.
-
-“Set up” describes configuration, not service health.
-Model size, speed, retention, and access depend on the service your organization uses.
-A model’s logo names its maker, not its operator.
-For example, a private endpoint does not automatically make an OpenAI model served by Azure in-house.
-Ask a workspace admin who operates the deployment and what terms apply to your work.
-
-### Accounts that a workspace requires
-
-A new workspace can ask you to connect accounts that it requires.
-A required account must match the Slack team or Outline instance configured for this workspace.
-An account on a different team or instance does not count.
-Connecting an account identifies you on that service but does not turn on AI.
-
-**Your AI choice** in the sidebar has these buttons:
-
-- **Save AI choice** and **Save and connect** both save your answer. On your first visit, **Save AI choice** also finishes setup once you have answered and connected every required account. If required accounts are still unconnected, it saves your answer without finishing setup. This holds for **No AI** too, because you never need to connect an account to opt out.
-- **Skip for now** leaves without saving a new answer. An existing answer stays in effect. The page stays under **Your AI choice** until a workspace owner changes the setup.
-- On return visits, **Save AI choice** records a new answer even if required accounts are unconnected. **Back to workspace** leaves without saving.
-
-An account that is unavailable right now does not block setup.
-Optional accounts never block completion.
-After you finish or skip, you return to the workspace page you came from, with its filters and selected section.
-
-The sign-in notice and the research question are separate from workspace setup.
-Connected accounts and AI choices do not change research participation.
+User settings hold the choices that apply to your account in every workspace.
+Select **User settings** at the bottom of the sidebar, or open it from the account menu.
+The sections below follow the order of the page.
 
 ## Connected accounts
 
-Connecting an account helps Hephaestus identify your work on that service.
+Connecting an account lets Hephaestus recognize your work on that service.
 It grants neither workspace membership nor AI permission.
+
+1. Under **Connected accounts**, select **Connect** next to the service.
+2. Finish the sign-in on that service.
+
 Connecting needs a recent sign-in.
-You cannot disconnect your last sign-in account.
+For Slack, connect the account of the Slack workspace where you want to send Hephaestus direct messages.
 
-## Slack
-
-For each connected Slack workspace, **Use your new channel messages** controls whether Hephaestus uses your new messages in monitored channels.
-This context supports your conversation in that workspace.
-[Your data in Hephaestus](./privacy#your-choices-and-right-to-object) explains how Hephaestus uses it.
-
-## Practice feedback
-
-**Comments on your work** controls new feedback comments on issues, pull requests, and merge requests you author.
-Turning it off does not stop reviews or remove existing feedback.
-Workspace admins can still see the observations of those reviews.
-Your Practice profile stays available.
-
-## Weekly digest
-
-The weekly digest is off until you turn it on.
-One switch covers each workspace where Hephaestus can answer you.
-If Hephaestus cannot answer you in any workspace, Hephaestus writes no digest.
-The section then appears only while the digest is on, so that you can turn it off.
-[Weekly digest](./ask-hephaestus#weekly-digest) explains when it arrives, what it lists, and where its note arrives.
-
-## Public activity pages
-
-A workspace can publish a [public activity page](./public-activity.mdx).
-It lists the pull requests, reviews and issues of everyone who worked in the workspace’s public repositories.
-**Show me on public activity pages** is off until you choose to show.
-This choice affects only public pages.
-Members still see your work on Workspace activity.
-
-## Product feedback
-
-**Public GitHub issues** sets the default for your reports about Hephaestus.
-Turning it off also keeps waiting public reports private. Issues already public need **Make private** for each report.
-**Mention my GitHub account on public issues** lets anyone see that you sent the report.
-It appears when you have a connected GitHub account.
-[Product feedback](./product-feedback) explains the first choice, per-report switch, hold, and withdrawal limits.
-
-## Email notifications
-
-Optional email choices depend on your role and your instance’s email setup.
-Your contact address comes from a connected sign-in provider that supplied a verified email address.
-You cannot enter a different address here.
-
-Product feedback updates for your reports start on. You can unsubscribe here or through an update email.
-Instance admins can opt into emails about reports that are not on GitHub.
-Workspace connection alerts are a separate choice.
-
-The note for the [weekly digest](#weekly-digest) is not a choice here.
-It arrives by email only if you have not connected your Slack account.
-
-## Research participation
-
-If your instance names a research organization, this section lets you change your research answer.
-AI choices and connected accounts do not change this answer.
-[Your data in Hephaestus](./privacy#signing-in-and-choosing-research-participation) explains the research decision.
-It also explains [what happens when you withdraw](./privacy#research-participation).
-
-## Active sessions
-
-This section lists the browsers and devices where you are signed in, including Chrome extension sessions.
-Each row shows the available sign-in, expiry, and network details.
-**This device** marks your current session.
-
-## Danger zone
-
-**Danger zone** lets you export your account data or delete your account.
-The export contains your account data, not all records about your work.
-[Your data in Hephaestus](./privacy#get-a-copy-of-your-data) explains how to request additional records.
+To stop using an account, select **Disconnect** next to it.
+You cannot disconnect your only sign-in account.
 
 ## Passkeys
 
-Use **Passkeys** to protect admin access, register another device, and save recovery codes.
-Your instance or workspace can require passkey verification.
+**Passkeys** protects your admin access and holds your recovery codes.
 [Passkeys](./passkeys) explains how to add, remove, and recover them.
 
-## Accounts created before you sign in
+## Active sessions
 
-Your workspace’s roster can create your account before you sign in.
-When you sign in, Hephaestus links your sign-in to that account if the provider identity matches.
-This does not create another developer or grant an extra workspace role.
-Your AI choice and your **Comments on your work** setting then apply across your connected identities and workspaces.
+**Active sessions** lists the browsers and devices where you are signed in, also Chrome extension sessions.
+**This device** marks your current session.
 
-## Change your AI choice
+- To sign out one session, select **Sign out** on its row.
+- To sign out every other session, select **Sign out N other sessions**, then **Sign out other sessions**.
 
-1. Open **User settings**.
-2. Select **In-house**, **Cloud**, or **No AI**.
-3. Select **Save AI choice**.
+Signing out a session needs a recent sign-in.
+If Hephaestus asks you to confirm access, sign in again and repeat the action.
+Your current session stays signed in.
+To sign it out, use the account menu.
 
-Your new answer applies in all your workspaces.
-To set up a workspace instead, open **Your AI choice** in the sidebar.
-[Accounts that a workspace requires](#accounts-that-a-workspace-requires) explains its buttons.
+## Practice feedback
 
-## Connect or disconnect an account
+**Comments on your work** controls new feedback comments on the issues, pull requests, and merge requests that you author.
+It is on until you turn it off, and it applies in every workspace.
 
-1. Under **Connected accounts**, select **Connect** next to the service you want to use.
-2. Complete that service’s sign-in process.
+- To stop new comments, turn off **Comments on your work**.
+- To allow new comments again, turn it on.
 
-For example, connect the Slack account from the workspace where you want to send Hephaestus direct messages.
-To stop using an account, select **Disconnect** next to it.
+Turning it off does not stop reviews or remove comments already posted.
+Workspace admins see the observations of those reviews, and your Practice profile shows your feedback.
 
-## Stop using your Slack channel messages
+## Your AI choice
 
-Read [Your data in Hephaestus](./privacy#your-choices-and-right-to-object) before you use this control.
+Your AI choice decides which AI models may review your work and answer you in Hephaestus.
+You give one answer for every workspace on this instance, also in Slack.
+It does not pick a model.
+
+| Answer | What it allows |
+| --- | --- |
+| **In-house** | Only models that your organization declares it runs |
+| **Cloud** | In-house models, and models that your organization declares a cloud provider runs |
+| **No AI** | No new practice reviews about you, no new questions to Hephaestus, and no new feedback delivery |
+
+1. Under **Your AI choice**, select **In-house**, **Cloud**, or **No AI**.
+2. Select **Save AI choice**.
+
+No answer starts selected.
+Until you answer, a workspace that requires an answer uses no AI for you.
+A workspace that does not require one may use a model that does not declare how it handles data.
+
+Hephaestus never changes your answer to allow more AI processing.
+It checks your saved answer on each request, also when a workspace adds models.
+A new answer does not recall requests already sent to a provider.
+
+With **No AI**, your feedback and your conversation stay readable, but you cannot send Hephaestus a message.
+**No AI** does not stop source sync, remove stored work, or change who can read your data.
+Your work can appear as shared repository context in reviews about other developers.
+
+Research participation is a separate choice.
+[Your data in Hephaestus](./privacy#your-ai-choice) explains what a provider receives.
+
+### Models in a workspace
+
+User settings show no models.
+To see them, open **Your AI choice** in a workspace sidebar.
+Each answer’s card there shows the first model for a new request, its maker’s logo, and the service that receives requests.
+If more models are ready, the card shows their count.
+
+A workspace owner declares who operates each model.
+A model’s logo names its maker, not its operator.
+For example, a private endpoint does not make an OpenAI model served by Azure in-house.
+Ask a workspace admin who operates the model, and on what terms.
+
+### Accounts that a workspace requires
+
+On your first visit to a workspace, it can ask you to connect accounts that it requires.
+A required account must belong to the Slack team or Outline instance of that workspace.
+
+- **Save AI choice** saves your answer. If you connected every required account, it also finishes setup.
+- **Save and connect** saves your answer and opens the sign-in of the account.
+- **Skip for now** leaves without saving the selected answer. A saved answer stays in effect.
+- On later visits, **Back to workspace** leaves without saving.
+
+An account that is unavailable, and an optional account, never block setup.
+**No AI** never needs a connected account.
+After setup, you return to the workspace page that you came from.
+
+## Public activity pages
+
+**Show me on public activity pages** decides if your work appears on the public activity pages of your workspaces.
+It is off until you turn it on.
+[Public activity page](./public-activity#show-or-hide-yourself) explains what the page shows and how to show or hide yourself.
+
+## Product feedback
+
+This section appears when your instance files product feedback as public GitHub issues.
+
+- **Public GitHub issues** sets the default for your reports about Hephaestus. You can change it for each report.
+- **Mention my GitHub account (@login) on public issues** lets anyone see that you sent the report. It appears when you connected a GitHub account.
+
+Turning off **Public GitHub issues** keeps your waiting reports private.
+An issue that is already public needs **Make private** on each report.
+[Product feedback](./product-feedback) explains the choices.
+
+## Weekly digest
+
+**Weekly digest** adds a summary of your week to your conversation with Hephaestus.
+It is off until you turn it on, and one switch covers all your workspaces.
+**Time zone** sets when it arrives.
+[Weekly digest](./ask-hephaestus#weekly-digest) explains what it lists and where its note arrives.
+
+## Email notifications
+
+Optional emails depend on your role and on your instance’s email setup.
+Your address comes from a sign-in provider that gave a verified email address.
+You cannot enter another address.
+
+| Email | When it arrives | Starts |
+| --- | --- | --- |
+| **Your product feedback updates** | The GitHub issue for your product feedback changes | On |
+| **Workspace connection alerts** | A connection in a workspace that you administer needs attention, such as a refused or expiring token, or recovers | Off |
+| **New product feedback** | New product feedback arrives. Only instance admins get this choice. | Off |
+
+Turn each email on or off in this section.
+You can also unsubscribe with the link in an email, without sign-in.
+Emails about account security and deletion are not optional.
+
+## Slack
+
+For each connected Slack workspace, **Use your new channel messages** decides if Hephaestus uses your new messages in monitored channels.
+It uses them as context for your conversation in that workspace.
 
 :::caution[Stopping deletes collected data]
 
-**Stop using and delete** permanently deletes your collected channel-message data in that workspace.
-To keep that collected data, do not confirm.
-It does not remove your messages from Slack.
+Turning off **Use your new channel messages** permanently deletes the channel-message data already collected from you in that workspace.
+Your messages in Slack stay.
+To keep the collected data, select **Cancel** in the dialog.
 
 :::
 
 1. Turn off **Use your new channel messages**.
-2. In the confirmation dialog, select **Stop using and delete**.
+2. In the dialog, select **Stop using and delete**.
 
-Hephaestus stops new collection and deletes the channel-message data already collected.
-To allow new collection again, turn on **Use your new channel messages**.
+To allow new messages again, turn the switch on.
 This does not restore deleted data.
 
-## Stop comments on your work
+In Slack, the Hephaestus App Home has the same controls: **Stop using my messages** and **Allow future messages**.
 
-Under **Practice feedback**, turn off **Comments on your work**.
-To allow comments again, turn it on.
+## Research participation
 
-## Turn on the weekly digest
+This section appears when your instance names a research organization.
 
-1. Turn on **Weekly digest**.
-2. Under **Time zone**, select the time zone for your digest.
+- To allow research use, turn on **Allow research use of my data**.
+- To withdraw, turn it off.
 
-If you have not set a time zone, turning on the digest saves your browser’s time zone.
-To stop the digest, turn off **Weekly digest**.
-You can also turn it off from its Slack note or email.
+Hephaestus records your answer with the date and the version of the text that you saw.
+[Your data in Hephaestus](./privacy#research-participation) explains what withdrawal changes.
 
-## Leave public activity pages
+## Danger zone
 
-Turn off **Show me on public activity pages**.
-You leave every public activity page, in every workspace, at once.
-Your work then does not count in their totals.
-
-Other people see the change when they load the page again.
-A page that is already open in a browser keeps its contents until it loads again.
-To return, turn the setting on again.
-
-## Choose optional emails
-
-Under **Email notifications**, choose which optional emails to receive.
-
-## Change your research answer
-
-Under **Research participation**, turn **Allow research use of my data** on or off.
-
-## Sign out other sessions
-
-To sign out one session, select **Sign out** on its row.
-
-To sign out all other sessions:
-
-1. Select **Sign out N other sessions**, where N is the number of other sessions.
-2. In the dialog, select **Sign out other sessions**.
-
-Signing out other sessions, one at a time or all together, needs a recent sign-in.
-If Hephaestus asks you to confirm access, sign in again, then repeat the action.
-
-Your current session stays signed in.
-Other sessions must sign in again.
-To sign out the current session, use the account menu.
-
-## Export your data
+### Export your data
 
 1. Under **Export your data**, select **Request export**.
-2. Wait until the export is ready. If the export fails, select **Request export again**.
+2. Wait until the export is ready. If it fails, select **Request export again**.
 3. Select **Download** to save the JSON file.
 
-The file holds your account data, your conversations with Hephaestus, the feedback delivered to you and your responses to it.
-[Your data in Hephaestus](./privacy#get-a-copy-of-your-data) lists what it leaves out.
+The download expires 48 hours after it is ready.
+Keep the file private.
 
-Keep the downloaded file private.
-The download expires 48 hours after preparation.
+The file holds your account, connected sign-in identities, memberships, preferences, AI choice, and sign-in history.
+It also holds, for every workspace:
 
-## Delete your account
+- Your conversations with Hephaestus, in the app and in Slack, with the weekly digests. The results of the tools that Hephaestus used stay out, because they can hold other people’s data.
+- The feedback delivered to you, with the comments posted on your work. Withdrawn feedback keeps its dates, but not its text.
+- Your responses to feedback, also earlier ones that you changed.
+
+The file holds no credentials or session secrets.
+[Your data in Hephaestus](./privacy#get-a-copy-of-your-data) explains how to ask for the records that the export leaves out.
+
+### Delete your account
 
 :::caution[You cannot undo account deletion]
 
-**Delete account** disables your account and permanently deletes it at once.
-Nobody can undo it, not even your instance operator.
-If Hephaestus posted feedback for you on GitHub, GitLab, or Slack, erasure finishes after your instance operator removes those comments.
-Do not use it to leave one workspace or sign out a device.
+**Delete account** signs you out on all devices and permanently deletes your account at once.
+Nobody can undo it, also not your instance operator.
+To leave one workspace or sign out a device, do not delete your account.
 
 :::
 
-1. Read [Your data in Hephaestus](./privacy) for erasure details and for requests from people who have never signed in.
-2. Select **Delete account**.
-3. In the dialog, enter the confirmation phrase it shows.
-4. Select **Delete account** again.
+1. Under **Delete account**, select **Delete account**.
+2. In the dialog, enter the confirmation phrase that it shows.
+3. Select **Delete account** again.
+   If you have not signed in recently, Hephaestus first asks you to sign in again.
 
-If you have not signed in recently, Hephaestus first asks you to sign in again.
+The sign-in page then shows that your account is deleted.
+Hephaestus erases your sign-in details, AI choice, memberships, observations, feedback, conversations, and product feedback reports.
+It also erases the contributor profiles and the copies of the work of the identities connected to your account.
 
-Confirming signs you out on all devices and deletes your account.
-The sign-in page then opens and shows that your account is deleted.
+If Hephaestus posted feedback for you on GitHub, GitLab, or Slack, erasure finishes after your instance operator removes those comments.
+Deletion does not delete your original work on connected services.
+[Your data in Hephaestus](./privacy#delete-your-account-or-request-wider-erasure) lists what Hephaestus keeps and how to ask for wider erasure.
 
 ## Troubleshooting
 
 ### A required account is unavailable
 
-Ask a workspace admin to repair it, or a workspace owner to remove the requirement.
+Ask a workspace admin to repair the connection, or a workspace owner to remove the requirement.
 An unavailable account does not block setup.
 
-### A card says not set up here yet
+### A card says Not set up in … yet
 
-No model meets that answer in the current workspace, so nothing runs for you for that purpose there.
-You can keep that answer while a workspace admin adds a model.
-You do not need to allow Cloud processing to complete setup.
+No model in this workspace meets that answer, so nothing runs for you for that purpose here.
+You can keep the answer while a workspace admin adds a model.
+You do not need to allow **Cloud** to finish setup.

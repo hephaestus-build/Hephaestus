@@ -8,38 +8,74 @@ The Chrome extension shows your practice review on the GitHub or GitLab page of 
 It links to the comments posted for you, lists your observations, and shows when the work was last reviewed.
 You read the feedback itself in the comment, on your [Practice profile](./practice-profile), or with Hephaestus.
 
-## What the extension shows
-
-The extension adds context to the work page.
-Feedback appears on the work, on your Practice profile, and in Hephaestus, as [Practice feedback](./ai-code-review#where-feedback-appears) describes.
-
-**Open in Hephaestus** opens your records in the app, on the page called **Your feedback on this work**.
-That page also shows each earlier review of the work.
-Workspace admins can also reach everyone’s records in **Practice reviews**.
-
 ## What you need
 
-- **Chrome on a desktop computer.** Chrome on Android and iOS cannot run desktop extensions.
+- **Chrome on a desktop computer.** Chrome on Android and iOS cannot run desktop extensions. Other browsers are not supported.
 - **A Hephaestus account** on an instance that allows the extension.
 - **Membership in a workspace** that monitors the repository you view.
 
-We support desktop Chrome because its sign-in, site permissions, and private report frame are [verified together](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0049-browser-extension-report-in-the-page.md#decision).
-
-The extension is not yet in the Chrome Web Store.
+The extension is not in the Chrome Web Store.
 Your organization’s Chrome settings may install it for you.
-Otherwise, [install it](#install-it) from the package of a Hephaestus release.
+Otherwise, install it from the package of a Hephaestus release.
 
-## The review line
+## Install it
 
-On supported pages, the review uses the page’s content column:
+If the Hephaestus icon is already in Chrome’s puzzle-piece menu, your organization installed it for you.
+Go to [Connect it to your Hephaestus](#connect-it-to-your-hephaestus).
 
-- On a GitHub pull request, after its description and before the conversation.
-- On a GitHub issue, after its description and before the activity.
-- On a GitLab merge request, with its reports and before the activity.
-- On a GitLab issue or work item, at the top of its activity.
-- On pull request or merge request changes, above the changed files.
+1. Get `hephaestus-chrome-extension-X.Y.Z.zip` from your Hephaestus admins. They check that the release signed it.
+2. Unzip it into a folder that you keep. Chrome runs the extension from that folder, so do not move or delete it.
+3. Open `chrome://extensions` and turn on **Developer mode**.
+4. Select **Load unpacked** and choose the folder.
+5. Copy the ID that Chrome shows under **Hephaestus**, and send it to your admins.
+   Your instance accepts sign-in only from an ID that its admins allow.
 
-The review starts as one line, and the line has the same height in every state.
+Chrome labels the extension as unpacked, and it does not update itself.
+To update it, replace the folder’s contents with a newer package.
+Then select the reload button under **Hephaestus** on `chrome://extensions`.
+The ID stays the same while the folder stays in the same place.
+
+## Connect it to your Hephaestus
+
+1. If you cannot see the Hephaestus icon, pin it from Chrome’s puzzle-piece menu.
+2. Select the Hephaestus toolbar icon to open extension settings.
+3. For `hephaestus.build`, select **Connect to Hephaestus**. For another instance, go to the next step.
+4. Open **Use a self-hosted instance**, enter its HTTPS address, and select **Connect instance**.
+5. Allow Chrome’s request for access to that address.
+6. Select the sign-in button for your usual provider, such as **Sign in with GitHub**.
+
+The sign-in window opens on your Hephaestus and sends you on to GitHub or GitLab, as the web app does.
+It uses your normal Chrome profile, so you may not need to sign in to the provider again.
+After sign-in, the window closes, and settings show who you’re signed in as.
+If you close the window before you finish, nothing changes, and you can try again.
+
+You can also paste a workspace address of a self-hosted instance.
+The extension finds the instance address in it and asks you to connect there.
+You can change the instance later on the same page.
+
+## Allow it on GitHub and GitLab
+
+The extension reads nothing on a site until you allow it.
+Settings list the sites connected to your workspaces: `github.com`, `gitlab.com`, or your organization’s GitLab address.
+Each site needs its own permission, and Chrome asks each time.
+
+1. In extension settings, select **Allow** beside each site you need.
+
+Each pull request, merge request, or issue that you then open on that site shows its review line.
+To stop the extension on a site, select **Remove** beside it, or remove the site in Chrome’s extension settings.
+
+## Read the review of a work page
+
+1. Open a pull request, merge request, or issue on an allowed site.
+2. Select the review line to expand the report in place.
+3. Select it again to close the report.
+
+The page moves down to make room for the report.
+The report stays open while you stay on the same work in that tab, also when you switch to the changes and back.
+
+### The review line
+
+The review line sits in the page’s content column, after the description or above the changed files.
 It shows, in order:
 
 1. *Review waiting* or *Review running*, while a review of the work is in progress.
@@ -49,173 +85,92 @@ It shows, in order:
 
 For example: *3 comments for you · reviewed 2 hr. ago*.
 
-While the report loads, the line reads *Loading…*.
-The report belongs to the extension, so the page cannot read its content.
-It follows the page’s light and dark modes, including GitHub’s dimmed and high-contrast themes.
+*No recorded comments for you* means only that Hephaestus recorded no comment for you on this work.
+It is not a clean result.
+The work may be unreviewed, or no practice may check what happened.
+*review status unavailable* does not mean that nobody reviewed the work.
 
-## What the report shows
+### The report
 
-The expanded report shows:
+- **Your comments.** Each row is a comment that Hephaestus posted for you on this work. The row links to the comment on the page and shows its practices and delivery time. To respond to the feedback, follow the Hephaestus link in the comment.
+- **Your observations.** Each row names the practice, the outcome, the severity for **Not met**, and a one-sentence summary. A **Not met** row lists its problems, one line each. The first five rows appear, and *Show … more* shows the rest.
+- **When, and where to read more.** The exact time of the latest review, and its commit if known.
 
-- **Your comments.** Each row is a comment Hephaestus posted for you on this work. The summary comment, or the file and lines, link to the comment on the page. You read the comment there. To respond to the feedback, follow its Hephaestus link. Below the link, the row shows the practices and the delivery time.
-- **Your observations.** Each row names the practice, the outcome, the severity for **Not met**, and a one-sentence summary. A **Not met** row also counts its problems, for example *Not met · 2 problems*. It lists each problem in one line. Where each problem is, and why, is in Hephaestus. The outcomes are **Met**, **Not met**, **Does not apply**, and **Could not determine**. An observation from before a change to the practice or the work says it is no longer current. The first five appear, and *Show … more* reveals the rest.
-- **When, and where to read more.** The exact time of the latest review, and its commit if known. **Open in Hephaestus** opens your feedback and observations on the work.
-
-On the changes page, comments on lines appear first.
 The comment list shows what Hephaestus recorded when it posted.
 Someone may have changed or deleted a comment since then.
-A comment with no recorded address says *no link recorded*.
-A comment posted while the rest of its feedback could not be posted names no practice.
 
-*No recorded comments for you* means only that Hephaestus recorded no comment for you on this work. It is not a clean result.
-The work may be unreviewed, or no practice may check the event that occurred.
-*review status unavailable* means that your account has no review history for this work.
-The work may still have been reviewed.
+**Open in Hephaestus** opens your feedback and observations on the work in the web app, on **Your feedback on this work**.
+That page also shows each earlier review of the work.
 
-Workspace admins also get **Review details**, including instance admins who work in the workspace.
-It shows each developer’s observations, each piece of feedback’s delivery state, and each review.
-A run there can be canceled or its observations retried.
-
-## Previews in lists
-
-On GitHub repository lists of pull requests or issues, each row has a small Hephaestus button after its title.
-GitLab project lists of merge requests, issues, or work items get the same button.
-Nothing is looked up until you select one.
-
-The preview shows one quiet line below the row title.
-It uses the first sentence of the work’s report and links to your first comments there.
-Nothing else expands in the row, and no changes happen from the list.
-Only one preview is open at a time.
-
-## Review requests
-
-The only change you can make from the page is a review request.
-**Request review** appears on the work page when you may request a review, as author, assignee, or workspace admin.
-It appears only when no review of that work is queued or running.
-You always confirm the request in a separate small Hephaestus window, which the page cannot cover or read.
-The extension sends nothing before you confirm.
-
-You cancel a review, retry its observations, and approve or reject feedback in Hephaestus, through **Review details**.
-
-## Sign-in
-
-You stay signed in until you close Chrome or seven days pass, whichever comes first.
-Your instance may set a shorter limit.
-Under **User settings** in Hephaestus, the session appears as *Browser extension in Chrome on …*.
-Ending that session there, signing out everywhere, or an instance admin ending your sessions also signs the extension out.
-Signing out, or changing the Hephaestus address, clears the extension’s content from every tab.
-After sign-in ends, sign in again from extension settings.
-
-## If your server is too old
-
-Chrome updates the extension on its own, so it can be newer than your Hephaestus server.
-If the extension needs a newer server, the review line says **This server is too old for this extension**.
-Ask your instance operator to upgrade the server.
-The report works again after that, and you do not need to reinstall.
-
-## Privacy
-
-The extension sends Hephaestus the address of each work page you open on an allowed site, and of each list row you preview.
-It reads no page text.
-[Chrome extension privacy](./browser-extension-privacy) lists what it reads, sends, and stores, and [Your data in Hephaestus](./privacy) explains the recorded data.
-
-## Install it
-
-If the Hephaestus icon is already in Chrome’s puzzle-piece menu, your organization installed it for you. Go to [Connect it to your Hephaestus](#connect-it-to-your-hephaestus).
-
-1. Get `hephaestus-chrome-extension-X.Y.Z.zip` from your Hephaestus admins. They check that the release signed it.
-2. Unzip it into a folder that you keep. Chrome runs the extension from that folder, so do not move or delete it.
-3. Open `chrome://extensions` and turn on **Developer mode**.
-4. Select **Load unpacked** and choose the folder.
-5. Copy the ID that Chrome shows under **Hephaestus**, and send it to your admins.
-   Chrome gives each unpacked folder its own ID, and your instance accepts sign-in only from the IDs it allows.
-
-Chrome labels the extension as unpacked, and it does not update itself.
-To update it, replace the folder’s contents with a newer package, and select the reload button under **Hephaestus** on `chrome://extensions`.
-The ID stays the same while the folder stays in the same place.
-
-## Connect it to your Hephaestus
-
-1. If you cannot see the Hephaestus icon, pin it from Chrome’s puzzle-piece menu.
-2. Select the Hephaestus toolbar icon to open extension settings.
-3. For `hephaestus.build`, select **Connect to Hephaestus**. For your organization’s own instance, open **Use a self-hosted instance**, enter its HTTPS address, and select **Connect instance**.
-4. Allow Chrome’s request for access to that address.
-5. Select the sign-in button for your usual provider, such as **Sign in with GitHub**.
-
-The sign-in window opens on your Hephaestus and sends you on to GitHub or GitLab, as the web app does.
-It uses your normal Chrome profile, so you may not need to sign in to the provider again.
-After sign-in, the window closes, and settings show who you’re signed in as.
-If you close the window before you finish, nothing changes, and you can try again.
-You can change the instance later on the same page.
-
-You can also paste a workspace address for a self-hosted instance.
-The extension reads its instance address and asks you to connect there.
-Chrome asks for access to that address before sign-in.
-Access granted only to read the workspace address is removed after that check.
-Access that you had already granted stays unchanged.
-
-## Allow it on GitHub and GitLab
-
-The extension reads nothing on a site until you allow it.
-Settings list sites connected to your workspaces: `github.com`, `gitlab.com`, or your organization’s GitLab address.
-Each site needs its own permission, and Chrome asks each time.
-
-1. In extension settings, select **Allow** beside each site you need.
-
-Each pull request, merge request, or issue you then open on that site shows its review line.
-To stop the extension on a site, select **Remove** beside it, or remove it in Chrome’s extension settings.
-
-## Read the review of a work page
-
-1. Open a pull request, merge request, or issue on an allowed site.
-2. Select the review line to expand the report in place.
-3. Select it again to close the report.
-
-The page moves down to make room, without an overlay.
-The extension remembers that the report is open while you stay on the same work in that tab.
-This includes when you switch to the changes and back.
+Workspace admins also get **Review details**.
+It opens the web app with every developer’s observations, the delivery state of each piece of feedback, and each review.
 
 ## Preview work from a list
 
-1. Select a row’s Hephaestus button.
+On GitHub and GitLab lists of pull requests, merge requests, issues, or work items, each row has a small Hephaestus button after its title.
+Nothing is looked up until you select one.
+
+1. Select a row’s Hephaestus button. One line from the work’s report appears below the row title.
 2. To open the full report, select the row’s title.
 
-Another row’s button moves the preview.
-The same button, or a list filter or page change, closes it.
-To request a review, open the work.
+Only one preview is open at a time.
+The same button, a list filter, or a page change closes it.
 
 ## Request a review
+
+**Request review** appears on the work page if you are the author, an assignee, or a workspace admin.
+It appears only when no review of that work is waiting or running.
 
 1. On the work page, select **Request review**.
 2. Check the work and workspace named in the confirmation window.
 3. Select **Request review** in that window.
 
-If Hephaestus does not start a review, the window shows the reason Hephaestus gave.
-If no answer arrives, the window says the request may or may not have gone through.
-It does not retry.
-Check the page report before you ask again.
+The page cannot cover or read that window, and the extension sends nothing before you confirm.
+If Hephaestus does not start a review, the window shows the reason.
+If no answer arrives, the window says that the request may or may not have gone through, and it does not retry.
+Check the review line before you ask again.
 
-## Sign out
+A review request is the only change that you can make from the page.
+You cancel a review, retry its observations, and approve or reject feedback in the web app, through **Review details**.
 
-Select **Sign out** in extension settings.
-The extension clears its content from every tab.
+## Stay signed in or sign out
+
+You stay signed in until you close Chrome or seven days pass, whichever comes first.
+Your instance may set a shorter limit.
+In Hephaestus, **User settings** lists the session as *Browser extension in Chrome on …*.
+
+To sign out, select **Sign out** in extension settings.
+Ending the session in **User settings** also signs the extension out.
+Signing out, or changing the Hephaestus address, clears the extension’s content from every tab.
+
+## Privacy
+
+The extension sends Hephaestus the address of each work page that you open on an allowed site, and of each list row that you preview.
+It reads no page text.
+[Chrome extension privacy](./browser-extension-privacy) lists what it reads, sends, and stores.
 
 ## Troubleshooting
 
+### This server is too old for this extension
+
+The extension can be newer than your Hephaestus server, for example when your organization installs a newer package.
+Ask your instance operator to upgrade the server.
+The report works again after that, and you do not need to reinstall.
+
 ### This instance does not know this extension
 
-Sign-in shows this when the instance does not allow the extension.
+The instance does not allow the extension.
 Ask its operators to allow it.
 If you [installed it yourself](#install-it), send them the ID that Chrome shows on `chrome://extensions`.
 
 ### No GitHub or GitLab site to allow yet
 
-You do not yet belong to a workspace that is connected to GitHub or GitLab.
+You do not belong to a workspace that is connected to GitHub or GitLab.
 Select **Open Hephaestus** to see your workspaces, or ask to join one.
 
 ### One step left in Hephaestus
 
-Your account needs a web-app step, such as acceptance of the current notice.
+Your account needs a step in the web app, such as acceptance of the current notice.
 
 1. Select **Open Hephaestus**.
 2. Finish the step shown.
@@ -241,7 +196,7 @@ Open the report, then select **Retry**.
 
 ### Connect the extension to Hephaestus
 
-The extension is not connected yet.
+The extension is not connected to an instance.
 Select **Set up**.
 
 ### Sign in to … to see it
@@ -251,13 +206,13 @@ Select **Sign in**.
 
 ### Not available for this work
 
-No workspace connects to this site, or the work is not in an accessible workspace.
+No workspace connects to this site, or the work is not in a workspace that you can open.
 On a page that is not a single pull request, merge request, or issue, the report asks you to open one.
 Open the report. It gives the reason if it can tell.
 
 ### Followed in 2 workspaces
 
-More than one workspace follows this work, so you choose one.
+More than one workspace follows this work.
 Open the report, then choose a workspace.
 
 ### Not refreshed
