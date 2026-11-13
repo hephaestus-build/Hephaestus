@@ -91,8 +91,7 @@ public class PracticeStagingService implements PracticeStagingStore {
             var refusal = ResultAdmissionWriter.refusal(candidate);
             if (reason == null && refusal != null) reason = refusal.wireValue();
             if (reason != null) {
-                row.setState(ReviewItemState.WITHHELD);
-                row.setReason(reason);
+                row.withhold(reason);
                 candidate = null;
             }
         } else if (row.getState() != ReviewItemState.WITHHELD) throw conflict();
@@ -109,7 +108,7 @@ public class PracticeStagingService implements PracticeStagingStore {
                         assignment.itemId(),
                         json.writeValueAsString(payload))
                 != 1) throw conflict();
-        if (candidate != null) row.setState(ReviewItemState.STAGED);
+        if (candidate != null) row.stage();
     }
 
     @Override
@@ -121,8 +120,7 @@ public class PracticeStagingService implements PracticeStagingStore {
         if (!jobId.equals(row.getJobId())) throw conflict();
         if (row.getState() != ReviewItemState.STAGED) return;
         var receipt = snapshot(row);
-        row.setState(ReviewItemState.WITHHELD);
-        row.setReason("COPY_AUTHORITY_UNAVAILABLE");
+        row.withhold("COPY_AUTHORITY_UNAVAILABLE");
         var payload = json.createObjectNode().put("digest", receipt.digest());
         payload.putNull("candidate");
         payload.putObject("evidence");

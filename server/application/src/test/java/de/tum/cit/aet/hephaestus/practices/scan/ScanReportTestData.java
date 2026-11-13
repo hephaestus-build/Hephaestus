@@ -36,7 +36,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReadReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadReceiptStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEvidence;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewMethod;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
@@ -247,8 +246,7 @@ public class ScanReportTestData {
                         review.getWorkspaceId(), review.getId(), result.getPracticeId(), result.getItemId())
                 .orElseThrow();
         var job = data.job(result);
-        member.setState(ReviewItemState.JUDGED);
-        member.setResultId(result.getId());
+        member.judge(result.getId());
         member.setJobId(job);
         member.setDetail(json.createObjectNode()
                 .putNull("developerId")

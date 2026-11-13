@@ -11,6 +11,7 @@ import jakarta.persistence.UniqueConstraint;
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Builder.Default;
@@ -64,6 +65,7 @@ public class ReviewItem {
     @Default
     @Enumerated(EnumType.STRING)
     @ColumnDefault("'LISTED'")
+    @Setter(AccessLevel.NONE)
     @Column(name = "state", nullable = false, length = 16)
     private ReviewItemState state = ReviewItemState.LISTED;
 
@@ -86,14 +88,43 @@ public class ReviewItem {
     @Column(name = "staged_attempt")
     private @Nullable Integer stagedAttempt;
 
+    /** The attempt holds a candidate result for this membership until admission decides. */
+    public void stage() {
+        moveTo(ReviewItemState.STAGED);
+    }
+
+    /** Admission wrote this membership's result. */
+    public void judge(UUID resultId) {
+        moveTo(ReviewItemState.JUDGED);
+        this.resultId = resultId;
+    }
+
+    /** An earlier result of the same frozen item and practice answers this membership. */
+    public void reuse(UUID resultId) {
+        moveTo(ReviewItemState.REUSED);
+        this.resultId = resultId;
+    }
+
+    /** Ends this membership without a result, for a recorded reason. */
+    public void withhold(String reason) {
+        moveTo(ReviewItemState.WITHHELD);
+        this.reason = reason;
+    }
+
     /** Ends this membership without a result, for a recorded reason that the message explains. */
     public void withhold(String reason, String message, Instant at) {
+        withhold(reason);
         var kept = detail instanceof ObjectNode node ? node.deepCopy() : JsonNodeFactory.instance.objectNode();
         kept.put("withholdingMessage", message);
         detail = kept;
-        state = ReviewItemState.WITHHELD;
-        this.reason = reason;
         attemptedAt = at;
+    }
+
+    private void moveTo(ReviewItemState next) {
+        if (!state.canTransitionTo(next)) {
+            throw new IllegalStateException("A review item cannot move from " + state + " to " + next);
+        }
+        state = next;
     }
 
     public record Id(UUID reviewId, long practiceId, long itemId) implements Serializable {}

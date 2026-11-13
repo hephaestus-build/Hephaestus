@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionState;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.ArrayDeque;
@@ -39,6 +40,10 @@ class LifecycleContractTest extends HephaestusArchitectureTest {
                         Set.of(Account.Status.UNCLAIMED, Account.Status.ACTIVE),
                         Set.of(Account.Status.DELETED)),
                 new Contract<>(IntegrationState.class, Set.of(IntegrationState.PENDING), Set.of()),
+                new Contract<>(
+                        ReviewItemState.class,
+                        Set.of(ReviewItemState.LISTED, ReviewItemState.WITHHELD),
+                        Set.of(ReviewItemState.JUDGED, ReviewItemState.REUSED, ReviewItemState.WITHHELD)),
                 new Contract<>(
                         ReviewStatus.class,
                         Set.of(ReviewStatus.QUEUED),

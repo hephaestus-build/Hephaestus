@@ -239,8 +239,7 @@ public class ReviewScanStoreService implements ReviewScanStore {
         var captured = candidate.orElseThrow().custody();
         detail.set("custody", json.valueToTree(captured));
         member.setDetail(detail);
-        member.setState(ReviewItemState.REUSED);
-        member.setResultId(result.getId());
+        member.reuse(result.getId());
         return Optional.of(result.getId());
     }
 

@@ -349,8 +349,7 @@ class ReviewAttemptsContentSourceIntegrationTest extends BaseIntegrationTest {
                     .param("itemVersion", "retained-work-version")
                     .param("developer", about)
                     .update();
-            member.setState(ReviewItemState.JUDGED);
-            member.setResultId(result);
+            member.judge(result);
             items.saveAndFlush(member);
         }
         return new ReviewAssignmentId(

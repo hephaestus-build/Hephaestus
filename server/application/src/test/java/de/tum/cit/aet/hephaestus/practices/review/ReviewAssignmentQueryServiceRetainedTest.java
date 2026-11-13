@@ -214,7 +214,11 @@ class ReviewAssignmentQueryServiceRetainedTest extends BaseUnitTest {
     }
 
     private static ReviewItem recorded(ReviewItem row, ReviewItemState state) {
-        row.setState(state);
+        switch (state) {
+            case JUDGED -> row.judge(UUID.randomUUID());
+            case WITHHELD -> row.withhold("EXECUTION_FAILED");
+            default -> throw new IllegalArgumentException("Record a judged or withheld membership");
+        }
         return row;
     }
 

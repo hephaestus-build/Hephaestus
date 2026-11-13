@@ -302,8 +302,7 @@ public class ReviewIntegrationData {
                     .basis(json.valueToTree(new IntroducedBasis(0, "The change introduces this problem.")))
                     .nextStep("Adjust the changed branch.")
                     .build());
-        member.setState(ReviewItemState.JUDGED);
-        member.setResultId(result.getId());
+        member.judge(result.getId());
         member.setAttemptedAt(recordedAt);
         reviewItems.saveAndFlush(member);
         return result;

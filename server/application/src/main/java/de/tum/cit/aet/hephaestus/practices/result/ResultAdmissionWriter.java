@@ -72,8 +72,7 @@ public class ResultAdmissionWriter {
             if (currentReason != null) {
                 if (member.getState() != ReviewItemState.LISTED && member.getState() != ReviewItemState.STAGED)
                     throw conflict("Current processing policy no longer permits this proof.");
-                member.setState(ReviewItemState.WITHHELD);
-                member.setReason(currentReason);
+                member.withhold(currentReason);
                 member.setAttemptedAt(clock.instant());
                 withheld.add(new WithheldItem(c.practiceId(), c.itemId(), currentReason));
                 continue;
@@ -98,8 +97,7 @@ public class ResultAdmissionWriter {
                 throw conflict("This assignment is already terminal.");
             var refusal = refusal(c);
             if (refusal != null) {
-                member.setState(ReviewItemState.WITHHELD);
-                member.setReason(refusal.wireValue());
+                member.withhold(refusal.wireValue());
                 member.setAttemptedAt(clock.instant());
                 withheld.add(new WithheldItem(c.practiceId(), c.itemId(), refusal.wireValue()));
                 continue;
@@ -107,8 +105,7 @@ public class ResultAdmissionWriter {
             var at = clock.instant();
             if (review.getAdmittedAt() == null) review.setAdmittedAt(at);
             var result = claims.write(ws, review, c, at);
-            member.setState(ReviewItemState.JUDGED);
-            member.setResultId(result.getId());
+            member.judge(result.getId());
             member.setAttemptedAt(at);
             ObjectNode detail = member.getDetail() == null
                     ? json.createObjectNode()
