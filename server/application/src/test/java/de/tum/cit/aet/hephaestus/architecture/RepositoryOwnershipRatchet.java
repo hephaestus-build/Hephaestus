@@ -132,12 +132,6 @@ final class RepositoryOwnershipRatchet {
                     "workspace::spi WorkspaceSummaryQuery.findStateForUpdate; workspace-owned connection initiation",
                     Set.of("integration.core.oauth.state.OAuthStateNonceStore")),
             new Entry(
-                    "integration.outline",
-                    "integration.core.connection.ConnectionRepository",
-                    "DDD11 (integration.core)",
-                    "integration.core::spi ConnectionQueries and ConnectionService commands",
-                    Set.of("integration.outline.lifecycle.OutlineWebhookRegistrar")),
-            new Entry(
                     "integration.scm",
                     "integration.core.connection.ConnectionAuditRepository",
                     "DDD11 (integration.core)",

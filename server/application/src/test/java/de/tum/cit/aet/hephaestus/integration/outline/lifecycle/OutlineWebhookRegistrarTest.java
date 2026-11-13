@@ -8,7 +8,6 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -20,10 +19,10 @@ import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineApiClient;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineApiException;
@@ -75,7 +74,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
     private Connection connection;
 
     @Mock
-    private ConnectionRepository connectionRepository;
+    private ConnectionQueries connectionQueries;
 
     @Mock
     private ProviderResourceRepairs repairs;
@@ -89,7 +88,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
                 outlineApiClient,
                 CREDENTIAL,
                 new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(externalUrl), "/api")),
-                connectionRepository,
+                connectionQueries,
                 ClusterLocks.free(),
                 meters);
     }
@@ -201,12 +200,9 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
 
     @Test
     void healRoutes_registersEveryActiveConnectionWithoutACurrentRoute() {
-        ConnectionRepository.OutlineRouteRow unrouted = mock(ConnectionRepository.OutlineRouteRow.class);
-        when(unrouted.getWorkspaceId()).thenReturn(WORKSPACE_ID);
-        when(unrouted.getRoute()).thenReturn(null);
-        ConnectionRepository.OutlineRouteRow routed = mock(ConnectionRepository.OutlineRouteRow.class);
-        when(routed.getRoute()).thenReturn(ROUTE);
-        when(connectionRepository.findActiveOutlineRoutes()).thenReturn(List.of(unrouted, routed));
+        var unrouted = new ConnectionQueries.WebhookRoute(WORKSPACE_ID, null);
+        var routed = new ConnectionQueries.WebhookRoute(WORKSPACE_ID, ROUTE);
+        when(connectionQueries.findActiveOutlineRoutes()).thenReturn(List.of(unrouted, routed));
         stubActiveConnection(config(null, null));
         stubToken();
         stubCreateReturning("sub-99");
@@ -234,7 +230,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
                         outlineApiClient,
                         credential(""),
                         new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(API_ORIGIN), "/api")),
-                        connectionRepository,
+                        connectionQueries,
                         ClusterLocks.free(),
                         meters)
                 .ensureSubscription(WORKSPACE_ID);

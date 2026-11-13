@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -34,6 +35,9 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ConnectionRepository connectionRepository;
+
+    @Autowired
+    private ConnectionQueries connectionQueries;
 
     @Autowired
     private WorkspaceRepository workspaceRepository;
@@ -305,15 +309,13 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
         entityManager.flush();
         entityManager.clear();
 
-        var mine = connectionRepository.findActiveOutlineRoutes().stream()
+        var mine = connectionQueries.findActiveOutlineRoutes().stream()
                 .filter(row -> Set.of(workspace.getId(), unrouted.getId(), suspendedWorkspace.getId())
-                        .contains(row.getWorkspaceId()))
+                        .contains(row.workspaceId()))
                 .toList();
 
         assertThat(mine)
-                .extracting(
-                        ConnectionRepository.OutlineRouteRow::getWorkspaceId,
-                        ConnectionRepository.OutlineRouteRow::getRoute)
+                .extracting(ConnectionQueries.WebhookRoute::workspaceId, ConnectionQueries.WebhookRoute::route)
                 .containsExactlyInAnyOrder(tuple(workspace.getId(), "key/route-routed"), tuple(unrouted.getId(), null));
     }
 

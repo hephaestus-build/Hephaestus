@@ -5,10 +5,10 @@ import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter.Resource;
@@ -62,7 +62,7 @@ public class OutlineWebhookRegistrar {
     private final OutlineRouteCredential credential;
     private final PublicApiUrls publicApiUrls;
 
-    private final ConnectionRepository connections;
+    private final ConnectionQueries connections;
 
     private final ClusterLock locks;
 
@@ -78,7 +78,7 @@ public class OutlineWebhookRegistrar {
             OutlineWebhookClient outlineApiClient,
             OutlineRouteCredential credential,
             PublicApiUrls publicApiUrls,
-            ConnectionRepository connections,
+            ConnectionQueries connections,
             ClusterLock locks,
             MeterRegistry meterRegistry) {
         this.connectionService = connectionService;
@@ -107,17 +107,17 @@ public class OutlineWebhookRegistrar {
             return;
         }
         int left = 0;
-        for (ConnectionRepository.OutlineRouteRow row : connections.findActiveOutlineRoutes()) {
-            String route = row.getRoute();
+        for (ConnectionQueries.WebhookRoute row : connections.findActiveOutlineRoutes()) {
+            String route = row.route();
             if (route != null && credential.isCurrent(route)) {
                 continue;
             }
             try {
-                ensureSubscription(row.getWorkspaceId());
+                ensureSubscription(row.workspaceId());
             } catch (RuntimeException e) {
                 log.warn(
                         "outline.webhook: heal failed for workspaceId={}: {}",
-                        row.getWorkspaceId(),
+                        row.workspaceId(),
                         e.getClass().getSimpleName());
             }
             left++;
