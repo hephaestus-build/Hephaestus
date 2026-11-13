@@ -63,6 +63,11 @@ describe("workspace provider availability", () => {
 
 		await screen.findByText("GitHub App not configured", {}, ROUTE_RENDER_WAIT);
 		expect(screen.queryByRole("link", { name: /Install GitHub App/u })).toBeNull();
+		// The installation URL is a chart value, so the notice opens the admin guide's setup steps.
+		const setup = screen.getByRole("link", {
+			name: /^set up the GitHub App\s*\(opens in a new tab\)$/u,
+		});
+		expect(setup.getAttribute("href")).toMatch(/\/admin\/github-integration#github-app-mode$/u);
 	});
 
 	it("opens setup with the configured GitHub App installation link", async () => {

@@ -22,6 +22,13 @@ export const DOC_TARGETS = {
 
 	// Setup steps that the reader finishes outside Hephaestus.
 	installationGuide: { path: "admin/kubernetes" },
+	githubAppSetup: { path: "admin/github-integration", anchor: "github-app-mode" },
+	outlineIntegration: { path: "admin/production-setup", anchor: "outline-integration" },
+	slackPermissions: { path: "admin/integrations", anchor: "slack" },
+	unreadableCredential: {
+		path: "admin/credential-key-rotation",
+		anchor: "a-credential-the-running-key-cannot-read",
+	},
 
 	// Sections of the two admin consoles.
 	practiceScriptGuide: { path: "admin/practice-scripts" },

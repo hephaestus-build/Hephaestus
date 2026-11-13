@@ -92,6 +92,13 @@ export const ConnectUnavailable: Story = {
 		await expect(canvas.getByText(/no connectionstrategy registered/iu)).toBeVisible();
 		await expect(canvas.getByText(/outline may not be enabled on this instance/iu)).toBeVisible();
 		await expect(canvas.getByText(/ask your instance operator/iu)).toBeVisible();
+		// The step to pass on to the operator, in the admin guide.
+		await expect(
+			canvas.getByRole("link", { name: "enable the Outline integration (opens in a new tab)" }),
+		).toHaveAttribute(
+			"href",
+			expect.stringMatching(/\/admin\/production-setup#outline-integration$/u),
+		);
 	},
 };
 

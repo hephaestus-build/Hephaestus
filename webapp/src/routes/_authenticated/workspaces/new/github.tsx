@@ -4,6 +4,7 @@ import { ArrowLeftIcon, ExternalLinkIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { getProvidersOptions } from "@/api/@tanstack/react-query.gen";
+import { DocLink } from "@/components/common/DocLink";
 import { GitHubIcon } from "@/components/icons/brand";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
@@ -51,8 +52,8 @@ function GitHubSetupPage() {
 			<Alert>
 				<AlertTitle>GitHub App not configured</AlertTitle>
 				<AlertDescription>
-					The GitHub App installation URL is not configured for this instance. Contact an instance
-					admin.
+					The GitHub App installation URL is not configured for this instance. Ask your instance
+					operator to <DocLink doc="githubAppSetup">set up the GitHub App</DocLink>.
 				</AlertDescription>
 			</Alert>
 		);

@@ -101,6 +101,10 @@ export const MissingScopes: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await expect(canvas.getByText("Permissions missing")).toBeVisible();
 		await expect(canvas.getByText("reactions:write")).toBeVisible();
+		// A reconnect keeps the Slack app's old scopes until the app gets the current manifest.
+		await expect(
+			canvas.getByRole("link", { name: "update the Slack app (opens in a new tab)" }),
+		).toHaveAttribute("href", expect.stringMatching(/\/admin\/integrations#slack$/u));
 		await expect(canvas.queryByText("Connected")).not.toBeInTheDocument();
 		await userEvent.click(canvas.getByRole("button", { name: "Reconnect Slack" }));
 		await expect(onReconnect).toHaveBeenCalled();

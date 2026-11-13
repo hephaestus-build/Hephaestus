@@ -78,6 +78,17 @@ export const CredentialUnreadable: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByText(/the stored token cannot be read/iu);
 		await expect(canvas.getByText(/the connection’s page says how to replace it/iu)).toBeVisible();
+		// Restoring a key is the operator's work, so the notice opens the procedure in the admin guide.
+		await expect(
+			canvas.getByRole("link", {
+				name: "restore the key that encrypted the token (opens in a new tab)",
+			}),
+		).toHaveAttribute(
+			"href",
+			expect.stringMatching(
+				/\/admin\/credential-key-rotation#a-credential-the-running-key-cannot-read$/u,
+			),
+		);
 	},
 };
 

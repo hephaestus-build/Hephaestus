@@ -1,24 +1,29 @@
 {
 	"accepted": [
 		{
-			"load": "src/routes/_authenticated/admin.provider-removals.tsx?tsr-split=component",
-			"gzipBytes": 14213,
-			"acceptedBy": "branch feat/provider-resource-adoption-fence"
+			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/integrations/index.tsx?tsr-split=component",
+			"gzipBytes": 15605,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4288"
 		},
 		{
 			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/integrations/outline.tsx?tsr-split=component",
-			"gzipBytes": 99104,
-			"acceptedBy": "branch feat/provider-resource-adoption-fence"
+			"gzipBytes": 101018,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4288"
 		},
 		{
 			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/integrations/scm.tsx?tsr-split=component",
-			"gzipBytes": 80822,
-			"acceptedBy": "branch feat/provider-resource-adoption-fence"
+			"gzipBytes": 82520,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4288"
 		},
 		{
 			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/integrations/slack.tsx?tsr-split=component",
-			"gzipBytes": 99847,
-			"acceptedBy": "branch feat/provider-resource-adoption-fence"
+			"gzipBytes": 101648,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4288"
+		},
+		{
+			"load": "src/routes/_authenticated/workspaces/new/github.tsx?tsr-split=component",
+			"gzipBytes": 3562,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4288"
 		}
 	]
 }
