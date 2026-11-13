@@ -451,6 +451,43 @@ for ((taskName, tag) in testTiers.filterKeys { it != "test" }) {
                 }
         }
         if (tag == "integration") {
+            // On Java 21 a virtual thread that blocks under a monitor keeps its carrier, and a few
+            // of them stall every
+            // virtual thread, a pool's waiters among them. The JDK records each such park of 20 ms
+            // or more, and the
+            // tier fails on any, with its call path.
+            val pinnedParks =
+                layout.buildDirectory.file("$name-pinned-virtual-threads.jfr").get().asFile
+            val pinnedSettings = file("src/test/resources/pinned-virtual-threads.jfc")
+            jvmArgs(
+                // The frame that holds the monitor sits far below the park; JFR keeps 64 frames by
+                // default.
+                "-XX:FlightRecorderOptions=stackdepth=256",
+                "-XX:StartFlightRecording=filename=$pinnedParks,settings=${pinnedSettings.absolutePath},dumponexit=true",
+                "-Xlog:jfr+startup=off",
+            )
+            doFirst { pinnedParks.delete() }
+            doLast {
+                if (!pinnedParks.isFile) return@doLast
+                val pinned =
+                    jdk.jfr.consumer.RecordingFile.readAllEvents(pinnedParks.toPath()).filter {
+                        it.eventType.name == "jdk.VirtualThreadPinned"
+                    }
+                if (pinned.isNotEmpty()) {
+                    val parks =
+                        pinned.joinToString("\n\n") { park ->
+                            "${park.duration.toMillis()} ms on ${park.thread?.javaName?.ifBlank { null } ?: "an unnamed virtual thread"}:\n" +
+                                park.stackTrace?.frames.orEmpty().joinToString("\n") {
+                                    "    at ${it.method.type.name}.${it.method.name}:${it.lineNumber}"
+                                }
+                        }
+                    throw GradleException(
+                        "${pinned.size} park(s) of 20 ms or more pinned a virtual thread to its carrier. Load a " +
+                            "blocking cache entry outside the cache's lock (CacheLoads), and do not block under a " +
+                            "monitor.\n\n$parks"
+                    )
+                }
+            }
             require(!criteriaCases.isPresent || integrationShard.get().isEmpty()) {
                 "criteriaCases cannot be combined with HEPHAESTUS_INTEGRATION_SHARD"
             }
