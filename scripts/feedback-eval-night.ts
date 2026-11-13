@@ -42,7 +42,7 @@ export interface Night {
 	sha: string;
 	runUrl: string;
 	serverUrl: string;
-	/** When the night ran, as an ISO timestamp. */
+	/** When this attempt of the run started, as an ISO timestamp. */
 	date: string;
 	/** The panel job's result, or the run's conclusion when the report job did not run. */
 	result: string;
@@ -160,48 +160,84 @@ async function holds(
 		);
 }
 
+/** The panel's tracking issues that the client lists for these parameters. */
+async function panelIssues(github: GitHub, repo: Repo, parameters: Record<string, unknown>) {
+	const listed = await github.paginate(github.rest.issues.listForRepo, {
+		...repo,
+		creator: "github-actions[bot]",
+		per_page: 100,
+		...parameters,
+	});
+	return listed
+		.map(record)
+		.filter((issue) => issue.pull_request === undefined && issue.title === ISSUE_TITLE);
+}
+
+/**
+ * Whether a panel issue already holds this attempt's marker. Only this attempt writes its marker, after the run
+ * started, so only issues updated since then are read. A failed lookup is returned as such: a duplicate is better than
+ * silence.
+ */
+async function alreadyTold(
+	github: GitHub,
+	repo: Repo,
+	night: Night,
+	marker: string,
+): Promise<boolean | { failure: string }> {
+	try {
+		const recent = await panelIssues(github, repo, { state: "all", since: night.date });
+		for (const issue of recent) {
+			if (await holds(github, repo, issue, marker)) {
+				return true;
+			}
+		}
+		return false;
+	} catch (error) {
+		return { failure: lookupFailure(error) };
+	}
+}
+
+const unchecked = (failure: string) =>
+	`The duplicate check could not complete (${failure}), so this comment may repeat an earlier one.`;
+
 /**
  * Keeps the one tracking issue in step with a night: a night that measured and passed closes it, and any other night
  * comments on it, or opens it, with the commits since the last night that measured and passed. Each comment carries the
- * attempt's marker, so a replay of an attempt that any of the panel's issues already holds, open or closed, adds
- * nothing.
+ * attempt's marker, so a replay of an attempt that a panel issue already holds, open or closed, adds nothing.
  */
 export async function reportNight(
 	github: GitHub,
 	repo: Repo,
 	night: Night,
 ): Promise<"closed" | "commented" | "created" | "unchanged"> {
-	const listed = await github.paginate(github.rest.issues.listForRepo, {
-		...repo,
-		creator: "github-actions[bot]",
-		state: "all",
-		per_page: 100,
-	});
-	const issues = listed
-		.map(record)
-		.filter((issue) => issue.pull_request === undefined && issue.title === ISSUE_TITLE);
-	const open = issues.find((issue) => issue.state === "open");
+	const [open] = await panelIssues(github, repo, { state: "open" });
 	const number = typeof open?.number === "number" ? open.number : null;
 	const marker = `<!-- run:${night.runId}:${night.attempt} -->`;
+	const told = await alreadyTold(github, repo, night, marker);
+	if (told === true) {
+		// A replay after a failed close finds its own comment and only closes.
+		if (night.result === "success" && night.status === "passed" && number !== null) {
+			await github.rest.issues.update({ ...repo, issue_number: number, state: "closed" });
+			return "closed";
+		}
+		return "unchanged";
+	}
+	const note = told === false ? [] : ["", unchecked(told.failure)];
 	if (night.result === "success" && night.status === "passed") {
-		if (open === undefined || number === null) {
+		if (number === null) {
 			return "unchanged";
 		}
-		// A replay after a failed close finds its own comment and only closes.
-		if (!(await holds(github, repo, open, marker))) {
-			await github.rest.issues.createComment({
-				...repo,
-				issue_number: number,
-				body: `${marker}\nThe panel measured and passed again on \`${night.sha}\`: ${night.runUrl}`,
-			});
-		}
+		await github.rest.issues.createComment({
+			...repo,
+			issue_number: number,
+			body: [
+				marker,
+				`The panel measured and passed again on \`${night.sha}\`: ${night.runUrl}`,
+				...note,
+			].join("\n"),
+		});
 		await github.rest.issues.update({ ...repo, issue_number: number, state: "closed" });
 		return "closed";
-	}
-	for (const issue of issues) {
-		if (await holds(github, repo, issue, marker)) {
-			return "unchanged";
-		}
 	}
 	const body = [
 		marker,
@@ -210,6 +246,7 @@ export async function reportNight(
 		await range(github, repo, night),
 		`Run: ${night.runUrl}`,
 		`Result: ${await artifactOf(github, repo, night)}`,
+		...note,
 	].join("\n");
 	if (number !== null) {
 		await github.rest.issues.createComment({ ...repo, issue_number: number, body });

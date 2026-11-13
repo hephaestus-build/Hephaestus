@@ -21,15 +21,24 @@ const repo = { owner: "owner", repo: "repo" };
 interface Fixture {
 	caches?: { key: string; created_at: string; ref: string }[];
 	cacheError?: number;
-	issues?: { number: number; title: string; state: string; body?: string }[];
+	issues?: { number: number; title: string; state: string; updated_at?: string; body?: string }[];
 	comments?: Record<number, { user: { login: string }; body: string }[]>;
+	commentErrors?: number[];
 	artifacts?: object[];
 }
 
 /** A client over a fixed repository state, which filters caches by ref as the REST API does, and records writes. */
-function client({ caches = [], cacheError, issues = [], comments = {}, artifacts = [] }: Fixture) {
+function client({
+	caches = [],
+	cacheError,
+	issues = [],
+	comments = {},
+	commentErrors = [],
+	artifacts = [],
+}: Fixture) {
 	const writes: { kind: string; input: Record<string, unknown> }[] = [];
 	const cacheQueries: Record<string, unknown>[] = [];
+	const commentReads: unknown[] = [];
 	const route = (kind: string) => async (input: Record<string, unknown>) => {
 		writes.push({ kind, input });
 		return {};
@@ -40,10 +49,21 @@ function client({ caches = [], cacheError, issues = [], comments = {}, artifacts
 	const github: GitHub = {
 		paginate: async (endpoint: unknown, input: Record<string, unknown>) => {
 			if (endpoint === listForRepo) {
-				assert.equal(input.state, "all");
-				return issues.map((issue) => ({ body: "", ...issue }));
+				// As the REST API does: a state filter, and `since` keeps issues updated at or after it.
+				return issues
+					.filter((issue) => input.state === "all" || issue.state === input.state)
+					.filter(
+						(issue) =>
+							typeof input.since !== "string" ||
+							Date.parse(issue.updated_at ?? "2026-11-20T04:00:00Z") >= Date.parse(input.since),
+					)
+					.map((issue) => ({ body: "", ...issue }));
 			}
 			if (endpoint === listComments) {
+				commentReads.push(input.issue_number);
+				if (commentErrors.includes(Number(input.issue_number))) {
+					throw Object.assign(new Error("Service Unavailable"), { status: 503 });
+				}
 				return comments[Number(input.issue_number)] ?? [];
 			}
 			assert.equal(endpoint, listWorkflowRunArtifacts);
@@ -74,7 +94,7 @@ function client({ caches = [], cacheError, issues = [], comments = {}, artifacts
 	};
 	const written = () =>
 		writes.filter((write) => ["create", "comment", "update"].includes(write.kind));
-	return { github, written, cacheQueries };
+	return { github, written, cacheQueries, commentReads };
 }
 
 const night = (
@@ -197,13 +217,53 @@ void test("a red night comments on the open issue, and a replay of the same atte
 	);
 });
 
-void test("a replay of an attempt that a closed issue already holds opens no new issue", async () => {
+void test("a replay of an attempt that an issue updated since the run started holds opens no new issue", async () => {
 	const reported = `<!-- run:99:1 -->\n@hephaestus-build/maintainer: the nightly feedback eval panel fell below a floor.`;
 	const { github, written } = client({
-		issues: [{ number: 3, title: ISSUE_TITLE, state: "closed", body: reported }],
+		issues: [
+			{
+				number: 3,
+				title: ISSUE_TITLE,
+				state: "closed",
+				updated_at: "2026-11-20T04:10:00Z",
+				body: reported,
+			},
+		],
 	});
 	assert.equal(await reportNight(github, repo, night("failure", "failed")), "unchanged");
 	assert.deepEqual(written(), []);
+});
+
+void test("issues last updated before the run started are not read for the marker", async () => {
+	const old = Array.from({ length: 1000 }, (_, index) => ({
+		number: 1000 + index,
+		title: ISSUE_TITLE,
+		state: "closed",
+		updated_at: "2026-10-01T00:00:00Z",
+	}));
+	const { github, written, commentReads } = client({ issues: old });
+	assert.equal(await reportNight(github, repo, night("failure", "failed")), "created");
+	assert.deepEqual(commentReads, []);
+	assert.equal(written().length, 1);
+});
+
+void test("a failed duplicate check still posts the report and says the check could not complete", async () => {
+	const { github, written } = client({
+		issues: [
+			{ number: 7, title: ISSUE_TITLE, state: "open", updated_at: "2026-11-20T04:00:00Z" },
+			{ number: 4, title: ISSUE_TITLE, state: "closed", updated_at: "2026-11-20T04:05:00Z" },
+		],
+		commentErrors: [4],
+	});
+	assert.equal(await reportNight(github, repo, night("failure", "failed")), "commented");
+	const body = bodyOf(written()[0]);
+	assert.match(body, /fell below a floor/u);
+	assert.ok(
+		body.includes(
+			"The duplicate check could not complete (HTTP 503), so this comment may repeat an earlier one.",
+		),
+		body,
+	);
 });
 
 void test("a night that measured and passed closes the open issue with a marked comment, once", async () => {

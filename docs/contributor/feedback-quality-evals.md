@@ -353,8 +353,10 @@ The next night that measures and passes closes the issue with a link to its run.
 
 A pull request run and a manual run report in their job summary only.
 If the report job itself fails, or the night is cancelled after its panel started, `CI / Scheduled failures` writes to the same issue.
-Each comment carries a marker of its run attempt. A replay of an attempt that any of the panel's issues already holds, open or closed, adds nothing.
 Both call one script, `scripts/feedback-eval-night.ts`, so the fallback gives the same commit range and result link.
+
+Each comment carries a marker of its run attempt. A replay of an attempt that a panel issue already holds, open or closed, adds nothing.
+The check reads only issues updated since the attempt started. If it fails, the report still goes out and says that the duplicate check could not complete.
 
 The cicd job keeps `feedback-eval-gate.json` as the `feedback-eval-gate` artifact for 14 days. The panel keeps it as `feedback-eval-panel`.
 The file holds each check, each measure, the model name and the SHA-256 of the endpoint. It never holds the endpoint or the key.

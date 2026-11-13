@@ -148,10 +148,11 @@ jobs:
           retries: 2
           script: |
             const { reportNight } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/feedback-eval-night.ts`);
+            const { data: run } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: context.runId });
             await reportNight(github, context.repo, {
               runId: context.runId,
               attempt: Number(process.env.GITHUB_RUN_ATTEMPT),
-              date: new Date().toISOString(),
+              date: run.run_started_at,
               sha: context.sha,
               serverUrl: context.serverUrl,
               runUrl: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
