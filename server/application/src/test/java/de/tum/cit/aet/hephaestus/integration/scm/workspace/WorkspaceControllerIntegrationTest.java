@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserTeamsDTO;
+import de.tum.cit.aet.hephaestus.testconfig.AuditedRequestCheck;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
@@ -679,6 +680,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                         workspace.getId(), "selection-audit/kept-project"))
                 .hasValueSatisfying(monitor -> assertThat(monitor.getNativeId()).isEqualTo(7301L));
         // The repeated narrowing changed nothing, so it recorded nothing.
+        AuditedRequestCheck.acceptUnchanged(ScmWorkspaceController.class, "updateGitLabRepositorySelection");
         assertThat(selectionChanges(workspace))
                 .extracting(ConnectionAudit::getDetail, ConnectionAudit::getActorAccountId)
                 .containsExactlyInAnyOrder(tuple("ALL → SELECTED", actor), tuple("SELECTED → ALL", actor));

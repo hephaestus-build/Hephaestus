@@ -1,11 +1,13 @@
 package de.tum.cit.aet.hephaestus.testconfig;
 
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtSigningKeyService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -23,6 +25,7 @@ import org.springframework.test.context.TestPropertySource;
 // A hang guard, not a latency budget: the 5s default failed whole suites whenever one request
 // crossed it under CI load, reported as "Timeout on blocking read" with no failing assertion.
 @AutoConfigureWebTestClient(timeout = "30s")
+@Import(AuditedRequestCheck.class)
 @Tag("integration")
 public abstract class RealAuthIntegrationTest {
 
@@ -39,7 +42,13 @@ public abstract class RealAuthIntegrationTest {
 
     @BeforeEach
     void cleanDatabase() {
+        AuditedRequestCheck.reset();
         databaseTestUtils.cleanDatabase();
         signingKeyService.ensureActiveKey();
+    }
+
+    @AfterEach
+    void auditedRequestsWroteTheirRows() {
+        AuditedRequestCheck.assertNoViolations();
     }
 }

@@ -6,6 +6,8 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewAdmissionData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewLookupData;
 import de.tum.cit.aet.hephaestus.practices.scan.ScanReportTestData;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -21,6 +23,8 @@ import org.springframework.test.context.TestPropertySource;
 // Allow bounded waits for database transactions in request tests.
 @AutoConfigureWebTestClient(timeout = "30s")
 @Import({
+    AuditedRequestCheck.class,
+    AuditedEchoController.class,
     TestSecurityConfig.class,
     TestAsyncConfiguration.class,
     RecordingScmEventListener.class,
@@ -49,6 +53,16 @@ public abstract class BaseIntegrationTest {
 
     @Autowired
     protected DatabaseTestUtils databaseTestUtils;
+
+    @BeforeEach
+    void forgetEarlierAuditedRequests() {
+        AuditedRequestCheck.reset();
+    }
+
+    @AfterEach
+    void auditedRequestsWroteTheirRows() {
+        AuditedRequestCheck.assertNoViolations();
+    }
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
