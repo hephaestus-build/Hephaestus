@@ -342,6 +342,39 @@ the label about 60px and the row squashes.
 Fixed widths on a control inside a responsive field must be breakpoint-scoped for the same reason —
 `w-56` alone cannot stack.
 
+## Docs links
+
+A docs link answers the question that a reader has at that point.
+Examples are a step outside Hephaestus, a concept that an empty state needs, and the fix for an error.
+It supports the sentence beside it and does not replace it. If the fix fits in the UI, put it in the UI.
+
+- **Where.** In a setup step that the reader finishes somewhere else, or in the description of an admin section.
+  Also below the action of an empty state, or next to the error that it fixes.
+  Use at most one docs link for each section or state.
+- **Where not.** Not in the app chrome, not on each settings row, and not on a member's feedback.
+  Feedback explains itself, and its practice carries its own practice guide.
+- **Words.** The link text names what the reader finds there, such as "Connect Slack" or "Read the upgrade guide".
+  Never use "Learn more" or "here" alone ([NN/g](https://www.nngroup.com/articles/learn-more-links/), WCAG 2.2 SC 2.4.4).
+- **A new tab, always.** This is a deliberate trade-off.
+  [NN/g](https://www.nngroup.com/articles/new-browser-windows-and-tabs/) and [GOV.UK](https://design-system.service.gov.uk/styles/links/) default to the same tab.
+  NN/g also notes that new tabs are hard for blind and low-vision readers.
+  Both make an exception for a page that the reader needs to finish a task.
+  GOV.UK also makes one for a form that would lose its input.
+  A docs link sits in a setup step, a form, or an admin section that the reader comes back to.
+  All other external links in the app also open a new tab.
+  One rule stays predictable, also next to an error or in an empty state.
+- **Say so twice.** The outbound icon is the visual warning.
+  The words "(opens in a new tab)" are the spoken warning, as [G201](https://www.w3.org/WAI/WCAG22/Techniques/general/G201) asks.
+  GOV.UK and Carbon put no icon on an inline link. We keep it, because it is the only visual warning.
+  The accessible name starts with the visible words.
+- **Underlined at rest.** A link on a practice surface is plain text at rest. A docs link is underlined, because it sits in muted text.
+  There, its colour alone does not mark it (WCAG 2.2 SC 1.4.1).
+
+`DocLink` (`src/components/common/DocLink.tsx`) does all of this.
+It takes an entry of `src/lib/doc-targets.ts`, never an address (`hephaestus/no-raw-docs-url`).
+The docs build fails when an entry's page or heading is missing (`scripts/check-doc-targets.ts`).
+`src/lib/docs-url.ts` picks the docs site: a release reads the site root, which serves the latest release, and any other build reads `next/`.
+
 ## Evolving the system
 
 Improve one readable composition at a time. Start from the actual screen and its existing Storybook owner. A new token, variant or shared recipe needs a named product constraint that the current system cannot express. Keep brand inspiration separate from that constraint.

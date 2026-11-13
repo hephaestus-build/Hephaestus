@@ -4,7 +4,7 @@
 	"private": true,
 	"scripts": {
 		"start": "vp exec docusaurus start --no-open",
-		"build": "vp exec docusaurus build",
+		"build": "vp exec docusaurus build && node ../scripts/check-doc-targets.ts",
 		"swizzle": "docusaurus swizzle",
 		"deploy": "docusaurus deploy",
 		"clear": "docusaurus clear",

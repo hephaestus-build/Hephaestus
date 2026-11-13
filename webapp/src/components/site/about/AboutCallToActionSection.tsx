@@ -1,6 +1,7 @@
 import { GitHubIcon } from "@/components/icons/brand";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
+import { docUrl } from "@/lib/docs-url";
 
 export function AboutCallToActionSection() {
 	return (
@@ -30,7 +31,7 @@ export function AboutCallToActionSection() {
 					<span className="sr-only">(opens in a new tab)</span>
 				</a>
 				<a
-					href="https://docs.hephaestus.build/contributor/overview"
+					href={docUrl("contributorGuide")}
 					target="_blank"
 					rel="noopener noreferrer"
 					className={buttonVariants({ variant: "outline", size: "lg" })}

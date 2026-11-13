@@ -222,6 +222,19 @@
 			"rules": { "hephaestus/ui-text-voice": "off" }
 		},
 		{
+			// A docs link names a registry entry. Tests and stories assert the resolved address, and mocks
+			// reproduce guide addresses that the server sends.
+			"files": ["src/**"],
+			"excludeFiles": [
+				"src/lib/docs-url.ts",
+				"**/*.test.ts",
+				"**/*.test.tsx",
+				"**/*.stories.tsx",
+				"src/mocks/**"
+			],
+			"rules": { "hephaestus/no-raw-docs-url": "error" }
+		},
+		{
 			// A focus ring is a box-shadow, which forced colors drops; the outline is what it draws instead.
 			"files": ["src/**"],
 			"rules": { "hephaestus/focus-outline-in-forced-colors": "error" }

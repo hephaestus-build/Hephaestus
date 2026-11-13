@@ -4,6 +4,7 @@ import { focusOutlineInForcedColors } from "./rules/focus-outline-in-forced-colo
 import { noManualQueryKey } from "./rules/no-manual-query-key.ts";
 import { noNonAsciiFilename } from "./rules/no-non-ascii-filename.ts";
 import { noNondeterministicRender } from "./rules/no-nondeterministic-render.ts";
+import { noRawDocsUrl } from "./rules/no-raw-docs-url.ts";
 import { noRedundantInTheDocument } from "./rules/no-redundant-in-the-document.ts";
 import { noStoryA11yOverride } from "./rules/no-story-a11y-override.ts";
 import { noUnsafeDefinitionLookup } from "./rules/no-unsafe-definition-lookup.ts";
@@ -23,6 +24,7 @@ export default definePlugin({
 		"no-unsafe-definition-lookup": noUnsafeDefinitionLookup,
 		"no-non-ascii-filename": noNonAsciiFilename,
 		"no-nondeterministic-render": noNondeterministicRender,
+		"no-raw-docs-url": noRawDocsUrl,
 		"focus-outline-in-forced-colors": focusOutlineInForcedColors,
 		"no-redundant-in-the-document": noRedundantInTheDocument,
 		"no-story-a11y-override": noStoryA11yOverride,

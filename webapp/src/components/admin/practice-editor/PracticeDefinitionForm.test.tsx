@@ -334,7 +334,10 @@ describe("the practice script section", () => {
 		fireEvent.click(section);
 
 		const guide = await screen.findByRole("link", { name: /^Write a practice script/u });
-		expect(guide.getAttribute("href")).toBe("https://docs.hephaestus.build/admin/practice-scripts");
+		// A test build is not a release, so it reads the docs of the next release.
+		expect(guide.getAttribute("href")).toBe(
+			"https://docs.hephaestus.build/next/admin/practice-scripts",
+		);
 	});
 
 	it("opens with the script a practice already has", async () => {
