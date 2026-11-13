@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 import { getMentorConversationOptions } from "@/api/@tanstack/react-query.gen";
 import { client } from "@/api/client.gen";
 import { problemType } from "@/lib/problem-detail";
+import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
 import { applyUserViewHeaders, clearUserView } from "@/runtime/user-view/session";
@@ -23,16 +24,14 @@ beforeEach(() => {
 	server.use(
 		http.get("*/workspaces", () =>
 			HttpResponse.json([
-				{
-					id: 1,
-					workspaceSlug: "engineering",
-					displayName: "Engineering",
-					status: "ACTIVE",
-					practicesEnabled: true,
-				},
+				workspaceListItem("engineering", { displayName: "Engineering", practicesEnabled: true }),
 			]),
 		),
 		http.get("*/user/features", () => HttpResponse.json(mockFeatureFlags())),
+		// The view reads as the viewed member, who belongs to the workspace.
+		http.get("*/workspaces/:workspaceSlug/members/me", () =>
+			HttpResponse.json(ownMembership("MEMBER")),
+		),
 		// The saved AI choice belongs to the signed-in account; the server refuses it in a view.
 		http.get("*/workspaces/:workspaceSlug/onboarding/me", () =>
 			HttpResponse.json({ status: 403 }, { status: 403 }),
@@ -94,7 +93,10 @@ const stepUpRequired = () =>
 	);
 
 it("asks for a recent sign-in when a viewed read is refused for it", async () => {
-	server.use(http.get("*/workspaces/:workspaceSlug/mentor/conversation", stepUpRequired));
+	server.use(
+		http.get("*/workspaces/:workspaceSlug/mentor/conversation", stepUpRequired),
+		http.get("*/workspaces/:workspaceSlug/mentor/entries", stepUpRequired),
+	);
 
 	renderRouteAt("/w/engineering/conversation", queryClient);
 	await screen.findByRole("dialog", { name: "Confirm access" }, ROUTE_RENDER_WAIT);
