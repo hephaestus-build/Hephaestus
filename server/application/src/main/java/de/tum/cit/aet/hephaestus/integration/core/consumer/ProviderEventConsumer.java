@@ -8,10 +8,10 @@ import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.sync.activity.ConnectionActivityRecorder;
 import jakarta.annotation.PreDestroy;
+import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
@@ -297,6 +297,7 @@ public class ProviderEventConsumer {
         if (IntegrationPoisonHandler.diagnosticCause(thrown) instanceof ProviderEventBusyException busy) {
             log.atDebug()
                     .addKeyValue("event.name", "integration.message.retry")
+                    .addKeyValue("integration.operation", "write-fence")
                     .addKeyValue("reason", busy.reason().tag)
                     .addKeyValue("integration.event.id", claimed.id())
                     .addKeyValue("integration.scope.id", claimed.workspaceId())
@@ -308,21 +309,24 @@ public class ProviderEventConsumer {
         // Exception messages can contain raw provider payloads. Log only the failure type.
         var logged = log.atError()
                 .addKeyValue("event.name", "integration.message.failed")
+                .addKeyValue("integration.operation", "handle")
+                .addKeyValue("integration.event.id", claimed.id())
                 .addKeyValue("integration.route", ConsumerSubjectMath.routeLabel(event.subject()))
                 .addKeyValue("integration.delivery", claimed.attempt())
                 .addKeyValue("error.type", thrown.getClass().getName());
         if (claimed.workspaceId() != null) logged = logged.addKeyValue("integration.scope.id", claimed.workspaceId());
-        if (claimed.attempt() <= 1) {
-            Throwable diagnostic = IntegrationPoisonHandler.diagnosticCause(thrown);
-            logged = logged.addKeyValue("error.root_type", diagnostic.getClass().getName())
-                    .addKeyValue(
-                            "error.stack_trace",
-                            Arrays.stream(diagnostic.getStackTrace())
-                                    .limit(32)
-                                    .map(StackTraceElement::toString)
-                                    .toList());
+        Throwable diagnostic = IntegrationPoisonHandler.diagnosticCause(thrown);
+        if (diagnostic instanceof SQLException sqlException) {
+            String state = sqlException.getSQLState();
+            if (state != null && state.matches("[A-Z0-9]{5}")) {
+                logged = logged.addKeyValue("db.response.status_code", state);
+            }
         }
-        logged.log("Handler failed");
+        if (claimed.attempt() <= 1) {
+            logged = logged.addKeyValue("error.root_type", diagnostic.getClass().getName())
+                    .addKeyValue("error.stack_trace", IntegrationPoisonHandler.diagnosticFrames(diagnostic));
+        }
+        logged.log("Provider event handler failed");
         meters.handled(event, IntegrationMessageMeters.Outcome.FAILED, System.nanoTime() - start);
         lastFailedAt = clock.instant();
         failures.handleFailure(claimed, thrown);

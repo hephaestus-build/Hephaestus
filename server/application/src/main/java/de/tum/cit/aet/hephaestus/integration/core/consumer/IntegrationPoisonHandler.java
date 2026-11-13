@@ -14,12 +14,15 @@ import java.sql.SQLTransientException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,17 +75,14 @@ public class IntegrationPoisonHandler {
                     claimed.id(), claimed.leaseEpoch(), diagnostic.getClass().getName())) {
                 log.atError()
                         .addKeyValue("event.name", "integration.message.captured")
+                        .addKeyValue("integration.operation", "capture-for-replay")
+                        .addKeyValue("integration.event.id", claimed.id())
                         .addKeyValue("integration.route", ConsumerSubjectMath.routeLabel(subject))
                         .addKeyValue("integration.scope.id", claimed.workspaceId())
                         .addKeyValue("integration.delivery", claimed.attempt())
                         .addKeyValue("error.type", failure.getClass().getName())
                         .addKeyValue("error.root_type", diagnostic.getClass().getName())
-                        .addKeyValue(
-                                "error.stack_trace",
-                                Arrays.stream(diagnostic.getStackTrace())
-                                        .limit(32)
-                                        .map(StackTraceElement::toString)
-                                        .toList())
+                        .addKeyValue("error.stack_trace", diagnosticFrames(diagnostic))
                         .log("Failed event stored for replay");
                 poisonCounter(subject).increment();
             }
@@ -113,6 +113,26 @@ public class IntegrationPoisonHandler {
             diagnostic = Objects.requireNonNull(diagnostic.getCause());
         }
         return diagnostic;
+    }
+
+    /** Keep the failure origin and the application call site when framework proxies fill the frame budget. */
+    static List<String> diagnosticFrames(Throwable diagnostic) {
+        StackTraceElement[] frames = diagnostic.getStackTrace();
+        int application = IntStream.range(0, frames.length)
+                .filter(index -> frames[index].getClassName().startsWith("de.tum.cit.aet.hephaestus."))
+                .findFirst()
+                .orElse(frames.length);
+        if (application >= 32 && application < frames.length) {
+            return Stream.concat(
+                            Stream.concat(
+                                    Arrays.stream(frames, 0, 15).map(StackTraceElement::toString),
+                                    Stream.of("... framework frames omitted ...")),
+                            Arrays.stream(frames, application, frames.length)
+                                    .limit(16)
+                                    .map(StackTraceElement::toString))
+                    .toList();
+        }
+        return Arrays.stream(frames).limit(32).map(StackTraceElement::toString).toList();
     }
 
     private enum FailureKind {
