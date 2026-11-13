@@ -10,8 +10,8 @@ import type {
 	PracticeItemTypeOption,
 } from "@/api/types.gen";
 import { CodeEditor } from "@/components/common/CodeEditor";
+import { DocLink } from "@/components/common/DocLink";
 import { FormErrorSummary } from "@/components/common/FormErrorSummary";
-import { InlineLink } from "@/components/common/InlineLink";
 import {
 	ABOUT_ROLE_LABELS,
 	type AboutRole,
@@ -67,8 +67,6 @@ import { PracticeReviewedByEditor } from "./PracticeReviewedByEditor";
 import { PracticeReviewSettingsEditor } from "./PracticeReviewSettingsEditor";
 import { PracticeVisualEditor } from "./PracticeVisualEditor";
 import { itemTypeFor, orderedItemTypes } from "./review-settings";
-
-const PRACTICE_SCRIPT_GUIDE_URL = "https://docs.hephaestus.build/admin/practice-scripts";
 
 // Base UI Select requires a string value even when About names no developer.
 const ABOUT_THE_WORK = "__work__";
@@ -516,10 +514,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 										TypeScript that reviews this practice and returns its candidate observation. It
 										can decide in code, or prepare places for the review to decide. It never writes
 										feedback. Without a script, the practice runs the built-in review.{" "}
-										<InlineLink href={PRACTICE_SCRIPT_GUIDE_URL} external>
-											Write a practice script
-										</InlineLink>
-										.
+										<DocLink doc="practiceScriptGuide">Write a practice script</DocLink>.
 									</p>
 									<CodeEditor
 										value={draft.script}

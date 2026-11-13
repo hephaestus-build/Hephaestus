@@ -33,6 +33,7 @@ export type ProblemTypeSlug = "feedback-withheld" | "passkey-required" | "step-u
 
 /** The RFC 9457 `type` the server sends for a problem kind. */
 export function problemType(slug: ProblemTypeSlug | "csrf-token-rejected"): string {
+	// oxlint-disable-next-line hephaestus/no-raw-docs-url -- An RFC 9457 type is an identifier that the server sends. It must not follow the docs of the release.
 	return `https://docs.hephaestus.build/contributor/api-error-handling#${slug}`;
 }
 

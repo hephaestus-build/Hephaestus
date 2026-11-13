@@ -27,6 +27,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { asDate } from "@/lib/dates";
+import { docUrl } from "@/lib/docs-url";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
 import {
@@ -35,7 +36,6 @@ import {
 } from "./release-check-status-defs";
 
 const RELEASES_URL = "https://github.com/hephaestus-build/Hephaestus/releases";
-const UPGRADE_GUIDE_URL = "https://docs.hephaestus.build/admin/upgrade";
 
 export type ReleaseCheckRequest =
 	| { status: "idle" | "pending" | "success" }
@@ -312,7 +312,7 @@ function ReleaseBody({ state }: InstanceReleaseCardProps) {
 						<p>{migrationNote(latest.schemaMigrations)}</p>
 						<p className="flex flex-wrap gap-x-4">
 							<ExternalLink href={latest.notesUrl}>Release notes</ExternalLink>
-							<ExternalLink href={UPGRADE_GUIDE_URL}>Upgrade guide</ExternalLink>
+							<ExternalLink href={docUrl("upgradeGuide")}>Upgrade guide</ExternalLink>
 						</p>
 					</AlertDescription>
 				</Alert>

@@ -402,6 +402,8 @@ jobs:
               - 'server/application/src/main/resources/practices/default-catalog.schema.json'
               - 'server/application/src/main/resources/practices/guidance/**'
               - 'docs/**'
+              # The docs build checks the web app's docs targets against its output.
+              - 'webapp/src/lib/doc-targets.ts'
               - 'tsconfig.node.json'
               - 'tsconfig.json'
               - '.oxlintrc.json'

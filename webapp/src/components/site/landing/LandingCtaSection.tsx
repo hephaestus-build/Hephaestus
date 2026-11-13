@@ -1,6 +1,7 @@
 import { ArrowRight, BookOpen } from "lucide-react";
 import { LandingSignInCta } from "@/components/auth/LandingSignInCta";
 import { buttonVariants } from "@/components/ui/button";
+import { docUrl } from "@/lib/docs-url";
 import { LandingGlow, LandingSpeechFigure, LandingSpark } from "./LandingVisuals";
 import styles from "./LandingVisuals.module.css";
 
@@ -40,7 +41,7 @@ export function LandingCtaSection({ onSignIn }: LandingCtaSectionProps) {
 					<div className="mt-6 flex w-full flex-col justify-center gap-3 sm:flex-row lg:justify-start">
 						<LandingSignInCta onSignIn={onSignIn} size="lg" className="w-full sm:w-auto" />
 						<a
-							href="https://docs.hephaestus.build/user/overview"
+							href={docUrl("userGuide")}
 							target="_blank"
 							rel="noopener noreferrer"
 							className={buttonVariants({ size: "lg", variant: "outline" })}
@@ -55,7 +56,7 @@ export function LandingCtaSection({ onSignIn }: LandingCtaSectionProps) {
 						Running your own deployment?{" "}
 						<a
 							className="font-medium text-foreground underline underline-offset-4"
-							href="https://docs.hephaestus.build/admin/kubernetes"
+							href={docUrl("installationGuide")}
 							target="_blank"
 							rel="noopener noreferrer"
 						>

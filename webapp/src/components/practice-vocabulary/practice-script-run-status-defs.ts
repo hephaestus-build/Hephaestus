@@ -1,5 +1,6 @@
 import type { PracticeScriptRun } from "@/api/types.gen";
 import { definitionFor } from "@/components/common/status-def";
+import type { DocKey } from "@/lib/doc-targets";
 
 export type PracticeScriptRunStatus = PracticeScriptRun["status"];
 export type PracticeScriptStopReason = NonNullable<PracticeScriptRun["stopReason"]>;
@@ -117,25 +118,19 @@ export function practiceScriptRunSentence(run: PracticeScriptRun): string {
 	).sentence(run);
 }
 
-const OPERATIONS_GUIDE_URL = "https://docs.hephaestus.build/admin/practice-review-operations";
-
 interface PracticeScriptGuideDef {
 	/** The link's words: what the section answers. */
 	label: string;
 	/** The section of the operations guide. */
-	anchor: string;
+	doc: DocKey;
 }
 
 export const PRACTICE_SCRIPT_GUIDE_DEFS = {
 	/** Why a program ran out of time or budget, or did not finish, and what to raise or speed up. */
-	STOPPED_EARLY: { label: "Why scripts stop early", anchor: "the-trace-line" },
+	STOPPED_EARLY: { label: "Why scripts stop early", doc: "practiceScriptTraceLine" },
 } satisfies Record<string, PracticeScriptGuideDef>;
 
 export type PracticeScriptGuide = keyof typeof PRACTICE_SCRIPT_GUIDE_DEFS;
-
-export function practiceScriptGuideUrl(guide: PracticeScriptGuide): string {
-	return `${OPERATIONS_GUIDE_URL}#${PRACTICE_SCRIPT_GUIDE_DEFS[guide].anchor}`;
-}
 
 export type PracticeScriptFix = { kind: "EDIT" } | { kind: "GUIDE"; guide: PracticeScriptGuide };
 

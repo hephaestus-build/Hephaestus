@@ -2,12 +2,12 @@ import { Link } from "@tanstack/react-router";
 import { ArrowRightIcon } from "lucide-react";
 
 import { practiceFormLevel } from "@/components/admin/practices/practice-search";
+import { DocLink } from "@/components/common/DocLink";
 import { InlineLink } from "@/components/common/InlineLink";
 import { detailSearch } from "@/components/layout/detail-drawer/detail-stack";
 import {
 	PRACTICE_SCRIPT_GUIDE_DEFS,
 	type PracticeScriptFix,
-	practiceScriptGuideUrl,
 } from "@/components/practice-vocabulary/practice-script-run-status-defs";
 
 export interface PracticeScriptFixLinkProps {
@@ -37,10 +37,10 @@ export function PracticeScriptFixLink({
 		);
 	if (fix.kind === "GUIDE") {
 		return (
-			<InlineLink href={practiceScriptGuideUrl(fix.guide)} external className="font-medium">
+			<DocLink doc={PRACTICE_SCRIPT_GUIDE_DEFS[fix.guide].doc} className="font-medium">
 				{PRACTICE_SCRIPT_GUIDE_DEFS[fix.guide].label}
 				{context}
-			</InlineLink>
+			</DocLink>
 		);
 	}
 	return (
