@@ -11,5 +11,5 @@ public interface OutlineWebhookClient {
     String createWebhookSubscription(
             String serverUrl, String token, String name, String deliveryUrl, String signingSecret, List<String> events);
 
-    void deleteWebhookSubscription(String serverUrl, String token, String subscriptionId);
+    boolean deleteWebhookSubscription(String serverUrl, String token, String subscriptionId);
 }

@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -94,8 +93,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         when(oauthStateService.consume(state)).thenReturn(binding);
 
         Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
-        when(callbackService.findOrCreatePendingConnection(42L, IntegrationKind.SLACK))
-                .thenReturn(pending);
+        when(callbackService.findAttemptConnection(any())).thenReturn(pending);
         when(callbackService.completeConnection(any(Connection.class), any(), any()))
                 .thenAnswer(inv -> {
                     Connection c = inv.getArgument(0);
@@ -139,8 +137,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), null);
         when(oauthStateService.consume(state)).thenReturn(binding);
         Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
-        when(callbackService.findOrCreatePendingConnection(42L, IntegrationKind.SLACK))
-                .thenReturn(pending);
+        when(callbackService.findAttemptConnection(any())).thenReturn(pending);
         when(callbackService.completeConnection(any(Connection.class), any(), any()))
                 .thenReturn(pending);
         slackStrategy.nextFinalization = new ConnectFinalization.Completed("T123", new BearerToken("tok", null), null);
@@ -175,7 +172,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         verify(oauthStateService, never()).consume(any());
         // Strategy never called.
         assertThat(slackStrategy.finalizeCalls).isEqualTo(0);
-        verify(callbackService, never()).findOrCreatePendingConnection(anyLong(), any());
+        verify(callbackService, never()).findAttemptConnection(any());
     }
 
     @Test
@@ -207,7 +204,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(response.getHeaders().getLocation())
                 .hasToString(
                         "/integrations?status=error&reason=access_denied&description=Connection+cancelled&kind=SLACK&workspaceSlug=team");
-        verify(callbackService, never()).findOrCreatePendingConnection(anyLong(), any());
+        verify(callbackService, never()).findAttemptConnection(any());
     }
 
     @Test
@@ -217,7 +214,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
                 "slack", "expired", "access_denied", null, Map.of(), htmlRequest(), servletResponse);
         assertThat(response.getHeaders().getLocation())
                 .hasToString(PROPS.resolvedFailureRedirect() + "&reason=access_denied&kind=SLACK");
-        verify(callbackService, never()).findOrCreatePendingConnection(anyLong(), any());
+        verify(callbackService, never()).findAttemptConnection(any());
     }
 
     @Test
@@ -233,7 +230,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
     void workspaceDeletedBeforeConnectionCreationReturnsFailure() {
         when(oauthStateService.consume("signed-state"))
                 .thenReturn(new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 42L));
-        when(callbackService.findOrCreatePendingConnection(42L, IntegrationKind.SLACK))
+        when(callbackService.findAttemptConnection(any()))
                 .thenThrow(new EntityNotFoundException("Workspace does not exist"));
         var response = controller.handleCallback(
                 "slack", "signed-state", null, null, Map.of(), htmlRequest(), servletResponse);
@@ -318,7 +315,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(body.getDetail()).contains("signature of the OAuth state");
         // Critical: strategy NEVER invoked when the state is bad.
         assertThat(slackStrategy.finalizeCalls).isEqualTo(0);
-        verify(callbackService, never()).findOrCreatePendingConnection(anyLong(), any());
+        verify(callbackService, never()).findAttemptConnection(any());
     }
 
     @Test
@@ -342,7 +339,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(body.getProperties()).containsEntry("callbackError", "kind_mismatch");
         assertThat(body.getDetail()).contains("SLACK").contains("github");
         assertThat(slackStrategy.finalizeCalls).isEqualTo(0);
-        verify(callbackService, never()).findOrCreatePendingConnection(anyLong(), any());
+        verify(callbackService, never()).findAttemptConnection(any());
     }
 
     @Test
@@ -350,8 +347,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 42L);
         when(oauthStateService.consume("s")).thenReturn(binding);
         Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
-        when(callbackService.findOrCreatePendingConnection(42L, IntegrationKind.SLACK))
-                .thenReturn(pending);
+        when(callbackService.findAttemptConnection(any())).thenReturn(pending);
 
         slackStrategy.nextFinalization = new ConnectFinalization.Failed("vendor rejected the code");
 
@@ -372,8 +368,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 42L);
         when(oauthStateService.consume("s")).thenReturn(binding);
         Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
-        when(callbackService.findOrCreatePendingConnection(42L, IntegrationKind.SLACK))
-                .thenReturn(pending);
+        when(callbackService.findAttemptConnection(any())).thenReturn(pending);
 
         slackStrategy.nextFinalization = new ConnectFinalization.Failed("vendor rejected the code");
 
@@ -396,8 +391,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 42L);
         when(oauthStateService.consume("s")).thenReturn(binding);
         Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
-        when(callbackService.findOrCreatePendingConnection(42L, IntegrationKind.SLACK))
-                .thenReturn(pending);
+        when(callbackService.findAttemptConnection(any())).thenReturn(pending);
 
         slackStrategy.throwOnFinalize = new RuntimeException("vendor 500");
 
@@ -426,7 +420,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         assertThat(response.getHeaders().getLocation()).hasToString("/");
         assertThat(slackStrategy.finalizeCalls).isZero();
         verify(oauthStateService, never()).consume(any());
-        verify(callbackService, never()).findOrCreatePendingConnection(anyLong(), any());
+        verify(callbackService, never()).findAttemptConnection(any());
     }
 
     @Test
@@ -451,8 +445,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 5L);
         when(oauthStateService.consume("s")).thenReturn(binding);
         Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
-        when(callbackService.findOrCreatePendingConnection(42L, IntegrationKind.SLACK))
-                .thenReturn(pending);
+        when(callbackService.findAttemptConnection(any())).thenReturn(pending);
         slackStrategy.nextFinalization = new ConnectFinalization.Completed("T1", new BearerToken("t", null), null);
         when(callbackService.completeConnection(any(), any(), any()))
                 .thenThrow(new OAuthCallbackService.InstanceConnectedElsewhereException("Held elsewhere.", null));
@@ -480,8 +473,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 42L);
         when(oauthStateService.consume("s")).thenReturn(binding);
         Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
-        when(callbackService.findOrCreatePendingConnection(42L, IntegrationKind.SLACK))
-                .thenReturn(pending);
+        when(callbackService.findAttemptConnection(any())).thenReturn(pending);
         slackStrategy.nextFinalization = new ConnectFinalization.Completed("T1", new BearerToken("t", null), null);
         when(callbackService.completeConnection(any(), any(), any()))
                 .thenThrow(new IllegalStateException("Connection 7 cannot change from UNINSTALLED to ACTIVE."));
@@ -500,8 +492,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 42L);
         when(oauthStateService.consume("s")).thenReturn(binding);
         Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
-        when(callbackService.findOrCreatePendingConnection(42L, IntegrationKind.SLACK))
-                .thenReturn(pending);
+        when(callbackService.findAttemptConnection(any())).thenReturn(pending);
         slackStrategy.nextFinalization = new ConnectFinalization.Completed("T1", new BearerToken("t", null), null);
         when(callbackService.completeConnection(any(), any(), any()))
                 .thenThrow(new IllegalStateException("Connection 7 cannot change from UNINSTALLED to ACTIVE."));
@@ -558,8 +549,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 42L);
         when(oauthStateService.consume("s")).thenReturn(binding);
         Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
-        when(callbackService.findOrCreatePendingConnection(42L, IntegrationKind.SLACK))
-                .thenReturn(pending);
+        when(callbackService.findAttemptConnection(any())).thenReturn(pending);
         when(callbackService.completeConnection(any(), any(), any())).thenReturn(pending);
         slackStrategy.nextFinalization = new ConnectFinalization.Completed("T1", new BearerToken("t", null), null);
 
@@ -737,12 +727,6 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         @Override
         public void eraseLocalData(IntegrationRef ref) {
             throw new UnsupportedOperationException("eraseLocalData() not exercised by OAuthCallbackController");
-        }
-
-        @Override
-        public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref, ProviderFootprint footprint) {
-            throw new UnsupportedOperationException(
-                    "prepareProviderTeardown() not exercised by OAuthCallbackController");
         }
     }
 }

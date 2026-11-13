@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794548896973-1" author="hephaestus">
+        <sql>
+            ALTER TABLE connection ADD COLUMN lifecycle_generation bigint NOT NULL DEFAULT 0;
+            CREATE TABLE provider_resource_repair (
+                id uuid PRIMARY KEY,
+                identity_hash varchar(64) NOT NULL,
+                kind varchar(48) NOT NULL,
+                origin varchar(2048) NOT NULL,
+                resource_type varchar(32) NOT NULL,
+                parent_id varchar(256) NOT NULL,
+                resource_id varchar(256) NOT NULL,
+                ownership_hash varchar(96),
+                state varchar(32) NOT NULL,
+                created_at timestamp with time zone NOT NULL,
+                updated_at timestamp with time zone NOT NULL,
+                next_attempt_at timestamp with time zone NOT NULL,
+                version bigint NOT NULL,
+                attempt_epoch bigint NOT NULL,
+                removal_attempts bigint NOT NULL,
+                CONSTRAINT uq_provider_resource_repair_identity UNIQUE (identity_hash),
+                CONSTRAINT ck_provider_resource_repair_state CHECK (state IN ('REGISTERING', 'PENDING', 'CHECKING', 'DISPATCHING', 'AWAITING_CONFIRMATION', 'NEEDS_AUTHORIZATION', 'CONFIRMATION_REQUIRED'))
+            );
+            CREATE INDEX ix_provider_resource_repair_next_attempt ON provider_resource_repair(next_attempt_at, id);
+            CREATE TABLE connection_provider_repair (
+                id uuid PRIMARY KEY,
+                workspace_id bigint NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
+                connection_id bigint NOT NULL,
+                repair_id uuid NOT NULL REFERENCES provider_resource_repair(id) ON DELETE CASCADE,
+                credentials_generation bigint NOT NULL,
+                lifecycle_generation bigint NOT NULL,
+                connection_version bigint NOT NULL,
+                CONSTRAINT fk_connection_provider_repair_owner FOREIGN KEY (connection_id, workspace_id) REFERENCES connection(id, workspace_id) ON DELETE CASCADE,
+                CONSTRAINT uq_connection_provider_repair UNIQUE (workspace_id, connection_id, repair_id)
+            );
+            CREATE INDEX ix_connection_provider_repair_resource ON connection_provider_repair(repair_id);
+        </sql>
+        <rollback>
+            <sql>
+                DROP TABLE connection_provider_repair;
+                DROP TABLE provider_resource_repair;
+                ALTER TABLE connection DROP COLUMN lifecycle_generation;
+            </sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1794548896973-2" author="hephaestus">
+        <comment>Pending OAuth requests must restart so each new authorization binds its exact connection lifecycle.</comment>
+        <sql>
+            DELETE FROM oauth_state_nonce;
+            ALTER TABLE oauth_state_nonce ADD COLUMN connection_id bigint NOT NULL;
+            ALTER TABLE oauth_state_nonce ADD COLUMN lifecycle_generation bigint NOT NULL;
+            ALTER TABLE oauth_state_nonce ADD CONSTRAINT fk_oauth_state_nonce_connection FOREIGN KEY (connection_id, workspace_id) REFERENCES connection(id, workspace_id) ON DELETE CASCADE;
+        </sql>
+        <rollback>
+            <sql>
+                ALTER TABLE oauth_state_nonce DROP CONSTRAINT fk_oauth_state_nonce_connection;
+                ALTER TABLE oauth_state_nonce DROP COLUMN lifecycle_generation;
+                ALTER TABLE oauth_state_nonce DROP COLUMN connection_id;
+            </sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1794548896973-3" author="hephaestus">
+        <addColumn tableName="connection">
+            <column name="provider_repair_capture_generation" type="bigint"/>
+        </addColumn>
+        <rollback><dropColumn tableName="connection" columnName="provider_repair_capture_generation"/></rollback>
+    </changeSet>
+    <changeSet id="1794548896973-4" author="hephaestus">
+        <sql>ALTER TABLE config_audit_event DROP CONSTRAINT ck_config_audit_event_entity_type;
+            ALTER TABLE config_audit_event ADD CONSTRAINT ck_config_audit_event_entity_type CHECK (entity_type IN ('PROVIDER_RESOURCE_RELEASE', 'PRACTICE_REVIEW_SETTINGS', 'AGENT_BINDING', 'AGENT_CONFIG', 'AI_CONFIG_BINDING', 'WORKSPACE_ROLE', 'ACTIVITY_AUTOMATION', 'WORKSPACE_FEATURES', 'WORKSPACE_STATUS', 'WORKSPACE_TOKEN', 'WORKSPACE_VISIBILITY', 'PRACTICE_ACTIVE', 'PRACTICE_USAGE', 'PRACTICE_DEFINITION', 'PRACTICE_GROUP', 'CATALOG_PRACTICE', 'CATALOG_GROUP', 'WORKSPACE_INSTANCE_LLM_BUDGET', 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET', 'WORKSPACE_LLM_BUDGET', 'WORKSPACE_BYO_LLM_BUDGET', 'REVIEW_BATCH', 'REVIEW_SCHEDULE', 'FEEDBACK_DELIVERY_RECHECK', 'WORKSPACE_LLM_CONNECTION', 'WORKSPACE_LLM_MODEL'));</sql>
+        <rollback><sql>ALTER TABLE config_audit_event DROP CONSTRAINT ck_config_audit_event_entity_type;
+            ALTER TABLE config_audit_event ADD CONSTRAINT ck_config_audit_event_entity_type CHECK (entity_type IN ('PRACTICE_REVIEW_SETTINGS', 'AGENT_BINDING', 'AGENT_CONFIG', 'AI_CONFIG_BINDING', 'WORKSPACE_ROLE', 'ACTIVITY_AUTOMATION', 'WORKSPACE_FEATURES', 'WORKSPACE_STATUS', 'WORKSPACE_TOKEN', 'WORKSPACE_VISIBILITY', 'PRACTICE_ACTIVE', 'PRACTICE_USAGE', 'PRACTICE_DEFINITION', 'PRACTICE_GROUP', 'CATALOG_PRACTICE', 'CATALOG_GROUP', 'WORKSPACE_INSTANCE_LLM_BUDGET', 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET', 'WORKSPACE_LLM_BUDGET', 'WORKSPACE_BYO_LLM_BUDGET', 'REVIEW_BATCH', 'REVIEW_SCHEDULE', 'FEEDBACK_DELIVERY_RECHECK', 'WORKSPACE_LLM_CONNECTION', 'WORKSPACE_LLM_MODEL'));</sql></rollback>
+    </changeSet>
+    <changeSet id="1794548896973-5" author="hephaestus">
+        <sql>ALTER TABLE config_audit_event DROP CONSTRAINT ck_config_audit_event_scope;
+            ALTER TABLE config_audit_event ADD CONSTRAINT ck_config_audit_event_scope CHECK (
+                entity_type = 'PROVIDER_RESOURCE_RELEASE' OR
+                (entity_type IN ('CATALOG_PRACTICE', 'CATALOG_GROUP') AND workspace_id IS NULL) OR
+                (entity_type &lt;&gt; 'CATALOG_PRACTICE' AND workspace_id IS NOT NULL));</sql>
+        <rollback><sql>ALTER TABLE config_audit_event DROP CONSTRAINT ck_config_audit_event_scope;
+            ALTER TABLE config_audit_event ADD CONSTRAINT ck_config_audit_event_scope CHECK (
+                (entity_type IN ('CATALOG_PRACTICE', 'CATALOG_GROUP') AND workspace_id IS NULL) OR
+                (entity_type &lt;&gt; 'CATALOG_PRACTICE' AND workspace_id IS NOT NULL));</sql></rollback>
+    </changeSet>
+    <changeSet id="1794548896973-6" author="hephaestus">
+  <sql>ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type;
+ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN ('USER_VIEW', 'LOGIN', 'PASSKEY_CHANGED', 'PASSKEY_VERIFIED', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED', 'IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IMPERSONATION_BEGIN', 'IMPERSONATION_END', 'ACCOUNT_DELETED', 'EXPORT_REQUESTED', 'PERSON_DATA_PREVIEWED', 'PERSON_DATA_EXPORTED', 'PERSON_DATA_ERASURE_REQUESTED', 'APP_ROLE_CHANGED', 'ACCOUNT_STATUS_CHANGED', 'RESEARCH_CONSENT_REVOKED', 'WORKSPACE_ELEVATION', 'INSTALLATION_EVENT_REPLAYED', 'GITHUB_INSTALLATION_ADOPTED', 'GITHUB_INSTALLATION_DECLINED', 'WORKSPACE_OWNER_CHANGE', 'WORKSPACE_DELETION', 'PROVIDER_RESOURCE_RELEASE', 'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED', 'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED', 'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED', 'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED', 'SILENT_MODE_CHANGED', 'PUBLIC_ACTIVITY_CHANGED', 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED', 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED', 'PRODUCT_FEEDBACK_FILED_BY_ADMIN', 'RESEARCH_DATASET_RELEASED', 'RESEARCH_REMOVAL_RECORDED'));</sql>
+  <rollback><sql>ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type;
+ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN ('USER_VIEW', 'LOGIN', 'PASSKEY_CHANGED', 'PASSKEY_VERIFIED', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED', 'IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IMPERSONATION_BEGIN', 'IMPERSONATION_END', 'ACCOUNT_DELETED', 'EXPORT_REQUESTED', 'PERSON_DATA_PREVIEWED', 'PERSON_DATA_EXPORTED', 'PERSON_DATA_ERASURE_REQUESTED', 'APP_ROLE_CHANGED', 'ACCOUNT_STATUS_CHANGED', 'RESEARCH_CONSENT_REVOKED', 'WORKSPACE_ELEVATION', 'INSTALLATION_EVENT_REPLAYED', 'GITHUB_INSTALLATION_ADOPTED', 'GITHUB_INSTALLATION_DECLINED', 'WORKSPACE_OWNER_CHANGE', 'WORKSPACE_DELETION', 'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED', 'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED', 'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED', 'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED', 'SILENT_MODE_CHANGED', 'PUBLIC_ACTIVITY_CHANGED', 'PRODUCT_FEEDBACK_DESTINATIONS_CHANGED', 'PRODUCT_FEEDBACK_CLEANUP_CONFIRMED', 'PRODUCT_FEEDBACK_FILED_BY_ADMIN', 'RESEARCH_DATASET_RELEASED', 'RESEARCH_REMOVAL_RECORDED'));</sql></rollback>
+ </changeSet>
+</databaseChangeLog>

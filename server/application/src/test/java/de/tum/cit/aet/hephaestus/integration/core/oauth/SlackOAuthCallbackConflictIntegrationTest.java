@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.connect.SlackOAuthClient;
 import de.tum.cit.aet.hephaestus.integration.slack.connect.SlackOAuthClient.OAuthV2Access;
@@ -81,6 +82,8 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
     @BeforeEach
     void setUp() {
         team = "T" + System.nanoTime();
+        when(slackOAuthClient.botIdentity(any()))
+                .thenReturn(new SlackOAuthClient.BotIdentity(true, team, "U-BOT", null));
         when(slackOAuthClient.exchangeCode(any(), any()))
                 .thenReturn(new OAuthV2Access(
                         true, null, "xoxb-test", new OAuthV2Access.Team(team, "Intro Course"), null, null));
@@ -202,7 +205,13 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
         Connection refreshed = reauthorize(workspace, admin, existing);
 
         assertThat(refreshed.getConfig())
-                .isEqualTo(new ConnectionConfig.SlackConfig(team, "Intro Course", 90, Set.of("messages")));
+                .isEqualTo(new ConnectionConfig.SlackConfig(
+                        team,
+                        "U-BOT",
+                        ProviderResourceAdapter.slackTokenFingerprint("xoxb-test"),
+                        "Intro Course",
+                        90,
+                        Set.of("messages")));
     }
 
     @Test
@@ -214,7 +223,13 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
         Connection revived = reauthorize(workspace, admin, existing);
 
         assertThat(revived.getConfig())
-                .isEqualTo(new ConnectionConfig.SlackConfig(team, "Intro Course", null, Set.of()));
+                .isEqualTo(new ConnectionConfig.SlackConfig(
+                        team,
+                        "U-BOT",
+                        ProviderResourceAdapter.slackTokenFingerprint("xoxb-test"),
+                        "Intro Course",
+                        null,
+                        Set.of()));
     }
 
     private Connection reauthorize(Workspace workspace, User admin, Connection existing) {

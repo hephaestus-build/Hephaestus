@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -23,6 +22,7 @@ import de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
@@ -40,8 +40,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -49,7 +51,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
 import org.slf4j.LoggerFactory;
@@ -82,6 +83,10 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
     @Mock
     private ObjectProvider<GitLabTokenLifecycleService> tokenLifecycle;
 
+    @Mock
+    private ProviderResourceRepairs repairs;
+
+    private final Map<UUID, ConnectionConfig.GitLabConfig> registrations = new HashMap<>();
     private GitLabWebhookService webhookService;
 
     private Workspace workspace;
@@ -113,6 +118,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                 credential,
                 workspaceRepository,
                 connectionService,
+                repairs,
                 tokenLifecycle);
     }
 
@@ -145,10 +151,6 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                     hooks.add(hook);
                     return hook;
                 });
-        lenient()
-                .doAnswer(inv -> hooks.removeIf(hook -> hook.id() == (long) inv.getArgument(2)))
-                .when(webhookClient)
-                .deregisterGroupWebhook(eq(1L), eq(42L), anyLong());
     }
 
     private void storeHook(WebhookInfo hook) {
@@ -162,6 +164,19 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(repairs.beginRegistration(anyLong(), anyLong(), any())).thenAnswer(call -> {
+            UUID id = UUID.randomUUID();
+            registrations.put(id, currentConfig(1L));
+            return id;
+        });
+        lenient()
+                .when(repairs.completeRegistration(anyLong(), anyLong(), any(), any()))
+                .thenAnswer(call -> {
+                    if (!Objects.equals(registrations.get(call.getArgument(2)), currentConfig(1L))) return false;
+                    UnaryOperator<ConnectionConfig> mutate = call.getArgument(3);
+                    bindGitLabConfig(1L, (ConnectionConfig.GitLabConfig) mutate.apply(currentConfig(1L)));
+                    return true;
+                });
         routeCredential = credential(KEY, null);
         webhookService = service(routeCredential);
         Connection connection = mock(Connection.class);
@@ -270,7 +285,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
             assertThat(result.registered()).isTrue();
             GitLabRouteCredential.Issued issued = routeCredential.issue(ROUTE);
             assertThat(registered).singleElement().satisfies(config -> {
-                assertThat(config.url()).isEqualTo(connectionUrl(routeCredential));
+                assertThat(config.url()).startsWith(connectionUrl(routeCredential) + "?hephaestus_resource=");
                 assertThat(routeCredential.verify(config.token(), CONNECTION_ID, issued.keyId(), issued.routeId()))
                         .contains(ROUTE);
                 assertThat(config.token()).isNotEqualTo(SECRET);
@@ -280,15 +295,14 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldAdoptOnlyTheExactHookOfThisRoute() {
+        void shouldUseAFreshOwnershipMarkerRatherThanAdoptAnUnrecordedHook() {
             hooks.add(new WebhookInfo(77L, connectionUrl(routeCredential)));
             hooks.add(new WebhookInfo(78L, API_ORIGIN + "/webhooks/gitlab"));
 
             WebhookSetupResult result = webhookService.registerWebhook(workspace);
 
-            assertThat(result.webhookId()).isEqualTo(77L);
-            assertThat(registered).isEmpty();
-            verify(webhookClient, never()).deregisterGroupWebhook(anyLong(), anyLong(), anyLong());
+            assertThat(result.webhookId()).isEqualTo(100L);
+            assertThat(registered).hasSize(1);
         }
 
         @Test
@@ -331,11 +345,8 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
             WebhookSetupResult result = service(rotating).registerWebhook(workspace);
 
             assertThat(result.webhookId()).isEqualTo(100L);
-            assertThat(hooks).extracting(WebhookInfo::url).containsExactly(connectionUrl(rotating));
-            InOrder order = inOrder(webhookClient, connectionService);
-            order.verify(webhookClient).registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class));
-            order.verify(connectionService).updateConfig(eq(1L), eq(IntegrationKind.GITLAB), any());
-            order.verify(webhookClient).deregisterGroupWebhook(1L, 42L, 99L);
+            assertThat(hooks).extracting(WebhookInfo::id).containsExactlyInAnyOrder(99L, 100L);
+            verify(repairs).retireCurrentHook(1L, CONNECTION_ID);
         }
 
         @Test
@@ -350,7 +361,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
             WebhookSetupResult result = webhookService.registerWebhook(workspace);
 
             assertThat(result.webhookId()).isEqualTo(100L);
-            assertThat(hooks).extracting(WebhookInfo::url).containsExactly(connectionUrl(routeCredential));
+            assertThat(hooks).extracting(WebhookInfo::id).containsExactlyInAnyOrder(99L, 100L);
         }
 
         @Test
@@ -384,13 +395,12 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
             assertThat(result.registered()).isFalse();
             assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(555L);
-            verify(webhookClient, never()).deregisterGroupWebhook(anyLong(), anyLong(), anyLong());
         }
 
         @Test
         void shouldKeepTheHookAConcurrentRegistrationOfTheSameRouteRecordedWhenItsOwnRecordLoses() {
             storeHook(99L, API_ORIGIN + "/webhooks/gitlab");
-            when(connectionService.updateConfig(eq(1L), eq(IntegrationKind.GITLAB), any()))
+            when(repairs.completeRegistration(eq(1L), eq(CONNECTION_ID), any(), any()))
                     .thenAnswer(inv -> {
                         // The other registration adopted the same hook and recorded it first; this write conflicts.
                         bindGitLabConfig(1L, currentConfig(1L).withGitlabWebhookId(100L));
@@ -402,11 +412,10 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
             assertThat(result.registered()).isFalse();
             assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(100L);
             assertThat(hooks).extracting(WebhookInfo::id).containsExactlyInAnyOrder(99L, 100L);
-            verify(webhookClient, never()).deregisterGroupWebhook(anyLong(), anyLong(), anyLong());
         }
 
         @Test
-        void shouldKeepOneHookWhenConcurrentRegistrationsOfOneRouteRace() {
+        void shouldRecordOneReturnedHookWithoutBlindDuplicateDeletion() {
             when(webhookClient.registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class)))
                     .thenAnswer(inv -> {
                         WebhookConfig config = inv.getArgument(2);
@@ -420,7 +429,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
             WebhookSetupResult result = webhookService.registerWebhook(workspace);
 
             assertThat(result.webhookId()).isEqualTo(100L);
-            assertThat(hooks).extracting(WebhookInfo::id).containsExactly(100L);
+            assertThat(hooks).extracting(WebhookInfo::id).containsExactlyInAnyOrder(100L, 101L);
             assertThat(routeCredential.issue(ROUTE).token())
                     .isEqualTo(registered.getFirst().token());
         }
@@ -525,6 +534,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                     new GitLabRouteCredential(unconfigured),
                     workspaceRepository,
                     connectionService,
+                    mock(ProviderResourceRepairs.class),
                     tokenLifecycle);
 
             WebhookSetupResult result = service.registerWebhook(workspace);
@@ -575,7 +585,6 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
             webhookService.checkWebhookHealth();
 
-            verify(webhookClient, never()).deregisterGroupWebhook(anyLong(), anyLong(), anyLong());
             verify(webhookClient, never()).registerGroupWebhook(anyLong(), anyLong(), any());
             assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(99L);
         }
@@ -588,7 +597,8 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
             webhookService.checkWebhookHealth();
 
-            assertThat(hooks).extracting(WebhookInfo::url).containsExactlyInAnyOrder(previous, canonical);
+            assertThat(hooks).extracting(WebhookInfo::id).containsExactlyInAnyOrder(99L, 100L);
+            assertThat(registered.getFirst().url()).startsWith(canonical + "?hephaestus_resource=");
             assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(100L);
         }
 
@@ -602,7 +612,7 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
             // The disabled hook is deleted first so registerWebhook's adopt-by-URL step can't re-adopt it,
             // then a fresh hook is registered and its id persisted.
-            verify(webhookClient).deregisterGroupWebhook(1L, 42L, 99L);
+            verify(repairs).retireCurrentHook(1L, CONNECTION_ID);
             verify(webhookClient).registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class));
             assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(100L);
         }
@@ -613,7 +623,6 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
             webhookService.checkWebhookHealth();
 
-            verify(webhookClient, never()).deregisterGroupWebhook(1L, 42L, 99L);
             assertThat(hooks).extracting(WebhookInfo::id).containsExactlyInAnyOrder(99L, 100L);
             assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(100L);
         }
@@ -626,7 +635,6 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
 
             webhookService.checkWebhookHealth();
 
-            verify(webhookClient, never()).deregisterGroupWebhook(anyLong(), anyLong(), anyLong());
             verify(webhookClient).registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class));
             assertThat(hooks).extracting(WebhookInfo::id).containsExactlyInAnyOrder(99L, 100L);
             assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(100L);
@@ -640,7 +648,6 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
             webhookService.checkWebhookHealth();
 
             // Nothing to delete for a row that's already gone; a fresh hook is registered.
-            verify(webhookClient, never()).deregisterGroupWebhook(anyLong(), anyLong(), anyLong());
             verify(webhookClient).registerGroupWebhook(eq(1L), eq(42L), any(WebhookConfig.class));
             assertThat(currentConfig(1L).gitlabWebhookId()).isEqualTo(100L);
         }

@@ -264,3 +264,10 @@ A successful upgrade does not qualify throughput or recovery time.
 
 Follow the [provider event inbox cutover](./webhook-ingestion-operations.mdx) before you start 1.0.
 Use the provider inbox cutover procedure before starting the new server.
+
+## Stop every role before the provider resource repair upgrade
+
+Stop every server before the migration, then deploy the matching release.
+The old server cannot write the required authorization binding columns.
+Pending OAuth requests must restart after this upgrade.
+[Integration administration](./integrations.mdx#confirm-a-provider-removal) describes the removal review and instance-admin release.

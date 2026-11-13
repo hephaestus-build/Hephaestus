@@ -7,11 +7,13 @@ import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Level;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService.StateBinding;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
 import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -302,7 +304,15 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
         private final Map<String, Boolean> consumed = new ConcurrentHashMap<>();
 
         InMemoryNonceStore() {
-            super(mock(OAuthStateNonceRepository.class));
+            super(
+                    mock(OAuthStateNonceRepository.class),
+                    mock(ConnectionRepository.class),
+                    mock(WorkspaceRepository.class));
+        }
+
+        @Override
+        public OAuthStateService.StateBinding boundAttempt(String nonce, OAuthStateService.StateBinding verified) {
+            return verified;
         }
 
         @Override

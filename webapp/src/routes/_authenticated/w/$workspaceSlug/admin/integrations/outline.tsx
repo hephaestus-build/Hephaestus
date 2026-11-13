@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
+import { WorkspaceProviderRepairs } from "@/routes/_authenticated/-provider-repairs";
 
 import { ConnectionStateNotice } from "@/components/admin/integrations/ConnectionStateNotice";
 import { IntegrationCardHeading } from "@/components/admin/integrations/IntegrationCardHeading";
@@ -18,6 +20,9 @@ import { workspaceAdminHead } from "@/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/integrations/outline")(
 	{
+		validateSearch: z.object({
+			repairConnection: z.number().int().positive().optional().catch(undefined),
+		}),
 		head: workspaceAdminHead("Outline"),
 		remountDeps: ({ params }) => params.workspaceSlug,
 		component: OutlineIntegrationPage,
@@ -27,6 +32,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/int
 function OutlineIntegrationPage() {
 	const { workspaceSlug: slug } = Route.useParams();
 	const outline = useOutlineIntegration(slug);
+	const repairId = Route.useSearch().repairConnection ?? outline.repairConnectionId;
 	const { connectionId, hasConnection } = outline;
 
 	return (
@@ -87,6 +93,13 @@ function OutlineIntegrationPage() {
 			)}
 
 			{hasConnection && <JobHistoryCard {...outline.jobHistoryProps} />}
+			{typeof repairId === "number" && (
+				<WorkspaceProviderRepairs
+					key={`${slug}/${repairId}`}
+					workspaceSlug={slug}
+					connectionId={repairId}
+				/>
+			)}
 		</PageLayout>
 	);
 }

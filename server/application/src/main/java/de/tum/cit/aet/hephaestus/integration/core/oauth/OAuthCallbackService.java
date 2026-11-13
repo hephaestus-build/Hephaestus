@@ -10,14 +10,15 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
+import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService.StateBinding;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy.ConnectFinalization;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.EnumSet;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -72,6 +73,7 @@ public class OAuthCallbackService {
 
     private final ConnectionRepository connectionRepository;
     private final ConnectionService connectionService;
+    private final ProviderResourceRepairs repairs;
     private final WorkspaceRepository workspaceRepository;
     private final CredentialBundleConverter credentialBundleConverter;
     private final AccountMembershipQuery membershipQuery;
@@ -90,7 +92,9 @@ public class OAuthCallbackService {
             WorkspaceRepository workspaceRepository,
             CredentialBundleConverter credentialBundleConverter,
             AccountMembershipQuery membershipQuery,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            ProviderResourceRepairs repairs) {
+        this.repairs = repairs;
         this.connectionRepository = connectionRepository;
         this.connectionService = connectionService;
         this.workspaceRepository = workspaceRepository;
@@ -99,31 +103,16 @@ public class OAuthCallbackService {
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
-    /**
-     * Resolve the Connection row that the in-flight OAuth should bind to. Look up an
-     * existing PENDING row first; fall back to ACTIVE (credential refresh on reconnect);
-     * create a fresh PENDING row only if neither exists. UNINSTALLED rows are
-     * intentionally NOT reused — they're terminal; a new row is correct.
-     */
-    @Transactional
-    public Connection findOrCreatePendingConnection(long workspaceId, IntegrationKind kind) {
-        Optional<Connection> pending = connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                workspaceId, kind, IntegrationState.PENDING);
-        if (pending.isPresent()) {
-            return pending.get();
+    @Transactional(readOnly = true)
+    public Connection findAttemptConnection(StateBinding binding) {
+        Connection owner = connectionRepository
+                .findByIdAndWorkspaceId(binding.connectionId(), binding.workspaceId())
+                .orElseThrow(() ->
+                        new IllegalStateException("This connection request was superseded. Start a new connection."));
+        if (owner.getKind() != binding.kind() || owner.getLifecycleGeneration() != binding.lifecycleGeneration()) {
+            throw new IllegalStateException("This connection request was superseded. Start a new connection.");
         }
-        Optional<Connection> active = connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                workspaceId, kind, IntegrationState.ACTIVE);
-        if (active.isPresent()) {
-            return active.get();
-        }
-        Workspace workspace = workspaceRepository
-                .findById(workspaceId)
-                .orElseThrow(
-                        () -> new EntityNotFoundException(
-                                "We could not find that workspace. It may have been deleted. Reload the page to see what is current."));
-        Connection fresh = new Connection(workspace, kind, /* instanceKey */ null, defaultConfig(kind));
-        return connectionRepository.save(fresh);
+        return owner;
     }
 
     /**
@@ -150,14 +139,29 @@ public class OAuthCallbackService {
             String conflict = connectedElsewhere(
                             pending.getKind(), pending.getWorkspace().getId(), completed.instanceKey(), actorAccountId)
                     .orElseThrow(() -> e);
+            recordAbandoned(pending, completed);
             throw new InstanceConnectedElsewhereException(conflict, e);
+        } catch (RuntimeException rejected) {
+            recordAbandoned(pending, completed);
+            throw rejected;
         }
+    }
+
+    private void recordAbandoned(Connection pending, ConnectFinalization.Completed completed) {
+        repairs.observeAbandonedOAuth(
+                new IntegrationRef(
+                        pending.getKind(), pending.getWorkspace().getId(), completed.instanceKey(), pending.getId()),
+                completed.config() == null ? pending.getConfig() : completed.config(),
+                completed.credentials());
     }
 
     private Connection complete(
             Connection pending, ConnectFinalization.Completed completed, @Nullable Long actorAccountId) {
-        Connection connection = resolveCompletionTarget(pending, completed, actorAccountId);
-        deleteSupersededPending(pending, connection);
+        Connection current = repairs.prepareCredentialCompletion(
+                pending,
+                completed.config() == null ? pending.getConfig() : completed.config(),
+                completed.credentials());
+        Connection connection = resolveCompletionTarget(current, completed, actorAccountId);
         applyVendorMetadata(connection, completed);
         connection.setCredentials(completed.credentials(), credentialBundleConverter);
         connection = connectionRepository.save(connection);
@@ -200,10 +204,23 @@ public class OAuthCallbackService {
         if (conflict.isPresent()) {
             throw new InstanceConnectedElsewhereException(conflict.get(), null);
         }
-        return connectionRepository
-                .findByWorkspaceIdAndKindAndInstanceKey(workspaceId, connection.getKind(), instanceKey)
-                .filter(existing -> !Objects.equals(existing.getId(), connection.getId()))
-                .orElse(connection);
+        var existing = connectionRepository.findByWorkspaceIdAndKindAndInstanceKey(
+                workspaceId, connection.getKind(), instanceKey);
+        if (existing.isPresent() && !Objects.equals(existing.get().getId(), connection.getId())) {
+            throw new IllegalStateException(
+                    "This authorization does not belong to that connection. Start the connection again.");
+        }
+        if (connection.getInstanceKey() == null || instanceKey.equals(connection.getInstanceKey())) return connection;
+        if (connection.getState() != IntegrationState.UNINSTALLED) {
+            throw new IllegalStateException(
+                    "Disconnect the current connection before connecting a different provider instance.");
+        }
+        // A new resource gets a new row. This authorization can never revive a different historical row.
+        return connectionRepository.save(new Connection(
+                connection.getWorkspace(),
+                connection.getKind(),
+                instanceKey,
+                completed.config() == null ? connection.getConfig() : completed.config()));
     }
 
     /**
@@ -215,18 +232,6 @@ public class OAuthCallbackService {
         ExclusiveInstance exclusive = EXCLUSIVE_INSTANCES.get(kind);
         if (exclusive == null) {
             return Optional.empty();
-        }
-        // A disconnect elsewhere may still revoke this token or installation; connecting now would receive a dead one.
-        if (connectionRepository.existsByKindAndInstanceKeyAndProviderTeardownRequestedAtNotNullAndWorkspace_IdNot(
-                kind, instanceKey, workspaceId)) {
-            log.warn(
-                    "Rejected {} connect: instanceKey={} is still being disconnected elsewhere, target workspace={}",
-                    kind,
-                    sanitizeForLog(instanceKey),
-                    workspaceId);
-            return Optional.of("Another Hephaestus workspace is still disconnecting this "
-                    + exclusive.noun()
-                    + ". Try again in a few minutes.");
         }
         return connectionRepository
                 .findAllByKindAndInstanceKeyAndStateIn(kind, instanceKey, exclusive.holdingStates())
@@ -267,31 +272,6 @@ public class OAuthCallbackService {
         return membershipQuery.isAdministrator(workspaceId, actorAccountId);
     }
 
-    private void deleteSupersededPending(Connection original, Connection target) {
-        if (Objects.equals(original.getId(), target.getId())) {
-            return;
-        }
-        if (original.getState() != IntegrationState.PENDING || original.getInstanceKey() != null) {
-            return;
-        }
-        connectionRepository.delete(original);
-    }
-
-    /**
-     * Per-kind empty config seed for newly-created PENDING rows. The strategy's
-     * {@code finalizeConnect} may upgrade the config later — we just need a non-null
-     * config so JPA doesn't reject the INSERT.
-     */
-    private static ConnectionConfig defaultConfig(IntegrationKind kind) {
-        return switch (kind) {
-            case GITHUB -> new ConnectionConfig.GitHubAppConfig(null, null, null, new HashSet<>());
-            case GITLAB ->
-                throw new IllegalArgumentException("Create a GitLab workspace to connect its verified group.");
-            case SLACK -> new ConnectionConfig.SlackConfig(null, null, null, new HashSet<>());
-            case OUTLINE -> new ConnectionConfig.OutlineConfig(null, null, null, new HashSet<>());
-        };
-    }
-
     private static void applyVendorMetadata(Connection connection, ConnectFinalization.Completed completed) {
         if (completed.instanceKey() != null) {
             connection.bindInstanceKey(completed.instanceKey());
@@ -318,7 +298,12 @@ public class OAuthCallbackService {
                 && refreshed.teamId() != null
                 && refreshed.teamId().equals(current.teamId())) {
             return new ConnectionConfig.SlackConfig(
-                    refreshed.teamId(), refreshed.teamName(), current.retentionDays(), current.enabledStreams());
+                    refreshed.teamId(),
+                    refreshed.botUserId(),
+                    refreshed.botTokenFingerprint(),
+                    refreshed.teamName(),
+                    current.retentionDays(),
+                    current.enabledStreams());
         }
         return vendor;
     }

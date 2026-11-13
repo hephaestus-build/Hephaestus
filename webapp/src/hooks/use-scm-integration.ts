@@ -75,10 +75,11 @@ export function useScmIntegration(workspaceSlug: string) {
 	const hasConnection = entry?.connected === true;
 	const isConnectionActive = entry?.connectionState === "ACTIVE";
 	const canReconnectGitLab = isDisconnectedGitLab(entry);
+	const repairConnectionId = entry?.connectionId;
 	const connectionId = hasConnection ? entry.connectionId : undefined;
 
 	const connectionQueryOptions = readOptions({
-		path: { workspaceSlug, id: entry?.connectionId ?? -1 },
+		path: { workspaceSlug, id: repairConnectionId ?? -1 },
 	});
 	const connectionQuery = useQuery({
 		...connectionQueryOptions,
@@ -242,6 +243,8 @@ export function useScmIntegration(workspaceSlug: string) {
 	};
 
 	return {
+		repairConnectionId,
+		connectionId,
 		kind,
 		label,
 		isAppInstallationWorkspace,

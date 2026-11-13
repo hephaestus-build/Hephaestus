@@ -38,7 +38,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
@@ -396,10 +395,5 @@ class ConnectionControllerTest extends BaseUnitTest {
 
         @Override
         public void eraseLocalData(IntegrationRef ref) {}
-
-        @Override
-        public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref, ProviderFootprint footprint) {
-            return Optional.empty();
-        }
     }
 }

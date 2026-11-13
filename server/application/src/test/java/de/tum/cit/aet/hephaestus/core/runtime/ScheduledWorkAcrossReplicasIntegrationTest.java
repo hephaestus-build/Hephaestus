@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.agent.handler.AgentHandlerTestDoubles;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateNonceCleanupJob;
+import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateNonceStore;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubWebhookRedelivery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
@@ -12,6 +14,8 @@ import de.tum.cit.aet.hephaestus.testconfig.SharedTestDoubles;
 import de.tum.cit.aet.hephaestus.testconfig.StubInstallationRepositoryEnumerator;
 import de.tum.cit.aet.hephaestus.testconfig.TestAsyncConfiguration;
 import de.tum.cit.aet.hephaestus.testconfig.TestSecurityConfig;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -40,6 +44,12 @@ import org.springframework.scheduling.support.ScheduledMethodRunnable;
  * the other replica.
  */
 class ScheduledWorkAcrossReplicasIntegrationTest extends BaseIntegrationTest {
+
+    @Autowired
+    private OAuthStateNonceStore nonces;
+
+    @Autowired
+    private WorkspaceRepository workspaces;
 
     private static ConfigurableApplicationContext secondReplica;
 
@@ -143,10 +153,13 @@ class ScheduledWorkAcrossReplicasIntegrationTest extends BaseIntegrationTest {
         try {
             jdbc.update("DELETE FROM shedlock WHERE name = ?", name);
             // Far past any retention, so the job deletes it whenever its body runs.
-            jdbc.update(
-                    "INSERT INTO oauth_state_nonce (nonce, workspace_id, kind, issued_at)"
-                            + " VALUES (?, 0, 'GITHUB', now() - interval '10 years')",
-                    nonce);
+            var workspace = workspaces.save(WorkspaceTestFixtures.activeWorkspace(
+                    "nonce-job-" + UUID.randomUUID().toString().substring(0, 8)));
+            nonces.issue(
+                    nonce,
+                    workspace.getId(),
+                    IntegrationKind.GITHUB,
+                    Instant.now().minus(Duration.ofDays(3650)));
             SimpleLock held = secondLocks
                     .lock(new LockConfiguration(Instant.now(), name, Duration.ofMinutes(1), Duration.ZERO))
                     .orElseThrow();

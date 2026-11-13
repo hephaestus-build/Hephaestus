@@ -87,20 +87,35 @@ The self-service account export is a separate, narrower operation. Self-service 
 | Container logs and support bundles | Operational output. Logging policy excludes raw request bodies, model output, sandbox transcripts and secrets. Lines still carry identifiers: Hephaestus account and user ids, and the provider's numeric account ids, which the provider can map to a person. They carry no provider logins and no email addresses, but they can carry library exception text, so operators must assess exported bundles | No selective deletion | No selective deletion | Shipped container logs rotate by size ([Collecting logs](../monitoring.md#collect-logs)). Support-bundle retention is deployment-specific. |
 | PostgreSQL and filesystem backups | A copy of the backed-up personal-data corpus | No selective deletion inside a backup | Expiry of the backup copy | The optional encrypted off-host PostgreSQL backup overlay retains full backup chains by count, not by a legal time limit. Operators must document and enforce destination retention, including copies of `.env` and inbox evidence. See [backup and restore](../backup-restore.mdx). |
 
-## Provider resource fence identifiers
+## Security retention
 
-[ADR 0101](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0101-a-connection-cannot-adopt-an-upstream-resource-whose-removal-is-unresolved.md) requires this retention policy. The follow-up implementation must add its store, catalog ownership and executable tests before it stores these identifiers.
+`provider_resource_repair` holds pseudonymous personal identifiers under [ADR 0101](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0101-a-connection-cannot-adopt-an-upstream-resource-whose-removal-is-unresolved.md).
+It holds the provider origin, resource identifiers, an ownership fingerprint and repair state.
+A Slack token fingerprint is a domain-separated, unkeyed SHA-256 value, not the token.
+A GitHub installation on a personal account can identify that person.
 
-| Property | Required treatment |
-| --- | --- |
-| Data classification | Pseudonymous personal identifiers: provider origin, App/group/team/bot/resource IDs, token fingerprint and minimal repair state. A GitHub installation on a user account can identify that person. Removing local pointers does not make the identifiers anonymous. |
-| Purpose | Integrity and security: prevent a delayed removal or retry from destroying an active replacement or another owner's resource. No use for practice feedback, tracking people or restoring erased work. |
-| Legal basis | GDPR Article 6(1)(f), legitimate interests in integrity and security, with the operator's documented necessity and balancing assessment. Recital 49 addresses information security. For official public tasks, the operator must document the applicable Article 6 basis instead. Article 6(1)(f) does not apply to that processing. |
-| Erasure independence | Erase credentials, payloads and scoped references on their existing deadlines. A retained fence has no workspace or person pointers, raw token or signed callback URL. It remains pseudonymous personal data. |
-| Deletion trigger | Delete the retained identity when the fence resolves or an instance admin releases it after out-of-band confirmation that the old resource is gone. A deadline alone does not release it. |
-| Indefinite case and access | An unresolved fence can remain indefinitely. Keep it visible to instance admins even after its connection/workspace is gone, so it can be reviewed and released. Release is audited. A bound connection's administration console shows the result. Workspace-only roles cannot release it. |
+| Table | Purpose | Legal basis | Deletion trigger | Deletion proof |
+| --- | --- | --- | --- | --- |
+| `provider_resource_repair` | Protect the integrity of adopted resources against unresolved provider removals | Legitimate interest in integrity and security, GDPR Art. 6(1)(f) | Delete when the fence resolves or an instance admin releases it | `server/application/src/test/java/de/tum/cit/aet/hephaestus/integration/core/connection/repair/ProviderResourceRepairDeletionIntegrationTest.java` |
 
-The legal-basis record follows [GDPR Article 6 and Recital 49](https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng). Its pseudonymous classification follows Recital 26. The identifier is not treated as anonymous merely because the local person link is absent.
+These identifiers have no workspace or person pointer.
+They cannot select a person's records for export or erasure.
+A data subject response must explain this retention purpose, legal basis and deletion trigger.
+The operator must document necessity and balancing before it relies on Article 6(1)(f).
+A public authority that processes data for its official tasks must identify its applicable Article 6 basis instead.
+See [GDPR Article 6 and Recital 49](https://eur-lex.europa.eu/eli/reg/2016/679/oj).
+
+An unresolved fence can remain indefinitely.
+It stays visible to instance admins, including after its connection or workspace is deleted.
+An instance admin can confirm out of band that the old resource is gone, then release the exact fence.
+The confirmation and release are audited. The audit does not copy the provider identifier.
+A workspace-only role cannot release a fence.
+
+`connection_provider_repair` holds the workspace authorization reference.
+It has no credential, provider payload or signed callback URL.
+Workspace and connection deletion cascade to these references, without deleting the unresolved security identity.
+Credential erasure keeps its existing deadlines.
+[Connection repair](../integrations.mdx) describes the admin action.
 
 ## Operator verification
 

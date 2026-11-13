@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,7 +18,6 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 /**
@@ -140,57 +138,22 @@ public class GitLabWebhookClient {
         return new WebhookInfo(webhookId, Objects.requireNonNull(url), (String) responseBody.get("alert_status"));
     }
 
-    /**
-     * Deregisters a group-level webhook. Silently succeeds if the webhook was already deleted (404).
-     *
-     * @param scopeId   the workspace/scope ID
-     * @param groupId   the numeric group ID
-     * @param webhookId the webhook ID to delete
-     */
-    public void deregisterGroupWebhook(Long scopeId, long groupId, long webhookId) {
-        deregisterGroupWebhook(resolveCredentials(scopeId), scopeId, groupId, webhookId);
-    }
-
-    public void deregisterGroupWebhookWithCredentials(String serverUrl, String token, long groupId, long webhookId) {
-        deregisterGroupWebhook(new ScopeCredentials(serverUrl, token), null, groupId, webhookId);
-    }
-
-    private void deregisterGroupWebhook(
-            ScopeCredentials credentials, @Nullable Long scopeId, long groupId, long webhookId) {
-        deleteGroupWebhook(credentials, scopeId, groupId, webhookId).block(REQUEST_TIMEOUT);
-    }
-
-    private Mono<Void> deleteGroupWebhook(
-            ScopeCredentials credentials, @Nullable Long scopeId, long groupId, long webhookId) {
-        return Mono.defer(() -> webClient
-                        .delete()
-                        .uri(credentials.serverUrl() + "/api/v4/groups/{groupId}/hooks/{hookId}", groupId, webhookId)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + credentials.token())
-                        .attributes(attributes -> {
-                            if (scopeId != null)
-                                attributes.put(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE, scopeId);
-                        })
-                        .retrieve()
-                        .toBodilessEntity()
-                        .then())
-                .onErrorResume(
-                        WebClientResponseException.class,
-                        failure -> failure.getStatusCode().value() == 404 ? Mono.empty() : Mono.error(failure));
-    }
-
-    /** Lists, removes and verifies this connection's hooks under one bounded request deadline. */
-    public void removeGroupWebhooksWithCredentials(
-            String serverUrl, String token, long groupId, Predicate<WebhookInfo> owned) {
-        var credentials = new ScopeCredentials(serverUrl, token);
-        groupHooks(credentials, groupId)
-                .flatMapMany(Flux::fromIterable)
-                .filter(owned)
-                .concatMap(hook -> deleteGroupWebhook(credentials, null, groupId, hook.id()))
-                .then(Mono.defer(() -> groupHooks(credentials, groupId)))
-                .flatMap(remaining -> remaining.stream().anyMatch(owned)
-                        ? Mono.error(new IllegalStateException("GitLab still lists a connection webhook"))
-                        : Mono.empty())
+    public boolean deregisterGroupWebhookWithCredentials(String serverUrl, String token, long groupId, long webhookId) {
+        var response = webClient
+                .delete()
+                .uri(serverUrl + "/api/v4/groups/{groupId}/hooks/{hookId}", groupId, webhookId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .retrieve()
+                .toBodilessEntity()
                 .block(REQUEST_TIMEOUT);
+        // The group-hook API documents 204 as completed deletion; a 202 is only acceptance. Hidden 404 propagates.
+        return Objects.requireNonNull(response).getStatusCode().value() == 204;
+    }
+
+    /** Complete, authorized group-hook listing with the captured credential, independent of resumed configuration. */
+    public List<WebhookInfo> listGroupWebhooksWithCredentials(String serverUrl, String token, long groupId) {
+        return Objects.requireNonNull(
+                groupHooks(new ScopeCredentials(serverUrl, token), groupId).block(REQUEST_TIMEOUT));
     }
 
     private record HookPage(List<WebhookInfo> hooks, int next) {}

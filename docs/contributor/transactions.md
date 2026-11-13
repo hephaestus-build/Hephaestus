@@ -42,7 +42,8 @@ Spring: "self-invocation (in effect, a method within the target object calling a
 - Use this sequence: read in a short transaction, call with no transaction, then write in a short transaction.
   The write checks the state again with a row lock or a compare-and-set.
 - If a row lock must stay across a call, record the reason in an ADR.
-  `GitLabTokenLifecycleService` and `ProviderTeardown` hold such a lock.
+  `GitLabTokenLifecycleService` holds such a lock.
+  Provider removal uses the separate capture, dispatch and settle transactions in [ADR 0101](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0101-a-connection-cannot-adopt-an-upstream-resource-whose-removal-is-unresolved.md).
 - `LlmCallPermits` refuses a model call that starts in a transaction.
 - `database_transaction_http_requests_total` counts the HTTP requests that start in a transaction, by boundary.
   It shows which boundaries still break this rule.

@@ -104,11 +104,18 @@ public class Connection {
 
     // Changes whenever the stored credential value changes, never on key rotation, so a pending provider teardown
     // can tell its own credential from one that a reconnect stored later.
+    @Column(name = "lifecycle_generation", nullable = false)
+    @ColumnDefault("0")
+    private long lifecycleGeneration;
+
     @Column(name = "credentials_generation", nullable = false)
     @ColumnDefault("0")
     private long credentialsGeneration;
 
     // Set by a disconnect that left a credential, an installation or a webhook at the provider; cleared once removed.
+    @Column(name = "provider_repair_capture_generation")
+    private @Nullable Long providerRepairCaptureGeneration;
+
     @Column(name = "provider_teardown_requested_at")
     private @Nullable Instant providerTeardownRequestedAt;
 
@@ -263,6 +270,7 @@ public class Connection {
     }
 
     public void setState(IntegrationState state) {
+        if (this.state != state) lifecycleGeneration++;
         this.state = state;
     }
 
@@ -307,10 +315,22 @@ public class Connection {
         this.credentialsGeneration++;
     }
 
-    /** A reconnect of this connection uses what it left at the provider again, so nothing is owed there any more. */
-    void adoptProviderFootprint() {
+    void finishProviderCredentialRetention() {
         this.providerTeardownRequestedAt = null;
-        this.credentialsGeneration++;
+    }
+
+    public void markProviderRepairCaptured() {
+        this.providerRepairCaptureGeneration = credentialsGeneration;
+    }
+
+    public boolean providerRepairWasCaptured() {
+        return Objects.equals(providerRepairCaptureGeneration, credentialsGeneration);
+    }
+
+    public void detachProviderWebhook() {
+        if (config instanceof ConnectionConfig.GitLabConfig gitlab) setConfig(gitlab.withGitlabWebhookId(null));
+        else if (config instanceof ConnectionConfig.OutlineConfig outline)
+            setConfig(outline.withWebhookSubscription(null, null));
     }
 
     public @Nullable Instant getProviderTeardownRequestedAt() {
@@ -321,11 +341,7 @@ public class Connection {
     void releaseProviderFootprint(CredentialBundleConverter converter) {
         this.providerTeardownRequestedAt = null;
         setCredentials(null, converter);
-        if (config instanceof ConnectionConfig.GitLabConfig gitLabConfig) {
-            setConfig(gitLabConfig.withGitlabWebhookId(null));
-        } else if (config instanceof ConnectionConfig.OutlineConfig outlineConfig) {
-            setConfig(outlineConfig.withWebhookSubscription(null, null));
-        }
+        detachProviderWebhook();
     }
 
     /** Re-encrypts the same credential under the active key; the stored value and its generation stay. */
@@ -334,6 +350,10 @@ public class Connection {
         this.credentialsAlg = CredentialBundleConverter.ALGORITHM_TAG;
         this.credentialsKeyVersion = converter.activeKeyVersion();
         this.credentialsRotationFailedAt = null;
+    }
+
+    public long getLifecycleGeneration() {
+        return lifecycleGeneration;
     }
 
     public long getCredentialsGeneration() {

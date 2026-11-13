@@ -228,7 +228,7 @@ public class OAuthCallbackController {
 
         Connection connection;
         try {
-            connection = callbackService.findOrCreatePendingConnection(binding.workspaceId(), kind);
+            connection = callbackService.findAttemptConnection(binding);
         } catch (EntityNotFoundException e) {
             return failure(
                     kind.name(),
@@ -236,8 +236,16 @@ public class OAuthCallbackController {
                     "The workspace no longer exists.",
                     HttpStatus.NOT_FOUND,
                     wantsJson);
+        } catch (IllegalStateException superseded) {
+            return failure(
+                    kind.name(),
+                    "superseded",
+                    "This connection request was superseded. Start a new connection.",
+                    HttpStatus.CONFLICT,
+                    wantsJson);
         }
-        IntegrationRef ref = connection.toRef();
+        IntegrationRef ref =
+                new IntegrationRef(kind, binding.workspaceId(), connection.getInstanceKey(), connection.getId());
 
         ConnectFinalization result;
         try {

@@ -255,16 +255,42 @@ After the disconnect commits, Hephaestus removes what it created at the provider
 | Slack | The bot token, if no other Hephaestus workspace is connected to the same Slack workspace |
 | Outline | The webhook subscription. Revoke the API key in Outline. |
 
-Until the provider confirms the removal, Hephaestus keeps the encrypted credential, and nothing else can use it.
-If the provider is unreachable, Hephaestus tries again every few minutes for at most 24 hours.
-After 24 hours, it deletes the credential without the removal.
-Then the integration's page and an email to the workspace admins tell you to remove the app, token, or webhook at the provider yourself.
+A disconnected connection keeps its encrypted credential for at most 24 hours so cleanup can use it.
+Erasure can remove it earlier.
+The removal record keeps no credential, provider payload or signed callback URL.
 
-You can connect the same Slack workspace, GitHub installation or GitLab group again before the removal succeeds.
-The new connection then uses it again, and Hephaestus removes nothing.
-You can connect Outline again only after the removal ends.
-Another Hephaestus workspace cannot connect the same Slack workspace or GitHub installation until the removal ends.
-`integration_provider_teardown_total` counts each outcome (`docs/admin/observability.mdx`).
+Hephaestus records removal before sending it to the provider.
+Every retry reads the captured resource and checks its ownership before DELETE.
+A new connection cannot reuse an identity while an earlier removal can still affect it.
+
+GitLab and Outline register a fresh hook or subscription when you resume or reconnect.
+GitHub needs a distinct installation while removal is unresolved.
+Slack blocks both the exact token and its bot user: a different token for the same bot user is not enough.
+A bot token's revocation does not uninstall the Slack app.
+
+### Confirm a provider removal
+
+Each integration page has **Provider removals**.
+It shows waiting removals, missing authorization and operations that need explicit confirmation.
+Workspace admins can inspect their connection's repairs.
+Only an instance admin can release a block.
+
+1. Check at the provider that the old resource is gone and its uncertain removal can no longer affect a replacement.
+   A timeout, `202`, or later absence alone does not prove that an earlier DELETE cannot still finish.
+2. Open the connection's integration administration page.
+3. Select **Confirm removal** for the exact provider identity.
+4. Confirm that you checked at the provider, then select **Release block**.
+
+The action records the admin, connection and confirmation in the audit log.
+It does not restore erased work or resume a failed authorization flow.
+Start the connection flow again after release.
+For Slack, release a pending token removal before its related bot-user block.
+
+Instance admins can also open **Instance administration → Provider removals**.
+A repair remains there after its connection or workspace is deleted.
+Release an orphan there by its exact provider identity. Hephaestus does not restore the deleted ownership link.
+Unresolved identifiers can remain indefinitely until resolution or release.
+The [personal-data map](./dsms/personal-data-map.md#security-retention) states what is retained and why.
 
 A connection with its integration disabled instance-wide cannot disconnect until the integration is enabled again.
 Nothing else can erase its mirror.

@@ -157,6 +157,7 @@ The chart runs two servers by default.
 GitLab, Slack, and Outline each have their own adapter. A deployment syncs one configured GitLab
 instance.
 Additional login providers do not create additional GitLab sync instances.
+[Provider resource repair](./provider-resource-repair.md) owns removal dispatch and adoption fencing across these adapters.
 
 `agent` owns execution jobs and sandbox orchestration.
 `practices` owns definitions, durable reviews, assignments, results, problems and feedback.

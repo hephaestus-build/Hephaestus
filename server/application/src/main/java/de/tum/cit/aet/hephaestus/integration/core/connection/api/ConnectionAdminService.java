@@ -8,9 +8,11 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.CredentialBundle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -26,10 +28,8 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Application-layer facade for the Connection registry's admin operations. Owns all
@@ -54,6 +54,7 @@ public class ConnectionAdminService {
 
     private final ConnectionRepository connectionRepository;
     private final ConnectionService connectionService;
+    private final ProviderResourceRepairs repairs;
     private final WorkspaceRepository workspaceRepository;
     private final IntegrationManifestRegistry manifests;
     private final CredentialBundleConverter credentialConverter;
@@ -63,7 +64,9 @@ public class ConnectionAdminService {
             ConnectionService connectionService,
             WorkspaceRepository workspaceRepository,
             IntegrationManifestRegistry manifests,
-            CredentialBundleConverter credentialConverter) {
+            CredentialBundleConverter credentialConverter,
+            ProviderResourceRepairs repairs) {
+        this.repairs = repairs;
         this.connectionRepository = connectionRepository;
         this.connectionService = connectionService;
         this.workspaceRepository = workspaceRepository;
@@ -138,6 +141,7 @@ public class ConnectionAdminService {
         }
 
         ConnectionConfig config = buildConfigForInlineKind(workspaceId, kind, userInput, instanceKey);
+        repairs.requireAdoptable(new IntegrationRef(kind, workspaceId, instanceKey), config, credentials);
         // Reconnect-friendly upsert: (workspace, kind, instance_key) is unique, so a previous
         // UNINSTALLED install of the same vendor instance is revived with fresh config +
         // credentials instead of colliding — the guarded INITIATE reconnect in
@@ -145,14 +149,9 @@ public class ConnectionAdminService {
         Connection connection = connectionRepository
                 .findByWorkspaceIdAndKindAndInstanceKey(workspaceId, kind, instanceKey)
                 .map(existing -> {
-                    // The webhook and token to remove are in this row; a new config would lose them at the provider.
-                    if (existing.getProviderTeardownRequestedAt() != null && kind != IntegrationKind.GITLAB) {
-                        throw new ResponseStatusException(
-                                HttpStatus.CONFLICT,
-                                "Hephaestus is still removing the previous connection at the provider. Try again in a few minutes.");
-                    }
-                    existing.setConfig(config);
-                    return existing;
+                    Connection locked = repairs.prepareCredentialCompletion(existing, config, credentials);
+                    locked.setConfig(config);
+                    return locked;
                 })
                 .orElseGet(() -> connectionRepository.save(new Connection(workspace, kind, instanceKey, config)));
 
@@ -214,7 +213,7 @@ public class ConnectionAdminService {
                 if (!(current instanceof ConnectionConfig.GitLabConfig gitlab)) {
                     throw new IllegalStateException("The disconnected GitLab connection has no group configuration.");
                 }
-                yield gitlab.withTokenMetadata(null);
+                yield gitlab.withTokenMetadata(null).withGitlabWebhookId(null);
             }
             case SLACK ->
                 new ConnectionConfig.SlackConfig(

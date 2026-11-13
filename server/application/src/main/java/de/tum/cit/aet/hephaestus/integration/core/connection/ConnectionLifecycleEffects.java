@@ -4,23 +4,12 @@ import de.tum.cit.aet.hephaestus.core.event.AgentContextChangedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionLifecycleEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.support.TransactionTemplate;
 
 final class ConnectionLifecycleEffects {
     private final ApplicationEventPublisher eventPublisher;
-    private final TransactionTemplate providerTeardownTemplate;
 
-    ConnectionLifecycleEffects(
-            ApplicationEventPublisher eventPublisher, PlatformTransactionManager transactionManager) {
+    ConnectionLifecycleEffects(ApplicationEventPublisher eventPublisher) {
         this.eventPublisher = eventPublisher;
-        this.providerTeardownTemplate = new TransactionTemplate(transactionManager);
-        this.providerTeardownTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_NOT_SUPPORTED);
-    }
-
-    void revoke(Runnable revoke) {
-        providerTeardownTemplate.executeWithoutResult(status -> revoke.run());
     }
 
     /**

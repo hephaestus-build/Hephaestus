@@ -1798,6 +1798,7 @@ export const ConfigAuditEntryViewSchema = {
 		entityType: {
 			type: "string",
 			enum: [
+				"PROVIDER_RESOURCE_RELEASE",
 				"PRACTICE_REVIEW_SETTINGS",
 				"AGENT_BINDING",
 				"AGENT_CONFIG",
@@ -6652,6 +6653,40 @@ export const OffsetPageDTOProfileReviewSchema = {
 	required: ["content", "page", "size", "totalElements", "totalPages"],
 } as const;
 
+export const OffsetPageDTOProviderResourceRepairSchema = {
+	type: "object",
+	description: "One numbered page of a list",
+	properties: {
+		content: {
+			type: "array",
+			items: {
+				$ref: "#/components/schemas/ProviderResourceRepair",
+			},
+		},
+		page: {
+			type: "integer",
+			format: "int32",
+			description: "This page's number, from 0",
+		},
+		size: {
+			type: "integer",
+			format: "int32",
+			description: "The most rows a page holds",
+		},
+		totalElements: {
+			type: "integer",
+			format: "int64",
+			description: "Rows in the whole list",
+		},
+		totalPages: {
+			type: "integer",
+			format: "int32",
+			description: "Pages in the whole list",
+		},
+	},
+	required: ["content", "page", "size", "totalElements", "totalPages"],
+} as const;
+
 export const OffsetPageDTOResultListSchema = {
 	type: "object",
 	description: "One numbered page of a list",
@@ -7351,6 +7386,20 @@ export const OwnItemTraceSchema = {
 		},
 	},
 	required: ["events", "item", "results", "review"],
+} as const;
+
+export const OwnerSchema = {
+	type: "object",
+	properties: {
+		connectionId: {
+			type: "integer",
+			format: "int64",
+		},
+		workspaceSlug: {
+			type: "string",
+		},
+	},
+	required: ["connectionId", "workspaceSlug"],
 } as const;
 
 export const PasskeyCredentialSchema = {
@@ -9539,6 +9588,76 @@ export const ProviderIdentityRefSchema = {
 	required: ["avatarUrl", "displayName", "login", "provider"],
 } as const;
 
+export const ProviderResourceRepairSchema = {
+	type: "object",
+	description:
+		"A repair's provider identity is pseudonymous security data, never an authorization credential.",
+	properties: {
+		createdAt: {
+			type: "string",
+			format: "date-time",
+		},
+		id: {
+			type: "string",
+			format: "uuid",
+		},
+		identityHash: {
+			type: "string",
+		},
+		kind: {
+			type: "string",
+			enum: ["GITHUB", "GITLAB", "SLACK", "OUTLINE"],
+		},
+		origin: {
+			type: "string",
+		},
+		owners: {
+			type: "array",
+			items: {
+				$ref: "#/components/schemas/Owner",
+			},
+		},
+		parentId: {
+			type: "string",
+		},
+		replacementInUse: {
+			type: "boolean",
+		},
+		resourceId: {
+			type: "string",
+		},
+		resourceType: {
+			type: "string",
+			enum: ["INSTALLATION", "GROUP_HOOK", "BOT_TOKEN", "BOT_USER", "SUBSCRIPTION", "REGISTRATION"],
+		},
+		state: {
+			type: "string",
+			enum: [
+				"REGISTERING",
+				"PENDING",
+				"CHECKING",
+				"DISPATCHING",
+				"AWAITING_CONFIRMATION",
+				"NEEDS_AUTHORIZATION",
+				"CONFIRMATION_REQUIRED",
+			],
+		},
+	},
+	required: [
+		"createdAt",
+		"id",
+		"identityHash",
+		"kind",
+		"origin",
+		"owners",
+		"parentId",
+		"replacementInUse",
+		"resourceId",
+		"resourceType",
+		"state",
+	],
+} as const;
+
 export const PublicActivitySchema = {
 	type: "object",
 	description:
@@ -10172,6 +10291,20 @@ export const RegisterSlackChannelRequestSchema = {
 		},
 	},
 	required: ["slackChannelId"],
+} as const;
+
+export const ReleaseProviderResourceRepairRequestSchema = {
+	type: "object",
+	properties: {
+		confirmedGone: {
+			type: "boolean",
+		},
+		identityHash: {
+			type: "string",
+			pattern: "[a-f0-9]{64}",
+		},
+	},
+	required: ["confirmedGone", "identityHash"],
 } as const;
 
 export const ReleaseResearchDatasetSchema = {

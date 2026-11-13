@@ -104,6 +104,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
 
     // Package-private so WorkspaceScopedTablesParityTest can compare it with the production allowlist.
     static final Set<String> GLOBAL_ENTITIES = Set.of(
+            "ProviderResourceRepair", // ADR 0101: security retention survives removal of every scoped owner
             "User", // Users can belong to multiple workspaces
             "CommitIdentityChange", // Numeric record of corrected links on shared commit rows
             "NotificationSubscription", // Native account email preferences span workspaces and are erased with that

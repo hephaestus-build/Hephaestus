@@ -87,7 +87,7 @@ class GitHubOAuthCallbackIntegrationTest extends AbstractWorkspaceIntegrationTes
         assertThat(connection.getInstanceKey()).isEqualTo(Long.toString(installationId));
         assertThat(connection.getDisplayName()).isEqualTo("acme");
         assertThat(connection.getConfig())
-                .isEqualTo(new ConnectionConfig.GitHubAppConfig(installationId, "acme", null, Set.of()));
+                .isEqualTo(new ConnectionConfig.GitHubAppConfig(installationId, 0L, "acme", null, Set.of()));
         assertThat(connection.getCredentialsEncrypted()).isNull();
     }
 

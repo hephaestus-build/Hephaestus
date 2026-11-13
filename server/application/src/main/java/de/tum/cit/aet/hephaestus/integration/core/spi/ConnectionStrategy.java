@@ -44,20 +44,6 @@ public interface ConnectionStrategy {
      */
     void eraseLocalData(IntegrationRef ref);
 
-    /**
-     * Returns the call that removes this connection's provider-side footprint (app installation, token,
-     * webhook), built from {@code footprint}, the config and credential the connection holds. The call only
-     * talks to the provider: it holds no entity and opens no transaction, and it throws when the removal
-     * cannot be confirmed. Empty when there is nothing to remove, including an installation or token that
-     * another connection still uses. {@code ref} carries the connection id. This reads but never writes the
-     * connection row.
-     */
-    Optional<Runnable> prepareProviderTeardown(IntegrationRef ref, ProviderFootprint footprint);
-
-    /** What a connection holds at the provider: its config, and its credential while it has one. */
-    record ProviderFootprint(
-            ConnectionConfig config, @Nullable CredentialBundle credentials) {}
-
     record InitiateRequest(
             long workspaceId,
             IntegrationKind kind,

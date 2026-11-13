@@ -2,27 +2,24 @@ package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
-import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
-import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
+import de.tum.cit.aet.hephaestus.integration.core.connection.api.ProviderResourceRepairAdminService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.api.ReleaseProviderResourceRepairRequestDTO;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ConnectionProviderRepairRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairDispatcher;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.InstallationCredential;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.integration.scm.workspace.ScmWorkspaceContentEraser;
-import de.tum.cit.aet.hephaestus.notification.NotificationRedeliveryJob;
+import de.tum.cit.aet.hephaestus.testconfig.MockSecurityContextUtils;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
@@ -31,17 +28,13 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeBlockedException;
-import io.micrometer.core.instrument.MeterRegistry;
-import jakarta.persistence.EntityManager;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -51,16 +44,17 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.modulith.events.FailedEventPublications;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.server.ResponseStatusException;
 
 class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegrationTest {
+
+    @Autowired
+    private ProviderResourceRepairAdminService repairAdmin;
 
     private static final String BLOCK = "test_block_disconnect";
 
@@ -82,20 +76,14 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    /** A fixture changes the schema as its owner: the application role cannot. */
+    // A fixture changes the schema as its owner: the application role cannot.
     private final JdbcTemplate schemaOwner = PostgreSQLTestContainer.ownerJdbc();
 
     @Autowired
     private ConnectionService connectionService;
 
     @Autowired
-    private ScmWorkspaceContentEraser scmWorkspaceContentEraser;
-
-    @Autowired
     private PlatformTransactionManager transactionManager;
-
-    @Autowired
-    private CredentialReader credentialReader;
 
     @Autowired
     private ObjectProvider<ProviderTeardown> teardowns;
@@ -104,18 +92,16 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
     private List<ConnectionStrategy> strategies;
 
     @Autowired
-    private FailedEventPublications failedPublications;
+    private ProviderResourceRepairs resourceRepairs;
 
     @Autowired
-    private MeterRegistry meterRegistry;
+    private ProviderResourceRepairDispatcher repairDispatcher;
 
     @Autowired
-    private IntegrationAttentionService attention;
+    private ProviderResourceRepairRepository repairRows;
 
     @Autowired
-    private EntityManager entityManager;
-
-    private final Runnable removal = mock(Runnable.class);
+    private ConnectionProviderRepairRepository repairReferences;
 
     private Workspace workspace;
     private Connection connection;
@@ -166,6 +152,7 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
         assertThat(disconnectReturningProviderWarnings()).isEmpty();
 
         assertConnectionUntouched();
+        assertThat(ownedRepairCount()).isZero();
     }
 
     @Test
@@ -184,142 +171,127 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
         assertThat(disconnectReturningProviderWarnings()).isEmpty();
 
         assertConnectionUntouched();
+        assertThat(ownedRepairCount()).isZero();
     }
 
     @Test
-    void shouldKeepTheCredentialUnusableAndRemoveTheInstallationWhenTheFailingProviderRecovers() {
-        double revoked = outcomes("revoked");
-
-        // The test profile holds no GitHub App key, so the application's own teardown fails like an unreachable GitHub.
-        assertThat(captureProviderWarnings(this::disconnect))
-                .singleElement()
-                .satisfies(event -> assertThat(event.getFormattedMessage()).contains("failure=IllegalStateException"));
-
-        Connection pending = connectionRepository.findById(connection.getId()).orElseThrow();
-        assertThat(pending.getState()).isEqualTo(IntegrationState.UNINSTALLED);
-        assertThat(pending.getCredentialsEncrypted()).isNotNull();
-        assertThat(pending.getProviderTeardownRequestedAt()).isNotNull();
-        assertThat(repositoryToMonitorRepository.findByWorkspaceId(workspace.getId()))
-                .isEmpty();
-        assertThat(publications()).isEqualTo(1);
-        // Every reader but the teardown gets nothing for a disconnected connection.
-        assertThat(credentialReader.credentialsOf(pending)).isEmpty();
-        assertThat(connectionService.findBearerToken(workspace.getId(), connection.getId()))
-                .isEmpty();
-
-        recovered().on(owed());
-
-        Connection released = connectionRepository.findById(connection.getId()).orElseThrow();
-        assertThat(released.getCredentialsEncrypted()).isNull();
-        assertThat(released.getProviderTeardownRequestedAt()).isNull();
-        verify(removal, times(1)).run();
-        assertThat(outcomes("revoked") - revoked).isEqualTo(1.0);
-        // The failed publication now finds nothing owed, and the registry completes it.
-        redeliverTeardown();
-        assertThat(publications()).isZero();
-    }
-
-    @Test
-    void shouldNeverRemoveWhatAReconnectUsesWhenTheConnectionReconnectsDuringAPendingTeardown() {
-        long installationId = Long.parseLong(connection.getInstanceKey());
-        double adopted = outcomes("adopted");
+    void shouldRefuseTheSameInstallationWhileRemovalIsUnresolved() {
         disconnect();
-        ProviderTeardownRequested beforeReconnect = owed();
-
-        reconnect(installationId);
-        recovered().on(beforeReconnect);
-
-        Connection reconnected =
-                connectionRepository.findById(connection.getId()).orElseThrow();
-        assertThat(reconnected.getState()).isEqualTo(IntegrationState.ACTIVE);
-        assertThat(reconnected.getProviderTeardownRequestedAt()).isNull();
-        assertThat(credentialReader.credentialsOf(reconnected))
-                .contains(new InstallationCredential(installationId, "reconnected"));
-        verify(removal, never()).run();
-        assertThat(outcomes("adopted") - adopted).isEqualTo(1.0);
-    }
-
-    @Test
-    void shouldIgnoreAnEarlierDisconnectsEventWhenItArrivesDuringALaterDisconnect() {
-        disconnect();
-        ProviderTeardownRequested first = owed();
-        reconnect(Long.parseLong(connection.getInstanceKey()));
-        connection = connectionRepository.findById(connection.getId()).orElseThrow();
-        disconnect();
-
-        recovered().on(first);
-
-        verify(removal, never()).run();
+        ConnectionConfig.GitHubAppConfig old = (ConnectionConfig.GitHubAppConfig) connection.getConfig();
+        assertThatThrownBy(() -> connectionService.upsertGitHubAppConnection(
+                        workspace,
+                        1L,
+                        Objects.requireNonNull(old.installationId()),
+                        workspace.getAccountLogin(),
+                        UUID.randomUUID().toString()))
+                .isInstanceOf(ResponseStatusException.class);
         assertThat(connectionRepository
                         .findById(connection.getId())
                         .orElseThrow()
-                        .getProviderTeardownRequestedAt())
-                .isNotNull();
+                        .getState())
+                .isEqualTo(IntegrationState.UNINSTALLED);
+        assertThat(ownedRepairCount()).isOne();
     }
 
     @Test
-    void shouldClearTheCredentialAndTellTheAdminWhenTheProviderFailsForTheWholeWindow() {
-        double unrevoked = outcomes("purged_unrevoked");
+    void shouldNotRetargetTheOldRemovalWhenAFreshInstallationIsAdopted() {
+        disconnect();
+        var old = repairRows
+                .findById(repairReferences
+                        .findByWorkspaceIdAndConnection_Id(workspace.getId(), connection.getId())
+                        .getFirst()
+                        .getRepair()
+                        .getId())
+                .orElseThrow()
+                .resource();
+        long freshInstallation = System.nanoTime();
+        Connection fresh = connectionService.upsertGitHubAppConnection(
+                workspace,
+                1L,
+                freshInstallation,
+                workspace.getAccountLogin(),
+                UUID.randomUUID().toString());
+        assertThat(fresh.getState()).isEqualTo(IntegrationState.ACTIVE);
+        assertThat(((ConnectionConfig.GitHubAppConfig) fresh.getConfig()).installationId())
+                .isEqualTo(freshInstallation);
+        assertThat(repairRows.findByIdentityHash(old.identity()).orElseThrow().resource())
+                .isEqualTo(old);
+    }
+
+    @Test
+    void shouldEraseAnExpiredCredentialWithoutReleasingItsUnresolvedIdentity() {
         disconnect();
         jdbcTemplate.update(
-                "UPDATE connection SET provider_teardown_requested_at = ? WHERE id = ?",
-                Timestamp.from(Instant.now().minus(ProviderTeardown.WINDOW).minusSeconds(60)),
+                "UPDATE connection SET provider_teardown_requested_at = ? WHERE workspace_id = ? AND id = ?",
+                Timestamp.from(Instant.now().minus(Duration.ofHours(25))),
+                workspace.getId(),
                 connection.getId());
-
-        recovered().on(owed());
-
-        Connection released = connectionRepository.findById(connection.getId()).orElseThrow();
-        assertThat(released.getCredentialsEncrypted()).isNull();
-        assertThat(released.getProviderTeardownRequestedAt()).isNull();
-        assertThat(released.getAttentionProblem()).isEqualTo(Problem.PROVIDER_CLEANUP_UNCONFIRMED);
-        assertThat(outcomes("purged_unrevoked") - unrevoked).isEqualTo(1.0);
-        verify(removal, never()).run();
-    }
-
-    @Test
-    void shouldRemoveAPendingTeardownsFootprintBeforeAWorkspacePurgeErasesTheMirror() {
-        disconnect();
-        var beans = new StaticListableBeanFactory();
-        beans.addBean("providerTeardown", recovered());
-        var purge = new ConnectionPurgeContributor(
+        ProviderTeardown expiry = new ProviderTeardown(
                 connectionRepository,
-                connectionService,
-                credentialReader,
-                beans.getBeanProvider(ProviderTeardown.class),
-                strategies);
-
-        new TransactionTemplate(transactionManager)
-                .executeWithoutResult(status -> purge.deleteWorkspaceData(workspace.getId()));
-
+                credentialConverter,
+                resourceRepairs,
+                repairDispatcher,
+                transactionManager,
+                Clock.systemUTC());
+        expiry.expire();
         Connection erased = connectionRepository.findById(connection.getId()).orElseThrow();
         assertThat(erased.getCredentialsEncrypted()).isNull();
-        assertThat(erased.getProviderTeardownRequestedAt()).isNull();
-        verify(removal, times(1)).run();
+        assertThat(ownedRepairCount()).isOne();
     }
 
     @Test
-    void shouldTearDownOutsideTheTransactionAndRollBackWhenPurgeTeardownFails() {
-        List<Boolean> transactionActive = new ArrayList<>();
-        ConnectionStrategy provider = mock(ConnectionStrategy.class);
-        when(provider.kind()).thenReturn(IntegrationKind.GITHUB);
-        when(provider.prepareProviderTeardown(any(), any())).thenAnswer(invocation -> {
-            transactionActive.add(TransactionSynchronizationManager.isActualTransactionActive());
-            return Optional.of((Runnable) () -> {
-                transactionActive.add(TransactionSynchronizationManager.isActualTransactionActive());
-                throw new IllegalStateException("provider unavailable");
-            });
-        });
-        var purge = new ConnectionPurgeContributor(
-                connectionRepository, connectionService, credentialReader, teardowns, List.of(provider));
+    void shouldEraseLocallyAndRetainTheFenceWhenTheProviderCannotConfirmRemoval() {
+        var purge = new ConnectionPurgeContributor(connectionRepository, connectionService, teardowns, strategies);
+        new TransactionTemplate(transactionManager)
+                .executeWithoutResult(status -> purge.deleteWorkspaceData(workspace.getId()));
+        Connection erased = connectionRepository.findById(connection.getId()).orElseThrow();
+        assertThat(erased.getState()).isEqualTo(IntegrationState.UNINSTALLED);
+        assertThat(erased.getCredentialsEncrypted()).isNull();
+        assertThat(repositoryToMonitorRepository.findByWorkspaceId(workspace.getId()))
+                .isEmpty();
+        assertThat(ownedRepairCount()).isOne();
+    }
 
-        assertThatThrownBy(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-                    scmWorkspaceContentEraser.eraseWorkspaceScmMirror(workspace.getId());
-                    purge.deleteWorkspaceData(workspace.getId());
-                }))
-                .isInstanceOf(WorkspacePurgeBlockedException.class);
+    @Test
+    void shouldNotRecreateAReleasedFenceOnAnOldWakeOrCredentialExpiry() {
+        disconnect();
+        var current = connectionRepository.findById(connection.getId()).orElseThrow();
+        long generation = current.getCredentialsGeneration();
+        var ref = repairReferences
+                .findByWorkspaceIdAndConnection_Id(workspace.getId(), current.getId())
+                .getFirst();
+        var repair = repairRows.findById(ref.getRepair().getId()).orElseThrow();
+        var actor = persistAccount("repair release " + UUID.randomUUID());
+        SecurityContextHolder.setContext(MockSecurityContextUtils.createSecurityContext(
+                Objects.requireNonNull(actor.getId()).toString(), new String[] {"app_admin"}, "repair-release"));
+        repairAdmin.release(
+                workspace.getId(),
+                current.getId(),
+                repair.getId(),
+                new ReleaseProviderResourceRepairRequestDTO(true, repair.getIdentityHash()));
+        ProviderTeardown expiry = Objects.requireNonNull(teardowns.getIfAvailable());
+        expiry.on(new ProviderTeardownRequested(current.getId(), workspace.getId(), generation));
+        assertThat(ownedRepairCount()).isZero();
+        jdbcTemplate.update(
+                "UPDATE connection SET provider_teardown_requested_at = ? WHERE workspace_id = ? AND id = ?",
+                Timestamp.from(Instant.now().minus(Duration.ofHours(25))),
+                workspace.getId(),
+                current.getId());
+        jdbcTemplate.update(
+                "UPDATE shedlock SET lock_until = TIMESTAMP '1970-01-01' WHERE name = 'provider-teardown-expiry'");
+        expiry.expire();
+        expiry.on(new ProviderTeardownRequested(current.getId(), workspace.getId(), generation));
+        assertThat(ownedRepairCount()).isZero();
+        assertThat(connectionRepository.findById(current.getId()).orElseThrow().getCredentialsEncrypted())
+                .isNull();
+    }
 
-        assertThat(transactionActive).containsExactly(false, false);
-        assertConnectionUntouched();
+    private @Nullable Long ownedRepairCount() {
+        return jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM connection_provider_repair WHERE workspace_id = ? AND connection_id = ?",
+                Long.class,
+                workspace.getId(),
+                connection.getId());
     }
 
     private void createBlockFunction() {
@@ -365,83 +337,11 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
                 strategy(IntegrationKind.GITHUB));
     }
 
-    /** A teardown whose provider now confirms the removal. */
-    private ProviderTeardown recovered() {
-        ConnectionStrategy github = mock(ConnectionStrategy.class);
-        when(github.kind()).thenReturn(IntegrationKind.GITHUB);
-        when(github.prepareProviderTeardown(any(), any())).thenReturn(Optional.of(removal));
-        var teardown = new ProviderTeardown(
-                connectionRepository,
-                credentialReader,
-                credentialConverter,
-                attention,
-                List.of(github),
-                meterRegistry,
-                transactionManager,
-                Clock.systemUTC());
-        ReflectionTestUtils.setField(teardown, "entityManager", entityManager);
-        return teardown;
-    }
-
-    /** The teardown the connection's latest disconnect owes. */
-    private ProviderTeardownRequested owed() {
-        return new ProviderTeardownRequested(
-                connection.getId(),
-                workspace.getId(),
-                connectionRepository.findById(connection.getId()).orElseThrow().getCredentialsGeneration());
-    }
-
-    /** A reconnect revives the same connection and stores what the provider returned. */
-    private void reconnect(long installationId) {
-        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            Connection revived =
-                    connectionRepository.findById(connection.getId()).orElseThrow();
-            connectionService.transition(
-                    revived,
-                    new TransitionRequest(
-                            IntegrationState.ACTIVE,
-                            "INITIATE",
-                            "SYSTEM",
-                            "reconnect",
-                            UUID.randomUUID().toString(),
-                            null));
-            revived.setCredentials(new InstallationCredential(installationId, "reconnected"), credentialConverter);
-        });
-    }
-
     private ConnectionStrategy strategy(IntegrationKind kind) {
         return strategies.stream()
                 .filter(candidate -> candidate.kind() == kind)
                 .findFirst()
                 .orElseThrow();
-    }
-
-    /** The staleness monitor marks a failed teardown FAILED; the redelivery job takes it after its minimum age. */
-    private void redeliverTeardown() {
-        jdbcTemplate.update(
-                "UPDATE event_publication SET status = 'FAILED', publication_date = ? WHERE serialized_event LIKE ?",
-                Timestamp.from(Instant.now().minus(Duration.ofMinutes(10))),
-                publicationPattern());
-        new NotificationRedeliveryJob(failedPublications).resubmitFailed();
-    }
-
-    private @Nullable Integer publications() {
-        return jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM event_publication WHERE serialized_event LIKE ?",
-                Integer.class,
-                publicationPattern());
-    }
-
-    private String publicationPattern() {
-        return "%\"connectionId\":" + connection.getId() + ",%";
-    }
-
-    private double outcomes(String outcome) {
-        var counter = meterRegistry
-                .find(IntegrationCoreMetrics.INTEGRATION_PROVIDER_TEARDOWN)
-                .tags("kind", "github", "outcome", outcome)
-                .counter();
-        return counter == null ? 0 : counter.count();
     }
 
     private List<ILoggingEvent> captureProviderWarnings(Runnable disconnect) {

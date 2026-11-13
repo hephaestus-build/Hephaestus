@@ -18,6 +18,7 @@ const RENAMED_ENTITY_TYPE_LABELS = {
 } satisfies Partial<Record<EntityType, string>>;
 
 export const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
+	PROVIDER_RESOURCE_RELEASE: "Provider removal release",
 	PRACTICE_REVIEW_SETTINGS: "Review settings",
 	AGENT_BINDING: "Model assignment",
 	WORKSPACE_ROLE: "Workspace role",

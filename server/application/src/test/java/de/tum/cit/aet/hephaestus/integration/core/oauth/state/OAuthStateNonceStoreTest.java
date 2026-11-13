@@ -7,9 +7,16 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
@@ -26,12 +33,26 @@ class OAuthStateNonceStoreTest extends BaseUnitTest {
     @Mock
     private OAuthStateNonceRepository repository;
 
+    @Mock
+    private WorkspaceRepository workspaces;
+
+    @Mock
+    private ConnectionRepository connections;
+
+    @Mock
+    private Connection pending;
+
     @InjectMocks
     private OAuthStateNonceStore store;
 
     @Test
     void issuePersistsRow() {
         when(repository.existsById("abc")).thenReturn(false);
+        when(workspaces.findByIdForUpdate(7L)).thenReturn(Optional.of(new Workspace()));
+        when(connections.findByWorkspaceId(7L)).thenReturn(List.of(pending));
+        when(pending.getKind()).thenReturn(IntegrationKind.GITHUB);
+        when(pending.getState()).thenReturn(IntegrationState.PENDING);
+        when(pending.getId()).thenReturn(9L);
 
         store.issue("abc", 7L, IntegrationKind.GITHUB, Instant.parse("2025-01-01T00:00:00Z"));
 

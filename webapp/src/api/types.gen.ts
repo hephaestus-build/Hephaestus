@@ -755,6 +755,7 @@ export type ConfigAuditEntryView = {
 	elevatedViaInstanceAdmin: boolean;
 	entityId?: string;
 	entityType?:
+		| "PROVIDER_RESOURCE_RELEASE"
 		| "PRACTICE_REVIEW_SETTINGS"
 		| "AGENT_BINDING"
 		| "AGENT_CONFIG"
@@ -3428,6 +3429,29 @@ export type OffsetPageDtoProfileReview = {
 /**
  * One numbered page of a list
  */
+export type OffsetPageDtoProviderResourceRepair = {
+	content: Array<ProviderResourceRepair>;
+	/**
+	 * This page's number, from 0
+	 */
+	page: number;
+	/**
+	 * The most rows a page holds
+	 */
+	size: number;
+	/**
+	 * Rows in the whole list
+	 */
+	totalElements: number;
+	/**
+	 * Pages in the whole list
+	 */
+	totalPages: number;
+};
+
+/**
+ * One numbered page of a list
+ */
 export type OffsetPageDtoResultList = {
 	content: Array<ResultList>;
 	/**
@@ -3856,6 +3880,11 @@ export type OwnItemTrace = {
 	item: ItemRef;
 	results: Array<ResultList>;
 	review: ReviewRef;
+};
+
+export type Owner = {
+	connectionId: number;
+	workspaceSlug: string;
 };
 
 export type PasskeyCredential = {
@@ -4641,6 +4670,36 @@ export type ProviderIdentityRef = {
 };
 
 /**
+ * A repair's provider identity is pseudonymous security data, never an authorization credential.
+ */
+export type ProviderResourceRepair = {
+	createdAt: Date;
+	id: string;
+	identityHash: string;
+	kind: "GITHUB" | "GITLAB" | "SLACK" | "OUTLINE";
+	origin: string;
+	owners: Array<Owner>;
+	parentId: string;
+	replacementInUse: boolean;
+	resourceId: string;
+	resourceType:
+		| "INSTALLATION"
+		| "GROUP_HOOK"
+		| "BOT_TOKEN"
+		| "BOT_USER"
+		| "SUBSCRIPTION"
+		| "REGISTRATION";
+	state:
+		| "REGISTERING"
+		| "PENDING"
+		| "CHECKING"
+		| "DISPATCHING"
+		| "AWAITING_CONFIRMATION"
+		| "NEEDS_AUTHORIZATION"
+		| "CONFIRMATION_REQUIRED";
+};
+
+/**
  * The public contract excludes account details, teams, automation and private activity.
  */
 export type PublicActivity = {
@@ -4886,6 +4945,11 @@ export type RegisterSlackChannelRequest = {
 	 * Slack public/private channel id (stable C… or G… id)
 	 */
 	slackChannelId: string;
+};
+
+export type ReleaseProviderResourceRepairRequest = {
+	confirmedGone: boolean;
+	identityHash: string;
 };
 
 export type ReleaseResearchDataset = {
@@ -8381,6 +8445,7 @@ export type AdminListAuthEventsData = {
 			| "GITHUB_INSTALLATION_DECLINED"
 			| "WORKSPACE_OWNER_CHANGE"
 			| "WORKSPACE_DELETION"
+			| "PROVIDER_RESOURCE_RELEASE"
 			| "LLM_CONNECTION_CREATED"
 			| "LLM_CONNECTION_UPDATED"
 			| "LLM_CONNECTION_DELETED"
@@ -8451,6 +8516,7 @@ export type AdminCountAuthEventsData = {
 			| "GITHUB_INSTALLATION_DECLINED"
 			| "WORKSPACE_OWNER_CHANGE"
 			| "WORKSPACE_DELETION"
+			| "PROVIDER_RESOURCE_RELEASE"
 			| "LLM_CONNECTION_CREATED"
 			| "LLM_CONNECTION_UPDATED"
 			| "LLM_CONNECTION_DELETED"
@@ -8521,6 +8587,7 @@ export type AdminExportAuthEventsData = {
 			| "GITHUB_INSTALLATION_DECLINED"
 			| "WORKSPACE_OWNER_CHANGE"
 			| "WORKSPACE_DELETION"
+			| "PROVIDER_RESOURCE_RELEASE"
 			| "LLM_CONNECTION_CREATED"
 			| "LLM_CONNECTION_UPDATED"
 			| "LLM_CONNECTION_DELETED"
@@ -8566,6 +8633,7 @@ export type AdminListConfigAuditEventsData = {
 		cursor?: string;
 		size?: number;
 		entityType?: Array<
+			| "PROVIDER_RESOURCE_RELEASE"
 			| "PRACTICE_REVIEW_SETTINGS"
 			| "AGENT_BINDING"
 			| "AGENT_CONFIG"
@@ -8618,6 +8686,7 @@ export type AdminCountConfigAuditEventsData = {
 	query?: {
 		workspaceId?: number;
 		entityType?: Array<
+			| "PROVIDER_RESOURCE_RELEASE"
 			| "PRACTICE_REVIEW_SETTINGS"
 			| "AGENT_BINDING"
 			| "AGENT_CONFIG"
@@ -10050,6 +10119,42 @@ export type RetryProductFeedbackFilingData = {
 };
 
 export type RetryProductFeedbackFilingResponses = {
+	/**
+	 * OK
+	 */
+	200: unknown;
+};
+
+export type ListInstanceProviderRepairsData = {
+	body?: never;
+	path?: never;
+	query?: {
+		page?: number;
+		size?: number;
+	};
+	url: "/admin/provider-resource-repairs";
+};
+
+export type ListInstanceProviderRepairsResponses = {
+	/**
+	 * OK
+	 */
+	200: OffsetPageDtoProviderResourceRepair;
+};
+
+export type ListInstanceProviderRepairsResponse =
+	ListInstanceProviderRepairsResponses[keyof ListInstanceProviderRepairsResponses];
+
+export type ReleaseOrphanProviderRepairData = {
+	body: ReleaseProviderResourceRepairRequest;
+	path: {
+		repairId: string;
+	};
+	query?: never;
+	url: "/admin/provider-resource-repairs/{repairId}/release";
+};
+
+export type ReleaseOrphanProviderRepairResponses = {
 	/**
 	 * OK
 	 */
@@ -12460,6 +12565,7 @@ export type ListWorkspaceConfigAuditEventsData = {
 		cursor?: string;
 		size?: number;
 		entityType?: Array<
+			| "PROVIDER_RESOURCE_RELEASE"
 			| "PRACTICE_REVIEW_SETTINGS"
 			| "AGENT_BINDING"
 			| "AGENT_CONFIG"
@@ -12516,6 +12622,7 @@ export type CountWorkspaceConfigAuditEventsData = {
 	};
 	query?: {
 		entityType?: Array<
+			| "PROVIDER_RESOURCE_RELEASE"
 			| "PRACTICE_REVIEW_SETTINGS"
 			| "AGENT_BINDING"
 			| "AGENT_CONFIG"
@@ -12654,6 +12761,53 @@ export type GetOutlineTokenStatusResponses = {
 
 export type GetOutlineTokenStatusResponse =
 	GetOutlineTokenStatusResponses[keyof GetOutlineTokenStatusResponses];
+
+export type ListConnectionProviderRepairsData = {
+	body?: never;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+		connectionId: number;
+	};
+	query?: {
+		page?: number;
+		size?: number;
+	};
+	url: "/workspaces/{workspaceSlug}/connections/{connectionId}/provider-repairs";
+};
+
+export type ListConnectionProviderRepairsResponses = {
+	/**
+	 * OK
+	 */
+	200: OffsetPageDtoProviderResourceRepair;
+};
+
+export type ListConnectionProviderRepairsResponse =
+	ListConnectionProviderRepairsResponses[keyof ListConnectionProviderRepairsResponses];
+
+export type ReleaseConnectionProviderRepairData = {
+	body: ReleaseProviderResourceRepairRequest;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+		connectionId: number;
+		repairId: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/connections/{connectionId}/provider-repairs/{repairId}/release";
+};
+
+export type ReleaseConnectionProviderRepairResponses = {
+	/**
+	 * OK
+	 */
+	200: unknown;
+};
 
 export type GetConnectionSyncStatusData = {
 	body?: never;

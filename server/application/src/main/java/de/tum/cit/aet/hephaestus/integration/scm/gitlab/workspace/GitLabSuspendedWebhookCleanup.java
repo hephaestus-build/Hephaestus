@@ -4,8 +4,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitLabConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
-import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialReader;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import jakarta.persistence.EntityManager;
@@ -21,7 +20,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** Removes suspended connections' hooks under their lifecycle lock, including work whose event was lost. */
+/** Captures suspended connections' immutable hook targets, including work whose event was lost. */
 @Component
 @ConditionalOnServerRole
 @ConditionalOnProperty(name = "hephaestus.integration.gitlab.enabled", havingValue = "true")
@@ -32,8 +31,7 @@ public class GitLabSuspendedWebhookCleanup {
     private static final Logger log = LoggerFactory.getLogger(GitLabSuspendedWebhookCleanup.class);
 
     private final ConnectionRepository connections;
-    private final CredentialReader credentials;
-    private final GitLabWebhookService webhooks;
+    private final ProviderResourceRepairs repairs;
     private final TransactionTemplate transactions;
 
     @PersistenceContext
@@ -41,20 +39,23 @@ public class GitLabSuspendedWebhookCleanup {
 
     public GitLabSuspendedWebhookCleanup(
             ConnectionRepository connections,
-            CredentialReader credentials,
-            GitLabWebhookService webhooks,
+            ProviderResourceRepairs repairs,
             PlatformTransactionManager transactionManager) {
         this.connections = connections;
-        this.credentials = credentials;
-        this.webhooks = webhooks;
+        this.repairs = repairs;
         this.transactions = new TransactionTemplate(transactionManager);
     }
 
-    /** Lifecycle locking orders confirmed calls. ADR 0075 records remote completion after a local timeout. */
+    /** Capture commits under the lifecycle lock; the ADR 0101 dispatcher calls the provider afterwards. */
     @SuppressWarnings("PMD.PreserveStackTrace") // Provider exceptions can contain secrets; only their class may escape.
     public void remove(long workspaceId, long connectionId) {
         try {
             transactions.executeWithoutResult(status -> {
+                var candidate = connections
+                        .findByIdAndWorkspaceId(connectionId, workspaceId)
+                        .orElse(null);
+                if (candidate == null) return;
+                repairs.coordinate(candidate);
                 connections.acquireLifecycleLock(connectionId, workspaceId);
                 var connection = connections
                         .findByIdAndWorkspaceId(connectionId, workspaceId)
@@ -63,16 +64,8 @@ public class GitLabSuspendedWebhookCleanup {
                 Objects.requireNonNull(entityManager).refresh(connection);
                 if (connection.getKind() != IntegrationKind.GITLAB
                         || connection.getState() != IntegrationState.SUSPENDED
-                        || !(connection.getConfig() instanceof GitLabConfig config)) return;
-                @Nullable
-                BearerToken bearer = credentials
-                        .credentialsOf(connection)
-                        .filter(BearerToken.class::isInstance)
-                        .map(BearerToken.class::cast)
-                        .orElse(null);
-                webhooks.removeSuspendedWebhooks(workspaceId, connectionId, config, bearer);
-                connection.setConfig(config.withGitlabWebhookId(null));
-                connections.save(connection);
+                        || !(connection.getConfig() instanceof GitLabConfig)) return;
+                repairs.requestRemoval(connection, true);
             });
         } catch (RuntimeException failure) {
             log.warn(

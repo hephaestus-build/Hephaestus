@@ -27,7 +27,7 @@ Outline also loses SUSPENDED cleanup after a failed listener. ADR 0080 protects 
 
 1. **Fence identity before removal.** Commit immutable intent before dispatch. Adoption, activation, credential replacement and last-owner checks share coordination, including the no-row-yet case. Lock identities before connections in stable order. Another workspace's ownership prevents removal; responses never reveal it.
 2. **Dispatch after commit.** Reuse publication-registry wake/retry and reconciliation. Before every removal retry, read the captured target and confirm ownership positively: its hook URL/route, subscription URL or installation App ID must match. GitHub's App-scoped installation API needs no separate ownership marker. Delete only on a match. Verified absence or a different owner resolves our removal without DELETE; an unreadable target, including a permission-hidden `404`, stays unresolved for rule 9. Never resolve a retry target from resumed configuration. Retire ADR 0075's network-call lock.
-3. **Uncertainty keeps the fence.** Timeout, `202`, hidden `404`, credential expiry and retry deadlines prove no completion. The verified ownership results in rule 2 resolve our removal without DELETE. Other automatic release requires proof that removal is terminal and the identity cannot be reused unsafely; rule 9 supplies the manual reverse state. Otherwise require a distinct identity. No exactly-once provider-execution claim.
+3. **Uncertainty keeps the fence.** Timeout, `202`, hidden `404`, credential expiry and retry deadlines prove no completion. The verified ownership results in rule 2 resolve our removal without DELETE. Other automatic release requires proof that removal is terminal and the identity cannot be reused unsafely; rule 9 supplies the manual reverse state. Otherwise require a distinct identity. No exactly-once provider-execution claim. An earlier uncertain attempt keeps the fence after verified absence or a different owner. Stop further DELETEs then; only rule 9 or a terminal receipt for that exact uncertain attempt releases it.
 4. **Record ownership before external creation.** Owned hooks need a non-secret, listable ownership marker. OAuth completion checks its durable attempt. Empty listings cannot exclude late creation; unknown outcomes need admin repair. Never delete unowned resources or retain signed callback URLs.
 5. **Apply the identity rule to every adapter.**
 
@@ -58,9 +58,13 @@ Outline also loses SUSPENDED cleanup after a failed listener. ADR 0080 protects 
 
 ## Confirmation
 
-**Not enforced.** The follow-up needs deterministic provider fakes for each adapter:
+`ProviderResourceAdoptionIntegrationTest` uses deterministic provider fakes for all four adapters and PostgreSQL transactions to enforce the contract below.
+`ProviderResourceRepairDeletionIntegrationTest` proves automatic and audited admin deletion, ownership scope, and the retained-identity policy.
+`ProviderResourceAdaptersTest` checks ownership inspection and terminal receipts; `ProviderResourceIdentityTest` checks the fingerprint and illegal transitions.
+The supported-version provider assumptions above still require live contract proof; the fakes do not establish those provider guarantees.
 
 - Accept removal, time out locally, refuse the same identity, adopt a fresh one, finish old removal: the replacement survives.
+- Accept DELETE, time out locally, observe absence, then reuse its ID before the old DELETE completes. The replacement is never adopted under that fenced identity.
 - Race ownership/removal across workspaces; crash before/after dispatch; retry the captured target.
 - Reuse a hook/subscription ID for a foreign resource: the retry reads the different ownership marker and deletes nothing. Unreadable ownership remains unresolved.
 - Revoke an old Slack token after a replacement arrives: assert bot-user state and memberships as well as token validity; block the shared bot user until isolation is proved.
@@ -69,7 +73,7 @@ Outline also loses SUSPENDED cleanup after a failed listener. ADR 0080 protects 
 - Lose Outline's SUSPENDED wake and first DELETE; reconciliation removes the old subscription. Then remove the inventory exception.
 - After out-of-band confirmation, an instance admin releases the exact fence and the connection console shows its audit. Reject workspace-only callers and mismatched workspace/connection/fence IDs; neither failure changes the fence.
 
-Preserve `OutlineFrameworkRegistrationIntegrationTest` admission and `ProviderEventErasureIntegrationTest` erasure proofs. Add tenancy and illegal-transition checks.
+The existing `OutlineFrameworkRegistrationIntegrationTest` admission and `ProviderEventErasureIntegrationTest` erasure proofs remain. `PersonalDataMapArchTest` enforces SECURITY_RETENTION and its deletion proofs; SQL enforces scoped ownership.
 
 ## Revisit trigger
 

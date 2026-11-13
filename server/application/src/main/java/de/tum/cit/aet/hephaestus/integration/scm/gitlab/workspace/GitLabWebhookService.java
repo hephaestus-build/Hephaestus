@@ -5,8 +5,11 @@ import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitLabConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter.Resource;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter.ResourceType;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookConfig;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookInfo;
@@ -19,17 +22,17 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.UUID;
 import java.util.function.Supplier;
-import java.util.function.UnaryOperator;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.util.Assert;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 /**
@@ -58,6 +61,7 @@ public class GitLabWebhookService {
     private final GitLabRouteCredential routeCredential;
     private final WorkspaceRepository workspaceRepository;
     private final ConnectionService connectionService;
+    private final ProviderResourceRepairs repairs;
     private final ObjectProvider<GitLabTokenLifecycleService> tokenLifecycle;
 
     public GitLabWebhookService(
@@ -66,12 +70,14 @@ public class GitLabWebhookService {
             GitLabRouteCredential routeCredential,
             WorkspaceRepository workspaceRepository,
             ConnectionService connectionService,
+            ProviderResourceRepairs repairs,
             ObjectProvider<GitLabTokenLifecycleService> tokenLifecycle) {
         this.webhookClientProvider = webhookClientProvider;
         this.publicApiUrls = publicApiUrls;
         this.routeCredential = routeCredential;
         this.workspaceRepository = workspaceRepository;
         this.connectionService = connectionService;
+        this.repairs = repairs;
         this.tokenLifecycle = tokenLifecycle;
     }
 
@@ -112,6 +118,9 @@ public class GitLabWebhookService {
      * @return result indicating success or failure with reason
      */
     public WebhookSetupResult registerWebhook(Workspace workspace) {
+        Assert.state(
+                !TransactionSynchronizationManager.isActualTransactionActive(),
+                "Provider calls require no active transaction");
         Optional<GitLabConfig> configOpt = gitLabConfig(workspace);
         Optional<Connection> connection = connectionService.findActive(workspace.getId(), IntegrationKind.GITLAB);
         if (configOpt.isEmpty() || connection.isEmpty()) {
@@ -151,7 +160,13 @@ public class GitLabWebhookService {
             Optional<WebhookInfo> stored = storedWebhookId == null
                     ? Optional.empty()
                     : client.getGroupWebhook(scopeId, groupId, storedWebhookId);
-            if (stored.isPresent() && webhookUrl.equals(stored.get().url())) {
+            if (stored.isPresent()
+                    && !stored.get().isDisabled()
+                    && (webhookUrl.equals(stored.get().url())
+                            || (stored.get().url().startsWith(webhookUrl + "?")
+                                    && ProviderResourceAdapter.fingerprint(
+                                                    stored.get().url())
+                                            .equals(config.webhookOwnershipHash())))) {
                 log.debug(
                         "Webhook already registered: workspaceId={}, webhookId={}",
                         scopeId,
@@ -163,14 +178,29 @@ public class GitLabWebhookService {
                 return WebhookSetupResult.skipped(WebhookSetupResult.Reason.ROUTING_KEY_UNKNOWN);
             }
 
-            // Step 3: Adopt this route's hook, or register it
+            if (storedWebhookId != null) repairs.retireCurrentHook(scopeId, connectionId);
+            String marker = UUID.randomUUID().toString();
+            webhookUrl += "?hephaestus_resource=" + marker;
+            String registrationUrl = webhookUrl;
+            String ownershipHash = ProviderResourceAdapter.fingerprint(registrationUrl);
+            UUID registration = repairs.beginRegistration(
+                    scopeId,
+                    connectionId,
+                    new Resource(
+                            IntegrationKind.GITLAB,
+                            origin.get(),
+                            ResourceType.REGISTRATION,
+                            Long.toString(groupId),
+                            marker,
+                            ownershipHash));
+
             long webhookId = adoptOrRegister(
                     client,
                     scopeId,
                     groupId,
                     webhookUrl,
                     () -> new WebhookConfig(
-                            webhookUrl,
+                            registrationUrl,
                             issued.token(),
                             true, // merge_requests_events
                             true, // issues_events
@@ -187,26 +217,19 @@ public class GitLabWebhookService {
                             true // enable_ssl_verification
                             ));
 
-            // Step 4: Record it, unless another registration recorded a different hook since step 2. The hook is left
-            // in
-            // place: it may be the one the other registration kept, and one it superseded carries the same immutable
-            // credential and is dropped as a duplicate by the next registration.
-            if (!recordWebhookId(scopeId, storedWebhookId, webhookId)) {
+            // A superseded creation stays discoverable through its committed registration marker.
+            if (!repairs.completeRegistration(scopeId, connectionId, registration, cfg -> {
+                if (!(cfg instanceof GitLabConfig gitlab)) throw new IllegalStateException("Expected GitLab config");
+                return gitlab.withWebhookOwnership(webhookId, ownershipHash, marker);
+            })) {
                 log.info("Webhook registration superseded by a concurrent one: workspaceId={}", scopeId);
                 return WebhookSetupResult.skipped(WebhookSetupResult.Reason.SUPERSEDED);
             }
 
-            // Step 5: Retire the hook this one replaces, when it is this connection's hook under a known key
-            if (stored.isPresent() && stored.get().id() != webhookId && storedKeyId.isPresent()) {
-                client.deregisterGroupWebhook(scopeId, groupId, stored.get().id());
-                log.info(
-                        "Retired replaced webhook: workspaceId={}, webhookId={}",
-                        scopeId,
-                        stored.get().id());
-            }
-
             log.info("Registered webhook: workspaceId={}, groupId={}, webhookId={}", scopeId, groupId, webhookId);
             return WebhookSetupResult.success(webhookId, groupId);
+        } catch (ObjectOptimisticLockingFailureException changed) {
+            return WebhookSetupResult.skipped("The connection changed during registration");
         } catch (WebClientResponseException e) {
             int status = e.getStatusCode().value();
             // A provider error response can echo the webhook secret or private request data.
@@ -239,9 +262,6 @@ public class GitLabWebhookService {
             }
         }
         WebhookInfo kept = matching.getFirst();
-        for (WebhookInfo duplicate : matching.subList(1, matching.size())) {
-            client.deregisterGroupWebhook(scopeId, groupId, duplicate.id());
-        }
         return kept.id();
     }
 
@@ -250,26 +270,6 @@ public class GitLabWebhookService {
                 .filter(hook -> webhookUrl.equals(hook.url()))
                 .sorted(Comparator.comparingLong(WebhookInfo::id))
                 .toList();
-    }
-
-    /**
-     * Records {@code next} as the connection's hook if {@code expected} is still the recorded one. The connection row is
-     * versioned, so a concurrent write in between fails this one rather than being overwritten.
-     */
-    private boolean recordWebhookId(long workspaceId, @Nullable Long expected, long next) {
-        AtomicBoolean recorded = new AtomicBoolean();
-        try {
-            updateGitLabConfig(workspaceId, cfg -> {
-                if (!Objects.equals(cfg.gitlabWebhookId(), expected) && !Objects.equals(cfg.gitlabWebhookId(), next)) {
-                    return cfg;
-                }
-                recorded.set(true);
-                return cfg.withGitlabWebhookId(next);
-            });
-        } catch (OptimisticLockingFailureException e) {
-            return false;
-        }
-        return recorded.get();
     }
 
     /** The key id in {@code url} when it is one of this connection's own hooks. */
@@ -286,70 +286,6 @@ public class GitLabWebhookService {
         return publicApiUrls
                 .originUri(GitLabConnectionWebhookController.PATH_PREFIX + "{connectionId}/", connectionId)
                 .toString();
-    }
-
-    /**
-     * Mutates the workspace's GitLab Connection config via {@link ConnectionService#updateConfig}.
-     * The cast inside the mutator is safe because we only reach this helper for workspaces
-     * whose active SCM connection is GitLab (caller-side filtered by {@link #gitLabConfig}).
-     */
-    private void updateGitLabConfig(long workspaceId, UnaryOperator<GitLabConfig> mutator) {
-        connectionService.updateConfig(workspaceId, IntegrationKind.GITLAB, cfg -> {
-            if (!(cfg instanceof GitLabConfig gitLabCfg)) {
-                throw new IllegalStateException("Expected GitLabConfig on workspace=" + workspaceId + " but got "
-                        + cfg.getClass().getSimpleName());
-            }
-            return mutator.apply(gitLabCfg);
-        });
-    }
-
-    /**
-     * The GitLab call that deletes the stored hook with the given PAT, which touches no database. Empty when no hook is
-     * stored; throws when one is stored but cannot be deleted with what is given.
-     */
-    public Optional<Runnable> webhookDeregistration(
-            long workspaceId, long connectionId, GitLabConfig config, @Nullable BearerToken bearer) {
-        Long groupId = config.gitlabGroupId();
-        Long webhookId = config.gitlabWebhookId();
-        String serverUrl = config.serverUrl();
-        if (webhookId == null || groupId == null) {
-            return Optional.empty();
-        }
-        if (serverUrl == null || serverUrl.isBlank() || bearer == null) {
-            throw new IllegalStateException("GitLab webhook credentials are unavailable");
-        }
-        var client = webhookClientProvider.getIfAvailable();
-        if (client == null) {
-            throw new IllegalStateException("GitLab webhook client is unavailable");
-        }
-        String token = bearer.token();
-        return Optional.of(() -> {
-            client.deregisterGroupWebhookWithCredentials(serverUrl, token, groupId, webhookId);
-            log.info(
-                    "Deregistered GitLab webhook for deactivated connection: workspaceId={}, connectionId={}, webhookId={}",
-                    workspaceId,
-                    connectionId,
-                    webhookId);
-        });
-    }
-
-    /** Removes every hook of this connection, including a registration whose ID was never committed. */
-    public void removeSuspendedWebhooks(
-            long workspaceId, long connectionId, GitLabConfig config, @Nullable BearerToken bearer) {
-        if (bearer == null) throw new IllegalStateException("GitLab webhook credentials are unavailable");
-        var client = webhookClientProvider.getIfAvailable();
-        if (client == null) throw new IllegalStateException("GitLab webhook client is unavailable");
-        String prefix = connectionWebhookUrl(connectionId);
-        client.removeGroupWebhooksWithCredentials(
-                config.serverUrl(),
-                bearer.token(),
-                config.gitlabGroupId(),
-                hook -> Objects.equals(config.gitlabWebhookId(), hook.id())
-                        || hook.url().startsWith(prefix));
-        log.info(
-                "Removed suspended GitLab connection hooks: workspaceId={}, connectionId={}",
-                workspaceId,
-                connectionId);
     }
 
     /**
@@ -417,23 +353,11 @@ public class GitLabWebhookService {
                             workspace.getId(),
                             candidate.webhookId());
                 } else if (disabled) {
-                    // GitLab auto-disabled the hook after repeated delivery failures: the row still
-                    // exists (so getGroupWebhook returns it) but it delivers nothing. A fresh register
-                    // adopts by URL, which would re-adopt this same disabled hook — so delete it first,
-                    // best-effort, then let registerWebhook create a clean one. A hook that is not this
-                    // connection's own, such as one an operator created, is never deleted.
+                    // Registration captures the old target before creating a distinct ownership marker.
                     log.warn(
                             "Webhook auto-disabled (alert_status=disabled), re-registering: workspaceId={}, webhookId={}",
                             workspace.getId(),
                             candidate.webhookId());
-                    try {
-                        client.deregisterGroupWebhook(workspace.getId(), candidate.groupId(), candidate.webhookId());
-                    } catch (Exception e) {
-                        log.debug(
-                                "Failed to delete disabled webhook before re-register (will retry next cycle): workspaceId={}",
-                                workspace.getId(),
-                                e);
-                    }
                 } else {
                     log.warn(
                             "Webhook missing, re-registering: workspaceId={}, webhookId={}",

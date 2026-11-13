@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { z } from "zod";
 import { hasText } from "@/lib/text";
 import { toast } from "@/lib/toast";
+import { WorkspaceProviderRepairs } from "@/routes/_authenticated/-provider-repairs";
 
 import { ConnectionStateNotice } from "@/components/admin/integrations/ConnectionStateNotice";
 import { IntegrationCardHeading } from "@/components/admin/integrations/IntegrationCardHeading";
@@ -23,6 +24,7 @@ import { workspaceAdminHead } from "@/lib/page-title";
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/integrations/slack")({
 	head: workspaceAdminHead("Slack"),
 	validateSearch: z.object({
+		repairConnection: z.number().int().positive().optional().catch(undefined),
 		status: z.enum(["success", "error"]).optional().catch(undefined),
 		reason: z.string().optional().catch(undefined),
 		description: z.string().optional().catch(undefined),
@@ -33,7 +35,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/int
 
 function SlackIntegrationPage() {
 	const { workspaceSlug: slug } = Route.useParams();
-	const { status, reason, description } = Route.useSearch();
+	const { status, reason, description, repairConnection } = Route.useSearch();
 	const navigate = Route.useNavigate();
 	useEffect(() => {
 		if (status === undefined) {
@@ -47,9 +49,10 @@ function SlackIntegrationPage() {
 				description: hasText(description) ? description : reason,
 			});
 		}
-		void navigate({ search: {}, replace: true });
-	}, [status, reason, description, navigate]);
+		void navigate({ search: { repairConnection }, replace: true });
+	}, [status, reason, description, repairConnection, navigate]);
 	const slack = useSlackIntegration(slug);
+	const repairId = repairConnection ?? slack.repairConnectionId;
 	const { hasConnection } = slack;
 	const ready = !slack.isLoading && !slack.loadError;
 	// A failed refresh that kept the connection leaves its management, and the drafts and pending
@@ -104,6 +107,13 @@ function SlackIntegrationPage() {
 			{manageable && <WorkspaceSlackChannelsSettings {...slack.channelsSettingsProps} />}
 
 			{hasConnection && <JobHistoryCard {...slack.jobHistoryProps} />}
+			{typeof repairId === "number" && (
+				<WorkspaceProviderRepairs
+					key={`${slug}/${repairId}`}
+					workspaceSlug={slug}
+					connectionId={repairId}
+				/>
+			)}
 		</PageLayout>
 	);
 }

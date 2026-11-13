@@ -3,19 +3,18 @@ package de.tum.cit.aet.hephaestus.integration.slack.connect;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter;
 import de.tum.cit.aet.hephaestus.integration.slack.connect.SlackOAuthClient.OAuthV2Access;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceContentEraser;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,7 +46,6 @@ public class SlackConnectionStrategy implements ConnectionStrategy {
             "users:read");
 
     private final OAuthStateService oauthStateService;
-    private final ConnectionService connectionService;
     private final SlackOAuthClient oauthClient;
     private final SlackWorkspaceContentEraser workspaceContentEraser;
     private final String clientId;
@@ -56,13 +54,11 @@ public class SlackConnectionStrategy implements ConnectionStrategy {
 
     public SlackConnectionStrategy(
             OAuthStateService oauthStateService,
-            ConnectionService connectionService,
             SlackOAuthClient oauthClient,
             SlackWorkspaceContentEraser workspaceContentEraser,
             @Value("${hephaestus.integration.slack.client-id:}") String clientId,
             PublicApiUrls publicApiUrls) {
         this.oauthStateService = oauthStateService;
-        this.connectionService = connectionService;
         this.oauthClient = oauthClient;
         this.workspaceContentEraser = workspaceContentEraser;
         this.clientId = clientId;
@@ -120,8 +116,17 @@ public class SlackConnectionStrategy implements ConnectionStrategy {
         if (r.accessToken() == null || r.accessToken().isBlank()) {
             return new ConnectFinalization.Failed("The Slack OAuth response has no access_token.");
         }
-        ConnectionConfig.SlackConfig config =
-                new ConnectionConfig.SlackConfig(r.team().id(), r.team().name(), /* retentionDays */ null, Set.of());
+        SlackOAuthClient.BotIdentity identity = oauthClient.botIdentity(r.accessToken());
+        if (!r.team().id().equals(identity.teamId())) {
+            return new ConnectFinalization.Failed("Slack returned a different team for the bot token.");
+        }
+        ConnectionConfig.SlackConfig config = new ConnectionConfig.SlackConfig(
+                r.team().id(),
+                identity.userId(),
+                ProviderResourceAdapter.slackTokenFingerprint(r.accessToken()),
+                r.team().name(),
+                null,
+                Set.of());
         return new ConnectFinalization.Completed(
                 r.team().id(), new BearerToken(r.accessToken(), null), r.team().name(), config);
     }
@@ -132,20 +137,6 @@ public class SlackConnectionStrategy implements ConnectionStrategy {
         log.info(
                 "slack.audit: disconnect erase — cleared ingested Slack content + consent for workspace={}",
                 ref.workspaceId());
-    }
-
-    @Override
-    public Optional<Runnable> prepareProviderTeardown(IntegrationRef ref, ProviderFootprint footprint) {
-        // Every workspace connected to one Slack team holds the same bot token, so revoking it cuts all of them off.
-        if (connectionService.hasOtherInstalledConnection(ref)) {
-            return Optional.empty();
-        }
-        if (!(footprint.credentials() instanceof BearerToken bearer)) {
-            throw new IllegalStateException("Slack bot token is unavailable");
-        }
-        String token = bearer.token();
-        // Token revocation does not remove the team-level Slack app installation.
-        return Optional.of(() -> oauthClient.revokeStrict(token));
     }
 
     private static String enc(String value) {

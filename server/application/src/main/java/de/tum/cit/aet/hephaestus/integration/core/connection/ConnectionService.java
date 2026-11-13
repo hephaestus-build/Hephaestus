@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionCredentialsReplacedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
@@ -26,9 +27,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -54,6 +55,7 @@ public class ConnectionService {
     private final CredentialReader credentialReader;
     private final SourceProviderNamespaces sourceNamespaces;
     private final Clock clock;
+    private final ProviderResourceRepairs resourceRepairs;
 
     public ConnectionService(
             ConnectionRepository connectionRepository,
@@ -61,19 +63,20 @@ public class ConnectionService {
             CredentialBundleConverter credentialConverter,
             ApplicationEventPublisher eventPublisher,
             SyncJobService syncJobService,
-            PlatformTransactionManager transactionManager,
             CredentialReader credentialReader,
             SourceProviderNamespaces sourceNamespaces,
-            Clock clock) {
+            Clock clock,
+            ProviderResourceRepairs resourceRepairs) {
         this.connectionRepository = connectionRepository;
         this.clock = clock;
+        this.resourceRepairs = resourceRepairs;
         this.sourceNamespaces = sourceNamespaces;
         this.credentialReader = credentialReader;
         this.auditRepository = auditRepository;
         this.credentialConverter = credentialConverter;
         this.eventPublisher = eventPublisher;
         this.syncJobService = syncJobService;
-        this.lifecycleEffects = new ConnectionLifecycleEffects(eventPublisher, transactionManager);
+        this.lifecycleEffects = new ConnectionLifecycleEffects(eventPublisher);
     }
 
     @Transactional(readOnly = true)
@@ -290,35 +293,31 @@ public class ConnectionService {
     @Transactional
     public Optional<Connection> updateConfig(
             long workspaceId, IntegrationKind kind, UnaryOperator<ConnectionConfig> mutator) {
-        return connectionRepository
-                .findActive(workspaceId, kind)
-                .filter(c -> {
-                    if (kind != IntegrationKind.GITLAB) return true;
-                    // Refresh after the lifecycle lock: a metadata update must retain a concurrent project stop.
-                    connectionRepository.acquireLifecycleLock(c.getId(), workspaceId);
-                    Objects.requireNonNull(entityManager).refresh(c);
-                    return c.getState() == IntegrationState.ACTIVE;
-                })
-                .map(c -> {
-                    ConnectionConfig next = mutator.apply(c.getConfig());
-                    if (next == null) {
-                        throw new IllegalArgumentException(
-                                "Mutator returned null for connection " + c.getId() + " — config must be non-null");
-                    }
-                    if (!next.getClass().equals(c.getConfig().getClass())) {
-                        throw new IllegalArgumentException("Mutator changed config variant on connection " + c.getId()
-                                + ": "
-                                + c.getConfig().getClass().getSimpleName()
-                                + " → "
-                                + next.getClass().getSimpleName());
-                    }
-                    boolean namespaceChanged = !Objects.equals(
-                            SourceProviderNamespaces.configuredUrl(c.getConfig()),
-                            SourceProviderNamespaces.configuredUrl(next));
-                    c.setConfig(next);
-                    if (namespaceChanged) sourceNamespaces.ensure(kind, next);
-                    return connectionRepository.save(c);
-                });
+        return connectionRepository.findActive(workspaceId, kind).map(connection -> {
+            ConnectionConfig next = Objects.requireNonNull(mutator.apply(connection.getConfig()), "Connection config");
+            if (!next.getClass().equals(connection.getConfig().getClass())) {
+                throw new IllegalArgumentException("A config update cannot change the connection mode");
+            }
+            var credential = resourceRepairs.retainedCredential(connection);
+            var identities = new ArrayList<>(resourceRepairs.resources(
+                    ProviderResourceRepairs.ref(connection), connection.getConfig(), credential));
+            identities.addAll(resourceRepairs.resources(ProviderResourceRepairs.ref(connection), next, credential));
+            resourceRepairs.coordinate(identities);
+            resourceRepairs.requireAdoptable(ProviderResourceRepairs.ref(connection), next, credential);
+            Long expectedVersion = connection.getVersion();
+            connectionRepository.acquireLifecycleLock(connection.getId(), workspaceId);
+            Objects.requireNonNull(entityManager).refresh(connection);
+            if (!Objects.equals(expectedVersion, connection.getVersion())
+                    || connection.getState() != IntegrationState.ACTIVE) {
+                throw new TransientDataAccessResourceException("The connection changed during its config update");
+            }
+            boolean namespaceChanged = !Objects.equals(
+                    SourceProviderNamespaces.configuredUrl(connection.getConfig()),
+                    SourceProviderNamespaces.configuredUrl(next));
+            connection.setConfig(next);
+            if (namespaceChanged) sourceNamespaces.ensure(kind, next);
+            return connectionRepository.save(connection);
+        });
     }
 
     /** Explicit project stops also survive a paused connection and its later resumption. */
@@ -361,6 +360,7 @@ public class ConnectionService {
                         + workspaceId
                         + " is an App installation. It uses no stored token, so there is nothing to replace.");
             }
+            resourceRepairs.requireAdoptableChange(c, c.getConfig(), bundle);
             connectionRepository.acquireLifecycleLock(c.getId(), workspaceId);
             Objects.requireNonNull(entityManager).refresh(c);
             if (c.getState() != IntegrationState.ACTIVE || c.getConfig() instanceof ConnectionConfig.GitHubAppConfig) {
@@ -385,8 +385,12 @@ public class ConnectionService {
      */
     @Transactional
     public Connection upsertGitHubAppConnection(
-            Workspace workspace, long installationId, @Nullable String accountLogin, String correlationId) {
+            Workspace workspace, long appId, long installationId, @Nullable String accountLogin, String correlationId) {
         String instanceKey = Long.toString(installationId);
+        resourceRepairs.requireAdoptable(
+                new IntegrationRef(IntegrationKind.GITHUB, workspace.getId(), instanceKey),
+                new ConnectionConfig.GitHubAppConfig(installationId, appId, accountLogin, null, Set.of()),
+                null);
 
         // Invariant: one ACTIVE GitHub Connection per workspace.
         for (Connection existing :
@@ -414,8 +418,8 @@ public class ConnectionService {
         Connection connection = connectionRepository
                 .findByWorkspaceIdAndKindAndInstanceKey(workspace.getId(), IntegrationKind.GITHUB, instanceKey)
                 .orElseGet(() -> {
-                    ConnectionConfig.GitHubAppConfig config = new ConnectionConfig.GitHubAppConfig(
-                            installationId, accountLogin, /* serverUrl */ null, Set.of());
+                    ConnectionConfig.GitHubAppConfig config =
+                            new ConnectionConfig.GitHubAppConfig(installationId, appId, accountLogin, null, Set.of());
                     Connection fresh = new Connection(workspace, IntegrationKind.GITHUB, instanceKey, config);
                     fresh.setDisplayName(accountLogin);
                     return connectionRepository.save(fresh);
@@ -427,7 +431,7 @@ public class ConnectionService {
                 && connection.getConfig() instanceof ConnectionConfig.GitHubAppConfig current
                 && !accountLogin.equals(current.orgLogin())) {
             connection.setConfig(new ConnectionConfig.GitHubAppConfig(
-                    installationId, accountLogin, current.serverUrl(), current.enabledStreams()));
+                    installationId, appId, accountLogin, current.serverUrl(), current.enabledStreams()));
             connection.setDisplayName(accountLogin);
             connection = connectionRepository.save(connection);
         }
@@ -553,8 +557,7 @@ public class ConnectionService {
      * lifecycle lock before the connection loses its source authority or credentials.
      */
     @Transactional
-    public Connection disconnectForErasure(
-            Connection connection, TransitionRequest req, Runnable revoke, Runnable erase) {
+    public Connection disconnectForErasure(Connection connection, TransitionRequest req, Runnable erase) {
         if (req.next() != IntegrationState.UNINSTALLED) {
             throw new IllegalArgumentException("Disconnect must transition to UNINSTALLED");
         }
@@ -562,7 +565,7 @@ public class ConnectionService {
                 connection,
                 req,
                 locked -> {
-                    lifecycleEffects.revoke(revoke);
+                    resourceRepairs.requestRemoval(locked, false);
                     erase.run();
                 },
                 /* fenceOnActiveSyncJob */ false, /* retainForTeardown */
@@ -582,11 +585,29 @@ public class ConnectionService {
         // For a persisted argument the row transitioned below is the one re-read under the
         // lifecycle
         // lock, never the caller's possibly-stale instance.
+        resourceRepairs.coordinate(requested);
+        if (req.next() == IntegrationState.ACTIVE) {
+            ConnectionConfig next = requested.getConfig();
+            if (requested.getState() != IntegrationState.ACTIVE) {
+                if (next instanceof ConnectionConfig.GitLabConfig gitlab) next = gitlab.withGitlabWebhookId(null);
+                else if (next instanceof ConnectionConfig.OutlineConfig outline)
+                    next = outline.withWebhookSubscription(null, null);
+            }
+            resourceRepairs.requireAdoptable(
+                    ProviderResourceRepairs.ref(requested), next, resourceRepairs.retainedCredential(requested));
+        }
         Connection connection = requested;
         if (requested.getId() != null) {
             long connectionId = requested.getId();
             long workspaceId = requested.getWorkspace().getId();
             connectionRepository.acquireLifecycleLock(connectionId, workspaceId);
+            Long persistedVersion = connectionRepository
+                    .findLifecycleVersion(connectionId, workspaceId)
+                    .orElseThrow();
+            if (!Objects.equals(requested.getVersion(), persistedVersion)) {
+                throw new TransientDataAccessResourceException(
+                        "The connection changed before its lifecycle transition");
+            }
             connection = connectionRepository
                     .findByIdAndWorkspaceId(connectionId, workspaceId)
                     .orElseThrow(() -> new EntityNotFoundException("Connection", connectionId));
@@ -606,8 +627,16 @@ public class ConnectionService {
             throw new IllegalStateException(
                     "Connection " + connection.getId() + " cannot change from " + current + " to " + req.next() + ".");
         }
-        if (req.next() == IntegrationState.ACTIVE)
+        if (req.next() == IntegrationState.ACTIVE) {
+            if (current == IntegrationState.SUSPENDED
+                    && (connection.getKind() == IntegrationKind.GITLAB
+                            || connection.getKind() == IntegrationKind.OUTLINE)
+                    && !connection.providerRepairWasCaptured()) {
+                resourceRepairs.requestRemoval(connection, current == IntegrationState.SUSPENDED);
+            }
+            connection.detachProviderWebhook();
             sourceNamespaces.ensure(connection.getKind(), connection.getConfig());
+        }
         if (beforeLocalTransition != null) {
             beforeLocalTransition.accept(connection);
         }
@@ -631,16 +660,22 @@ public class ConnectionService {
                     req.correlationId());
             return connection;
         }
+        if ((req.next() == IntegrationState.UNINSTALLED && retainForTeardown)
+                || req.next() == IntegrationState.SUSPENDED) {
+            resourceRepairs.requestRemoval(connection, req.next() == IntegrationState.SUSPENDED);
+        }
         connection.setState(req.next());
         connection.setStateReason(req.detail());
         Instant now = clock.instant();
         if (req.next() == IntegrationState.UNINSTALLED) {
             if (retainForTeardown) {
                 connection.requestProviderTeardown(now);
+                connection.markProviderRepairCaptured();
             } else {
                 connection.releaseProviderFootprint(credentialConverter);
             }
         }
+        if (req.next() == IntegrationState.ACTIVE) connection.finishProviderCredentialRetention();
         Connection saved = connectionRepository.save(connection);
         if (req.next() == IntegrationState.UNINSTALLED && retainForTeardown) {
             eventPublisher.publishEvent(new ProviderTeardownRequested(

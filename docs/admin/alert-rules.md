@@ -159,3 +159,9 @@ An archive command that hangs without a failure stops the next backup, because p
 `HephaestusBackupStale` and `HephaestusPostgresVolumeFilling` then fire.
 
 [Load the alert rules](./monitoring#load-the-alert-rules) gives the setup, and [Service level objectives](./observability#service-level-objectives) gives the objectives.
+
+### Provider removal confirmation
+
+`HephaestusProviderRemovalNeedsConfirmation` fires when a provider has an unresolved removal, registration or authorization need for one hour.
+It reads `integration_provider_repair_open`, takes the maximum across replicas, then groups by provider kind.
+The [integration guide](./integrations.mdx#confirm-a-provider-removal) owns the procedure.

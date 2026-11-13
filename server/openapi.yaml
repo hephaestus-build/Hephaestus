@@ -216,6 +216,7 @@ paths:
             - GITHUB_INSTALLATION_DECLINED
             - WORKSPACE_OWNER_CHANGE
             - WORKSPACE_DELETION
+            - PROVIDER_RESOURCE_RELEASE
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -317,6 +318,7 @@ paths:
             - GITHUB_INSTALLATION_DECLINED
             - WORKSPACE_OWNER_CHANGE
             - WORKSPACE_DELETION
+            - PROVIDER_RESOURCE_RELEASE
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -418,6 +420,7 @@ paths:
             - GITHUB_INSTALLATION_DECLINED
             - WORKSPACE_OWNER_CHANGE
             - WORKSPACE_DELETION
+            - PROVIDER_RESOURCE_RELEASE
             - LLM_CONNECTION_CREATED
             - LLM_CONNECTION_UPDATED
             - LLM_CONNECTION_DELETED
@@ -506,6 +509,7 @@ paths:
           items:
             type: string
             enum:
+            - PROVIDER_RESOURCE_RELEASE
             - PRACTICE_REVIEW_SETTINGS
             - AGENT_BINDING
             - AGENT_CONFIG
@@ -598,6 +602,7 @@ paths:
           items:
             type: string
             enum:
+            - PROVIDER_RESOURCE_RELEASE
             - PRACTICE_REVIEW_SETTINGS
             - AGENT_BINDING
             - AGENT_CONFIG
@@ -2084,6 +2089,57 @@ paths:
       summary: File a stopped report again
       tags:
       - product-feedback-destinations
+  /admin/provider-resource-repairs:
+    get:
+      operationId: listInstanceProviderRepairs
+      parameters:
+      - in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+          minimum: 0
+      - in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 25
+          maximum: 100
+          minimum: 1
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OffsetPageDTOProviderResourceRepair"
+          description: OK
+      tags:
+      - instance-provider-resource-repair
+  /admin/provider-resource-repairs/{repairId}/release:
+    post:
+      operationId: releaseOrphanProviderRepair
+      parameters:
+      - in: path
+        name: repairId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReleaseProviderResourceRepairRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+      tags:
+      - instance-provider-resource-repair
   /admin/release:
     get:
       operationId: adminGetRelease
@@ -4928,6 +4984,7 @@ paths:
           items:
             type: string
             enum:
+            - PROVIDER_RESOURCE_RELEASE
             - PRACTICE_REVIEW_SETTINGS
             - AGENT_BINDING
             - AGENT_CONFIG
@@ -5023,6 +5080,7 @@ paths:
           items:
             type: string
             enum:
+            - PROVIDER_RESOURCE_RELEASE
             - PRACTICE_REVIEW_SETTINGS
             - AGENT_BINDING
             - AGENT_CONFIG
@@ -5203,6 +5261,87 @@ paths:
       summary: Live state of the API token behind this workspace's Outline connection
       tags:
       - Connections
+  /workspaces/{workspaceSlug}/connections/{connectionId}/provider-repairs:
+    get:
+      operationId: listConnectionProviderRepairs
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: connectionId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - in: query
+        name: page
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+          minimum: 0
+      - in: query
+        name: size
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 25
+          maximum: 100
+          minimum: 1
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OffsetPageDTOProviderResourceRepair"
+          description: OK
+      tags:
+      - provider-resource-repair
+  /workspaces/{workspaceSlug}/connections/{connectionId}/provider-repairs/{repairId}/release:
+    post:
+      operationId: releaseConnectionProviderRepair
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: connectionId
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - in: path
+        name: repairId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReleaseProviderResourceRepairRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+      tags:
+      - provider-resource-repair
   /workspaces/{workspaceSlug}/connections/{connectionId}/sync:
     get:
       operationId: getConnectionSyncStatus
@@ -13514,6 +13653,7 @@ components:
         entityType:
           type: string
           enum:
+          - PROVIDER_RESOURCE_RELEASE
           - PRACTICE_REVIEW_SETTINGS
           - AGENT_BINDING
           - AGENT_CONFIG
@@ -17979,6 +18119,36 @@ components:
       - size
       - totalElements
       - totalPages
+    OffsetPageDTOProviderResourceRepair:
+      type: object
+      description: One numbered page of a list
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProviderResourceRepair"
+        page:
+          type: integer
+          format: int32
+          description: "This page's number, from 0"
+        size:
+          type: integer
+          format: int32
+          description: The most rows a page holds
+        totalElements:
+          type: integer
+          format: int64
+          description: Rows in the whole list
+        totalPages:
+          type: integer
+          format: int32
+          description: Pages in the whole list
+      required:
+      - content
+      - page
+      - size
+      - totalElements
+      - totalPages
     OffsetPageDTOResultList:
       type: object
       description: One numbered page of a list
@@ -18610,6 +18780,17 @@ components:
       - item
       - results
       - review
+    Owner:
+      type: object
+      properties:
+        connectionId:
+          type: integer
+          format: int64
+        workspaceSlug:
+          type: string
+      required:
+      - connectionId
+      - workspaceSlug
     PasskeyCredential:
       type: object
       properties:
@@ -20542,6 +20723,69 @@ components:
       - displayName
       - login
       - provider
+    ProviderResourceRepair:
+      type: object
+      description: "A repair's provider identity is pseudonymous security data, never\
+        \ an authorization credential."
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        identityHash:
+          type: string
+        kind:
+          type: string
+          enum:
+          - GITHUB
+          - GITLAB
+          - SLACK
+          - OUTLINE
+        origin:
+          type: string
+        owners:
+          type: array
+          items:
+            $ref: "#/components/schemas/Owner"
+        parentId:
+          type: string
+        replacementInUse:
+          type: boolean
+        resourceId:
+          type: string
+        resourceType:
+          type: string
+          enum:
+          - INSTALLATION
+          - GROUP_HOOK
+          - BOT_TOKEN
+          - BOT_USER
+          - SUBSCRIPTION
+          - REGISTRATION
+        state:
+          type: string
+          enum:
+          - REGISTERING
+          - PENDING
+          - CHECKING
+          - DISPATCHING
+          - AWAITING_CONFIRMATION
+          - NEEDS_AUTHORIZATION
+          - CONFIRMATION_REQUIRED
+      required:
+      - createdAt
+      - id
+      - identityHash
+      - kind
+      - origin
+      - owners
+      - parentId
+      - replacementInUse
+      - resourceId
+      - resourceType
+      - state
     PublicActivity:
       type: object
       description: "The public contract excludes account details, teams, automation\
@@ -21063,6 +21307,17 @@ components:
           pattern: "^[CG][A-Z0-9]{8,}$"
       required:
       - slackChannelId
+    ReleaseProviderResourceRepairRequest:
+      type: object
+      properties:
+        confirmedGone:
+          type: boolean
+        identityHash:
+          type: string
+          pattern: "[a-f0-9]{64}"
+      required:
+      - confirmedGone
+      - identityHash
     ReleaseResearchDataset:
       type: object
       properties:

@@ -576,6 +576,12 @@ export {
 } from "./react-query/listAdoptablePractices.gen.js";
 export { listAgentsOptions, listAgentsQueryKey } from "./react-query/listAgents.gen.js";
 export {
+	listConnectionProviderRepairsInfiniteOptions,
+	listConnectionProviderRepairsInfiniteQueryKey,
+	listConnectionProviderRepairsOptions,
+	listConnectionProviderRepairsQueryKey,
+} from "./react-query/listConnectionProviderRepairs.gen.js";
+export {
 	listConnectionSyncJobsInfiniteOptions,
 	listConnectionSyncJobsInfiniteQueryKey,
 	listConnectionSyncJobsOptions,
@@ -619,6 +625,12 @@ export {
 	listInstallationDeadLettersOptions,
 	listInstallationDeadLettersQueryKey,
 } from "./react-query/listInstallationDeadLetters.gen.js";
+export {
+	listInstanceProviderRepairsInfiniteOptions,
+	listInstanceProviderRepairsInfiniteQueryKey,
+	listInstanceProviderRepairsOptions,
+	listInstanceProviderRepairsQueryKey,
+} from "./react-query/listInstanceProviderRepairs.gen.js";
 export {
 	listLinkedIdentitiesOptions,
 	listLinkedIdentitiesQueryKey,
@@ -809,6 +821,8 @@ export { refreshClientSessionMutation } from "./react-query/refreshClientSession
 export { registerOutlineCollectionMutation } from "./react-query/registerOutlineCollection.gen.js";
 export { registerPasskeyMutation } from "./react-query/registerPasskey.gen.js";
 export { registerSlackChannelMutation } from "./react-query/registerSlackChannel.gen.js";
+export { releaseConnectionProviderRepairMutation } from "./react-query/releaseConnectionProviderRepair.gen.js";
+export { releaseOrphanProviderRepairMutation } from "./react-query/releaseOrphanProviderRepair.gen.js";
 export { releaseResearchDatasetMutation } from "./react-query/releaseResearchDataset.gen.js";
 export { removeLabelFromTeamMutation } from "./react-query/removeLabelFromTeam.gen.js";
 export { removeMemberMutation } from "./react-query/removeMember.gen.js";

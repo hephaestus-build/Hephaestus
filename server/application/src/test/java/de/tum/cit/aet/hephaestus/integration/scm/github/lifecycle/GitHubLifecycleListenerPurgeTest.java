@@ -118,7 +118,7 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
         assertThat(listener.purgeWorkspaceForInstallation(INSTALLATION_ID)).contains(workspace);
 
         verify(connectionService)
-                .disconnectForErasure(eq(connection), any(ConnectionService.TransitionRequest.class), any(), any());
+                .disconnectForErasure(eq(connection), any(ConnectionService.TransitionRequest.class), any());
     }
 
     @Test

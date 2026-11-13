@@ -116,21 +116,6 @@ class OutlineConnectionStateListenerTest extends BaseUnitTest {
     }
 
     @Test
-    void outlineDeactivation_deregistersByConnectionId() {
-        listener.onDeactivated(new ConnectionLifecycleEvent.Deactivated(42L, 5L, IntegrationKind.OUTLINE));
-
-        verify(webhookRegistrar).deregister(5L, 42L);
-        verifyNoInteractions(syncScheduler, syncJobService);
-    }
-
-    @Test
-    void nonOutlineDeactivation_isIgnored() {
-        listener.onDeactivated(new ConnectionLifecycleEvent.Deactivated(42L, 5L, IntegrationKind.SLACK));
-
-        verifyNoInteractions(webhookRegistrar, syncScheduler, syncJobService);
-    }
-
-    @Test
     void connectTimeFailure_neverPropagatesOffTheAsyncThread() {
         doThrow(new IllegalStateException("outline is down"))
                 .when(webhookRegistrar)

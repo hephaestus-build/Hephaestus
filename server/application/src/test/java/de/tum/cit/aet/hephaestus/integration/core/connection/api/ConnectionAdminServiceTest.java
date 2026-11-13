@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection.api;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -13,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -61,7 +63,12 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
         // Real converter so the encrypt/round-trip behaviour is exercised end-to-end.
         credentialConverter = new CredentialBundleConverter("a".repeat(32), false);
         service = new ConnectionAdminService(
-                connectionRepository, connectionService, workspaceRepository, manifests, credentialConverter);
+                connectionRepository,
+                connectionService,
+                workspaceRepository,
+                manifests,
+                credentialConverter,
+                mock(ProviderResourceRepairs.class));
     }
 
     @Test

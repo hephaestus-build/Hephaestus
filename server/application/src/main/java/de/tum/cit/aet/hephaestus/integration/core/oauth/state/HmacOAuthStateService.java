@@ -227,7 +227,7 @@ public class HmacOAuthStateService implements OAuthStateService {
         if (nonceStore != null && !nonceStore.tryConsume(nonce, binding)) {
             throw new IllegalArgumentException("This connection request was already used. Start the connection again.");
         }
-        return binding;
+        return nonceStore == null ? binding : nonceStore.boundAttempt(nonce, binding);
     }
 
     private static String encodeActor(@Nullable Long actorAccountId) {

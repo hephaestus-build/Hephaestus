@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.oauth.state;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Instant;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -17,6 +18,8 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public interface OAuthStateNonceRepository extends JpaRepository<OAuthStateNonce, String> {
+    Optional<OAuthStateNonce> findByNonceAndWorkspaceId(String nonce, long workspaceId);
+
     /** Issuing a nonce checks that it is unused. The nonce is the key, unique across every workspace. */
     @Override
     @WorkspaceAgnostic("Issuing a nonce checks that it is unused; the nonce is the key, unique across every workspace")

@@ -4,6 +4,38 @@ rule_files:
 evaluation_interval: 1m
 
 tests:
+  - name: provider removal needs sustained admin attention
+    interval: 1m
+    input_series:
+      - series: 'integration_provider_repair_open{job="hephaestus",kind="outline",state="confirmation_required",instance="server-a:9090"}'
+        values: "1x70 0x20"
+      - series: 'integration_provider_repair_open{job="hephaestus",kind="outline",state="confirmation_required",instance="server-b:9090"}'
+        values: "1x70 0x20"
+      - series: 'integration_provider_repair_open{job="hephaestus",kind="gitlab",state="awaiting_confirmation",instance="server-a:9090"}'
+        values: "1x70 0x20"
+    alert_rule_test:
+      - eval_time: 59m
+        alertname: HephaestusProviderRemovalNeedsConfirmation
+        exp_alerts: []
+      - eval_time: 61m
+        alertname: HephaestusProviderRemovalNeedsConfirmation
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              kind: outline
+            exp_annotations:
+              summary: A provider removal has lacked completion or authorization for an hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+          - exp_labels:
+              severity: warning
+              kind: gitlab
+            exp_annotations:
+              summary: A provider removal has lacked completion or authorization for an hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 75m
+        alertname: HephaestusProviderRemovalNeedsConfirmation
+        exp_alerts: []
+
   - name: a stopped erasure fires, automatic recovery without a stopped erasure stays silent
     interval: 1m
     input_series:

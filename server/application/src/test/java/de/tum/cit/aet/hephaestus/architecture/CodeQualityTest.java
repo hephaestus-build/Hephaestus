@@ -443,6 +443,13 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     // optional-bean break as the GitLab provider
                     "SecurityConfig", // InstalledClientRegistry is server-role only; the CORS configuration
                     // it contributes origins to is built on every runtime role
+                    "ProviderResourceRepairs", // Adapters are server-role beans; migration mode does not dispatch
+                    // provider operations.
+                    "GitLabResourceAdapter", // The client is conditional on GitLab runtime; resource identities remain
+                    // capturable when disabled.
+                    "OutlineResourceAdapter", // The client is conditional on Outline runtime; resource identities
+                    // remain
+                    // capturable when disabled.
                     "TurnContextLoads", // Context loaders are optional beans of each integration; a server
                     // without one, or with Git mirrors off, still serves the folder's documents
                     "InstanceLlmSettingsService", // LlmSettingsAudit's sole impl is @ConditionalOnServerRole, but this

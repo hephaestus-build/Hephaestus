@@ -964,11 +964,15 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         targetAccount.setPasskeyRecoveryRequired(true);
         targetAccount = accounts.saveAndFlush(targetAccount);
         Account otherAccount = accounts.saveAndFlush(new Account("Other"));
+        var nonceWorkspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("privacy-nonce"));
         var targetOAuthBinding = new OAuthStateService.StateBinding(
-                1L, IntegrationKind.GITHUB, Instant.now().truncatedTo(ChronoUnit.SECONDS), targetAccount.getId());
+                nonceWorkspace.getId(),
+                IntegrationKind.GITHUB,
+                Instant.now().truncatedTo(ChronoUnit.SECONDS),
+                targetAccount.getId());
         oauthNonces.issue(
                 "nonce-credential-canary",
-                1L,
+                nonceWorkspace.getId(),
                 IntegrationKind.GITHUB,
                 targetOAuthBinding.issuedAt(),
                 targetOAuthBinding.actorAccountId());
