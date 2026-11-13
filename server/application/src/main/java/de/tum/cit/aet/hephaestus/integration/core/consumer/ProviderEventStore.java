@@ -208,11 +208,14 @@ public class ProviderEventStore {
         checkLease(events.awaitLease(eventId), leaseEpoch);
     }
 
-    private static void checkLease(Optional<ProviderEventRepository.LeaseRow> candidate, int leaseEpoch) {
+    private static void checkLease(Optional<? extends ProviderEventRepository.LeaseRow> candidate, int leaseEpoch) {
         var row = candidate.orElseThrow(
                 () -> new ProviderEventFenceException(ProviderEventFenceException.Reason.ERASED_DURING_PROCESSING));
         if (!"LEASED".equals(row.getState()) || row.getLeaseEpoch() != leaseEpoch) {
             throw new ProviderEventFenceException(ProviderEventFenceException.Reason.LEASE_LOST);
+        }
+        if (row instanceof ProviderEventRepository.LeaseAttemptRow attempted && !attempted.getAcquired()) {
+            throw new ProviderEventBusyException();
         }
     }
 

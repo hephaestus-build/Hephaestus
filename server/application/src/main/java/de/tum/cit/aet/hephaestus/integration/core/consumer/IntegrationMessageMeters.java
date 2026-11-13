@@ -94,6 +94,7 @@ public class IntegrationMessageMeters {
     enum Outcome {
         COMPLETED("completed"),
         FAILED("failed"),
+        RETRIED("retried"),
         DROPPED("dropped"),
         /** The handler outlived the handler timeout, and its event returned to the inbox. */
         TIMED_OUT("timed_out");
