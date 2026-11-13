@@ -89,6 +89,7 @@ The migration guide owns each change. This table gives the names.
 
 | Where | Before | After | Migration entry |
 | --- | --- | --- | --- |
+| Site file | Fixed `server.databasePool.maximumPoolSize` or `postgresql.parameters.max_connections` | Automatic values or fixed values that hold the target chart’s full connection budget | *Check database connection limits for review recovery* |
 | Site file | `config.monitoring` | `config.sync`, with the same four child settings | *Rename scheduled sync settings* |
 | Site file | `config.auth.bootstrapAdmins`, `config.auth.browserExtensionIds`, `config.auth.passkeys.allowedOrigins`, `config.outline.allowedOrigins` as strings | The same keys as YAML arrays | *Convert chart list values to arrays* |
 | Site file | `conversationLoop.turns` | `sandbox.conversationTurns`, a count for the whole installation | *Stop every role before moving conversation turns to sandboxes* |
