@@ -114,6 +114,7 @@ public class ResultAdmissionService {
 
     /** Verifies and durably stages one completed practice. A lost acknowledgement can repeat only the same body. */
     public StageResponseDTO stage(AdmissionIdentity identity, AdmissionRequestDTO request) {
+        files.ensureAttemptFolder(identity);
         return Objects.requireNonNull(transactions.execute(status -> {
             files.holdCopyAdmission();
             var job = ownedJob(identity);
@@ -126,6 +127,7 @@ public class ResultAdmissionService {
 
     /** Seals the retained set once. Candidates are read from memberships, never resubmitted by the runner. */
     public AdmissionResponseDTO admit(AdmissionIdentity identity, SealResultsRequestDTO request) {
+        files.ensureAttemptFolder(identity);
         return admittedResponse(seal(identity, request));
     }
 
@@ -194,6 +196,7 @@ public class ResultAdmissionService {
 
     /** A retry with every practice ended seals without capturing or starting a sandbox. */
     public boolean sealIfComplete(AdmissionIdentity identity) {
+        files.ensureAttemptFolder(identity);
         return Boolean.TRUE.equals(transactions.execute(status -> {
             files.holdCopyAdmission();
             var job = ownedJob(identity);
@@ -224,6 +227,7 @@ public class ResultAdmissionService {
 
     /** At the retry limit, preserve completed practices and record why the remaining work stopped. */
     public void finishInterrupted(AdmissionIdentity identity, ReviewStopReason reason) {
+        files.ensureAttemptFolder(identity);
         transactions.executeWithoutResult(status -> {
             files.holdCopyAdmission();
             var job = ownedJob(identity);

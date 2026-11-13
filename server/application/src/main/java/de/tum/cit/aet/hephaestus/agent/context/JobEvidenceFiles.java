@@ -81,6 +81,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.TransactionException;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -338,8 +339,20 @@ public class JobEvidenceFiles implements SandboxResultListener {
     }
 
     public EvidenceDirectory verificationDirectory(ReviewJob job) {
-        ensureAttemptFolder(job);
+        requireAttemptFolder(job);
         return new EvidenceDirectory("inputs/", directory(job));
+    }
+
+    /**
+     * {@link #ensureAttemptFolder(ReviewJob)} for the attempt that {@code identity} names, when it is still its job's
+     * attempt and not yet admitted. Admission calls it before it takes its locks and opens its transaction. An admitted
+     * attempt reads no folder there: admission removes it once it commits.
+     */
+    public void ensureAttemptFolder(ResultAdmissionService.AdmissionIdentity identity) {
+        Path root = directory(identity.workspaceId(), identity.jobId(), identity.attempt(), identity.runId());
+        jobs.findByIdAndWorkspaceId(identity.jobId(), identity.workspaceId())
+                .filter(job -> directory(job).equals(root) && !ResultAdmissionService.isAdmitted(job))
+                .ifPresent(this::ensureAttemptFolder);
     }
 
     /**
@@ -347,13 +360,17 @@ public class JobEvidenceFiles implements SandboxResultListener {
      * attempt's recorded files ({@link AttemptInputs}) and its checkouts, which this server builds from the recorded
      * commit and tree and checks against the recorded checkout digest. A folder that exists stays as it is. One rebuild
      * runs for each folder in this JVM; the others wait for it. An attempt whose copy is erased, or that ended, gets
-     * no folder.
+     * no folder. The readers of the folder never rebuild it: they run in admission's transaction.
      *
+     * @throws IllegalStateException when a transaction is active: a checkout build can fetch from the provider for as
+     *     long as the provider takes
      * @throws CheckoutUnverifiedException when the folder cannot be rebuilt with the recorded identity, or the running
      *     attempt's recorded files are missing: a capture failure, never missing evidence
      * @throws AttemptFolderBusyException when another process holds the folder longer than a rebuild waits: retryable
      */
     public void ensureAttemptFolder(ReviewJob job) {
+        if (TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("An evidence folder is rebuilt before any transaction starts");
         Path root = directory(job);
         if (Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return;
         JsonNode capture = job.getCapture();
@@ -361,9 +378,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
         var rebuild = rebuilds.computeIfAbsent(root, folder -> new ReentrantLock());
         rebuild.lock();
         try {
-            if (Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return;
-            if (job.getStatus() != ReviewJobStatus.RUNNING
-                    || !personCopies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt())) return;
+            if (Files.exists(root, LinkOption.NOFOLLOW_LINKS) || !live(job)) return;
             var files = attemptInputs.list(job);
             if (files.isEmpty()) {
                 throw unverified(
@@ -380,6 +395,23 @@ public class JobEvidenceFiles implements SandboxResultListener {
             rebuild.unlock();
             if (!rebuild.hasQueuedThreads()) rebuilds.remove(root, rebuild);
         }
+    }
+
+    /**
+     * The folder that {@link #ensureAttemptFolder(ReviewJob)} built for the job's running attempt before its caller's
+     * transaction.
+     *
+     * @throws AttemptFolderBusyException when the folder is gone again, as after a sweep: retryable, since the next
+     *     call rebuilds it before its transaction
+     */
+    private void requireAttemptFolder(ReviewJob job) {
+        if (Files.exists(directory(job), LinkOption.NOFOLLOW_LINKS) || job.getCapture() == null || !live(job)) return;
+        throw new AttemptFolderBusyException("The evidence folder is not on this server");
+    }
+
+    private boolean live(ReviewJob job) {
+        return job.getStatus() == ReviewJobStatus.RUNNING
+                && personCopies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt());
     }
 
     /** The job's folder lease, waited for while a sweep or a runtime of this or another process holds it briefly. */
@@ -748,7 +780,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
         Path root = directory(identity.workspaceId(), identity.jobId(), identity.attempt(), identity.runId());
         jobs.findByIdAndWorkspaceId(identity.jobId(), identity.workspaceId())
                 .filter(job -> directory(job).equals(root))
-                .ifPresent(this::ensureAttemptFolder);
+                .ifPresent(this::requireAttemptFolder);
         try {
             var files = new TreeMap<String, byte[]>();
             byte[] index = Files.readAllBytes(regularFile(root, SandboxLayout.MANIFEST_PATH));
@@ -1227,7 +1259,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
     }
 
     private Path sourceFile(ReviewJob job, String filePath) throws IOException {
-        ensureAttemptFolder(job);
+        requireAttemptFolder(job);
         Path root = directory(job);
         Path sourceFile = safePath(root, filePath);
         if (!sourceFile.toRealPath().startsWith(root.toRealPath())

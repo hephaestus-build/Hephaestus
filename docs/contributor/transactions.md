@@ -45,6 +45,8 @@ Spring: "self-invocation (in effect, a method within the target object calling a
   `GitLabTokenLifecycleService` holds such a lock.
   Provider removal uses the separate capture, dispatch and settle transactions in [ADR 0101](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0101-a-connection-cannot-adopt-an-upstream-resource-whose-removal-is-unresolved.md).
 - `LlmCallPermits` refuses a model call that starts in a transaction.
+- `JobEvidenceFiles#ensureAttemptFolder` refuses an evidence folder rebuild that starts in a transaction.
+  A rebuild can fetch from the provider. Result admission rebuilds the folder before it takes its locks.
 - `database_transaction_http_requests_total` counts the HTTP requests that start in a transaction, by boundary.
   It shows which boundaries still break this rule.
 
