@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { problemType } from "@/lib/problem-detail";
 import { sessions } from "@/mocks/fixtures/auth";
@@ -9,6 +9,11 @@ import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAt, loadRouteCode } from "@/test/router-harness";
 
 beforeAll(async () => loadRouteCode("/settings"), ROUTE_RENDER_WAIT.timeout);
+
+// The page is not workspace-scoped, so the reader belongs to no workspace here.
+beforeEach(() => {
+	server.use(http.get("*/workspaces", () => HttpResponse.json([])));
+});
 
 async function sessionsRegion(): Promise<HTMLElement> {
 	return screen.findByRole("region", { name: "Active sessions" }, ROUTE_RENDER_WAIT);

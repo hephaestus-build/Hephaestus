@@ -14,6 +14,8 @@ beforeAll(async () => loadRouteCode("/settings", "/login"), ROUTE_RENDER_WAIT.ti
 const realLocation = window.location;
 
 beforeEach(() => {
+	// The page is not workspace-scoped, so the reader belongs to no workspace here.
+	server.use(http.get("*/workspaces", () => HttpResponse.json([])));
 	// JSDOM has no viewport observer; the landing page uses it only for decorative motion.
 	vi.stubGlobal("IntersectionObserver", ObserverStub);
 	server.use(

@@ -1,6 +1,6 @@
 import { screen } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { beforeAll, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Workspace } from "@/api/types.gen";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
@@ -11,6 +11,11 @@ beforeAll(
 	async () => loadRouteCode("/integrations", "/w/intro-course/admin/integrations/slack"),
 	ROUTE_RENDER_WAIT.timeout,
 );
+
+// The page is not workspace-scoped, so the reader belongs to no workspace here.
+beforeEach(() => {
+	server.use(http.get("*/workspaces", () => HttpResponse.json([])));
+});
 
 vi.mock("@/hooks/use-sync-events", () => ({ useSyncEvents: () => false }));
 

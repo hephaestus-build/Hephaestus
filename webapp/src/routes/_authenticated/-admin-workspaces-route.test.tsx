@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { act, cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { adminListWorkspacesQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { AdminWorkspaceView, InstanceSettings } from "@/api/types.gen";
@@ -12,6 +12,11 @@ import { deferred } from "@/test/async";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
 beforeAll(async () => loadRouteCode("/admin/workspaces"), ROUTE_RENDER_WAIT.timeout);
+
+// The page is not workspace-scoped, so the reader belongs to no workspace here.
+beforeEach(() => {
+	server.use(http.get("*/workspaces", () => HttpResponse.json([])));
+});
 
 const aet: Wire<AdminWorkspaceView> = {
 	id: 1,
