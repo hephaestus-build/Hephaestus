@@ -288,6 +288,21 @@ on proximity in light mode, not on its semantic purpose.
 Select the existing token for the meaning.
 A genuine false positive gets a line-level suppression with its reason, never a palette-wide exception.
 
+## Retired paths
+
+Run `vp run gate:no-legacy` to check source deprecations, configuration aliases, path redirects and docs redirect stubs.
+The gate runs in `check` and the policy checks in CI.
+Provider schemas and provider payload mixins follow their upstream contracts.
+Authentication, current landing pages and the canonical workspace-host redirect remain current flows.
+Review also checks behavior that source patterns cannot classify.
+
+`scripts/no-legacy-baseline.json` records the remaining removals during the release candidates.
+Each entry names its owner and records its source file's fingerprint.
+A file with an entry stays frozen until its retired paths and entries are removed together.
+The gate rejects new entries, larger counts, changed fingerprints and stale entries.
+The first baseline can record only files unchanged from the Git base.
+Stable 1.0 and later releases require an empty baseline.
+
 ## Repository tooling
 
 Use these conventions when changing tasks or lint configuration.

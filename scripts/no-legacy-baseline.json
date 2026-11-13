@@ -1,0 +1,74 @@
+[
+	{
+		"rule": "path-alias",
+		"file": "deploy/chart/hephaestus/templates/route.yaml",
+		"text": "- type: URLRewrite",
+		"digest": "ea167dc39fa715386bdddb851693d47c90c7745a7e3dae320397ccb2fe473e0b",
+		"count": 1,
+		"owner": "#4179 API prefix"
+	},
+	{
+		"rule": "docs-redirect",
+		"file": "docs/docusaurus.config.ts",
+		"text": "redirects: [",
+		"digest": "de627aff12f293d960a4e9317c8f0a4f08ed476fea64530f9bbfe69c955833ee",
+		"count": 1,
+		"owner": "LEGACY docs"
+	},
+	{
+		"rule": "docs-redirect",
+		"file": "docs/docusaurus.config.ts",
+		"text": "\"@docusaurus/plugin-client-redirects\",",
+		"digest": "de627aff12f293d960a4e9317c8f0a4f08ed476fea64530f9bbfe69c955833ee",
+		"count": 1,
+		"owner": "LEGACY docs"
+	},
+	{
+		"rule": "docs-redirect",
+		"file": "docs/package.json",
+		"text": "\"@docusaurus/plugin-client-redirects\": \"3.10.2\",",
+		"digest": "86d599218a522aac9fb7a78887d4de0a28410786339233f03ce7300c32ddba88",
+		"count": 1,
+		"owner": "LEGACY docs after #4243 lockfile"
+	},
+	{
+		"rule": "config-alias",
+		"file": "scripts/write-platform-exceptions.ts",
+		"text": "const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;",
+		"digest": "629f2498eaaf2d6ad1fc559873b05806bfe83f0bcff0938d0cfe769831cdf4bb",
+		"count": 1,
+		"owner": "LEGACY scripts"
+	},
+	{
+		"rule": "path-alias",
+		"file": "server/application/src/main/java/de/tum/cit/aet/hephaestus/workspace/context/WorkspaceContextFilter.java",
+		"text": "response.setStatus(HttpStatus.PERMANENT_REDIRECT.value());",
+		"digest": "2037412d8307144f9ab540b8ccbf3d9861177521042973a27147a6ce1ce8ae6f",
+		"count": 1,
+		"owner": "LEGACY after #4179/#4249"
+	},
+	{
+		"rule": "path-alias",
+		"file": "webapp/docker/nginx.conf",
+		"text": "return 308 /conversation$is_args$args;",
+		"digest": "17807177be030be5636dc22883c407646fe3592f99451fd053bd646d79adc49d",
+		"count": 1,
+		"owner": "LEGACY routes"
+	},
+	{
+		"rule": "path-alias",
+		"file": "webapp/docker/nginx.conf",
+		"text": "return 308 /w/$conversation_workspace/conversation$is_args$args;",
+		"digest": "17807177be030be5636dc22883c407646fe3592f99451fd053bd646d79adc49d",
+		"count": 1,
+		"owner": "LEGACY routes"
+	},
+	{
+		"rule": "route-alias",
+		"file": "webapp/src/routes/_authenticated/w/$workspaceSlug/mentor.tsx",
+		"text": "throw redirect({",
+		"digest": "b534769a78ed3f3d38ad85c7944ea35357b1460ea10e186081e4812624ae0974",
+		"count": 1,
+		"owner": "LEGACY routes"
+	}
+]
