@@ -10,8 +10,7 @@ Use this procedure to run the release against a PostgreSQL server that you opera
 
 ## Set up the database roles
 
-The chart never gets the administrator login of your PostgreSQL.
-Thus, you set up the roles yourself.
+The chart never gets the administrator login of your PostgreSQL, so you set up the roles yourself.
 Do this before the first install, after each change of their passwords, and after each update of the server's extensions.
 
 1. Get the folder `files/` from the verified chart of the release, as [Verify the release chart](./kubernetes#verify-the-release-chart) describes.
@@ -37,9 +36,8 @@ The administrator can be a superuser or a role with `CREATEROLE` and `CREATEDB`,
 - It must own the Hephaestus database, or be a member of its owner.
 - If the roles exist, it must have created them, or have the `ADMIN` option on them.
 - The file makes it a member of `hephaestus_owner`, with `INHERIT` and `SET`.
-  Thus, it can give the database and the objects to that role.
-  The administrator can then act as `hephaestus_owner`, and the row-level security of its tables does not apply to it.
-  This gives it nothing new: with the `ADMIN` option on the role, it could already grant itself that membership.
+  It can then give the database and the objects to that role.
+  The administrator can also act as `hephaestus_owner`, and the row-level security of its tables does not apply to it.
 
 Only a superuser may change the settings that `database-quiet.sql` turns off.
 For each setting that the administrator may not change, the file checks the value that applies:
@@ -66,20 +64,33 @@ The migrations need no superuser: `citext` and `btree_gist` are trusted extensio
 
 ## Connect the release
 
-Set `postgresql.bundled=false` to use your PostgreSQL server.
-Set up its [database roles](#set-up-the-database-roles) first.
-That server must have the `pg_partman` extension.
-Also set `wal_compression = lz4` (or `zstd`) on it, as the bundled PostgreSQL does.
+Your PostgreSQL server needs the `pg_partman` extension.
+Set `wal_compression = lz4`, or `zstd`, on it, as the bundled PostgreSQL does.
 Without it, a streamed answer writes about 1.5 times more write-ahead log, because most of that log is full-page images of index pages.
-Compression costs a little CPU for each full-page image.
 
-The chart connects to `postgresql.external.host` and `postgresql.external.port` with `sslmode=verify-full`.
-The server certificate must name that host.
-The Secret in `postgresql.tls.existingSecret` needs only `ca.crt`, the CA that signed the server certificate.
-The chart has no setting for a connection without certificate verification or without TLS.
+1. Create the [PostgreSQL TLS Secret](./kubernetes#postgresql-tls-secret) with only `ca.crt`, the CA that signed the server certificate.
+2. Add these values to your values file:
+
+   ```yaml title="values.yaml"
+   postgresql:
+     bundled: false
+     external:
+       host: postgresql.example.internal
+       port: 5432
+       cidr: 10.20.30.40/32
+     tls:
+       existingSecret: hephaestus-postgresql-tls
+   ```
+
+   Set `host` to the name in the server certificate.
+   Set `cidr` to the address range of the database. The network policy of the server opens only this range on `port`.
+
+3. Install or upgrade the release.
+
+The chart connects with `sslmode=verify-full`.
+It has no setting for a connection without TLS or without certificate verification.
 
 ## Check that it worked
 
-1. Install or upgrade the release.
-2. Read the log of the migration Job of the revision. It logs `Database migration completed`.
-3. Run `kubectl --namespace hephaestus rollout status deployment/hephaestus-server`. The server becomes ready.
+1. Read the log of the migration Job of the revision. It logs `Database migration completed`.
+2. Run `kubectl --namespace hephaestus rollout status deployment/hephaestus-server`. The server becomes ready.

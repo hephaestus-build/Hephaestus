@@ -4,75 +4,50 @@ description: The deployment checks that the server reports at startup and on the
 page_type: reference
 ---
 
-The production profile checks deployment settings at startup.
-The server-role endpoint `GET /api/admin/configuration-readiness` returns those facts and checks that need runtime state.
-It requires the `app_admin` authority.
-It is available only after checks that can prevent startup pass.
+The server checks its deployment settings at startup, under the production profile.
+`GET /api/admin/configuration-readiness` returns those facts and the checks that need runtime state. The readiness card of the instance admin overview shows them.
+The endpoint requires the `app_admin` authority. It is available only after the checks that can prevent startup pass.
 Diagnostics never contain configured values.
 
-Each fact has these fields:
+The chart sets each setting from your values and the release Secret ([Configuration reference](./configuration-reference)).
 
-- A stable `id`.
-- The affected configuration `subject`.
-- Applicable runtime `roles`.
-- A `requirement` and a `status`.
-- An explanation and a documentation link.
+Each fact has a stable `id`, the configuration `subject`, the runtime `roles`, a `requirement`, a `status`, an explanation and a link to its section on this page.
+The requirement is `REQUIRED`, `RECOMMENDED`, or `OPTIONAL`.
 
-Requirements are `REQUIRED`, `RECOMMENDED`, or `OPTIONAL`.
-Status is one of:
+| Status | Meaning |
+| --- | --- |
+| `SATISFIED` | The check passed. |
+| `ACTION_REQUIRED` | The check failed. A required deployment fact with this status prevents startup. |
+| `NOT_CONFIGURED` | An optional setting is absent. |
+| `NOT_APPLICABLE` | The check does not apply to this server, for example an agent check with agent jobs off. |
 
-| Status            | Meaning                                                                                 |
-| ----------------- | --------------------------------------------------------------------------------------- |
-| `SATISFIED`       | The applicable check passed.                                                            |
-| `ACTION_REQUIRED` | An applicable check failed. Required deployment facts with this status prevent startup. |
-| `NOT_CONFIGURED`  | An optional setting is absent.                                                          |
-| `NOT_APPLICABLE`  | The check does not apply to this process's runtime roles.                               |
+| Fact `id` | Requirement | Section |
+| --- | --- | --- |
+| `runtime.roles` | Required | [Server role](#runtime-roles) |
+| `database.url`, `database.username`, `database.password` | Required | [Database](#database) |
+| `security.credential-encryption`, `security.value-encryption` | Required | [Credential encryption](#credential-encryption) |
+| `external.base-url`, `external.api-origin` | Required | [External URL](#external-url) |
+| `webhook.shared-secret`, `webhook.routing-secret` | Required | [Webhooks](#webhooks) |
+| `auth.state-cookie-key`, `auth.login-provider` | Required | [Login](#login) |
+| `llm.proxy-egress` | Required with agent jobs on | [LLM proxy](#llm-proxy) |
+| `agent.image-contract` | Required with agent jobs on | [Agent image](#agent-image) |
+| `notification.email` | Optional | [Email](#email) |
 
-The table names variables inside each application Pod. The chart owns their role selection and their mapping from values and Secret keys.
+## Server role {/* #runtime-roles */}
 
-| Setting                                         | Application environment variable                |
-| ----------------------------------------------- | ----------------------------------------------- |
-| `spring.datasource.url`                         | `DATABASE_URL`                                  |
-| `spring.datasource.username`                    | `DATABASE_USERNAME`                             |
-| `spring.datasource.password`                    | `DATABASE_PASSWORD`                             |
-| `hephaestus.runtime.server.enabled`             | `HEPHAESTUS_RUNTIME_SERVER_ENABLED`             |
-| `hephaestus.agent.enabled`                      | `AGENT_ENABLED`                                 |
-| `hephaestus.host-url`                           | `APPLICATION_HOST_URL`                          |
-| `hephaestus.auth.issuer`                        | `HEPHAESTUS_AUTH_ISSUER`                        |
-| `hephaestus.security.encryption-key`            | `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`            |
-| `hephaestus.security.credential-encryption-key` | `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` |
-| `hephaestus.webhook.secret`                     | `WEBHOOK_SECRET`                                |
-| `hephaestus.webhook.routing.secret`             | `WEBHOOK_ROUTING_SECRET`                        |
-| `hephaestus.webhook.routing.previous-secret`    | `WEBHOOK_ROUTING_PREVIOUS_SECRET`               |
-| `hephaestus.auth.state-cookie-key`              | `HEPHAESTUS_AUTH_STATE_COOKIE_KEY`              |
-| `hephaestus.llm.egress.allow-loopback`          | `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK`          |
-| `hephaestus.agent.image.require-digest`         | `HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST`         |
-| `hephaestus.agent.image.reference`              | `HEPHAESTUS_AGENT_IMAGE_REFERENCE`              |
-| `spring.mail.host`                              | `SPRING_MAIL_HOST`                              |
-| `hephaestus.email.from`                         | `HEPHAESTUS_EMAIL_FROM`                         |
-
-## Runtime roles
-
-1. Enable `hephaestus.runtime.server.enabled`.
-2. Use only `true` or `false` for it.
-
-`hephaestus.agent.enabled` lets a server run agent jobs and their sandboxes.
+`runtime.roles` checks `hephaestus.runtime.server.enabled`.
+It must be `true`, which is its default. Only `true` or `false` is valid.
+`hephaestus.agent.enabled` (`AGENT_ENABLED`) turns on agent jobs and their sandboxes ([Agent jobs](./runtime-roles#agent-jobs)).
 
 ## Database
 
-The server role uses PostgreSQL.
-`DATABASE_URL` must be a PostgreSQL URL.
-The production profile adds the `jdbc:` prefix.
-Spring Boot and Liquibase perform separate connection and migration health checks.
-This syntax check does not replace them.
+`database.url` checks that `DATABASE_URL` is a PostgreSQL URL. The production profile adds the `jdbc:` prefix.
+`database.username` and `database.password` check that both values are not empty.
+Spring Boot and Liquibase check the connection and the migration separately.
 
-1. Supply a non-empty username.
-2. Supply a non-empty password.
-
-Remote databases require TLS.
-Prefer `sslmode=verify-full`, which encrypts the connection and verifies server identity.
-`sslmode=require` encrypts without identity verification.
-Production startup rejects plaintext remote connections unless `HEPHAESTUS_DATABASE_ALLOW_INSECURE_REMOTE=true` explicitly permits them.
+A remote database requires TLS.
+`sslmode=verify-full` encrypts the connection and verifies the server identity. `sslmode=require` only encrypts.
+Production startup refuses a plaintext remote connection, unless `HEPHAESTUS_DATABASE_ALLOW_INSECURE_REMOTE=true` permits it.
 
 ## Credential encryption
 
@@ -83,41 +58,32 @@ Rotate the credential key with the documented online procedure.
 
 :::
 
-The server role requires both keys.
-
-1. Set each encryption key to exactly 32 printable, non-space ASCII characters.
-2. Keep both keys with the backup set, in separate storage with separate credentials.
-   [Keep the required keys outside the cluster](./secret-custody#keep-the-required-keys-outside-the-cluster) gives the rule.
-
-The [Secret procedure](./kubernetes#create-the-secret) generates the required keys.
-Keep the general and credential encryption keys as separate settings.
+`security.credential-encryption` checks `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`, which encrypts stored integration credentials.
+`security.value-encryption` checks `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`, which seals JWT signing keys and other encrypted values.
+Each key must be exactly 32 printable, non-space ASCII characters.
+Keep both keys with the backup set, in separate storage with separate credentials ([Keep the required keys outside the cluster](./secret-custody#keep-the-required-keys-outside-the-cluster)).
 
 ## External URL
 
-Set `hephaestus.host-url` to the public HTTPS origin.
-The origin must have no credentials, query, fragment, or path other than `/`.
-The server role also requires `hephaestus.auth.issuer` as such an origin.
-Provider webhooks and the Slack callback use it. The chart sets it from the host.
+`external.base-url` checks `hephaestus.host-url`, and `external.api-origin` checks `hephaestus.auth.issuer`.
+Each must be a root HTTPS origin, with no credentials, query, fragment, or path other than `/`.
+Provider webhooks and the Slack callback use the issuer. The chart sets both from `host`.
 
 ## Webhooks
 
-The server requires `hephaestus.webhook.secret` with at least 32 printable, non-space ASCII characters.
-Generate an independent value in the release Secret.
-Never reuse another application key.
+`webhook.shared-secret` checks `WEBHOOK_SECRET`.
+It needs at least 32 printable, non-space ASCII characters. Never reuse another application key.
 
-The REQUIRED fact `webhook.routing-secret` applies to the server on every production deployment, even without GitLab.
-
-1. Set `WEBHOOK_ROUTING_SECRET` to at least 32 printable, non-space ASCII characters.
-2. Use a value different from `WEBHOOK_SECRET`.
+`webhook.routing-secret` checks `WEBHOOK_ROUTING_SECRET`, also on a deployment without GitLab.
+GitLab group hooks and Outline subscriptions use it.
+It needs at least 32 printable, non-space ASCII characters, and must differ from `WEBHOOK_SECRET`.
 
 ## Login
 
-The server role requires a Base64-encoded 32-byte `hephaestus.auth.state-cookie-key`.
-It also requires an enabled GitHub or GitLab sign-in provider in the database-backed provider catalogue.
-Environment provider entries are seeds, not the readiness authority.
-Slack and Outline are link-only providers and do not satisfy sign-in readiness.
-
-Use the [configuration reference](./configuration-reference) to find the chart-owned values for auth session and user-view rate limits.
+`auth.state-cookie-key` checks `HEPHAESTUS_AUTH_STATE_COOKIE_KEY`, a Base64-encoded 32-byte key that seals the OAuth state.
+`auth.login-provider` checks that at least one GitHub or GitLab sign-in provider is enabled in the provider catalog of the instance.
+Environment provider entries only seed the catalog.
+Slack and Outline only link accounts, so they do not satisfy this check.
 
 ### Recent sign-in for sensitive actions
 
@@ -130,100 +96,40 @@ These actions require a sign-in from the last few minutes:
 - Register an LLM connection.
 - Link an identity.
 
-`hephaestus.auth.step-up-max-age` sets that window and defaults to `5m`.
-It must be a positive duration shorter than the absolute session lifetime.
-Otherwise, the gate can never bind.
-
-Access confirmation uses a provider already connected to the account.
-This is local confirmation, not multi-factor authentication.
-An identity provider with an existing session may complete it without another request to the user.
-Enforce MFA at the provider.
-
-The server does not replay a refused action after access confirmation.
-
-1. Review the action.
-2. Submit it again.
+`hephaestus.auth.step-up-max-age` sets that window, `5m` by default.
+It must be a positive duration shorter than the session lifetime.
+The confirmation uses a provider that is already connected to the account. It is not multi-factor authentication: enforce MFA at the provider.
+The server does not replay a refused action, so the user submits it again after the confirmation.
 
 ### Session deadlines
 
 The access cookie lasts `24h` by default (`hephaestus.auth.access-ttl`).
-While active, the browser renews it about hourly, before expiry, or after a return to a tab whose renewal is due.
-Hidden or inactive tabs do not renew it continuously.
-This is a renewable credential lifetime, not a precise last-request idle timeout.
-After the cookie expires, the user must sign in.
+While a tab is active, the browser renews it about every hour. After the cookie expires, the user must sign in.
+A session ends at `hephaestus.auth.session-max-lifetime`, `7d` by default, whatever the activity.
+Renewal never moves a session past that deadline. Revocation and account suspension deny access before either deadline.
 
-In production, tokens stay in HttpOnly, Secure, host-only, SameSite=Lax cookies.
-The browser never stores them in local storage.
-A session ends at `hephaestus.auth.session-max-lifetime` (default `7d`), regardless of activity.
-Access token renewal stays within that deadline, never past it.
-
-An account can hold any number of parallel sessions, one per browser or installed client.
-Each one appears under **User settings → Active sessions**, where its owner can end it.
+Tokens stay in HttpOnly, Secure, host-only, SameSite=Lax cookies, never in local storage.
+An account can hold parallel sessions, one for each browser or installed client.
 An instance admin can end every session of one account with **Force sign out**, or block the account.
 To end every session on the instance, see [End every session on the instance](./production-operations-runbook#end-every-session-on-the-instance).
-
-Reads through a [user view](/contributor/instance-admin#read-only-user-views) have a per-instance-admin budget.
-`hephaestus.auth.rate-limit.user-view.capacity` per `hephaestus.auth.rate-limit.user-view.period` defaults to 120 per minute.
-Every read about the viewed member counts, so one page usually uses several.
-If the rate-limit store is unavailable, the server refuses views rather than permitting them without a budget.
-
-### Choosing session limits
-
-Longer sessions reduce interruptions but increase exposure to stolen cookies and unattended devices.
-The defaults suit individual devices for routine team work.
-For shared computers or sensitive deployments, shorten both limits.
-Require MFA at the identity provider.
-The recent-sign-in gate above does not establish a second factor.
-
-[NIST SP 800-63B-4 §2.1.3](https://pages.nist.gov/800-63-4/sp800-63b.html#aal1reauth) recommends an overall timeout of no more than 30 days at AAL1.
-It does not require an inactivity timeout there.
-[OWASP's session guidance](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#automatic-session-expiration) gives more conservative examples: 15–30 minutes idle and a 4–8 hour overall timeout.
-These are risk-based reference points, not an assurance-level certification for Hephaestus.
-
-Explicit overrides take precedence over defaults.
-Renewal applies the configured access lifetime but preserves the session's original absolute deadline and sign-in time.
-Revocation and account suspension still deny access before either deadline.
-
-Temporary renewal failures leave the page open.
-They do not bypass server authentication.
-A failed sign-out reports an error, which the user can retry.
-If the server rotates a token but its response is lost, the user may need to sign in again.
-Cross-tab coordination requires [Web Locks support](https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API) and a secure context (HTTPS in production).
+For shared computers or sensitive deployments, shorten both lifetimes and require MFA at the identity provider.
 
 ## LLM proxy
 
-A server with `hephaestus.agent.enabled` must leave `hephaestus.llm.egress.allow-loopback=false`. Provider credentials and model
-configuration are database-backed runtime configuration and are not deployment settings.
+`llm.proxy-egress` checks that `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK` is `false` on a server with agent jobs on.
+Provider credentials and models are runtime settings in the database, not deployment settings ([AI providers](./ai-providers)).
 
 ## Agent image
 
-A server with `hephaestus.agent.enabled` requires digest enforcement and a SHA-256-pinned `hephaestus.agent.image.reference`
-(readiness fact `agent.image-contract`). See [Release image lock](./release-image-lock).
-
-## Sandbox isolation
-
-Servers run sandbox work through the Kubernetes API with the chart's service account.
-Run the platform isolation gate before sandbox work starts.
-Server readiness does not qualify the cluster policy.
-The settings page does not test the cluster from the server role.
-See [Kubernetes isolation qualification](./sandboxes#server) for the server configuration and proof.
+`agent.image-contract` checks, on a server with agent jobs on, that `HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST` is on and that `HEPHAESTUS_AGENT_IMAGE_REFERENCE` is pinned by its SHA-256 digest.
+The chart sets both from the release ([Release image lock](./release-image-lock)).
 
 ## Email
 
 Email is optional.
-The fact `notification.email` is `NOT_CONFIGURED` until `spring.mail.host` names a relay.
-It is `ACTION_REQUIRED` if a relay is set but `hephaestus.email.from` is blank.
-Without a sender address, every notification is withheld and recorded as `NOT_CONFIGURED`.
-This optional readiness fact never prevents startup.
+`notification.email` is `NOT_CONFIGURED` until `spring.mail.host` names a relay.
+It is `ACTION_REQUIRED` if a relay is set but `hephaestus.email.from` is blank. Every notification is then withheld and recorded as `NOT_CONFIGURED`.
+This fact never prevents startup.
 
-Personal settings do not expose SMTP setup warnings.
-Instance admins configure the capability in instance settings.
-See the supported no-email behavior in the setup guide.
-[Integration settings → Email](./production-setup#email) gives configuration and verification instructions.
-Before email activation, complete the processing review in the [processor checklist](./dsms/processor-checklist#follow-up-if-the-processing-surface-changes).
-
-### Test-instance confirmation policy
-
-[Admin passkeys](./passkeys.mdx#test-instances-without-additional-confirmation) explains the
-explicit test-instance override for additional authentication checks.
-Keep its default enabled on production instances.
+[Integration settings → Email](./production-setup#email) gives the configuration and the test.
+Before you turn on email, complete the processing review in the [processor checklist](./dsms/processor-checklist#follow-up-if-the-processing-surface-changes).

@@ -1,81 +1,71 @@
 ---
 title: Sizing and scaling
-description: The memory, CPU, process, storage and database budget of the Kubernetes deployment.
+description: The nodes, requests, reviews and conversation turns of each chart profile, how to raise capacity, and the database connection budget.
 page_type: reference
 ---
 
-The [Helm chart reference](./helm-chart#profiles) owns the deployment profiles and their resource budgets.
-Use measured requests to plan capacity, and keep room for the operating system, the cluster and a rolling update.
-A resource limit is a ceiling, not evidence that every workload fits.
+This page gives the capacity of each [chart profile](./helm-chart#profiles), the values that change it, and the database connection budget.
+The numbers come from the profiles and `values.yaml` of the chart.
+They are scheduling requests, not measured peaks. Keep room for the operating system, the cluster and a rolling update.
 
-## Measured conversation baseline
+## Profiles at a glance
 
-The web conversation target is first answer text within 10 seconds for at least 95% of turns.
-Time starts when the client sends the question and includes queue, startup, provider and tool time.
-A stream snapshot or heartbeat is not answer text.
+| Profile | Nodes | Servers | Requests of each server | PostgreSQL requests and volume | Reviews at once | Conversation turns at once |
+| --- | --- | --- | --- | --- | --- | --- |
+| `dev.yaml`, `preview.yaml` | One workstation node | 2 | 250m CPU, 3 GiB memory, 5 GiB Git cache | 100m CPU, 1 GiB memory, 5 GiB volume | 0: sandboxes are off | 0 |
+| `small.yaml` | One node of 4 vCPU, at least 16 GiB of memory and 150 GiB of disk | 1 | 500m CPU, 3 GiB memory, 20 GiB Git cache | 250m CPU, 2 GiB memory, 20 GiB volume | 5 | 11, or 7 with backups on (`auto`) |
+| `cluster.yaml` | Several nodes, with sandbox nodes that hold the review and conversation quotas | 2 | 500m CPU, 3 GiB memory, 70 GiB Git cache | 250m CPU, 2 GiB memory, 20 GiB volume | 12 | 8 |
 
-The table gives a controlled Kubernetes measurement on release 0.95.0, with 4 vCPUs and 15.61 GiB of memory.
-Each case had 40 synthetic users, three turns each and 30 seconds between turns.
-The users arrived over one second.
-All 120 turns completed in each case, with no missing first-text samples.
+Each server's memory request equals its limit, because the JVM sizes its heap from the limit.
+The server's CPU limit is 4 cores, and 2 with `dev.yaml` and `preview.yaml`.
+The Git cache is node storage of each server ([Storage and retention](./helm-chart#storage-and-retention)).
 
-The deterministic provider used assumed timings: first token at 3 seconds, 500 declared output tokens and 13 seconds per call.
-Each turn made one call, with no tools, reviews or provider throttles.
-These conditions do not represent the full course workload.
+The sandbox quotas hold these requests at full load, before RuntimeClass overhead:
 
-| Turn admission | First text p50 / p95 | Turn duration p50 / p95 | First text within 10 s | Cohort drain, turns/h |
-| -------------- | -------------------- | ----------------------- | ---------------------- | --------------------- |
-| 8              | 25.78 / 55.97 s      | 35.56 / 65.76 s         | 8/120 (6.67%)          | 2,164                 |
-| 16             | 3.46 / 31.27 s       | 13.24 / 41.05 s         | 96/120 (80.00%)        | 3,332                 |
-| 32             | 3.57 / 17.88 s       | 13.37 / 27.66 s         | 112/120 (93.33%)       | 3,721                 |
+| Profile | Review quota | Conversation quota |
+| --- | --- | --- |
+| `small.yaml` | 5 Pods: 500m CPU, 2560 MiB memory | 11 Pods: 1100m CPU, 4224 MiB memory |
+| `cluster.yaml` | 12 Pods: 1200m CPU, 6144 MiB memory | 8 Pods: 800m CPU, 3072 MiB memory |
 
-Each case misses the 95% target, which requires at least 114 of 120 turns within 10 seconds.
-The drain rate divides completed turns by the whole case duration.
-It is not a sustained arrival rate or a review-throughput measurement.
-Admission 32 is a tested point, not a qualified default.
-The [CSV results](/data/capacity-s3-0950.csv) include the measured commit, cohort and provider assumptions.
-The [capacity procedure](/contributor/capacity-benchmark) describes the fixture and required evidence.
+Add the webapp (50m CPU, 64 MiB) and the agent image DaemonSet (1m CPU and 16 MiB on each sandbox node).
+With `cluster.yaml`, also add the agent-sandbox controller (10m CPU, 64 MiB).
+During an install or an upgrade, the migration Job requests 250m CPU and 1536 MiB more.
+Check the rendered requests against the allocatable resources of your nodes before you install.
 
-The following effects still need measurement with the same workload:
+## Raise capacity
 
-| Condition                   | Required comparison                                                                                               | Current result |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------- |
-| PostgreSQL backups | Throughput, first text, completion latency and resource pressure during a backup versus an idle control           | Unmeasured     |
-| Cold starts and image pulls | Startup delay, first text and memory peak with an empty image cache versus a warm cache                           | Unmeasured     |
-| Server deployments          | Failed or slow authenticated reads, user-visible outage and error-budget use during server updates                      | Unmeasured     |
-| Provider throttles          | First text, call-grant waits and review throughput with deterministic 429 responses versus an unthrottled control | Unmeasured     |
+| To get | Change | Also needs |
+| --- | --- | --- |
+| More reviews at once | `sandbox.reviewMemory`: 512 MiB more for each review, plus the RuntimeClass overhead | That memory on the sandbox nodes. Each review also takes about 18 MiB of the server's memory and two database connections of its pool. |
+| More conversation turns at once | `sandbox.conversationTurns`, or with `auto` a larger `sandbox.budget` | 384 MiB and 100m CPU on the sandbox nodes for each turn ([Sandbox capacity budget](./helm-chart#sandbox-capacity-budget)) |
+| More API capacity, and reception during a restart | `server.replicas` | A server request for each replica, and its database connections. More servers do not add reviews or turns. |
+| Larger repositories | `server.gitCache.sizeLimit` | That much free ephemeral storage on each server's node |
+| More database space | `postgresql.persistence.size` | [Change a volume size](./upgrade#change-a-volume-size) |
+| A larger review or conversation sandbox | `sandbox.templates.<kind>.resources` | The quotas follow the requests ([Sandbox sizes](./sandboxes#sandbox-sizes)) |
 
-### Deployment availability budget
+These signals show that a capacity limit holds work back:
 
-The app target is 99.5% of eligible authenticated reads succeeding within 2 seconds.
-Deployments consume this error budget.
-For a window with `N` eligible reads, the budget permits at most `floor(N / 200)` failed or slow reads.
-Measure deployment failures with an authenticated probe outside the server Pod that is replaced.
-Pod readiness alone does not measure the outage that a user sees.
-
-At a constant probe rate of one request per second, a 30-day window permits 12,960 bad probe results, equivalent to 216 minutes.
-This time conversion applies to that probe schedule.
-The app's request-based budget uses its actual eligible request count.
-No deploy-outage measurement or error-budget qualification is available from the conversation cases above.
-
-## Initial budget
-
-Select a [chart profile](./helm-chart#profiles) for the host.
-Check the rendered requests against the node's allocatable resources before installation.
-A sandbox quota bounds the installation's sandbox requests independently of the server JVM.
+| Signal | Meaning |
+| --- | --- |
+| `agent_queue_oldest_age_seconds`, `HephaestusAgentQueueStalled` | Reviews wait for a review sandbox. |
+| `mentor_turn_queued`, `mentor_turn_queue_wait_seconds` | Questions wait for a conversation turn. |
+| `hikaricp_connections_pending`, `HephaestusDatabaseConnectionTimeouts` | Server threads wait for a database connection. |
+| `HephaestusSandboxGatewayConnectionsHigh` | The sandbox gateway is near `sandbox.gateway.maxConnections`. |
+| `HephaestusGitCacheNearlyFull` | The Git cache is near `server.gitCache.sizeLimit`. |
+| `llm_pool_permit_wait_seconds` | Calls wait for the model provider, not for the cluster ([Call pool metrics](./metrics.md#call-pool-metrics)). |
 
 ## PostgreSQL memory
 
 The bundled image calculates starting settings from its container limit.
-The chart's `postgresql.parameters` adds explicit `-c` arguments after that calculation.
-The small profile uses these shared-node values:
+`postgresql.parameters` adds explicit `-c` arguments after that calculation.
+The `small` profile uses these values for a shared node:
 
 | Setting | Value |
 | --- | --- |
 | `shared_buffers` | `256MB` |
 | `work_mem` | `2MB` |
 | `hash_mem_multiplier` | `1.0` |
-| `max_connections` | `120`, derived from the client budget |
+| `max_connections` | `120`, derived from the [connection budget](#database-connections) |
 | `maintenance_work_mem` | `64MB` |
 | `autovacuum_work_mem` | `32MB` |
 | `autovacuum_max_workers` | `3` |
@@ -85,180 +75,71 @@ The small profile uses these shared-node values:
 
 `work_mem` applies to each sort or hash operation and can multiply across concurrent queries.
 `effective_cache_size` is a planner estimate. It allocates no memory.
-These settings retain autovacuum, statement statistics, fsync, and WAL durability.
 See [PostgreSQL resource consumption](https://www.postgresql.org/docs/18/runtime-config-resource.html).
 
-The small profile requests the PostgreSQL process's full 2 GiB memory limit.
-Its resident pgBackRest sidecar also requests its full 512 MiB memory limit.
-CPU can still burst. These Pods retain Burstable QoS.
-
-At 120 connection slots, a planning allowance of 5 MiB per backend totals 600 MiB.
-Add 256 MiB of shared buffers, 96 MiB for three autovacuum workers, 64 MiB of maintenance memory, and 256 MiB for other memory and cache.
-One 2 MiB work operation per slot brings that estimate to 1512 MiB. Two such operations per slot bring it to 1752 MiB.
-Both estimates fit the unchanged 2 GiB request and limit.
-
-These are planning estimates, not measured peaks or hard bounds.
-`work_mem` applies per operation. Temporary buffers and cache can add memory.
-The loaded qualification must check total container charge and OOM events at the permitted connection count.
-
-A lower 1536 MiB limit is a qualification target, not an enabled setting.
-Count the pgBackRest server sidecar separately, and count a backup or stanza Job in addition.
-Do not add individual-container p95 values to claim a synchronized node peak.
-
-### Measure stateful memory
-
-The queries take each container's maximum over the window, then the maximum across its replacement containers.
-They exclude Pod-level cgroups and infrastructure containers.
-The working-set and charge maxima need not occur at the same time.
-Working set excludes some reclaimable file cache. The container's limit also covers that cache.
-Thus, working set alone does not justify a lower limit.
-
-For example, query the working set with this PromQL expression:
-
-```promql
-max by (container) (max_over_time(container_memory_working_set_bytes{namespace="hephaestus",container=~"postgresql"}[14d]))
-```
-
-Use `container_memory_usage_bytes` for total charge and `tfirst_over_time` to check the actual sample window in VictoriaMetrics.
-A 14-day range selector does not prove that 14 days of samples exist.
-
-Compare total charge with inactive file cache, memory pressure and OOM counters before attributing a peak to reclaimable cache.
-Keep the existing ceilings until a controlled workload qualifies a lower limit.
-The [stateful observations](/contributor/capacity-benchmark#stateful-resource-observations) record the available evidence and its limits.
-
-Before lowering the process limit, run the reference load with the representative database, vacuum work, WAL archiving, and the permitted server surge.
-Read `pg_settings` to verify the effective values and their command-line source.
-Require process charge within 1536 MiB, no OOM, no Hikari timeouts, and connection-acquire p95 below 50 ms.
-For the initial trial, require WAL archive lag below 60 seconds during steady load and below five minutes during recovery.
-
-Require autovacuum to reduce dead tuples after the peak, and investigate idle transactions older than one minute.
-Record vacuum duration and archive catch-up with the workload. A successful startup does not prove these gates.
-Keep the larger limit and lower concurrency if the trial fails.
-
-## Review sandbox limits
-
-`sandbox.templates.review.resources` sets the memory, CPU and disk of a review sandbox ([Sandbox sizes](./sandboxes#sandbox-sizes)).
-By default, it requests 100m and 512 MiB, and its limits are 2 CPUs and 2 GiB.
-The Pod-kind table there owns the sizes of the other sandbox Pods.
-The retired `SANDBOX_MEMORY_BYTES` and `SANDBOX_PIDS_LIMIT` settings do not configure Kubernetes.
-The kubelet enforces the per-Pod process limit, which the server's isolation probe verifies.
-
-## CPU and processes
-
-CPU requests determine scheduling and CPU limits bound use.
-Keep the node's process limit configured as the [Sandboxes](./sandboxes#server) requires.
-A server that cannot prove isolation starts no sandbox work.
-
-## What you can scale
-
-The chart controls server replicas, review capacity and conversation capacity.
-Each server replica also needs its JVM and database connections. The conversation loop has its own replicas and resources.
-Before raising capacity, qualify the workload on the target host shape.
-Keep the workload, logs and before/after measurements with the qualification result.
+The PostgreSQL container requests its full 2 GiB memory limit.
+With backups on, its pgBackRest sidecar also requests its full 512 MiB limit.
+At 120 connections, an allowance of 5 MiB for each backend, the shared buffers, autovacuum, maintenance memory and other memory total about 1512 MiB.
+Two work operations for each connection bring the estimate to about 1752 MiB. Both estimates fit the 2 GiB limit.
 
 ## Database connections
 
-Each chart role has a typed `databasePool.maximumPoolSize` and `databasePool.minimumIdle`.
-They set native Spring datasource properties for that role and override its profile defaults.
-The small profile uses:
-
-| Client | Maximum / minimum idle |
-| --- | --- |
-| Server | `auto`: 36 / 2 with the small profile |
-| Migration Job | 2 / 1 |
-| Sandboxes | 0 / 0: use their gateway |
-
-Preparing code evidence can hold two connections.
-Bound capture concurrency separately. A larger pool does not authorize more simultaneous captures.
-The server's four scheduled workspace syncs can hold eight connections. The rest serve reviews, foreground and control work.
-Do not hold a database transaction while waiting for a model grant or provider response.
-
-The chart derives the server pool from the caps it gives the runtime:
+Each chart role has `databasePool.maximumPoolSize` and `databasePool.minimumIdle`.
+With `maximumPoolSize: auto`, the chart derives the server pool from the caps that it gives the server:
 
 ```text
-pool = inbox handlers + 2 × review captures + 2 × long-load preparations
+pool = inbox handlers + 2 × reviews at once + 2 × long-load preparations
      + permit maintenance threads + sync reserve + HTTP/control reserve
-small = 8 + 2 × 5 + 2 × 2 + 2 + (4 × 2) + 4 = 36
 ```
 
-`server.inboxClaimers` sets the inbox handler count. The review cap comes from the sandbox template requests and review memory budget.
-Long loads have two preparation slots. The permit gate has two maintenance threads.
+| Part | Connections | Source |
+| --- | --- | --- |
+| Inbox handlers | 8 | `server.inboxClaimers` |
+| Review captures | 2 for each review at once | `sandbox.reviewMemory` |
+| Long-load preparations | 4, with sandboxes on | Fixed |
+| Permit maintenance | 2, with sandboxes on | Fixed |
+| Sync reserve | 8, for four syncs | Fixed |
+| HTTP and control reserve | 4 | Fixed |
 
-The last twelve connections reserve eight for four syncs and four for HTTP and control requests.
-A model stream holds no pooled connection while it waits for the model.
-A review or turn at its sandbox cap does not hold a pooled connection for its full run.
+The result is 20 for `dev.yaml` and `preview.yaml`, 36 for `small.yaml`, and 50 for `cluster.yaml`.
+An explicit `server.databasePool.maximumPoolSize` must hold the derived count. The chart refuses a smaller one.
+A model stream and a sandbox hold no pooled connection. Sandboxes reach the server through the gateway and have no database pool.
 
-The same helper derives the PostgreSQL budget for one rolling update:
+The chart derives `max_connections` for one rolling update, in which every old server can still drain beside its replacement:
 
-| Client or reserve | Small-profile peak |
+| Client or reserve | `small.yaml` |
 | --- | --- |
-| Servers at overlap | 2 |
+| Servers at overlap: twice `server.replicas` | 2 |
 | Server pools | 2 × 36 = 72 |
-| Five dedicated LISTEN sessions per server | 2 × 5 = 10 |
-| New revision's migration Job | 2 |
-| PostgreSQL metrics exporter | 2, the monitor role's cluster-wide connection limit |
+| Five dedicated `LISTEN` sessions for each server | 2 × 5 = 10 |
+| Migration Job | 2 |
+| PostgreSQL metrics exporter, the monitor role's connection limit | 2 |
 | Backup sessions | 2 |
-| PostgreSQL probes and role/monitor setup | 3 |
-| Ordinary client total | 91 |
+| PostgreSQL probes and role setup | 3 |
+| Client total | 91 |
 | `superuser_reserved_connections` | 3 |
-| Operator margin outside the reserved slots | 4 |
-| Required slots, including reserves | 98 |
-| Derived `max_connections` | 120 |
-| Extra slots after all clients and reserves | 22 |
+| Operator margin | 4 |
+| Required slots | 98 |
+| `max_connections`: rounded up to a multiple of 20, at least 120 | 120 |
 
-The owning helper is `hephaestus.databaseConnectionCapacity` in the chart. It reserves optional monitoring and backup clients even when they are off.
-The chart rounds the derived limit up to twenty slots, with a floor of 120. An explicit limit must hold the complete budget.
+The chart reserves the exporter and backup sessions also when they are off.
+With `cluster.yaml`, four servers at overlap with pools of 50 give `max_connections` of 240.
+An explicit `postgresql.parameters.max_connections` must hold the required slots. The chart refuses a smaller one.
+An external database must hold the same budget beside its own reserved slots ([PostgreSQL connection settings](https://www.postgresql.org/docs/18/runtime-config-connection.html#GUC-SUPERUSER-RESERVED-CONNECTIONS)).
 
-The bundled database pins three superuser-reserved slots. An external database must also subtract its configured reserved slots.
-See [PostgreSQL connection settings](https://www.postgresql.org/docs/18/runtime-config-connection.html#GUC-SUPERUSER-RESERVED-CONNECTIONS).
-
-An explicit `server.databasePool.maximumPoolSize` must hold the derived holder count and reserve.
-When all pooled connections are busy, Hikari waits up to the configured `connection-timeout`, 45000 ms, then throws an SQL exception.
-This queue does not raise the connection limit. See [Hikari pool settings](https://github.com/brettwooldridge/HikariCP#frequently-used).
-
-The load qualification must measure `hikaricp_connections_pending`, acquisition timeouts and acquisition latency with inbox, capture, conversation and HTTP work together.
-That measurement qualifies the twelve-connection reserve. It does not replace the holder floor.
-
-Inventory dedicated listeners after runtime changes and recompute this budget if more exist.
-
-Agent sandboxes use the gateway and have no database connection pool.
-
-The other profiles derive their server pool from the same holder model, with minimum idle five.
-Recalculate the PostgreSQL budget if the server pool changes.
-Measure pool waits at the actual workload. A rendered connection count does not prove query latency or memory use.
+When all pooled connections are busy, a caller waits up to 45 seconds for one, then gets an error.
+`HephaestusDatabaseConnectionTimeouts` fires on such errors.
 
 ## Memory headroom
 
 When the JVM starts, the buildpack's memory calculator sets the Java memory from the container's memory limit.
-`BPL_JVM_HEAD_ROOM` is an optional percentage of that limit.
-The calculator keeps this percentage out of the Java memory that it calculates.
-The heap must also leave room for the server's file cache and for other memory that the container uses outside the JVM.
-
-The default headroom is 0 %.
-Thus, if you increase the container memory limit, the heap can also increase at the next start.
-Measure the server's total memory use before changing its memory limit.
-
-The Helm chart exposes no value for JVM headroom.
-The release uses the buildpack's default behavior.
-The value applies only when the JVM starts.
-To apply a change, drain and restart the server, as [Graceful drain](./runtime-roles#graceful-drain) describes.
-For the calculation, see the [Paketo memory calculator](https://paketo.io/docs/reference/java-reference/#memory-calculator).
+The default headroom (`BPL_JVM_HEAD_ROOM`) is 0 %, and the chart exposes no value for it.
+Thus, a higher memory limit also gives the heap more memory at the next start.
+Measure the server's total memory use before you change its memory limit.
+See the [Paketo memory calculator](https://paketo.io/docs/reference/java-reference/#memory-calculator).
 
 ## Disk
 
-Budget the node's images, logs and sandbox scratch space separately from persistent database and Git-cache storage.
-The chart bounds sandbox ephemeral-storage requests, limits and volumes.
-The [Sandboxes](./sandboxes#sandbox-sizes) owns these bounds.
-Back up persistent state as [Backup and restore](./backup-restore) describes.
-
-## Conversation turn admission
-
-[Sandbox capacity budget](./helm-chart#sandbox-capacity-budget) owns the budget values, formula and validation rules.
-Automatic admission fits both steady-state and drained-upgrade requests.
-A supplied budget also checks an explicit count.
-The provider pool admits each physical model call separately.
-
-The review request remains 512Mi, and the conversation request remains 384Mi, before RuntimeClass overhead.
-These are current template values. No review or conversation workload peak has been measured.
-Idle Pi SDK measurements do not qualify a workload request.
-Qualification must sample each sandbox during reviews and conversation turns before proposing requests from p95 plus a margin.
+Budget the node's images, logs and sandbox scratch space separately from the PostgreSQL volume and the Git cache.
+The sandbox templates bound their ephemeral storage ([Sandbox sizes](./sandboxes#sandbox-sizes)).
+The `small` profile needs 150 GiB of disk on its node.

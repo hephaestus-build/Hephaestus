@@ -215,7 +215,7 @@ These observations cover normal activity across several releases, not a controll
 | --- | --- | --- | --- |
 | PostgreSQL | 1,202.44 MiB | 2,047.67 MiB | 2 GiB / 2 GiB |
 
-The [sizing guide](/admin/sizing#measure-stateful-memory) owns the query method and the qualification criteria.
+[Measure stateful memory](#measure-stateful-memory) gives the query method and the qualification criteria.
 
 The separate conversation benchmark on `2026-10-30` had synthetic chat load and zero reviews.
 Its PostgreSQL maximum was 1,544.31 MiB RSS and 291.25 MiB charged, across the three admission cases.
@@ -224,3 +224,55 @@ The sampler sums process RSS, which can count shared pages more than once, as [C
 Do not substitute RSS for cgroup charge or working set, or add these independent maxima.
 Neither observation qualifies the lower PostgreSQL target.
 Keep the current ceilings until the reference workload includes reviews, vacuum, backups and inbox catch-up.
+
+### Measure stateful memory
+
+The queries take each container's maximum over the window, then the maximum across its replacement containers.
+They exclude Pod-level cgroups and infrastructure containers.
+The working-set and charge maxima need not occur at the same time.
+Working set excludes some reclaimable file cache. The container's limit also covers that cache.
+Thus, working set alone does not justify a lower limit.
+
+For example, query the working set with this PromQL expression:
+
+```promql
+max by (container) (max_over_time(container_memory_working_set_bytes{namespace="hephaestus",container=~"postgresql"}[14d]))
+```
+
+Use `container_memory_usage_bytes` for total charge, and `tfirst_over_time` to check the actual sample window in VictoriaMetrics.
+A 14-day range selector does not prove that 14 days of samples exist.
+Compare total charge with inactive file cache, memory pressure and OOM counters before you attribute a peak to reclaimable cache.
+
+### Qualify a lower PostgreSQL limit
+
+The `small` profile keeps a PostgreSQL limit of 2 GiB. A limit of 1536 MiB is a qualification target, not a setting.
+Count the pgBackRest server sidecar separately, and count a backup or stanza Job in addition.
+Do not add the p95 values of single containers to claim a synchronized node peak.
+
+Before you lower the process limit, run the reference load with the representative database, vacuum work, WAL archiving, and the permitted server surge.
+Read `pg_settings` to verify the effective values and their command-line source.
+Require process charge within 1536 MiB, no OOM, no Hikari timeouts, and connection-acquire p95 below 50 ms.
+Require WAL archive lag below 60 seconds during steady load and below five minutes during recovery.
+Require autovacuum to reduce dead tuples after the peak, and investigate idle transactions older than one minute.
+Keep the larger limit and lower concurrency if the trial fails.
+
+The same load qualifies the twelve-connection reserve of the server pool.
+Measure `hikaricp_connections_pending`, acquisition timeouts and acquisition latency with inbox, capture, conversation and HTTP work together.
+
+## Recorded conversation baseline
+
+This measurement ran on release 0.95.0, with 4 vCPUs and 15.61 GiB of memory, before conversation turns ran in sandboxes.
+It does not describe the sandbox runtime.
+Each case had 40 synthetic users, three turns each and 30 seconds between turns. The users arrived over one second.
+The deterministic provider used a first token at 3 seconds, 500 declared output tokens and 13 seconds per call.
+Each turn made one call, with no tools, reviews or provider throttles.
+
+| Turn admission | First text p50 / p95 | Turn duration p50 / p95 | First text within 10 s | Cohort drain, turns/h |
+| -------------- | -------------------- | ----------------------- | ---------------------- | --------------------- |
+| 8              | 25.78 / 55.97 s      | 35.56 / 65.76 s         | 8/120 (6.67%)          | 2,164                 |
+| 16             | 3.46 / 31.27 s       | 13.24 / 41.05 s         | 96/120 (80.00%)        | 3,332                 |
+| 32             | 3.57 / 17.88 s       | 13.37 / 27.66 s         | 112/120 (93.33%)       | 3,721                 |
+
+Each case misses the target of first answer text within 10 seconds for 95% of turns.
+The drain rate divides completed turns by the whole case duration. It is not a sustained arrival rate.
+The [CSV results](/data/capacity-s3-0950.csv) include the measured commit, cohort and provider assumptions.

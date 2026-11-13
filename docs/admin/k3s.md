@@ -8,16 +8,15 @@ This procedure installs Hephaestus on one Linux host with [k3s](https://docs.k3s
 One command, `k3s-install.sh`, does the install.
 It checks the host, installs the pinned k3s and the platform, and keeps the release Secret.
 Then it verifies the release chart and installs it.
-It uses the `small.yaml` profile, the bundled PostgreSQL, and one worker that runs reviews.
+It uses the `small.yaml` profile, the bundled PostgreSQL, and gVisor sandboxes for practice reviews.
 
 A second run of the same release changes nothing that the first run made.
 A run with the files of a newer release upgrades the host.
 
 ## Before you start
 
-- A host of 4 vCPU, at least 16 GiB of memory, and 150 GiB of disk, as [Profiles](./helm-chart#profiles) gives for `small.yaml`.
-  Each worker upgrade pauses reviews and conversations.
-- Ubuntu 24.04 with its 6.8 GA kernel on `amd64` or `arm64`. Other OS or kernel families require explicit qualification with `--allow-unqualified-host`.
+- A host of 4 vCPU, 16 GiB of memory, and 150 GiB of disk, as [Profiles](./helm-chart#profiles) gives for `small.yaml`.
+- Ubuntu 24.04 with its 6.8 GA kernel on `amd64` or `arm64`. The installer refuses another OS or kernel unless you add `--allow-unqualified-host`.
 - A DNS A record for your host name that points to the public address of the host.
 - Ports 80 and 443 open from the internet, for `Let's Encrypt`, OAuth callbacks, and provider webhooks. Keep port 6443, the Kubernetes API, and port 10250, the kubelet, closed to the internet.
 - If `ufw` is active, rules that let in ports 80 and 443 and the k3s networks: `sudo ufw allow 80,443/tcp`, `sudo ufw allow from 10.42.0.0/16`, and `sudo ufw allow from 10.43.0.0/16`.
@@ -33,7 +32,7 @@ The installer stops before it changes the host when one of these checks fails. E
 | Check | Condition |
 | --- | --- |
 | Input | The host name, the address, the OAuth client ID, and the admin list have a strict format. |
-| Size | The host has 4 CPUs and at least 15 GiB of memory. The installer uses `small.yaml` for every supported host. |
+| Size | The host has at least 4 CPUs, and the kernel reports at least 15 GiB of memory. A host of 16 GiB meets this, because the kernel keeps part of the memory. If `/var` has less than 100 GiB free, the installer warns and continues. |
 | Clock | NTP synchronizes the clock. |
 | Swap | No swap device or file is active. The kubelet also refuses swap. |
 | Ports | No other program listens on port 80 or 443. The installer checks this before k3s runs. |
@@ -54,6 +53,7 @@ If your network cannot reach its own public address, the DNS check fails. Then r
 ## 1. Get the release files
 
 1. Make a directory for the release files. The installer keeps its state there: `site.yaml`, the verified chart, and a `kubeconfig` file.
+   Use the version of the newest release on the [releases page](https://github.com/hephaestus-build/Hephaestus/releases).
 
    ```bash
    VERSION=1.0.0-rc.7   # the release, without the leading "v"
@@ -127,7 +127,7 @@ Change the file to change these values, and run the installer again.
 Before a repeat run, pause deployment automation and wait for its active run to finish.
 
 Without a login provider, Hephaestus starts, but nobody can sign in.
-Thus, a first install stops when it has no GitHub OAuth client ID or client secret.
+A first install stops when it has no GitHub OAuth client ID or client secret.
 A repeat run stops when the kept `site.yaml` names no GitHub or GitLab login provider.
 Set `config.github.oauthClientId` in `site.yaml`, as [First steps § 1](./first-steps#1-configure-a-login-provider) describes, and run the installer again.
 
@@ -167,9 +167,13 @@ Use [Login provider secrets](./secret-custody#login-provider-secrets) to rotate 
 
 1. Open `https://<host>`.
    The browser trusts the certificate, unless you used `--staging`.
-2. Sign in as the bootstrap admin.
+   The login page shows **Continue with GitHub**.
+2. Run the [sandbox isolation gate](./sandboxes#sandbox-isolation-gate) for each sandbox template, with `KUBECONFIG=~/hephaestus/kubeconfig`.
+   Connect no repository until the gate passes for each template.
+   The installer does not run the gate. It runs from a checkout of the release tag with Node.js, because no release asset contains it.
 
-Then continue with [First steps § 4](./first-steps#4-connect-repository-data).
+Then continue with [First steps § 3. Sign in](./first-steps#3-sign-in).
+The installer asked for the values of First steps § 1 and § 2.
 
 ## Extra host names
 
@@ -318,25 +322,6 @@ Before step 3, examine these points:
 - cert-manager issues the certificates of the installed certificates file into Secrets with the same names.
   A new PostgreSQL CA or server certificate needs the restarts that [TLS certificates](./secret-custody#tls-certificates) describes.
 
-## Keep old images off the disk
-
-Each upgrade pulls the images of the new release, and the chart removes no image.
-The kubelet removes unused images when the image filesystem is fuller than `imageGCHighThresholdPercent` (85 % by default), until it is below `imageGCLowThresholdPercent` (80 %).
-On one host, set lower thresholds and a maximum age, so that the images of old releases go before the disk fills.
-On k3s, put a KubeletConfiguration file whose name ends in `.conf` into `/var/lib/rancher/k3s/agent/etc/kubelet.conf.d/`, then run `sudo systemctl restart k3s`:
-
-```yaml
-apiVersion: kubelet.config.k8s.io/v1beta1
-kind: KubeletConfiguration
-imageGCHighThresholdPercent: 75
-imageGCLowThresholdPercent: 65
-imageMaximumGCAge: 168h
-```
-
-The thresholds count the whole filesystem, also data that is not an image.
-If other data keeps the disk above the low threshold, the kubelet logs that image garbage collection failed, and it removes every unused image.
-The kubelet never removes an image that a Pod uses.
-
 ## Undo
 
 :::caution[CAUTION: Host data loss]
@@ -367,6 +352,7 @@ The bundle holds these files:
 | --- | --- |
 | `k3s-install.sh` | The installer. It is a POSIX shell script, and it needs no Node.js and no checkout of the repository. |
 | `hephaestus-keys.sh` | Creates or completes the release Secret. The installer runs it. [Create the Secret](./kubernetes#create-the-secret) uses it on another cluster. |
+| `hephaestus-cluster-admin.yaml` | The admin bundle of a [managed cluster](./managed-cluster). The one-host install does not use it. |
 | `k3s-wait-condition.sh` | Waits until a cert-manager resource reports a condition as true, also while the resource has no status yet. The installer runs it. |
 | `k3s-platform.yaml` | The pins and the platform add-ons. It goes to the k3s manifests directory. The installer adds a listener for each [extra host name](#extra-host-names). |
 | `k3s-agent-sandbox.yaml` | The agent-sandbox controller and its resource definitions, with its pin. It goes to the k3s manifests directory. |
@@ -374,10 +360,10 @@ The bundle holds these files:
 | `k3s-runtimeclass.yaml` | The RuntimeClass `gvisor` of the sandbox templates. It goes to the k3s manifests directory. |
 | `k3s-certificates.yaml` | The `Let's Encrypt` issuer, the Gateway certificate, and the PostgreSQL CA and server certificate. The installer writes your host name and address into it. |
 | `k3s-config.yaml` | The k3s configuration: the kubelet configuration file, no bundled Traefik, no ServiceLB, and no metrics server. |
-| `k3s-kubelet.yaml` | A limit of 4096 processes for each Pod, and the shutdown grace period. Also the memory and CPU reserved for k3s and the host, and the eviction thresholds. |
+| `k3s-kubelet.yaml` | A limit of 4096 processes for each Pod, and the shutdown grace period. Also the memory and CPU reserved for k3s and the host, the eviction thresholds, log rotation, and image garbage collection. |
 | `k3s-logind.conf` | How long logind lets the kubelet hold a shutdown. |
 | `k3s-journald.conf` | Host journal limits: 512 MiB on disk, 128 MiB in memory, and seven days. |
-| `k3s-values.yaml` | The chart values of every one-host install: the Gateway, the Traefik Pods, the Secret names, the sandbox namespace, and reviews with repository checkouts. |
+| `k3s-values.yaml` | The chart values of every one-host install. They name the Gateway, the Traefik Pods, the Secrets, the sandbox namespace, and the gVisor runtime. |
 
 `k3s-platform.yaml` contains these add-ons:
 
@@ -387,9 +373,9 @@ The bundle holds these files:
 The `pin: k3s` line of `k3s-platform.yaml` sets the k3s release, and its two `HelmChart` objects set the versions of Traefik and cert-manager.
 The file pins each chart by version and each image by digest.
 
-The Gateway API resource definitions come from the `gateway-api-crd` chart that k3s includes, so no second owner installs them.
+The Gateway API resource definitions come from the `gateway-api-crd` chart that k3s includes.
 k3s deploys each file in `/var/lib/rancher/k3s/server/manifests/`, and it applies a file again every 15 seconds until the apply succeeds.
-Thus, cert-manager and the Gateway start some minutes after k3s.
+cert-manager and the Gateway start some minutes after k3s.
 
 `k3s-agent-sandbox.yaml` contains the [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) controller, with its extensions.
 The controller creates sandbox Pods from `SandboxTemplate` and `SandboxClaim` objects.
@@ -412,7 +398,7 @@ Give them on each run. A run without them keeps the file.
 
 The node name is fixed for the life of the cluster.
 A new name registers a second node, and the local volumes stay with the old node.
-Thus, the installer stops when a run would change the name of the running node.
+The installer stops when a run would change the name of the running node.
 It also stops when `--node-ip` names an address that the host does not have.
 
 A new node address also moves the Kubernetes API endpoint.
@@ -423,88 +409,19 @@ To remove `50-node.yaml`, do these steps:
 2. Run the installer again. It stops if the file named a node other than the host name, because the node name would change.
 3. Restart k3s with `sudo systemctl restart k3s`. k3s keeps the old node address until it restarts.
 
-The installer does not run the application itself as a k3s `HelmChart`.
-The k3s Helm controller does not wait for the migration Job, and it does not roll back a failed upgrade.
+`k3s-kubelet.yaml` sets these limits:
 
-The limit of 4096 processes applies to each Pod on the host, the server and the worker included.
-Size the Pod PID limit for every runtime role and its subprocesses.
-CI's clusters run with the same 4096.
-
-When the host shuts down, the kubelet stops the Pods first.
-The configured budget is 5 minutes: 4 minutes for the application Pods, then 1 minute for Traefik and CoreDNS.
-PostgreSQL stops within its termination grace period of 120 seconds, inside the first 4 minutes.
-Ubuntu sets the logind limit to 30 seconds, so `k3s-logind.conf` raises it to 5 minutes.
-At the end of the budget, a worker stops the reviews that it runs. They run again after the start.
-
-Pods cannot request all of the host's memory.
-`k3s-kubelet.yaml` reserves 1 GiB and 250m CPU for k3s, which runs the API server, the kubelet and containerd in one process of about 1 GB.
-It reserves 512 MiB and 250m CPU for the host's own services.
-The kubelet evicts Pods when less than 256 MiB of memory is available, before the kernel's out-of-memory killer stops a process on the host.
-
-For a Node API capacity of exactly 16 GiB and 4 vCPU, Pods get 14 592 MiB (14.25 GiB) and 3.5 CPUs.
-At the recorded capacity of 16 372 036 KiB used in the profile table, Pods get about 13.9 GiB.
+- Each Pod can run at most 4096 processes.
+- At a host shutdown, the kubelet has 5 minutes to stop the Pods. Traefik and CoreDNS stop in the last minute. `k3s-logind.conf` raises the logind limit of Ubuntu, 30 seconds, to 5 minutes. A review that a shutdown stops runs again after the start.
+- The kubelet reserves 1 GiB of memory and 250m CPU for k3s. It reserves 512 MiB and 250m CPU for the host services. It evicts Pods when less than 256 MiB of memory is available.
+- Container logs rotate at 10 MiB, with at most five files for each container.
+- Image garbage collection starts at 75 % disk use and stops at 65 %. It never removes the image of a running container.
 
 The installer restarts k3s when this file changes.
-After the node becomes ready, it reads the kubelet configuration endpoint and Node allocatable.
-It stops before the application upgrade if the configured policy is absent or overridden.
+Then it compares the effective kubelet configuration and the Node allocatable with the file, and it stops if they differ.
+To repeat this read-only check, run `sh k3s-install.sh --verify-kubelet`.
 
-Allocatable must equal measured capacity less the reservations and the hard memory floor.
-The soft threshold does not reduce allocatable again.
-Only Pod allocatable is enforced. The reservations do not impose hard memory caps on the host or k3s system slices.
-
-To repeat these read-only cluster checks with your current kubeconfig, run `sh k3s-install.sh --verify-kubelet`.
-The command uses Helm locally to parse the policy.
-It does not change the cluster.
-After a restart, verification allows 31 checks with two-second pauses for the Node status and configuration endpoint to converge.
-
-Soft eviction is disabled until stateful-service requests and admission protection are qualified.
-For memory eviction, usage above requests ranks before Pod priority.
-Thus, a higher priority cannot protect PostgreSQL above their requests from a review below its request.
-The existing hard thresholds remain emergency recovery boundaries.
-The kubelet targets an additional 256 MiB of reclaim and holds a pressure condition for five minutes.
-Application admission must stop new background work before those boundaries.
-
-Container logs rotate at 10 MiB with at most five files per container.
-Image garbage collection starts at 75 percent disk use and targets 65 percent.
-It does not reclaim live volumes or database files.
-The installer bounds the host journal and restarts journald only when its policy changes.
-
-Host swap must be disabled, including at boot.
-The installer rejects active swap, and the kubelet requires `failSwapOn=true` and `NoSwap`.
-These policies do not qualify a smaller container memory limit or a higher review count.
-Before enabling either, measure synchronized node peaks, pressure, queue waits, and OOM counters under the reference load.
-
-The verifier accepts the declared Ubuntu 24.04/kernel 6.8 GA baseline and rejects unknown OS or kernel families.
-The optional `--allow-unqualified-host` flag permits an explicitly authorized rehearsal on another family.
-It preserves all effective-policy and allocatable checks.
-A matching host family alone does not prove installation, pressure behavior, or loaded capacity.
-
-The current proof consists of policy/parser fixtures, read-only Node API observations, and rendered chart checks.
-The release host smoke targets Ubuntu 24.04 on both architectures.
-This change has not run a full host installation.
-
-Before target-host rollout, the release lane must rehearse the exact assets and pinned k3s release on disposable Ubuntu 26.04/kernel 7 with 16 GiB.
-Use the qualification override for that rehearsal and record the actual OS, kernel, CPU count, capacity, and allocatable.
-Run the installer, then repeat it and verify stateful Pod identity and service continuity.
-The second run must preserve unchanged configuration and avoid unnecessary k3s or journald restarts.
-Verify disabled swap and its boot activation settings.
-
-Apply pressure with PostgreSQL above their requests and review/turn Pods below theirs.
-Require application backoff and recovery before hard eviction, with no database loss or OOM.
-Observe container and journal rollover, image GC at 75/65, and image pull/start latency.
-Retain the command logs, effective configuration, pressure/OOM counters, and synchronized footprint samples as release evidence.
-
-## What the release workflow tests
-
-Before it publishes a release, the release workflow runs `k3s-install.sh` on Ubuntu 24.04 on `amd64` and on `arm64`.
-It runs the command twice, then an upgrade that restarts every role except PostgreSQL, whose Pods must stay.
-That run differs from your install in these points:
-
-- A local CA issues the Gateway certificate, because `Let's Encrypt` cannot reach a CI runner. CI does not test the HTTP-01 challenge of the `Let's Encrypt` issuer.
-- It skips the DNS check, because a runner has no public host name.
-- It skips the clock check: a hosted runner takes its time from the hypervisor and can report no NTP sync.
-- A runner has 16 GiB of memory and uses the same `small.yaml` profile.
-- It checks the shutdown settings that the kubelet and logind use. It does not reboot the host.
+Host swap must stay off, also at boot. The installer refuses active swap, and the kubelet refuses to start with swap.
 
 ## Known limits of the one-host platform
 
@@ -512,7 +429,6 @@ That run differs from your install in these points:
 - The k3s default Pod network is `10.42.0.0/16`. `trustedProxies` in `k3s-values.yaml` matches it. If you change the network of k3s, change `trustedProxies` too.
 - The platform issues a separate backup client certificate, `hephaestus-postgresql-backup-tls`. Enable backups after you configure the off-host repository ([Backup and restore](./backup-restore#back-up-the-database)).
 - If the model endpoint resolves to this host's own Gateway, set `networkPolicy.modelGatewayPorts: [8443, 8000]` in `site.yaml`, as [Network policy](./helm-chart#network-policy) describes.
-- CI's clusters run no cert-manager. Only the release workflow's install tests the cert-manager pin.
 
 ## Troubleshooting
 

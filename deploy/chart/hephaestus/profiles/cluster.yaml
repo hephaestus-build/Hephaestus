@@ -4,7 +4,7 @@
 # default runtime with hostUsers: false.
 #
 # Sandboxes are on. The operator states sandbox.namespace and networkPolicy.kubernetesApi, and
-# the chart refuses to render without them (docs/admin/managed-cluster.mdx § Values).
+# the chart refuses to render without them (docs/admin/managed-cluster.mdx).
 priorityClasses:
   # The admin bundle (deploy/platform/hephaestus-cluster-admin.yaml) creates these three.
   create: false

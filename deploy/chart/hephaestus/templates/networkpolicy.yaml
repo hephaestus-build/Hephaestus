@@ -59,7 +59,7 @@ spec:
         - port: http
           protocol: TCP
     {{- if .Values.sandbox.enabled }}
-    # The gateway port admits only the sandboxes of the release's sandbox namespace and the conversation loop.
+    # The gateway port admits only the sandboxes of the release's sandbox namespace.
     # No route of the Gateway reaches it.
     - from:
         - namespaceSelector:

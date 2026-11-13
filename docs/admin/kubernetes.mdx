@@ -1,42 +1,38 @@
 ---
 title: Install on a Kubernetes cluster
-description: Verify the signed Helm chart, create its Secrets and Gateway route, and install Hephaestus on a cluster that you operate.
+description: Verify the signed Helm chart, create its Secrets and Gateway route, and install Hephaestus on a cluster on which you are a cluster-admin.
 page_type: how-to
 ---
 
-This procedure installs the signed Helm chart of a release on a Kubernetes cluster that you operate.
-For one Linux host, [Install on one host](./k3s) runs the same chart on k3s with one command.
-For a cluster on which you are not a cluster-admin, use [Install on a managed cluster without cluster-admin](./managed-cluster).
-The [Helm chart reference](./helm-chart) describes what the chart runs and each value.
+This procedure installs the signed Helm chart of a release on a Kubernetes cluster on which you are a cluster-admin.
+For one Linux host, [Install on one host](./k3s) does all of these steps with one command.
+For a cluster without cluster-admin rights, or a cluster of several nodes, use [Install on a managed cluster without cluster-admin](./managed-cluster).
+
+The commands use the release `hephaestus` in the namespace `hephaestus`, and the sandbox namespace `hephaestus-sandboxes`.
 
 ## Before you start
 
-- The cluster meets the [supported cluster](./helm-chart#supported-clusters) requirements.
-- The sandbox nodes meet the [sandbox prerequisites](./sandboxes#sandbox-prerequisites).
-- You selected a [profile](./helm-chart#profiles) for the size of the cluster.
-- You have the tools that [Verify the release chart](#verify-the-release-chart) names.
+- Helm 4. The install command uses `--wait=watcher`, which Helm 3 does not have.
+- [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) 3.1 or later.
+- `kubectl`, `curl`, `jq` and `openssl`.
+- A cluster that meets the [supported cluster](./helm-chart#supported-clusters) requirements.
+- A host name, with a DNS record that points to your Gateway.
+  Serve Hephaestus on HTTPS port 443 of that host name.
+  The webapp calls the API at `https://<host>/api`, without a port, and the chart has no setting for another port.
+- A GitHub OAuth app, its client ID and its client secret, as [First steps § 1](./first-steps#1-configure-a-login-provider) describes.
+- The version of the newest release, from the [releases page](https://github.com/hephaestus-build/Hephaestus/releases), without the leading `v`.
 
-## Verify the release chart
+Choose a [profile](./helm-chart#profiles):
 
-The chart package of a release names the release version, the source commit, and the release's images by digest.
-Thus, you give Helm only your own values.
-The chart version and its `appVersion` equal the release version without the leading `v`.
-A stable promotion keeps the candidate's images and packages the chart with stable release metadata.
-The signed joint lock records the resulting chart digest.
-The chart source in the repository names no image, tag, or registry.
+- `small.yaml` runs practice reviews on one node of 4 vCPU, 16 GiB of memory, and 150 GiB of disk.
+  The sandbox nodes must meet the [sandbox prerequisites](./sandboxes#sandbox-prerequisites).
+  The [sandbox isolation gate](./sandboxes#sandbox-isolation-gate) also needs a checkout of the release tag and Node.js.
+- `dev.yaml` is for a trial on a workstation cluster, such as k3d or kind. It runs no practice reviews.
+  Skip each step below that is for `small.yaml` only.
 
-You need [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) 3.1 or later, the Helm CLI, `curl`, and `jq`.
-The release signs the chart with Cosign 3.1 in the Sigstore bundle format.
-Cosign 2 reads that format only from version 2.6 and only with `--new-bundle-format`, and CI does not test it.
-You do not need Node.js or a checkout of the repository.
+## 1. Verify the release chart {/* #verify-the-release-chart */}
 
-Use the Helm version that [`.github/actions/setup-helm`](https://github.com/hephaestus-build/Hephaestus/blob/main/.github/actions/setup-helm/action.yml) pins.
-CI and the release workflow install that version.
-Contributors also need it: see the [local development prerequisites](/contributor/local-development#prerequisites).
-The pin is a build tool, not a qualified Helm version for an installation.
-No Helm plugin is necessary.
-
-Run these commands in the directory of your `site.yaml`.
+Run these commands in the directory of your values file.
 If one command fails, stop: do not install the chart.
 
 ```bash
@@ -55,56 +51,67 @@ helm pull "oci://$CHART@$DIGEST" --untar --untardir "chart-$VERSION"
 helm show chart "chart-$VERSION/hephaestus" | grep -x "version: $VERSION" >/dev/null
 ```
 
-The joint lock in step 1 is only a lookup for the chart digest.
-You do not verify it.
+Step 1 only looks up the digest, so the joint lock needs no check of its own.
 Step 2 refuses every digest that the release workflow did not sign.
-That identity is the same for every release, so step 4 binds the chart to the release that you asked for.
-A version tag can move, and it is not a release signal.
+Step 4 binds the signed chart to the release that you asked for.
+A version tag can move, so Helm never pulls the chart by a tag.
+Step 3 stops if `chart-$VERSION/hephaestus` exists.
 
-The `chart-$VERSION/hephaestus` directory is the verified chart, with its `profiles/`.
-Step 3 stops if that directory already exists.
-[Install](#install) and [Upgrades](./upgrade#upgrade-a-schema-compatible-release) use it.
+`chart-$VERSION/hephaestus` is the verified chart, with its `profiles/`.
+The chart names the images of the release by digest, so you give Helm only your own values.
 [Release assets](./release-image-lock#release-assets) gives the purpose of each signed asset of a release.
 
-## Create the Secret
+Then get the k3s bundle of the same release.
+Download, verify and unpack it, as steps 2 and 3 of [Get the release files](./k3s#1-get-the-release-files) describe.
+You need two files from it: `hephaestus-keys.sh` and, for `small.yaml`, `k3s-agent-sandbox.yaml`.
 
-The chart reads secret values only from one Secret in the release namespace.
+## 2. Create the namespaces
+
+1. Create the release namespace and the sandbox namespace.
+   Label both with the Restricted Pod Security level.
+   Use the sandbox namespace for this release only.
+
+   ```bash
+   kubectl create namespace hephaestus
+   kubectl create namespace hephaestus-sandboxes
+   kubectl label namespace hephaestus hephaestus-sandboxes pod-security.kubernetes.io/enforce=restricted
+   ```
+
+2. For `small.yaml`, install the agent-sandbox controller of the release ([Sandbox templates](./sandboxes#sandbox-templates)).
+   Apply it again for each release.
+
+   ```bash
+   kubectl apply --server-side -f k3s-agent-sandbox.yaml
+   kubectl -n agent-sandbox-system rollout status deployment/agent-sandbox-controller
+   ```
+
+## 3. Create the Secret {/* #create-the-secret */}
+
+The chart reads secret values from one Secret in the release namespace, with fixed key names.
 It never writes a secret value.
-Set `secret.name` to the name of that Secret.
-The chart reads fixed key names from it.
-
-[Secret custody and rotation](./secret-custody#inventory) lists each key, the roles that read it, and the command that generates it.
-That page also tells you which keys to keep outside the cluster for a restore, and how to replace each key.
-
 A minimal install needs these keys:
 
 - `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` and `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`.
 - `HEPHAESTUS_AUTH_STATE_COOKIE_KEY`.
 - `WEBHOOK_SECRET` and `WEBHOOK_ROUTING_SECRET`.
-- `HEPHAESTUS_CONVERSATION_LOOP_SECRET`, when the server runs.
 - `DATABASE_OWNER_PASSWORD` and `DATABASE_APP_PASSWORD`, the passwords of the [database roles](./helm-chart#database-roles).
 - With the bundled PostgreSQL, also `DATABASE_ADMIN_USERNAME` and `DATABASE_ADMIN_PASSWORD`, its administrator.
 - `GITHUB_OAUTH_CLIENT_SECRET`, for sign-in with GitHub.
 
-If a needed key is missing, the Pod that reads it stays in `CreateContainerConfigError`.
-For a feature that you turn on later, for example backups or Slack, add the keys that the [inventory](./secret-custody#inventory) lists for it.
+If a key is missing, the Pod that reads it stays in `CreateContainerConfigError`.
+[Secret custody and rotation](./secret-custody#inventory) lists each key, the keys of features that you turn on later, and how to replace each key.
 
-The release script `hephaestus-keys.sh` creates the Secret with these keys.
-It generates each key that you do not choose, and it never changes a key that exists.
+The release script `hephaestus-keys.sh` creates the Secret.
+It generates each key that you do not supply, and it never changes a key that exists.
 It prints key names, never a value.
-It needs `kubectl` with access to the release namespace, `openssl` and `jq`.
 
-1. Get the script from the signed bundle of the release.
-   Download, verify and unpack the bundle as steps 2 and 3 of [Get the release files](./k3s#1-get-the-release-files) describe.
-   You need only `hephaestus-keys.sh` from it.
-
-2. Type the client secret of your GitHub OAuth app. The shell does not show it:
+1. Type the client secret of your GitHub OAuth app. The shell does not show it:
 
    ```bash
    read -rs GITHUB_OAUTH_CLIENT_SECRET && export GITHUB_OAUTH_CLIENT_SECRET
    ```
 
-3. Run the script:
+2. Run the script:
 
    ```bash
    sh hephaestus-keys.sh --namespace hephaestus --secret hephaestus-app
@@ -112,61 +119,37 @@ It needs `kubectl` with access to the release namespace, `openssl` and `jq`.
 
    Add these options when they apply:
 
-   - `--external-database`: you use your own PostgreSQL. The script takes `DATABASE_OWNER_PASSWORD` and `DATABASE_APP_PASSWORD` from the environment. Use the passwords that you gave the [database roles](./helm-chart#database-roles).
-   - `--new-keys`: with `--external-database`, for a database without Hephaestus data only. The script cannot see whether the database holds data. For a database with data, restore both keys from your backup first.
+   - `--external-database`: you use your own PostgreSQL. The script takes `DATABASE_OWNER_PASSWORD` and `DATABASE_APP_PASSWORD` from the environment. Use the passwords that you gave the [database roles](./external-database#set-up-the-database-roles).
+   - `--new-keys`: with `--external-database`, for a database without Hephaestus data only. The script cannot see whether the database holds data. For a database with data, restore both encryption keys from your backup first.
    - `--backups`: you turn on backups with a new, empty backup repository. The script generates `BACKUP_CIPHER_PASS`. For an existing repository, restore its passphrase into the Secret instead.
    - `--metrics`: you turn on the [database metrics](./monitoring#turn-on-database-metrics). The script generates `DATABASE_MONITOR_PASSWORD`.
 
-4. Set `secret.name` to `hephaestus-app`.
-5. Copy the keys off the cluster, as [Copy the keys from the Secret](./secret-custody#copy-the-keys-from-the-secret) describes.
+3. Copy the keys off the cluster, as [Copy the keys from the Secret](./secret-custody#copy-the-keys-from-the-secret) describes.
+   Without the encryption keys, a restore cannot read the data that they protect.
 
 Run the script again at any time, for example with `--backups` when you turn on backups.
 It adds only the keys that the Secret lacks.
 The script stops if the bundled PostgreSQL volume exists but the Secret lacks the administrator login or an encryption key.
 Then restore the Secret from your backup.
 
-If Git holds your release, for example with Argo CD or Flux, create the release namespace first.
-Then run the script once from your workstation before the first sync.
+If Git holds your release, for example with Argo CD or Flux, run the script once from your workstation before the first sync.
 Keep the Secret out of Git.
-The chart never generates a key: a key in a rendered manifest would change at each render.
-A new system key cannot read what the old key encrypted.
+To write the Secret yourself instead, generate each value as [Generation and rotation](./secret-custody#generation-and-rotation) gives it.
 
-To write the Secret yourself instead, generate each value as [Generation and rotation](./secret-custody#generation-and-rotation) gives it, and do not write a newline into a value.
+## 4. Create the PostgreSQL TLS Secret {/* #postgresql-tls-secret */}
 
-### PostgreSQL TLS Secret
+The server and the migration Job connect to PostgreSQL with `sslmode=verify-full`.
+They check the server certificate against a CA, and they check that the certificate names the host.
+The chart creates no certificate, no key, and no CA, and it refuses to render without this Secret.
 
-Each role connects to PostgreSQL with `sslmode=verify-full`.
-The role verifies the server certificate against a CA, and it checks that the certificate names the host that the role connects to.
-Set `postgresql.tls.existingSecret` to an existing Secret in the release namespace.
-The chart refuses to render without it.
-The chart creates no certificate, no key, and no CA.
+| Key | Bundled PostgreSQL | External PostgreSQL |
+| --- | --- | --- |
+| `ca.crt` | Yes | Yes |
+| `tls.crt`, `tls.key` | Yes | No |
 
-| Key | Bundled PostgreSQL | External PostgreSQL | Mounted in |
-| --- | --- | --- | --- |
-| `ca.crt` | Yes | Yes | Server, migration Job, PostgreSQL metrics |
-| `tls.crt`, `tls.key` | Yes | No | Bundled PostgreSQL only |
-
-These receive only `ca.crt`, read-only, at `/etc/hephaestus/postgresql-ca`.
-No application role receives a private key.
-
-Backup Jobs use a separate client Secret, `postgresql.backup.clientTlsSecret`.
-It holds `ca.crt`, `tls.crt` and `tls.key` for the common name `hephaestus-backup`.
-The PostgreSQL CA signs it.
-The chart mounts its certificate and key as `backup.crt` and `backup.key`.
-Do not put the private key of the CA in this Secret.
-
-For the bundled PostgreSQL, the certificate in `tls.crt` must name `<release>-postgresql.<release namespace>.svc`.
-`<release>-postgresql` follows the object name rule in [Install](#install).
-The roles connect to exactly this name, without a cluster domain.
-The chart mounts `tls.crt` and `tls.key` into the PostgreSQL pod with the mode `0440`.
-The files belong to root and to the group 999, and PostgreSQL accepts a key with these permissions.
-
+For the bundled PostgreSQL, `tls.crt` must name `hephaestus-postgresql.hephaestus.svc`, without a cluster domain.
 If you have no CA, make one with OpenSSL.
-The server certificate needs the name above as a DNS subject alternative name, and the `serverAuth` extended key usage.
-This example makes a CA that is valid for ten years, and a server certificate that is valid for one year.
-Change `RELEASE` and `NAMESPACE` if your release differs.
-If `<release>-postgresql` has more than 52 characters, the chart shortens the Service name, as [Install](#install) describes.
-Then set `HOST` to that shortened name with `.<namespace>.svc`.
+This example makes a CA that is valid for ten years, and a server certificate that is valid for one year:
 
 ```bash
 RELEASE=hephaestus NAMESPACE=hephaestus
@@ -185,7 +168,7 @@ openssl verify -CAfile "$TLS_DIR/ca.crt" -verify_hostname "$HOST" -purpose sslse
 ```
 
 The last command prints `OK` when the certificate names the host.
-Then create the Secret with the three keys, and set `postgresql.tls.existingSecret` to its name:
+Then create the Secret:
 
 ```bash
 kubectl --namespace "$NAMESPACE" create secret generic hephaestus-postgresql-tls \
@@ -194,26 +177,27 @@ kubectl --namespace "$NAMESPACE" create secret generic hephaestus-postgresql-tls
   --from-file=tls.key="$TLS_DIR/tls.key"
 ```
 
-Keep `ca.key` outside the cluster, because you need it to renew the server certificate.
+Keep `ca.key` outside the cluster: you need it to renew the server certificate.
 For an external PostgreSQL, the Secret holds only `ca.crt`.
+[TLS certificates](./secret-custody#tls-certificates) gives the renewal of each certificate.
 
-[TLS certificates](./secret-custody#tls-certificates) gives the renewal of each certificate. A new CA needs the [database maintenance](./maintenance#database-maintenance) procedure.
+## 5. Prepare the Gateway {/* #prepare-the-gateway */}
 
-## Prepare the Gateway
+The chart attaches one `HTTPRoute` to the Gateways in `route.parentRefs`.
+It installs no Gateway, no Gateway controller, and no certificate.
+Before the install, the cluster needs these items:
 
-The Gateway API is a platform prerequisite of the chart.
-The platform operator installs and operates these items:
+- The Gateway API resource definitions, and a Gateway controller with the two `HTTPRoute` features in [Gateway routes](./helm-chart#gateway-routes).
+- A Gateway that serves HTTPS on port 443 of your host name, with a TLS certificate for it.
+- A redirect from HTTP to HTTPS.
+- A listener that accepts routes from the release namespace.
+  The Gateway API calls this setting `allowedRoutes.namespaces`. The Traefik chart calls it `namespacePolicy`.
+  Without it, the Gateway rejects the route, and every request returns `404`.
+- An idle timeout of at least 60 seconds for the Hephaestus live stream.
+- A request body limit of 25 MiB on `/webhooks` and `/api`.
 
-- The Gateway API resource definitions and a Gateway controller.
-- The Gateway, its TLS certificate, and its HTTP to HTTPS redirect.
-
-The chart installs none of them.
-It attaches one `HTTPRoute` to the Gateways in `route.parentRefs`.
-`route.parentRefs` must name at least one Gateway.
-
-On a k3s cluster that you set up yourself, the bundled Traefik does not serve the Gateway API until you turn on its Gateway provider.
-Put this `HelmChartConfig` in `/var/lib/rancher/k3s/server/manifests/`.
-Then run `kubectl get gateway --all-namespaces` to find the Gateway for `route.parentRefs`.
+For example, on a k3s cluster that you set up yourself, the bundled Traefik serves the Gateway API when you turn on its Gateway provider.
+Put this `HelmChartConfig` in `/var/lib/rancher/k3s/server/manifests/`, or apply it with `kubectl apply -f`:
 
 ```yaml
 apiVersion: helm.cattle.io/v1
@@ -232,11 +216,9 @@ spec:
         web:
           port: 8000
           protocol: HTTP
+          # Only the redirect below, which is in this namespace.
           namespacePolicy:
-            from: Selector
-            selector:
-              matchLabels:
-                kubernetes.io/metadata.name: hephaestus
+            from: Same
         websecure:
           port: 8443
           protocol: HTTPS
@@ -247,120 +229,124 @@ spec:
             selector:
               matchLabels:
                 kubernetes.io/metadata.name: hephaestus
+    extraObjects:
+      - apiVersion: gateway.networking.k8s.io/v1
+        kind: HTTPRoute
+        metadata:
+          name: https-redirect
+          namespace: kube-system
+        spec:
+          parentRefs:
+            - name: traefik-gateway
+              sectionName: web
+          rules:
+            - filters:
+                - type: RequestRedirect
+                  requestRedirect:
+                    scheme: https
+                    statusCode: 301
 ```
 
-Traefik creates the HTTPS listener only when `certificateRefs` names a TLS Secret.
-Create `hephaestus-tls` in `kube-system`, the namespace of this Gateway, from the certificate of your host name.
-Change `hephaestus` in the selector if your release namespace differs.
-The one-host install sets up its own Traefik, so it needs none of this.
+This Traefik creates the Gateway `kube-system/traefik-gateway`.
+It creates the HTTPS listener only when the TLS Secret `hephaestus-tls` exists in `kube-system`.
+Its default idle timeout of 180 seconds meets the requirement above.
+It has no request body limit, as on the one-host platform.
 
-A Gateway accepts a route from another namespace only if its listener allows that namespace.
-If the Gateway is not in the release namespace, set `allowedRoutes.namespaces` on its listener.
-This example allows only the release namespace:
-
-```yaml
-listeners:
-  - name: websecure
-    port: 443
-    protocol: HTTPS
-    allowedRoutes:
-      namespaces:
-        from: Selector
-        selector:
-          matchLabels:
-            kubernetes.io/metadata.name: hephaestus
-```
-
-Traefik names this setting `namespacePolicy` in its chart values.
-Without it, the Gateway rejects the route, and every request returns `404`.
-Hephaestus reports nothing about it.
-After the install, check that the Gateway accepted the route:
+Optional: if you cannot get a certificate from a public CA, make a test certificate.
+Sign it with your own CA instead if you have one.
+A browser shows a warning for a self-signed certificate, and GitHub does not deliver webhooks to it:
 
 ```bash
-kubectl --namespace hephaestus get httproute -o jsonpath='{range .items[*].status.parents[*].conditions[*]}{.type}={.status} {.reason}{"\n"}{end}'
+HOST=hephaestus.example.com
+openssl req -x509 -newkey rsa:3072 -nodes -sha256 -days 365 -subj "/CN=$HOST" \
+  -addext "subjectAltName=DNS:$HOST" -keyout gateway.key -out gateway.crt
+kubectl --namespace kube-system create secret tls hephaestus-tls --cert=gateway.crt --key=gateway.key
 ```
 
-Both conditions must be `True`: `Accepted=True` and `ResolvedRefs=True`.
-`Accepted=False NotAllowedByListeners` means that the listener does not allow the release namespace.
-`kubectl --namespace hephaestus describe httproute` shows the same conditions with a message.
-
-Set `trustedProxies` to a Tomcat regular expression that matches only the Gateway data plane addresses.
-The server does not start in production with a blank value.
-The `IP` column of this command shows the addresses of the Gateway Pods:
+The server trusts forwarded client addresses only from the Gateway Pods.
+The `IP` column of this command shows their addresses:
 
 ```bash
-kubectl get pods --namespace <Gateway namespace> --selector <Gateway pod label> --output wide
+kubectl get pods --namespace kube-system --selector app.kubernetes.io/name=traefik --output wide
 ```
 
-Write a regular expression for the Pod network that holds them, not for one address, because a Pod gets a new address when it restarts.
-On a k3s cluster with the default Pod network `10.42.0.0/16`, use this value:
+Change the namespace and the label for another Gateway controller.
+A Pod gets a new address when it restarts, so `trustedProxies` matches the Pod network, not one address.
+
+## 6. Write the values file
+
+Write your values file, `site.yaml`.
+This example is for `small.yaml` and the k3s Traefik above:
 
 ```yaml title="values.yaml"
+host: hephaestus.example.com
+# A Tomcat regular expression for the Pod network of the Gateway Pods: k3s uses 10.42.0.0/16.
 trustedProxies: '10\.42\.\d{1,3}\.\d{1,3}'
+secret:
+  name: hephaestus-app
+postgresql:
+  tls:
+    existingSecret: hephaestus-postgresql-tls
+route:
+  parentRefs:
+    - name: traefik-gateway
+      namespace: kube-system
+      sectionName: websecure
+networkPolicy:
+  # The Gateway Pods that may send requests to the release.
+  gateway:
+    namespace: kube-system
+    podLabels:
+      app.kubernetes.io/name: traefik
+      app.kubernetes.io/instance: traefik-kube-system
+  # The Kubernetes API endpoint, for small.yaml only.
+  kubernetesApi:
+    cidr: 192.168.5.15/32
+    port: 6443
+# For small.yaml only.
+sandbox:
+  namespace: hephaestus-sandboxes
+config:
+  github:
+    oauthClientId: Ov23liExampleClientId
+  auth:
+    bootstrapAdmins: ["github:1234567"]
 ```
 
-Use single quotes, or no quotes, in YAML.
-Double quotes read each backslash as the start of an escape sequence.
-
-The Gateway API has no portable request body limit or idle timeout.
-Configure these values on the Gateway:
-
-- A request body limit of 25 MiB on `/webhooks` and `/api`.
-- An idle timeout of at least 60 seconds for the Hephaestus live stream.
-
-## Install
-
-1. Create the release namespace and the sandbox namespace, and label both with the Restricted Pod Security level.
-   Use the sandbox namespace for this release alone.
-
-   ```bash
-   kubectl create namespace hephaestus
-   kubectl create namespace hephaestus-sandboxes
-   kubectl label namespace hephaestus hephaestus-sandboxes pod-security.kubernetes.io/enforce=restricted
-   ```
-
-   With the server enabled, install the agent-sandbox controller of the release before the chart ([Sandbox templates](./sandboxes#sandbox-templates)).
-   The file is `k3s-agent-sandbox.yaml` in the release's k3s bundle.
-   Apply it again for each release.
-
-   ```bash
-   kubectl apply --server-side -f k3s-agent-sandbox.yaml
-   kubectl -n agent-sandbox-system rollout status deployment/agent-sandbox-controller
-   ```
-
-2. Make the OAuth App of your login provider, as [First steps § 1](./first-steps#1-configure-a-login-provider) describes.
-   Then create the [Secret](#create-the-secret) with its client secret, and the [PostgreSQL TLS Secret](#postgresql-tls-secret).
-   The server copies the client secret into the database at its first start.
-3. Write your values file, `site.yaml`, with `host`, `trustedProxies`, `secret.name`, `postgresql.tls.existingSecret`, `route.parentRefs`, and `networkPolicy.gateway` with its pod labels.
-   Add `config.github.oauthClientId` and `config.auth.bootstrapAdmins`, as [First steps § 1 and § 2](./first-steps) describe.
-   Do not set `release` or `images`: the release chart sets them.
-   For a public instance, create the ConfigMap with your legal pages and name it in `webapp.legalOverrides`, as [Legal pages](./legal-pages#deployment-specific-overrides) describes.
-   The webapp Pod waits for a ConfigMap that it names.
-4. Enable reviews.
-   `small.yaml` enables the sandboxes, and the chart does not render them without the sandbox namespace and the Kubernetes API endpoint.
-   Find the endpoint that the network plugin sees:
+1. Set `host` to your host name.
+2. Set `trustedProxies` to a regular expression for the Pod network of your Gateway Pods.
+   Use single quotes, or no quotes. In double quotes, YAML reads each backslash as the start of an escape sequence.
+3. Set `route.parentRefs` to your Gateway and its HTTPS listener.
+4. Set `networkPolicy.gateway` to the namespace and the Pod labels of your Gateway Pods.
+   The chart refuses a namespace without labels, because it would admit every Pod in that namespace.
+5. For `small.yaml`, find the Kubernetes API endpoint that the network plugin sees:
 
    ```bash
    kubectl get endpointslices --namespace default --selector kubernetes.io/service-name=kubernetes
    ```
 
-   On a single k3s node, `PORTS` is `6443` and `ENDPOINTS` is the node's internal address, for example `192.168.5.15`.
-   Add both values to `site.yaml`:
+   Set `networkPolicy.kubernetesApi.cidr` to the address in `ENDPOINTS`, with `/32`, or `/128` for IPv6.
+   Set `networkPolicy.kubernetesApi.port` to the value in `PORTS`.
+   If `ENDPOINTS` lists one address for each control plane node, set a CIDR that holds all of them.
+6. Set `config.github.oauthClientId` and `config.auth.bootstrapAdmins`, as [First steps § 1 and § 2](./first-steps) describe.
+7. For a public instance, name your legal pages ConfigMap in `webapp.legalOverrides`, as [Legal pages](./legal-pages#deployment-specific-overrides) describes.
+   The webapp Pod waits until the ConfigMap that it names exists.
 
-   ```yaml
-   sandbox:
-     namespace: hephaestus-sandboxes
-   networkPolicy:
-     kubernetesApi:
-       cidr: 192.168.5.15/32
-       port: 6443
+Do not set `release` or `images`: the release chart sets them.
+For `dev.yaml`, leave out `networkPolicy.kubernetesApi` and `sandbox`.
+
+## 7. Install the chart {/* #install */}
+
+1. Render the chart with your profile and your values. This step needs no cluster:
+
+   ```bash
+   helm template hephaestus "chart-$VERSION/hephaestus" -n hephaestus \
+     -f "chart-$VERSION/hephaestus/profiles/small.yaml" -f site.yaml >/dev/null
    ```
 
-   Use `/128` for an IPv6 address.
-   If `ENDPOINTS` lists more than one address, one for each control plane node, set a CIDR that holds all of them.
+   If Helm prints an error, correct the value that it names, and render again.
 
-5. [Verify the release chart](#verify-the-release-chart).
-6. Install the verified chart with a [profile](./helm-chart#profiles) and your values:
+2. Install the chart with the same files:
 
    ```bash
    helm upgrade --install hephaestus "chart-$VERSION/hephaestus" -n hephaestus \
@@ -368,32 +354,44 @@ Configure these values on the Gateway:
      --wait=watcher --wait-for-jobs --timeout 45m
    ```
 
-   The first install omits automatic rollback so a failure leaves its Jobs and Pods available for diagnosis.
-   If it fails, use [A first install fails](#a-first-install-fails) before removing anything.
+The first install has no automatic rollback, so a failed install keeps its Jobs and Pods for diagnosis.
+If it fails, use [A first install fails](#a-first-install-fails) before you remove anything.
 
 ## Check that it worked
 
-1. Find the successful install's revision with `helm history hephaestus --namespace hephaestus`.
-   Follow its migration Job's log: `kubectl --namespace hephaestus logs job/hephaestus-migration-<revision>`.
-   Replace `<revision>` with the successful install's revision number.
-   The Job logs `Database migration completed` when it finishes.
+1. Find the revision of the install with `helm history hephaestus --namespace hephaestus`.
+2. Read the log of its migration Job: `kubectl --namespace hephaestus logs job/hephaestus-migration-<revision>`.
+   The Job logs `Database migration completed`.
    The JVM then prints a long native memory summary. It is not an error.
-2. Wait until the server is ready, then run the [sandbox isolation gate](./sandboxes#the-agent-image-on-the-sandbox-nodes) for each template.
+3. Wait until the server is ready:
 
    ```bash
    kubectl --namespace hephaestus rollout status deployment/hephaestus-server
    ```
 
-   The server's readiness does not run the old isolation probe. The platform gate must pass before work is enabled.
+   On a first install, the server can restart while PostgreSQL starts. This is not a failure.
 
-3. Continue with [First steps § 3. Sign in](./first-steps#3-sign-in).
+4. Check that the Gateway accepted the route:
+
+   ```bash
+   kubectl --namespace hephaestus get httproute -o jsonpath='{range .items[*].status.parents[*].conditions[*]}{.type}={.status} {.reason}{"\n"}{end}'
+   ```
+
+   The output shows `Accepted=True` and `ResolvedRefs=True`.
+   `Accepted=False NotAllowedByListeners` means that the listener does not accept routes from the release namespace.
+
+5. Open `https://<host>`. The login page shows **Continue with GitHub**.
+6. For `small.yaml`, run the [sandbox isolation gate](./sandboxes#sandbox-isolation-gate) for each sandbox template.
+   Connect no repository until the gate passes for each template.
+   The gate runs from a checkout of the release tag with Node.js, because no release asset contains it.
+
+Then continue with [First steps § 3. Sign in](./first-steps#3-sign-in).
 
 ## Undo
 
 1. Delete the sandbox namespace first.
    This stops every sandbox at once.
-   If you remove the release first, its network policies go.
-   Then sandbox Pods that remain lose their policies.
+   If you remove the release first, its network policies go, and the remaining sandbox Pods lose their policies.
 
    ```bash
    kubectl delete namespace hephaestus-sandboxes
@@ -442,9 +440,9 @@ Do not run the cluster checks below with another kubeconfig.
    Replace `<migration-job>` with the Job name for the failed Helm revision from steps 3 and 4.
 7. If a server Pod remains, read its log before the next install replaces it.
 
-Events expire, and a removed Pod's log might no longer exist.
+Events expire, and the log of a removed Pod can be gone.
 A failed install can still have changed the database.
-Use [Failed-migration recovery](./upgrade#if-migration-fails) before starting an older release against it.
+Use [Failed-migration recovery](./upgrade#if-migration-fails) before you start an older release against it.
 For durable logs, configure a [log collector](./monitoring#ship-logs-to-a-log-store) before the install.
 
 ### Other symptoms
@@ -453,11 +451,17 @@ For durable logs, configure a [log collector](./monitoring#ship-logs-to-a-log-st
 | --- | --- |
 | A server log says that the network policy did not filter a sandbox Pod in time | The network plugin applied the policy of a new Pod more than 60 seconds after the Pod started. The attempt is tried again. |
 | A sandbox Pod stays `Pending` with a quota error | Its tier's quota is full. The chart sizes each tier for its servers' capacity, so check a quota of your own, or `sandbox.reviewMemory` and `sandbox.conversationTurns`. |
-| Every path returns `404`, and `kubectl get httproute` shows `Accepted=False NotAllowedByListeners` | The listener of the Gateway does not allow routes from the release namespace. Set `allowedRoutes.namespaces` on the listener, as [Gateway routes](./helm-chart#gateway-routes) shows. |
+| Every path returns `404`, and `kubectl get httproute` shows `Accepted=False NotAllowedByListeners` | The listener of the Gateway does not accept routes from the release namespace. Set `allowedRoutes.namespaces` on the listener, as [Prepare the Gateway](#prepare-the-gateway) describes. |
 | A new Pod restarts during an upgrade, and its log names a pending change set | It waited 10 minutes for the schema. Check the migration Job's log. A longer migration needs the [database maintenance](./maintenance#database-maintenance) procedure. |
 | A backup Job fails with `unable to find primary cluster` | The Job cannot reach pgBackRest's TLS server on port 8432 of the PostgreSQL Service, or its client certificate is not for `hephaestus-backup` from `ca.crt`. |
 | PostgreSQL's volume fills | A failed WAL archive keeps the WAL on the volume. Check the latest backup Job's log and the bucket's credentials. |
-| A practice review fails with "The sandbox could not prepare its workspace." | The sandbox's initializer failed before any model call. The job runs again within its retry limit, so a failure that repeats on every attempt uses all of them. The server log names the initializer's exit code. After the last attempt, read the exit code and the last lines of the initializer's log on the job: `kubectl --namespace hephaestus exec hephaestus-postgresql-0 -c postgresql -- psql -U "$DATABASE_USERNAME" -d hephaestus -c "SELECT capture->'initializationFailure' FROM review_job WHERE id='<job id>'"`. Known credential formats in those lines are masked. |
+| A practice review fails with "The sandbox could not prepare its workspace." | The sandbox's initializer failed before any model call. The job runs again within its retry limit, so a failure that repeats on every attempt uses all of them. The server log names the initializer's exit code. After the last attempt, read the exit code and the last lines of the initializer's log with the command below this table. Known credential formats in those lines are masked. |
 
-Run `node scripts/sandbox-isolation.ts` to verify each template and its network boundary.
-The server's `/actuator/prometheus` on its management port shows the same tier in the `sandbox_isolation_*` metrics.
+Replace `<job id>` with the ID of the review job:
+
+```bash
+kubectl --namespace hephaestus exec -i hephaestus-postgresql-0 -c postgresql -- \
+  sh -c 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+SELECT capture->'initializationFailure' FROM review_job WHERE id = '<job id>';
+SQL
+```

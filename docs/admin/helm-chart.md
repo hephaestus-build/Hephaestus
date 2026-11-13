@@ -6,90 +6,66 @@ page_type: reference
 
 import SystemDiagram from "@site/src/components/SystemDiagram"
 
-This page describes the Helm chart of a release: the clusters it supports, the objects it runs, and its values.
-[Install on a Kubernetes cluster](./kubernetes) and [Install on one host](./k3s) give the procedures.
-From 1.0, the chart is the supported deployment: [ADR 0058](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) records the decision, and the [compatibility policy](./compatibility-policy#support-for-1x) gives the terms.
+This page describes the Helm chart of a release: the clusters it supports, the objects it runs, its profiles, and its values.
+[Install on a Kubernetes cluster](./kubernetes), [Install on one host](./k3s) and [Install on a managed cluster](./managed-cluster) give the procedures.
+The chart is the only supported deployment ([compatibility policy](./compatibility-policy#supported-deployment)).
 
 Each release publishes the chart as a signed OCI artifact, `oci://ghcr.io/hephaestus-build/charts/hephaestus`.
 The chart source is in `deploy/chart/hephaestus/` of the repository.
-It uses the standard Helm chart format: `Chart.yaml`, `values.yaml`, `values.schema.json`, and `templates/`.
 It uses only stable Kubernetes APIs and the Gateway API `HTTPRoute` resource of version `v1`.
 
 ## Supported clusters
 
-Hephaestus supports the chart on a cluster with these items:
+The chart needs a cluster with these items:
 
-- A [conformant](https://www.cncf.io/training/certification/software-conformance/) Kubernetes cluster at a supported minor version.
-  The [Kubernetes project](https://kubernetes.io/releases/) must support that minor version when the Hephaestus release ships.
-  Below 1.35, the chart refuses the cluster.
-  Upgrade a cluster at an older minor, for example 1.30 or 1.33, before Hephaestus runs on it.
+- A [conformant](https://www.cncf.io/training/certification/software-conformance/) Kubernetes cluster at a minor version that the [Kubernetes project](https://kubernetes.io/releases/) supports when the Hephaestus release ships.
+  The chart refuses a cluster below 1.35.
   [ADR 0060](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0060-the-kubernetes-floor-follows-upstream-support.md) gives the reason.
 - A network plugin that enforces NetworkPolicy for egress and for ingress, also on traffic to a Service address.
-  Run the platform isolation gate before enabling work ([Sandbox prerequisites](./sandboxes#sandbox-prerequisites)).
 - A Gateway API controller for `HTTPRoute` `v1` with the two features in [Gateway routes](#gateway-routes).
 - A storage class for `ReadWriteOnce` volumes, for the bundled PostgreSQL.
-- With the server enabled, the [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) controller with its extensions, at the version that the release pins ([Sandbox templates](./sandboxes#sandbox-templates)).
+- With `sandbox.enabled`, the [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) controller and its extensions at the version that the release pins, and the [sandbox prerequisites](./sandboxes#sandbox-prerequisites).
 
-CI installs and upgrades the chart on Kubernetes 1.35 and on the latest minor version, 1.37, on `amd64`.
-1.35 is the lowest version that the chart takes.
-A pull request runs only the latest minor version.
-When a change touches the chart or the sandbox runtime, the merge queue runs both before the commit reaches `main`.
-A nightly run repeats them on `main`, and it also runs 1.35 on `arm64`.
-
-One more run uses Kubernetes 1.35, three nodes, Calico for network policy, and an external PostgreSQL.
-The merge queue and the nightly run include it.
-Each run starts two servers with the `dev.yaml` profile and runs the platform isolation gate on that cluster.
-In the merge queue, the 1.35 run on `amd64` uses `small.yaml` instead, with one server, on a runner of 16 GiB.
-
-Each upgrade must keep the PostgreSQL Pods: only a change to their own image or settings restarts them.
-On the latest minor version, the `amd64` run also backs up to an S3 server and restores to a point in time.
-[Backup and restore](./backup-restore#back-up-the-database) describes these steps.
-[Install on one host (k3s)](./k3s) states what the release workflow tests before it publishes a release.
 When a Kubernetes minor version reaches its end of life upstream, the next Hephaestus release can drop it.
 
 ## Clocks
 
-Keep the clock of every host that runs a Hephaestus role or PostgreSQL synchronized by NTP.
+Keep the clock of every host that runs the server or PostgreSQL synchronized by NTP.
 Conversation turn leases and person erasure compare times that different hosts write.
-Slack posts that lose their receipt are found by message metadata.
 [Conversation runtime § Slack replies](/contributor/unified-pi-runtime#slack-replies) has the rule.
 
 ## What the chart runs
 
-| Component | Kind | Role or image |
+| Component | Kind | What it runs |
 | --- | --- | --- |
-| `server` | Deployment, 2 replicas by default, or 0 while stopped | Server role: the API and provider webhook receiver. |
-| `migration` | Job, one for each Helm revision | The server image in its migrate run mode. It applies the release's database migrations and exits. |
+| `server` | Deployment, 2 replicas by default | The server: the API, the provider webhook receiver, sync, delivery, and with `sandbox.enabled` the sandboxes and their gateway. `server.replicas: 0` stops it for maintenance. |
+| `migration` | Job, one for each Helm revision | The server image in its migrate run mode. It applies the database migrations of the release and exits. |
 | `webapp` | Deployment | The SPA, from the non-root webapp image. |
-| `postgresql` | StatefulSet, optional | The release PostgreSQL image, with `pg_partman` and pgBackRest. |
-| `postgresql-backup` | CronJobs, optional | Full and differential pgBackRest backups ([Backup and restore](./backup-restore#back-up-the-database)). |
-| `route` | HTTPRoute | `/`, `/api` and `/webhooks`. |
-| `priority` | PriorityClasses, cluster-wide | The priorities of the role Pods and of the sandboxes ([Server § Priorities](./sandboxes#priorities)). |
+| `postgresql` | StatefulSet, with `postgresql.bundled` | The release PostgreSQL image, with `pg_partman` and pgBackRest. |
+| `postgresql-backup` | CronJobs, with `postgresql.backup.enabled` | Full and differential pgBackRest backups ([Back up the database](./backup-restore#back-up-the-database)). |
+| `postgresql-exporter` | Deployment, with `postgresql.metrics.enabled` | The PostgreSQL metrics exporter ([Database metrics](./monitoring#turn-on-database-metrics)). |
+| `route` | HTTPRoute | `/`, `/api` and `/webhooks` ([Gateway routes](#gateway-routes)). |
+| `agent-image` | DaemonSet, with `sandbox.enabled` | Keeps the agent image on each sandbox node ([The agent image on the sandbox nodes](./sandboxes#the-agent-image-on-the-sandbox-nodes)). |
+| Sandbox templates | SandboxTemplates, SandboxWarmPools, quotas and policies, with `sandbox.enabled` | The sandbox namespace objects ([Sandboxes](./sandboxes)). |
+| `agent-sandbox-controller` | Deployment, with `sandbox.controller.enabled` | The agent-sandbox controller in the release namespace, for a [managed cluster](./managed-cluster). |
+| `priority` | PriorityClasses, cluster-wide, with `priorityClasses.create` | The priorities of the Pods ([Priorities](./sandboxes#priorities)). |
 
 The PriorityClasses are the only cluster-wide objects of the chart.
-The account that installs the chart therefore needs permission to create PriorityClasses.
-Their names contain the release's namespace and name, so two releases never share one.
-On a shared cluster that does not allow this, use classes that exist ([Server § Priorities](./sandboxes#priorities)).
+Their names contain the namespace and the name of the release, so two releases never share one.
+Without permission to create them, set `priorityClasses.create: false` and name classes that exist ([Priorities](./sandboxes#priorities)).
 
 The migration Job is the only migration owner.
-No role runs Liquibase: each new Pod waits for the schema before it starts, for up to 10 minutes, while the previous release serves.
+Each new server Pod waits for the schema before it starts, for up to 10 minutes, while the previous release serves.
 The Job is a plain part of the release and not a Helm hook, because a hook would run before the bundled PostgreSQL exists.
-[Runtime roles](./runtime-roles) describes the run mode and the wait.
+[Database migrations](./runtime-roles#database-migrations) describes the run mode and the wait.
 
-The server defaults to two replicas and uses `RollingUpdate`, with `maxSurge: 1` and `maxUnavailable: 0`.
+The server uses `RollingUpdate` with `maxSurge: 1` and `maxUnavailable: 0`.
 A replacement must be ready before an old Pod stops serving.
-The server PodDisruptionBudget permits one unavailable replica when there are two or more servers.
+The server PodDisruptionBudget keeps at least one server available (`minAvailable: 1`).
 With one replica, it prevents voluntary eviction.
-The Deployment strategy controls the rollout.
-See [Kubernetes disruption budgets](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/#pod-disruption-budgets).
 
-[Ingest durability](/contributor/ingest-durability) owns the database leases that order provider events across replicas.
-[Runtime roles](./runtime-roles#graceful-drain) owns the drain and interrupted-call recovery.
-Schema-compatible releases can serve together during an update.
-An incompatible schema, including the cutover to 1.0, requires the stopped procedure in [Upgrade](./upgrade).
-
-The server also runs the sandboxes when `sandbox.enabled` is on.
-[Database maintenance](./maintenance#database-maintenance) gives the order of the roles for a change of the database or of a schema that needs every role stopped.
+Schema-compatible releases serve together during an update. An incompatible schema needs a [stopped schema upgrade](./upgrade#stopped-schema-upgrades).
+[Graceful drain](./runtime-roles#graceful-drain) describes how a server stops.
 
 ### Where each part runs on a managed cluster
 
@@ -105,8 +81,9 @@ Each box names who deploys and runs it:
 - `«cluster admin»`: the cluster admins run it.
 - `«external»`: a service outside the cluster.
 
-Look at the two control paths. The server and the agent-sandbox controller never connect to each other: both connect to the Kubernetes API server. The server creates a `SandboxClaim` there, and the controller watches the claims and creates each sandbox Pod.
-Public traffic goes through the Gateway data plane, the proxy or load balancer that the cluster admins' Gateway API implementation runs. It reaches the server Service on port 8080.
+The server and the agent-sandbox controller never connect to each other: both connect to the Kubernetes API server.
+The server creates a `SandboxClaim` there, and the controller watches the claims and creates each sandbox Pod.
+Public traffic goes through the Gateway data plane, the proxy or load balancer of the cluster admins' Gateway API implementation. It reaches the server Service on port 8080.
 
 <SystemDiagram name="deployment-cluster" title="Deployment view: Hephaestus on a managed Kubernetes cluster" alt="Deployment diagram: the Gateway data plane and API server, worker nodes with the server, PostgreSQL, controller and sandbox Pods, each with its image and connections.">
 
@@ -127,16 +104,15 @@ Public traffic goes through the Gateway data plane, the proxy or load balancer t
 
 These facts complete the view:
 
-- You need access to the two namespaces only. The cluster admins apply one admin bundle: the CRDs, the PriorityClasses and a read-only ClusterRole. With the cluster profile, the chart renders no cluster-wide object.
-- The agent-sandbox controller has a Role in each of the two namespaces and the admin bundle's read-only ClusterRole.
-- The server runs two replicas by default, with a PodDisruptionBudget. The chart sets no rule that spreads the replicas over nodes, so the cluster's scheduler places them.
-- PostgreSQL stores its data on a persistent volume from the cluster's storage class. With an external PostgreSQL, you deploy and run it outside the chart ([External database](./external-database)).
-- A network policy lets a sandbox reach only port 8081. The public route has no rule for that port.
-- The egress policies allow the Kubernetes API only at `networkPolicy.kubernetesApi.cidr` and `.port`. Set the endpoint after address translation, not the Service port.
-- The nodes that run sandboxes need the agent image before the first claim. A cold image pull alone takes longer than the cold-start target.
+- You need access to the two namespaces only. The cluster admins apply the admin bundle: the CRDs, the PriorityClasses and the read-only ClusterRole of the controller. The chart renders no cluster-wide object.
+- The chart sets no rule that spreads the server replicas over nodes, so the cluster's scheduler places them.
+- PostgreSQL stores its data on a persistent volume from the cluster's storage class. You run an [external PostgreSQL](./external-database) outside the chart.
+- A network policy lets a sandbox reach only port 8081 of the server. The public route has no rule for that port.
+- The egress policies allow the Kubernetes API only at `networkPolicy.kubernetesApi.cidr` and `.port`: the endpoint after address translation, not the Service port.
+- The nodes that run sandboxes need the agent image before the first claim.
 
-The view shows two decided changes that the chart does not have yet.
-The server serves the SPA ([ADR 0100](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0100-the-server-serves-the-web-app.md)). Until that change lands, the `webapp` Deployment serves it with nginx.
+The view shows one decided change that the chart does not have yet: the server serves the SPA ([ADR 0100](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0100-the-server-serves-the-web-app.md)).
+Until that change lands, the `webapp` Deployment serves the SPA with nginx.
 Sync-status hints use PostgreSQL notifications.
 
 The sandbox namespace enforces the restricted Pod Security Standard. The runtime class decides the rest of the isolation ([Sandbox prerequisites](./sandboxes#sandbox-prerequisites)):
@@ -151,63 +127,45 @@ Traefik is the Gateway, the agent-sandbox controller runs in `agent-sandbox-syst
 
 ## Profiles
 
-Four values files in `profiles/` set capacity for one use.
-All four use the same templates.
-Each release chart contains them in `chart-$VERSION/hephaestus/profiles/` after you [verify the release chart](./kubernetes#verify-the-release-chart).
-Give the profile as the first `-f` file, before your own values, as [Install](./kubernetes#install) shows.
+A profile is a values file in `profiles/` that sets capacity for one kind of cluster.
+All profiles use the same templates.
+The release chart contains them in `chart-$VERSION/hephaestus/profiles/` after you [verify the release chart](./kubernetes#verify-the-release-chart).
+Give the profile as the first `-f` file, before your own values.
+
+| Profile | Cluster | Sandboxes | PriorityClasses and agent-sandbox controller |
+| --- | --- | --- | --- |
+| `dev.yaml` | A disposable cluster on one workstation, such as k3d or kind | Off: no practice reviews and no conversation turns | The chart creates the classes. No controller is needed. |
+| `preview.yaml` | A short-lived preview of one pull request | Off | The chart creates the classes. No controller is needed. |
+| `small.yaml` | One node of 4 vCPU, at least 16 GiB of memory and 150 GiB of disk, such as the [one-host platform](./k3s) | On | The chart creates the classes. The cluster runs the controller of `k3s-agent-sandbox.yaml`. |
+| `cluster.yaml` | A cluster of several nodes | On | The [admin bundle](./managed-cluster#admin-handoff) creates the classes. The controller runs in the release namespace. |
+
+With `dev.yaml` or `preview.yaml`, the sandbox prerequisites do not apply.
+Use `dev.yaml` to try Hephaestus on a workstation cluster.
+
+No profile is only for a cluster of several nodes on which you are cluster-admin.
+Use `cluster.yaml`, and do the steps of [Admin handoff](./managed-cluster#admin-handoff) yourself.
+Do not also apply `k3s-agent-sandbox.yaml`: a second agent-sandbox controller would also act on the sandboxes of the release.
+
+[Sizing and scaling](./sizing#profiles-at-a-glance) gives the nodes, requests, reviews and conversation turns of each profile.
 If a change of profile changes a volume size, read [Change a volume size](./upgrade#change-a-volume-size) before you upgrade.
-
-| Profile | Use | PostgreSQL |
-| --- | --- | --- |
-| `dev.yaml` | One workstation cluster | Bundled, small volumes |
-| `preview.yaml` | One pull request preview | Bundled, small volumes |
-| `small.yaml` | One small cluster, for example one k3s node | Bundled, bounded streams |
-| `cluster.yaml` | A managed cluster of several nodes, without cluster-admin: [Install on a managed cluster without cluster-admin](./managed-cluster) | Bundled, or external |
-
-`small.yaml` supports a node of 4 vCPU, at least 16GiB of memory, and 150GiB of disk.
-It runs one server with bundled PostgreSQL. Its sandbox quotas follow the template requests, RuntimeClass overhead, review memory budget and admitted conversation turns.
-Check the complete request totals against the node's allocatable resources before installation.
-[Sizing and scaling](./sizing) owns the resource planning rules and the limits of the available measurements.
-
-The `small` profile keeps one steady server and reserves room for its replacement during an update.
-The old server drains beside the ready replacement. Its gateway stays available during that drain.
-[Upgrade](./upgrade) gives the procedure, including the stopped cutover to 1.0.
-Measure restart errors against the 99.5% availability budget.
-
-`sandbox.conversationTurns: auto` uses the declared CPU and memory budget.
-[Sandbox capacity budget](#sandbox-capacity-budget) owns the inputs, formula and validation rules.
-
-Each admitted turn has room for one conversation template Pod.
-Tools run in that Pod. There is no separate tools pool or loop Deployment.
-Model calls still need their own provider grants.
-[Sandbox sizes](./sandboxes#sandbox-sizes) owns the template resource contract.
-
-The chart's fit tests count schedulable requests, including rollout and backup resources.
-Those totals do not qualify workload memory or CPU peaks.
-The current review and conversation template requests have no workload peak measurement yet.
-Idle Pi SDK measurements do not qualify those requests.
-Qualification must measure each sandbox during reviews and conversation turns before changing the requests.
-
-For a cluster with several nodes, start from `cluster.yaml`, and set the servers, their reviews, their quota and the external services in your own values file.
-
-[ADR 0035](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0035-pull-request-previews-are-label-gated.md) owns what a preview can run.
-The preview profile sets only capacity.
 
 ### Sandbox capacity budget
 
-`sandbox.budget.cpu` and `sandbox.budget.memory` state the allocatable CPU and memory assigned to this release in its sandbox node pool.
-Use the capacity left after the kubelet reservations and eviction floor, and after workloads outside this release.
-These are aggregate limits. They do not prove that each Pod fits an eligible node or that node selectors permit its placement.
-Allow for the image-hold DaemonSet on each additional sandbox node when assigning the aggregate budget.
+`sandbox.budget.cpu` and `sandbox.budget.memory` state the allocatable CPU and memory of the sandbox node pool that this release can use.
+Use the capacity that is left after the kubelet reservations, the eviction floor and the workloads outside this release.
+These are aggregate limits. They do not prove that each Pod fits an eligible node.
+On each additional sandbox node, also reserve one image-hold Pod of the `agent-image` DaemonSet.
 
-When `sandbox.conversationTurns` is `auto`, both budget values are required.
-The chart fails with a message that points to this section if either value is absent.
-With an explicit turn count, the budget is optional. When supplied, it checks that count against both operating phases.
-A count above the budget fails validation. The chart does not silently overcommit.
+`sandbox.conversationTurns` sets the conversation turns that the whole installation runs at once:
 
-The `small` profile declares 3500m CPU and 14196Mi memory.
-The memory is the recorded 16GiB node's allocatable capacity, rounded down after its kubelet reservations and eviction floor.
-The managed-cluster profile has no default budget. Its operator must supply the aggregate fact before selecting `auto`.
+- `auto` computes the count from the budget. Both budget values are then required. Without one, the chart fails with a message that links this section.
+- A number sets the count. With a budget, the chart checks the count against it and fails when the count does not fit. The chart never overcommits.
+- `0` stops new turns.
+
+The chart passes the resolved count to each server.
+More servers do not add turns.
+The `small` profile uses `auto` and declares 3500m CPU and 14196Mi memory: the allocatable capacity of a 16 GiB node, rounded down.
+The `cluster` profile declares no budget and uses the default count, 8.
 
 For CPU and memory separately, the chart computes:
 
@@ -217,46 +175,29 @@ upgrade slots = floor((budget - resident requests - draining servers and rollout
 auto turns    = min(steady CPU slots, steady memory slots, upgrade CPU slots, upgrade memory slots)
 ```
 
-Resident requests include the server, webapp, bundled PostgreSQL and its backup sidecar, and enabled controllers or monitoring workloads.
-The chart reads the rendered workload requests, including the largest init container.
+- Resident requests are the requests of the server, the webapp, PostgreSQL with its backup sidecar, and the controller.
+  The monitoring workloads and one image-hold Pod also count. So does the largest init container of each Pod.
+- The review requests are the reviews at once times the review template request, with the RuntimeClass overhead. The reviews at once are `sandbox.reviewMemory` divided by one review's memory request and overhead.
+- Each turn needs one conversation template Pod, with its RuntimeClass overhead.
+- Requests round up to millicores and MiB. Budget values round down.
 
-One image-hold Pod is included. The operator reserves the other nodes' image-hold Pods in the assigned budget.
-The review count follows `sandbox.reviewMemory` divided by the review template's memory request and RuntimeClass overhead.
-Each admitted conversation needs one conversation template Pod, including its RuntimeClass overhead.
-Requests round up to millicores and MiB. Budget values round down to those units.
-
-The upgrade model requires reviews to finish before its transient peak. Conversation sandboxes can remain warm.
-[Upgrade](./upgrade#sandbox-capacity-during-upgrade) gives that operating requirement.
-The chart counts one concurrent backup and the migration and stanza Jobs beside rolling replacement Pods.
-Every old server can still be draining when every replacement is ready.
-
-The resource and database connection budgets therefore reserve twice `server.replicas` for servers during one update.
-Start no further update until those old Pods have stopped.
-
-Kubernetes does not count terminating Pods against `maxSurge` ([Deployment termination](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#terminating-pods)).
-
-It reads the workload templates directly, so adding a sidecar or changing a request also changes admission.
-The old loop's 50m estimate, fixed turn ceiling and JSON budget table no longer size sandbox turns.
-
-With the current templates, `small` admits eleven turns without backups and seven with backups, while retaining five review slots.
-These are request totals. Review and conversation workload peaks have not been measured.
-Qualification must measure their memory and CPU before proposing smaller requests.
+The upgrade phase assumes that reviews finish before its peak, and that warm conversation sandboxes stay.
+Every old server can still drain when every replacement is ready, so the budgets reserve twice `server.replicas` for servers.
+[Sandbox capacity during upgrade](./upgrade#sandbox-capacity-during-upgrade) gives the operating rule.
+A changed request or an added sidecar also changes the turn count.
 
 ## Values
 
 The schema refuses an unknown key, an image tag, and a value outside its bounds.
 Each object name is `<release>-<component>`, with at most 52 characters.
-A StatefulSet revision label adds up to 11 characters to its name, and a label value has at most 63.
 If a name is longer, the chart keeps its start and adds 8 characters of a hash of the full name.
-The same release always gets the same names.
 The `app.kubernetes.io/instance` label always holds the full release name.
 
 `config.auth.assuranceEnforced` controls the passkey and recent sign-in checks for administration.
-Its default is `true`, as in the application.
-The chart never changes it from the environment name.
+Its default is `true`, and the chart never changes it from the environment name.
 To turn it off, for example on a staging instance, set it to `false` yourself.
 
-These values set the server's settings of the same meaning ([Production setup](./production-setup)):
+These values set server settings ([Integration settings](./production-setup)):
 
 | Value | Setting | Default |
 | --- | --- | --- |
@@ -275,14 +216,13 @@ These values set the server's settings of the same meaning ([Production setup](.
 | `config.sync.timeframeDays` | `SYNC_TIMEFRAME_DAYS` | `7` |
 | `config.sync.syncCron` | `SYNC_CRON`, a Spring cron expression with six fields | `0 0 * * * *` |
 | `config.sync.cooldownMinutes` | `SYNC_COOLDOWN_MINUTES` | `60` |
+| `webapp.securityContact` | `SECURITY_CONTACT` of the webapp. With a value, `/.well-known/security.txt` names it. | Empty: no file |
 
 `config.auth.bootstrapAdmins`, `config.auth.browserExtensionIds`, `config.auth.passkeys.allowedOrigins`, and `config.outline.allowedOrigins` take arrays of strings.
 Use `[]` for an empty list.
-The chart joins the items in their given order for the application's environment binding.
-An item cannot contain a comma.
-For example:
+The chart joins the items in their order. An item cannot contain a comma.
 
-```yaml
+```yaml title="values.yaml"
 config:
   auth:
     bootstrapAdmins:
@@ -294,11 +234,9 @@ config:
     allowedOrigins: []
 ```
 
-`webapp.securityContact` sets the webapp's `SECURITY_CONTACT`: with a value, `/.well-known/security.txt` names it as the contact of this deployment ([Production setup](./production-setup)). Empty serves no file.
-
 ## Integration values
 
-Each integration takes its settings from `site.yaml` and its secrets from the [Secret](./kubernetes#create-the-secret).
+Each integration takes its settings from your values file and its secrets from the [Secret](./kubernetes#create-the-secret).
 `values.schema.json` describes each value.
 [Integration settings](./production-setup) explains each setting.
 
@@ -328,27 +266,17 @@ The Gateway controller must support the core `HTTPRoute` features and these two 
 - `URLRewrite` with `ReplacePrefixMatch`, for `/api`.
 - `ResponseHeaderModifier`, for `Strict-Transport-Security` on each rule.
 
-If the controller does not support one of them, the route does not work as described.
-The chart cannot detect this. Confirm both features for the controller that you select.
+The chart cannot detect a controller without them. Confirm both features for your controller.
 
 The live streams of Hephaestus stay open for much longer than one request.
-They do not need a route timeout. Instead, the server sends a heartbeat on each live stream about every 20 seconds.
-The server skips a heartbeat while the previous one is still being sent, so two events can be about 40 seconds apart.
+The server sends a heartbeat on each live stream about every 20 seconds. Two events can be about 40 seconds apart.
 Thus, set each idle timeout between the browser and the server to at least 60 seconds.
 
-The `/api` rule also sets `timeouts.request` and `timeouts.backendRequest` to `0s`, which asks the controller for no time limit.
+The `/api` rule sets `timeouts.request` and `timeouts.backendRequest` to `0s`, which asks the controller for no time limit.
 A controller with the `HTTPRouteRequestTimeout` and `HTTPRouteBackendTimeout` features applies them.
-The Traefik of the one-host platform does not have these features, so it does not apply the values.
+The Traefik of the one-host platform does not have these features.
 A controller that limits the total time of a response, and does not apply the values, ends each live stream at that limit.
-The other three rules set no timeout and no retry.
-
-An idle timeout of at least 60 seconds does not replace the request and backend timeouts.
-No Gateway controller or version is qualified yet.
-A qualification must include these tests on the selected controller and its idle settings:
-
-- A long Hephaestus live stream.
-- A long WebSocket connection through the Gateway.
-- A cancellation by the client during a stream.
+The other two rules set no timeout and no retry.
 
 ## Network policy
 
@@ -362,14 +290,15 @@ The chart then opens only these paths:
 | `server` | PostgreSQL | 5432, or the external port |
 | `server` | `networkPolicy.externalEgress` | 443 |
 | `server`, if `config.email.host` is set | `networkPolicy.externalEgress` | `config.email.port` |
-| `server` | The Kubernetes API, `networkPolicy.kubernetesApi` | Its port |
+| `server`, with `sandbox.enabled` | The Kubernetes API, `networkPolicy.kubernetesApi` | Its port |
 | `server`, if `networkPolicy.modelGatewayPorts` is set | `networkPolicy.gateway` pods | `networkPolicy.modelGatewayPorts` |
-| `server`, for each item of `networkPolicy.modelEndpoints` | Its `cidr` | Its `ports` |
+| `server`, for each item of `networkPolicy.modelEndpoints` and `networkPolicy.scmEndpoints` | Its `cidr` | Its `ports` |
 | Review and conversation sandboxes | `server` | 8081, the sandbox gateway |
 | PostgreSQL and the backup Jobs, with backups on | `postgresql.backup.s3`, or `networkPolicy.externalEgress` | `postgresql.backup.s3.port` |
 | The backup Jobs, with backups on | PostgreSQL | 8432, the pgBackRest TLS server |
 | All pods | `networkPolicy.dns` pods | 53 |
-| `networkPolicy.metrics` pods | All application roles | 9090 |
+| `networkPolicy.metrics` pods | `server` | 9090, the management port |
+| `networkPolicy.metrics` pods | The PostgreSQL exporter | Its metrics port |
 | `server`, if `config.tracing.otlpEnabled` and `networkPolicy.traceCollector` are set | `networkPolicy.traceCollector` pods | The port of `config.tracing.otlpEndpoint` |
 
 Sandboxes are in the sandbox namespace, where every pod also starts with no ingress and no egress.
@@ -382,53 +311,42 @@ Set `networkPolicy.modelGatewayPorts` to the container ports of the Gateway Pods
 A namespace without labels would admit every pod in it, so the chart refuses it.
 The same rule applies to `networkPolicy.metrics` and `networkPolicy.traceCollector` when you set their namespace.
 
-The management listener binds to the pod address.
-The kubelet probes it, and the metrics scraper can read it.
-No Service and no route expose it.
+No Service and no route expose the management port. Only the kubelet probes and the metrics scraper reach it.
 
 The external egress rule excludes private, link-local, and shared address ranges by default.
 An external database in a private range needs `postgresql.external.cidr`.
-
-A rendered policy does not show enforcement.
-Each network plugin needs its own positive and negative traffic tests before the chart is supported.
+A rendered policy does not show enforcement: the [sandbox isolation gate](./sandboxes#sandbox-isolation-gate) tests it on your cluster.
 
 Network policy controls which pods can connect. It does not encrypt traffic.
 The connections to PostgreSQL use TLS ([PostgreSQL TLS Secret](./kubernetes#postgresql-tls-secret)).
 These internal channels send plain text:
 
-- The connection from the server to the server.
-- The connections from sandboxes to the server gateway.
-
-The bundled PostgreSQL still accepts a connection without TLS.
-The roles never use one, and network policy admits only the roles.
+- The connections from the Gateway data plane to the server and the webapp, after TLS ends at the Gateway.
+- The connections from sandboxes to the sandbox gateway of the server.
 
 On a cluster with several nodes, these channels cross the node network.
-Use a network plugin that encrypts traffic between nodes, for example WireGuard in Calico or Cilium, when that network is not private to the cluster.
+When that network is not private to the cluster, use a network plugin that encrypts traffic between nodes, for example WireGuard in Calico or Cilium.
 
 ## Storage and retention
 
 | Data | Bound | Setting |
 | --- | --- | --- |
-| PostgreSQL | Volume size | `postgresql.persistence.size` |
-| Provider event inbox | 3 days for handled events, 30 days for dead letters | `hephaestus.integration.consumer.replay-window`, `dead-retention` |
-| Server Git mirrors and review clones | `emptyDir` size limit on the node, per server | `server.gitCache.sizeLimit` |
+| PostgreSQL | Volume size, 20 GiB by default | `postgresql.persistence.size` |
+| Provider event inbox, in PostgreSQL | 3 days for handled events, 30 days for dead letters | `HEPHAESTUS_INTEGRATION_CONSUMER_REPLAY_WINDOW`, `HEPHAESTUS_INTEGRATION_CONSUMER_DEAD_RETENTION` |
+| Server Git mirrors and review clones | `emptyDir` size limit on the node, for each server | `server.gitCache.sizeLimit` |
 | AI spend ledger | Retention | `config.llmUsageRetention` |
 | Conversations, feedback and practice results | Retention | `config.feedbackRetention` |
 | Temporary files | `emptyDir` size limit | Fixed in the templates |
 
-The provider event inbox is in PostgreSQL, so `postgresql.persistence.size` also holds the webhook deliveries of its retention.
-[Webhook ingestion operations](./webhook-ingestion-operations) gives the durability guarantee.
+[Webhook ingestion operations](./webhook-ingestion-operations) gives the durability guarantee of the inbox.
 
-The Git mirrors are caches.
-A restarted server or server clones them again, so they use node storage and no volume claim.
+The Git mirrors are a cache.
+A restarted server clones them again, so they use node storage and no volume claim.
 The node needs that much free ephemeral storage, and the container limits include it.
-
 The same volume holds review checkouts and the archives that wait for their sandbox.
-Above 80 percent of `gitCache.sizeLimit`, a role deletes the mirrors that a capture used longest ago.
-It keeps a mirror that a capture used in the last 10 minutes.
-Each one costs a full fetch at its next capture.
-Thus, repositories that outgrow the volume slow captures before the kubelet evicts the Pod.
-Mirrors are all it can delete: review checkouts that fill the volume alone still evict the Pod, and `HephaestusGitCacheNearlyFull` warns first.
+
+Above 80 percent of `server.gitCache.sizeLimit`, the server deletes the mirrors that it used least recently. Each deleted mirror costs a full fetch at its next capture.
+Review checkouts that fill the volume alone still make the kubelet evict the Pod. `HephaestusGitCacheNearlyFull` warns first.
 
 ## Pod security
 
@@ -437,29 +355,19 @@ Each pod meets the Kubernetes Restricted Pod Security Standard:
 - A non-root user, `RuntimeDefault` seccomp, and no privilege escalation.
 - All capabilities dropped and a read-only root filesystem.
 - No host path, host network, or container runtime socket.
-- No service account token, except on the server. Its Role reaches only the sandbox namespace.
+- No service account token, except on the server with `sandbox.enabled`, the agent-sandbox controller, and the VictoriaMetrics Pod of the monitoring stack. The server's Role reaches only the sandbox namespace.
 
 The webapp runs as user and group 101 and listens on port 8080.
 Its only writable path is a 16 MiB volume at `/tmp/hephaestus-webapp`.
-The image writes its generated files, its nginx PID file, and its temporary directories there.
-`/tmp` itself and the assets stay read-only.
 
 The bundled PostgreSQL runs as the image user 999 and owns its volume through `fsGroup`.
-The volume is at `/var/lib/postgresql`, as [ADR 0038](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0038-postgresql-18-release-baseline.md) decides.
+The volume is at `/var/lib/postgresql` ([ADR 0038](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0038-postgresql-18-release-baseline.md)).
 The image keeps its versioned data directory below it, and the chart does not set `PGDATA`.
-The image's entrypoint starts PostgreSQL with `ssl=on` and the certificate and key from the TLS Secret, read-only at `/etc/postgresql/tls`.
-No real volume driver has shown this configuration yet.
-First initialization, restart, and restore need a start of the release image on a volume before this path counts as working.
-
-The small profile sets explicit PostgreSQL memory parameters and per-role connection pools.
-See [PostgreSQL memory](./sizing#postgresql-memory) and [Database connections](./sizing#database-connections) for the values, surge budget, and measurement gates.
-It retains the larger PostgreSQL process limit until a loaded trial qualifies the lower ceiling.
+PostgreSQL starts with `ssl=on` and the certificate and key from the TLS Secret, read-only at `/etc/postgresql/tls`.
 
 Every container of the release has CPU, memory, and ephemeral storage requests and limits.
 The schema refuses a zero value.
-Sandbox containers have CPU, memory, and disk limits ([Sandbox sizes](./sandboxes#sandbox-sizes)).
-They request the memory that their kind of sandbox was measured to use, below their limit ([Sandbox sizes](./sandboxes#sandbox-sizes)).
-They request a small part of their CPU limit, because the CPU limit is a share of CPU time, not a reserved core ([Sizing](./sizing#review-sandbox-limits)).
+[Sandbox sizes](./sandboxes#sandbox-sizes) gives the sandbox requests and limits.
 
 ## Database roles
 
@@ -470,48 +378,43 @@ No Hephaestus process logs in as a superuser.
 | --- | --- | --- | --- |
 | The administrator | Only you, for administration, and the step of the migration Job that sets up the roles. The bundled PostgreSQL creates it at its first start. | Everything. | `DATABASE_ADMIN_USERNAME`, `DATABASE_ADMIN_PASSWORD`, with the bundled PostgreSQL only |
 | `hephaestus_owner` | The migration Job | It owns the database and every schema object, and runs the migrations. It is not a superuser, and it cannot create roles or replicate. | `DATABASE_OWNER_PASSWORD` |
-| `hephaestus_app` | The server and the server | It reads and writes the rows of the application tables. It owns nothing, and it cannot change the schema or read the role catalog. Row-level security applies to it. | `DATABASE_APP_PASSWORD` |
+| `hephaestus_app` | The server | It reads and writes the rows of the application tables. It owns nothing, and it cannot change the schema or read the role catalog. | `DATABASE_APP_PASSWORD` |
 | `hephaestus_monitor` | The PostgreSQL exporter | It reads statistics only, as a member of `pg_monitor` ([Database metrics](./monitoring#turn-on-database-metrics)). | `DATABASE_MONITOR_PASSWORD` |
 
 Neither `hephaestus_owner` nor `hephaestus_app` has the `BYPASSRLS` attribute.
-As the owner of each table, `hephaestus_owner` is not held to the row-level security policies of its tables, unless a table sets `FORCE ROW LEVEL SECURITY`.
-No table has a policy yet.
 
-The chart file `files/database-roles.sql` sets up the owner and the application role.
-No password reaches the PostgreSQL server.
-The chart script `files/scram-sha-256.pl` computes the SCRAM-SHA-256 verifier of each password, with a new salt, as `psql`'s `\password` does.
-`database-roles.sql` accepts only these verifiers.
+If a key is missing from the Secret, `helm upgrade` stops and names it.
+It also stops if the Secret holds `DATABASE_USERNAME` or `DATABASE_PASSWORD`. No Hephaestus Pod uses these keys.
 
-A verifier still allows an offline guess of its password.
-While a statement of the file runs, the members of `pg_monitor` can see its verifier in `pg_stat_activity`, but never a password.
-Thus, the chart file `files/database-quiet.sql` runs first, in the same `psql` session.
-It turns off each setting that would record a verifier:
+The chart script `files/database-roles.sh` sets up the owner and the application role in one `psql` session:
+
+1. `files/scram-sha-256.pl` computes the SCRAM-SHA-256 verifier of each password, with a new salt. No password reaches the PostgreSQL server.
+2. `files/database-quiet.sql` turns off each setting that would record a verifier, because a verifier allows an offline guess of its password.
+3. `files/database-roles.sql` creates or updates the roles. It accepts only verifiers, and it does not run without `database-quiet.sql`.
+
+`database-quiet.sql` turns off these settings:
 
 - `pg_stat_statements.track_utility`
 - `log_statement`, `log_min_duration_statement`, `log_min_duration_sample` and `log_transaction_sample_rate`
 - `debug_print_parse`, `debug_print_rewritten` and `debug_print_plan`
 - `log_min_error_statement`
 
-`database-roles.sql` does not run without it.
-Both files need `psql` 15 or later and PostgreSQL 16 or later, and they stop with a message on an older version.
+Both SQL files need `psql` 15 or later and PostgreSQL 16 or later, and they stop with a message on an older version.
 `scram-sha-256.pl` needs Perl 5.10 or later with the module `Digest::SHA`.
-Most distributions include that module with Perl. On RHEL and its minimal images, install the package `perl-Digest-SHA`.
+On RHEL and its minimal images, install the package `perl-Digest-SHA`.
 Hephaestus itself needs PostgreSQL 18 ([Compatibility policy](./compatibility-policy#database-baseline-prerequisites)).
 
 `database-roles.sql` is idempotent:
 
-- It creates each role that does not exist and sets its password verifier.
-  It reads both verifiers from the environment of `psql`, never from its command line.
+- It creates each role that does not exist and sets its password verifier, which it reads from the environment of `psql`.
 - It stops if either role is a superuser, bypasses row-level security, creates roles or replicates.
 - It makes `hephaestus_owner` the owner of the database.
-- It removes the right of every other role to create objects in the schema `public`. A database from before PostgreSQL 15 gives that right to all roles.
+- It removes the right of every other role to create objects in the schema `public`.
 - It moves each schema object of another role to `hephaestus_owner`. The objects of an extension stay with the role that created the extension.
 - It updates the extensions `pg_partman`, `citext` and `btree_gist` to the versions that the PostgreSQL server has. The migrations never update an extension.
-- It grants `hephaestus_app` the rows of each table, and each table that `hephaestus_owner` creates later.
+- It grants `hephaestus_app` the rows of each table, and of each table that `hephaestus_owner` creates later.
 
-The chart script `files/database-roles.sh` runs these files in the right order: it computes the verifiers, then runs `database-quiet.sql` and `database-roles.sql` in one `psql` session.
-With the bundled PostgreSQL, the migration Job runs the script before each migration, as the administrator.
-The chart gives the Job the files in a ConfigMap, not in its command, because Kubernetes rewrites `$$` and `$(NAME)` in a command.
+With the bundled PostgreSQL, the migration Job runs `database-roles.sh` before each migration, as the administrator.
 Only that init container of the Job gets the administrator's password.
 Thus, a changed `DATABASE_OWNER_PASSWORD` or `DATABASE_APP_PASSWORD` takes effect with the next upgrade.
 A new PostgreSQL image with a new extension version also takes effect with that step.
@@ -520,36 +423,13 @@ The application role keeps the monthly partitions of `auth_event` through the fu
 That function runs as `hephaestus_owner`, for `auth_event` only.
 No other role can run it.
 
-If a key is missing from the Secret, `helm upgrade` stops and names it.
-It also stops if the Secret holds `DATABASE_USERNAME` or `DATABASE_PASSWORD`, the single login before 1.0.
-
-## Conversation capacity
-
-`sandbox.conversationTurns` is the installation's turn capacity. `0` stops new turns.
-The chart passes the resolved count to `hephaestus.agent.capacity.turns` on each server.
-[Sandbox capacity budget](#sandbox-capacity-budget) defines automatic admission and checks explicit counts.
-No conversation-loop Deployment or loop credential remains.
-
-Each conversation uses one sandbox, with one run at a time.
-Its tools execute in that sandbox's container.
-The conversation template owns its resources. the quota counts those requests and the RuntimeClass overhead.
-
 ## Known limits
 
 - PostgreSQL runs as one instance. A lost node stops the release until PostgreSQL runs again. A lost volume needs a [restore](./backup-restore#restore).
-- A server update requires space for its draining Pods and their replacements. See [Sandbox capacity budget](#sandbox-capacity-budget).
-- The server records the isolation tier in its log and metrics, not with each review. A record for each review needs a schema change.
+- A server update needs room for its draining Pods and their replacements ([Sandbox capacity budget](#sandbox-capacity-budget)).
 - The kubelet enforces sandbox disk limits by eviction after it measures the use, not when a process writes.
-  A sandbox can pass its limit until the next measurement, for some seconds.
+  A sandbox can pass its limit for some seconds, until the next measurement.
   Only file system project quotas (`LocalStorageCapacityIsolationFSQuotaMonitoring`) refuse the write itself.
-- Use the [versioned deployment move](./compose-to-kubernetes) before upgrading an older installation.
-
-## What CI does not show
-
-A successful install in CI does not show that your cluster isolates sandboxes.
-Run the platform isolation gate on your cluster before enabling sandbox work.
-CI does not qualify your Gateway controller.
-Check its two `HTTPRoute` features, its body limit and its idle timeout yourself, and rehearse a [restore](./backup-restore#restore) on your own cluster.
-
-The database connection budget includes five dedicated notification listeners per server during rolling overlap.
-[Database connections](./sizing#database-connections) gives the derived pools, client counts, reserved slots and connection limit.
+- A successful install does not show that your cluster isolates sandboxes. Run the [sandbox isolation gate](./sandboxes#sandbox-isolation-gate).
+- The chart does not test your Gateway controller. Check its two `HTTPRoute` features, its request body limit and its idle timeout yourself.
+- Rehearse a [restore](./backup-restore#restore) on your own cluster.

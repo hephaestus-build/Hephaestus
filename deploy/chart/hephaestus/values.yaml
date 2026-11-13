@@ -1,4 +1,4 @@
-# Hephaestus chart values. docs/admin/kubernetes.mdx describes each group.
+# Hephaestus chart values. docs/admin/helm-chart.md describes each group.
 # values.schema.json owns the shape of every key. The templates own the cross-field rules.
 
 # The release writes its version, commit and image digests here, in the chart package that it
@@ -258,7 +258,7 @@ priorityClasses:
 
 # The agent sandboxes: practice reviews and conversation turns, which the server starts in their own namespace.
 # sandbox.enabled=true needs sandbox.namespace and networkPolicy.kubernetesApi. Before the release starts,
-# the platform isolation gate proves the sandbox boundary. docs/admin/kubernetes.mdx § Sandbox prerequisites.
+# the platform isolation gate proves the sandbox boundary. docs/admin/sandboxes.md § Sandbox isolation gate.
 sandbox:
   # The conversation turns that the whole installation runs at once. Auto uses the declared CPU
   # budget, role requests and sandbox reservations. An explicit count overrides it. 0 stops new turns.

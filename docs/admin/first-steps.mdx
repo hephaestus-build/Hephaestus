@@ -1,100 +1,101 @@
 ---
 title: First steps
-description: Configure the login provider and the first admin, then connect GitHub and an AI provider, and run the first practice review.
+description: Configure the login provider and the first admin, sign in, connect GitHub and an AI provider, check the instance, and run the first practice review.
 page_type: tutorial
 ---
 
 At the end of this tutorial, your instance has a first admin, a workspace with GitHub data, and a first practice review that you approved.
-The steps configure the Helm chart on [Kubernetes](./kubernetes).
-Stages 1 and 2 set values before the first start, so the install pages link to them.
-Stages 3 to 6 follow the first start.
+Do stages 1 and 2 before you install: the install pages tell you when.
+After the install, both install paths continue at stage 3.
 
 ## Before you start
 
-- An instance of the Helm chart. [Install on one host](./k3s) or [on a Kubernetes cluster](./kubernetes) installs it.
 - The host name of the instance.
 - A GitHub organization in which you can create and install apps.
 - An account at an AI provider, with an API key.
+- For stage 3 and later, an instance that you installed [on one host](./k3s) or [on a Kubernetes cluster](./kubernetes).
 
 This tutorial uses GitHub for sign-in and for repository data.
 
 ## 1. Configure a login provider
 
-GitHub login needs a plain **OAuth App**.
+GitHub sign-in needs a plain **OAuth App**.
 This is *not* the GitHub App for data access, which stage 4 creates.
-Without a login provider, the instance boots but shows **no sign-in button**.
+Without a login provider, the instance starts but shows **no sign-in button**.
 
-1. Open [github.com/settings/developers](https://github.com/settings/developers), or your organization's equivalent settings.
+1. Open [github.com/settings/developers](https://github.com/settings/developers), or the same settings of your organization.
 2. Select **New OAuth App**.
 3. Set **Homepage URL** to `https://<your hostname>`.
 4. Set **Authorization callback URL** to `https://<your hostname>/api/login/oauth2/code/github`.
-   The string must include `/api` and have no trailing slash.
+   The URL must include `/api` and have no trailing slash.
 5. If the GitHub settings page offers an image upload, use [`external-app-icon-1024.png`](/img/brand/external-app-icon-1024.png) as the application logo.
 6. Create a client secret.
-7. Set the client ID as `config.github.oauthClientId` in `site.yaml`.
-8. Put the client secret as `GITHUB_OAUTH_CLIENT_SECRET` in the [Secret](./kubernetes#create-the-secret).
+7. Give the client ID and the client secret to the install:
+   - On one host, the installer asks for both.
+   - On a Kubernetes cluster, set the client ID as `config.github.oauthClientId` in `site.yaml`. Put the client secret in the [Secret](./kubernetes#create-the-secret) as `GITHUB_OAUTH_CLIENT_SECRET`.
 
 ## 2. Name the first admin
 
-The admin UI requires admin access.
-The **first instance admin must therefore come from operator config**, not the UI.
+The admin UI requires admin access, so the **first instance admin comes from the install values**, not from the UI.
 
-1. Before the first start, set the first admin.
-   Set `config.auth.bootstrapAdmins: ["github:@your-github-username"]` in `site.yaml`.
+1. On one host, give the installer your GitHub login when it asks. It writes your numeric GitHub user ID into the admin list.
+2. On a Kubernetes cluster, set `config.auth.bootstrapAdmins: ["github:1234567"]` in `site.yaml` before the first start.
+   Use your numeric GitHub user ID, from `https://api.github.com/users/<login>`.
+   On public github.com, another person can take an abandoned login, but never a numeric ID.
 
-   Add one array item for each admin, as `<provider>:@<username>` or `<provider>:<numeric-id>`.
-   Promotion occurs **on sign-in**.
-   It is idempotent and never demotes.
+Add one item for each admin, as `<provider>:<numeric-id>` or `<provider>:@<username>`.
+Hephaestus makes each listed person an instance admin when they sign in.
+It never removes the admin role from a person.
 
-2. On public github.com, prefer the numeric ID (`github:1234567`, from `https://api.github.com/users/<login>`).
-   Others can reclaim abandoned handles.
-3. If you omitted the value, add it.
-   Then run the install command again: `helm upgrade --install` with your site values.
-
+To add an admin later, change `config.auth.bootstrapAdmins` in `site.yaml`.
+Then run the installer again on one host, or `helm upgrade --install` with your values on a cluster.
 For the break-glass bootstrap token, see [Instance administration](./instance-admin#bootstrap-and-recovery).
 
 ## 3. Sign in
 
-After the first start:
-
 1. Open `https://<your hostname>`.
-   The login page should offer **Continue with GitHub**.
+   The login page shows **Continue with GitHub**.
 2. Sign in as the bootstrap admin.
-   You should see instance-admin navigation.
-3. Open **Instance administration → Overview**.
-4. Read **Configuration readiness**.
-
-   Each item under **Action required** needs a change and links to its section in [Configuration readiness](./configuration-readiness).
-   **Not configured** lists optional settings you have not set, such as email.
-   The page never shows a setting's value.
-
-5. Leave optional settings until you want them.
+   You see the instance-admin navigation.
 
 ## 4. Connect repository data
 
-Login alone syncs nothing.
+Sign-in alone syncs nothing.
 A **GitHub App** reads the repositories, receives their webhooks, and posts feedback with its own identity.
 
 1. Create the GitHub App, as [GitHub App mode](./github-integration#github-app-mode) describes.
-   Its webhook points at `https://<your hostname>/webhooks/github` with your `WEBHOOK_SECRET`.
+   Its webhook URL is `https://<your hostname>/webhooks/github`, with your `WEBHOOK_SECRET`.
 2. Install the App on your organization, and set its chart values and Secret keys, as [Install and configure](./github-integration#install-and-configure) describes.
 3. Open **Instance administration → GitHub installations**.
 4. Select **Adopt** for the installation.
    Hephaestus creates the workspace with you as its owner and starts the first sync.
 
-## 5. Connect an AI provider
+## 5. Check the instance
 
-Practice review needs a running server and a model that the workspace can run on.
-The job queue runs on PostgreSQL.
+1. Open **Instance administration → Overview**.
+2. Read the **Configuration readiness** card.
+   Each item under **Action required** needs a change and links to its section in [Configuration readiness](./configuration-readiness).
+   **Not configured** lists optional settings that you have not set, such as email. Leave them until you want them.
+   The card never shows the value of a setting.
+3. Correct each item under **Action required**.
+   The card then reads **Every check that applies to this instance passes.**
+4. In the settings of your GitHub App at GitHub, open **Advanced → Recent deliveries**.
+   The latest deliveries show the response `202`.
+   If the list is empty, open a pull request in a repository of the installation.
+   [Failed deliveries and redelivery](./github-integration#failed-deliveries-and-redelivery) helps with another response.
+5. Optional: if you scrape metrics, check that Prometheus shows the target of each server Pod as up.
+   [Scrape metrics](./monitoring#scrape-metrics) gives the scrape configuration and `networkPolicy.metrics`.
 
-1. Turn on the server, reviews, and repository checkouts in the [chart values](./helm-chart#integration-values).
-   On Kubernetes, the `small.yaml` profile turns on the server.
-2. Run the install command again with your site values.
-3. Connect the provider, then price, enable, and share a model, as [The staged flow](./ai-providers#1-the-staged-flow-and-why-it-is-staged) describes.
-4. As a workspace admin, assign the model to **Practice reviews** on the workspace's **AI models** page.
+## 6. Connect an AI provider
+
+Practice reviews need sandboxes.
+The one-host install, `small.yaml` and `cluster.yaml` turn them on. `dev.yaml` runs no practice reviews.
+
+1. Connect the provider, then price, enable, and share a model, as [The staged flow](./ai-providers#1-the-staged-flow-and-why-it-is-staged) describes.
+2. As a workspace admin, assign the model to **Practice reviews** on the **AI models** page of the workspace.
    The row shows the model and does not read **Not ready**.
 
-## 6. Run the first practice review
+## 7. Run the first practice review
 
 A new instance starts in **Silent mode**.
 Sync and reviews can run, but outbound feedback is blocked.
@@ -107,14 +108,12 @@ The procedure runs one review and lets you read its feedback before anyone else 
 4. When the review finishes, open **Practices → Practice reviews**.
    Its feedback is listed under **Needs you**, awaiting approval.
    Nothing reaches the pull request before you approve it.
-5. Open the feedback.
-6. Read it.
-7. Read the problems behind it.
-8. Open **Instance administration → Instance settings**.
-9. Turn silent mode off.
-   Turning silent mode off does not replay feedback withheld while it was on.
+5. Open the feedback, and read the problems behind it.
+6. Open **Instance administration → Instance settings**.
+7. Turn silent mode off.
+   This does not send the feedback that silent mode withheld.
    [Silent mode](./instance-admin#silent-mode) describes the switch.
-10. Approve or reject the feedback.
+8. Approve or reject the feedback.
 
 ## Next steps
 

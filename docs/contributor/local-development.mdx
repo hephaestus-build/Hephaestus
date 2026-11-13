@@ -100,6 +100,17 @@ they are used.
 These are Spring profiles, not build profiles. Gradle’s `bootRun` passes `-Pprofiles=…` through to
 Spring. `vp run dev:server:e2e` uses that interface.
 
+#### Build-only profiles
+
+`specs` and `cds-training` generate artifacts. They are not deployment modes.
+They load the application contract without runtime bootstrap, container-image validation or image pulls.
+They supply no shared placeholder secrets.
+If an authentication component needs a key to initialize, the build uses the non-production ephemeral-key behavior, without a runtime warning.
+
+Startup rejects either profile together with `prod`, even when production secrets are configured.
+Production encryption requirements apply to Spring's expanded profiles.
+Thus, a production profile group requires the same keys as `prod` itself.
+
 `vp run dev` runs the server role, with its sandboxes, in a host JVM against one shared k3d cluster.
 Each worktree uses its own sandbox namespace, derived from its port set, with its own ResourceQuota.
 Its review and conversation sandboxes stay in that namespace.
@@ -563,7 +574,7 @@ The webhook receiver lives in the Java server (`integration.core.webhook` packag
 `vp run dev:server` exposes the unified `/webhooks/{kind}` endpoint (kinds: `github` and
 `slack`) alongside the rest of the API. GitLab and Outline post to their connection routes.
 
-Production runs the receiver in the server too — [Runtime roles](../admin/runtime-roles#reception-during-a-restart).
+Production runs the receiver in the server too — [Server runtime](../admin/runtime-roles#reception-during-a-restart).
 
 Set the webhook secret before the first start, so that GitHub signature checks succeed.
 In the native stack, add it to `server/.env`:

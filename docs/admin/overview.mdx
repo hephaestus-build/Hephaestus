@@ -1,6 +1,6 @@
 ---
 title: Admin overview
-description: What a Hephaestus deployment consists of and the order to set it up in.
+description: Choose an install path for Hephaestus, see what a deployment connects to, and set it up in order.
 page_type: overview
 ---
 
@@ -13,10 +13,23 @@ It has five parts:
 - **Configure** connects providers, AI models, and practices.
 - **Operate** covers upgrades, backups, troubleshooting, and incidents.
 - **Security and compliance** covers the threat model, keys, release verification, legal pages, and data protection.
-- **Reference** lists every setting, the runtime roles, network egress, sizing, and what a version number promises.
+- **Reference** lists every setting, the server runtime, network egress, sizing, and what a version number promises.
 
 Developers who use Hephaestus need the [User guide](/user/overview).
 People who change the code need the [Contributor guide](/contributor/overview).
+
+## Choose an install path
+
+Each path installs the same signed Helm chart with a different profile.
+After the install, each path continues at [First steps § 3. Sign in](./first-steps#3-sign-in).
+
+| Where you install | Install page | Profile |
+| --- | --- | --- |
+| One Linux host. The installer sets up k3s and the platform for you. | [Install on one host](./k3s) | `small.yaml`. The installer selects it. |
+| A cluster on which you are a cluster-admin | [Install on a Kubernetes cluster](./kubernetes) | `small.yaml` for one node. `dev.yaml` for a trial without reviews. |
+| A cluster on which you are not a cluster-admin, or a cluster of several nodes | [Install on a managed cluster without cluster-admin](./managed-cluster) | `cluster.yaml` |
+
+[Profiles](./helm-chart#profiles) gives the size and the use of each profile.
 
 ## What a deployment consists of
 
@@ -47,19 +60,11 @@ Slack, Outline and email are optional.
 A model provider is required for reviews and conversations. Only Hephaestus holds its key.
 
 One application image runs the server.
-A deployment stores provider events and sends sync-status hints through PostgreSQL.
-On [Helm chart reference](./helm-chart#what-the-chart-runs), the Helm chart runs them on a cluster or on one host with k3s, and a Gateway API controller handles TLS.
-
-Sign-in uses a GitHub or GitLab OAuth app that you register during installation.
-The server starts a sandboxed container for each practice review.
-It does not keep that container active between reviews.
-[Runtime roles](./runtime-roles) explains the server role and the migrate run mode.
-
-## Architecture and network
-
-The [chart topology](./helm-chart#what-the-chart-runs) describes the roles, persistent storage and network policies.
-The Gateway API controller routes public traffic to the webapp and server.
-The server runs sandboxes in a separate namespace with Restricted Pod Security. The platform isolation gate qualifies their boundary before work starts.
+PostgreSQL stores the data of the deployment, including the provider events that wait for processing.
+A Gateway API controller in front of the release handles TLS.
+The server starts a sandboxed container in a separate namespace for each practice review.
+It does not keep that container between reviews.
+[What the chart runs](./helm-chart#what-the-chart-runs) shows each Pod, its storage and its network policies.
 
 ## Two kinds of admin
 
@@ -72,14 +77,15 @@ A person can be both.
 
 ## Set it up in this order
 
-1. [Install the Helm chart](./kubernetes), on a cluster or on one host with k3s.
+1. Install Hephaestus on the [path that fits your platform](#choose-an-install-path).
    Then follow [First steps](./first-steps) for the login provider, the first admin, and the first review.
 2. [Connect a source](./integrations): a GitHub App or GitLab connection that supplies repository activity.
    [Integration settings](./production-setup) covers Slack and Outline.
 3. [Connect an AI provider](./ai-providers) with a supported API.
-4. Set a cap on AI spend.
+4. [Set a cap on AI spend](./instance-admin#usage) for each workspace.
 5. [Choose practices](./practice-catalog) for the instance to include and the workspace to adopt.
    [Practice review](./practice-review) explains how a review runs.
+   [Scan a repository](./practice-scans) reviews a default branch and exports SARIF.
 6. [Publish the legal pages](./legal-pages) with imprint and privacy information for your deployment.
    The [data-protection documentation](./dsms) has the GDPR records.
 
@@ -93,12 +99,3 @@ A person can be both.
 - The [production operations runbook](./production-operations-runbook) covers incident brakes, silent deployment, PostgreSQL restore, and removal of external feedback.
 - [Practice review operations](./practice-review-operations) and
   [webhook ingestion operations](./webhook-ingestion-operations) cover the two pipelines whose failures are most visible.
-
-Hephaestus is pre-1.0.
-A minor release can still require action.
-
-## Repository scans
-
-[Scan a repository](./practice-scans.mdx) explains default-branch review and SARIF export.
-Scan reports separate judged, reused, withheld and unreviewed work.
-They do not produce personal feedback or developer standing.

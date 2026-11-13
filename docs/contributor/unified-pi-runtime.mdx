@@ -10,7 +10,7 @@ description: How a conversation turn runs, from the ledger in PostgreSQL to its 
 Use this page to change how a conversation turn runs.
 [ADR 0057](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0057-one-heph-conversation-per-developer.md) records the decisions about the ledger and the context.
 [ADR 0068](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0068-reviews-and-heph-run-on-one-agent-runtime.md) records where the loop and the tools run.
-[Runtime roles](/admin/runtime-roles#conversation-turns) gives the operator settings.
+[Server runtime](/admin/runtime-roles#conversation-turns) gives the operator settings.
 
 `processResources` compiles the trusted Node modules to JavaScript for the server JAR.
 `PracticeRunnerProfile` selects the review's compiled modules.
@@ -177,7 +177,7 @@ For later turns, the path builder removes the tool calls from the cut-off answer
 The deadline of a turn is the LLM timeout of the conversation model binding, at most 15 minutes (`AgentBindingLimits.MAX_HEPH_TURN_SECONDS`).
 The deadline is the hard ceiling of a turn that keeps making progress.
 A stall ends a turn earlier: the server's LLM proxy cuts a silent model call (`LlmProxyService`, `upstream_stalled`), and the loop ends the turn as `STALLED`.
-The proxy cuts a review's streamed call on the same bounds, and the review runner retries it ([Runtime roles](/admin/runtime-roles)).
+The proxy cuts a review's streamed call on the same bounds, and the review runner retries it ([Stalled model calls](./agent-runs#stalled-model-calls)).
 Set the ceiling above the time of a few of the slowest model calls, because an answer takes a few calls.
 An installation runs few turns at once, so a turn as long as a review would keep every question queued behind it waiting.
 
@@ -217,7 +217,7 @@ Its question stays in the path with a marker ([The path](#the-path)), and the de
 | The deadline passes. | The loop, with the reason `DEADLINE`. If the loop does not end it within `STOP_GRACE`, the next lease call. | "Hephaestus took too long to reply and stopped. Try again." |
 | The turn reaches its model call limit. | The loop, with the reason `ERROR` and the detail `call_limit`. | "Hephaestus could not finish this reply. Try again." |
 | The provider of a model call sends no response headers within `hephaestus.mentor.turn.model-first-byte-timeout`, or its stream sends no byte for `model-idle-timeout`, or its breaker refuses the call. The proxy answers with the code `upstream_stalled` or `upstream_paused`. | The loop, with the reason `STALLED`. | "Hephaestus's AI model stopped responding, so Hephaestus could not finish this reply. Try again in a moment." |
-| The provider breaker of the admitted model's connection is open ([Runtime roles](/admin/runtime-roles#provider-breaker)). | The server, before the loop runs the turn (`MentorTurnStarter`). | "Hephaestus's AI model is not responding right now, so Hephaestus did not start this reply. Try again in a few minutes." |
+| The provider breaker of the admitted model's connection is open ([Server runtime](/admin/runtime-roles#provider-breaker)). | The server, before the loop runs the turn (`MentorTurnStarter`). | "Hephaestus's AI model is not responding right now, so Hephaestus did not start this reply. Try again in a few minutes." |
 | Pi writes no answer, or the model call fails. | The loop, with the reason `ERROR` and a `detail`. | "Hephaestus could not finish this reply. Try again." |
 | The conversation stays too long after compaction. | The loop, with the reason `ERROR` and a `detail`. | "Hephaestus could not finish this reply. Try again." |
 | The server refuses the end with `400`, for example for too many entries. | The loop, with the reason `ERROR` and a `detail`. | "Hephaestus could not finish this reply. Try again." |
@@ -498,7 +498,7 @@ The browser authenticates the stream with its cookie, and a native client with `
 - An erasure sends one notification for each conversation that shows a changed message.
 - A large end or erasure splits its notification, so that each payload stays below the 8000-byte limit of PostgreSQL.
   The app does not show tool results and summaries, so their erasure sends no notification.
-- A comment `ping` keeps a quiet stream open through the proxy ([Runtime roles](/admin/runtime-roles#live-answers)).
+- A comment `ping` keeps a quiet stream open through the proxy ([Server runtime](/admin/runtime-roles#live-answers)).
 - A stream belongs to the account that opened it.
   Before each snapshot, each event, and each `ping`, the server checks the membership of the account (`AccountMembershipQuery.isActiveVisibleMember`).
   The account must still be an active, visible member of the workspace.
@@ -519,7 +519,7 @@ An earlier time changes nothing, so each device of the developer can send its ow
 When the marker moves, the developer's other open streams get a `read` event with the new `lastReadAt` (`MentorRead`).
 
 One `LISTEN` connection serves each server replica.
-`MentorLiveHub` limits the streams of each account in a workspace ([Runtime roles](/admin/runtime-roles#live-answers)).
+`MentorLiveHub` limits the streams of each account in a workspace ([Server runtime](/admin/runtime-roles#live-answers)).
 A stream whose queue of 256 events overflows gets a new snapshot.
 
 ## Context of a turn
@@ -713,8 +713,8 @@ The [data map](/admin/dsms/personal-data-map) owns the inventory of person data.
 ## Limits
 
 This table gives the fixed limits that only contributors change.
-[Runtime roles](/admin/runtime-roles#conversation-turns) gives the operator settings and their defaults, the limits and timeouts of the loop, and the stream limits.
-[Runtime roles](/admin/runtime-roles#configuration-cheatsheet) gives the request bound of the gateway (`SANDBOX_API_MAX_REQUEST_BYTES`).
+[Server runtime § Tunables](/admin/runtime-roles#tunables) gives the operator settings and their defaults, and [Live answers](/admin/runtime-roles#live-answers) the stream limits.
+[Sandbox gateway](/admin/runtime-roles#sandbox-gateway) gives the request bound of the gateway (`SANDBOX_API_MAX_REQUEST_BYTES`).
 
 | Limit | Value | Where |
 | --- | --- | --- |

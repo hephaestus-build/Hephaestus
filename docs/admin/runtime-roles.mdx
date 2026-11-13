@@ -1,758 +1,212 @@
 ---
-title: Runtime roles
-description: The server role that one Hephaestus image boots into, and the migrate run mode.
+title: Server runtime
+description: What the one server role runs, the migrate run mode, agent jobs, the sandbox gateway, conversation turn settings, and the graceful drain.
 page_type: reference
 ---
 
-Hephaestus ships **one JAR**. It boots as the server, or it runs the migration and exits.
-One boolean property controls the server role:
+Hephaestus ships one image.
+It boots as the server, or it runs the database migration and exits ([ADR 0005](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0005-two-role-runtime-via-conditional-on-property.md)).
+The [configuration reference](./configuration-reference) lists every setting. This page gives the facts that an operator acts on.
 
-| Role   | Property                            | Default |
-| ------ | ----------------------------------- | ------- |
-| Server | `hephaestus.runtime.server.enabled` | `true`  |
+## Server role
 
-The server serves the API, receives provider webhooks, syncs provider work, delivers feedback, and runs the agent sandboxes and their gateway.
-There is no separate worker role and no separate webhook role.
-Practice reviews and conversation turns need a server with agent jobs on (`AGENT_ENABLED`).
-With agent jobs on, the server runs the agent runtime: the sandboxes, their gateway, the LLM proxy, the review executor and the conversation turns.
-The chart's `sandbox.enabled` sets `AGENT_ENABLED`.
+The server serves the API, receives provider webhooks, syncs provider work, and delivers feedback.
+With agent jobs on, it also runs the practice reviews and conversation turns in sandboxes, their gateway, and the LLM proxy.
 
-## Boot log
+| Port | Listener | Who reaches it |
+| --- | --- | --- |
+| 8080 | The API and `/webhooks/**`, plain HTTP | The Gateway data plane |
+| 8081 | The sandbox gateway, with agent jobs on | The sandboxes of the release |
+| 9090 | The management listener: health probes and metrics | The kubelet and the metrics scraper |
 
-On startup, the JVM logs the role:
+`hephaestus.runtime.server.enabled` is `true` by default. Under the `prod` profile, `false` prevents startup.
+At startup, the server logs its role, with `event.name=runtime.roles.configured`:
 
 ```text
 INFO  RuntimeRoleStartupLogger : Runtime roles enabled: [SERVER]
 ```
 
-Under `prod`, a disabled server role prevents startup.
-The warning for a JVM without the server role is a non-production diagnostic, not a production recovery mode.
-The startup event also records `event.name=runtime.roles.configured` and the `runtime.server.enabled` boolean.
-
 ## Reception during a restart
 
-The server receives provider webhooks on `/webhooks/**`.
-The [Helm chart](./kubernetes) runs it in one Deployment.
-The server creates sandbox Pods and sandbox claims through its Kubernetes service account, when `sandbox.enabled` is on.
-No application Pod needs a Docker socket.
+While no server is ready, providers cannot deliver webhooks.
+The chart keeps a ready server during a schema-compatible update ([What the chart runs](./helm-chart#what-the-chart-runs)).
+A stopped upgrade, or the loss of all server replicas, stops reception.
+After reception resumes:
 
-While no server is available, providers cannot deliver.
-The chart keeps a ready server during a schema-compatible update ([Helm chart](./helm-chart)).
-A stopped upgrade or a loss of all server replicas stops reception.
-GitHub deliveries that fail in that time are redelivered (`GitHubWebhookRedelivery`).
-Slack retries a failed event.
-The routine sync repairs the lifecycle facts of GitLab and Outline.
+- GitHub redelivers the deliveries that failed.
+- Slack retries a failed event.
+- The routine sync repairs the lifecycle facts of GitLab and Outline.
+
+## Agent jobs
+
+`AGENT_ENABLED` (`hephaestus.agent.enabled`) turns on the agent runtime. It is `false` until you set it.
+The chart's `sandbox.enabled` sets it.
+Without it, the server submits and claims no practice reviews, runs no conversation turn, and starts no sandbox.
+It still takes back expired review leases, closes finished reviews, and records the spend of attempts that already ran.
+
+The server needs no LLM environment variable.
+Register providers under **Instance administration → AI models**, or on the AI models page of a workspace ([AI providers](./ai-providers)).
+
+The chart derives two capacity settings. Set them through the chart, not as environment variables:
+
+| Setting | Chart value | Effect |
+| --- | --- | --- |
+| `SANDBOX_MAX_CONCURRENT` | `sandbox.reviewMemory` | The review sandboxes that the installation runs at once. |
+| `HEPHAESTUS_MENTOR_TURN_CAPACITY` | `sandbox.conversationTurns` | The conversation turns that the installation runs at once ([Conversation turn capacity](#conversation-turn-capacity)). |
+
+A review's sandbox holds a lease of 5 minutes on the database clock and renews it every 25 seconds.
+When a lease expires, any server queues the review again, or fails it after `AGENT_MAX_RETRIES` lost leases (default `5`).
+A cancel ends a review at once. Its sandbox stops at the next lease renewal.
+
+The server runs sandboxes only on Kubernetes. The chart sets each `HEPHAESTUS_SANDBOX_KUBERNETES_*` variable, including the server Pod metadata.
+Missing metadata prevents startup.
+The server removes orphaned sandbox resources at startup and then at a fixed interval.
+Each server generates the key that signs its sandbox tokens at start. The key needs no configuration.
 
 ## Sandbox gateway
 
-With agent jobs on, the server opens a second connector for sandboxes: the sandbox gateway on `SANDBOX_API_PORT` (default `8081`).
-Kubernetes requires a fixed gateway port that matches the chart NetworkPolicy.
-The public API on port 8080 serves no gateway path, and the gateway port serves no API path.
-The gateway's connector-specific security chain accepts only job-token-authenticated sandbox capabilities.
-Other paths on that port return an empty `404`.
-Capability calls receive these responses:
+With agent jobs on, the server opens the sandbox gateway on port 8081 (`SANDBOX_API_PORT`).
+The API port serves no gateway path, and the gateway port serves no API path. Other paths return an empty `404`.
+The Service `<release>-sandbox-gateway` selects every server, so any server can serve a sandbox's call.
+No route of the Gateway reaches this port.
 
-- Over `SANDBOX_API_MAX_REQUEST_BYTES`: `413`.
-- No declared body length: `411`.
-- Past `SANDBOX_API_SOURCE_REQUESTS_PER_MINUTE` from one connection peer: `429` with a `Retry-After`, before the gateway reads a credential.
-- When the request bodies in flight would pass a quarter of the server's heap: `429` with a `Retry-After`.
-- Past `SANDBOX_API_REQUESTS_PER_MINUTE`: `429` with a `Retry-After`.
+| Setting | Default | Response past the limit |
+| --- | --- | --- |
+| `SANDBOX_API_MAX_REQUEST_BYTES` | `4194304` | `413`. A request without a declared body length gets `411`. |
+| `SANDBOX_API_SOURCE_REQUESTS_PER_MINUTE` | `12000` from one connection address | `429` with `Retry-After`, before the gateway reads a credential |
+| `SANDBOX_API_REQUESTS_PER_MINUTE` | `680` | `429` with `Retry-After` |
+| `SANDBOX_API_MAX_CONNECTIONS` (chart: `sandbox.gateway.maxConnections`) | `4096` | Up to 100 more connections wait in the operating system's queue. The rest fail. |
 
-If the gateway cannot reach the store for rate-limit counts, it serves the call without a limit.
-It counts that failure under `sandbox.gateway.limiter.errors`.
-Thus, a limiter outage never stops a review.
-The Gateway never routes to this port.
-
-The source limit reads the address of the connection, so a forwarded header does not change it.
-
-The gateway holds at most `sandbox.gateway.maxConnections` connections open.
-Up to 100 further connections wait in the operating system's queue, and the rest fail.
-A model call holds its connection until its stream ends, and it runs on a virtual thread.
-Thus, this limit and the body limit above bound the calls in flight at this connector.
-The model call pool can still make a call wait.
+The gateway also answers `429` when the request bodies in flight would pass a quarter of the server's heap.
+If the gateway cannot read its rate-limit counts, it serves the call without a limit and counts `sandbox.gateway.limiter.errors`.
 A caller that stays silent for 30 seconds loses its connection.
-
-The Service `<release>-sandbox-gateway` selects every server on this port.
-The platform sandbox isolation gate checks the installed templates before work is enabled.
-
-The sandbox driver renews its run lease through this Service during execution and result upload.
-Any server can renew it. The server that launched the Pod is not required for renewal.
-If renewal fails, the driver stops when its last confirmed lease expires.
-The feedback is composed in a later run of the review's sandbox, which renews its own lease through the same Service.
-
-## Build-only profiles
-
-`specs` and `cds-training` generate artifacts. They are not deployment modes. They load the
-application contract without runtime bootstrap, container-image validation or image pulls. They
-supply no shared placeholder secrets. If an authentication component needs a key to initialize,
-the build uses the existing non-production ephemeral-key behavior, without a runtime warning.
-
-Never combine either profile with `prod`. Startup rejects that combination even when production secrets are configured.
-Production encryption requirements apply to Spring's expanded profiles, so selecting a production
-profile group requires the same keys as selecting `prod` directly.
 
 ## Database migrations
 
 The `migrate` run mode applies the database migration of a release, then exits.
-Start the application image with `SPRING_PROFILES_ACTIVE=prod,migrate`.
-It starts no web server and no runtime role.
+The chart's migration Job starts the image with `SPRING_PROFILES_ACTIVE=prod,migrate` once for each revision.
+The run mode starts no web server.
 It exits with status 0 when the schema is current, and with a non-zero status when the migration fails.
 
-The run mode needs `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD`.
-Give it the login of `hephaestus_owner`, which owns the schema.
-Give the server roles the login of `hephaestus_app`, which reads and writes rows only.
-[Database roles](./helm-chart#database-roles) describes both roles.
+The run mode needs `DATABASE_URL`, `DATABASE_USERNAME`, and `DATABASE_PASSWORD`, with the login of `hephaestus_owner`.
+The server uses the login of `hephaestus_app` ([Database roles](./helm-chart#database-roles)).
 
 Under the `prod` profile, the server does not migrate at start.
-It waits until the database holds every change set of its release.
-The wait reads the migration history and writes nothing.
-A schema that is ahead of the role is correct: during a rollout, the previous release runs against the new schema.
-
-After `hephaestus.database.migration-wait` (`HEPHAESTUS_DATABASE_MIGRATION_WAIT`, default `10m`), the role stops.
-Size this wait against the migration duration measured on a restored backup.
-Its error names the first change set that has not run.
-
-Run the migration once for each release, before the new roles start:
-
-The [Helm chart](./upgrade#upgrade-a-schema-compatible-release) runs a migration Job for each revision.
-The server also checks that the schema is current before it becomes ready.
-For a major cutover, [pull-based deployment](./pull-based-deployment#stopped-major-upgrades) stops every application writer before the migration.
+It waits until the database holds every change set of its release, and writes nothing.
+A schema that is ahead of the server is correct: during a rollout, the previous release runs against the new schema.
+After `HEPHAESTUS_DATABASE_MIGRATION_WAIT` (default `10m`), the server stops. Its error names the first change set that has not run.
+Size this wait against the migration time that you measured on a restored backup.
 
 ### One migration at a time
 
 Every migration holds a PostgreSQL advisory lock while it runs.
 The lock lives in the database session, so the migration needs a direct or session-pooled connection.
 A proxy that pools by transaction can leave the lock on a server connection.
-This applies to the run mode and to a process that migrates at start, such as the development server or a role with `SPRING_LIQUIBASE_ENABLED=true`.
 A second migration waits until the first ends, and logs `database.migration.lock_awaited`.
-After `hephaestus.database.migration-wait`, the waiting process stops.
+After `HEPHAESTUS_DATABASE_MIGRATION_WAIT`, the waiting process stops.
 
-PostgreSQL releases this lock when the process stops, also when the process is killed.
-Thus, a killed run cannot block the next one.
-The run mode releases the Liquibase lock that a killed run left.
-It logs `database.migration.lock_released` with the holder and the time of that lock.
-
-A release from before the run mode takes no advisory lock, and its server migrates at start.
-During the first upgrade to this release, do not restart the previous server while the migration starts.
-Otherwise, the run mode can release the Liquibase lock of that server while it still migrates.
-Release a Liquibase lock by hand only when such a process left it, and only after you prove that it no longer runs.
+PostgreSQL releases the lock when the process stops, also when the process is killed.
+The run mode also releases the Liquibase lock that a killed run left, and logs `database.migration.lock_released` with the holder and the time of that lock.
 
 ### Rollouts and rollback
 
 Between the migration and the end of the rollout, both releases use the new schema.
 The [expand/contract rule](/contributor/database-migration#expand-and-contract) keeps this safe.
 The schema is never rolled back.
-If the new release fails after the migration, you can return the roles to the previous release.
-The previous release runs on the new schema.
+If the new release fails after the migration, return the server to the previous release, which runs on the new schema.
 Then roll forward to a release that fixes the problem.
 
 A failed migration stops at a change set boundary.
-The previous release can run on that partly migrated schema, but only if the release has no **Stop every role** entry in its migration guide.
-Save the failed migration Job's log for diagnosis: `kubectl -n hephaestus logs job/<migration-job> -c migration > migration.log`. The chart deletes a finished Job after 24 hours.
-Correct the cause and follow [Recover a stopped cutover](./pull-based-deployment#recover-a-stopped-cutover) before retrying the verified chart.
+The previous release can run on that partly migrated schema, unless the release has a **Stop every role** entry in its migration guide.
+Save the log of the failed Job, because the chart deletes a finished Job after 24 hours:
+
+```bash
+kubectl -n hephaestus logs job/<migration-job> -c migration > migration.log
+```
+
 A failed Helm status does not mean that the Job has stopped.
-
-A release whose migration guide entry starts with **Stop every role** is the exception.
-The previous release cannot run on its schema, and also not on a partly migrated one.
-For that release, do these steps:
-
-1. Stop every role.
-2. Make a database backup with the matching signed release lock, as the [silent deployment checklist](./production-operations-runbook#silent-deployment-checklist) describes.
-3. Run the migration.
-   Do not let a deployment tool return the roles to the previous release when the migration fails.
-4. Start the new release.
-5. If the migration or the new release fails, follow [Upgrade § If migration fails](./upgrade#if-migration-fails). It restores the backup and the previous signed release lock together.
-
-[Upgrade § Rollback](./upgrade#rollback) explains why images alone cannot undo a schema change.
-
-## Webapp container
-
-The webapp image runs nginx as an unprivileged user and needs no capabilities.
-
-| Property         | Value                                                                                       |
-| ---------------- | ------------------------------------------------------------------------------------------- |
-| User and group   | UID `101`, GID `101`                                                                        |
-| Port             | `8080`, plain HTTP. Your proxy handles TLS.                                              |
-| Health check     | `GET /` on port `8080` returns `200`                                                        |
-| Writable path    | `/tmp/hephaestus-webapp` only. It holds the page shell, the runtime configuration and the nginx files. |
-| Root file system | Can be read-only                                                                            |
-
-The chart runs the container with a read-only root file system, all capabilities dropped and privilege escalation disabled.
-It mounts a 16 MiB `emptyDir` at `/tmp/hephaestus-webapp` with `fsGroup: 101`.
-If you run the image on another platform, mount an empty directory at `/tmp/hephaestus-webapp` that UID 101 can write, for example an `emptyDir` with `fsGroup: 101`.
-To mount legal overrides, see [Legal Pages](./legal-pages).
-
-## Configuration cheatsheet
-
-Each cell shows the value the server uses when the operator sets **no** environment variable for it.
-
-| Property                                                | Server  | Set by                                                 |
-| ------------------------------------------------------- | ------- | ------------------------------------------------------ |
-| `hephaestus.runtime.server.enabled`                     | true    | env default                                            |
-| `hephaestus.workspace.init-default`                     | false   | `prod` profile                                         |
-| `hephaestus.git.enabled`                                | false   | env default                                            |
-| `hephaestus.agent.enabled`                              | false   | env default                                            |
-| `hephaestus.integration.outline.allowed-origins`        | empty   | env default                                            |
-| `hephaestus.sandbox.gateway.port`                       | 8081    | env default (`SANDBOX_API_PORT`)                       |
-| `hephaestus.sandbox.gateway.requests-per-minute`        | 680     | env default (`SANDBOX_API_REQUESTS_PER_MINUTE`)        |
-| `hephaestus.sandbox.gateway.max-request-bytes`          | 4194304 | env default (`SANDBOX_API_MAX_REQUEST_BYTES`)          |
-| `hephaestus.sandbox.gateway.source-requests-per-minute` | 12000   | env default (`SANDBOX_API_SOURCE_REQUESTS_PER_MINUTE`) |
-| `hephaestus.sandbox.gateway.max-connections`            | 4096    | env default (`SANDBOX_API_MAX_CONNECTIONS`)            |
-
-The server enforces Outline origin approval: it controls connections, sync, the change events it receives and
-consumes, and the evidence it projects.
-The chart gives the server the configured allowlist. After a change, restart the server.
-
-`init-default` is `false` in the `prod` profile.
-`GIT_CHECKOUT_ENABLED` and `AGENT_ENABLED` default to `false` until the operator sets them.
-No profile turns on work automatically.
-
-User authentication exists only with the server role.
-`hephaestus.runtime.server.enabled=false` removes it.
-
-No Spring property `hephaestus.sandbox.enabled` exists, and an architecture test forbids one.
-Kubernetes sandbox work belongs to the server role with agent jobs on.
-The chart's `sandbox.enabled` sets `AGENT_ENABLED` and the sandbox settings of the server.
-
-Git needs no such row.
-It runs in-process through JGit in the server.
-It uses the server's mirrors under `hephaestus.fabric.root`, one root for commit ingestion and review preparation.
-
-A review's sandbox also writes the review's feedback, in a later run of the same sandbox.
-These model calls take the same proxy path and rules as the review's other calls, so they need no new egress.
-
-The server removes orphaned sandbox resources at startup and then at a fixed interval.
-API-contract generation and CDS training do not run sandbox maintenance, server scheduled jobs or startup sync-job recovery.
-
-The server has a separate private management listener on port **9090**.
-Management does not run on `SERVER_PORT`. See [Set up monitoring](./monitoring#scrape-metrics) for network restrictions.
-
-The server stores admitted provider deliveries in the PostgreSQL inbox and claims them there.
-[Webhook ingestion operations](./webhook-ingestion-operations) owns admission, retention, and recovery.
-
-`hephaestus.agent.enabled` (`AGENT_ENABLED`) controls submission and execution.
-Server maintenance runs independently of this flag:
-
-- **Submission** (turning pull request, issue and bot-command events into queued jobs) needs
-  this flag **and** the server role.
-- **Lease recovery** takes back the reviews of a sandbox that stopped.
-  Each review job runs under an agent run.
-  The review's sandbox claims the run and holds its lease, on the database clock, for `hephaestus.agent.capacity.lease-ttl` (5 minutes).
-  Its driver renews the lease every `hephaestus.agent.capacity.lease-renewal` (25 seconds). No other process renews it.
-  At the same interval, each server replica takes back the runs whose lease expired.
-  It queues the review again, or fails it at the retry limit (`AGENT_MAX_RETRIES`, `hephaestus.agent.capacity.review-retries`).
-  - Every server replica does this at the same time, without a leader. Each takes back a run with one conditional write, so one replica wins and the others change nothing.
-  - The upgrade to 1.0 queues again every job that a server held. The job keeps its admitted and staged results and spends no retry.
-  - Lease recovery runs also when `AGENT_ENABLED=false`.
-- **Completion** closes the parent review of a terminal job and records its stop reason.
-  This server maintenance also runs when `AGENT_ENABLED=false`.
-- **Execution** needs this flag **and** the server role.
-  The server requests a sandbox for each queued review. The sandbox claims and runs the review ([Agent runs § A review in its sandbox](/contributor/agent-runs#a-review-in-its-sandbox)).
-  Admission and preparation read the same practice-page feedback support.
-  A review attempt that was cancelled, requeued or taken back writes nothing more.
-  The gateway refuses each of its calls, and the practice review stops at its next refused call.
-
-`AGENT_ENABLED` is `false` until you set it, regardless of how the pod starts.
-A server with this flag set to `false` submits and claims no practice reviews, and runs no conversation turn.
-Server maintenance still records the spend of attempts that already ran.
+Correct the cause, then follow [If migration fails](./upgrade#if-migration-fails).
+A release with a **Stop every role** entry needs a [stopped schema upgrade](./upgrade#stopped-schema-upgrades).
 
 ## Conversation turns
 
-Each question in the app or a Slack DM starts a TURN run.
-The conversation's sandbox runs it through the same gateway, claim, and lease as a review sandbox.
-The server keeps admission, PostgreSQL storage, and the live hub.
-`AGENT_ENABLED` controls the agent runtime for both reviews and turns.
-
-### Dispatch
-
-The server stores the question and its queued turn together.
-Dispatch requests a `CONVERSATION` sandbox for `conversation:<id>`.
-Its driver pulls `POST /internal/agent/next`, then serves one run at a time.
-Each gateway write checks the sandbox subject, run epoch, lease, and turn state.
-A call can reach any server replica.
-
-The driver sends answer changes through the gateway and live hub to the app's SSE stream.
-At turn end, the server stores the final entries and publishes its end-run event.
-The delivery executor uses those records to send one completed Slack reply through `SLACK_POST`.
-The sandbox does not call Slack. Slack receives no live answer stream.
-
+Each question in the app or in a Slack direct message starts a turn in the conversation's sandbox.
 A conversation runs one turn at a time. Each thread is a separate conversation.
-Questions for a busy conversation wait in its queue.
-`hephaestus.mentor.turn.max-follow-ups` bounds that queue.
+[Conversation runtime](/contributor/unified-pi-runtime#turn-lifecycle) describes dispatch, leases and failures.
 
 ### Conversation turn capacity
 
-`sandbox.conversationTurns` sets installation-wide turn capacity.
-The chart passes the resolved value to `hephaestus.agent.capacity.turns` on each server.
-More servers do not add capacity.
-A claim starts no turn when the installation already holds that many live turn leases.
+`sandbox.conversationTurns` sets the turns that the whole installation runs at once.
+More servers do not add turns.
+A server starts no turn while the installation already holds that many running turns.
+A queued turn does not spend its time limit.
+[Sandbox capacity budget](./helm-chart#sandbox-capacity-budget) gives `auto` and the checks of an explicit count.
 
-`auto` subtracts actual role and sandbox requests from the declared CPU budget.
-An explicit count overrides it. `0` stops new turns.
-The conversation quota uses the template's actual CPU, memory, disk, and RuntimeClass overhead.
-No tools-Pod pool, loop replica, or isolation-probe reservation remains.
+### Live answers
 
-A queued turn does not spend its execution deadline.
-A model call that waits at the provider spends both the deadline and model idle timeout.
-The provider pool bounds physical calls separately from turn and sandbox capacity.
+The server serves the live answer stream at `GET /api/workspaces/{slug}/mentor/events`.
+It sends a `ping` comment every 20 seconds.
+Every proxy between the browser and the server needs an idle timeout of at least 60 seconds ([Gateway routes](./helm-chart#gateway-routes)).
+A developer can have at most 10 open streams.
+When a server stops, it ends its live streams first. The browser connects to another server and gets the whole conversation again.
 
-### Lease, retry, and deadline
+Slack receives one completed answer after the turn ends, and no live text.
 
-The sandbox driver renews the lease of each running turn's run every 25 seconds, through any server.
-The lease is `hephaestus.agent.capacity.turn-lease-ttl`, 60 seconds by default.
-If the loop that runs the turn stops, or no server answers for that long, the lease expires.
-The server's run reaper then returns the turn to the queue once, and any server can claim it.
-If the lease of the second attempt also expires, the turn fails with **Hephaestus could not finish this reply. Try again.**
+### Tunables
 
-A stopped turn, and a turn past its time limit, gets 30 seconds in which its loop can end it with what it wrote.
-The run's lease is not renewed past that.
-Then the run reaper ends the turn: stopped, or failed with **Hephaestus took too long to reply and stopped. Try again.**
+| Setting | Default | Effect |
+| --- | --- | --- |
+| `hephaestus.agent.capacity.turn-lease-ttl` | `60s` | The lease of a running turn. The sandbox renews it every 25 seconds. A turn that loses its lease runs once more, then fails. |
+| `hephaestus.mentor.turn.model-first-byte-timeout` | `PT5M` | How long one model call of a turn, or one streamed model call of a review, waits for the provider's response headers. |
+| `hephaestus.mentor.turn.model-idle-timeout` | `PT2M` | How long the stream of one model call can send nothing. |
+| `hephaestus.mentor.turn.max-follow-ups` | `3` | The questions that can wait in one conversation or thread. |
+| `hephaestus.mentor.agent.max-prompt-chars` | `100000` | The longest question in the web app, in characters. |
+| `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_CAPACITY` and `_PERIOD` | `20` per `10m` | The questions that one account can ask. A load test that asks more as one account must raise it. |
 
-The lease end and its expiry both use the database clock.
-Thus, a clock difference between servers does not take back a running turn.
+The timeout of the workspace's conversation model binding is the time limit of each turn, at most 900 seconds.
+Set it above the time of a few of your model's slowest calls, because one answer takes a few calls.
+A turn also stops after 40 model calls.
+A gateway in front of the model that buffers whole answers looks like a silent provider ([Gateways that buffer answers](./ai-providers#gateways-that-buffer-answers)).
+Give every server the same values.
 
-The timeout of the workspace's conversation model binding is the deadline of each attempt, at most 900 seconds.
-A binding accepts no longer Hephaestus timeout, and an older binding with a longer one acts as 900 seconds.
-The deadline is a ceiling for a turn that keeps making progress.
-A turn whose model stops sending fails earlier, at the bounds of the LLM proxy below.
-A Hephaestus answer takes a few model calls, so set the timeout above the time of a few of your model's slowest calls.
-The LLM proxy cuts a conversation model call only when its provider stays silent, as described below.
+## Model calls
 
-A turn also stops after 40 model calls, retries included.
+### Call pools
 
-At the deadline, the next call of the turn tells the loop to stop it.
-The turn fails with **Hephaestus took too long to reply and stopped. Try again.**
-At the call limit, the turn fails with **Hephaestus could not finish this reply. Try again.**
+Each model is in a call pool: one provider quota boundary across servers, models and workspaces.
+The pool learns its limit of calls in flight. A new pool starts at 4.
+The limit rises while the provider serves every call. It falls after a refusal, and when the first tokens of calls arrive late.
+Conversation calls have an interactive reserve of a quarter of the limit.
 
-The next lease renewal ends a turn that the loop did not end in time.
-The loop has 30 seconds after a stop, and 30 seconds after the deadline.
-
-The server's LLM proxy cuts a conversation model call, or a streamed model call of a practice review, whose provider stays silent too long.
-Two bounds apply:
-
-- `hephaestus.mentor.turn.model-first-byte-timeout` (default 5 minutes) bounds the wait for the response headers.
-  A provider can queue a request before it answers, so this bound is the longer one.
-- `hephaestus.mentor.turn.model-idle-timeout` (default 2 minutes) bounds each gap in the stream after the headers.
-
-Any byte counts, also an SSE comment that a gateway sends to keep the connection alive.
-The turn's deadline also bounds both, because the stop at the deadline cancels the call.
-The turn fails with **Hephaestus's AI model stopped responding, so Hephaestus could not finish this reply. Try again in a moment.**
-The server logs the cut call and the failure with the reason `STALLED` and the bound that was passed.
-
-For a practice review, the review runner retries the cut call up to 5 times.
-When two sessions in a row end with their calls unanswered, the review starts no new session.
-The attempt then ends early.
-If no call of the attempt was answered, the review runs again under the normal retry rules.
-`llm_proxy_upstream_stalled_total` counts each cut call.
-
-In a load test, the slowest 5 % of single calls took 21 seconds, and calls under load took 34 seconds on average.
-Both defaults are above these times.
-A gateway that buffers the whole answer and sends nothing until then shows a slow answer as one long silence.
-Configure it to stream or to send keep-alive comments, for example with `proxy_buffering off` in nginx.
-Otherwise, set the timeout above your longest answer.
+[AI providers](./ai-providers#6-sharing-provider-capacity) tells how to share a pool and set a ceiling.
+[Call pools](/contributor/agent-runs#call-pools) gives the learned limit, the grant order and the leases.
 
 ### Provider breaker
 
 Each server keeps a circuit breaker for each provider connection.
 A call that stalls, that cannot connect, or that ends with a server error counts as a failure.
-When at least 3 calls in 5 minutes ended, and half of them failed, the breaker opens for 60 seconds.
+A rate limit, a request error, or a client that went away does not count.
+When at least 3 calls in 5 minutes ended and half of them failed, the breaker opens for 60 seconds.
 
 While it is open, the server starts no conversation turn on that connection.
 Each such turn fails at once with **Hephaestus's AI model is not responding right now, so Hephaestus did not start this reply. Try again in a few minutes.**
-Model calls of turns that already run, and of practice reviews, get an error at once.
+Model calls of running turns and of practice reviews get an error at once.
 
-After 60 seconds, one call probes the provider.
-If it succeeds, the breaker closes.
-If it fails, the breaker opens again.
+After 60 seconds, one call tries the provider. If it succeeds, the breaker closes. If it fails, the breaker opens again.
 
-A rate limit, a request error, or a client that went away does not count.
-[Metrics](./metrics.md#conversation-turn-metrics) names the breaker's metrics.
-
-### Model calls in flight for each attempt
-
-The server limits the model calls that one attempt has in flight at the same time, on every model:
-
-- A conversation turn has at most 2: one call, and one that a stop left open.
-- A practice review has at most 170.
-
-The review limit protects the server's memory, because a call that waits for a grant keeps its body in the server.
-The limit does not share the provider. A [call pool](#call-pools) does that with its fair grants.
-
-A review's runner does not reach this limit. It starts a session only while its 256 MiB heap has room for that session.
-A session holds about 3 MiB, so the heap holds at most 85 sessions.
-Each session has one call open and one that an abort left closing.
-Only a sandbox that the runner no longer controls can reach the limit.
-
-The proxy notices that a client went away only at its next write to that client.
-Thus, a call that a stalled session left open still counts for a time.
-A model call ends when its provider sends nothing for 5 minutes.
-
-The proxy refuses a call past the limit with HTTP 429 and `Retry-After: 1`.
-It refuses the call before the call reaches the provider.
-`llm_proxy_refused_total` with `refusal="calls_in_flight"` counts these refusals.
-
-A refused call is not lost:
-
-- The review's sessions and Hephaestus ask again with their own retries.
-- The feedback composition of a review counts against the same limit, because it is a call of the same attempt. It starts after the review's sandbox ends. Then, only calls that a stalled session left open can fill the limit. The composition treats a refusal as a provider pause and tries again.
-
-### Call pools
-
-A call pool represents one provider quota boundary across servers, models, and workspaces.
-Every model is in a pool. The database gives each model a pool of its own.
-An instance admin can move models into a shared pool.
-A shared host name alone does not establish a shared quota.
-[AI providers](./ai-providers.mdx#6-sharing-provider-capacity) owns the setup procedure.
-
-Every call takes a database grant before it reaches the provider.
-Each call has a band, which is its priority: `interactive`, `batch` or `background`.
-A conversation call is interactive.
-A composition call and the calls of a requested or event review are batch.
-The calls of a scheduled or backfill review and product feedback are background.
-
-Review calls and composition share the capacity outside the interactive reserve.
-Interactive calls can also use the interactive reserve.
-The reserve is never lent to batch or background calls.
-Both the total limit and the limit outside the reserve apply independently.
-
-#### The learned limit
-
-The pool row holds the limit, so all servers share it and a restart keeps it.
-No server holds a database connection while its call waits for a grant or for the provider.
-
-| Event | Effect |
-| --- | --- |
-| New pool | The limit starts at 4 calls in flight |
-| A served call ended while the limit was full. It did not wait in the provider's queue, and the limit did not fall in the last 10 minutes | The limit rises by 1, so it doubles in about one call duration |
-| Such a call ended, and the limit fell in the last 10 minutes | The limit rises by 1 for each limit's worth of such calls |
-| The provider answers 429, 529, or 503 | The limit falls to 70%, and never below 2. No call starts until the provider's `Retry-After` has passed, or for 5 seconds without one |
-| Even the fastest first token of a window of calls exceeds twice the baseline plus 1 second | The limit falls in proportion to that delay, to 70% at most and never below 2. Calls continue with no pause |
-| A served stream ends with no content and no usage. The provider ended it, or sent no content for `hephaestus.mentor.turn.model-idle-timeout`, or the call waited past twice the baseline plus 1 second | The limit falls to 70%, and never below 2. Calls continue with no pause. Such a call never raises the limit |
-
-A model server such as vLLM queues calls by default and refuses none, so a limit that learns only from refusals keeps rising.
-The pool measures the time from each streamed call's request to its first content event: text, reasoning, or a tool call.
-A role, an error event, or an SSE comment does not count, as a gateway can send one at once and then serve nothing.
-A window holds at least 4 such samples, and half of the limit when that is more.
-The baseline is the fastest first token that the pool knows.
-A queue delays every call behind it, and a long prompt delays only itself, so the pool compares only the fastest call of a window.
-
-A call without a stream, such as a feedback composition, gives no sample. It cannot raise a limit that first tokens watch.
-A model that only such calls use learns from refusals only.
-A failed answer gives no sample either, as it can arrive at once even behind a queue.
-
-A provider can also fail without an error: it sends its head, and then nothing.
-A stream without content and usage is such a call, also when it carries only an error event.
-The proxy cuts a stream whose provider sends nothing for `hephaestus.mentor.turn.model-idle-timeout`, and the limit falls then.
-A provider that sends only SSE comments is not cut. A call without content for that long still lowers the limit, also before the pool knows a baseline.
-A caller that ends such a call sooner lowers the limit only if the call waited longer than the baseline allows.
-
-The baseline is one value for all calls of a pool.
-Short prompts can set it, and only long prompts that miss the cache can follow.
-Then the limit falls to the floor once, takes their first token as the new baseline, and rises again.
-
-At a limit of 2, these calls alone cannot make a queue. If the window is still late, the pool takes that window as its new baseline, and the limit can rise again.
-Thus, a provider that became slower, or another tenant on the same server, cannot hold the limit at the floor.
-Tokens per second of one stream give no such signal. They fall while a batch fills and more calls still add throughput, and they stop falling at the point where the queue starts.
-
-A burst of refusals or late calls lowers the limit once: only a call that started under the current limit can lower it.
-The same rule applies to a served call that raises it.
-The limit does not rise while calls do not fill it.
-An instance admin's maximum is a ceiling on the limit.
-
-A release grants waiting calls immediately.
-Servers send a pool-id hint through PostgreSQL after a release or grant.
-Each server keeps one dedicated database connection for these notifications.
-The database owns admission.
-A hint does not grant capacity.
-If a hint is lost, a two-second check recovers it and checks rate refills, cooldowns and expired permits.
-
-The interactive reserve is a quarter of the limit, rounded up, and the limit always leaves one call outside it.
-A limit of 32 has a reserve of 8. A limit of 8 has a reserve of 2.
-When the limit falls, calls in flight continue. A conversation can still use its reserve while they end.
-
-A new provider pause applies to conversations too, as the provider would refuse their calls.
-A queue at the provider delays them too, which is why the limit stays below it.
-
-#### What a caller sees
-
-A provider's refusal does not reach the caller when the call can wait for it.
-The proxy releases the grant, and the call joins the queue again.
-The call asks the provider again after the pause. A conversation call waits up to 30 seconds and another call up to 2 minutes.
-
-The refusal reaches the caller as the provider's own answer, with its status, in these cases:
-
-- The provider asks for a longer pause than the call can wait.
-- The answer says that the account has no quota left (`insufficient_quota` or `enforced_spend_limit_reached`).
-- The answer is a 503 without `Retry-After`, which can be an outage. The connection's breaker also counts it.
-- A workspace-controlled credential was refused in a shared pool.
-
-A call that ends while it waits gets a capacity refusal. Hephaestus records this as its own stop, and it says nothing about the reviewed work.
-[Decisions and withholdings](/contributor/practice-review-pipeline#decisions-and-withholdings) explains how a stop affects the feedback.
-
-Product feedback is a background call.
-It starts only when no other call waits in that endpoint pool, whatever the band of that call.
-At most one drafting call can be active in each pool, and it cannot use the interactive reserve.
-A later call does not revoke an active draft: it can wait for that draft's transport to close.
-
-A pool grants the waiting calls in this order:
-
-1. The band. Each waiting interactive call gets its grant before a batch call, and each batch call before a background call.
-2. The workspace with the fewest granted calls in the pool.
-3. In that workspace, the review attempt with the fewest granted calls.
-4. The oldest call.
-
-Thus, a wide review cannot hold more than its share while another review waits. It uses free capacity while none waits.
-A review's composition does not wait behind the measurements of a wider review.
-If two workspaces have the same number of granted calls, the workspace whose last grant in that band is older goes first.
-Every physical call joins this queue, including composition.
-
-A batch or background call that waits rises one band for each `hephaestus.agent.capacity.permit-aging`, 30 seconds by default.
-It never rises into the interactive band.
-Thus, the call of a scheduled review waits behind a steady stream of other reviews' calls for a limited time only.
-
-Each server runs one admission round per pool for each 250 milliseconds while calls wait, and a new call starts one at once.
-A round can grant any server's call, in queue order, up to the limit. The call's own server finds the grant in its next round.
-Thus, the database load does not grow with the number of waiting calls.
-One database statement grants all the calls of a round. Interactive calls are granted first in each round.
-
-Before a review starts capture or creates a Pod, its claim checks the review quota and its model's endpoint pool.
-The parent review and its job start in one transaction after those checks pass.
-The claim stays queued while the quota has no room or the pool has a live review call waiting.
-A review call is a batch or background call that has a workspace.
-It is a call of a requested, event, scheduled or backfill review, or of a composition.
-Conversation and product feedback waiters do not block a review claim.
-
-An unavailable observation leaves the review queued.
-The Kubernetes readiness check also fails while a namespace informer cannot list or watch its resources.
-
-This check takes no provider grant and adds no pool waiter.
-A pool whose calls are all active can admit a review when it has no review call waiting.
-The review's actual calls join the pool queue when they run.
-A new waiter or another server can use room after the observation.
-The Kubernetes quota and the pool enforce capacity when the Pod and call start.
-
-After a backlog refusal, the same poll scans other endpoint pools before it sleeps.
-The job retains its original readiness time.
-Claims prefer started work, then workspaces with fewer running reviews.
-Each batch also counts the positions already offered to a workspace.
-Within that order, requested reviews precede event, scheduled, and backfill reviews.
-Each ten minutes of waiting offsets one origin priority step, so old backfill can pass new requests.
-
-The pool also accounts for request and token rates across servers.
-Each physical request, including a protocol retry, consumes a rate debit.
-
-A configured per-call token bound reserves the provider's maximum input-plus-output charge on the pool's combined and input token rates.
-An output token rate has no reservation, because providers count output as the model writes it.
-When a call ends, the usage that its provider reported replaces that bound.
-The reservation remains conservative when usage is absent or the call is cancelled.
-Closed calls retain their debit for a full minute after closure.
-Background calls keep their share of the limit in the rate account too, and at least one call.
-
-A live server cancels a call after three quarters of the permit lease without renewal.
-The proxy also checks that local lease before it starts or retries a provider call, without waiting for the next periodic check.
-
-The proxy releases capacity only after the response completes or the cancelled transport closes.
-Cancellation also closes a JSON response body after its headers arrive.
-The request UUID fences renewal and release.
-A late release cannot affect another call.
-An ended attempt cannot start a provider call after a capacity wait.
-
-Admission and administration reclaim grants that the server has not renewed within `hephaestus.llm.call-pools.permit-lease` (one minute by default).
-This lease is the bound on a provider connection that nobody can see anymore:
-
-- When a server process ends, its sockets close.
-- A server that loses its database cancels its calls after three quarters of the lease. Their connections close before the grant expires.
-- A server cancels a call within two renewal intervals after its hard end and stops renewing it. Its grant then expires.
-
-The hard end is the deadline of the work, such as a review attempt's work deadline.
-A conversation call has no such deadline, so its hard end comes 32 minutes after its grant.
-
-A suspended server is the one exception.
-It can keep a provider connection open after its grant expires.
-The connection closes when the server resumes and cancels the call, or when its liveness probe restarts the container.
-A cancellation that cannot close the transport can do the same.
-The pool limit can then be exceeded until those connections close.
-
-The expired grant cannot renew or debit a retry.
-Its provider rate debit remains for one minute after lease expiry.
-Pool edits, deletion, and membership changes wait for open requests, retained rate debits, and cooldowns to end.
-
-The cooldown follows the retry headers and never shortens an existing pause.
-A workspace-controlled connection can lower the limit and pause only a pool that its model has alone.
-
-### Conversation sandboxes
-
-The image's driver runs turns in each conversation's sandbox.
-It pulls a run with the sandbox credential and sends every later call with the run and epoch headers.
-Any server replica can serve a call.
-The sandbox renews its run lease. a server never renews it for the sandbox.
-
-The server resolves provider keys and keeps them out of the sandbox.
-PostgreSQL holds the run lease, turn entries and billing record.
-If the sandbox stops, the run reaper recovers its turn after the lease expires.
-[Sandbox templates](./sandboxes#sandbox-templates) gives the chart settings and claim cleanup rule.
-
-### Abnormal sandbox ends
-
-When a sandbox ends abnormally, the server logs why from the Pod's status: the container, its exit code and the Kubernetes reason (`sandbox.exited`).
-Only for a practice review does that line also carry the review runtime's own last diagnostic lines, as `sandbox.stderr.tail`.
-Each kept line names one runtime event with counts, flags and closed codes, such as `[pi-runner] tool.failed phase=review turn=1 practice=0 tool=bash reason_chars=42`.
-A turn and a practice are named by their positions in the review's practice index, not by their names.
-The line never holds a tool result, a provider's error message, model output, reviewed code, a name, a path or an identifier.
-
-The server keeps a line only when its event, fields and values are in the runtime's diagnostic vocabulary.
-This rule also applies to a line from an older runtime image.
-It counts every other line in `sandbox.stderr.dropped`.
-
-A practice review can stop with some practices still without a result, for example when a practice reaches its deadline.
-The runtime then keeps the results that it staged and exits with code 78.
-The server logs this end at `INFO` as `partial`, not as an error.
-The field `sandbox.review.without_result` names each practice without a result by its position and stop code.
-An example is `practice=9 program_stop=deadline`.
-
-If the attempt staged a practice that no earlier attempt had, the next attempt continues the review.
-It runs only the open practices and spends no retry.
-
-### Conversation tools
-
-The model loop, `read`, `bash`, searches and loaded programs run in one sandbox container.
-The server sends the turn's fixed context documents with its context response.
-The sandbox stages them locally, fetches indexed item documents on demand and extracts repository loads there.
-The server enforces workspace access and the load count.
-[Conversation runtime § Context folder](/contributor/unified-pi-runtime#context-folder) owns that protocol.
-
-### Live answers
-
-Slack receives one completed answer through the outbox after the turn ends and the answer passes admission.
-Slack receives no live answer text or progress reaction.
-Use **Stop answer** in the app to stop an unfinished turn.
-[Conversation runtime § Slack replies](/contributor/unified-pi-runtime#slack-replies) owns the delivery and readback rules.
-
-The server role serves the live answer stream at `GET /api/workspaces/{slug}/mentor/events`.
-It sends a `ping` comment every 20 seconds.
-The reverse proxy must keep an idle connection open for longer than 20 seconds.
-The bundled Traefik keeps it open for 300 seconds.
-A developer can have at most 10 open streams.
-
-When the server stops, it ends every live stream before it drains its other requests.
-The browser connects again to the next server, which first sends the whole conversation.
-The workspace's sync stream works the same way: on the next connect, the page reads its data again.
-
-The `mentor-turns` rate limit applies to `POST /api/workspaces/{slug}/mentor/turns`.
-`HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_CAPACITY` (default `20`) and `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_PERIOD` (default `10m`) set it.
-The limit counts the questions of one account.
-A load test that asks more questions as one account must raise the capacity.
-
-### Tunables
-
-These defaults apply to the application properties without chart overrides.
-The chart passes a resolved integer for turn capacity, from `sandbox.conversationTurns` ([Helm chart reference § Conversation capacity](./helm-chart#conversation-capacity)).
-Its `auto` setting uses the chart's CPU budget.
-
-| Property                                    | Default       | Effect                                                                  |
-| ------------------------------------------- | ------------- | ----------------------------------------------------------------------- |
-| `hephaestus.agent.capacity.turn-lease-ttl`  | `60s`         | The lease of a running turn's run. The sandbox driver renews it every 25 seconds. |
-| `hephaestus.mentor.turn.model-first-byte-timeout` | `PT5M`  | How long one model call of a turn, or one streamed model call of a review, may wait for the provider's response headers |
-| `hephaestus.mentor.turn.model-idle-timeout` | `PT2M`        | How long the stream of one model call of a turn or of a review may send nothing |
-| `hephaestus.mentor.turn.max-follow-ups`     | `3`           | The number of questions that can wait in one conversation or thread |
-| `hephaestus.agent.capacity.turns`           | Not set       | The conversation turns that the whole installation runs at once. Each server reads it ([Conversation turn capacity](#conversation-turn-capacity)) |
-| `hephaestus.mentor.agent.max-prompt-chars`  | `100000`      | The maximum length of a question sent in the webapp, in characters      |
-
-Give all roles the same values.
-Use the [configuration reference](./configuration-reference) for the chart-owned configuration of the other properties.
-
-[Metrics](./metrics.md#conversation-turn-metrics) lists the conversation turn metrics.
-
-## Agent settings
-
-The bare minimum to run reviews and conversation turns on a server, beside the database settings:
-
-```sh
-SPRING_PROFILES_ACTIVE=prod
-HEPHAESTUS_AGENT_DRAIN_TIMEOUT=30m
-AGENT_ENABLED=true
-```
-
-Without the last line, the server runs no agent runtime: no practice review, no conversation turn and no sandbox.
-
-No LLM environment variables are necessary.
-The LLM proxy runs in-process on each server with agent jobs on.
-It serves queued practice reviews, conversation turns, and product feedback drafts.
-A draft uses the proxy in the server process and starts no sandbox.
-It reads providers from the same instance/workspace catalog as the API.
-
-1. Register providers at runtime under Instance administration → AI models, or under the workspace's AI models page.
-2. Never register providers through an environment variable.
-
-[Tunables](#tunables) gives the Conversation turn capacity.
-
-The JVM binds `HEPHAESTUS_MENTOR_TURN_CAPACITY` and `SANDBOX_MAX_CONCURRENT`.
-Set `sandbox.conversationTurns` and `sandbox.reviewMemory` through the chart. The chart derives `SANDBOX_MAX_CONCURRENT` from the review memory ([Kubernetes](./kubernetes)).
-
-`SANDBOX_MAX_CONCURRENT` is the review capacity.
-The server requests no review sandbox while that many review sandboxes are live in the installation ([Agent runs § Sandbox dispatch](/contributor/agent-runs#sandbox-dispatch)).
-The selected chart profile owns this limit.
-A higher review capacity there has no effect until you also raise the sandbox limit.
-
-1. Raise the sandbox limit only with sufficient RAM, as [Sizing](./sizing) describes.
-
-Each server signs the attempt tokens and sandbox tokens of its sandboxes with a key that it generates at start and keeps in memory.
-It stores the public key in the table `attempt_public_key`, so any server can verify those tokens.
-The key needs no configuration.
-
-[Sizing](./sizing#database-connections) owns the connection pool budget of each role and the JVM [memory headroom](./sizing#memory-headroom).
-
-### Sandbox runtime
-
-The server runs sandboxes only on Kubernetes.
-The runtime reads the `HEPHAESTUS_SANDBOX_KUBERNETES_*` variables of the [configuration reference](./configuration-reference).
-The [Helm chart](./sandboxes#server) sets each of them, including the server Pod metadata from the Downward API.
-Missing metadata prevents server startup.
-The [host development launcher](/contributor/local-development#kubernetes) supplies these values for the shared dev cluster.
-
-A subject's sandbox is an agent-sandbox claim from the warm pool of its kind (`HEPHAESTUS_AGENT_SANDBOX_WARM_POOLS_*`).
-The claim passes the address of the gateway Service (`HEPHAESTUS_AGENT_SANDBOX_GATEWAY_URL`), which the server resolves, to the sandbox.
-Each server deletes the claims that no work needs, without a leader ([Agent runs](/contributor/agent-runs#sandbox-reaper)).
+[Conversation turn metrics](./metrics.md#conversation-turn-metrics) names the breaker's metrics.
 
 ## Graceful drain
 
-On SIGTERM, the server stops new review and conversation claims before the web server closes.
-It keeps the private gateway and the database open while leased measurement and composition runs finish.
-The drain reads `agent_run`. It adds no second count of active work.
-Completed measurement and queued composition stay recorded for the replacement server.
+On `SIGTERM`, the server stops taking review and conversation claims before the web server closes.
+It keeps the sandbox gateway and the database open while leased runs finish.
+The gateway Service still includes the stopping server, so its sandboxes can renew their leases.
+A model stream that loses its server connection is tried again by the sandbox runtime, within the run's time limit.
 
-`hephaestus.agent.drain-timeout` bounds the wait, 30 minutes by default.
-The chart sets it from `server.drainTimeoutSeconds`: 1800 by default, 600 in the small profile.
-It gives the Pod that interval plus two minutes for the other shutdown phases.
-The replacement is ready before an old Pod drains ([Helm chart](./helm-chart)).
-A model stream that loses its server connection is retried by the native sandbox runtime, within the run deadline.
-The retry discards the interrupted answer before it streams the next answer.
+`HEPHAESTUS_AGENT_DRAIN_TIMEOUT` bounds the wait, 30 minutes by default.
+The chart sets it from `server.drainTimeoutSeconds`: 1800 by default, 600 in the `small` profile.
+The chart gives the Pod that interval plus two minutes for the other shutdown phases.
+Every other shutdown phase has `SHUTDOWN_TIMEOUT`, 20 seconds.
 
-Each proxy call has its own usage row. An interrupted call without usage remains unverifiable. It is not charged as a measured completion.
-The run's end settles any open call rows. `settle_after` recovers runless calls instead.
-The claim epoch admits the turn result once, also when its terminal request is repeated.
-
-The private gateway Service includes a terminating server so existing runs can renew their leases and finish.
-New claims require startup readiness, and are refused while the server drains.
-Public routing does not use this Service.
-If the deadline expires, `agent.review.drain.expired` records the remaining count.
-The server then closes. The run reaper recovers work whose lease expires under its existing retry policy.
-
-Every other shutdown phase keeps `spring.lifecycle.timeout-per-shutdown-phase` (`SHUTDOWN_TIMEOUT`, 20 seconds).
-
-## Cancellation
-
-A cancel ends a review on its row at once.
-The sandbox gateway then refuses the review's next model call.
-The server that runs the review stops its sandbox at its next lease renewal (`hephaestus.agent.capacity.lease-renewal`).
-A requeue or a reap of the review ends it in the same way.
-
-## Decision records
-
-The full design rationale lives in the architecture decision records, which are kept in the
-repository rather than on this site:
-
-- [**ADR 0005**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0005-two-role-runtime-via-conditional-on-property.md) — original two-role design.
-- [**ADR 0008**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0008-webhook-runtime-role.md) — the former webhook role. The server now receives provider webhooks.
-- [**ADR 0009**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0009-worker-runtime-substrate-wss-control-channel.md) — server substrate. Its WSS control channel is superseded by ADR 0068.
-- [**ADR 0025**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0025-agent-job-queue-on-postgresql.md) — PostgreSQL agent job queue.
+If the drain time ends, the server logs `agent.review.drain.expired` with the count of runs that remain, and closes.
+Any server takes back those runs when their leases expire ([Review drain deadline](./log-records#review-drain-deadline)).

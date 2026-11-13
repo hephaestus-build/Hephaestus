@@ -9,15 +9,11 @@ You have kubectl access to two namespaces, but you are not a cluster-admin.
 The cluster's admins apply the cluster-scoped objects of the release, the admin bundle.
 You install everything else with the Helm chart and the `cluster.yaml` profile.
 
-The release runs the agent-sandbox controller in its own namespace.
-Every write right of the controller is in a Role of the chart.
-The controller version of the release, v1.0.10, has no option that limits what it reads to one namespace.
-Thus, the admin bundle grants it one ClusterRole that reads these kinds in all namespaces, and writes none of them.
-The kinds are Pods, Services, NetworkPolicies, and the four agent-sandbox kinds.
-
-The controller can then read the specs of the Pods and Services of other namespaces, including their environment values.
-The built-in `admin` role of the release namespace can impersonate the controller's ServiceAccount.
-Thus, each user with `admin` in the release namespace can read these specs too.
+The release runs the agent-sandbox controller in its own namespace, and every write right of the controller is in a Role of the chart.
+The pinned controller cannot limit what it reads to one namespace.
+Thus, the admin bundle grants it one ClusterRole that reads Pods, Services, NetworkPolicies and the four agent-sandbox kinds in all namespaces.
+The controller can read the specs of the Pods and Services of other namespaces, including their environment values.
+Each user with the built-in `admin` role in the release namespace can impersonate the controller and read them too.
 The admins must accept that before they apply the bundle.
 
 ## Before you start
@@ -32,7 +28,7 @@ The preflight in [Install](#install) checks each item that your access can read.
    It serves the public host name of the release with TLS.
 4. Sandbox nodes that meet the [sandbox prerequisites](./sandboxes#sandbox-prerequisites).
    They need user namespace support (Linux 6.3 or later, containerd 2.0 or later) and encrypted node storage.
-5. A StorageClass for ReadWriteOnce volumes, as the default class or by name, with about 50 GiB for PostgreSQL.
+5. A StorageClass for ReadWriteOnce volumes, as the default class or by name, for the PostgreSQL volume: 20 GiB by default (`postgresql.persistence.size`).
    An [external PostgreSQL](./external-database) replaces the PostgreSQL volume.
 6. Egress on port 443 from the release namespace to the Git providers and the model APIs that the workspaces use.
 7. Image pulls from `ghcr.io`, `docker.io` and `registry.k8s.io` on every node.
@@ -44,7 +40,14 @@ Get the release files of the version that you install:
 - The chart, which you [verify](./kubernetes#verify-the-release-chart).
 - The k3s bundle `hephaestus-k3s-X.Y.Z.tar.gz` with its signature, which you verify as [Get the release files](./k3s#1-get-the-release-files) shows.
   It holds the admin bundle, `hephaestus-cluster-admin.yaml`.
-- A checkout of the release's Git tag, from which you run the preflight with Node.js.
+- A checkout of the release's Git tag, from which you run the preflight and the sandbox isolation gate.
+
+On your workstation, you need these tools:
+
+- `kubectl` with a context for the cluster.
+- Helm 4, on the `PATH`. The install uses `--wait=watcher`, and the preflight renders the chart with `helm`.
+- Node.js at the version that `package.json` of the checkout names.
+- The dependencies of the checkout, for the preflight: run `vp install` in the checkout. [Local development](/contributor/local-development) tells how to install `vp`.
 
 ## Admin handoff
 
@@ -155,10 +158,8 @@ The admins repeat step 3 for each release.
      namespace: hephaestus-sandboxes
    ```
 
-   `kubernetesApi` is an address from the EndpointSlice, a server node on port 6443, not the address of the `kubernetes` Service.
-   The network plugin applies the policy after it translates the Service address.
-   Use `/128` for an IPv6 address.
-   A cluster with three server nodes has three addresses: set a CIDR that holds all of them.
+   `kubernetesApi` is an address from the EndpointSlice, not the address of the `kubernetes` Service ([Network policy](./helm-chart#network-policy)).
+   A cluster with three server nodes has three addresses: set a CIDR that holds all of them. Use `/128` for one IPv6 address.
 
 2. Run the preflight from the checkout of the release tag:
 
@@ -184,9 +185,9 @@ The admins repeat step 3 for each release.
      --wait=watcher --wait-for-jobs --timeout 45m
    ```
 
-   The profile runs the server with room for 16 reviews across the sandbox nodes, and the agent-sandbox controller in the release namespace.
+   The profile runs two servers, twelve reviews at once across the sandbox nodes, and the agent-sandbox controller in the release namespace.
    It names the PriorityClasses of the admin bundle, so the chart creates no cluster-scoped object.
-   It gives the server 3 GiB of memory, for the peak that a staging bench measured.
+   [Sizing and scaling](./sizing#profiles-at-a-glance) gives its requests.
 
 ## Check that it worked
 
@@ -196,18 +197,53 @@ The admins repeat step 3 for each release.
    node scripts/cluster-preflight.ts --namespace hephaestus --values site.yaml --installed
    ```
 
-   The server is ready only when its isolation probe passes on the real nodes: user namespaces, NetworkPolicy enforcement and the gateway path.
-   If the server is not ready, its log names the probe item that failed.
+   It also waits up to 10 minutes for the server rollout.
+   The last line starts with `The preflight of hephaestus passed`.
+   If the server is not ready, a `missing:` line gives the command that shows its log.
 
-2. Run the sandbox isolation gate against the review template, with the cluster's DNS Service:
-
-   ```bash
-   node scripts/sandbox-isolation.ts --namespace hephaestus-sandboxes --template hephaestus-sandbox-review \
-     --gateway "$(kubectl -n hephaestus get service hephaestus-sandbox-gateway -o jsonpath='{.spec.clusterIP}'):8081" \
-     --dns kube-system/rke2-coredns-rke2-coredns
-   ```
-
-   It needs the rights of step 2 of the admin handoff and `create` on `pods/exec` in the sandbox namespace.
+2. Run the [sandbox isolation gate](./sandboxes#sandbox-isolation-gate) for each template. Add the cluster's DNS Service, for example `--dns kube-system/rke2-coredns-rke2-coredns` on RKE2.
+   Besides the rights of step 2 of the admin handoff, the gate needs `create` on `pods/exec` in the sandbox namespace.
    It also reads the `kubernetes` Service and its EndpointSlices in `default`, and the DNS Service.
+   Each run must end with `The sandbox isolation gate passed`.
 
 3. Open the public host name, sign in, and request a review of one pull request.
+
+## Undo
+
+1. Delete the sandbox claims while the agent-sandbox controller still runs:
+
+   ```bash
+   kubectl -n hephaestus-sandboxes delete sandboxclaims --all
+   ```
+
+2. Uninstall the release:
+
+   ```bash
+   helm uninstall hephaestus -n hephaestus
+   ```
+
+3. Optional: delete the PostgreSQL volume claim, which the uninstall keeps.
+
+   :::caution[CAUTION: Data loss]
+
+   This deletes the database. Keep a [backup](./backup-restore#back-up-the-database) and the [required keys](./secret-custody#keep-the-required-keys-outside-the-cluster) if you can restore later.
+
+   :::
+
+   ```bash
+   kubectl -n hephaestus delete pvc data-hephaestus-postgresql-0
+   ```
+
+4. Ask the admins to delete the two namespaces, which also deletes the release Secret and your RoleBindings:
+
+   ```bash
+   kubectl delete namespace hephaestus hephaestus-sandboxes
+   ```
+
+5. Ask the admins to remove the admin bundle of the release:
+
+   ```bash
+   kubectl delete -f hephaestus-cluster-admin.yaml
+   ```
+
+   This deletes the agent-sandbox CRDs, the three PriorityClasses and the read-only ClusterRole with its binding.

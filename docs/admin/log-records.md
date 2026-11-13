@@ -186,6 +186,21 @@ These are fields, not metric labels.
 An outbox event names no person and no payload.
 An account email has no workspace, so its events have no `workspace.id`.
 
+## Abnormal sandbox ends
+
+When a sandbox ends abnormally, the server logs `sandbox.exited` with the container, its exit code and the Kubernetes reason from the Pod's status.
+For a practice review, the line also carries the last diagnostic lines of the review runtime as `sandbox.stderr.tail`.
+Each kept line names one runtime event with counts, flags and closed codes, such as `[pi-runner] tool.failed phase=review turn=1 practice=0 tool=bash reason_chars=42`.
+A turn and a practice are named by their positions in the review's practice index.
+The line never holds a tool result, a provider's error message, model output, reviewed code, a name, a path or an identifier.
+The server keeps only lines whose event, fields and values are in the runtime's diagnostic vocabulary, and counts the others in `sandbox.stderr.dropped`.
+
+A practice review can stop with some practices still without a result, for example when a practice reaches its deadline.
+The runtime then keeps the results that it staged and exits with code 78.
+The server logs this end at `INFO` as `partial`, not as an error.
+`sandbox.review.without_result` names each practice without a result by its position and stop code, such as `practice=9 program_stop=deadline`.
+If the attempt staged a practice that no earlier attempt had, the next attempt runs only the open practices and spends no retry.
+
 ## Database logs
 
 The bundled PostgreSQL image logs four kinds of events that show contention and maintenance:
