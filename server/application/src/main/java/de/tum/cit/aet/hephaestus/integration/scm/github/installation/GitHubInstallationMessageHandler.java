@@ -1,11 +1,11 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.installation;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener.AccountType;
@@ -39,13 +39,13 @@ public class GitHubInstallationMessageHandler extends AbstractIntegrationMessage
     private final ProvisioningListener provisioningListener;
     private final OrganizationService organizationService;
     private final GitHubAppTokenService gitHubAppTokenService;
-    private final IdentityProviderRepository gitProviderRepository;
+    private final IdentityProviderLookup identityProviders;
 
     GitHubInstallationMessageHandler(
             ProvisioningListener provisioningListener,
             OrganizationService organizationService,
             GitHubAppTokenService gitHubAppTokenService,
-            IdentityProviderRepository gitProviderRepository,
+            IdentityProviderLookup identityProviders,
             EventPayloadDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
@@ -57,7 +57,7 @@ public class GitHubInstallationMessageHandler extends AbstractIntegrationMessage
         this.provisioningListener = provisioningListener;
         this.organizationService = organizationService;
         this.gitHubAppTokenService = gitHubAppTokenService;
-        this.gitProviderRepository = gitProviderRepository;
+        this.identityProviders = identityProviders;
     }
 
     /** Every action handles here: the default dispatch would hold its transaction across the GitHub status read. */
@@ -195,10 +195,9 @@ public class GitHubInstallationMessageHandler extends AbstractIntegrationMessage
 
         // Ensure organization identity is up-to-date if applicable
         if (account != null && "Organization".equalsIgnoreCase(account.type())) {
-            Long providerId = gitProviderRepository
-                    .findByTypeAndServerUrl(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
-                    .orElseThrow(() -> new IllegalStateException("IdentityProvider not found for GitHub"))
-                    .getId();
+            Long providerId = identityProviders
+                    .findId(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
+                    .orElseThrow(() -> new IllegalStateException("IdentityProvider not found for GitHub"));
             organizationService.upsertIdentity(
                     Objects.requireNonNull(account.id()),
                     Objects.requireNonNull(accountLogin),

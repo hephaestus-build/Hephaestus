@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
@@ -34,12 +34,12 @@ public class GitLabGroupProcessor {
     private static final Logger log = LoggerFactory.getLogger(GitLabGroupProcessor.class);
 
     private final OrganizationRepository organizationRepository;
-    private final IdentityProviderRepository gitProviderRepository;
+    private final SourceProviderNamespaces providerNamespaces;
 
     public GitLabGroupProcessor(
-            OrganizationRepository organizationRepository, IdentityProviderRepository gitProviderRepository) {
+            OrganizationRepository organizationRepository, SourceProviderNamespaces providerNamespaces) {
         this.organizationRepository = organizationRepository;
-        this.gitProviderRepository = gitProviderRepository;
+        this.providerNamespaces = providerNamespaces;
     }
 
     /**
@@ -75,7 +75,7 @@ public class GitLabGroupProcessor {
                 .orElseGet(() -> {
                     Organization org = new Organization();
                     org.setNativeId(nativeId);
-                    org.setProvider(gitProviderRepository.getReferenceById(providerId));
+                    org.setProvider(providerNamespaces.referenceForMirror(providerId));
                     org.setCreatedAt(Instant.now());
                     return org;
                 });

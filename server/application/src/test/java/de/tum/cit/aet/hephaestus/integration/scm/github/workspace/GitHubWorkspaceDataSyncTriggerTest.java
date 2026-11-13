@@ -15,9 +15,8 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJob;
@@ -48,7 +47,7 @@ class GitHubWorkspaceDataSyncTriggerTest extends BaseUnitTest {
     private static final long INSTALLATION_ID = 4242L;
 
     private final GitHubDataSyncService dataSyncService = mock(GitHubDataSyncService.class);
-    private final ConnectionRepository connectionRepository = mock(ConnectionRepository.class);
+    private final ConnectionQueries connectionQueries = mock(ConnectionQueries.class);
     private final SyncJobService syncJobService = mock(SyncJobService.class);
     private final WorkspaceRepositoryMonitorService monitorService = mock(WorkspaceRepositoryMonitorService.class);
     private final Connection connection = mock(Connection.class);
@@ -58,7 +57,7 @@ class GitHubWorkspaceDataSyncTriggerTest extends BaseUnitTest {
     void singleTargetSyncRunsInsideLifecycleJobForActiveConnection() {
         var dataSyncService = mock(GitHubDataSyncService.class);
         var targetProvider = mock(SyncTargetProvider.class);
-        var connectionRepository = mock(ConnectionRepository.class);
+        var connectionQueries = mock(ConnectionQueries.class);
         var syncJobService = mock(SyncJobService.class);
         var target = mock(SyncTarget.class);
         var connection = mock(Connection.class);
@@ -66,9 +65,8 @@ class GitHubWorkspaceDataSyncTriggerTest extends BaseUnitTest {
 
         when(target.scopeId()).thenReturn(41L);
         when(targetProvider.findSyncTargetById(7L)).thenReturn(Optional.of(target));
-        when(connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                        41L, IntegrationKind.GITHUB, IntegrationState.ACTIVE))
-                .thenReturn(Optional.of(connection));
+        when(connectionQueries.findActive(41L, IntegrationKind.GITHUB))
+                .thenAnswer(ignored -> Optional.of(snapshotFixture(connection)));
         when(connection.getId()).thenReturn(99L);
         doAnswer(invocation -> {
                     Consumer<SyncJobHandle> body = invocation.getArgument(1);
@@ -87,7 +85,7 @@ class GitHubWorkspaceDataSyncTriggerTest extends BaseUnitTest {
         var trigger = new GitHubWorkspaceDataSyncTrigger(
                 requiredProvider(dataSyncService),
                 optionalProvider(targetProvider),
-                optionalProvider(connectionRepository),
+                optionalProvider(connectionQueries),
                 optionalProvider(syncJobService),
                 absentProvider(),
                 executor);
@@ -157,9 +155,8 @@ class GitHubWorkspaceDataSyncTriggerTest extends BaseUnitTest {
 
     @Test
     void shouldSkipAppStartupWorkWhenSyncJobServiceIsUnavailable() {
-        when(connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                        WORKSPACE_ID, IntegrationKind.GITHUB, IntegrationState.ACTIVE))
-                .thenReturn(Optional.of(connection));
+        when(connectionQueries.findActive(WORKSPACE_ID, IntegrationKind.GITHUB))
+                .thenAnswer(ignored -> Optional.of(snapshotFixture(connection)));
         when(connection.getConfig())
                 .thenReturn(new ConnectionConfig.GitHubAppConfig(INSTALLATION_ID, null, null, Set.of()));
 
@@ -184,9 +181,8 @@ class GitHubWorkspaceDataSyncTriggerTest extends BaseUnitTest {
     }
 
     private void activeConnection(ConnectionConfig config) {
-        when(connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                        WORKSPACE_ID, IntegrationKind.GITHUB, IntegrationState.ACTIVE))
-                .thenReturn(Optional.of(connection));
+        when(connectionQueries.findActive(WORKSPACE_ID, IntegrationKind.GITHUB))
+                .thenAnswer(ignored -> Optional.of(snapshotFixture(connection)));
         when(connection.getConfig()).thenReturn(config);
         when(connection.getId()).thenReturn(CONNECTION_ID);
     }
@@ -211,7 +207,7 @@ class GitHubWorkspaceDataSyncTriggerTest extends BaseUnitTest {
         return new GitHubWorkspaceDataSyncTrigger(
                 lazyProvider(dataSyncService),
                 absentProvider(),
-                optionalProvider(connectionRepository),
+                optionalProvider(connectionQueries),
                 jobServiceProvider,
                 lazyProvider(monitorService),
                 mock(AsyncTaskExecutor.class));
@@ -242,5 +238,10 @@ class GitHubWorkspaceDataSyncTriggerTest extends BaseUnitTest {
         @SuppressWarnings("unchecked")
         ObjectProvider<T> provider = mock(ObjectProvider.class);
         return provider;
+    }
+
+    private static ConnectionQueries.ConnectionSnapshot snapshotFixture(Connection connection) {
+        return new ConnectionQueries.ConnectionSnapshot(
+                connection.getId(), connection.getVersion(), connection.getConfig());
     }
 }

@@ -3,8 +3,8 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.team;
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -50,7 +50,7 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
 
     private final GitHubTeamProcessor teamProcessor;
     private final ScopeIdResolver scopeIdResolver;
-    private final IdentityProviderRepository gitProviderRepository;
+    private final SourceProviderNamespaces providerNamespaces;
     private final TeamRepository teamRepository;
     private final RepositoryRepository repositoryRepository;
     private final TeamRepositoryPermissionRepository permissionRepository;
@@ -58,7 +58,7 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
     GitHubTeamMessageHandler(
             GitHubTeamProcessor teamProcessor,
             ScopeIdResolver scopeIdResolver,
-            IdentityProviderRepository gitProviderRepository,
+            SourceProviderNamespaces providerNamespaces,
             TeamRepository teamRepository,
             RepositoryRepository repositoryRepository,
             TeamRepositoryPermissionRepository permissionRepository,
@@ -72,7 +72,7 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
                 transactionTemplate);
         this.teamProcessor = teamProcessor;
         this.scopeIdResolver = scopeIdResolver;
-        this.gitProviderRepository = gitProviderRepository;
+        this.providerNamespaces = providerNamespaces;
         this.teamRepository = teamRepository;
         this.repositoryRepository = repositoryRepository;
         this.permissionRepository = permissionRepository;
@@ -116,8 +116,8 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
                     (event.organization() == null ? null : event.organization().id()));
             return;
         }
-        IdentityProvider gitHubProvider = gitProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
+        IdentityProvider gitHubProvider = providerNamespaces
+                .findForMirror(IdentityProviderType.GITHUB, "https://github.com")
                 .orElseThrow(() -> new IllegalStateException("GitHub provider not configured"));
         ProcessingContext context = ProcessingContext.forWebhook(scopeId, gitHubProvider, event.action());
 

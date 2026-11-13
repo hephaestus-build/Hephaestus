@@ -1,9 +1,9 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials;
 
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitLabConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitLabTokenMetadata;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionCredentialsReplacedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
@@ -34,7 +34,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 @Slf4j
 public class GitLabTokenLifecycleService {
     private final ConnectionService connections;
-    private final ConnectionRepository repository;
+    private final ConnectionCommands commands;
     private final GitLabTokenRotationClient rotationClient;
     private final GitLabTokenService tokenService;
     private final GitLabCredentialHealth health;
@@ -50,7 +50,7 @@ public class GitLabTokenLifecycleService {
         var candidate = connections.findActive(workspaceId, IntegrationKind.GITLAB);
         if (candidate.isEmpty()) return;
         var connection = candidate.get();
-        repository.acquireLifecycleLock(connection.getId(), workspaceId);
+        commands.holdLifecycleLock(workspaceId, connection.getId());
         Objects.requireNonNull(entityManager).refresh(connection);
         if (connection.getState() != IntegrationState.ACTIVE
                 || !(connection.getConfig() instanceof GitLabConfig config)) return;

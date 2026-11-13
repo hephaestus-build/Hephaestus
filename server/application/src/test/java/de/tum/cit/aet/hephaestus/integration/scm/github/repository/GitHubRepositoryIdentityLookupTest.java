@@ -11,17 +11,24 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAuditRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialReader;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.graphql.FragmentMergingDocumentSource;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryIdentityLookup.RepositoryIdentity;
+import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.GitHubGraphQlFragments;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -31,6 +38,7 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.http.HttpHeaders;
@@ -62,7 +70,7 @@ class GitHubRepositoryIdentityLookupTest extends BaseUnitTest {
         lenient().when(credentials.credentialsOf(connection)).thenReturn(Optional.of(new BearerToken(TOKEN, null)));
         lenient().when(properties.graphqlTimeout()).thenReturn(Duration.ofSeconds(5));
         lenient().when(clients.withToken(TOKEN)).thenReturn(client(answer));
-        return new GitHubRepositoryIdentityLookup(clients, connections, credentials, properties);
+        return new GitHubRepositoryIdentityLookup(clients, connectionService(), properties);
     }
 
     @Test
@@ -169,5 +177,18 @@ class GitHubRepositoryIdentityLookupTest extends BaseUnitTest {
                                 new ClassPathResource(GitHubGraphQlFragments.ACTOR_FRAGMENTS_RESOURCE),
                                 new ClassPathResource(GitHubGraphQlFragments.COMMIT_ENRICHMENT_FIELDS_RESOURCE))))
                 .build();
+    }
+
+    private ConnectionService connectionService() {
+        return new ConnectionService(
+                connections,
+                mock(ConnectionAuditRepository.class),
+                mock(CredentialBundleConverter.class),
+                mock(ApplicationEventPublisher.class),
+                mock(SyncJobService.class),
+                credentials,
+                mock(SourceProviderNamespaces.class),
+                Clock.systemUTC(),
+                mock(ProviderResourceRepairs.class));
     }
 }

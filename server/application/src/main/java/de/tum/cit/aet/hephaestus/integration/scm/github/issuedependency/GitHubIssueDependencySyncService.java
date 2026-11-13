@@ -10,9 +10,9 @@ import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSync
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.adaptPageSize;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncMetadata;
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
@@ -93,7 +93,7 @@ public class GitHubIssueDependencySyncService {
 
     private final IssueRepository issueRepository;
     private final RepositoryRepository repositoryRepository;
-    private final IdentityProviderRepository identityProviderRepository;
+    private final IdentityProviderLookup identityProviders;
     private final SyncTargetProvider syncTargetProvider;
     private final GitHubGraphQlClientProvider graphQlClientProvider;
     private final GitHubSyncProperties syncProperties;
@@ -107,7 +107,7 @@ public class GitHubIssueDependencySyncService {
     public GitHubIssueDependencySyncService(
             IssueRepository issueRepository,
             RepositoryRepository repositoryRepository,
-            IdentityProviderRepository identityProviderRepository,
+            IdentityProviderLookup identityProviders,
             SyncTargetProvider syncTargetProvider,
             GitHubGraphQlClientProvider graphQlClientProvider,
             GitHubSyncProperties syncProperties,
@@ -118,7 +118,7 @@ public class GitHubIssueDependencySyncService {
             GitHubGraphQlSyncCoordinator graphQlSyncHelper) {
         this.issueRepository = issueRepository;
         this.repositoryRepository = repositoryRepository;
-        this.identityProviderRepository = identityProviderRepository;
+        this.identityProviders = identityProviders;
         this.syncTargetProvider = syncTargetProvider;
         this.graphQlClientProvider = graphQlClientProvider;
         this.syncProperties = syncProperties;
@@ -207,11 +207,11 @@ public class GitHubIssueDependencySyncService {
             return 0;
         }
 
-        var provider = identityProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL)
+        var provider = identityProviders
+                .findId(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL)
                 .orElseThrow(() -> new IllegalStateException("IdentityProvider not found for type=GITHUB, serverUrl="
                         + PersonSourceNamespace.GITHUB_DEFAULT_URL));
-        Long providerId = Objects.requireNonNull(provider.getId());
+        Long providerId = Objects.requireNonNull(provider);
         HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
         int totalSynced = 0;
         int failedRepoCount = 0;

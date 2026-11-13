@@ -3,8 +3,8 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.team;
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -37,14 +37,14 @@ public class GitLabSubgroupMessageHandler extends AbstractIntegrationMessageHand
     private static final Logger log = LoggerFactory.getLogger(GitLabSubgroupMessageHandler.class);
 
     private final GitLabTeamProcessor teamProcessor;
-    private final IdentityProviderRepository gitProviderRepository;
+    private final SourceProviderNamespaces providerNamespaces;
     private final GitLabProperties gitLabProperties;
     private final GitLabRouteAdmission routeAdmission;
     private final TeamRepository teamRepository;
 
     GitLabSubgroupMessageHandler(
             GitLabTeamProcessor teamProcessor,
-            IdentityProviderRepository gitProviderRepository,
+            SourceProviderNamespaces providerNamespaces,
             GitLabProperties gitLabProperties,
             GitLabRouteAdmission routeAdmission,
             TeamRepository teamRepository,
@@ -57,7 +57,7 @@ public class GitLabSubgroupMessageHandler extends AbstractIntegrationMessageHand
                 deserializer,
                 transactionTemplate);
         this.teamProcessor = teamProcessor;
-        this.gitProviderRepository = gitProviderRepository;
+        this.providerNamespaces = providerNamespaces;
         this.gitLabProperties = gitLabProperties;
         this.routeAdmission = routeAdmission;
         this.teamRepository = teamRepository;
@@ -73,8 +73,8 @@ public class GitLabSubgroupMessageHandler extends AbstractIntegrationMessageHand
                 event.groupId(),
                 event.parentGroupId());
 
-        IdentityProvider provider = gitProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITLAB, gitLabProperties.defaultServerUrl())
+        IdentityProvider provider = providerNamespaces
+                .findForMirror(IdentityProviderType.GITLAB, gitLabProperties.defaultServerUrl())
                 .orElse(null);
 
         if (provider == null) {

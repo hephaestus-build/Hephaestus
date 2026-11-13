@@ -13,9 +13,8 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener.AccountKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
@@ -62,7 +61,7 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
     private OrganizationService organizationService;
 
     @Mock
-    private IdentityProviderRepository gitProviderRepository;
+    private IdentityProviderLookup identityProviders;
 
     private GitHubLifecycleListener listener;
 
@@ -73,7 +72,7 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
                 mock(),
                 repositoryRepository,
                 mock(),
-                gitProviderRepository,
+                identityProviders,
                 mock(),
                 mock(),
                 mock(),
@@ -162,10 +161,8 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
         Workspace workspace = workspace(11L, "acme");
         workspace.setAccountLogin("acme");
         WorkspaceStatusFixture.markPurged(workspace);
-        IdentityProvider github = mock();
-        when(github.getId()).thenReturn(3L);
-        when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com"))
-                .thenReturn(Optional.of(github));
+        when(identityProviders.findId(IdentityProviderType.GITHUB, "https://github.com"))
+                .thenReturn(Optional.of(3L));
         when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.empty());
         when(organizationService.findId(99L, 3L)).thenReturn(Optional.of(7L));
         when(workspaceRepository.findByOrganizationIdForUpdate(7L)).thenReturn(Optional.of(workspace));
@@ -223,8 +220,7 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
         workspace.resume();
         workspace.setAccountLogin("acme");
         when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
-        when(gitProviderRepository.findByTypeAndServerUrl(
-                        IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL))
+        when(identityProviders.findId(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> listener.handleAccountRename(INSTALLATION_ID, "acme", "renamed"))

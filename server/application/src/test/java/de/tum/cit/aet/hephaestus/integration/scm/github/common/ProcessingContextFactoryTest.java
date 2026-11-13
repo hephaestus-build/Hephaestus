@@ -9,8 +9,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeFilter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubRepositoryRefDTO;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
+import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,7 +41,7 @@ class ProcessingContextFactoryTest {
     private static final long GITHUB_PROVIDER_ID = 1L;
 
     private RepositoryRepository repositoryRepository;
-    private IdentityProviderRepository identityProviderRepository;
+    private IdentityProviderLookup identityProviders;
     private ScopeIdResolver scopeIdResolver;
     private RepositoryScopeFilter repositoryScopeFilter;
     private ProcessingContextFactory factory;
@@ -48,14 +49,15 @@ class ProcessingContextFactoryTest {
     @BeforeEach
     void setUp() {
         repositoryRepository = mock(RepositoryRepository.class);
-        identityProviderRepository = mock(IdentityProviderRepository.class);
-        when(identityProviderRepository.findByTypeAndServerUrl(
-                        IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL))
-                .thenReturn(Optional.of(TestEntities.gitProvider(GITHUB_PROVIDER_ID, IdentityProviderType.GITHUB)));
+        identityProviders = mock(IdentityProviderLookup.class);
+        when(identityProviders.findId(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL))
+                .thenReturn(Optional.of(
+                        Objects.requireNonNull(TestEntities.gitProvider(GITHUB_PROVIDER_ID, IdentityProviderType.GITHUB)
+                                .getId())));
         scopeIdResolver = mock(ScopeIdResolver.class);
         repositoryScopeFilter = mock(RepositoryScopeFilter.class);
         factory = new ProcessingContextFactory(
-                repositoryRepository, identityProviderRepository, scopeIdResolver, repositoryScopeFilter);
+                repositoryRepository, identityProviders, scopeIdResolver, repositoryScopeFilter);
     }
 
     @Nested
@@ -91,8 +93,7 @@ class ProcessingContextFactoryTest {
             String repoFullName = "ls1intum/Hephaestus";
             GitHubWebhookEvent event = createEventWithRepo(repoFullName);
             when(repositoryScopeFilter.isRepositoryAllowed(repoFullName)).thenReturn(true);
-            when(identityProviderRepository.findByTypeAndServerUrl(
-                            IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL))
+            when(identityProviders.findId(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL))
                     .thenReturn(Optional.empty());
 
             assertThat(factory.forWebhookEvent(event)).isEmpty();

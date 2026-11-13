@@ -11,8 +11,8 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRuns;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRunsRecorder;
@@ -26,6 +26,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,7 +42,7 @@ class GitHubHeadCheckRunsRereadTest extends BaseUnitTest {
 
     private static final long GITHUB = 1L;
 
-    private final IdentityProviderRepository providers = mock(IdentityProviderRepository.class);
+    private final IdentityProviderLookup providers = mock(IdentityProviderLookup.class);
     private final RepositoryRepository repositories = mock(RepositoryRepository.class);
     private final PullRequestRepository pullRequests = mock(PullRequestRepository.class);
     private final GitHubCommitCheckRuns checkRuns = mock(GitHubCommitCheckRuns.class);
@@ -53,8 +54,8 @@ class GitHubHeadCheckRunsRereadTest extends BaseUnitTest {
     void githubProvider() {
         var github = new IdentityProvider();
         github.setId(GITHUB);
-        when(providers.findByTypeAndServerUrl(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL))
-                .thenReturn(Optional.of(github));
+        when(providers.findId(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL))
+                .thenReturn(Optional.of(Objects.requireNonNull(github.getId())));
     }
 
     @Test

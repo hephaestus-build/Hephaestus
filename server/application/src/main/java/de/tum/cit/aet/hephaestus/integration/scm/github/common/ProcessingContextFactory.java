@@ -3,9 +3,8 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.common;
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeFilter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
@@ -42,17 +41,17 @@ public class ProcessingContextFactory {
     private static final Logger log = LoggerFactory.getLogger(ProcessingContextFactory.class);
 
     private final RepositoryRepository repositoryRepository;
-    private final IdentityProviderRepository identityProviderRepository;
+    private final IdentityProviderLookup identityProviders;
     private final ScopeIdResolver scopeIdResolver;
     private final RepositoryScopeFilter repositoryScopeFilter;
 
     public ProcessingContextFactory(
             RepositoryRepository repositoryRepository,
-            IdentityProviderRepository identityProviderRepository,
+            IdentityProviderLookup identityProviders,
             ScopeIdResolver scopeIdResolver,
             RepositoryScopeFilter repositoryScopeFilter) {
         this.repositoryRepository = repositoryRepository;
-        this.identityProviderRepository = identityProviderRepository;
+        this.identityProviders = identityProviders;
         this.scopeIdResolver = scopeIdResolver;
         this.repositoryScopeFilter = repositoryScopeFilter;
     }
@@ -109,9 +108,8 @@ public class ProcessingContextFactory {
             return Optional.empty();
         }
 
-        var providerId = identityProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL)
-                .map(IdentityProvider::getId);
+        var providerId =
+                identityProviders.findId(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL);
         if (providerId.isEmpty()) {
             log.warn(
                     "Skipped webhook event: reason=githubProviderNotFound, repoName={}, action={}",

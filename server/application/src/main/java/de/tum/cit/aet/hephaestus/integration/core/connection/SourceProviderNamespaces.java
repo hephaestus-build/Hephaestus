@@ -56,6 +56,24 @@ public class SourceProviderNamespaces {
                 providers.save(new IdentityProvider(type, serverUrl)).getId());
     }
 
+    /** Existing provider aggregate for a mirror write that keeps its JPA association. */
+    @Transactional(readOnly = true)
+    public Optional<IdentityProvider> findForMirror(IdentityProviderType type, String serverUrl) {
+        return providers.findByTypeAndServerUrl(type, serverUrl);
+    }
+
+    /** Existing provider aggregate for a mirror write already bound to its provider id. */
+    @Transactional(readOnly = true)
+    public Optional<IdentityProvider> findForMirror(long providerId) {
+        return providers.findById(providerId);
+    }
+
+    /** Resolves the association in the current writer's persistence context, including REQUIRES_NEW writers. */
+    @Transactional(readOnly = true)
+    public IdentityProvider referenceForMirror(long providerId) {
+        return providers.getReferenceById(providerId);
+    }
+
     public static @Nullable String configuredUrl(ConnectionConfig config) {
         return switch (config) {
             case ConnectionConfig.GitHubAppConfig c -> c.serverUrl();

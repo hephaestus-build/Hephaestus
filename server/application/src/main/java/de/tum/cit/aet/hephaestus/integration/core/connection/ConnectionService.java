@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.security.MissingCredentialKeyException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionCredentialsReplacedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
@@ -21,6 +22,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -77,6 +79,28 @@ public class ConnectionService {
         this.syncJobService = syncJobService;
         this.lifecycleEffects = new ConnectionLifecycleEffects(eventPublisher);
     }
+
+    /**
+     * Checks the destination before reading credentials, from the same connection snapshot. A failed
+     * credential read propagates without marking a caller's transaction rollback-only.
+     */
+    @Transactional(
+            readOnly = true,
+            noRollbackFor = {CredentialUnreadableException.class, MissingCredentialKeyException.class})
+    public Optional<BearerConnection> findActiveBearerConnection(
+            long workspaceId, IntegrationKind kind, Function<ConnectionConfig, @Nullable String> serverForConfig) {
+        return connectionRepository.findActive(workspaceId, kind).flatMap(connection -> {
+            String serverUrl = serverForConfig.apply(connection.getConfig());
+            if (serverUrl == null) return Optional.empty();
+            return credentialReader
+                    .credentialsOf(connection)
+                    .filter(BearerToken.class::isInstance)
+                    .map(BearerToken.class::cast)
+                    .map(bearer -> new BearerConnection(serverUrl, bearer));
+        });
+    }
+
+    public record BearerConnection(String serverUrl, BearerToken bearer) {}
 
     @Transactional(readOnly = true)
     public Optional<Connection> findActive(long workspaceId, IntegrationKind kind) {
@@ -166,15 +190,6 @@ public class ConnectionService {
                 .map(Connection::getConfig)
                 .filter(c -> c instanceof ConnectionConfig.SlackConfig)
                 .map(c -> (ConnectionConfig.SlackConfig) c);
-    }
-
-    @Transactional(readOnly = true)
-    public Optional<ConnectionConfig.OutlineConfig> findActiveOutlineConfig(long workspaceId) {
-        return connectionRepository
-                .findActive(workspaceId, IntegrationKind.OUTLINE)
-                .map(Connection::getConfig)
-                .filter(c -> c instanceof ConnectionConfig.OutlineConfig)
-                .map(c -> (ConnectionConfig.OutlineConfig) c);
     }
 
     /**

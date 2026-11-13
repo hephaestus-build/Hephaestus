@@ -14,8 +14,8 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties.BackfillProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties.FilterProperties;
@@ -95,7 +95,7 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
     private GitHubIssueCommentSyncService commentSyncService;
 
     @Mock
-    private IdentityProviderRepository gitProviderRepository;
+    private SourceProviderNamespaces providerNamespaces;
 
     @Mock
     private SyncTargetProvider syncTargetProvider;
@@ -175,7 +175,7 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
 
         service = new GitHubDataSyncService(
                 properties,
-                gitProviderRepository,
+                providerNamespaces,
                 syncTargetProvider,
                 organizationMembershipListener,
                 repositoryRepository,
@@ -214,7 +214,7 @@ class GitHubDataSyncServiceTest extends BaseUnitTest {
 
         when(syncTargetProvider.isScopeActiveForSync(SCOPE_ID)).thenReturn(true);
         lenient()
-                .when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com"))
+                .when(providerNamespaces.findForMirror(IdentityProviderType.GITHUB, "https://github.com"))
                 .thenReturn(Optional.of(provider));
         lenient()
                 .when(repositoryRepository.findByNativeIdAndProviderId(NATIVE_ID, PROVIDER_ID))

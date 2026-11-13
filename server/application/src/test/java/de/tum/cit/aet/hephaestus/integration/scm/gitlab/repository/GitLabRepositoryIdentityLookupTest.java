@@ -11,19 +11,27 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAuditRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialReader;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
+import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryIdentityLookup.RepositoryIdentity;
+import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabProjectResponse;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.time.Clock;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 class GitLabRepositoryIdentityLookupTest extends BaseUnitTest {
     private static final long WORKSPACE_ID = 42L;
@@ -48,7 +56,7 @@ class GitLabRepositoryIdentityLookupTest extends BaseUnitTest {
                 .when(connections.findActive(WORKSPACE_ID, IntegrationKind.GITLAB))
                 .thenReturn(Optional.of(connection));
         lenient().when(tokens.serverUrlOf(CONFIGURED)).thenReturn(SERVER);
-        lookup = new GitLabRepositoryIdentityLookup(projects, connections, credentials, tokens);
+        lookup = new GitLabRepositoryIdentityLookup(projects, connectionService(), tokens);
     }
 
     @Test
@@ -84,5 +92,18 @@ class GitLabRepositoryIdentityLookupTest extends BaseUnitTest {
         when(projects.fetchProject(WORKSPACE_ID, TOKEN, SERVER, PATH)).thenReturn(Optional.of(project));
 
         assertThat(lookup.resolve(WORKSPACE_ID, PATH)).isEmpty();
+    }
+
+    private ConnectionService connectionService() {
+        return new ConnectionService(
+                connections,
+                mock(ConnectionAuditRepository.class),
+                mock(CredentialBundleConverter.class),
+                mock(ApplicationEventPublisher.class),
+                mock(SyncJobService.class),
+                credentials,
+                mock(SourceProviderNamespaces.class),
+                Clock.systemUTC(),
+                mock(ProviderResourceRepairs.class));
     }
 }

@@ -1,8 +1,9 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitLabConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMemberRole;
@@ -105,7 +106,8 @@ public class GitLabSelectedMembershipProjection {
 
     private final WorkspaceRepository workspaces;
     private final RepositoryToMonitorRepository monitors;
-    private final ConnectionRepository connections;
+    private final ConnectionCommands connections;
+    private final ConnectionQueries connectionQueries;
     private final WorkspaceActorSelector actorSelector;
     private final OrganizationMembershipRepository roster;
     private final GitLabCollaboratorSyncService collaboratorSync;
@@ -120,7 +122,8 @@ public class GitLabSelectedMembershipProjection {
     public GitLabSelectedMembershipProjection(
             WorkspaceRepository workspaces,
             RepositoryToMonitorRepository monitors,
-            ConnectionRepository connections,
+            ConnectionCommands connections,
+            ConnectionQueries connectionQueries,
             WorkspaceActorSelector actorSelector,
             OrganizationMembershipRepository roster,
             GitLabCollaboratorSyncService collaboratorSync,
@@ -131,6 +134,7 @@ public class GitLabSelectedMembershipProjection {
         this.workspaces = workspaces;
         this.monitors = monitors;
         this.connections = connections;
+        this.connectionQueries = connectionQueries;
         this.actorSelector = actorSelector;
         this.roster = roster;
         this.collaboratorSync = collaboratorSync;
@@ -175,8 +179,9 @@ public class GitLabSelectedMembershipProjection {
     private Capture capture(long workspaceId) {
         WorkspaceRepository.MonitorPolicy policy =
                 workspaces.findMonitorPolicy(workspaceId).orElse(null);
-        Connection connection =
-                connections.findActive(workspaceId, IntegrationKind.GITLAB).orElse(null);
+        ConnectionQueries.ConnectionSnapshot connection = connectionQueries
+                .findActive(workspaceId, IntegrationKind.GITLAB)
+                .orElse(null);
         Workspace workspace = workspaces.findById(workspaceId).orElse(null);
         if (policy == null
                 || policy.getRepositorySelection() != RepositorySelection.SELECTED
@@ -185,9 +190,8 @@ public class GitLabSelectedMembershipProjection {
             return Capture.skip(Outcome.NOT_SELECTED);
         }
         EntityManager em = Objects.requireNonNull(entityManager);
-        em.refresh(connection);
         em.refresh(workspace);
-        if (!(connection.getConfig() instanceof GitLabConfig config)) {
+        if (!(connection.config() instanceof GitLabConfig config)) {
             return Capture.skip(Outcome.NOT_SELECTED);
         }
         Optional<Long> providerId = actorSelector.connectedProviderId(workspaceId);
@@ -198,8 +202,8 @@ public class GitLabSelectedMembershipProjection {
         }
         return Capture.of(new Snapshot(
                 workspaceId,
-                Objects.requireNonNull(connection.getId()),
-                connection.getVersion(),
+                connection.id(),
+                connection.version(),
                 config.serverUrl(),
                 providerId.get(),
                 policy.getAccountLogin(),
@@ -275,7 +279,7 @@ public class GitLabSelectedMembershipProjection {
         if (workspace == null) {
             return Outcome.STALE;
         }
-        connections.acquireLifecycleLock(snapshot.connectionId(), workspaceId);
+        connections.holdLifecycleLock(workspaceId, snapshot.connectionId());
         if (!unchanged(snapshot, workspace)) {
             log.info("Skipped selected membership changes: reason=changedWhileRead, workspaceId={}", workspaceId);
             return Outcome.STALE;
@@ -313,7 +317,7 @@ public class GitLabSelectedMembershipProjection {
         EntityManager em = Objects.requireNonNull(entityManager);
         em.refresh(workspace);
         Connection connection = connections
-                .findByIdAndWorkspaceId(snapshot.connectionId(), workspaceId)
+                .findHeldConnection(workspaceId, snapshot.connectionId())
                 .orElse(null);
         if (connection == null) {
             return false;
@@ -323,9 +327,9 @@ public class GitLabSelectedMembershipProjection {
                 && Objects.equals(connection.getVersion(), snapshot.connectionVersion())
                 && connection.getConfig() instanceof GitLabConfig config
                 && Objects.equals(config.serverUrl(), snapshot.serverUrl())
-                && connections
+                && connectionQueries
                         .findActive(workspaceId, IntegrationKind.GITLAB)
-                        .filter(active -> Objects.equals(active.getId(), snapshot.connectionId()))
+                        .filter(active -> active.id() == snapshot.connectionId())
                         .isPresent()
                 && workspaces
                         .findMonitorPolicy(workspaceId)

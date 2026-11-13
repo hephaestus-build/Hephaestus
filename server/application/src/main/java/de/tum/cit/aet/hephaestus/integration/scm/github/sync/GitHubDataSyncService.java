@@ -4,8 +4,8 @@ import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationTokenProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener;
@@ -95,7 +95,7 @@ public class GitHubDataSyncService {
     private final GitHubIssueCommentSyncService commentSyncService;
     private final SyncSchedulerProperties syncSchedulerProperties;
 
-    private final IdentityProviderRepository gitProviderRepository;
+    private final SourceProviderNamespaces providerNamespaces;
     private final SyncTargetProvider syncTargetProvider;
     private final OrganizationMembershipListener organizationMembershipListener;
     private final RepositoryRepository repositoryRepository;
@@ -121,7 +121,7 @@ public class GitHubDataSyncService {
 
     public GitHubDataSyncService(
             SyncSchedulerProperties syncSchedulerProperties,
-            IdentityProviderRepository gitProviderRepository,
+            SourceProviderNamespaces providerNamespaces,
             SyncTargetProvider syncTargetProvider,
             OrganizationMembershipListener organizationMembershipListener,
             RepositoryRepository repositoryRepository,
@@ -146,7 +146,7 @@ public class GitHubDataSyncService {
             ActivityLedgerRepair activityLedgerRepair,
             GitHubIssueCommentSyncService commentSyncService) {
         this.syncSchedulerProperties = syncSchedulerProperties;
-        this.gitProviderRepository = gitProviderRepository;
+        this.providerNamespaces = providerNamespaces;
         this.syncTargetProvider = syncTargetProvider;
         this.organizationMembershipListener = organizationMembershipListener;
         this.repositoryRepository = repositoryRepository;
@@ -211,8 +211,8 @@ public class GitHubDataSyncService {
             return false;
         }
 
-        IdentityProvider provider = gitProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
+        IdentityProvider provider = providerNamespaces
+                .findForMirror(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
                 .orElseThrow(() -> new IllegalStateException(
                         "IdentityProvider not found for type=GITHUB, serverUrl=" + GITHUB_SERVER_URL));
 

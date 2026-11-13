@@ -154,13 +154,13 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     List<Connection> findByStateAndProviderTeardownRequestedAtBefore(IntegrationState state, Instant cutoff);
 
     @Query("""
-        SELECT new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository$WebhookCleanupCandidate(
+        SELECT new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionMaintenanceQueries$WebhookCleanupCandidate(
             c.id, c.workspace.id)
         FROM Connection c
         WHERE c.kind = de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.GITLAB
           AND c.state = de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.SUSPENDED
         """)
-    List<WebhookCleanupCandidate> findSuspendedGitLabWebhookCandidates();
+    List<ConnectionMaintenanceQueries.WebhookCleanupCandidate> findSuspendedGitLabWebhookCandidates();
 
     @Query("""
         SELECT new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository$WebhookCleanupCandidate(
@@ -199,6 +199,24 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
             """)
     List<ConnectionQueries.ConnectionSnapshot> findViewsInState(
             long workspaceId, IntegrationKind kind, IntegrationState state, Limit limit);
+
+    @Query("""
+            SELECT new de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries$ConnectionView(
+                c.id, c.kind, c.state, c.config, c.instanceKey, c.displayName)
+            FROM Connection c
+            WHERE c.workspace.id = :workspaceId AND c.kind = :kind
+              AND ((:connectionId IS NOT NULL AND c.id = :connectionId)
+                OR (:connectionId IS NULL AND :instanceKey IS NOT NULL AND c.instanceKey = :instanceKey)
+                OR (:connectionId IS NULL AND :instanceKey IS NULL
+                    AND c.state = de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.ACTIVE))
+            ORDER BY c.createdAt DESC
+            """)
+    List<ConnectionQueries.ConnectionView> findReferencedViews(
+            long workspaceId,
+            IntegrationKind kind,
+            @Nullable Long connectionId,
+            @Nullable String instanceKey,
+            Limit limit);
 
     @Query("SELECT c FROM Connection c WHERE c.workspace.id = :workspaceId")
     List<Connection> findByWorkspaceId(@Param("workspaceId") long workspaceId);

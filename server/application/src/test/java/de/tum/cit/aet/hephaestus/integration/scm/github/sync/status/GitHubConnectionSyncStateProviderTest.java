@@ -8,11 +8,11 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties.BackfillProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties.FilterProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.BackfillSummary;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionSyncDetails;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
@@ -59,7 +59,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
     }
 
     @Mock
-    private ConnectionRepository connectionRepository;
+    private ConnectionQueries connectionQueries;
 
     @Mock
     private ScopedRateLimitTracker rateLimitTracker;
@@ -88,7 +88,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
 
     private GitHubConnectionSyncStateProvider provider(SyncSchedulerProperties properties, Clock clock) {
         return new GitHubConnectionSyncStateProvider(
-                connectionRepository,
+                connectionQueries,
                 rateLimitTracker,
                 suspensionTracker,
                 properties,
@@ -134,7 +134,9 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
 
         @Test
         void appInstallationNotSuspended_webhookRegisteredTrueAndHealthy() {
-            when(connectionRepository.findById(CONNECTION_ID)).thenReturn(Optional.of(githubAppConnection()));
+            when(connectionQueries.findReferenced(
+                            new IntegrationRef(IntegrationKind.GITHUB, WORKSPACE_ID, null, CONNECTION_ID)))
+                    .thenAnswer(ignored -> Optional.of(viewFixture(githubAppConnection())));
             when(suspensionTracker.isInstallationMarkedSuspended(INSTALLATION_ID))
                     .thenReturn(false);
 
@@ -146,7 +148,9 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
 
         @Test
         void appInstallationSuspended_vendorHealthDegraded() {
-            when(connectionRepository.findById(CONNECTION_ID)).thenReturn(Optional.of(githubAppConnection()));
+            when(connectionQueries.findReferenced(
+                            new IntegrationRef(IntegrationKind.GITHUB, WORKSPACE_ID, null, CONNECTION_ID)))
+                    .thenAnswer(ignored -> Optional.of(viewFixture(githubAppConnection())));
             when(suspensionTracker.isInstallationMarkedSuspended(INSTALLATION_ID))
                     .thenReturn(true);
 
@@ -157,7 +161,9 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
 
         @Test
         void patConnection_webhookRegisteredNull() {
-            when(connectionRepository.findById(CONNECTION_ID)).thenReturn(Optional.of(githubPatConnection()));
+            when(connectionQueries.findReferenced(
+                            new IntegrationRef(IntegrationKind.GITHUB, WORKSPACE_ID, null, CONNECTION_ID)))
+                    .thenAnswer(ignored -> Optional.of(viewFixture(githubPatConnection())));
 
             ConnectionSyncDetails details = provider(schedulerProperties(false)).describe(ref, CONNECTION_ID);
 
@@ -167,7 +173,9 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
 
         @Test
         void rateLimitSnapshot_passedThroughFromTracker() {
-            when(connectionRepository.findById(CONNECTION_ID)).thenReturn(Optional.of(githubAppConnection()));
+            when(connectionQueries.findReferenced(
+                            new IntegrationRef(IntegrationKind.GITHUB, WORKSPACE_ID, null, CONNECTION_ID)))
+                    .thenAnswer(ignored -> Optional.of(viewFixture(githubAppConnection())));
             RateLimitSnapshot snapshot =
                     new RateLimitSnapshot(5000, 4200, Instant.now().plusSeconds(1800), Instant.now(), null);
             when(rateLimitTracker.snapshot(WORKSPACE_ID)).thenReturn(snapshot);
@@ -179,7 +187,9 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
 
         @Test
         void rateLimitNeverObserved_isNull() {
-            when(connectionRepository.findById(CONNECTION_ID)).thenReturn(Optional.of(githubAppConnection()));
+            when(connectionQueries.findReferenced(
+                            new IntegrationRef(IntegrationKind.GITHUB, WORKSPACE_ID, null, CONNECTION_ID)))
+                    .thenAnswer(ignored -> Optional.of(viewFixture(githubAppConnection())));
 
             ConnectionSyncDetails details = provider(schedulerProperties(false)).describe(ref, CONNECTION_ID);
 
@@ -188,7 +198,9 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
 
         @Test
         void nextScheduledSyncAt_isTheCronsNextRunAfterTheClock() {
-            when(connectionRepository.findById(CONNECTION_ID)).thenReturn(Optional.of(githubAppConnection()));
+            when(connectionQueries.findReferenced(
+                            new IntegrationRef(IntegrationKind.GITHUB, WORKSPACE_ID, null, CONNECTION_ID)))
+                    .thenAnswer(ignored -> Optional.of(viewFixture(githubAppConnection())));
             Clock clock = Clock.fixed(scheduled("2026-10-24T03:34"), ZoneOffset.UTC);
 
             Instant next = provider(schedulerProperties(false), clock)
@@ -200,7 +212,9 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
 
         @Test
         void syncInterval_isTheCadenceOfTheConfiguredCron() {
-            when(connectionRepository.findById(CONNECTION_ID)).thenReturn(Optional.of(githubAppConnection()));
+            when(connectionQueries.findReferenced(
+                            new IntegrationRef(IntegrationKind.GITHUB, WORKSPACE_ID, null, CONNECTION_ID)))
+                    .thenAnswer(ignored -> Optional.of(viewFixture(githubAppConnection())));
 
             ConnectionSyncDetails details = provider(schedulerProperties(false)).describe(ref, CONNECTION_ID);
 
@@ -212,7 +226,9 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
 
         @Test
         void nextScheduledSyncAt_invalidCron_isNull() {
-            when(connectionRepository.findById(CONNECTION_ID)).thenReturn(Optional.of(githubAppConnection()));
+            when(connectionQueries.findReferenced(
+                            new IntegrationRef(IntegrationKind.GITHUB, WORKSPACE_ID, null, CONNECTION_ID)))
+                    .thenAnswer(ignored -> Optional.of(viewFixture(githubAppConnection())));
             SyncSchedulerProperties broken = new SyncSchedulerProperties(
                     true,
                     7,
@@ -227,7 +243,9 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
 
         @Test
         void backfillDisabled_stateIsDisabled() {
-            when(connectionRepository.findById(CONNECTION_ID)).thenReturn(Optional.of(githubAppConnection()));
+            when(connectionQueries.findReferenced(
+                            new IntegrationRef(IntegrationKind.GITHUB, WORKSPACE_ID, null, CONNECTION_ID)))
+                    .thenAnswer(ignored -> Optional.of(viewFixture(githubAppConnection())));
 
             ConnectionSyncDetails details = provider(schedulerProperties(false)).describe(ref, CONNECTION_ID);
 
@@ -236,7 +254,9 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
 
         @Test
         void backfillEnabledNoMonitoredRepos_stateIsNotStarted() {
-            when(connectionRepository.findById(CONNECTION_ID)).thenReturn(Optional.of(githubAppConnection()));
+            when(connectionQueries.findReferenced(
+                            new IntegrationRef(IntegrationKind.GITHUB, WORKSPACE_ID, null, CONNECTION_ID)))
+                    .thenAnswer(ignored -> Optional.of(viewFixture(githubAppConnection())));
             when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of());
 
             ConnectionSyncDetails details = provider(schedulerProperties(true)).describe(ref, CONNECTION_ID);
@@ -248,7 +268,9 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
 
         @Test
         void backfillEnabledAllComplete_stateIsCompleteAndPercentIsFull() {
-            when(connectionRepository.findById(CONNECTION_ID)).thenReturn(Optional.of(githubAppConnection()));
+            when(connectionQueries.findReferenced(
+                            new IntegrationRef(IntegrationKind.GITHUB, WORKSPACE_ID, null, CONNECTION_ID)))
+                    .thenAnswer(ignored -> Optional.of(viewFixture(githubAppConnection())));
             RepositoryToMonitor rtm = WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/repo-a", 100L);
             rtm.setId(500L);
             rtm.setIssueBackfillHighWaterMark(100);
@@ -266,7 +288,9 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
 
         @Test
         void backfillEnabledPartialProgress_stateIsInProgressWithCoarsePercent() {
-            when(connectionRepository.findById(CONNECTION_ID)).thenReturn(Optional.of(githubAppConnection()));
+            when(connectionQueries.findReferenced(
+                            new IntegrationRef(IntegrationKind.GITHUB, WORKSPACE_ID, null, CONNECTION_ID)))
+                    .thenAnswer(ignored -> Optional.of(viewFixture(githubAppConnection())));
             RepositoryToMonitor rtm = WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/repo-a", 100L);
             rtm.setId(500L);
             rtm.setIssueBackfillHighWaterMark(100);
@@ -456,5 +480,15 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
             assertThat(resources.get(0).backfillPercent()).isEqualTo(75);
             assertThat(resources.get(0).backfillCompletedThrough()).isNull();
         }
+    }
+
+    private static ConnectionQueries.ConnectionView viewFixture(Connection connection) {
+        return new ConnectionQueries.ConnectionView(
+                connection.getId(),
+                connection.getKind(),
+                connection.getState(),
+                connection.getConfig(),
+                connection.getInstanceKey(),
+                connection.getDisplayName());
     }
 }

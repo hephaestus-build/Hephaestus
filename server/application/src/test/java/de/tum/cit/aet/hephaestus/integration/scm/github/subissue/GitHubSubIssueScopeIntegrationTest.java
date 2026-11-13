@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.itemevent.ItemEventRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FoundBy;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
@@ -67,6 +68,9 @@ import reactor.core.publisher.Mono;
 /** Real scope enumeration and persisted writes with GitHub stood in for at its transport boundary. */
 @RecordApplicationEvents
 class GitHubSubIssueScopeIntegrationTest extends BaseIntegrationTest {
+    @Autowired
+    private IdentityProviderLookup providerLookup;
+
     @Autowired
     private ApplicationEventPublisher publisher;
 
@@ -160,7 +164,7 @@ class GitHubSubIssueScopeIntegrationTest extends BaseIntegrationTest {
         var service = new GitHubSubIssueSyncService(
                 issues,
                 repositories,
-                providers,
+                providerLookup,
                 syncTargets,
                 boundary,
                 syncProperties,
@@ -257,7 +261,7 @@ class GitHubSubIssueScopeIntegrationTest extends BaseIntegrationTest {
         var service = new GitHubSubIssueSyncService(
                 issues,
                 repositories,
-                providers,
+                providerLookup,
                 syncTargets,
                 boundary,
                 syncProperties,

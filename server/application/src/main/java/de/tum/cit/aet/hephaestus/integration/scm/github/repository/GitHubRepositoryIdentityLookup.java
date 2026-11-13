@@ -1,10 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.repository;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
-import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialReader;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryIdentityLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
@@ -29,8 +27,7 @@ public class GitHubRepositoryIdentityLookup implements RepositoryIdentityLookup 
     private static final String CLIENT_ORIGIN = "https://github.com";
 
     private final GitHubGraphQlClientProvider clients;
-    private final ConnectionRepository connections;
-    private final CredentialReader credentials;
+    private final ConnectionService connections;
     private final GitHubSyncProperties syncProperties;
 
     @Override
@@ -47,17 +44,16 @@ public class GitHubRepositoryIdentityLookup implements RepositoryIdentityLookup 
     public Optional<RepositoryIdentity> resolve(long workspaceId, String fullPath) {
         var name = GitHubRepositoryNameParser.parse(fullPath).orElse(null);
         if (name == null) return Optional.empty();
-        var connection =
-                connections.findActive(workspaceId, IntegrationKind.GITHUB).orElse(null);
-        if (connection == null
-                || !(connection.getConfig() instanceof ConnectionConfig.GitHubPatConfig config)
-                || !onClientOrigin(config)) {
-            return Optional.empty();
-        }
-        if (!(credentials.credentialsOf(connection).orElse(null) instanceof BearerToken bearer)
-                || bearer.token().isBlank()) {
-            return Optional.empty();
-        }
+        var connection = connections
+                .findActiveBearerConnection(
+                        workspaceId,
+                        IntegrationKind.GITHUB,
+                        config -> config instanceof ConnectionConfig.GitHubPatConfig pat && onClientOrigin(pat)
+                                ? CLIENT_ORIGIN
+                                : null)
+                .orElse(null);
+        if (connection == null || connection.bearer().token().isBlank()) return Optional.empty();
+        var bearer = connection.bearer();
         clients.acquirePermission();
         ClientGraphQlResponse response = clients.withToken(bearer.token())
                 .documentName(QUERY_DOCUMENT)

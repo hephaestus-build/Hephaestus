@@ -1,9 +1,9 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.organization;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener.MembershipChangedEvent;
@@ -38,7 +38,7 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
 
     private final GitHubOrganizationProcessor organizationProcessor;
     private final GitHubUserProcessor userProcessor;
-    private final IdentityProviderRepository gitProviderRepository;
+    private final IdentityProviderLookup identityProviders;
     private final OrganizationMembershipRepository membershipRepository;
     private final OrganizationRepository organizationRepository;
     private final UserRepository userRepository;
@@ -47,7 +47,7 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
     GitHubOrganizationMessageHandler(
             GitHubOrganizationProcessor organizationProcessor,
             GitHubUserProcessor userProcessor,
-            IdentityProviderRepository gitProviderRepository,
+            IdentityProviderLookup identityProviders,
             OrganizationMembershipRepository membershipRepository,
             OrganizationRepository organizationRepository,
             UserRepository userRepository,
@@ -62,7 +62,7 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
                 transactionTemplate);
         this.organizationProcessor = organizationProcessor;
         this.userProcessor = userProcessor;
-        this.gitProviderRepository = gitProviderRepository;
+        this.identityProviders = identityProviders;
         this.membershipRepository = membershipRepository;
         this.organizationRepository = organizationRepository;
         this.userRepository = userRepository;
@@ -81,10 +81,9 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
         log.debug("Received organization event: action={}, orgId={}", event.action(), orgDto.id());
 
         // Resolve GitHub provider ID for user upsert
-        Long providerId = Objects.requireNonNull(gitProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
-                .orElseThrow(() -> new IllegalStateException("IdentityProvider not found for GitHub"))
-                .getId());
+        Long providerId = identityProviders
+                .findId(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
+                .orElseThrow(() -> new IllegalStateException("IdentityProvider not found for GitHub"));
         // The payload carries GitHub's ids. Memberships and their events use the stored organization's and person's
         // ids.
         Long nativeOrganizationId = Objects.requireNonNull(orgDto.id());

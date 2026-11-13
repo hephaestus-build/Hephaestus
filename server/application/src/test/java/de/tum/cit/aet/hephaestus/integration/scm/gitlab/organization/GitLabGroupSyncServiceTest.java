@@ -13,8 +13,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
@@ -66,7 +66,7 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
     private GitLabProjectProcessor projectProcessor;
 
     @Mock
-    private IdentityProviderRepository gitProviderRepository;
+    private SourceProviderNamespaces providerNamespaces;
 
     private final GitLabProperties gitLabProperties = new GitLabProperties(
             "https://gitlab.com",
@@ -84,7 +84,7 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
         IdentityProvider gitLabProvider = TestEntities.gitProvider(TEST_PROVIDER_ID, IdentityProviderType.GITLAB);
         gitLabProvider.setServerUrl(gitLabProperties.defaultServerUrl());
         lenient()
-                .when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITLAB, "https://gitlab.com"))
+                .when(providerNamespaces.findForMirror(IdentityProviderType.GITLAB, "https://gitlab.com"))
                 .thenReturn(Optional.of(gitLabProvider));
 
         lenient()
@@ -97,7 +97,7 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
                 groupProcessor,
                 projectProcessor,
                 gitLabProperties,
-                gitProviderRepository,
+                providerNamespaces,
                 projectAdmission);
     }
 

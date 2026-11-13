@@ -4,15 +4,14 @@ import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.RouteAdmission;
 import de.tum.cit.aet.hephaestus.integration.core.handler.PayloadParsingException;
 import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
@@ -104,8 +103,8 @@ public class GitLabRouteAdmission implements RouteAdmission {
             @Nullable GitLabDescendantGroupResponse group,
             GitLabProjectAdmission.@Nullable ProjectRead project) {}
 
-    private final ConnectionRepository connectionRepository;
-    private final IdentityProviderRepository identityProviderRepository;
+    private final ConnectionCommands connectionCommands;
+    private final IdentityProviderLookup identityProviders;
     private final RepositoryRepository repositoryRepository;
     private final RepositoryToMonitorRepository repositoryToMonitorRepository;
     private final WorkspaceScopeFilter workspaceScopeFilter;
@@ -120,8 +119,8 @@ public class GitLabRouteAdmission implements RouteAdmission {
     private final GitLabProjectAdmission projectAdmission;
 
     public GitLabRouteAdmission(
-            ConnectionRepository connectionRepository,
-            IdentityProviderRepository identityProviderRepository,
+            ConnectionCommands connectionCommands,
+            IdentityProviderLookup identityProviders,
             RepositoryRepository repositoryRepository,
             RepositoryToMonitorRepository repositoryToMonitorRepository,
             WorkspaceScopeFilter workspaceScopeFilter,
@@ -134,8 +133,8 @@ public class GitLabRouteAdmission implements RouteAdmission {
             ObjectMapper objectMapper,
             PlatformTransactionManager transactionManager,
             GitLabProjectAdmission projectAdmission) {
-        this.connectionRepository = connectionRepository;
-        this.identityProviderRepository = identityProviderRepository;
+        this.connectionCommands = connectionCommands;
+        this.identityProviders = identityProviders;
         this.repositoryRepository = repositoryRepository;
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
         this.workspaceScopeFilter = workspaceScopeFilter;
@@ -255,9 +254,9 @@ public class GitLabRouteAdmission implements RouteAdmission {
      * first write, so a disconnect either finishes first and the handler writes nothing, or waits until it is done.
      */
     public boolean holdActive(AdmittedRoute route) {
-        connectionRepository.acquireLifecycleLock(route.connectionId(), route.workspaceId());
-        boolean active = connectionRepository
-                .findByIdAndWorkspaceId(route.connectionId(), route.workspaceId())
+        connectionCommands.holdLifecycleLock(route.workspaceId(), route.connectionId());
+        boolean active = connectionCommands
+                .findHeldConnection(route.workspaceId(), route.connectionId())
                 .filter(connection -> mismatch(connection, route.groupId(), route.groupPath()) == null)
                 .isPresent();
         if (!active) {
@@ -308,8 +307,8 @@ public class GitLabRouteAdmission implements RouteAdmission {
     }
 
     private Workspace workspace(AdmittedRoute route) {
-        return connectionRepository
-                .findByIdAndWorkspaceId(route.connectionId(), route.workspaceId())
+        return connectionCommands
+                .findHeldConnection(route.workspaceId(), route.connectionId())
                 .orElseThrow()
                 .getWorkspace();
     }
@@ -321,10 +320,9 @@ public class GitLabRouteAdmission implements RouteAdmission {
             log.warn("Skipped GitLab delivery: reason=workspaceMismatch, connectionId={}", connectionId);
             return null;
         }
-        connectionRepository.acquireLifecycleLock(connectionId, workspaceId);
-        Connection connection = connectionRepository
-                .findByIdAndWorkspaceId(connectionId, workspaceId)
-                .orElse(null);
+        connectionCommands.holdLifecycleLock(workspaceId, connectionId);
+        Connection connection =
+                connectionCommands.findHeldConnection(workspaceId, connectionId).orElse(null);
         if (connection == null) {
             log.info("Skipped GitLab delivery: reason=connectionInactive, connectionId={}", connectionId);
             return null;
@@ -337,13 +335,13 @@ public class GitLabRouteAdmission implements RouteAdmission {
             log.warn("Skipped GitLab delivery: reason={}, connectionId={}", mismatch, connectionId);
             return null;
         }
-        IdentityProvider provider = identityProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITLAB, gitLabProperties.defaultServerUrl())
+        Long provider = identityProviders
+                .findId(IdentityProviderType.GITLAB, gitLabProperties.defaultServerUrl())
                 .orElseThrow(() -> new IllegalStateException("GitLab identity provider is not provisioned"));
         return new AdmittedRoute(
                 connectionId,
                 workspaceId,
-                Objects.requireNonNull(provider.getId()),
+                provider,
                 claims.groupId(),
                 Objects.requireNonNull(connection.getWorkspace().getAccountLogin()));
     }
@@ -551,8 +549,8 @@ public class GitLabRouteAdmission implements RouteAdmission {
 
     private boolean projectAllowed(AdmittedRoute route, @Nullable Long nativeId) {
         if (nativeId == null) return false;
-        return connectionRepository
-                .findConfigInState(route.connectionId(), route.workspaceId(), IntegrationState.ACTIVE)
+        return connectionCommands
+                .configurationInState(route.workspaceId(), route.connectionId(), IntegrationState.ACTIVE)
                 .filter(ConnectionConfig.GitLabConfig.class::isInstance)
                 .map(ConnectionConfig.GitLabConfig.class::cast)
                 .filter(config -> !config.projectExclusions().excludes(nativeId))

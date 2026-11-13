@@ -8,7 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabGroupResponse;
@@ -31,19 +31,19 @@ class GitLabGroupProcessorTest extends BaseUnitTest {
     private OrganizationRepository organizationRepository;
 
     @Mock
-    private IdentityProviderRepository gitProviderRepository;
+    private SourceProviderNamespaces providerNamespaces;
 
     private GitLabGroupProcessor processor;
 
     @BeforeEach
     void setUp() {
-        processor = new GitLabGroupProcessor(organizationRepository, gitProviderRepository);
+        processor = new GitLabGroupProcessor(organizationRepository, providerNamespaces);
 
         // Default: save returns its argument (lenient — not used by null-guard tests)
         lenient().when(organizationRepository.save(any(Organization.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // Default: provider reference (lenient — not used by null-guard tests)
-        lenient().when(gitProviderRepository.getReferenceById(PROVIDER_ID)).thenReturn(new IdentityProvider());
+        lenient().when(providerNamespaces.referenceForMirror(PROVIDER_ID)).thenReturn(new IdentityProvider());
     }
 
     @Nested

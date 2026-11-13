@@ -21,6 +21,8 @@ public interface ConnectionQueries {
 
     boolean hasConnectionInState(long workspaceId, IntegrationKind kind, IntegrationState state);
 
+    Optional<ConnectionView> findReferenced(IntegrationRef ref);
+
     record ConnectionSnapshot(long id, long version, ConnectionConfig config) {}
 
     record ConnectionView(

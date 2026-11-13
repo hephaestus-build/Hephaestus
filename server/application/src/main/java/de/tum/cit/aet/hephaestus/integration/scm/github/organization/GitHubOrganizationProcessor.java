@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.organization;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.organization.dto.GitHubOrganizationEventDTO;
@@ -30,12 +30,12 @@ public class GitHubOrganizationProcessor {
     private static final Logger log = LoggerFactory.getLogger(GitHubOrganizationProcessor.class);
 
     private final OrganizationRepository organizationRepository;
-    private final IdentityProviderRepository gitProviderRepository;
+    private final SourceProviderNamespaces providerNamespaces;
 
     public GitHubOrganizationProcessor(
-            OrganizationRepository organizationRepository, IdentityProviderRepository gitProviderRepository) {
+            OrganizationRepository organizationRepository, SourceProviderNamespaces providerNamespaces) {
         this.organizationRepository = organizationRepository;
-        this.gitProviderRepository = gitProviderRepository;
+        this.providerNamespaces = providerNamespaces;
     }
 
     /**
@@ -59,7 +59,7 @@ public class GitHubOrganizationProcessor {
                 .orElseGet(() -> {
                     Organization org = new Organization();
                     org.setNativeId(organizationId);
-                    org.setProvider(gitProviderRepository.getReferenceById(providerId));
+                    org.setProvider(providerNamespaces.referenceForMirror(providerId));
                     return org;
                 });
 

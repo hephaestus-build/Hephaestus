@@ -2,10 +2,10 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.team;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
@@ -16,7 +16,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.dto.GitHubMembershipEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
-import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -33,13 +32,13 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
     private static final String GITHUB_SERVER_URL = "https://github.com";
 
     private final GitHubUserProcessor userProcessor;
-    private final IdentityProviderRepository gitProviderRepository;
+    private final IdentityProviderLookup identityProviders;
     private final TeamRepository teamRepository;
     private final TeamMembershipRepository teamMembershipRepository;
 
     GitHubMembershipMessageHandler(
             GitHubUserProcessor userProcessor,
-            IdentityProviderRepository gitProviderRepository,
+            IdentityProviderLookup identityProviders,
             TeamRepository teamRepository,
             TeamMembershipRepository teamMembershipRepository,
             EventPayloadDeserializer deserializer,
@@ -51,7 +50,7 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
                 deserializer,
                 transactionTemplate);
         this.userProcessor = userProcessor;
-        this.gitProviderRepository = gitProviderRepository;
+        this.identityProviders = identityProviders;
         this.teamRepository = teamRepository;
         this.teamMembershipRepository = teamMembershipRepository;
     }
@@ -74,10 +73,9 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
                 event.organization() != null ? event.organization().id() : null);
 
         // Resolve GitHub provider ID for user upsert
-        Long providerId = Objects.requireNonNull(gitProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
-                .orElseThrow(() -> new IllegalStateException("IdentityProvider not found for GitHub"))
-                .getId());
+        Long providerId = identityProviders
+                .findId(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
+                .orElseThrow(() -> new IllegalStateException("IdentityProvider not found for GitHub"));
         Long teamId = teamDto.id();
         if (teamId == null) {
             log.warn("Skipped membership event: reason=missingTeamId");

@@ -1,8 +1,9 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace;
 
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitLabConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -45,7 +46,7 @@ public class GitLabRepositoryMonitors {
     private final RepositoryToMonitorRepository repositoryToMonitorRepository;
     private final RepositoryRepository repositoryRepository;
     private final WorkspaceRepository workspaceRepository;
-    private final ConnectionRepository connectionRepository;
+    private final ConnectionCommands connectionCommands;
     private final SyncTargetProvider syncTargetProvider;
 
     public GitLabRepositoryMonitors(
@@ -53,13 +54,13 @@ public class GitLabRepositoryMonitors {
             RepositoryToMonitorRepository repositoryToMonitorRepository,
             RepositoryRepository repositoryRepository,
             WorkspaceRepository workspaceRepository,
-            ConnectionRepository connectionRepository,
+            ConnectionCommands connectionCommands,
             SyncTargetProvider syncTargetProvider) {
         this.workspaceScopeFilter = workspaceScopeFilter;
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
         this.repositoryRepository = repositoryRepository;
         this.workspaceRepository = workspaceRepository;
-        this.connectionRepository = connectionRepository;
+        this.connectionCommands = connectionCommands;
         this.syncTargetProvider = syncTargetProvider;
     }
 
@@ -90,8 +91,9 @@ public class GitLabRepositoryMonitors {
         // The connection's lifecycle lock, held until this transaction ends, serializes this with disconnect, manual
         // add and other calls here. The connection's state and instance and the workspace's group and selection are
         // read after it from the database, not from entities this transaction loaded before it.
-        GitLabConfig config = connectionRepository
-                .lockActiveConfig(workspaceId, IntegrationKind.GITLAB)
+        GitLabConfig config = connectionCommands
+                .holdActiveConnection(workspaceId, IntegrationKind.GITLAB)
+                .map(Connection::getConfig)
                 .filter(GitLabConfig.class::isInstance)
                 .map(GitLabConfig.class::cast)
                 .orElse(null);

@@ -14,9 +14,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
@@ -39,6 +39,7 @@ import de.tum.cit.aet.hephaestus.testconfig.PassThroughTransactionTemplate;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -64,7 +65,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
     private RepositoryRepository repositoryRepository;
 
     @Mock
-    private IdentityProviderRepository identityProviderRepository;
+    private IdentityProviderLookup identityProviders;
 
     @Mock
     private CommitRepository commitRepository;
@@ -95,7 +96,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
                 gitRepositoryManager,
                 tokenService,
                 repositoryRepository,
-                identityProviderRepository,
+                identityProviders,
                 commitRepository,
                 persister,
                 authorResolver,
@@ -107,9 +108,9 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
     }
 
     private void stubRepositoryLookup(Optional<Repository> repository) {
-        when(identityProviderRepository.findByTypeAndServerUrl(
-                        IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL))
-                .thenReturn(Optional.of(TestEntities.gitProvider(1L, IdentityProviderType.GITHUB)));
+        when(identityProviders.findId(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL))
+                .thenReturn(Optional.of(Objects.requireNonNull(TestEntities.gitProvider(1L, IdentityProviderType.GITHUB)
+                        .getId())));
         when(repositoryRepository.findByNativeIdAndProviderId(100L, 1L)).thenReturn(repository);
     }
 
@@ -278,8 +279,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
         void shouldSkipWhenTheGitHubProviderIsUnavailable() {
             var commit = createPushCommit("sha1", "message", List.of("file.txt"), List.of(), List.of());
             var event = createBasicPushEvent("refs/heads/main", false, List.of(commit));
-            when(identityProviderRepository.findByTypeAndServerUrl(
-                            IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL))
+            when(identityProviders.findId(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL))
                     .thenReturn(Optional.empty());
 
             handler.handleEvent(event);

@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
@@ -48,6 +49,8 @@ import tools.jackson.databind.node.ObjectNode;
  * reconciliation through the real reconciler; only GitHub itself is a fixture.
  */
 class GitHubPurgedWorkspaceIntegrationTest extends BaseIntegrationTest {
+    @Autowired
+    private IdentityProviderLookup providerLookup;
 
     private final GitHubAppTokenService appTokens = mock(GitHubAppTokenService.class);
 
@@ -107,7 +110,7 @@ class GitHubPurgedWorkspaceIntegrationTest extends BaseIntegrationTest {
                 provisioningListener,
                 organizationService,
                 appTokens,
-                identityProviders,
+                providerLookup,
                 deserializer,
                 transactionTemplate);
     }

@@ -2,8 +2,9 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitLabConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionMaintenanceQueries;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -30,7 +31,8 @@ public class GitLabSuspendedWebhookCleanup {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabSuspendedWebhookCleanup.class);
 
-    private final ConnectionRepository connections;
+    private final ConnectionCommands connections;
+    private final ConnectionMaintenanceQueries maintenanceQueries;
     private final ProviderResourceRepairs repairs;
     private final TransactionTemplate transactions;
 
@@ -38,10 +40,12 @@ public class GitLabSuspendedWebhookCleanup {
     private @Nullable EntityManager entityManager;
 
     public GitLabSuspendedWebhookCleanup(
-            ConnectionRepository connections,
+            ConnectionCommands connections,
+            ConnectionMaintenanceQueries maintenanceQueries,
             ProviderResourceRepairs repairs,
             PlatformTransactionManager transactionManager) {
         this.connections = connections;
+        this.maintenanceQueries = maintenanceQueries;
         this.repairs = repairs;
         this.transactions = new TransactionTemplate(transactionManager);
     }
@@ -52,13 +56,13 @@ public class GitLabSuspendedWebhookCleanup {
         try {
             transactions.executeWithoutResult(status -> {
                 var candidate = connections
-                        .findByIdAndWorkspaceId(connectionId, workspaceId)
+                        .findHeldConnection(workspaceId, connectionId)
                         .orElse(null);
                 if (candidate == null) return;
                 repairs.coordinate(candidate);
-                connections.acquireLifecycleLock(connectionId, workspaceId);
+                connections.holdLifecycleLock(workspaceId, connectionId);
                 var connection = connections
-                        .findByIdAndWorkspaceId(connectionId, workspaceId)
+                        .findHeldConnection(workspaceId, connectionId)
                         .orElse(null);
                 if (connection == null) return;
                 Objects.requireNonNull(entityManager).refresh(connection);
@@ -81,7 +85,7 @@ public class GitLabSuspendedWebhookCleanup {
     @SchedulerLock(name = LOCK_NAME, lockAtMostFor = "PT30M", lockAtLeastFor = "PT30S")
     @WorkspaceAgnostic("Finds suspended GitLab hooks across workspaces; each removal takes its scoped lifecycle lock")
     public void reconcile() {
-        for (var candidate : connections.findSuspendedGitLabWebhookCandidates()) {
+        for (var candidate : maintenanceQueries.findSuspendedGitLabWebhookCandidates()) {
             try {
                 remove(candidate.workspaceId(), candidate.connectionId());
             } catch (RuntimeException ignored) {

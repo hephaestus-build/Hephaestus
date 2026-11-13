@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import java.util.List;
 import java.util.Optional;
@@ -70,5 +71,13 @@ public class ConnectionQuery implements ConnectionQueries {
         return !connections
                 .findViewsInState(workspaceId, kind, state, Limit.of(1))
                 .isEmpty();
+    }
+
+    @Override
+    public Optional<ConnectionView> findReferenced(IntegrationRef ref) {
+        return connections
+                .findReferencedViews(ref.workspaceId(), ref.kind(), ref.connectionId(), ref.instanceKey(), Limit.of(1))
+                .stream()
+                .findFirst();
     }
 }

@@ -1,11 +1,12 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace;
 
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
-import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitLabConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -43,7 +44,8 @@ public class GitLabProjectAdmission {
 
     public record ProjectRead(ConnectionRead connection, long repositoryId, long nativeId, long monitorId) {}
 
-    private final ConnectionRepository connections;
+    private final ConnectionCommands connections;
+    private final ConnectionQueries connectionQueries;
     private final RepositoryRepository repositories;
     private final RepositoryToMonitorRepository monitors;
     private final WorkspaceRepository workspaces;
@@ -62,13 +64,13 @@ public class GitLabProjectAdmission {
                 original.computeIfAbsent(key, ignored -> new HashSet<>()).add(monitor.getId());
             }
         }
-        return connections
+        return connectionQueries
                 .findActive(workspaceId, IntegrationKind.GITLAB)
-                .filter(connection -> connection.getConfig() instanceof GitLabConfig)
+                .filter(connection -> connection.config() instanceof GitLabConfig)
                 .flatMap(connection -> workspaces
                         .findMonitorPolicy(workspaceId)
                         .map(policy -> new ConnectionRead(
-                                Objects.requireNonNull(connection.getId()),
+                                connection.id(),
                                 workspaceId,
                                 providerId,
                                 policy.getAccountLogin(),
@@ -118,7 +120,7 @@ public class GitLabProjectAdmission {
 
     private boolean holdCurrent(ProjectRead read) {
         ConnectionRead connection = read.connection();
-        connections.acquireLifecycleLock(connection.connectionId(), connection.workspaceId());
+        connections.holdLifecycleLock(connection.workspaceId(), connection.connectionId());
         return repositories
                 .findById(read.repositoryId())
                 .filter(repository -> Objects.equals(repository.getNativeId(), read.nativeId())
@@ -158,7 +160,7 @@ public class GitLabProjectAdmission {
     public <T> Optional<T> discover(
             ConnectionRead read, long nativeId, String path, String serverUrl, Supplier<@Nullable T> write) {
         return Optional.ofNullable(transactions.execute(status -> {
-            connections.acquireLifecycleLock(read.connectionId(), read.workspaceId());
+            connections.holdLifecycleLock(read.workspaceId(), read.connectionId());
             Set<Long> original = originalMonitors(read, nativeId);
             if (!original.isEmpty() && original.stream().noneMatch(monitors::existsById)) return null;
             if (selected(read.workspaceId())
@@ -183,9 +185,9 @@ public class GitLabProjectAdmission {
                         || !monitors.findByWorkspaceIdAndSourceRepositoryId(workspaceId, repository.getId())
                                 .isEmpty())
                 && connections
-                        .findConfigInState(
-                                read.connection().connectionId(),
+                        .configurationInState(
                                 read.connection().workspaceId(),
+                                read.connection().connectionId(),
                                 IntegrationState.ACTIVE)
                         .filter(GitLabConfig.class::isInstance)
                         .map(GitLabConfig.class::cast)
@@ -196,13 +198,14 @@ public class GitLabProjectAdmission {
     private boolean allowed(ConnectionRead read, long nativeId, String path, String serverUrl, boolean locked) {
         Optional<GitLabConfig> config = locked
                 ? connections
-                        .findConfigInState(read.connectionId(), read.workspaceId(), IntegrationState.ACTIVE)
+                        .configurationInState(read.workspaceId(), read.connectionId(), IntegrationState.ACTIVE)
                         .filter(GitLabConfig.class::isInstance)
                         .map(GitLabConfig.class::cast)
-                : connections
-                        .findByIdAndWorkspaceId(read.connectionId(), read.workspaceId())
-                        .filter(connection -> connection.getState() == IntegrationState.ACTIVE)
-                        .map(Connection::getConfig)
+                : connectionQueries
+                        .findReferenced(new IntegrationRef(
+                                IntegrationKind.GITLAB, read.workspaceId(), null, read.connectionId()))
+                        .filter(connection -> connection.state() == IntegrationState.ACTIVE)
+                        .map(ConnectionQueries.ConnectionView::config)
                         .filter(GitLabConfig.class::isInstance)
                         .map(GitLabConfig.class::cast);
         GitLabConfig current = config.orElse(null);

@@ -3,11 +3,10 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.repository;
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
@@ -52,13 +51,13 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
 
     private final ProvisioningListener provisioningListener;
     private final RepositoryRepository repositoryRepository;
-    private final IdentityProviderRepository gitProviderRepository;
+    private final IdentityProviderLookup identityProviders;
     private final SyncTargetProvider syncTargetProvider;
 
     GitHubRepositoryMessageHandler(
             ProvisioningListener provisioningListener,
             RepositoryRepository repositoryRepository,
-            IdentityProviderRepository gitProviderRepository,
+            IdentityProviderLookup identityProviders,
             SyncTargetProvider syncTargetProvider,
             EventPayloadDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
@@ -75,7 +74,7 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
                 transactionTemplate);
         this.provisioningListener = provisioningListener;
         this.repositoryRepository = repositoryRepository;
-        this.gitProviderRepository = gitProviderRepository;
+        this.identityProviders = identityProviders;
         this.syncTargetProvider = syncTargetProvider;
     }
 
@@ -175,13 +174,12 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
     }
 
     private Optional<Repository> findGitHubRepository(@Nullable Long nativeId, String nameWithOwner) {
-        return gitProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
+        return identityProviders
+                .findId(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
                 .flatMap(provider -> nativeId == null
                         ? repositoryRepository.findByNameWithOwnerAndProviderId(
-                                nameWithOwner, Objects.requireNonNull(provider.getId()))
-                        : repositoryRepository.findByNativeIdAndProviderId(
-                                nativeId, Objects.requireNonNull(provider.getId())));
+                                nameWithOwner, Objects.requireNonNull(provider))
+                        : repositoryRepository.findByNativeIdAndProviderId(nativeId, Objects.requireNonNull(provider)));
     }
 
     /**
@@ -222,9 +220,8 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
         }
 
         // Native ids and repository names are unique only within a provider instance.
-        Long providerId = gitProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
-                .map(IdentityProvider::getId)
+        Long providerId = identityProviders
+                .findId(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
                 .orElse(null);
         if (providerId == null) {
             log.debug(

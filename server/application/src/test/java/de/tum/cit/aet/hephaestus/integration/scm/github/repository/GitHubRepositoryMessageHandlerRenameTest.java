@@ -9,10 +9,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -45,16 +44,13 @@ class GitHubRepositoryMessageHandlerRenameTest extends BaseUnitTest {
     private RepositoryRepository repositoryRepository;
 
     @Mock
-    private IdentityProviderRepository gitProviderRepository;
+    private IdentityProviderLookup identityProviders;
 
     @Mock
     private SyncTargetProvider syncTargetProvider;
 
     @Mock
     private EventPayloadDeserializer deserializer;
-
-    @Mock
-    private IdentityProvider gitHubProvider;
 
     private GitHubRepositoryMessageHandler handler;
 
@@ -63,16 +59,15 @@ class GitHubRepositoryMessageHandlerRenameTest extends BaseUnitTest {
         handler = new GitHubRepositoryMessageHandler(
                 provisioningListener,
                 repositoryRepository,
-                gitProviderRepository,
+                identityProviders,
                 syncTargetProvider,
                 deserializer,
                 new TransactionTemplate());
     }
 
     private void stubProvider() {
-        when(gitHubProvider.getId()).thenReturn(PROVIDER_ID);
-        when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com"))
-                .thenReturn(Optional.of(gitHubProvider));
+        when(identityProviders.findId(IdentityProviderType.GITHUB, "https://github.com"))
+                .thenReturn(Optional.of(PROVIDER_ID));
     }
 
     private static GitHubRepositoryRefDTO repositoryRef(String name, String fullName) {
@@ -182,7 +177,7 @@ class GitHubRepositoryMessageHandlerRenameTest extends BaseUnitTest {
 
     @Test
     void renamesNothingWithoutTheProviderTheEventCameFrom() {
-        when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com"))
+        when(identityProviders.findId(IdentityProviderType.GITHUB, "https://github.com"))
                 .thenReturn(Optional.empty());
 
         handler.handleEvent(renamedEvent());

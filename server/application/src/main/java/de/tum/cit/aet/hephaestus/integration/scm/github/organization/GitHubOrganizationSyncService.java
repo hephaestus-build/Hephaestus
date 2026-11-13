@@ -9,8 +9,8 @@ import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSync
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.TRANSPORT_MAX_RETRIES;
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.adaptPageSize;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
@@ -73,7 +73,7 @@ public class GitHubOrganizationSyncService {
     private final GitHubSyncProperties syncProperties;
     private final GitHubExceptionClassifier exceptionClassifier;
     private final GitHubGraphQlSyncCoordinator graphQlSyncHelper;
-    private final IdentityProviderRepository gitProviderRepository;
+    private final IdentityProviderLookup identityProviders;
     private static final int MAX_RETRY_ATTEMPTS = 3;
 
     public GitHubOrganizationSyncService(
@@ -84,7 +84,7 @@ public class GitHubOrganizationSyncService {
             GitHubSyncProperties syncProperties,
             GitHubExceptionClassifier exceptionClassifier,
             GitHubGraphQlSyncCoordinator graphQlSyncHelper,
-            IdentityProviderRepository gitProviderRepository) {
+            IdentityProviderLookup identityProviders) {
         this.graphQlClientProvider = graphQlClientProvider;
         this.organizationProcessor = organizationProcessor;
         this.userProcessor = userProcessor;
@@ -92,7 +92,7 @@ public class GitHubOrganizationSyncService {
         this.syncProperties = syncProperties;
         this.exceptionClassifier = exceptionClassifier;
         this.graphQlSyncHelper = graphQlSyncHelper;
-        this.gitProviderRepository = gitProviderRepository;
+        this.identityProviders = identityProviders;
     }
 
     /**
@@ -165,10 +165,9 @@ public class GitHubOrganizationSyncService {
             }
 
             // Resolve GitHub provider ID
-            Long providerId = Objects.requireNonNull(gitProviderRepository
-                    .findByTypeAndServerUrl(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
-                    .orElseThrow(() -> new IllegalStateException("IdentityProvider not found for GitHub"))
-                    .getId());
+            Long providerId = identityProviders
+                    .findId(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
+                    .orElseThrow(() -> new IllegalStateException("IdentityProvider not found for GitHub"));
 
             // Convert GraphQL response to DTO and process
             GitHubOrganizationEventDTO.GitHubOrganizationDTO dto = convertToDTO(graphQlOrg);

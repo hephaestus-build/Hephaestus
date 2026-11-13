@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncContextProvider;
@@ -113,6 +114,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * live-update stream keeps Tomcat's drain open.
  */
 class ScheduledScmSyncShutdownIntegrationTest extends AbstractWorkspaceIntegrationTest {
+    @Autowired
+    private ConnectionQueries connectionQueries;
 
     enum Provider {
         GITHUB,
@@ -457,7 +460,7 @@ class ScheduledScmSyncShutdownIntegrationTest extends AbstractWorkspaceIntegrati
                 properties(),
                 mock(RateLimitTracker.class),
                 executor,
-                connectionRepository,
+                connectionQueries,
                 jobs,
                 mock(GitHubHeadCheckRunsReread.class));
     }
@@ -484,7 +487,7 @@ class ScheduledScmSyncShutdownIntegrationTest extends AbstractWorkspaceIntegrati
                 providerOf(mock(GitLabRateLimitTracker.class)),
                 properties(),
                 executor,
-                connectionRepository,
+                connectionQueries,
                 jobs,
                 mock(GitLabDeletionSweepService.class),
                 initialization,

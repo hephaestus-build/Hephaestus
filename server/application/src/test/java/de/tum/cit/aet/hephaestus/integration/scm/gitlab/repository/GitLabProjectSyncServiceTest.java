@@ -13,8 +13,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -76,7 +76,7 @@ class GitLabProjectSyncServiceTest extends BaseUnitTest {
     private GitLabGroupProcessor groupProcessor;
 
     @Mock
-    private IdentityProviderRepository gitProviderRepository;
+    private SourceProviderNamespaces providerNamespaces;
 
     private final GitLabProperties gitLabProperties = new GitLabProperties(
             "https://gitlab.com",
@@ -94,7 +94,7 @@ class GitLabProjectSyncServiceTest extends BaseUnitTest {
         IdentityProvider gitLabProvider = TestEntities.gitProvider(TEST_PROVIDER_ID, IdentityProviderType.GITLAB);
         gitLabProvider.setServerUrl(gitLabProperties.defaultServerUrl());
         lenient()
-                .when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITLAB, "https://gitlab.com"))
+                .when(providerNamespaces.findForMirror(IdentityProviderType.GITLAB, "https://gitlab.com"))
                 .thenReturn(Optional.of(gitLabProvider));
 
         // Default: responseHandler.handle() returns CONTINUE (valid response)
@@ -108,7 +108,7 @@ class GitLabProjectSyncServiceTest extends BaseUnitTest {
                 projectProcessor,
                 groupProcessor,
                 gitLabProperties,
-                gitProviderRepository,
+                providerNamespaces,
                 new GitLabExceptionClassifier(new SimpleMeterRegistry()),
                 projectAdmission);
     }
