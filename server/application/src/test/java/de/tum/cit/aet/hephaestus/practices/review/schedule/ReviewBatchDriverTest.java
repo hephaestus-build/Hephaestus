@@ -67,7 +67,7 @@ class ReviewBatchDriverTest extends BaseUnitTest {
                 .build();
         workspace = new Workspace();
         workspace.setId(1L);
-        workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
+        workspace.resume();
         lenient().when(spend.remaining(batch)).thenReturn(new ReviewBatchSpend.Snapshot(null, true));
         lenient().when(workspaces.findById(1L)).thenReturn(Optional.of(workspace));
         lenient().when(readiness.hasRunnableAgent(1L)).thenReturn(true);
@@ -193,7 +193,7 @@ class ReviewBatchDriverTest extends BaseUnitTest {
         if (reason == ReviewBatchPauseReason.REVIEW_MODEL_UNBOUND) {
             when(readiness.hasRunnableAgent(1L)).thenReturn(false);
         } else {
-            workspace.setStatus(Workspace.WorkspaceStatus.SUSPENDED);
+            workspace.suspend();
         }
         driver.advance(batch);
         assertThat(batch.getStatus()).isEqualTo(ReviewBatchStatus.PAUSED);
@@ -201,7 +201,7 @@ class ReviewBatchDriverTest extends BaseUnitTest {
         assertThat(batch.getCursorItemId()).isEqualTo(5L);
 
         when(readiness.hasRunnableAgent(1L)).thenReturn(true);
-        workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
+        workspace.resume();
         when(submitter.offer(batch, 6, null)).thenReturn(new ReviewBatchSubmitter.SubmissionOutcome.Submitted());
 
         driver.advance(batch);

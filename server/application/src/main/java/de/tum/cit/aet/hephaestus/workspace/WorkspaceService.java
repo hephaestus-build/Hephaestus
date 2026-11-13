@@ -42,8 +42,6 @@ public class WorkspaceService {
 
     private static final Logger log = LoggerFactory.getLogger(WorkspaceService.class);
 
-    private static final boolean DEFAULT_PUBLIC_ACTIVITY_ENABLED = false;
-
     // Core repositories
     private final WorkspaceRepository workspaceRepository;
     private final RepositoryToMonitorRepository repositoryToMonitorRepository;
@@ -108,13 +106,7 @@ public class WorkspaceService {
             throw new WorkspaceSlugConflictException(slug);
         }
 
-        Workspace workspace = new Workspace();
-        workspace.setWorkspaceSlug(slug);
-        workspace.setDisplayName(displayName);
-        workspace.setPublicActivityEnabled(DEFAULT_PUBLIC_ACTIVITY_ENABLED);
-        workspace.setAccountLogin(accountLogin);
-        workspace.setAccountType(accountType);
-        workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
+        Workspace workspace = Workspace.create(slug, displayName, accountLogin, accountType);
 
         try {
             Workspace saved = workspaceRepository.saveAndFlush(workspace);

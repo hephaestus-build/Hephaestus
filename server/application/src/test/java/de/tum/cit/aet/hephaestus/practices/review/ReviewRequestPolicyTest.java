@@ -49,7 +49,7 @@ class ReviewRequestPolicyTest {
     @BeforeEach
     void setUp() {
         workspace.setId(1L);
-        workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
+        workspace.resume();
         workspace.getFeatures().setPracticesEnabled(true);
         when(workspaces.findByIdForUpdate(1L)).thenReturn(Optional.of(workspace));
     }

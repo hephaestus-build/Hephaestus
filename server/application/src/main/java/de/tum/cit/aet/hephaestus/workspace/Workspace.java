@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
+import de.tum.cit.aet.hephaestus.core.Lifecycle;
+import de.tum.cit.aet.hephaestus.workspace.exception.WorkspaceLifecycleViolationException;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewSettings;
 import de.tum.cit.aet.hephaestus.workspace.validation.WorkspaceSlug;
 import jakarta.persistence.CascadeType;
@@ -21,7 +23,10 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -117,6 +122,7 @@ public class Workspace {
     @Column(name = "status", nullable = false, length = 20)
     @NotNull(message = "Status is required")
     @NonNull
+    @Setter(AccessLevel.NONE)
     private WorkspaceStatus status = WorkspaceStatus.ACTIVE;
 
     // Repository Monitoring
@@ -186,6 +192,53 @@ public class Workspace {
         return reviewSettings;
     }
 
+    /** The one way to build a workspace: active, and with public activity off until an admin turns it on. */
+    public static Workspace create(String slug, String displayName, String accountLogin, AccountType accountType) {
+        var workspace = new Workspace();
+        workspace.workspaceSlug = slug;
+        workspace.displayName = displayName;
+        workspace.publicActivityEnabled = false;
+        workspace.accountLogin = accountLogin;
+        workspace.accountType = accountType;
+        return workspace;
+    }
+
+    /**
+     * Suspends an active workspace.
+     *
+     * @return whether the status changed
+     * @throws WorkspaceLifecycleViolationException if the workspace is purged
+     */
+    public boolean suspend() {
+        return moveTo(WorkspaceStatus.SUSPENDED, "suspend");
+    }
+
+    /**
+     * Makes a suspended workspace active again.
+     *
+     * @return whether the status changed
+     * @throws WorkspaceLifecycleViolationException if the workspace is purged
+     */
+    public boolean resume() {
+        return moveTo(WorkspaceStatus.ACTIVE, "resume");
+    }
+
+    /** Only {@link WorkspaceLifecycleService#purgeWorkspace}, which first runs every purge contributor, purges. */
+    boolean markPurged() {
+        return moveTo(WorkspaceStatus.PURGED, "purge");
+    }
+
+    private boolean moveTo(WorkspaceStatus next, String action) {
+        if (status == next) return false;
+        if (!status.canTransitionTo(next)) {
+            // PURGED is the only state without exits.
+            throw new WorkspaceLifecycleViolationException(
+                    "The workspace “" + workspaceSlug + "” is purged. You cannot " + action + " it.");
+        }
+        status = next;
+        return true;
+    }
+
     @PrePersist
     public void prePersist() {
         this.createdAt = Instant.now();
@@ -200,33 +253,25 @@ public class Workspace {
     // Nested Enums
 
     /**
-     * Workspace lifecycle states with defined transition rules.
-     *
-     * <h2>State Machine</h2>
-     *
-     * <pre>
-     *   ACTIVE ──suspend──► SUSPENDED ──resume──► ACTIVE
-     *      │                    │
-     *      └──────purge────────►│
-     *                           └──────purge─────► PURGED (terminal)
-     * </pre>
-     *
-     * <h2>Behavior by State</h2>
-     *
-     * <ul>
-     *   <li><b>ACTIVE:</b> Normal operation - syncs run, webhooks processed, full access
-     *   <li><b>SUSPENDED:</b> Read-only mode - no syncs, webhooks queued, limited access
-     *   <li><b>PURGED:</b> Soft-deleted - excluded from queries, pending hard delete
-     * </ul>
-     *
-     * @see WorkspaceLifecycleService for state transition operations
+     * Workspace lifecycle states. A suspended workspace runs no sync and processes no webhook. A purged workspace has lost
+     * its data and stays purged: the {@code guard_workspace} trigger refuses any change of its status as well.
      */
-    public enum WorkspaceStatus {
+    public enum WorkspaceStatus implements Lifecycle<WorkspaceStatus> {
         /** Workspace is fully operational */
         ACTIVE,
         /** Workspace is temporarily disabled (billing, maintenance, etc.) */
         SUSPENDED,
         /** Workspace is soft-deleted and pending permanent removal */
-        PURGED,
+        PURGED;
+
+        private static final Map<WorkspaceStatus, Set<WorkspaceStatus>> LEGAL = Map.of(
+                ACTIVE, Set.of(SUSPENDED, PURGED),
+                SUSPENDED, Set.of(ACTIVE, PURGED),
+                PURGED, Set.of());
+
+        @Override
+        public boolean canTransitionTo(WorkspaceStatus next) {
+            return Objects.requireNonNull(LEGAL.get(this)).contains(next);
+        }
     }
 }

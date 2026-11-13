@@ -71,14 +71,8 @@ public class WorkspaceLifecycleService {
                 .findByWorkspaceSlugForUpdate(workspaceSlug)
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceSlug));
 
-        if (workspace.getStatus() == WorkspaceStatus.PURGED) {
-            throw new WorkspaceLifecycleViolationException(
-                    "The workspace “" + workspaceSlug + "” is purged. You cannot suspend it.");
-        }
-
-        if (workspace.getStatus() != WorkspaceStatus.SUSPENDED) {
-            WorkspaceStatus previous = workspace.getStatus();
-            workspace.setStatus(WorkspaceStatus.SUSPENDED);
+        WorkspaceStatus previous = workspace.getStatus();
+        if (workspace.suspend()) {
             workspace = workspaceRepository.save(workspace);
             recordStatusChange(workspace, previous, WorkspaceStatus.SUSPENDED);
             log.info("Suspended workspace: workspaceSlug={}", LoggingUtils.sanitizeForLog(workspaceSlug));
@@ -111,14 +105,8 @@ public class WorkspaceLifecycleService {
                 .findByWorkspaceSlugForUpdate(workspaceSlug)
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceSlug));
 
-        if (workspace.getStatus() == WorkspaceStatus.PURGED) {
-            throw new WorkspaceLifecycleViolationException(
-                    "The workspace “" + workspaceSlug + "” is purged. You cannot resume it.");
-        }
-
-        if (workspace.getStatus() != WorkspaceStatus.ACTIVE) {
-            WorkspaceStatus previous = workspace.getStatus();
-            workspace.setStatus(WorkspaceStatus.ACTIVE);
+        WorkspaceStatus previous = workspace.getStatus();
+        if (workspace.resume()) {
             workspace = workspaceRepository.save(workspace);
             recordStatusChange(workspace, previous, WorkspaceStatus.ACTIVE);
             log.info("Resumed workspace: workspaceSlug={}", LoggingUtils.sanitizeForLog(workspaceSlug));
@@ -175,7 +163,7 @@ public class WorkspaceLifecycleService {
         workspace.setIssueDependenciesSyncedAt(null);
 
         WorkspaceStatus previousStatus = workspace.getStatus();
-        workspace.setStatus(WorkspaceStatus.PURGED);
+        workspace.markPurged();
         workspace = workspaceRepository.save(workspace);
         recordStatusChange(workspace, previousStatus, WorkspaceStatus.PURGED);
 

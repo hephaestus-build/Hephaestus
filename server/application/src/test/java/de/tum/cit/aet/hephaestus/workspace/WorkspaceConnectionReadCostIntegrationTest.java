@@ -200,7 +200,7 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
     void shouldKeepAUserViewLimitedToItsWorkspace() {
         workspace(owner, 0);
         var viewed = workspace(owner, 1);
-        viewed.setStatus(Workspace.WorkspaceStatus.SUSPENDED);
+        viewed.suspend();
         workspaces.saveAndFlush(viewed);
         UserViewContextHolder.set(
                 new UserViewContextHolder.View(viewed.getId(), Objects.requireNonNull(owner.getId())));
@@ -217,7 +217,7 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
     @Test
     void shouldRetainConnectionMetadataForSuspendedWorkspaceDetails() {
         var workspace = workspace(owner, 0);
-        workspace.setStatus(Workspace.WorkspaceStatus.SUSPENDED);
+        workspace.suspend();
         workspaces.saveAndFlush(workspace);
 
         var read = reads.measure(() -> queries.toWorkspaceDTO(workspace));
@@ -342,7 +342,7 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
         workspace.setDisplayName("Connection read " + index);
         workspace.setAccountLogin("connection-read-" + index);
         workspace.setAccountType(AccountType.ORG);
-        workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
+        workspace.resume();
         workspace = workspaces.saveAndFlush(workspace);
         workspaceMembershipService.createMembership(
                 workspace, Objects.requireNonNull(account.getId()), Membership.WorkspaceRole.OWNER);

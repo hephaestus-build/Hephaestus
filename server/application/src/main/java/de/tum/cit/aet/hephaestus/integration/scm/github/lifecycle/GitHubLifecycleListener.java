@@ -366,13 +366,13 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             workspace.setRepositorySelection(repositorySelection);
         }
 
-        if (workspace.getStatus() != Workspace.WorkspaceStatus.ACTIVE) {
+        Workspace.WorkspaceStatus previousStatus = workspace.getStatus();
+        if (workspace.resume()) {
             log.info(
                     "Reactivated workspace from installation: workspaceId={}, previousStatus={}, installationId={}",
                     workspace.getId(),
-                    workspace.getStatus(),
+                    previousStatus,
                     installationId);
-            workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
         }
 
         // Organization must exist before repositories are created so they get organization_id set.
@@ -467,27 +467,29 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
     }
 
     /**
-     * Update workspace status for a given installation if the status differs.
+     * Suspends the workspace of an installation that GitHub suspended. A purge is no status change but erases the
+     * workspace's data: {@link #purgeWorkspaceForInstallation(long)} does it.
      *
-     * <p>{@code PURGED} is rejected: it is not a status flip but a data-erasure operation, and
-     * routing it through here silently skipped every {@code WorkspacePurgeContributor}. Use
-     * {@link #purgeWorkspaceForInstallation(long)}.
-     *
-     * @param installationId the GitHub App installation ID
-     * @param status         the new workspace status
-     * @return the updated workspace, or empty if no workspace exists for the installation
-     * @throws IllegalArgumentException if {@code status} is {@code PURGED}
+     * @return the workspace, unchanged if it is purged, or empty if the installation has none
      */
     @Transactional
-    public Optional<Workspace> updateWorkspaceStatus(long installationId, Workspace.WorkspaceStatus status) {
-        if (status == Workspace.WorkspaceStatus.PURGED) {
-            throw new IllegalArgumentException(
-                    "PURGED must go through purgeWorkspaceForInstallation so the purge contributors run: installationId="
-                            + installationId);
-        }
+    public Optional<Workspace> suspendForInstallation(long installationId) {
+        return changeStatus(installationId, false);
+    }
 
+    /**
+     * Makes the workspace of an installation that GitHub unsuspended active again.
+     *
+     * @return the workspace, unchanged if it is purged, or empty if the installation has none
+     */
+    @Transactional
+    public Optional<Workspace> resumeForInstallation(long installationId) {
+        return changeStatus(installationId, true);
+    }
+
+    private Optional<Workspace> changeStatus(long installationId, boolean active) {
         var workspaceOpt = workspaceRepository.findByInstallationIdForUpdate(installationId);
-        if (workspaceOpt.isEmpty() || status == null) {
+        if (workspaceOpt.isEmpty()) {
             return workspaceOpt;
         }
 
@@ -495,21 +497,18 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
         if (workspace.getStatus() == Workspace.WorkspaceStatus.PURGED) {
             return Optional.of(workspace);
         }
-        if (status != workspace.getStatus()) {
-            workspace.setStatus(status);
+        if (active ? workspace.resume() : workspace.suspend()) {
             workspace = workspaceRepository.save(workspace);
         }
 
-        if (status == Workspace.WorkspaceStatus.SUSPENDED || status == Workspace.WorkspaceStatus.ACTIVE) {
-            long workspaceId = workspace.getId();
-            connectionService
-                    .findActive(workspaceId, IntegrationKind.GITHUB)
-                    .ifPresent(connection -> attention.report(
-                            connection.getId(),
-                            workspaceId,
-                            IntegrationAttentionChangedEvent.Problem.PROVIDER_SUSPENDED,
-                            status == Workspace.WorkspaceStatus.ACTIVE));
-        }
+        long workspaceId = workspace.getId();
+        connectionService
+                .findActive(workspaceId, IntegrationKind.GITHUB)
+                .ifPresent(connection -> attention.report(
+                        connection.getId(),
+                        workspaceId,
+                        IntegrationAttentionChangedEvent.Problem.PROVIDER_SUSPENDED,
+                        active));
         return Optional.of(workspace);
     }
 
@@ -657,15 +656,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             @Nullable Long ownerAccountId) {
         workspaceSlugService.validate(slug);
 
-        Workspace workspace = new Workspace();
-        workspace.setWorkspaceSlug(slug);
-        workspace.setDisplayName(displayName);
-        workspace.setPublicActivityEnabled(false);
-        workspace.setAccountLogin(accountLogin);
-        workspace.setAccountType(accountType);
-        workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
-
-        Workspace saved = workspaceRepository.save(workspace);
+        Workspace saved = workspaceRepository.save(Workspace.create(slug, displayName, accountLogin, accountType));
         if (ownerAccountId != null) {
             workspaceMembershipService.createMembership(saved, ownerAccountId, Membership.WorkspaceRole.OWNER);
         }

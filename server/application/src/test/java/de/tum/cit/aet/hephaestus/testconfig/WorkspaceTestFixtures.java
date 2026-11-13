@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceStatusFixture;
 import java.util.Set;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -26,7 +27,7 @@ public final class WorkspaceTestFixtures {
         workspace.setAccountLogin(slug + "-org");
         workspace.setAccountType(AccountType.ORG);
         workspace.setPublicActivityEnabled(true);
-        workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
+        workspace.resume();
         return workspace;
     }
 
@@ -112,12 +113,11 @@ public final class WorkspaceTestFixtures {
             workspace.setDisplayName("Workspace " + installationId);
             workspace.setAccountLogin(login);
             workspace.setAccountType(AccountType.ORG);
-            workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
             workspace.setPublicActivityEnabled(false);
         }
 
         public WorkspaceBuilder withStatus(Workspace.WorkspaceStatus status) {
-            workspace.setStatus(status);
+            WorkspaceStatusFixture.withStatus(workspace, status);
             return this;
         }
 
@@ -154,7 +154,6 @@ public final class WorkspaceTestFixtures {
             workspace.setDisplayName("GitLab " + groupPath);
             workspace.setAccountLogin(groupPath);
             workspace.setAccountType(AccountType.ORG);
-            workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
             workspace.setPublicActivityEnabled(false);
         }
 
@@ -164,7 +163,7 @@ public final class WorkspaceTestFixtures {
         }
 
         public GitLabWorkspaceBuilder withStatus(Workspace.WorkspaceStatus status) {
-            workspace.setStatus(status);
+            WorkspaceStatusFixture.withStatus(workspace, status);
             return this;
         }
 

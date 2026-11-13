@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794557215289-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <columnExists tableName="workspace" columnName="status"/>
+        </preConditions>
+        <comment>A purged workspace keeps its status, including when a writer uses SQL instead of the aggregate.</comment>
+        <sql splitStatements="false">
+CREATE FUNCTION guard_workspace() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF OLD.status = 'PURGED' AND NEW.status IS DISTINCT FROM OLD.status THEN
+  RAISE EXCEPTION 'a purged workspace keeps its status' USING ERRCODE = '55000';
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER workspace_transition BEFORE UPDATE OF status ON workspace FOR EACH ROW EXECUTE FUNCTION guard_workspace();
+        </sql>
+        <rollback>DROP TRIGGER workspace_transition ON workspace; DROP FUNCTION guard_workspace();</rollback>
+    </changeSet>
+</databaseChangeLog>

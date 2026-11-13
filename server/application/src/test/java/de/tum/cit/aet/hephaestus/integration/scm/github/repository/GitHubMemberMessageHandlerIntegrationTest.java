@@ -96,7 +96,7 @@ class GitHubMemberMessageHandlerIntegrationTest extends BaseIntegrationTest {
         Workspace workspace = new Workspace();
         workspace.setWorkspaceSlug("hephaestus-test");
         workspace.setDisplayName("Hephaestus Test");
-        workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
+        workspace.resume();
         workspace.setPublicActivityEnabled(true);
         workspace.setOrganizationId(org.getId());
         workspace.setAccountLogin("HephaestusTest");

@@ -580,7 +580,7 @@ class GitLabMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
         testWorkspace = new Workspace();
         testWorkspace.setWorkspaceSlug("hephaestus-test-gitlab");
         testWorkspace.setDisplayName("HephaestusTest GitLab");
-        testWorkspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
+        testWorkspace.resume();
         testWorkspace.setPublicActivityEnabled(true);
         testWorkspace.setOrganizationId(org.getId());
         testWorkspace.setAccountLogin(FIXTURE_ORG_LOGIN);

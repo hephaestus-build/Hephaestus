@@ -112,7 +112,7 @@ public final class TestEntities {
         ws.setAccountLogin(slug + "-org");
         ws.setAccountType(AccountType.ORG);
         ws.setPublicActivityEnabled(true);
-        ws.setStatus(Workspace.WorkspaceStatus.ACTIVE);
+        ws.resume();
         return ws;
     }
 

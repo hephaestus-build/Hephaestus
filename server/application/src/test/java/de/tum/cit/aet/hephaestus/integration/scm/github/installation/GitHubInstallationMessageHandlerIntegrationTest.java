@@ -129,7 +129,7 @@ class GitHubInstallationMessageHandlerIntegrationTest extends BaseIntegrationTes
     void shouldReactivateSuspendedWorkspaceWhenProviderConfirmsActivation() throws IOException {
         GitHubInstallationEventDTO event = loadPayload("installation.unsuspend");
         Workspace workspace = createWorkspaceFor(event);
-        workspace.setStatus(Workspace.WorkspaceStatus.SUSPENDED);
+        workspace.suspend();
         workspaceRepository.saveAndFlush(workspace);
         when(appTokens.isInstallationSuspended(installationId(event))).thenReturn(false);
 
@@ -142,7 +142,7 @@ class GitHubInstallationMessageHandlerIntegrationTest extends BaseIntegrationTes
     void shouldActivateWorkspaceWhenSuspendEventIsStale() throws IOException {
         GitHubInstallationEventDTO event = loadPayload("installation.suspend");
         Workspace workspace = createWorkspaceFor(event);
-        workspace.setStatus(Workspace.WorkspaceStatus.SUSPENDED);
+        workspace.suspend();
         workspaceRepository.saveAndFlush(workspace);
         when(appTokens.isInstallationSuspended(installationId(event))).thenReturn(false);
 

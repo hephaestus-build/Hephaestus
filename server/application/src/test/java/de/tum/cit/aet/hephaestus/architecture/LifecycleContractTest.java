@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.Lifecycle;
 import de.tum.cit.aet.hephaestus.core.action.ActionState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
+import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.ArrayDeque;
 import java.util.EnumSet;
 import java.util.List;
@@ -33,7 +34,11 @@ class LifecycleContractTest extends HephaestusArchitectureTest {
                                 ReviewStatus.COMPLETE,
                                 ReviewStatus.PARTIAL,
                                 ReviewStatus.FAILED,
-                                ReviewStatus.CANCELLED)));
+                                ReviewStatus.CANCELLED)),
+                new Contract<>(
+                        Workspace.WorkspaceStatus.class,
+                        Set.of(Workspace.WorkspaceStatus.ACTIVE),
+                        Set.of(Workspace.WorkspaceStatus.PURGED)));
     }
 
     @Test

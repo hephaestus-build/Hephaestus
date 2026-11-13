@@ -113,7 +113,7 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
         testWorkspace = new Workspace();
         testWorkspace.setWorkspaceSlug("hephaestus-test");
         testWorkspace.setDisplayName("Hephaestus Test");
-        testWorkspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
+        testWorkspace.resume();
         testWorkspace.setPublicActivityEnabled(true);
         testWorkspace.setOrganizationId(org.getId());
         testWorkspace.setAccountLogin(FIXTURE_ORG_LOGIN);

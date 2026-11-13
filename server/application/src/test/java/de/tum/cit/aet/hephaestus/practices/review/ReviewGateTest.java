@@ -348,7 +348,7 @@ class ReviewGateTest {
     private static Workspace workspace() {
         var ws = new Workspace();
         ws.setId(1L);
-        ws.setStatus(Workspace.WorkspaceStatus.ACTIVE);
+        ws.resume();
         ws.getFeatures().setPracticesEnabled(true);
         return ws;
     }

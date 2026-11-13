@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceStatusFixture;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -91,14 +92,16 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
             names = {"SUSPENDED", "ACTIVE"})
     void statusTransitionStopsConsumptionOnlyForSuspension(Workspace.WorkspaceStatus status) {
         Workspace workspace = workspace(11L, "acme");
-        workspace.setStatus(
-                status == Workspace.WorkspaceStatus.ACTIVE
-                        ? Workspace.WorkspaceStatus.SUSPENDED
-                        : Workspace.WorkspaceStatus.ACTIVE);
+        boolean resume = status == Workspace.WorkspaceStatus.ACTIVE;
+        if (resume) workspace.suspend();
         when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
         when(workspaceRepository.save(workspace)).thenReturn(workspace);
 
-        assertThat(listener.updateWorkspaceStatus(INSTALLATION_ID, status)).contains(workspace);
+        assertThat(
+                        resume
+                                ? listener.resumeForInstallation(INSTALLATION_ID)
+                                : listener.suspendForInstallation(INSTALLATION_ID))
+                .contains(workspace);
 
         assertThat(workspace.getStatus()).isEqualTo(status);
     }
@@ -141,19 +144,9 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("updateWorkspaceStatus refuses PURGED outright")
-    void updateWorkspaceStatus_rejectsPurgedSoItCannotBypassThePurgeChain() {
-        assertThatThrownBy(() -> listener.updateWorkspaceStatus(INSTALLATION_ID, Workspace.WorkspaceStatus.PURGED))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("purgeWorkspaceForInstallation");
-
-        verifyNoInteractions(workspaceRepository, workspaceLifecycleService);
-    }
-
-    @Test
     void installationEventsCannotReactivateAPurgedWorkspace() {
         Workspace workspace = workspace(11L, "acme");
-        workspace.setStatus(Workspace.WorkspaceStatus.PURGED);
+        WorkspaceStatusFixture.markPurged(workspace);
         when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
 
         Workspace result = listener.createOrUpdateFromInstallation(
@@ -168,7 +161,7 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
     void newInstallationCannotReactivateThePurgedWorkspaceOfTheSameOrganization() {
         Workspace workspace = workspace(11L, "acme");
         workspace.setAccountLogin("acme");
-        workspace.setStatus(Workspace.WorkspaceStatus.PURGED);
+        WorkspaceStatusFixture.markPurged(workspace);
         IdentityProvider github = mock();
         when(github.getId()).thenReturn(3L);
         when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com"))
@@ -187,11 +180,11 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
     @Test
     void statusEventsCannotReactivateAPurgedWorkspace() {
         Workspace workspace = workspace(11L, "acme");
-        workspace.setStatus(Workspace.WorkspaceStatus.PURGED);
+        WorkspaceStatusFixture.markPurged(workspace);
         when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
 
-        assertThat(listener.updateWorkspaceStatus(INSTALLATION_ID, Workspace.WorkspaceStatus.ACTIVE))
-                .contains(workspace);
+        assertThat(listener.resumeForInstallation(INSTALLATION_ID)).contains(workspace);
+        assertThat(listener.suspendForInstallation(INSTALLATION_ID)).contains(workspace);
 
         assertThat(workspace.getStatus()).isEqualTo(Workspace.WorkspaceStatus.PURGED);
         verify(workspaceRepository, never()).save(workspace);
@@ -200,7 +193,7 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
     @Test
     void repositorySelectionReplayCannotMutateAPurgedWorkspace() {
         Workspace workspace = workspace(11L, "acme");
-        workspace.setStatus(Workspace.WorkspaceStatus.PURGED);
+        WorkspaceStatusFixture.markPurged(workspace);
         workspace.setRepositorySelection(RepositorySelection.SELECTED);
         when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
 
@@ -214,7 +207,7 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
     @Test
     void renameReplayCannotMutateAPurgedWorkspace() {
         Workspace workspace = workspace(11L, "acme");
-        workspace.setStatus(Workspace.WorkspaceStatus.PURGED);
+        WorkspaceStatusFixture.markPurged(workspace);
         workspace.setAccountLogin("acme");
         when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
 
@@ -227,7 +220,7 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
     @Test
     void shouldRefuseRepositoryRenameWhenTheGitHubProviderIsUnavailable() {
         Workspace workspace = workspace(11L, "acme");
-        workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
+        workspace.resume();
         workspace.setAccountLogin("acme");
         when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
         when(gitProviderRepository.findByTypeAndServerUrl(
@@ -244,12 +237,11 @@ class GitHubLifecycleListenerPurgeTest extends BaseUnitTest {
     @Test
     void activationStillResumesALockedSuspendedWorkspace() {
         Workspace workspace = workspace(11L, "acme");
-        workspace.setStatus(Workspace.WorkspaceStatus.SUSPENDED);
+        workspace.suspend();
         when(workspaceRepository.findByInstallationIdForUpdate(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
         when(workspaceRepository.save(workspace)).thenReturn(workspace);
 
-        assertThat(listener.updateWorkspaceStatus(INSTALLATION_ID, Workspace.WorkspaceStatus.ACTIVE))
-                .contains(workspace);
+        assertThat(listener.resumeForInstallation(INSTALLATION_ID)).contains(workspace);
 
         assertThat(workspace.getStatus()).isEqualTo(Workspace.WorkspaceStatus.ACTIVE);
         verify(workspaceRepository).findByInstallationIdForUpdate(INSTALLATION_ID);
