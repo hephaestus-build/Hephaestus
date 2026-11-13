@@ -7570,3 +7570,26 @@ void test("an old candidate lacks the release drill verifier and stops before an
 	assert.match(String(checkout.get("uses")), /^actions\/checkout@/u);
 	assert.equal(steps.items[1], verifier);
 });
+
+void test("the feedback eval gate runs on its paths in every tier, a stacked layer's light tier included", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	const runs = (outputs: Record<string, string>, event = "pull_request") =>
+		jobRuns(workflow, "feedback-eval", event, {
+			"detect-changes": {
+				result: "success",
+				outputs: {
+					should_skip: "false",
+					"version-bump": "false",
+					unfiltered: "false",
+					"light-tier": "false",
+					"feedback-eval": "false",
+					...outputs,
+				},
+			},
+		});
+	assert.equal(runs({ "feedback-eval": "true", "light-tier": "true" }), true);
+	assert.equal(runs({ "feedback-eval": "true" }), true);
+	assert.equal(runs({ "feedback-eval": "true" }, "merge_group"), true);
+	assert.equal(runs({ "light-tier": "true" }), false);
+	assert.equal(runs({}), false);
+});

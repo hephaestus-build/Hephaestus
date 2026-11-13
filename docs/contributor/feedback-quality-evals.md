@@ -271,23 +271,25 @@ They detect edits. They do not judge what an edit means: only the [model panel](
 | G1 | A pinned case changed or is missing. Or `gate.json` changed since the base commit, and its `version` did not increase. |
 | G2 | The composition set or the claim corpus does not parse. |
 | G3 | A quote check does not match, or an absence check finds its text and the claim label is not `false`. |
-| G4 | A prompt file no longer contains a clause that `gate.json` names, or the paragraph around the clause changed. |
+| G4 | A prompt changed, or a new prompt file has no pin. Or a prompt no longer contains a clause that `gate.json` names. |
 | G5 | An automated practice has no Applicability section in its criteria and no Applies when gate. Or a practice's criteria or Applies when changed. |
 | G6 | A bundled practice script gives other leads than its snapshot in `docker/agents/practice-scripts/corpus/snapshots/`. |
+| G7 | The pinned cases times the calls for each case permit more model calls than the panel's ceiling. |
 
 A pin is a SHA-256 of one of these:
 
 - A case, as the fixture file holds it.
-- The words of a clause's paragraph.
+- A whole prompt file under `agent/` or `agent/mentor/`, or the writing guide's Writing feedback section.
 - A practice's criteria and Applies when.
 
-Line breaks in a paragraph do not count.
 A failure prints the new digest.
 
 Each G4 clause carries one occasion criterion (O1–O8) or one evidence-bound criterion (E1–E15).
 The criterion ID is in `gate.json` beside the clause.
-A substring check cannot tell a rule from its reversal, so G4 pins the whole paragraph.
-Any edit near a trust rule fails until the pull request pins it again.
+
+A text check cannot tell a rule from its reversal, and a new paragraph can override a rule that is still present.
+Thus, G4 pins each whole prompt. Any edit to a prompt fails until the pull request pins it again.
+The clause check names a rule that went missing. The panel and the review of the pull request judge what an edit means.
 
 G5 keeps a list of known gaps: automated practices without an Applicability section or an Applies when gate.
 The check also fails when a listed practice gets one. Then remove it from the list.
@@ -295,7 +297,7 @@ The check also fails when a listed practice gets one. Then remove it from the li
 G6 runs `docker/agents/practice-scripts/corpus.test.ts`. Each bundled script runs over the authored corpus, without a model.
 To change what a script sends on purpose, run that test with `--test-update-snapshots` and commit the new snapshot.
 
-To pin a changed case, paragraph or practice, put the new digest in `gate.json` and increase `version` in the same pull request.
+To pin a changed case, prompt or practice, put the new digest in `gate.json` and increase `version` in the same pull request.
 The review of that pull request is the review of the change.
 
 ### Model panel
@@ -317,7 +319,11 @@ The four floors share a 5 % budget.
 A floor finds only a large regression. The [release eval](#release-feedback-eval) remains the quality bar.
 
 Each case is one `CompositionEvalLiveTest` invocation, with 16,384 output tokens and medium reasoning effort.
-The composer loop sends at most 12 model calls for each case. Thus, one run sends at most 240 calls.
+The composer loop sends at most 12 model calls for each case, and G7 keeps the pinned cases within 240 calls.
+The run also counts the calls that each case recorded. It stops before a case that could pass 240 calls, and after a case that passed its bound of 12.
+Such a run ends as "ceiling reached", not as a pass.
+
+The eval composer sends a failed model request once: a provider failure ends that case and is recorded as its failure.
 The job stops after 40 minutes.
 
 ### When the panel runs
@@ -340,11 +346,13 @@ A skip is not a pass: the panel job fails and names the reason.
 With a provider, a night can fall below a floor, be skipped or not finish.
 Each such night comments on one tracking issue, "The nightly feedback eval panel is not green".
 The workflow opens the issue if it is not open.
-The comment links the run, the kept result and the commits since the last green night.
-The next green night closes the issue with a link to its run.
+
+The comment links the run, the kept result and the commits since the last night whose panel measured and passed.
+A night counts as green only when its panel job succeeded. A successful run with a skipped panel does not count.
+The next night that measures and passes closes the issue with a link to its run.
 
 A pull request run and a manual run report in their job summary only.
-`CI / Scheduled failures` reports a night whose report job itself failed.
+If the report job itself fails, `CI / Scheduled failures` writes to the same issue.
 
 The cicd job keeps `feedback-eval-gate.json` as the `feedback-eval-gate` artifact for 14 days. The panel keeps it as `feedback-eval-panel`.
 The file holds each check, each measure, the model name and the SHA-256 of the endpoint. It never holds the endpoint or the key.

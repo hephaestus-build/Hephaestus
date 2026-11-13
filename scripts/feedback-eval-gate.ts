@@ -10,7 +10,9 @@ import {
 	parseGateConfig,
 	scorePanel,
 	catalogPractices,
+	ceilingReached,
 	verdict,
+	readPrompts,
 	type Panel,
 } from "./feedback-eval/gate.ts";
 import { parseJson } from "./lib/json.ts";
@@ -77,6 +79,7 @@ function practiceScripts(): string[] {
 
 const checks = deterministic({
 	gate,
+	prompts: readPrompts(),
 	base: baseManifest(),
 	compositions: compositionsFile,
 	claims: readJson("scripts/feedback-eval/cases.json"),
@@ -134,9 +137,31 @@ function runPanel(): { panel: Panel; model: Model | null } {
 			.digest("hex"),
 	};
 	const checked = path.join(output, "panel-compositions.json");
-	// One invocation for each case keeps each under the live tier's own time limit. A rerun composes
-	// only the cases the file lacks, and a failed case is never sent again.
+	const recordedCalls = (): number[] => {
+		if (!existsSync(checked)) {
+			return [];
+		}
+		const file: unknown = readJson(checked);
+		const cases =
+			typeof file === "object" && file !== null && "cases" in file && Array.isArray(file.cases)
+				? (file.cases as unknown[])
+				: [];
+		return cases.map((entry) =>
+			typeof entry === "object" &&
+			entry !== null &&
+			"calls" in entry &&
+			typeof entry.calls === "number"
+				? entry.calls
+				: gate.panel.callsPerCase,
+		);
+	};
+	// One invocation for each case keeps each under the live tier's own time limit. The composer sends a
+	// failed request once (CompositionEvalCases), and a failed case is never composed again.
 	for (const caseId of Object.keys(gate.panel.cases)) {
+		const stop = ceilingReached(gate, recordedCalls());
+		if (stop !== undefined) {
+			return { panel: { status: "ceiling-reached", reason: stop }, model };
+		}
 		spawnSync(
 			"./gradlew",
 			[":application:liveTest", "--tests", "CompositionEvalLiveTest", "--console=plain"],
@@ -153,6 +178,13 @@ function runPanel(): { panel: Panel; model: Model | null } {
 			},
 		);
 	}
+	const over = recordedCalls().find((each) => each > gate.panel.callsPerCase);
+	if (over !== undefined) {
+		return {
+			panel: { status: "ceiling-reached", reason: ceilingReached(gate, recordedCalls()) ?? "" },
+			model,
+		};
+	}
 	const run: RunFile = existsSync(checked)
 		? parseRun(readJson(checked), checked)
 		: { version: 1, model: null, runner: null, cases: [] };
@@ -165,7 +197,11 @@ const report = { version: 1, gateVersion: gate.version, checks, panel, model, ve
 writeFileSync(path.join(output, "feedback-eval-gate.json"), `${JSON.stringify(report, null, 2)}\n`);
 
 function panelLines(scored: Panel): string {
-	if (scored.status === "not-run" || scored.status === "skipped") {
+	if (
+		scored.status === "not-run" ||
+		scored.status === "skipped" ||
+		scored.status === "ceiling-reached"
+	) {
 		return `Model panel: **${scored.status}**. ${scored.reason}`;
 	}
 	return [

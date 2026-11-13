@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readFileSync, readdirSync } from "node:fs";
 
 import Ajv2020 from "ajv/dist/2020.js";
 
@@ -16,14 +17,23 @@ export interface GateConfig {
 	version: number;
 	description: string;
 	claims: Record<string, string>;
-	panel: { cases: Record<string, string>; reasoningEffort: string; maxOutputTokens: number };
+	panel: {
+		cases: Record<string, string>;
+		reasoningEffort: string;
+		maxOutputTokens: number;
+		/** The composer's own bound on model calls for one case. */
+		callsPerCase: number;
+		/** The most model calls one run may send. */
+		maxCalls: number;
+	};
 	floors: {
 		accepted: number;
 		mechanicallyClean: number;
 		raiseRecall: number;
 		withholdCorrect: number;
 	};
-	clauses: { criterion: string; file: string; text: string; paragraphSha256: string }[];
+	clauses: { criterion: string; file: string; text: string }[];
+	prompts: Record<string, string>;
 	practices: Record<string, string>;
 	occasionGaps: string[];
 }
@@ -42,6 +52,7 @@ const validate = new Ajv2020({ strict: true }).compile<GateConfig>({
 		"panel",
 		"floors",
 		"clauses",
+		"prompts",
 		"practices",
 		"occasionGaps",
 	],
@@ -52,11 +63,13 @@ const validate = new Ajv2020({ strict: true }).compile<GateConfig>({
 		panel: {
 			type: "object",
 			additionalProperties: false,
-			required: ["cases", "reasoningEffort", "maxOutputTokens"],
+			required: ["cases", "reasoningEffort", "maxOutputTokens", "callsPerCase", "maxCalls"],
 			properties: {
 				cases: { ...digests, minProperties: 1 },
 				reasoningEffort: { type: "string", minLength: 1 },
 				maxOutputTokens: { type: "integer", minimum: 1 },
+				callsPerCase: { type: "integer", minimum: 1 },
+				maxCalls: { type: "integer", minimum: 1 },
 			},
 		},
 		floors: {
@@ -76,15 +89,15 @@ const validate = new Ajv2020({ strict: true }).compile<GateConfig>({
 			items: {
 				type: "object",
 				additionalProperties: false,
-				required: ["criterion", "file", "text", "paragraphSha256"],
+				required: ["criterion", "file", "text"],
 				properties: {
 					criterion: { type: "string", minLength: 1 },
 					file: { type: "string", minLength: 1 },
 					text: { type: "string", minLength: 1 },
-					paragraphSha256: { type: "string", pattern: "^[0-9a-f]{64}$" },
 				},
 			},
 		},
+		prompts: { ...digests, minProperties: 1 },
 		practices: { ...digests, minProperties: 1 },
 		occasionGaps: { type: "array", uniqueItems: true, items: { type: "string" } },
 	},
@@ -106,17 +119,40 @@ export const caseDigest = (value: unknown) => sha256(JSON.stringify(value));
 const words = (text: string) => text.replaceAll(/\s+/gu, " ").trim();
 
 /**
- * The paragraph of `source` that holds `clause`, as words. A substring check cannot judge meaning, so
- * the gate pins the whole paragraph: any edit around a trust clause shows as a changed digest.
+ * A prompt's pin: the SHA-256 of its whole text. A text check cannot judge meaning, and a new paragraph can override a
+ * rule that is still there, so any edit to a prompt fails until the pull request pins it again.
  */
-export function clauseParagraph(source: string, clause: string): string | undefined {
-	return source
-		.split(/\n[ \t]*\n/u)
-		.map(words)
-		.find((paragraph) => paragraph.includes(words(clause)));
+export const promptDigest = (text: string) => sha256(text);
+
+const PROMPT_DIRECTORIES = [
+	"server/application/src/main/resources/agent",
+	"server/application/src/main/resources/agent/mentor",
+];
+const WRITING_GUIDE = "docs/contributor/practice-feedback-language.md";
+
+/** The prompts in scope, by their `gate.json` key: every prompt file, and the writing guide's section. */
+export function readPrompts(): Record<string, string> {
+	const files = PROMPT_DIRECTORIES.flatMap((directory) =>
+		readdirSync(directory)
+			.filter((name) => name.endsWith(".md"))
+			.map((name) => `${directory}/${name}`),
+	).toSorted();
+	return {
+		...Object.fromEntries(files.map((file) => [file, readFileSync(file, "utf8")])),
+		[`${WRITING_GUIDE}#writing-feedback`]: writingFeedback(readFileSync(WRITING_GUIDE, "utf8")),
+	};
 }
 
-export const paragraphDigest = (paragraph: string) => sha256(paragraph);
+/** The writing guide's section that `FeedbackWritingGuide` puts in the prompts, read by the same rule. */
+export function writingFeedback(page: string): string {
+	const heading = "## Writing feedback\n";
+	const start = page.indexOf(heading);
+	if (start === -1) {
+		return "";
+	}
+	const end = page.indexOf("\n## ", start + heading.length);
+	return page.slice(start, end === -1 ? undefined : end).trim();
+}
 
 export interface Check {
 	id: string;
@@ -222,6 +258,11 @@ export interface Inputs {
 	claims: unknown;
 	catalog: CatalogPractice[];
 	read: (file: string) => string | undefined;
+	/**
+	 * The prompt texts in scope, by their `gate.json` key: each prompt file, and the writing guide's section that the
+	 * prompts include.
+	 */
+	prompts: Record<string, string>;
 	/** G6: what the practice-script corpus run reported, one problem for each program that differs. */
 	scripts: string[];
 }
@@ -277,8 +318,8 @@ export function deterministic(inputs: Inputs): Check[] {
 			: unchecked("G3", "The literal checks agree with the claim labels"),
 		{
 			id: "G4",
-			name: "Each criterion clause and its paragraph are unchanged",
-			problems: clauses(gate, read),
+			name: "Each prompt is unchanged and carries every criterion clause",
+			problems: [...clauses(gate, read), ...promptPins(gate, inputs.prompts)],
 		},
 		{
 			id: "G5",
@@ -289,6 +330,11 @@ export function deterministic(inputs: Inputs): Check[] {
 			id: "G6",
 			name: "Each practice script gives its recorded leads",
 			problems: inputs.scripts,
+		},
+		{
+			id: "G7",
+			name: "The panel fits its call ceiling",
+			problems: ceiling(gate),
 		},
 	];
 }
@@ -347,22 +393,42 @@ function literal(gate: GateConfig, claims: Corpus): string[] {
 }
 
 function clauses(gate: GateConfig, read: Inputs["read"]): string[] {
-	return gate.clauses.flatMap(({ criterion, file, text, paragraphSha256 }) => {
+	return gate.clauses.flatMap(({ criterion, file, text }) => {
 		const source = read(file);
 		if (source === undefined) {
 			return [`${criterion}: ${file} is missing`];
 		}
-		const paragraph = clauseParagraph(source, text);
-		if (paragraph === undefined) {
-			return [`${criterion}: ${file} no longer says "${text}"`];
-		}
-		const actual = paragraphDigest(paragraph);
-		return actual === paragraphSha256
+		return words(source).includes(words(text))
 			? []
-			: [
-					`${criterion}: the paragraph around "${text}" in ${file} changed (now ${actual}); pin it again under a new gate version`,
-				];
+			: [`${criterion}: ${file} no longer says "${text}"`];
 	});
+}
+
+function promptPins(gate: GateConfig, prompts: Inputs["prompts"]): string[] {
+	return [
+		...Object.entries(prompts).flatMap(([key, text]) => {
+			const pin = gate.prompts[key];
+			const actual = promptDigest(text);
+			if (pin === undefined) {
+				return [`${key} has no pin (now ${actual})`];
+			}
+			return pin === actual
+				? []
+				: [`${key} changed (now ${actual}); pin it again under a new gate version`];
+		}),
+		...Object.keys(gate.prompts)
+			.filter((key) => !(key in prompts))
+			.map((key) => `gate.json pins ${key}, which is not a prompt in scope`),
+	];
+}
+
+function ceiling(gate: GateConfig): string[] {
+	const permitted = Object.keys(gate.panel.cases).length * gate.panel.callsPerCase;
+	return permitted <= gate.panel.maxCalls
+		? []
+		: [
+				`${Object.keys(gate.panel.cases).length} cases × ${gate.panel.callsPerCase} calls permit ${permitted} calls, over the ceiling of ${gate.panel.maxCalls}`,
+			];
 }
 
 function occasions(gate: GateConfig, catalog: CatalogPractice[]): string[] {
@@ -395,12 +461,28 @@ function occasions(gate: GateConfig, catalog: CatalogPractice[]): string[] {
 	];
 }
 
+/**
+ * The hard stop on model calls. `calls` holds the calls that each composed case recorded. A case over the composer's
+ * bound, or a next case that could pass the run's ceiling, stops the run before it sends another request.
+ */
+export function ceilingReached(gate: GateConfig, calls: number[]): string | undefined {
+	const used = calls.reduce((sum, each) => sum + each, 0);
+	const over = calls.find((each) => each > gate.panel.callsPerCase);
+	if (over !== undefined) {
+		return `A case sent ${over} model calls, over its bound of ${gate.panel.callsPerCase}.`;
+	}
+	return used + gate.panel.callsPerCase > gate.panel.maxCalls
+		? `The run sent ${used} model calls, and one more case could pass the ceiling of ${gate.panel.maxCalls}.`
+		: undefined;
+}
+
 /** Endpoint failures that measure the endpoint, not the model (CompositionEvalLiveTest). */
 const ENDPOINT_FAILURES = new Set(["PROVIDER", "CAPACITY"]);
 
 export type Panel =
 	| { status: "not-run"; reason: string }
 	| { status: "skipped"; reason: string }
+	| { status: "ceiling-reached"; reason: string }
 	| {
 			status: "passed" | "failed";
 			measures: { id: string; name: string; count: number; of: number; floor: number }[];
@@ -490,6 +572,12 @@ export function verdict(checks: Check[], panel: Panel) {
 		}
 		case "skipped": {
 			return { pass: false, reason: `The model panel was skipped. ${panel.reason}` };
+		}
+		case "ceiling-reached": {
+			return {
+				pass: false,
+				reason: `The model panel stopped at its call ceiling. ${panel.reason}`,
+			};
 		}
 		case "passed": {
 			return { pass: true, reason: "Every check passed." };

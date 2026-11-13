@@ -818,9 +818,9 @@ jobs:
     timeout-minutes: 15
     runs-on: ubuntu-latest
     needs: [detect-changes]
+    # Only its paths select it, never the tier: a stacked layer that changes a prompt runs it too.
     if: |
       needs.detect-changes.outputs.should_skip != 'true' &&
-      needs.detect-changes.outputs.light-tier != 'true' &&
       (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
       (
         needs.detect-changes.outputs.feedback-eval == 'true' ||

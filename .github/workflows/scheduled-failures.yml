@@ -60,7 +60,12 @@ jobs:
             const issues = await github.paginate(github.rest.issues.listForRepo, {
               ...context.repo, creator: 'github-actions[bot]', state: 'open', per_page: 100,
             });
-            const existing = issues.find(issue => !issue.pull_request && issue.body?.startsWith(marker));
+            // The panel keeps one tracking issue by its title, and its next green night closes it, so its
+            // fallback report goes to that issue too.
+            const panelTitle = run.name === 'CI / Feedback eval panel'
+              ? 'The nightly feedback eval panel is not green' : null;
+            const existing = issues.find(issue => !issue.pull_request &&
+              (panelTitle ? issue.title === panelTitle : issue.body?.startsWith(marker)));
             const body = [
               marker, attempt,
               '@hephaestus-build/maintainer: a scheduled check needs attention.',
@@ -69,7 +74,7 @@ jobs:
               'Inspect the run logs. Close this issue after a successful run or a recorded decision.',
             ].join('\n');
             if (!existing) {
-              await github.rest.issues.create({ ...context.repo, title: `Scheduled check failed: ${run.name}`, body });
+              await github.rest.issues.create({ ...context.repo, title: panelTitle ?? `Scheduled check failed: ${run.name}`, body });
               return;
             }
             const comments = await github.paginate(github.rest.issues.listComments, {

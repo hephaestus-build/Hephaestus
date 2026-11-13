@@ -99,6 +99,11 @@ export interface Gateway {
 	fetch?: typeof fetch;
 	/** The first pause after a provider failure; each later one doubles. */
 	retryPauseMs?: number;
+	/**
+	 * Whether the loop sends a request again after a provider failure. Production retries; an eval turns it off, so
+	 * that a provider failure ends the case after one call and is recorded as that case's failure.
+	 */
+	retryProviderFailures?: boolean;
 	/** The driver aborts it on SIGTERM or when it may not renew the run's lease; the loop stops at its next await. */
 	signal?: AbortSignal;
 }

@@ -39,10 +39,11 @@ void test("every scheduled workflow has a notification owner", async () => {
 });
 
 async function notify(
-	existing: { number: number; body: string }[] = [],
+	existing: { number: number; body: string; title?: string }[] = [],
 	comments: { user: { login: string }; body: string }[] = [],
 	fail = false,
 	nativeJobs?: object[],
+	name?: string,
 ) {
 	const writes: { kind: string; input: Record<string, unknown> }[] = [];
 	const list = Symbol("issues");
@@ -56,7 +57,7 @@ async function notify(
 					workflow_id: 7,
 					id: 42,
 					run_attempt: 2,
-					name: nativeJobs === undefined ? "Weekly check" : "Security / Rescan images",
+					name: name ?? (nativeJobs === undefined ? "Weekly check" : "Security / Rescan images"),
 					conclusion: "failure",
 					html_url: "https://github.com/owner/repo/actions/runs/42",
 				},
@@ -129,4 +130,31 @@ void test("the shared reporter covers timeouts but leaves successful specific no
 		{ conclusion: "failure", steps: [{ name: "Report a failed rescan", conclusion: "failure" }] },
 	]);
 	assert.equal(failedNotice.length, 1);
+});
+
+const PANEL = "CI / Feedback eval panel";
+const PANEL_TITLE = "The nightly feedback eval panel is not green";
+
+void test("the panel's fallback report and its own report keep one issue", async () => {
+	const panelWorkflow = await readFile(".github/workflows/feedback-eval-panel.yml", "utf8");
+	assert.ok(panelWorkflow.includes(`const title = '${PANEL_TITLE}';`));
+	assert.ok(script.includes(`'${PANEL_TITLE}'`));
+	// The panel's own report succeeded: nothing to add.
+	assert.deepEqual(
+		await notify([], [], false, [{ name: "Report a failure", conclusion: "success" }], PANEL),
+		[],
+	);
+	// The report job timed out: the fallback opens the panel's issue, which the next green night closes.
+	const timedOut = [{ name: "Report a failure", conclusion: "timed_out", steps: [] }];
+	const [created] = await notify([], [], false, timedOut, PANEL);
+	assert.ok(created);
+	assert.equal(created.kind, "create");
+	assert.equal(created.input.title, PANEL_TITLE);
+	// With the panel's issue open, the fallback comments on it and opens no second issue.
+	const open = [{ number: 5, title: PANEL_TITLE, body: "the panel's own report" }];
+	const writes = await notify(open, [], false, timedOut, PANEL);
+	assert.deepEqual(
+		writes.map((write) => [write.kind, write.input.issue_number]),
+		[["comment", 5]],
+	);
 });

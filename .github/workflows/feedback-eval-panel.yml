@@ -95,8 +95,9 @@ jobs:
           if-no-files-found: warn
 
   # A night has no pull request to fail, so it keeps one tracking issue. A red or unfinished night
-  # comments on it with the commits since the last green night. The next green night closes it. A
-  # night without a provider runs no panel, so it never reaches this job.
+  # comments on it with the commits since the last night whose panel measured and passed. The next
+  # such night closes it. A night without a provider runs no panel, so it never reaches this job.
+  # CI / Scheduled failures writes to the same issue if this job itself fails.
   report:
     name: "Report a failure"
     needs: [panel]
@@ -108,45 +109,57 @@ jobs:
       issues: write
     steps:
       - name: Keep the tracking issue in step with the night
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          COMMIT: ${{ github.sha }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          ARTIFACT_URL: ${{ needs.panel.outputs.artifact }}
           RESULT: ${{ needs.panel.result }}
           STATUS: ${{ needs.panel.outputs.status }}
-        run: |
-          set -euo pipefail
-          title="The nightly feedback eval panel is not green"
-          number=$(gh issue list -R "$REPOSITORY" --state open --search "\"$title\" in:title" --json number,title |
-            jq -r --arg title "$title" '[.[] | select(.title == $title)][0].number // empty')
-          if [ "$RESULT" = success ] && [ "$STATUS" = passed ]; then
-            if [ -n "$number" ]; then
-              gh issue close "$number" -R "$REPOSITORY" --comment "The panel is green again on \`$COMMIT\`: $RUN_URL"
-            fi
-            exit 0
-          fi
-          case "$STATUS" in
-            failed) what="fell below a floor" ;;
-            skipped) what="measured nothing, because the endpoint gave no composition for a panel case" ;;
-            *) what="did not finish ($RESULT)" ;;
-          esac
-          # This run is not green yet, so the newest successful scheduled run is the last green night.
-          green=$(gh api "repos/$REPOSITORY/actions/workflows/feedback-eval-panel.yml/runs?event=schedule&status=success&per_page=1" \
-            --jq '.workflow_runs[0].head_sha // empty')
-          if [ -n "$green" ]; then
-            range="Commits since the last green night: https://github.com/$REPOSITORY/compare/$green...$COMMIT"
-          else
-            range="No night has been green yet. This night ran on \`$COMMIT\`."
-          fi
-          body="@hephaestus-build/maintainer: the nightly feedback eval panel $what.
-
-          $range
-          Run: $RUN_URL
-          Result: ${ARTIFACT_URL:-no artifact was kept}"
-          if [ -n "$number" ]; then
-            gh issue comment "$number" -R "$REPOSITORY" --body "$body"
-          else
-            gh issue create -R "$REPOSITORY" --title "$title" --body "$body"
-          fi
+          ARTIFACT_URL: ${{ needs.panel.outputs.artifact }}
+        with:
+          retries: 2
+          script: |
+            const title = 'The nightly feedback eval panel is not green';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              ...context.repo, creator: 'github-actions[bot]', state: 'open', per_page: 100,
+            });
+            const open = issues.find(issue => !issue.pull_request && issue.title === title);
+            if (process.env.RESULT === 'success' && process.env.STATUS === 'passed') {
+              if (open) {
+                await github.rest.issues.createComment({ ...context.repo, issue_number: open.number,
+                  body: `The panel measured and passed again on \`${context.sha}\`: ${runUrl}` });
+                await github.rest.issues.update({ ...context.repo, issue_number: open.number, state: 'closed' });
+              }
+              return;
+            }
+            // Only a night whose panel job succeeded measured and passed: a night without a provider
+            // succeeds with a skipped panel, so a successful run alone is not a green night.
+            const runs = await github.rest.actions.listWorkflowRuns({
+              ...context.repo, workflow_id: 'feedback-eval-panel.yml', event: 'schedule', per_page: 30,
+            });
+            let green = null;
+            for (const run of runs.data.workflow_runs) {
+              if (run.id === context.runId) continue;
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                ...context.repo, run_id: run.id, per_page: 100,
+              });
+              if (jobs.some(job => job.name === 'Model panel' && job.conclusion === 'success')) {
+                green = run.head_sha;
+                break;
+              }
+            }
+            const what = { failed: 'fell below a floor',
+              skipped: 'measured nothing, because the endpoint gave no composition for a panel case',
+              'ceiling-reached': 'stopped at its call ceiling' }[process.env.STATUS]
+              ?? `did not finish (${process.env.RESULT})`;
+            const range = green
+              ? `Commits since the last night that measured and passed: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/compare/${green}...${context.sha}`
+              : `No night of the last 30 measured and passed. This night ran on \`${context.sha}\`.`;
+            const body = [
+              `@hephaestus-build/maintainer: the nightly feedback eval panel ${what}.`, '',
+              range, `Run: ${runUrl}`, `Result: ${process.env.ARTIFACT_URL || 'no artifact was kept'}`,
+            ].join('\n');
+            if (open) {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: open.number, body });
+            } else {
+              await github.rest.issues.create({ ...context.repo, title, body });
+            }
