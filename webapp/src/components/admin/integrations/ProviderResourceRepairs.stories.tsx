@@ -182,3 +182,28 @@ export const InstanceOverviewWithOwner: Story = {
 		).toHaveAttribute("href", "/w/platform/admin/integrations/outline?repairConnection=7");
 	},
 };
+
+export const UncertainSlackAuthorization: Story = {
+	args: {
+		state: {
+			status: "ready",
+			items: [
+				{
+					repair: {
+						...repair,
+						kind: "SLACK",
+						resourceType: "OAUTH_EXCHANGE",
+						origin: "https://slack.com",
+						parentId: "T-EXAMPLE",
+						resourceId: "authorization-attempt",
+						state: "CONFIRMATION_REQUIRED",
+					},
+					releaseAvailable: true,
+				},
+			],
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Slack authorization")).toBeVisible();
+	},
+};

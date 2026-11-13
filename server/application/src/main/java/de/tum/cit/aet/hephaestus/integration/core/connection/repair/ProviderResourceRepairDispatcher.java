@@ -2,8 +2,12 @@ package de.tum.cit.aet.hephaestus.integration.core.connection.repair;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.CredentialBundle;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter.Removal;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter.Resource;
@@ -71,6 +75,10 @@ public class ProviderResourceRepairDispatcher {
                 "Provider calls require no active transaction");
         Attempt attempt = transactions.execute(status -> claim(repairId));
         if (attempt == null) return;
+        if (attempt.resource().type() == ResourceType.OAUTH_EXCHANGE) {
+            transactions.executeWithoutResult(status -> finish(attempt, repairId, Removal.ADMIN_CONFIRMATION));
+            return;
+        }
         if (attempt.resource().type() == ResourceType.REGISTRATION) {
             try {
                 ProviderResourceAdapter adapter =
@@ -124,17 +132,40 @@ public class ProviderResourceRepairDispatcher {
         if (repair == null
                 || repair.getNextAttemptAt().isAfter(clock.instant())
                 || repair.getState() == ProviderResourceRepair.State.CONFIRMATION_REQUIRED) return null;
-        @Nullable CredentialBundle credential = null;
-        for (ConnectionProviderRepair ref : references.findByRepair_Id(id)) {
-            credential = coordination.retainedCredential(ref.getConnection());
-            if (credential != null) break;
-        }
-        repair.transition(
-                repair.getState() == ProviderResourceRepair.State.REGISTERING
-                        ? ProviderResourceRepair.State.REGISTERING
-                        : ProviderResourceRepair.State.CHECKING,
-                clock.instant());
+        CredentialBundle credential = removalCredential(repair.resource(), references.findByRepair_Id(id));
+        repair.transition(ProviderResourceRepair.State.CHECKING, clock.instant());
         return new Attempt(repair.resource(), credential, repair.getAttemptEpoch());
+    }
+
+    private @Nullable CredentialBundle removalCredential(Resource target, List<ConnectionProviderRepair> owners) {
+        if (target.kind() == IntegrationKind.GITHUB || target.type() == ResourceType.BOT_USER) return null;
+        for (var reference : owners) {
+            var owner = reference.getConnection();
+            var config = owner.getConfig();
+            boolean matches = switch (config) {
+                case ConnectionConfig.GitLabConfig gitlab ->
+                    ScmOrigin.of(gitlab.serverUrl())
+                                    .filter(target.origin()::equals)
+                                    .isPresent()
+                            && gitlab.gitlabGroupId().toString().equals(target.parentId());
+                case ConnectionConfig.OutlineConfig outline ->
+                    ScmOrigin.of(outline.serverUrl())
+                            .filter(target.origin()::equals)
+                            .isPresent();
+                case ConnectionConfig.SlackConfig slack ->
+                    slack.botTokenFingerprint() == null
+                            || slack.botTokenFingerprint().equals(target.resourceId());
+                default -> false;
+            };
+            if (!matches) continue;
+            CredentialBundle candidate = coordination.retainedCredential(owner);
+            if (target.type() == ResourceType.BOT_TOKEN
+                    && (!(candidate instanceof BearerToken bearer)
+                            || !ProviderResourceAdapter.slackTokenFingerprint(bearer.token())
+                                    .equals(target.resourceId()))) continue;
+            if (candidate != null) return candidate;
+        }
+        return null;
     }
 
     private boolean permitDispatch(UUID id, Attempt attempt) {
@@ -151,7 +182,10 @@ public class ProviderResourceRepairDispatcher {
         Resource resource = attempt.resource();
         coordination.coordinate(List.of(resource));
         ProviderResourceRepair repair = repairs.findById(id).orElse(null);
-        if (repair == null || repair.getAttemptEpoch() != attempt.epoch()) return;
+        if (repair == null
+                || repair.getAttemptEpoch() != attempt.epoch()
+                || (repair.getState() != ProviderResourceRepair.State.CHECKING
+                        && repair.getState() != ProviderResourceRepair.State.DISPATCHING)) return;
         boolean verified = outcome == Removal.VERIFIED_ABSENT || outcome == Removal.DIFFERENT_OWNER;
         boolean terminal = outcome == Removal.TERMINAL_SUCCESS;
         if (verified || terminal) coordination.clearCompletedHook(id, resource);

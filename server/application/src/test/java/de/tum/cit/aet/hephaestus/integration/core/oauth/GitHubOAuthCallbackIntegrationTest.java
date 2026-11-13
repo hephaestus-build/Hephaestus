@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.util.UriBuilder;
 
@@ -55,6 +56,9 @@ class GitHubOAuthCallbackIntegrationTest extends AbstractWorkspaceIntegrationTes
 
     @Autowired
     private WorkspaceRepository workspaceRepository;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private long installationId;
 
@@ -159,6 +163,29 @@ class GitHubOAuthCallbackIntegrationTest extends AbstractWorkspaceIntegrationTes
         assertThat(workspaceRepository.findByInstallationId(installationId))
                 .map(Workspace::getId)
                 .contains(holder.getId());
+    }
+
+    @Test
+    void shouldRefuseASecondInstallationWithoutDeletingOrFencingItsUnadoptedResource() {
+        User admin = accountHolder("different-installation");
+        Workspace workspace = workspaceOwnedBy(admin, "Existing installation");
+        Connection first = connectInstallation(workspace, IntegrationState.ACTIVE);
+        long firstId = installationId;
+        installationId++;
+        ProblemDetail refused = jsonCallback(workspace, admin, 409);
+        assertThat(refused.getProperties()).containsEntry("callbackError", "transition_conflict");
+        verifyNoInteractions(userAuthorization);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM provider_resource_repair WHERE kind = 'GITHUB' AND resource_id = ?",
+                        Long.class,
+                        Long.toString(installationId)))
+                .isZero();
+        assertThat(((ConnectionConfig.GitHubAppConfig) connectionRepository
+                                .findById(first.getId())
+                                .orElseThrow()
+                                .getConfig())
+                        .installationId())
+                .isEqualTo(firstId);
     }
 
     @Test

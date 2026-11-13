@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialReader;
+import de.tum.cit.aet.hephaestus.integration.core.connection.api.ConnectionAdminService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.CredentialBundle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -62,12 +63,15 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
@@ -76,6 +80,9 @@ import org.springframework.web.server.ResponseStatusException;
 class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
     private static final PublicApiUrls URLS =
             new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create("https://receiver.example.test"), "/api"));
+
+    @Autowired
+    private ConnectionAdminService connectionAdmin;
 
     @Autowired
     private ProviderResourceRepairRepository rows;
@@ -145,6 +152,8 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(IntegrationState.ACTIVE);
         assertThatThrownBy(() -> adopt(context, provider, false, false)).isInstanceOf(ResponseStatusException.class);
         if (kind == IntegrationKind.SLACK) {
+            assertThat(provider.botActive.get(provider.oldBot())).isFalse();
+            assertThat(provider.botActive.get(provider.freshBot())).isTrue();
             assertThat(provider.botMemberships.get(provider.oldBot())).isEmpty();
             assertThat(provider.botMemberships.get(provider.freshBot())).containsExactly("fresh-channel");
         }
@@ -177,9 +186,8 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
         // The state committed without a wake or an existing fence. The durable sweep discovers it.
         assertThat(context.repairs().suspendedOutlineHooks())
                 .anyMatch(candidate -> candidate.connectionId() == owner.getId());
-        context.transactions()
-                .executeWithoutResult(status -> context.repairs()
-                        .captureSuspendedHook(owner.getWorkspace().getId(), owner.getId()));
+        provider.deleteUnavailable = true;
+        context.dispatcher().reconcile();
         List<UUID> pending =
                 references
                         .findByWorkspaceIdAndConnection_Id(owner.getWorkspace().getId(), owner.getId())
@@ -187,15 +195,16 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
                         .map(ref -> ref.getRepair().getId())
                         .toList();
         created.addAll(pending);
-        provider.deleteUnavailable = true;
-        pending.forEach(context.dispatcher()::dispatch);
         assertThat(provider.accepted).isEmpty();
         assertThat(provider.live).contains(provider.oldRemoteKey());
+        Connection fresh = adopt(context, provider, true, false);
+        provider.live.add(provider.freshRemoteKey());
         provider.deleteUnavailable = false;
         provider.terminal = true;
         context.clock().now = context.clock().now.plusSeconds(61);
-        pending.forEach(context.dispatcher()::dispatch);
-        assertThat(provider.live).doesNotContain(provider.oldRemoteKey());
+        context.dispatcher().reconcile();
+        assertThat(provider.live).doesNotContain(provider.oldRemoteKey()).contains(provider.freshRemoteKey());
+        assertThat(connections.findById(fresh.getId()).orElseThrow().getState()).isEqualTo(IntegrationState.ACTIVE);
         assertThat(pending)
                 .allSatisfy(id -> assertThat(rows.findById(id).orElseThrow().getState())
                         .isEqualTo(ProviderResourceRepair.State.CONFIRMATION_REQUIRED));
@@ -378,6 +387,52 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
         assertThatThrownBy(() -> adopt(context, provider, false, false)).isInstanceOf(ResponseStatusException.class);
     }
 
+    @ParameterizedTest
+    @EnumSource(
+            value = IntegrationKind.class,
+            names = {"GITLAB", "OUTLINE"})
+    void shouldRefuseALegacySuspendedIdentityBeforeTheFirstRepairSweep(IntegrationKind kind) {
+        Wire provider = new Wire(kind);
+        Context context = context(provider.adapter);
+        owner(provider, false, false, IntegrationState.SUSPENDED);
+        assertThatThrownBy(() -> adopt(context, provider, false, false)).isInstanceOf(ResponseStatusException.class);
+        assertThat(provider.accepted).isEmpty();
+        assertThat(adopt(context, provider, true, false).getState()).isEqualTo(IntegrationState.ACTIVE);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = IntegrationKind.class,
+            names = {"GITLAB"})
+    void shouldWaitForTheResourceIdentityBeforeLockingTheConnectionForReconnect(IntegrationKind kind) throws Exception {
+        Wire provider = new Wire(kind);
+        Context context = context(provider.adapter);
+        Connection old = owner(provider, false, false, IntegrationState.UNINSTALLED);
+        HeldTransaction identity = HeldTransaction.holdIn(
+                context.transactions(),
+                jdbc,
+                () -> context.repairs()
+                        .coordinate(
+                                context.repairs().resources(ProviderResourceRepairs.ref(old), old.getConfig(), null)));
+        var reconnect = CompletableFuture.supplyAsync(() -> connectionAdmin.createInlineConnection(
+                old.getWorkspace().getId(),
+                IntegrationKind.GITLAB,
+                old.getInstanceKey(),
+                new BearerToken("fresh-credential-" + old.getId(), null),
+                Map.of(),
+                null));
+        identity.commitAfter(
+                reconnect,
+                () -> new TransactionTemplate(manager)
+                        .executeWithoutResult(status -> assertThat(jdbc.queryForObject(
+                                        "SELECT id FROM connection WHERE workspace_id = ? AND id = ? FOR UPDATE NOWAIT",
+                                        Long.class,
+                                        old.getWorkspace().getId(),
+                                        old.getId()))
+                                .isEqualTo(old.getId())));
+        assertThat(reconnect.get(20, TimeUnit.SECONDS).getState()).isEqualTo(IntegrationState.ACTIVE);
+    }
+
     private List<UUID> request(Context context, Connection owner) {
         List<UUID> ids = context.transactions().execute(status -> {
             Connection current = connections
@@ -437,8 +492,14 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
                 event -> {},
                 clock);
         ReflectionTestUtils.setField(coordination, "entityManager", Objects.requireNonNull(entities));
+        var transactionsAdvice = new TransactionInterceptor();
+        transactionsAdvice.setTransactionManager(manager);
+        transactionsAdvice.setTransactionAttributeSource(new AnnotationTransactionAttributeSource());
+        var proxy = new ProxyFactory(coordination);
+        proxy.addAdvice(transactionsAdvice);
+        ProviderResourceRepairs transactionalCoordination = (ProviderResourceRepairs) proxy.getProxy();
         ProviderResourceRepairDispatcher dispatcher = new ProviderResourceRepairDispatcher(
-                rows, references, coordination, manager, clock, new SimpleMeterRegistry());
+                rows, references, transactionalCoordination, manager, clock, new SimpleMeterRegistry());
         ReflectionTestUtils.setField(dispatcher, "entityManager", Objects.requireNonNull(entities));
         return new Context(coordination, dispatcher, new TransactionTemplate(manager), clock);
     }
@@ -458,6 +519,7 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
         final Set<String> live = ConcurrentHashMap.newKeySet();
         final List<String> accepted = new CopyOnWriteArrayList<>();
         final Map<String, Set<String>> botMemberships = new ConcurrentHashMap<>();
+        final Map<String, Boolean> botActive = new ConcurrentHashMap<>();
         final ProviderResourceAdapter adapter;
         boolean terminal;
         boolean crashBeforeRead;
@@ -468,6 +530,8 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
         Wire(IntegrationKind kind) {
             this.kind = kind;
             live.add(oldRemoteKey());
+            botActive.put(oldBot(), true);
+            botActive.put(freshBot(), true);
             botMemberships.put(oldBot(), ConcurrentHashMap.newKeySet());
             botMemberships.get(oldBot()).add("old-channel");
             botMemberships.put(freshBot(), ConcurrentHashMap.newKeySet());
@@ -551,8 +615,10 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
 
         void completeAccepted() {
             for (String key : accepted) live.remove(key);
-            if (kind == IntegrationKind.SLACK)
+            if (kind == IntegrationKind.SLACK) {
                 Objects.requireNonNull(botMemberships.get(oldBot())).clear();
+                botActive.put(oldBot(), false);
+            }
         }
 
         private void accept(String key) {

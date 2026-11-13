@@ -41,7 +41,8 @@ public interface ProviderResourceAdapter {
         BOT_TOKEN,
         BOT_USER,
         SUBSCRIPTION,
-        REGISTRATION
+        REGISTRATION,
+        OAUTH_EXCHANGE
     }
 
     record Resource(

@@ -93,7 +93,10 @@ function useRepairView(
 			status: "ready",
 			items: query.data.content.map((repair) => ({
 				repair,
-				releaseAvailable: allowed && (scope.kind === "workspace" || repair.owners.length === 0),
+				releaseAvailable:
+					repair.state !== "REGISTERING" &&
+					allowed &&
+					(scope.kind === "workspace" || repair.owners.length === 0),
 			})),
 		};
 	}

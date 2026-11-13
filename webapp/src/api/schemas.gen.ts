@@ -9628,7 +9628,15 @@ export const ProviderResourceRepairSchema = {
 		},
 		resourceType: {
 			type: "string",
-			enum: ["INSTALLATION", "GROUP_HOOK", "BOT_TOKEN", "BOT_USER", "SUBSCRIPTION", "REGISTRATION"],
+			enum: [
+				"INSTALLATION",
+				"GROUP_HOOK",
+				"BOT_TOKEN",
+				"BOT_USER",
+				"SUBSCRIPTION",
+				"REGISTRATION",
+				"OAUTH_EXCHANGE",
+			],
 		},
 		state: {
 			type: "string",
@@ -9652,7 +9660,6 @@ export const ProviderResourceRepairSchema = {
 		"owners",
 		"parentId",
 		"replacementInUse",
-		"resourceId",
 		"resourceType",
 		"state",
 	],

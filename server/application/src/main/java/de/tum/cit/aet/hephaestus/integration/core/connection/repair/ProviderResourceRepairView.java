@@ -18,7 +18,8 @@ public record ProviderResourceRepairView(
         String resourceId,
         @Nullable String ownershipHash,
         ProviderResourceRepair.State state,
-        Instant createdAt) {
+        Instant createdAt,
+        @Nullable String observedTeamId) {
     public Resource resource() {
         return new Resource(kind, origin, resourceType, parentId, resourceId, ownershipHash);
     }

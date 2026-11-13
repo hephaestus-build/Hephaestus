@@ -91,12 +91,13 @@ The self-service account export is a separate, narrower operation. Self-service 
 
 `provider_resource_repair` holds pseudonymous personal identifiers under [ADR 0101](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0101-a-connection-cannot-adopt-an-upstream-resource-whose-removal-is-unresolved.md).
 It holds the provider origin, resource identifiers, an ownership fingerprint and repair state.
+An unresolved Slack authorization also holds its attempt ID and, when known, the returned team, bot-user ID and token fingerprint.
 A Slack token fingerprint is a domain-separated, unkeyed SHA-256 value, not the token.
 A GitHub installation on a personal account can identify that person.
 
 | Table | Purpose | Legal basis | Deletion trigger | Deletion proof |
 | --- | --- | --- | --- | --- |
-| `provider_resource_repair` | Protect the integrity of adopted resources against unresolved provider removals | Legitimate interest in integrity and security, GDPR Art. 6(1)(f) | Delete when the fence resolves or an instance admin releases it | `server/application/src/test/java/de/tum/cit/aet/hephaestus/integration/core/connection/repair/ProviderResourceRepairDeletionIntegrationTest.java` |
+| `provider_resource_repair` | Protect the integrity of adopted resources against unresolved provider removals and authorization exchanges | Legitimate interest in integrity and security, GDPR Art. 6(1)(f) | Delete when the fence resolves or an instance admin releases it | `server/application/src/test/java/de/tum/cit/aet/hephaestus/integration/core/connection/repair/ProviderResourceRepairDeletionIntegrationTest.java` |
 
 These identifiers have no workspace or person pointer.
 They cannot select a person's records for export or erasure.

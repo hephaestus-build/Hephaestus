@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.Cred
 import java.net.URI;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -68,8 +69,17 @@ public interface ConnectionStrategy {
                 String instanceKey,
                 @Nullable CredentialBundle credentials,
                 @Nullable String displayName,
-                @Nullable ConnectionConfig config)
+                @Nullable ConnectionConfig config,
+                @Nullable UUID exchangeAttemptId)
                 implements ConnectFinalization {
+            public Completed(
+                    String instanceKey,
+                    @Nullable CredentialBundle credentials,
+                    @Nullable String displayName,
+                    @Nullable ConnectionConfig config) {
+                this(instanceKey, credentials, displayName, config, null);
+            }
+
             /** 3-arg overload for strategies that don't need to upgrade the config blob. */
             public Completed(String instanceKey, @Nullable CredentialBundle credentials, @Nullable String displayName) {
                 this(instanceKey, credentials, displayName, null);

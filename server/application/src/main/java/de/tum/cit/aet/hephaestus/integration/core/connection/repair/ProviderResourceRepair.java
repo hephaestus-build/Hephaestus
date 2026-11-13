@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection.repair;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter.Resource;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter.ResourceType;
@@ -77,6 +78,15 @@ public class ProviderResourceRepair {
     @Column(name = "removal_attempts", nullable = false)
     private long removalAttempts;
 
+    @Column(name = "observed_team_id", length = 256)
+    private @Nullable String observedTeamId;
+
+    @Column(name = "observed_bot_user_id", length = 256)
+    private @Nullable String observedBotUserId;
+
+    @Column(name = "observed_token_fingerprint", length = 64)
+    private @Nullable String observedTokenFingerprint;
+
     @Version
     private long version;
 
@@ -91,10 +101,15 @@ public class ProviderResourceRepair {
         this.parentId = resource.parentId();
         this.resourceId = resource.resourceId();
         this.ownershipHash = resource.ownershipHash();
-        this.state = resource.type() == ResourceType.REGISTRATION ? State.REGISTERING : State.PENDING;
+        this.state = (resource.type() == ResourceType.REGISTRATION || resource.type() == ResourceType.OAUTH_EXCHANGE)
+                ? State.REGISTERING
+                : State.PENDING;
         this.createdAt = now;
         this.updatedAt = now;
-        this.nextAttemptAt = resource.type() == ResourceType.REGISTRATION ? now.plusSeconds(600) : now;
+        this.nextAttemptAt =
+                (resource.type() == ResourceType.REGISTRATION || resource.type() == ResourceType.OAUTH_EXCHANGE)
+                        ? now.plusSeconds(600)
+                        : now;
     }
 
     /** A pre-cutover call could already have reached the provider without a durable dispatch permit. */
@@ -105,10 +120,17 @@ public class ProviderResourceRepair {
         return repair;
     }
 
+    public static ProviderResourceRepair confirmationOnly(Resource resource, Instant now) {
+        var repair = new ProviderResourceRepair(resource, now);
+        repair.state = State.CONFIRMATION_REQUIRED;
+        return repair;
+    }
+
     public void transition(State next, Instant now) {
         boolean allowed = state == next
                 || switch (state) {
-                    case REGISTERING, CONFIRMATION_REQUIRED -> false;
+                    case REGISTERING -> next == State.CHECKING || next == State.AWAITING_CONFIRMATION;
+                    case CONFIRMATION_REQUIRED -> false;
                     case PENDING, AWAITING_CONFIRMATION, NEEDS_AUTHORIZATION -> next == State.CHECKING;
                     case DISPATCHING ->
                         next == State.CHECKING
@@ -126,7 +148,32 @@ public class ProviderResourceRepair {
         if (next == State.DISPATCHING) removalAttempts++;
         state = next;
         updatedAt = now;
-        nextAttemptAt = now.plusSeconds((next == State.DISPATCHING || next == State.CHECKING) ? 600 : 60);
+        long delay = switch (next) {
+            case CHECKING, DISPATCHING -> 600;
+            case AWAITING_CONFIRMATION, NEEDS_AUTHORIZATION ->
+                Math.min(3600L, 60L << Math.min(6L, Math.max(0L, attemptEpoch - 1)));
+            default -> 60;
+        };
+        nextAttemptAt = now.plusSeconds(delay);
+    }
+
+    public void observeOAuth(String teamId, @Nullable String botUserId, String tokenFingerprint, Instant now) {
+        if (resourceType != ResourceType.OAUTH_EXCHANGE) throw new IllegalStateException("Not an OAuth exchange");
+        if (observedTokenFingerprint != null && !observedTokenFingerprint.equals(tokenFingerprint))
+            throw new IllegalStateException("An exchange cannot change its token identity");
+        observedTeamId = teamId;
+        observedBotUserId = botUserId;
+        observedTokenFingerprint = tokenFingerprint;
+        updatedAt = now;
+    }
+
+    public boolean matchesOAuthIdentity(ConnectionConfig.SlackConfig config) {
+        return resourceType == ResourceType.OAUTH_EXCHANGE
+                && observedTeamId != null
+                && observedTeamId.equals(config.teamId())
+                && observedTokenFingerprint != null
+                && observedTokenFingerprint.equals(config.botTokenFingerprint())
+                && (observedBotUserId == null || observedBotUserId.equals(config.botUserId()));
     }
 
     public UUID getId() {

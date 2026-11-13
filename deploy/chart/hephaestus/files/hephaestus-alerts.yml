@@ -37,7 +37,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: A provider removal has lacked completion or authorization for an hour
+          summary: A provider removal or authorization has remained unresolved for an hour
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusProductFeedbackStuck
         expr: max(product_feedback_oldest_waiting_seconds{job="hephaestus"}) > 1800

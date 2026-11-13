@@ -23,6 +23,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
@@ -99,14 +100,38 @@ public class ProviderResourceRepairs {
     }
 
     private void checkAdoption(IntegrationRef ref, ConnectionConfig config, @Nullable CredentialBundle credential) {
+        checkAdoption(ref, config, credential, null);
+    }
+
+    private void checkAdoption(
+            IntegrationRef ref,
+            ConnectionConfig config,
+            @Nullable CredentialBundle credential,
+            @Nullable UUID exchangeAttempt) {
         List<Resource> targets = adoptionIdentities(resources(ref, config, credential));
         lockIdentities(targets);
-        boolean pendingBeforeCutover =
-                connections.findByStateAndProviderTeardownRequestedAtNotNull(IntegrationState.UNINSTALLED).stream()
-                        .filter(owner -> !owner.providerRepairWasCaptured())
-                        .flatMap(owner -> resources(ref(owner), owner.getConfig(), retainedCredential(owner)).stream())
-                        .anyMatch(old -> targets.stream().anyMatch(candidate -> overlaps(candidate, old)));
+        boolean pendingBeforeCutover = Stream.concat(
+                        connections
+                                .findByStateAndProviderTeardownRequestedAtNotNull(IntegrationState.UNINSTALLED)
+                                .stream(),
+                        Stream.of(IntegrationKind.GITLAB, IntegrationKind.OUTLINE)
+                                .flatMap(kind ->
+                                        connections
+                                                .findAllByKindAndStateIn(kind, List.of(IntegrationState.SUSPENDED))
+                                                .stream()))
+                .filter(owner -> !owner.providerRepairWasCaptured())
+                .flatMap(owner -> resources(ref(owner), owner.getConfig(), null).stream())
+                .anyMatch(old -> targets.stream().anyMatch(candidate -> overlaps(candidate, old)));
+        boolean pendingExchange = config instanceof ConnectionConfig.SlackConfig slack
+                && slack.teamId() != null
+                && repairs.hasUnresolvedSlackExchange(
+                        ProviderResourceAdapter.ResourceType.OAUTH_EXCHANGE,
+                        slack.teamId(),
+                        slack.botUserId() == null ? "*" : slack.botUserId(),
+                        slack.botTokenFingerprint() == null ? "" : slack.botTokenFingerprint(),
+                        exchangeAttempt);
         if (pendingBeforeCutover
+                || pendingExchange
                 || targets.stream()
                         .anyMatch(resource ->
                                 repairs.findByIdentityHash(resource.identity()).isPresent())) {
@@ -150,10 +175,29 @@ public class ProviderResourceRepairs {
     }
 
     private void lockAdoptableChange(Connection owner, ConnectionConfig next, @Nullable CredentialBundle credential) {
+        lockAdoptableChange(owner, next, credential, null);
+    }
+
+    private void lockAdoptableChange(
+            Connection owner,
+            ConnectionConfig next,
+            @Nullable CredentialBundle credential,
+            @Nullable UUID exchangeAttempt) {
         var targets = new ArrayList<>(resources(ref(owner), owner.getConfig(), retainedCredential(owner)));
         targets.addAll(resources(ref(owner), next, credential));
+        if (exchangeAttempt != null) {
+            var attempt = references
+                    .findByWorkspaceIdAndConnection_IdAndRepair_Id(
+                            owner.getWorkspace().getId(), owner.getId(), exchangeAttempt)
+                    .orElseThrow();
+            if (!(next instanceof ConnectionConfig.SlackConfig slack)
+                    || !attempt.getRepair().matchesOAuthIdentity(slack)) {
+                throw new IllegalStateException("The authorization result does not match its exchange attempt");
+            }
+            targets.add(attempt.getRepair().resource());
+        }
         lockIdentities(adoptionIdentities(targets));
-        checkAdoption(ref(owner), next, credential);
+        checkAdoption(ref(owner), next, credential, exchangeAttempt);
     }
 
     @Transactional
@@ -179,7 +223,10 @@ public class ProviderResourceRepairs {
                             && resources(ref(owner), owner.getConfig(), retainedCredential(owner)).stream()
                                     .anyMatch(owned -> overlaps(owned, target)))) continue;
             ProviderResourceRepair repair = repairs.findByIdentityHash(target.identity())
-                    .orElseGet(() -> repairs.save(new ProviderResourceRepair(target, clock.instant())));
+                    .orElseGet(() -> repairs.save(
+                            target.kind() == IntegrationKind.GITHUB
+                                    ? ProviderResourceRepair.confirmationOnly(target, clock.instant())
+                                    : new ProviderResourceRepair(target, clock.instant())));
             if (owner != null
                     && references
                             .findByWorkspaceIdAndConnection_IdAndRepair_Id(
@@ -187,20 +234,38 @@ public class ProviderResourceRepairs {
                             .isEmpty()) {
                 references.save(new ConnectionProviderRepair(owner, repair));
             }
-            events.publishEvent(new ProviderResourceRepairRequested(repair.getId()));
+            if (target.kind() != IntegrationKind.GITHUB)
+                events.publishEvent(new ProviderResourceRepairRequested(repair.getId()));
         }
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public Connection prepareCredentialCompletion(
             Connection expected, ConnectionConfig config, @Nullable CredentialBundle credential) {
+        return prepareCompletion(expected, config, credential, null);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Connection prepareCredentialCompletion(
+            Connection expected,
+            ConnectionConfig config,
+            @Nullable CredentialBundle credential,
+            @Nullable UUID exchangeAttempt) {
+        return prepareCompletion(expected, config, credential, exchangeAttempt);
+    }
+
+    private Connection prepareCompletion(
+            Connection expected,
+            ConnectionConfig config,
+            @Nullable CredentialBundle credential,
+            @Nullable UUID exchangeAttempt) {
         long expectedGeneration = expected.getLifecycleGeneration();
         Long expectedVersion = expected.getVersion();
         Connection current = connections
                 .findByIdAndWorkspaceId(
                         expected.getId(), expected.getWorkspace().getId())
                 .orElseThrow();
-        lockAdoptableChange(current, config, credential);
+        lockAdoptableChange(current, config, credential, exchangeAttempt);
         connections.acquireLifecycleLock(current.getId(), current.getWorkspace().getId());
         Objects.requireNonNull(entityManager).refresh(current);
         if (current.getLifecycleGeneration() != expectedGeneration
@@ -339,7 +404,7 @@ public class ProviderResourceRepairs {
             for (Resource resource : discovered) requestCapturedRemoval(reference.getConnection(), resource);
         }
         // An empty listing does not exclude a timed-out creation completing later.
-        registration.transition(ProviderResourceRepair.State.REGISTERING, clock.instant());
+        registration.transition(ProviderResourceRepair.State.AWAITING_CONFIRMATION, clock.instant());
     }
 
     @Transactional
@@ -394,7 +459,7 @@ public class ProviderResourceRepairs {
                 .filter(owner -> owner.getState() == IntegrationState.ACTIVE
                         || (target.kind() != IntegrationKind.GITLAB && target.kind() != IntegrationKind.OUTLINE))
                 .filter(owner -> !Objects.equals(owner.getId(), removingId))
-                .flatMap(owner -> resources(ref(owner), owner.getConfig(), retainedCredential(owner)).stream())
+                .flatMap(owner -> resources(ref(owner), owner.getConfig(), null).stream())
                 .anyMatch(owned -> overlaps(owned, target));
     }
 

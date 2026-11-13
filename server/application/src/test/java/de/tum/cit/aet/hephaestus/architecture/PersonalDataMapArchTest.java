@@ -111,7 +111,7 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "provider_resource_repair",
             new SecurityRetention(
                     "docs/decisions/0101-a-connection-cannot-adopt-an-upstream-resource-whose-removal-is-unresolved.md",
-                    "Protect the integrity of adopted resources against unresolved provider removals",
+                    "Protect the integrity of adopted resources against unresolved provider removals and authorization exchanges",
                     "Legitimate interest in integrity and security, GDPR Art. 6(1)(f)",
                     "Delete when the fence resolves or an instance admin releases it",
                     "de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairDeletionIntegrationTest"));

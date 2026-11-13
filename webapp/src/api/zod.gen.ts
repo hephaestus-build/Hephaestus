@@ -2927,7 +2927,7 @@ export const zProviderResourceRepair = z.object({
 	owners: z.array(zOwner),
 	parentId: z.string(),
 	replacementInUse: z.boolean(),
-	resourceId: z.string(),
+	resourceId: z.string().optional(),
 	resourceType: z.enum([
 		"INSTALLATION",
 		"GROUP_HOOK",
@@ -2935,6 +2935,7 @@ export const zProviderResourceRepair = z.object({
 		"BOT_USER",
 		"SUBSCRIPTION",
 		"REGISTRATION",
+		"OAUTH_EXCHANGE",
 	]),
 	state: z.enum([
 		"REGISTERING",

@@ -27,6 +27,7 @@ const RESOURCE_LABELS: Record<ProviderResourceRepair["resourceType"], string> = 
 	BOT_USER: "Bot user",
 	SUBSCRIPTION: "Webhook subscription",
 	REGISTRATION: "Unconfirmed registration",
+	OAUTH_EXCHANGE: "Slack authorization",
 };
 
 const STATE_COPY: Record<ProviderResourceRepair["state"], string> = {
@@ -43,6 +44,16 @@ const STATE_COPY: Record<ProviderResourceRepair["state"], string> = {
 	NEEDS_AUTHORIZATION:
 		"Hephaestus cannot verify removal with the available credentials. An instance admin must check at the provider.",
 };
+
+function repairStateCopy(repair: ProviderResourceRepair) {
+	if (repair.resourceType !== "OAUTH_EXCHANGE") {
+		return STATE_COPY[repair.state];
+	}
+	if (repair.state === "REGISTERING") {
+		return "Slack is completing this authorization. Wait for its result before confirming the outcome.";
+	}
+	return "This authorization has an uncertain outcome. An instance admin must confirm its outcome at Slack before releasing this block.";
+}
 
 export interface ProviderRepairItem {
 	repair: ProviderResourceRepair;
@@ -122,7 +133,7 @@ export function ProviderResourceRepairs({
 								<ShieldAlertIcon />
 								<AlertTitle>{RESOURCE_LABELS[repair.resourceType]}</AlertTitle>
 								<AlertDescription className="space-y-2">
-									<p>{STATE_COPY[repair.state]}</p>
+									<p>{repairStateCopy(repair)}</p>
 									{repair.replacementInUse && (
 										<p>A connection is using a different resource while this removal stays open.</p>
 									)}
@@ -154,7 +165,9 @@ export function ProviderResourceRepairs({
 										</Button>
 									) : (
 										<p>
-											An instance admin can release the block after confirming removal is complete.
+											{repair.state === "REGISTERING"
+												? "Wait for the authorization or registration to finish before confirming its outcome."
+												: "An instance admin can release the block after confirming removal is complete."}
 										</p>
 									)}
 								</AlertDescription>

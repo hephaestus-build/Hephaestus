@@ -417,6 +417,122 @@ class ProviderResourceRepairDeletionIntegrationTest extends AbstractWorkspaceInt
         assertThat(target.getRemovalAttempts()).isEqualTo(1);
     }
 
+    @Test
+    @WithMockUser(authorities = "app_admin")
+    void shouldAuditEveryReferencingWorkspaceWhenAnInstanceAdminReleasesASharedFence() {
+        var actor = persistAccount("shared repair admin " + UUID.randomUUID());
+        SecurityContextHolder.setContext(MockSecurityContextUtils.createSecurityContext(
+                Objects.requireNonNull(actor.getId()).toString(), new String[] {"app_admin"}, "shared-admin"));
+        UUID id = pending();
+        var first = references.findByRepair_Id(id).getFirst();
+        long otherWorkspace = Objects.requireNonNull(transactions.execute(status -> {
+            Workspace other = workspaces.save(WorkspaceTestFixtures.activeWorkspace("shared-" + UUID.randomUUID()));
+            var target = rows.findById(id).orElseThrow().resource();
+            var owner = new Connection(
+                    other,
+                    IntegrationKind.OUTLINE,
+                    "shared",
+                    new ConnectionConfig.OutlineConfig(target.origin(), target.resourceId(), "key/route", Set.of()));
+            owner.setState(IntegrationState.UNINSTALLED);
+            owner = connections.saveAndFlush(owner);
+            references.save(
+                    new ConnectionProviderRepair(owner, rows.findById(id).orElseThrow()));
+            return other.getId();
+        }));
+        admin.release(
+                first.getWorkspaceId(),
+                first.getConnection().getId(),
+                id,
+                new ReleaseProviderResourceRepairRequestDTO(
+                        true, rows.findById(id).orElseThrow().getIdentityHash()));
+        assertThat(jdbc.queryForList(
+                        "SELECT workspace_id FROM config_audit_event WHERE entity_type = 'PROVIDER_RESOURCE_RELEASE' AND entity_id = ?",
+                        Long.class,
+                        id.toString()))
+                .containsExactlyInAnyOrder(first.getWorkspaceId(), otherWorkspace);
+        assertThat(rows.existsById(id)).isFalse();
+    }
+
+    @Test
+    @WithMockUser(authorities = "app_admin")
+    void shouldRefuseAReleaseWhileTheExternalRegistrationIsStillInProgress() {
+        var actor = persistAccount("registration admin " + UUID.randomUUID());
+        SecurityContextHolder.setContext(MockSecurityContextUtils.createSecurityContext(
+                Objects.requireNonNull(actor.getId()).toString(), new String[] {"app_admin"}, "registration-admin"));
+        UUID seed = pending();
+        var owner = references.findByRepair_Id(seed).getFirst();
+        UUID registration = Objects.requireNonNull(transactions.execute(status -> {
+            var record = rows.save(new ProviderResourceRepair(
+                    new Resource(
+                            IntegrationKind.OUTLINE,
+                            "https://outline.example.test",
+                            ProviderResourceAdapter.ResourceType.REGISTRATION,
+                            "",
+                            UUID.randomUUID().toString(),
+                            null),
+                    clock.instant()));
+            references.save(new ConnectionProviderRepair(
+                    connections.findById(owner.getConnection().getId()).orElseThrow(), record));
+            return record.getId();
+        }));
+        created.add(registration);
+        assertThatThrownBy(() -> admin.release(
+                        owner.getWorkspaceId(),
+                        owner.getConnection().getId(),
+                        registration,
+                        new ReleaseProviderResourceRepairRequestDTO(
+                                true, rows.findById(registration).orElseThrow().getIdentityHash())))
+                .isInstanceOf(ResponseStatusException.class);
+        assertThat(rows.existsById(registration)).isTrue();
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM config_audit_event WHERE entity_type = 'PROVIDER_RESOURCE_RELEASE' AND entity_id = ?",
+                        Long.class,
+                        registration.toString()))
+                .isZero();
+    }
+
+    @Test
+    void shouldOmitTheTokenFingerprintFromAWorkspaceAdministratorsRepairResponse() {
+        UUID seed = pending();
+        var source = references.findByRepair_Id(seed).getFirst();
+        Workspace workspace = workspaces.findById(source.getWorkspaceId()).orElseThrow();
+        String fingerprint = ProviderResourceAdapter.slackTokenFingerprint("test-token-" + seed);
+        long connectionId = Objects.requireNonNull(transactions.execute(status -> {
+            String team = "T-" + seed;
+            var owner = new Connection(
+                    workspace,
+                    IntegrationKind.SLACK,
+                    team,
+                    new ConnectionConfig.SlackConfig(team, "U-BOT", fingerprint, "Team", null, Set.of()));
+            owner.setState(IntegrationState.UNINSTALLED);
+            owner = connections.saveAndFlush(owner);
+            var record = rows.save(new ProviderResourceRepair(
+                    new Resource(
+                            IntegrationKind.SLACK,
+                            "https://slack.com",
+                            ProviderResourceAdapter.ResourceType.BOT_TOKEN,
+                            team + "/U-BOT",
+                            fingerprint,
+                            null),
+                    clock.instant()));
+            created.add(record.getId());
+            references.save(new ConnectionProviderRepair(owner, record));
+            return owner.getId();
+        }));
+        long member = Objects.requireNonNull(ensureAdminMembership(workspace).getAccountId());
+        String response = Objects.requireNonNull(http.get()
+                .uri("/workspaces/" + workspace.getWorkspaceSlug() + "/connections/" + connectionId
+                        + "/provider-repairs")
+                .headers(headers -> headers.setBearerAuth("mock-jwt-member-" + member))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody());
+        assertThat(response).isNotNull().doesNotContain(fingerprint).contains("BOT_TOKEN");
+    }
+
     private UUID pending() {
         return pending(false);
     }

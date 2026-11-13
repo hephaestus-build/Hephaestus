@@ -4681,14 +4681,15 @@ export type ProviderResourceRepair = {
 	owners: Array<Owner>;
 	parentId: string;
 	replacementInUse: boolean;
-	resourceId: string;
+	resourceId?: string;
 	resourceType:
 		| "INSTALLATION"
 		| "GROUP_HOOK"
 		| "BOT_TOKEN"
 		| "BOT_USER"
 		| "SUBSCRIPTION"
-		| "REGISTRATION";
+		| "REGISTRATION"
+		| "OAUTH_EXCHANGE";
 	state:
 		| "REGISTERING"
 		| "PENDING"

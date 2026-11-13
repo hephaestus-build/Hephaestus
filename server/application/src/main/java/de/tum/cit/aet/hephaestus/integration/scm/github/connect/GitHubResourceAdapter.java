@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.Cred
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import java.util.List;
 import java.util.function.BooleanSupplier;
@@ -56,7 +57,11 @@ public class GitHubResourceAdapter implements ProviderResourceAdapter {
             return Removal.NEEDS_AUTHORIZATION;
         // App JWT authentication positively scopes both reads and deletes to this App. A hidden 404 throws and retains
         // the fence.
-        app.installation(Long.parseLong(resource.resourceId()));
+        try {
+            app.installation(Long.parseLong(resource.resourceId()));
+        } catch (InstallationNotFoundException hiddenOrAbsent) {
+            return Removal.ADMIN_CONFIRMATION;
+        }
         if (!beforeDispatch.getAsBoolean()) return Removal.CANCELLED;
         app.deleteInstallation(Long.parseLong(resource.resourceId()));
         // GitHub returns 202. It has accepted work, not supplied a terminal removal receipt.

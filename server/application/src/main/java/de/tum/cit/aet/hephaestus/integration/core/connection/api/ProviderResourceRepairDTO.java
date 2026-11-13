@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /** A repair's provider identity is pseudonymous security data, never an authorization credential. */
 public record ProviderResourceRepairDTO(
@@ -18,7 +19,7 @@ public record ProviderResourceRepairDTO(
         @NonNull String origin,
         @NonNull ResourceType resourceType,
         @NonNull String parentId,
-        @NonNull String resourceId,
+        @Nullable String resourceId,
         @NonNull State state,
         @NonNull Instant createdAt,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean replacementInUse,
@@ -38,8 +39,8 @@ public record ProviderResourceRepairDTO(
                 repair.kind(),
                 resource.origin(),
                 resource.type(),
-                resource.parentId(),
-                resource.resourceId(),
+                repair.observedTeamId() == null ? resource.parentId() : repair.observedTeamId(),
+                resource.type() == ResourceType.BOT_TOKEN ? null : resource.resourceId(),
                 repair.state(),
                 repair.createdAt(),
                 replacementInUse,

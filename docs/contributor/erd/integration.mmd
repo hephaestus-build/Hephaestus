@@ -440,6 +440,9 @@ erDiagram
         BIGINT version "NOT NULL"
         BIGINT attempt_epoch "NOT NULL"
         BIGINT removal_attempts "NOT NULL"
+        VARCHAR(256) observed_team_id
+        VARCHAR(256) observed_bot_user_id
+        VARCHAR(64) observed_token_fingerprint
     }
 
     PullRequestClosingIssue {

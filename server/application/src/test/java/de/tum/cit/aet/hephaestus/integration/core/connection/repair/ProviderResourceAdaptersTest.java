@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter.Re
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineWebhookClient;
 import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineWebhookSubscription;
 import de.tum.cit.aet.hephaestus.integration.outline.lifecycle.OutlineResourceAdapter;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.connect.GitHubResourceAdapter;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
@@ -79,6 +80,19 @@ class ProviderResourceAdaptersTest {
         assertThat(adapter.remove(target, null, () -> false)).isEqualTo(Removal.CANCELLED);
         doThrow(new IllegalStateException("permission-hidden 404")).when(app).installation(42L);
         assertThatThrownBy(() -> adapter.remove(target, null, () -> true)).isInstanceOf(IllegalStateException.class);
+        verify(app, never()).deleteInstallation(anyLong());
+    }
+
+    @Test
+    void shouldStopPollingAnAppInstallationWhoseAbsenceNeedsAdminConfirmation() {
+        GitHubAppTokenService app = mock(GitHubAppTokenService.class);
+        when(app.isConfigured()).thenReturn(true);
+        when(app.getConfiguredAppId()).thenReturn(77L);
+        when(app.installation(42L)).thenThrow(new InstallationNotFoundException(42L));
+        var target =
+                new Resource(IntegrationKind.GITHUB, "https://github.com", ResourceType.INSTALLATION, "77", "42", null);
+        assertThat(new GitHubResourceAdapter(app).remove(target, null, () -> true))
+                .isEqualTo(Removal.ADMIN_CONFIRMATION);
         verify(app, never()).deleteInstallation(anyLong());
     }
 

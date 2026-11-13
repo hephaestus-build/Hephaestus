@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -21,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.Bear
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy.ConnectFinalization;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.OAuthExchangeRepair;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -71,7 +73,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         lenient()
-                .when(repairs.prepareCredentialCompletion(any(), any(), any()))
+                .when(repairs.prepareCredentialCompletion(any(), any(), any(), any()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         service = new OAuthCallbackService(
@@ -81,7 +83,8 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
                 credentialBundleConverter,
                 membershipQuery,
                 transactionManager,
-                repairs);
+                repairs,
+                mock(OAuthExchangeRepair.class));
     }
 
     @Test

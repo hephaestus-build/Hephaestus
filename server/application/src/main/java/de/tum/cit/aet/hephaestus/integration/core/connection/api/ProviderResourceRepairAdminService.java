@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderReso
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter.ResourceType;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import java.util.HashSet;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
@@ -103,7 +104,7 @@ public class ProviderResourceRepairAdminService {
         reference = references
                 .findByWorkspaceIdAndConnection_IdAndRepair_Id(workspaceId, connectionId, repairId)
                 .orElseThrow(() -> new NoSuchElementException("Provider repair not found"));
-        release(reference.getRepair(), workspaceId, connectionId, confirmation);
+        release(reference.getRepair(), confirmation);
     }
 
     @Transactional
@@ -118,17 +119,18 @@ public class ProviderResourceRepairAdminService {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "Release this fence from the connection's administration page.");
         }
-        release(repair, null, null, confirmation);
+        release(repair, confirmation);
     }
 
-    private void release(
-            ProviderResourceRepair repair,
-            @Nullable Long workspaceId,
-            @Nullable Long connectionId,
-            ReleaseProviderResourceRepairRequestDTO confirmation) {
+    private void release(ProviderResourceRepair repair, ReleaseProviderResourceRepairRequestDTO confirmation) {
         if (!confirmation.confirmedGone() || !repair.getIdentityHash().equals(confirmation.identityHash())) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "The provider identity or its removal confirmation does not match.");
+        }
+        if (repair.getState() == ProviderResourceRepair.State.REGISTERING) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "The provider registration is still in progress. Wait for its result before confirming removal.");
         }
         var resource = repair.resource();
         if (resource.type() == ResourceType.BOT_USER
@@ -144,14 +146,29 @@ public class ProviderResourceRepairAdminService {
         CurrentAccount.requireId();
         coordination.clearCompletedHook(repair.getId(), resource);
         // The audit keeps confirmation and attribution, never a copy of the retained provider identifier.
-        var snapshot = new ReleaseSnapshot(repair.getId(), connectionId, true);
-        audit.record(new ConfigAuditEntry(
-                ConfigAuditEntityType.PROVIDER_RESOURCE_RELEASE,
-                repair.getId().toString(),
-                workspaceId,
-                null,
-                snapshot));
-        references.deleteAll(references.findByRepair_Id(repair.getId()));
+        var owners = references.findByRepair_Id(repair.getId());
+        if (owners.isEmpty()) {
+            audit.record(new ConfigAuditEntry(
+                    ConfigAuditEntityType.PROVIDER_RESOURCE_RELEASE,
+                    repair.getId().toString(),
+                    null,
+                    null,
+                    new ReleaseSnapshot(repair.getId(), null, true)));
+        } else {
+            var auditedWorkspaces = new HashSet<Long>();
+            for (var owner : owners) {
+                if (auditedWorkspaces.add(owner.getWorkspaceId())) {
+                    audit.record(new ConfigAuditEntry(
+                            ConfigAuditEntityType.PROVIDER_RESOURCE_RELEASE,
+                            repair.getId().toString(),
+                            owner.getWorkspaceId(),
+                            null,
+                            new ReleaseSnapshot(
+                                    repair.getId(), owner.getConnection().getId(), true)));
+                }
+            }
+        }
+        references.deleteAll(owners);
         repairs.delete(repair);
     }
 

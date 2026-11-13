@@ -281,7 +281,9 @@ Only an instance admin can release a block.
 3. Select **Confirm removal** for the exact provider identity.
 4. Confirm that you checked at the provider, then select **Release block**.
 
-The action records the admin, connection and confirmation in the audit log.
+The action records the admin, connection and confirmation in each referencing workspace’s audit log.
+An authorization or registration that is still in progress cannot be released.
+An uncertain Slack authorization remains visible even if the process stopped before it stored the token identity.
 It does not restore erased work or resume a failed authorization flow.
 Start the connection flow again after release.
 For Slack, release a pending token removal before its related bot-user block.

@@ -16,3 +16,5 @@
 
 Replace `integration_provider_teardown_total` in custom dashboards with `integration_provider_repair_attempts_total` and `integration_provider_repair_open`.
 Route `HephaestusProviderRemovalNeedsConfirmation` to an instance administrator.
+
+While repairs remain unresolved, or after a provider release is audited, rollback refuses to remove that evidence. Keep the matching release and apply a forward fix.

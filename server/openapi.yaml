@@ -20764,6 +20764,7 @@ components:
           - BOT_USER
           - SUBSCRIPTION
           - REGISTRATION
+          - OAUTH_EXCHANGE
         state:
           type: string
           enum:
@@ -20783,7 +20784,6 @@ components:
       - owners
       - parentId
       - replacementInUse
-      - resourceId
       - resourceType
       - state
     PublicActivity:

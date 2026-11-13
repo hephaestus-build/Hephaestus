@@ -28,6 +28,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -140,7 +141,7 @@ public class ConnectionAdminService {
                     "Disconnect the current source-control integration before reconnecting GitLab.");
         }
 
-        ConnectionConfig config = buildConfigForInlineKind(workspaceId, kind, userInput, instanceKey);
+        ConnectionConfig config = buildConfigForInlineKind(workspaceId, kind, userInput, instanceKey, credentials);
         repairs.requireAdoptable(new IntegrationRef(kind, workspaceId, instanceKey), config, credentials);
         // Reconnect-friendly upsert: (workspace, kind, instance_key) is unique, so a previous
         // UNINSTALLED install of the same vendor instance is revived with fresh config +
@@ -194,7 +195,11 @@ public class ConnectionAdminService {
      * its strategy checked the fresh token before this transaction began.
      */
     private ConnectionConfig buildConfigForInlineKind(
-            long workspaceId, IntegrationKind kind, Map<String, String> userInput, @Nullable String instanceKey) {
+            long workspaceId,
+            IntegrationKind kind,
+            Map<String, String> userInput,
+            @Nullable String instanceKey,
+            CredentialBundle freshCredentials) {
         Set<String> enabledStreams = new HashSet<>();
         return switch (kind) {
             case GITHUB -> throw new IllegalStateException(kind + " is never connected inline");
@@ -204,8 +209,17 @@ public class ConnectionAdminService {
                         .orElseThrow(() ->
                                 new IllegalArgumentException("This workspace has no GitLab connection to reconnect."));
                 long previousId = Objects.requireNonNull(previous.getId());
+                if (!(previous.getConfig() instanceof ConnectionConfig.GitLabConfig before)) {
+                    throw new IllegalStateException("The disconnected GitLab connection has no group configuration.");
+                }
+                Long expectedVersion = previous.getVersion();
+                repairs.requireAdoptableChange(
+                        previous, before.withTokenMetadata(null).withGitlabWebhookId(null), freshCredentials);
                 connectionRepository.acquireLifecycleLock(previousId, workspaceId);
                 Objects.requireNonNull(entityManager).refresh(previous);
+                if (!Objects.equals(expectedVersion, previous.getVersion())) {
+                    throw new TransientDataAccessResourceException("The GitLab connection changed before reconnecting");
+                }
                 if (previous.getState() != IntegrationState.UNINSTALLED) {
                     throw new IllegalArgumentException("This GitLab connection changed. Reload before reconnecting.");
                 }

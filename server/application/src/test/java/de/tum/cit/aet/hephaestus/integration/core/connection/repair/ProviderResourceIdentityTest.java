@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter.Resource;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter.ResourceType;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -52,6 +53,22 @@ class ProviderResourceIdentityTest {
         removal.transition(ProviderResourceRepair.State.DISPATCHING, Instant.EPOCH);
         removal.transition(ProviderResourceRepair.State.AWAITING_CONFIRMATION, Instant.EPOCH.plusSeconds(1));
         assertThat(removal.getState()).isEqualTo(ProviderResourceRepair.State.AWAITING_CONFIRMATION);
+    }
+
+    @Test
+    void shouldBackOffUncertainAndUnauthorizedAttemptsToAnHourlyCap() {
+        for (var state : List.of(
+                ProviderResourceRepair.State.AWAITING_CONFIRMATION, ProviderResourceRepair.State.NEEDS_AUTHORIZATION)) {
+            var row = new ProviderResourceRepair(
+                    resource("https://provider.example.test", "group", "hook", ResourceType.GROUP_HOOK), Instant.EPOCH);
+            Instant now = Instant.EPOCH;
+            for (long delay : new long[] {60, 120, 240, 480, 960, 1920, 3600, 3600}) {
+                row.transition(ProviderResourceRepair.State.CHECKING, now);
+                row.transition(state, now);
+                assertThat(row.getNextAttemptAt()).isEqualTo(now.plusSeconds(delay));
+                now = row.getNextAttemptAt();
+            }
+        }
     }
 
     private static Resource resource(String origin, String parent, String id, ResourceType type) {

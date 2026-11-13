@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -18,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy.Connect
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy.InitiateRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
+import de.tum.cit.aet.hephaestus.integration.core.spi.OAuthExchangeRepair;
 import de.tum.cit.aet.hephaestus.integration.slack.connect.SlackOAuthClient.OAuthV2Access;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -53,6 +55,7 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
         strategy = new SlackConnectionStrategy(
                 oauthStateService,
                 oauthClient,
+                mock(OAuthExchangeRepair.class),
                 workspaceContentEraser,
                 "client-id",
                 new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create("https://app.test"), "/api")));
@@ -159,6 +162,7 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
         SlackConnectionStrategy misconfigured = new SlackConnectionStrategy(
                 oauthStateService,
                 oauthClient,
+                mock(OAuthExchangeRepair.class),
                 workspaceContentEraser,
                 "",
                 new PublicApiUrls(AuthPropertiesFixture.withApiBasePath("/api")));
@@ -181,6 +185,7 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
         var callbackStrategy = new SlackConnectionStrategy(
                 oauthStateService,
                 oauthClient,
+                mock(OAuthExchangeRepair.class),
                 workspaceContentEraser,
                 "client-id",
                 new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(issuer), prefix)));

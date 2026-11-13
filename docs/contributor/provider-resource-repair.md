@@ -26,6 +26,9 @@ A returned resource is adopted only by the connection version and lifecycle gene
 A late result becomes a removal target.
 An unknown creation remains visible while discovery looks for its marker.
 OAuth state similarly binds the connection and its lifecycle generation before redirect.
+A Slack exchange commits intent before dispatch and stores the returned team, bot-user ID and token fingerprint before `auth.test`.
+A crash or ambiguous error keeps that attempt for admin repair; a deterministic refusal creates no resource fence.
+Successful adoption removes the attempt in the same transaction.
 
 ## Separate inspection, dispatch and completion
 
@@ -47,6 +50,8 @@ stateDiagram-v2
 ```
 
 The dispatcher calls the provider outside a database transaction.
+Uncertain and unauthorized attempts back off from one minute to one hour.
+A GitHub App not-found result requires admin confirmation and stops automatic polling.
 Before DELETE or revocation, a short transaction records that this attempt can reach the provider.
 An epoch prevents an old inspection from acquiring a new dispatch permit after a competing claim or release.
 A crash after the permit is uncertain even if no request left the process.

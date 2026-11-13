@@ -214,7 +214,18 @@ public class SlackOAuthClient {
             @JsonProperty("access_token") @Nullable String accessToken,
             @JsonProperty("team") @Nullable Team team,
             @JsonProperty("expires_in") @Nullable Integer expiresIn,
-            @JsonProperty("refresh_token") @Nullable String refreshToken) {
+            @JsonProperty("refresh_token") @Nullable String refreshToken,
+            @JsonProperty("bot_user_id") @Nullable String botUserId) {
+        public OAuthV2Access(
+                boolean ok,
+                @Nullable String error,
+                @Nullable String accessToken,
+                @Nullable Team team,
+                @Nullable Integer expiresIn,
+                @Nullable String refreshToken) {
+            this(ok, error, accessToken, team, expiresIn, refreshToken, null);
+        }
+
         @JsonIgnoreProperties(ignoreUnknown = true)
         public record Team(
                 @JsonProperty("id") @Nullable String id,
