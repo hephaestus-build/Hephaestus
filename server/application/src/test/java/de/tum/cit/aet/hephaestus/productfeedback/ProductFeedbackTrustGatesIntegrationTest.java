@@ -11,6 +11,7 @@ import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -453,12 +454,43 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldEndAnExpandedFallbackTitleWithoutBlockingTheNextReport() {
+        UUID oversized = privateReportDue();
+        String message = "#1 ".repeat(60).strip();
+        jdbc.update("UPDATE product_feedback SET message = ? WHERE id = ?", message, oversized);
+        jdbc.update(
+                "UPDATE product_feedback_filing SET draft = ? WHERE feedback_id = ?",
+                routing.write(Fallback.of(ProductFeedback.Kind.BUG, message)),
+                oversized);
+        when(issues.create(any(), anyString(), anyString(), any()))
+                .thenThrow(new ProductFeedbackIssues.Refused("422 title too long"));
+        fileDueAndDrain();
+        var stopped = filings.findById(oversized).orElseThrow();
+        assertThat(stopped.getState()).isEqualTo(FilingState.STOPPED);
+        assertThat(stopped.getReason()).isEqualTo(FilingReason.GITHUB_REFUSED);
+        assertThat(stopped.getIssueTitle())
+                .isEqualTo("issue 1 ".repeat(60).strip())
+                .hasSizeGreaterThan(300);
+
+        UUID next = privateReportDue();
+        doReturn(new ProductFeedbackIssues.Issue(93, "I_93", "https://github.com/acme/feedback-private/issues/93"))
+                .when(issues)
+                .create(any(), anyString(), anyString(), any());
+        fileDueAndDrain();
+        assertThat(filings.findById(next).orElseThrow().getState()).isEqualTo(FilingState.FILED);
+    }
+
+    @Test
     void shouldFindTheIssueByItsMarkerInsteadOfFilingItAgainWhenGitHubsAnswerWasLost() {
         UUID id = privateReportDue();
         when(issues.create(any(), anyString(), anyString(), any()))
                 .thenThrow(new ProductFeedbackIssues.Unknown("read timed out", null));
         fileDueAndDrain();
         assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.FILING);
+        String claimedTitle = filings.findById(id).orElseThrow().getIssueTitle();
+        String claimedText = filings.findById(id).orElseThrow().getIssueText();
+        assertThat(claimedTitle).isNotBlank();
+        assertThat(claimedText).isNotBlank();
 
         when(issues.findByMarker(eq(PRIVATE_REPOSITORY), eq(id.toString()), any()))
                 .thenReturn(Optional.of(new ProductFeedbackIssues.Issue(
@@ -474,6 +506,8 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
         var filed = filings.findById(id).orElseThrow();
         assertThat(filed.getState()).isEqualTo(FilingState.FILED);
         assertThat(filed.getIssueNumber()).isEqualTo(92L);
+        assertThat(filed.getIssueTitle()).isEqualTo(claimedTitle);
+        assertThat(filed.getIssueText()).isEqualTo(claimedText);
     }
 
     @Test

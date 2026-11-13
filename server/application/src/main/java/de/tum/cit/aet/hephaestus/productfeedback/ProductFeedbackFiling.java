@@ -93,7 +93,7 @@ public class ProductFeedbackFiling {
     private @Nullable Instant publishRequestedAt;
 
     /** The issue's title as filed, frozen because the destination and the release can change afterwards. */
-    @Column(name = "issue_title", length = 300)
+    @Column(name = "issue_title", columnDefinition = "text")
     private @Nullable String issueTitle;
 
     /** The issue's sections as filed, without its footer, reason or marker: what the reporter may read. */

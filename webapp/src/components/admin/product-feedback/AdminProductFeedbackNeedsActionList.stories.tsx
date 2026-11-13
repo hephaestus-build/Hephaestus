@@ -144,3 +144,17 @@ export const LoadError: Story = {
 		await expect(canvas.getByText("We could not load the reports that need action")).toBeVisible();
 	},
 };
+
+/** A stopped admin-routed report names its destination as a sentence. */
+export const SavedForAdmins: Story = {
+	args: {
+		state: {
+			status: "ready",
+			items: [{ ...unavailable, route: "ADMINS", repository: undefined }],
+			cleanups: [],
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/It was going to the instance admins in Reports/u)).toBeVisible();
+	},
+};
