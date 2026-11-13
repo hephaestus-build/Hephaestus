@@ -25,19 +25,19 @@
             CREATE INDEX ix_provider_resource_repair_next_attempt ON provider_resource_repair(next_attempt_at, id);
             CREATE TABLE connection_provider_repair (
                 id uuid PRIMARY KEY,
-                workspace_id bigint NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
+                workspace_id bigint NOT NULL,
                 connection_id bigint NOT NULL,
                 repair_id uuid NOT NULL REFERENCES provider_resource_repair(id) ON DELETE CASCADE,
                 credentials_generation bigint NOT NULL,
                 lifecycle_generation bigint NOT NULL,
                 connection_version bigint NOT NULL,
-                CONSTRAINT fk_connection_provider_repair_owner FOREIGN KEY (connection_id, workspace_id) REFERENCES connection(id, workspace_id) ON DELETE CASCADE,
+                CONSTRAINT sfk_connection_provider_repair_workspace FOREIGN KEY (workspace_id) REFERENCES workspace(id) ON DELETE CASCADE, CONSTRAINT fk_connection_provider_repair_owner FOREIGN KEY (connection_id, workspace_id) REFERENCES connection(id, workspace_id) ON DELETE CASCADE,
                 CONSTRAINT uq_connection_provider_repair UNIQUE (workspace_id, connection_id, repair_id)
             );
             CREATE INDEX ix_connection_provider_repair_resource ON connection_provider_repair(repair_id);
         </sql>
         <rollback>
-            <sql>
+            <sql> ALTER TABLE config_audit_event VALIDATE CONSTRAINT ck_config_audit_event_entity_type; ALTER TABLE config_audit_event VALIDATE CONSTRAINT ck_config_audit_event_scope; ALTER TABLE auth_event VALIDATE CONSTRAINT ck_auth_event_event_type;
                 DROP TABLE connection_provider_repair;
                 DROP TABLE provider_resource_repair;
                 ALTER TABLE connection DROP COLUMN lifecycle_generation;
@@ -50,11 +50,11 @@
             DELETE FROM oauth_state_nonce;
             ALTER TABLE oauth_state_nonce ADD COLUMN connection_id bigint NOT NULL;
             ALTER TABLE oauth_state_nonce ADD COLUMN lifecycle_generation bigint NOT NULL;
-            ALTER TABLE oauth_state_nonce ADD CONSTRAINT fk_oauth_state_nonce_connection FOREIGN KEY (connection_id, workspace_id) REFERENCES connection(id, workspace_id) ON DELETE CASCADE;
+            ALTER TABLE oauth_state_nonce ADD CONSTRAINT sfk_oauth_state_nonce_connection FOREIGN KEY (connection_id, workspace_id) REFERENCES connection(id, workspace_id) ON DELETE CASCADE;
         </sql>
-        <rollback>
+        <createIndex tableName="oauth_state_nonce" indexName="idx_oauth_state_nonce_connection"><column name="connection_id"/><column name="workspace_id"/></createIndex><rollback><dropIndex tableName="oauth_state_nonce" indexName="idx_oauth_state_nonce_connection"/>
             <sql>
-                ALTER TABLE oauth_state_nonce DROP CONSTRAINT fk_oauth_state_nonce_connection;
+                ALTER TABLE oauth_state_nonce DROP CONSTRAINT sfk_oauth_state_nonce_connection;
                 ALTER TABLE oauth_state_nonce DROP COLUMN lifecycle_generation;
                 ALTER TABLE oauth_state_nonce DROP COLUMN connection_id;
             </sql>

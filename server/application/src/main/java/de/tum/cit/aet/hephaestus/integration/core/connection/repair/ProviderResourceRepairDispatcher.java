@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionCredentialsReplacedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.CredentialBundle;
@@ -67,6 +68,13 @@ public class ProviderResourceRepairDispatcher {
     @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)
     public void on(ProviderResourceRepairRequested requested) {
         dispatch(requested.repairId());
+    }
+
+    @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)
+    public void on(ConnectionCredentialsReplacedEvent replaced) {
+        for (UUID id : coordination.retryWithRestoredAuthorization(replaced.workspaceId(), replaced.connectionId())) {
+            dispatch(id);
+        }
     }
 
     public void dispatch(UUID repairId) {

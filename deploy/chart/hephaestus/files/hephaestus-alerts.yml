@@ -32,7 +32,7 @@ groups:
           summary: The monitoring of Hephaestus scrapes, evaluates and notifies
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusProviderRemovalNeedsConfirmation
-        expr: sum by (kind) (max by (kind, state) (integration_provider_repair_open{job="hephaestus",state=~"registering|awaiting_confirmation|needs_authorization|confirmation_required"})) > 0
+        expr: sum by (kind) (max by (kind, state) (integration_provider_repair_open{job="hephaestus"})) > 0
         for: 1h
         labels:
           severity: warning

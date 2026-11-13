@@ -447,6 +447,8 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     // provider operations.
                     "GitLabResourceAdapter", // The client is conditional on GitLab runtime; resource identities remain
                     // capturable when disabled.
+                    "SlackResourceAdapter", // SlackOAuthClient is conditional on Slack being enabled; identities
+                    // remain capturable when disabled.
                     "OutlineResourceAdapter", // The client is conditional on Outline runtime; resource identities
                     // remain
                     // capturable when disabled.

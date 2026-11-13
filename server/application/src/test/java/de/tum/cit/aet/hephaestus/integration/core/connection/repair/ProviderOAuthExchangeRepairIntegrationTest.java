@@ -40,6 +40,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -224,6 +225,112 @@ class ProviderOAuthExchangeRepairIntegrationTest extends AbstractWorkspaceIntegr
                         Long.class,
                         team))
                 .isZero();
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "true,true,ACTIVE",
+        "true,false,ACTIVE",
+        "false,true,ACTIVE",
+        "false,false,ACTIVE",
+        "true,true,SUSPENDED",
+        "true,false,SUSPENDED",
+        "false,true,SUSPENDED",
+        "false,false,SUSPENDED"
+    })
+    void shouldLetTheLiveTeamHolderReauthorizeAfterAnExchangeWasSuperseded(
+            boolean otherWorkspace, boolean legacyMetadata, IntegrationState heldState) {
+        var heldConfig = new ConnectionConfig.SlackConfig(
+                team,
+                legacyMetadata ? null : "U-BOT",
+                legacyMetadata ? null : ProviderResourceAdapter.slackTokenFingerprint(token),
+                "Team",
+                null,
+                Set.of());
+        Workspace heldWorkspace = otherWorkspace
+                ? workspaces.save(WorkspaceTestFixtures.activeWorkspace("held-" + UUID.randomUUID()))
+                : workspace;
+        Connection holder;
+        if (otherWorkspace) {
+            holder = new Connection(heldWorkspace, IntegrationKind.SLACK, team, heldConfig);
+        } else {
+            owner.bindInstanceKey(team);
+            holder = owner;
+            holder.setConfig(heldConfig);
+        }
+        holder.setState(heldState);
+        holder.setCredentials(new BearerToken(token, null), converter);
+        holder = connections.saveAndFlush(holder);
+        if (!otherWorkspace) owner = holder;
+        var first = (ConnectFinalization.Completed) strategy.finalizeConnect(ref(), Map.of("code", "old"));
+        UUID firstId = Objects.requireNonNull(first.exchangeAttemptId());
+        new TransactionTemplate(manager).executeWithoutResult(status -> {
+            var edited = connections.findById(owner.getId()).orElseThrow();
+            edited.setDisplayName("Changed while the provider answered");
+            connections.saveAndFlush(edited);
+        });
+        assertThatThrownBy(() -> callbacks.completeConnection(owner, first, actorAccountId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("superseded");
+        assertThat(rows.findById(firstId).orElseThrow().getState())
+                .isEqualTo(ProviderResourceRepair.State.AWAITING_CONFIRMATION);
+        String replacement = "replacement-" + token;
+        when(client.exchangeCode(anyString(), anyString()))
+                .thenReturn(new SlackOAuthClient.OAuthV2Access(
+                        true,
+                        null,
+                        replacement,
+                        new SlackOAuthClient.OAuthV2Access.Team(team, "Team"),
+                        null,
+                        null,
+                        "U-BOT"));
+        when(client.botIdentity(replacement)).thenReturn(new SlackOAuthClient.BotIdentity(true, team, "U-BOT", null));
+        Connection freshHolder = connections.findById(holder.getId()).orElseThrow();
+        var holderRef = new IntegrationRef(IntegrationKind.SLACK, heldWorkspace.getId(), team, freshHolder.getId());
+        var next = (ConnectFinalization.Completed) strategy.finalizeConnect(holderRef, Map.of("code", "new"));
+        Connection active = callbacks.completeConnection(freshHolder, next, actorAccountId);
+        assertThat(active.getState()).isEqualTo(IntegrationState.ACTIVE);
+        assertThat(((ConnectionConfig.SlackConfig) active.getConfig()).botTokenFingerprint())
+                .isEqualTo(ProviderResourceAdapter.slackTokenFingerprint(replacement));
+        assertThat(rows.existsById(firstId)).isTrue();
+        assertThat(rows.existsById(Objects.requireNonNull(next.exchangeAttemptId())))
+                .isFalse();
+        verify(client, never()).revokeStrict(anyString());
+    }
+
+    @Test
+    void shouldMarkAnUnrelatedDatabaseRefusalAsAnUncertainSlackExchange() {
+        var completed = (ConnectFinalization.Completed) strategy.finalizeConnect(ref(), Map.of("code", "code"));
+        UUID attempt = Objects.requireNonNull(completed.exchangeAttemptId());
+        var invalid = new ConnectFinalization.Completed(
+                completed.instanceKey(), completed.credentials(), "x".repeat(300), completed.config(), attempt);
+        assertThatThrownBy(() -> callbacks.completeConnection(owner, invalid, actorAccountId))
+                .hasStackTraceContaining("value too long for type character varying(256)");
+        assertThat(rows.findById(attempt).orElseThrow().getState())
+                .isEqualTo(ProviderResourceRepair.State.AWAITING_CONFIRMATION);
+        assertThat(connections.findById(owner.getId()).orElseThrow().getState()).isEqualTo(IntegrationState.PENDING);
+    }
+
+    @Test
+    void shouldRetryTheSameGitHubInstallationAfterALocalAdoptionRollback() {
+        long installation = Math.floorMod(UUID.randomUUID().getMostSignificantBits(), Long.MAX_VALUE - 1) + 1;
+        var config = new ConnectionConfig.GitHubAppConfig(installation, 77L, "org", "https://github.com", Set.of());
+        Connection github = connections.saveAndFlush(new Connection(workspace, IntegrationKind.GITHUB, null, config));
+        String key = Long.toString(installation);
+        assertThatThrownBy(() -> callbacks.completeConnection(
+                        github, new ConnectFinalization.Completed(key, null, "x".repeat(300), config), actorAccountId))
+                .hasStackTraceContaining("value too long for type character varying(256)");
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM provider_resource_repair WHERE kind = 'GITHUB' AND resource_id = ?",
+                        Long.class,
+                        key))
+                .isZero();
+        Connection active = callbacks.completeConnection(
+                connections.findById(github.getId()).orElseThrow(),
+                new ConnectFinalization.Completed(key, null, "GitHub", config),
+                actorAccountId);
+        assertThat(active.getState()).isEqualTo(IntegrationState.ACTIVE);
+        assertThat(active.getInstanceKey()).isEqualTo(key);
     }
 
     @Test

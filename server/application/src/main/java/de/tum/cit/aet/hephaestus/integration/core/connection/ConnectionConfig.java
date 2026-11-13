@@ -12,6 +12,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -33,6 +34,13 @@ public sealed interface ConnectionConfig
                 ConnectionConfig.GitLabConfig,
                 ConnectionConfig.SlackConfig,
                 ConnectionConfig.OutlineConfig {
+    default ConnectionConfig updatedBy(UnaryOperator<ConnectionConfig> mutator) {
+        ConnectionConfig next = Objects.requireNonNull(mutator.apply(this), "Connection config");
+        if (!next.getClass().equals(getClass()))
+            throw new IllegalArgumentException("A config update cannot change the connection mode");
+        return next;
+    }
+
     /** Enabled sync streams (subset of the source's catalog). */
     Set<String> enabledStreams();
 
@@ -149,8 +157,7 @@ public sealed interface ConnectionConfig
 
         /**
          * Returns a copy with {@link #gitlabWebhookId} replaced, stamped after webhook
-         * registration/adoption. Pair with {@code connectionService.updateConfig(...)} to
-         * persist the swap atomically.
+         * registration/adoption. Adopt the result through {@code ProviderResourceRepairs.completeRegistration}, which checks its lifecycle.
          */
         public GitLabConfig withGitlabWebhookId(@Nullable Long webhookId) {
             return new GitLabConfig(
@@ -278,8 +285,7 @@ public sealed interface ConnectionConfig
             implements ConnectionConfig {
         /**
          * Returns a copy with the change-notification subscription id and route
-         * replaced, stamped after the subscription is registered. Pair with
-         * {@code connectionService.updateConfig(...)} to persist the swap atomically.
+         * replaced, stamped after the subscription is registered. Adopt the result through {@code ProviderResourceRepairs.completeRegistration}, which checks its lifecycle.
          */
         public OutlineConfig withWebhookSubscription(@Nullable String subscriptionId, @Nullable String route) {
             return new OutlineConfig(serverUrl, subscriptionId, route, enabledStreams);

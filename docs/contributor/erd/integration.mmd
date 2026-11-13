@@ -717,8 +717,8 @@ erDiagram
     Account ||--o{ ConnectionAudit : has
     Connection ||--o{ ConnectionAudit : connection_id
     ProviderResourceRepair ||--o{ ConnectionProviderRepair : has
-    Workspace ||--o{ ConnectionProviderRepair : has
     Connection ||--o{ ConnectionProviderRepair : has
+    Workspace ||--o{ ConnectionProviderRepair : has
     User ||--o{ GitCommit : authored_by
     User ||--o{ GitCommit : references
     Repository ||--o{ GitCommit : has
@@ -746,8 +746,8 @@ erDiagram
     IdentityProvider ||--o{ Milestone : references
     Repository ||--o{ Milestone : has
     User ||--o{ Milestone : created_by
-    Connection ||--o{ OauthStateNonce : has
     Account ||--o{ OauthStateNonce : has
+    Connection ||--o{ OauthStateNonce : has
     IdentityProvider ||--o{ Organization : references
     Connection ||--o{ OutlineCollection : has
     Workspace ||--o{ OutlineCollection : has

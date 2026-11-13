@@ -40,6 +40,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 @Tag("unit")
 class ProviderResourceAdaptersTest {
@@ -84,7 +85,7 @@ class ProviderResourceAdaptersTest {
     }
 
     @Test
-    void shouldStopPollingAnAppInstallationWhoseAbsenceNeedsAdminConfirmation() {
+    void shouldVerifyAbsenceThroughTheAuthenticatedAppScope() {
         GitHubAppTokenService app = mock(GitHubAppTokenService.class);
         when(app.isConfigured()).thenReturn(true);
         when(app.getConfiguredAppId()).thenReturn(77L);
@@ -92,7 +93,7 @@ class ProviderResourceAdaptersTest {
         var target =
                 new Resource(IntegrationKind.GITHUB, "https://github.com", ResourceType.INSTALLATION, "77", "42", null);
         assertThat(new GitHubResourceAdapter(app).remove(target, null, () -> true))
-                .isEqualTo(Removal.ADMIN_CONFIRMATION);
+                .isEqualTo(Removal.VERIFIED_ABSENT);
         verify(app, never()).deleteInstallation(anyLong());
     }
 
@@ -228,7 +229,8 @@ class ProviderResourceAdaptersTest {
     @Test
     void slackPersistsBothTheTokenAndBotUserWithoutRetainingTheToken() {
         SlackOAuthClient client = mock(SlackOAuthClient.class);
-        var adapter = new SlackResourceAdapter(client);
+        var adapter = new SlackResourceAdapter(
+                new StaticListableBeanFactory(Map.of("slack", client)).getBeanProvider(SlackOAuthClient.class));
         String fingerprint = ProviderResourceAdapter.slackTokenFingerprint(TOKEN.token());
         var config = new ConnectionConfig.SlackConfig("T1", "U1", fingerprint, "Team", null, Set.of());
         List<Resource> identities = adapter.resources(ref(IntegrationKind.SLACK), config, TOKEN);
@@ -243,9 +245,35 @@ class ProviderResourceAdaptersTest {
     }
 
     @Test
+    void shouldKeepSlackRepairIdentitiesWhenTheSlackClientIsDisabled() {
+        new ApplicationContextRunner()
+                .withUserConfiguration(SlackResourceAdapter.class)
+                .withPropertyValues("hephaestus.integration.slack.enabled=false")
+                .run(context -> {
+                    assertThat(context).hasNotFailed().hasSingleBean(SlackResourceAdapter.class);
+                    assertThat(context).doesNotHaveBean(SlackOAuthClient.class);
+                    var adapter = context.getBean(SlackResourceAdapter.class);
+                    var config = new ConnectionConfig.SlackConfig(
+                            "T1",
+                            "U1",
+                            ProviderResourceAdapter.slackTokenFingerprint(TOKEN.token()),
+                            "Team",
+                            null,
+                            Set.of());
+                    var identities = adapter.resources(ref(IntegrationKind.SLACK), config, null);
+                    assertThat(identities).hasSize(2);
+                    assertThat(adapter.remove(identities.get(1), TOKEN, () -> true))
+                            .isEqualTo(Removal.NEEDS_AUTHORIZATION);
+                    assertThat(adapter.remove(identities.getFirst(), null, () -> true))
+                            .isEqualTo(Removal.ADMIN_CONFIRMATION);
+                });
+    }
+
+    @Test
     void slackCannotRevokeAReplacementTokenUsingTheOldRemovalIdentity() {
         SlackOAuthClient client = mock(SlackOAuthClient.class);
-        var adapter = new SlackResourceAdapter(client);
+        var adapter = new SlackResourceAdapter(
+                new StaticListableBeanFactory(Map.of("slack", client)).getBeanProvider(SlackOAuthClient.class));
         Resource old = new Resource(
                 IntegrationKind.SLACK,
                 "https://slack.com",

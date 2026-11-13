@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialReader;
 import de.tum.cit.aet.hephaestus.integration.core.connection.api.ConnectionAdminService;
+import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionCredentialsReplacedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.CredentialBundle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -27,6 +28,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineWebhookClient
 import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineWebhookSubscription;
 import de.tum.cit.aet.hephaestus.integration.outline.lifecycle.OutlineResourceAdapter;
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineWebhookController;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.connect.GitHubResourceAdapter;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
@@ -63,9 +65,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
+import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -272,39 +276,6 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
     }
 
     @ParameterizedTest
-    @EnumSource(
-            value = IntegrationKind.class,
-            names = {"GITHUB", "SLACK"})
-    void shouldFenceAnOAuthResultObservedAfterItsOwnerWasRemoved(IntegrationKind kind) {
-        Wire provider = new Wire(kind);
-        Context context = context(provider.adapter);
-        Connection owner = owner(provider, false, false, IntegrationState.UNINSTALLED);
-        new TransactionTemplate(manager).executeWithoutResult(status -> connections.deleteById(owner.getId()));
-        context.transactions()
-                .executeWithoutResult(status -> context.repairs()
-                        .observeAbandonedOAuth(
-                                new IntegrationRef(
-                                        kind, owner.getWorkspace().getId(), provider.instanceKey(false), owner.getId()),
-                                provider.config(false, false),
-                                provider.credential(false)));
-        List<UUID> pending = context.transactions()
-                .execute(status -> context
-                        .repairs()
-                        .resources(
-                                new IntegrationRef(kind, owner.getWorkspace().getId(), provider.instanceKey(false)),
-                                provider.config(false, false),
-                                provider.credential(false))
-                        .stream()
-                        .map(resource -> rows.findByIdentityHash(resource.identity())
-                                .orElseThrow()
-                                .getId())
-                        .toList());
-        created.addAll(Objects.requireNonNull(pending));
-        assertThat(pending).isNotEmpty();
-        assertThatThrownBy(() -> adopt(context, provider, false, false)).isInstanceOf(ResponseStatusException.class);
-    }
-
-    @ParameterizedTest
     @EnumSource(IntegrationKind.class)
     void shouldSerializeCrossWorkspaceAdoptionBehindCapturedRemoval(IntegrationKind kind) throws Exception {
         Wire provider = new Wire(kind);
@@ -431,6 +402,80 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
                                         old.getId()))
                                 .isEqualTo(old.getId())));
         assertThat(reconnect.get(20, TimeUnit.SECONDS).getState()).isEqualTo(IntegrationState.ACTIVE);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldResolveAuthenticatedAppAbsenceOnlyBeforeAnyPossibleDispatch(boolean previouslyDispatched) {
+        Wire provider = new Wire(IntegrationKind.GITHUB);
+        Context context = context(provider.adapter);
+        Connection old = owner(provider, false, false, IntegrationState.UNINSTALLED);
+        UUID id = request(context, old).getFirst();
+        if (previouslyDispatched) {
+            context.dispatcher().dispatch(id);
+            assertThat(provider.accepted).containsExactly(provider.oldRemoteKey());
+            context.clock().now = context.clock().now.plusSeconds(61);
+        }
+        provider.live.remove(provider.oldRemoteKey());
+        context.dispatcher().dispatch(id);
+        if (previouslyDispatched) {
+            assertThat(rows.findById(id).orElseThrow().getState())
+                    .isEqualTo(ProviderResourceRepair.State.CONFIRMATION_REQUIRED);
+        } else {
+            assertThat(rows.existsById(id)).isFalse();
+            assertThat(provider.accepted).isEmpty();
+        }
+    }
+
+    @Test
+    void shouldRetryOnlyTheConnectionWhoseAuthorizationWasRestoredWithoutWaitingForBackoff() {
+        Wire provider = new Wire(IntegrationKind.OUTLINE);
+        provider.terminal = true;
+        Context context = context(provider.adapter);
+        Connection old = owner(provider, false, false, IntegrationState.UNINSTALLED);
+        UUID id = request(context, old).getFirst();
+        Wire unrelated = new Wire(IntegrationKind.OUTLINE);
+        UUID other = request(context, owner(unrelated, false, false, IntegrationState.UNINSTALLED))
+                .getFirst();
+        context.transactions().executeWithoutResult(status -> {
+            for (UUID rowId : List.of(id, other)) {
+                var row = rows.findById(rowId).orElseThrow();
+                for (int i = 0; i < 7; i++) {
+                    row.transition(
+                            ProviderResourceRepair.State.CHECKING,
+                            context.clock().instant());
+                    row.transition(
+                            ProviderResourceRepair.State.NEEDS_AUTHORIZATION,
+                            context.clock().instant());
+                }
+            }
+        });
+        Instant delayed = rows.findById(other).orElseThrow().getNextAttemptAt();
+        context.dispatcher().dispatch(id);
+        assertThat(provider.accepted).isEmpty();
+        var restored = new ConnectionCredentialsReplacedEvent(
+                old.getId(), old.getWorkspace().getId(), old.getKind());
+        context.transactions()
+                .executeWithoutResult(status -> rows.findById(id)
+                        .orElseThrow()
+                        .transition(
+                                ProviderResourceRepair.State.CHECKING,
+                                context.clock().instant()));
+        assertThatThrownBy(() -> context.dispatcher().on(restored))
+                .isInstanceOf(TransientDataAccessResourceException.class);
+        assertThat(provider.accepted).isEmpty();
+        context.transactions()
+                .executeWithoutResult(status -> rows.findById(id)
+                        .orElseThrow()
+                        .transition(
+                                ProviderResourceRepair.State.NEEDS_AUTHORIZATION,
+                                context.clock().instant()));
+        context.dispatcher().on(restored);
+        assertThat(rows.existsById(id)).isFalse();
+        assertThat(provider.live).doesNotContain(provider.oldRemoteKey());
+        assertThat(rows.findById(other).orElseThrow().getNextAttemptAt()).isEqualTo(delayed);
+        assertThat(rows.findById(other).orElseThrow().getState())
+                .isEqualTo(ProviderResourceRepair.State.NEEDS_AUTHORIZATION);
     }
 
     private List<UUID> request(Context context, Connection owner) {
@@ -653,7 +698,7 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
             when(app.installation(anyLong())).thenAnswer(call -> {
                 inspect();
                 if (!live.contains(call.getArgument(0, Long.class).toString()))
-                    throw new IllegalStateException("unreadable installation");
+                    throw new InstallationNotFoundException(call.getArgument(0, Long.class));
                 return mock(GitHubAppTokenService.AppInstallation.class);
             });
             doAnswer(call -> {
@@ -720,7 +765,8 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
                     })
                     .when(client)
                     .revokeStrict(anyString());
-            return new SlackResourceAdapter(client);
+            return new SlackResourceAdapter(
+                    new StaticListableBeanFactory(Map.of("slack", client)).getBeanProvider(SlackOAuthClient.class));
         }
     }
 

@@ -23,10 +23,12 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -124,6 +126,7 @@ public class ProviderResourceRepairs {
                 .anyMatch(old -> targets.stream().anyMatch(candidate -> overlaps(candidate, old)));
         boolean pendingExchange = config instanceof ConnectionConfig.SlackConfig slack
                 && slack.teamId() != null
+                && !alreadyHoldsSlackTeam(ref, slack)
                 && repairs.hasUnresolvedSlackExchange(
                         ProviderResourceAdapter.ResourceType.OAUTH_EXCHANGE,
                         slack.teamId(),
@@ -139,6 +142,50 @@ public class ProviderResourceRepairs {
                     HttpStatus.CONFLICT,
                     "This provider resource is still pending removal. Use a fresh resource or ask an instance admin to review the removal.");
         }
+    }
+
+    private boolean alreadyHoldsSlackTeam(IntegrationRef ref, ConnectionConfig.SlackConfig next) {
+        if (ref.connectionId() == null) return false;
+        // Exchange intent cannot revoke anything. It must not stop the existing team holder from reauthorizing.
+        return connections
+                .findByIdAndWorkspaceId(ref.connectionId(), ref.workspaceId())
+                .filter(owner ->
+                        owner.getState() == IntegrationState.ACTIVE || owner.getState() == IntegrationState.SUSPENDED)
+                .map(Connection::getConfig)
+                .filter(config -> config instanceof ConnectionConfig.SlackConfig)
+                .map(config -> (ConnectionConfig.SlackConfig) config)
+                .filter(current -> Objects.equals(current.teamId(), next.teamId()))
+                .isPresent();
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void requireCoordinated(List<Resource> acquired, List<Resource> current) {
+        var coordinated = acquired.stream().map(Resource::identity).collect(Collectors.toSet());
+        if (current.stream().anyMatch(resource -> !coordinated.contains(resource.identity())))
+            throw new TransientDataAccessResourceException(
+                    "The connection's provider identity changed during its update");
+    }
+
+    @Transactional
+    public List<UUID> retryWithRestoredAuthorization(long workspaceId, long connectionId) {
+        var targets = references.findByWorkspaceIdAndConnection_Id(workspaceId, connectionId).stream()
+                .map(reference -> reference.getRepair().resource())
+                .toList();
+        lockIdentities(targets);
+        Objects.requireNonNull(entityManager).clear();
+        var pending = references.findByWorkspaceIdAndConnection_Id(workspaceId, connectionId).stream()
+                .map(ConnectionProviderRepair::getRepair)
+                .toList();
+        if (pending.stream()
+                .anyMatch(repair -> repair.getState() == ProviderResourceRepair.State.CHECKING
+                        || repair.getState() == ProviderResourceRepair.State.DISPATCHING)) {
+            // Keep the credential publication unfinished until the previous provider outcome is recorded.
+            throw new TransientDataAccessResourceException("The provider operation is still in progress");
+        }
+        return pending.stream()
+                .filter(repair -> repair.authorizationAvailable(clock.instant()))
+                .map(ProviderResourceRepair::getId)
+                .toList();
     }
 
     private static List<Resource> adoptionIdentities(List<Resource> resources) {
@@ -198,45 +245,6 @@ public class ProviderResourceRepairs {
         }
         lockIdentities(adoptionIdentities(targets));
         checkAdoption(ref(owner), next, credential, exchangeAttempt);
-    }
-
-    @Transactional
-    public void observeAbandonedOAuth(
-            IntegrationRef ref, ConnectionConfig config, @Nullable CredentialBundle credential) {
-        List<Resource> observed = resources(ref, config, credential);
-        lockIdentities(observed);
-        Connection owner = ref.connectionId() == null
-                ? null
-                : connections
-                        .findByIdAndWorkspaceId(ref.connectionId(), ref.workspaceId())
-                        .orElse(null);
-        if (owner != null) {
-            if (connections
-                    .findAndLockLifecycleConnection(owner.getId(), ref.workspaceId())
-                    .isEmpty()) owner = null;
-            else Objects.requireNonNull(entityManager).refresh(owner);
-        }
-        for (Resource target : observed) {
-            if (heldByLiveConnection(owner == null ? null : owner.getId(), target)
-                    || (owner != null
-                            && owner.getState() == IntegrationState.ACTIVE
-                            && resources(ref(owner), owner.getConfig(), retainedCredential(owner)).stream()
-                                    .anyMatch(owned -> overlaps(owned, target)))) continue;
-            ProviderResourceRepair repair = repairs.findByIdentityHash(target.identity())
-                    .orElseGet(() -> repairs.save(
-                            target.kind() == IntegrationKind.GITHUB
-                                    ? ProviderResourceRepair.confirmationOnly(target, clock.instant())
-                                    : new ProviderResourceRepair(target, clock.instant())));
-            if (owner != null
-                    && references
-                            .findByWorkspaceIdAndConnection_IdAndRepair_Id(
-                                    ref.workspaceId(), owner.getId(), repair.getId())
-                            .isEmpty()) {
-                references.save(new ConnectionProviderRepair(owner, repair));
-            }
-            if (target.kind() != IntegrationKind.GITHUB)
-                events.publishEvent(new ProviderResourceRepairRequested(repair.getId()));
-        }
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

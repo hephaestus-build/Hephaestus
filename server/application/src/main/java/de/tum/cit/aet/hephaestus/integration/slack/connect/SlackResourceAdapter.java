@@ -11,15 +11,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 @Component
 @ConditionalOnServerRole
 public class SlackResourceAdapter implements ProviderResourceAdapter {
     private static final String ORIGIN = "https://slack.com";
-    private final SlackOAuthClient oauth;
+    private final ObjectProvider<SlackOAuthClient> oauth;
 
-    public SlackResourceAdapter(SlackOAuthClient oauth) {
+    public SlackResourceAdapter(ObjectProvider<SlackOAuthClient> oauth) {
         this.oauth = oauth;
     }
 
@@ -53,9 +54,11 @@ public class SlackResourceAdapter implements ProviderResourceAdapter {
         if (!(credential instanceof BearerToken bearer)
                 || !resource.resourceId().equals(ProviderResourceAdapter.slackTokenFingerprint(bearer.token())))
             return Removal.NEEDS_AUTHORIZATION;
+        SlackOAuthClient client = oauth.getIfAvailable();
+        if (client == null) return Removal.NEEDS_AUTHORIZATION;
         SlackOAuthClient.BotIdentity identity;
         try {
-            identity = oauth.botIdentity(bearer.token());
+            identity = client.botIdentity(bearer.token());
         } catch (SlackOAuthException rejected) {
             if ("token_revoked".equals(rejected.getMessage())) return Removal.VERIFIED_ABSENT;
             if ("invalid_auth".equals(rejected.getMessage()) || "account_inactive".equals(rejected.getMessage()))
@@ -65,7 +68,7 @@ public class SlackResourceAdapter implements ProviderResourceAdapter {
         if (!(identity.teamId() + "/" + identity.userId()).equals(resource.parentId())
                 && !(identity.teamId() + "/*").equals(resource.parentId())) return Removal.DIFFERENT_OWNER;
         if (!beforeDispatch.getAsBoolean()) return Removal.CANCELLED;
-        oauth.revokeStrict(bearer.token());
+        client.revokeStrict(bearer.token());
         // The exact token is spent; its separate bot-user guard still needs explicit confirmation.
         return Removal.TERMINAL_SUCCESS;
     }

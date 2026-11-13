@@ -286,37 +286,38 @@ public class ConnectionService {
     }
 
     /**
-     * Mutate the {@link ConnectionConfig} on the workspace's ACTIVE Connection.
-     * Empty when no ACTIVE row exists — callers MUST NOT auto-create. The mutator
-     * must return the same sealed-subtype variant; cross-variant returns throw.
+     * Mutates the active connection's config. The mutator must be pure: it runs again after the lifecycle lock
+     * refreshes the current config, so a concurrent project stop or other setting is retained.
      */
     @Transactional
     public Optional<Connection> updateConfig(
             long workspaceId, IntegrationKind kind, UnaryOperator<ConnectionConfig> mutator) {
-        return connectionRepository.findActive(workspaceId, kind).map(connection -> {
-            ConnectionConfig next = Objects.requireNonNull(mutator.apply(connection.getConfig()), "Connection config");
-            if (!next.getClass().equals(connection.getConfig().getClass())) {
-                throw new IllegalArgumentException("A config update cannot change the connection mode");
-            }
+        return connectionRepository.findActive(workspaceId, kind).flatMap(connection -> {
+            ConnectionConfig planned = connection.getConfig().updatedBy(mutator);
+            Class<?> mode = connection.getConfig().getClass();
             var credential = resourceRepairs.retainedCredential(connection);
             var identities = new ArrayList<>(resourceRepairs.resources(
                     ProviderResourceRepairs.ref(connection), connection.getConfig(), credential));
-            identities.addAll(resourceRepairs.resources(ProviderResourceRepairs.ref(connection), next, credential));
-            resourceRepairs.coordinate(identities);
-            resourceRepairs.requireAdoptable(ProviderResourceRepairs.ref(connection), next, credential);
-            Long expectedVersion = connection.getVersion();
+            identities.addAll(resourceRepairs.resources(ProviderResourceRepairs.ref(connection), planned, credential));
+            resourceRepairs.requireAdoptableChange(connection, planned, credential);
             connectionRepository.acquireLifecycleLock(connection.getId(), workspaceId);
             Objects.requireNonNull(entityManager).refresh(connection);
-            if (!Objects.equals(expectedVersion, connection.getVersion())
-                    || connection.getState() != IntegrationState.ACTIVE) {
-                throw new TransientDataAccessResourceException("The connection changed during its config update");
-            }
+            if (connection.getState() != IntegrationState.ACTIVE) return Optional.empty();
+            if (!mode.equals(connection.getConfig().getClass()))
+                throw new TransientDataAccessResourceException("The connection mode changed during its config update");
+            ConnectionConfig next = connection.getConfig().updatedBy(mutator);
+            var currentCredential = resourceRepairs.retainedCredential(connection);
+            var current = new ArrayList<>(resourceRepairs.resources(
+                    ProviderResourceRepairs.ref(connection), connection.getConfig(), currentCredential));
+            current.addAll(resourceRepairs.resources(ProviderResourceRepairs.ref(connection), next, currentCredential));
+            resourceRepairs.requireCoordinated(identities, current);
+            resourceRepairs.requireAdoptable(ProviderResourceRepairs.ref(connection), next, currentCredential);
             boolean namespaceChanged = !Objects.equals(
                     SourceProviderNamespaces.configuredUrl(connection.getConfig()),
                     SourceProviderNamespaces.configuredUrl(next));
             connection.setConfig(next);
             if (namespaceChanged) sourceNamespaces.ensure(kind, next);
-            return connectionRepository.save(connection);
+            return Optional.of(connectionRepository.save(connection));
         });
     }
 
@@ -585,7 +586,9 @@ public class ConnectionService {
         // For a persisted argument the row transitioned below is the one re-read under the
         // lifecycle
         // lock, never the caller's possibly-stale instance.
-        resourceRepairs.coordinate(requested);
+        var credential = resourceRepairs.retainedCredential(requested);
+        var identities = new ArrayList<>(
+                resourceRepairs.resources(ProviderResourceRepairs.ref(requested), requested.getConfig(), credential));
         if (req.next() == IntegrationState.ACTIVE) {
             ConnectionConfig next = requested.getConfig();
             if (requested.getState() != IntegrationState.ACTIVE) {
@@ -593,8 +596,10 @@ public class ConnectionService {
                 else if (next instanceof ConnectionConfig.OutlineConfig outline)
                     next = outline.withWebhookSubscription(null, null);
             }
-            resourceRepairs.requireAdoptable(
-                    ProviderResourceRepairs.ref(requested), next, resourceRepairs.retainedCredential(requested));
+            identities.addAll(resourceRepairs.resources(ProviderResourceRepairs.ref(requested), next, credential));
+            resourceRepairs.requireAdoptableChange(requested, next, credential);
+        } else {
+            resourceRepairs.coordinate(identities);
         }
         Connection connection = requested;
         if (requested.getId() != null) {
@@ -604,13 +609,18 @@ public class ConnectionService {
             Long persistedVersion = connectionRepository
                     .findLifecycleVersion(connectionId, workspaceId)
                     .orElseThrow();
-            if (!Objects.equals(requested.getVersion(), persistedVersion)) {
-                throw new TransientDataAccessResourceException(
-                        "The connection changed before its lifecycle transition");
-            }
             connection = connectionRepository
                     .findByIdAndWorkspaceId(connectionId, workspaceId)
                     .orElseThrow(() -> new EntityNotFoundException("Connection", connectionId));
+            if (!Objects.equals(connection.getVersion(), persistedVersion)) {
+                Objects.requireNonNull(entityManager).refresh(connection);
+            }
+            resourceRepairs.requireCoordinated(
+                    identities,
+                    resourceRepairs.resources(
+                            ProviderResourceRepairs.ref(connection),
+                            connection.getConfig(),
+                            resourceRepairs.retainedCredential(connection)));
             if (fenceOnActiveSyncJob) {
                 // Inside the lock, so no job can slip in between this check and the state write.
                 syncJobService.requestCancelForTeardown(connectionId).ifPresent(activeJobId -> {

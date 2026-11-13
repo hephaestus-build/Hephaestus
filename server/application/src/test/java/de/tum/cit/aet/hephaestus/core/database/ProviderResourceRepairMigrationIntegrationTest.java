@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 
 @Tag("integration")
 class ProviderResourceRepairMigrationIntegrationTest {
-    private static final String CHANGELOG = "20261113054816-feat-provider-resource-adoption-fence.xml";
+    private static final String CHANGELOG = "20261113123749-feat-provider-resource-adoption-fence.xml";
     private static final String VALIDATION =
             "SELECT convalidated::int::text FROM pg_constraint WHERE conrelid IN ('public.auth_event'::regclass, 'public.config_audit_event'::regclass) AND conname IN ('ck_config_audit_event_entity_type', 'ck_config_audit_event_scope', 'ck_auth_event_event_type') ORDER BY conname";
 
@@ -91,6 +91,22 @@ class ProviderResourceRepairMigrationIntegrationTest {
         assertThat(PracticeMigrationFixture.column(
                         database, "SELECT resource_id FROM provider_resource_repair WHERE id = '" + identity + "'"))
                 .containsExactly("42");
+    }
+
+    @Test
+    void shouldRestoreValidatedAuditConstraintsAfterAnUnusedMigrationIsRolledBack() throws Exception {
+        TestDatabase database = beforeUpgrade();
+        try (var connection =
+                        DriverManager.getConnection(database.jdbcUrl(), database.username(), database.password());
+                var liquibase = new Liquibase(
+                        "db/master.xml",
+                        new ClassLoaderResourceAccessor(),
+                        DatabaseFactory.getInstance()
+                                .findCorrectDatabaseImplementation(new JdbcConnection(connection)))) {
+            PracticeMigrationFixture.upgradeOnly(liquibase, "prod", CHANGELOG);
+            PracticeMigrationFixture.rollbackOnly(liquibase, "prod", CHANGELOG);
+        }
+        assertThat(PracticeMigrationFixture.column(database, VALIDATION)).containsExactly("1", "1", "1");
     }
 
     private TestDatabase beforeUpgrade() throws Exception {

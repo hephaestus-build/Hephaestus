@@ -4,8 +4,10 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinColumns;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
@@ -27,8 +29,20 @@ public class ConnectionProviderRepair {
     @Column(name = "workspace_id", nullable = false, updatable = false)
     private long workspaceId;
 
+    @Column(name = "connection_id", nullable = false, updatable = false)
+    private long connectionId;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "connection_id", nullable = false, updatable = false)
+    @JoinColumns(
+            value = {
+                @JoinColumn(name = "connection_id", referencedColumnName = "id", insertable = false, updatable = false),
+                @JoinColumn(
+                        name = "workspace_id",
+                        referencedColumnName = "workspace_id",
+                        insertable = false,
+                        updatable = false)
+            },
+            foreignKey = @ForeignKey(name = "fk_connection_provider_repair_owner"))
     private Connection connection;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -49,6 +63,7 @@ public class ConnectionProviderRepair {
     public ConnectionProviderRepair(Connection connection, ProviderResourceRepair repair) {
         this.id = UUID.randomUUID();
         this.workspaceId = connection.getWorkspace().getId();
+        this.connectionId = Objects.requireNonNull(connection.getId());
         this.connection = connection;
         this.repair = repair;
         this.credentialsGeneration = connection.getCredentialsGeneration();

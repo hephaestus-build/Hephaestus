@@ -120,10 +120,11 @@ public class ProviderResourceRepair {
         return repair;
     }
 
-    public static ProviderResourceRepair confirmationOnly(Resource resource, Instant now) {
-        var repair = new ProviderResourceRepair(resource, now);
-        repair.state = State.CONFIRMATION_REQUIRED;
-        return repair;
+    public boolean authorizationAvailable(Instant now) {
+        if (state != State.NEEDS_AUTHORIZATION) return false;
+        nextAttemptAt = now;
+        updatedAt = now;
+        return true;
     }
 
     public void transition(State next, Instant now) {

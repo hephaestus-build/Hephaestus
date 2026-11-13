@@ -51,7 +51,10 @@ stateDiagram-v2
 
 The dispatcher calls the provider outside a database transaction.
 Uncertain and unauthorized attempts back off from one minute to one hour.
-A GitHub App not-found result requires admin confirmation and stops automatic polling.
+A GitHub App-scoped not-found result resolves an undispatched removal. After a possible dispatch, it requires admin confirmation and stops automatic polling.
+Replacing a connection credential wakes its NEEDS_AUTHORIZATION repairs without waiting for the backoff.
+If an earlier provider call is still in flight, the credential publication stays unfinished until its outcome is recorded.
+An uncertain Slack exchange does not block reauthorization by the existing ACTIVE or SUSPENDED team holder. It never dispatches revocation.
 Before DELETE or revocation, a short transaction records that this attempt can reach the provider.
 An epoch prevents an old inspection from acquiring a new dispatch permit after a competing claim or release.
 A crash after the permit is uncertain even if no request left the process.

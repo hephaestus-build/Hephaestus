@@ -60,7 +60,7 @@ public class GitHubResourceAdapter implements ProviderResourceAdapter {
         try {
             app.installation(Long.parseLong(resource.resourceId()));
         } catch (InstallationNotFoundException hiddenOrAbsent) {
-            return Removal.ADMIN_CONFIRMATION;
+            return Removal.VERIFIED_ABSENT;
         }
         if (!beforeDispatch.getAsBoolean()) return Removal.CANCELLED;
         app.deleteInstallation(Long.parseLong(resource.resourceId()));

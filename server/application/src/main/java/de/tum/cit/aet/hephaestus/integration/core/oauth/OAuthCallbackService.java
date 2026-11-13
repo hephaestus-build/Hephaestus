@@ -14,7 +14,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderReso
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService.StateBinding;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy.ConnectFinalization;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OAuthExchangeRepair;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -29,11 +28,9 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionException;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
@@ -138,39 +135,39 @@ public class OAuthCallbackService {
         try {
             return Objects.requireNonNull(
                     transactionTemplate.execute(status -> complete(pending, completed, actorAccountId)));
-        } catch (DataIntegrityViolationException e) {
-            ExclusiveInstance exclusive = EXCLUSIVE_INSTANCES.get(pending.getKind());
-            if (exclusive == null || !DataIntegrityViolationConstraints.hasName(e, exclusive.index())) {
-                throw e;
-            }
-            // A concurrent connect can commit after the ownership check.
-            String conflict = connectedElsewhere(
-                            pending.getKind(), pending.getWorkspace().getId(), completed.instanceKey(), actorAccountId)
-                    .orElseThrow(() -> e);
-            if (completed.exchangeAttemptId() != null) exchangeRepairs.discard(completed.exchangeAttemptId());
-            throw new InstanceConnectedElsewhereException(conflict, e);
         } catch (RuntimeException rejected) {
-            boolean deterministic = rejected instanceof TargetRefusedException
-                    || rejected instanceof InstanceConnectedElsewhereException
-                    || rejected instanceof ResponseStatusException;
+            RuntimeException failure = completionFailure(pending, completed, actorAccountId, rejected);
+            boolean deterministic = failure instanceof TargetRefusedException
+                    || failure instanceof InstanceConnectedElsewhereException
+                    || failure instanceof ResponseStatusException;
             if (completed.exchangeAttemptId() != null) {
                 if (deterministic) exchangeRepairs.discard(completed.exchangeAttemptId());
                 else exchangeRepairs.uncertain(completed.exchangeAttemptId());
             }
-            if (!deterministic
-                    && pending.getKind() == IntegrationKind.GITHUB
-                    && (rejected instanceof DataAccessException || rejected instanceof TransactionException))
-                recordAbandoned(pending, completed);
-            throw rejected;
+            // GitHub's installation predates this callback. A local adoption failure needs no upstream removal.
+            throw failure;
         }
     }
 
-    private void recordAbandoned(Connection pending, ConnectFinalization.Completed completed) {
-        repairs.observeAbandonedOAuth(
-                new IntegrationRef(
-                        pending.getKind(), pending.getWorkspace().getId(), completed.instanceKey(), pending.getId()),
-                completed.config() == null ? pending.getConfig() : completed.config(),
-                completed.credentials());
+    private RuntimeException completionFailure(
+            Connection pending,
+            ConnectFinalization.Completed completed,
+            @Nullable Long actorAccountId,
+            RuntimeException rejected) {
+        ExclusiveInstance exclusive = EXCLUSIVE_INSTANCES.get(pending.getKind());
+        if (!(rejected instanceof DataIntegrityViolationException violation)
+                || exclusive == null
+                || !DataIntegrityViolationConstraints.hasName(violation, exclusive.index())) return rejected;
+        try {
+            // A concurrent connect can commit after the ownership check.
+            return connectedElsewhere(
+                            pending.getKind(), pending.getWorkspace().getId(), completed.instanceKey(), actorAccountId)
+                    .<RuntimeException>map(conflict -> new InstanceConnectedElsewhereException(conflict, violation))
+                    .orElse(violation);
+        } catch (RuntimeException unavailable) {
+            violation.addSuppressed(unavailable);
+            return violation;
+        }
     }
 
     private Connection complete(
@@ -206,10 +203,7 @@ public class OAuthCallbackService {
         return connection;
     }
 
-    /**
-     * The row to complete. A kind whose instance one workspace holds refuses an instance another workspace holds, and
-     * reuses this workspace's own row for it rather than colliding with it on {@code (workspace, kind, instance_key)}.
-     */
+    /** Callback hints are unverified: preflight checks only this workspace's target before exchange. */
     @Transactional(readOnly = true)
     public void validateKnownCallbackTarget(Connection connection, Map<String, String> params) {
         String claimed = connection.getKind() == IntegrationKind.GITHUB
