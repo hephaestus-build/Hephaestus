@@ -16,6 +16,13 @@ async function completionGate() {
 	let connection: Socket | undefined;
 	const server = createServer((socket) => {
 		connection = socket;
+		// When the job's process dies, Windows resets its connection where POSIX closes it.
+		// Either way the job command has ended, which is what a test of a lost supervisor causes.
+		socket.on("error", (error: NodeJS.ErrnoException) => {
+			if (error.code !== "ECONNRESET") {
+				throw error;
+			}
+		});
 		connected.resolve(socket);
 	});
 	server.listen(0, "127.0.0.1");
