@@ -194,7 +194,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
         long getRuns();
 
-        /** Of these runs, the queued ones with no hold whose {@code available_at} has passed. */
+        /** Of these runs, the ones with no hold that {@link AgentRunRepository#CLAIMABLE} offers: a claim could take them now. */
         long getDue();
 
         /** Seconds since the oldest due one became due; 0 when none is due. */
@@ -202,19 +202,24 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
     }
 
     /**
-     * One pass over the runs that have not ended, for the run gauges ({@link AgentRunSampler}). One statement time
-     * decides which runs are due, so a run is never counted as due without its age or the other way round.
+     * One pass over the runs that have not ended, for the run gauges ({@link AgentRunSampler}). The counts take every
+     * open run. A run is due when {@link AgentRunRepository#CLAIMABLE} offers it and it has no hold, so a run that no claim may take, such
+     * as one of a suspended workspace, never reads as a stalled queue.
      */
     @WorkspaceAgnostic("The runs of the whole instance; the gauges name no workspace")
     @Query(value = """
-            SELECT kind AS "kind", band AS "band", state AS "state", hold_reason AS "holdReason", count(*) AS "runs",
-                   count(*) FILTER (WHERE state = 'QUEUED' AND hold_reason IS NULL
-                                      AND available_at <= statement_timestamp()) AS "due",
-                   COALESCE(floor(EXTRACT(EPOCH FROM statement_timestamp() - min(available_at)
-                       FILTER (WHERE state = 'QUEUED' AND hold_reason IS NULL
-                                 AND available_at <= statement_timestamp()))), 0)::bigint AS "oldestDueSeconds"
-              FROM agent_run WHERE state <> 'ENDED'
-             GROUP BY kind, band, state, hold_reason
+            SELECT o.kind AS "kind", o.band AS "band", o.state AS "state", o.hold_reason AS "holdReason",
+                   count(*) AS "runs",
+                   count(due.id) FILTER (WHERE o.hold_reason IS NULL) AS "due",
+                   COALESCE(floor(EXTRACT(EPOCH FROM clock_timestamp() - min(o.available_at)
+                       FILTER (WHERE due.id IS NOT NULL AND o.hold_reason IS NULL))), 0)::bigint
+                       AS "oldestDueSeconds"
+              FROM agent_run o
+              LEFT JOIN (SELECT r.id AS id
+            """ + CLAIMABLE + """
+                        ) due ON due.id = o.id
+             WHERE o.state <> 'ENDED'
+             GROUP BY o.kind, o.band, o.state, o.hold_reason
             """, nativeQuery = true)
     List<OpenRow> open();
 

@@ -493,6 +493,15 @@ groups:
         annotations:
           summary: An agent run that can start has waited for more than one hour
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # A turn that has not started after 3 minutes ends as NOT_STARTED and leaves the queue, so the hour above never sees it.
+      - alert: HephaestusInteractiveRunWaiting
+        expr: max(agent_run_oldest_due_age_seconds{job="hephaestus",band="interactive"}) > 60
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: A run that a person waits for can start, and no server has claimed it for more than one minute
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusOutboxStalled
         expr: max by (kind) (action_oldest_due_seconds{job="hephaestus"}) > 900
         for: 10m

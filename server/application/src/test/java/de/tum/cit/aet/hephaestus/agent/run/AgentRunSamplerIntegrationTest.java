@@ -109,6 +109,30 @@ class AgentRunSamplerIntegrationTest extends BaseIntegrationTest {
         assertThat(oldestDue(AgentRunKind.REVIEW, AgentRunBand.INTERACTIVE)).isZero();
     }
 
+    /** The claim offers no run of a suspended workspace, so such a run is open but is not a stalled queue. */
+    @Test
+    void shouldNotCountTheRunsOfASuspendedWorkspaceAsDueUntilItIsActiveAgain() {
+        dueSince(enqueue(AgentRunKind.REVIEW, AgentRunBand.BATCH, "review:suspended"), "2 hours");
+        var sampler = new AgentRunSampler(repository, meters);
+
+        sampler.sample();
+        assertThat(due(AgentRunKind.REVIEW, AgentRunBand.BATCH)).isOne();
+        assertThat(oldestDue(AgentRunKind.REVIEW, AgentRunBand.BATCH)).isGreaterThanOrEqualTo(7200.0);
+
+        jdbc.update("UPDATE workspace SET status = 'SUSPENDED' WHERE id = ?", workspace);
+        sampler.sample();
+        assertThat(runs(AgentRunKind.REVIEW, AgentRunBand.BATCH, "queued", "none"))
+                .as("the run stays open")
+                .isOne();
+        assertThat(due(AgentRunKind.REVIEW, AgentRunBand.BATCH)).isZero();
+        assertThat(oldestDue(AgentRunKind.REVIEW, AgentRunBand.BATCH)).isZero();
+
+        jdbc.update("UPDATE workspace SET status = 'ACTIVE' WHERE id = ?", workspace);
+        sampler.sample();
+        assertThat(due(AgentRunKind.REVIEW, AgentRunBand.BATCH)).isOne();
+        assertThat(oldestDue(AgentRunKind.REVIEW, AgentRunBand.BATCH)).isGreaterThanOrEqualTo(7200.0);
+    }
+
     private AgentRunRef enqueue(AgentRunKind kind, AgentRunBand band, String subject) {
         return Objects.requireNonNull(
                 transactions.execute(status -> runs.enqueue(workspace, kind, band, subject, null)));

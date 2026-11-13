@@ -974,6 +974,48 @@ tests:
         alertname: HephaestusAgentQueueStalled
         exp_alerts: []
 
+  # A turn waits more than a minute from minute 2 on, on one of two servers. The other server and the other bands do not
+  # change the answer.
+  - name: an interactive run that waits more than a minute fires after a minute
+    interval: 1m
+    input_series:
+      - series: 'agent_run_oldest_due_age_seconds{job="hephaestus",instance="server:9090",kind="turn",band="interactive"}'
+        values: "0 20 70 100 130 160 0x4"
+      - series: 'agent_run_oldest_due_age_seconds{job="hephaestus",instance="server-b:9090",kind="turn",band="interactive"}'
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: HephaestusInteractiveRunWaiting
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: HephaestusInteractiveRunWaiting
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: A run that a person waits for can start, and no server has claimed it for more than one minute
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      - eval_time: 8m
+        alertname: HephaestusInteractiveRunWaiting
+        exp_alerts: []
+
+  - name: a short spike, an empty queue, and long waits of the other bands do not fire the interactive alert
+    interval: 1m
+    input_series:
+      - series: 'agent_run_oldest_due_age_seconds{job="hephaestus",instance="server:9090",kind="turn",band="interactive"}'
+        values: "0 0 90 0 0 0 0 0"
+      - series: 'agent_run_oldest_due_age_seconds{job="hephaestus",instance="server:9090",kind="review",band="batch"}'
+        values: "4000x8"
+      - series: 'agent_run_oldest_due_age_seconds{job="hephaestus",instance="server:9090",kind="review",band="background"}'
+        values: "4000x8"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: HephaestusInteractiveRunWaiting
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: HephaestusInteractiveRunWaiting
+        exp_alerts: []
+
   - name: an archive that keeps failing fires, a recovered or unread archive does not
     interval: 1m
     input_series:
