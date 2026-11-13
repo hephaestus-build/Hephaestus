@@ -31,14 +31,6 @@ blockExoticSubdeps: true
 # every locked entry needs each package's full registry metadata, more memory than Renovate's
 # hosted job has. The setup-toolchain install in CI still verifies every entry (--no-trust-lockfile).
 trustLockfile: true
-# Explicitly requested versions; keep the age policy for every other package/version.
-minimumReleaseAgeExclude:
-  # CVE-2026-118772.
-  - "joi@17.13.9"
-  - "@shadcn/lint@0.1.0"
-  # Renovate security update: fast-xml-parser@5.12.0
-  - fast-xml-parser@5.12.0
-
 allowBuilds:
   "@google/genai": false
   "@swc/core": true
