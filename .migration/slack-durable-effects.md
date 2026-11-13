@@ -1,4 +1,4 @@
-#### 🔴 Stop every server before the Slack delivery cutover
+#### 🔴 Stop every role before the Slack delivery cutover
 
 Stop every server replica before you apply this release's migration.
 The previous release cannot read the new Slack action kinds or channel states.
