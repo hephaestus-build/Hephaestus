@@ -57,126 +57,214 @@ function isObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-const PLAIN_TEXT = ["plain_text"];
-const ANY_TEXT = ["plain_text", "mrkdwn"];
-
-/** A string of at most `max` characters when present. */
-function optionalString(object: Record<string, unknown>, key: string, max: number): boolean {
-	const value = object[key];
-	return value === undefined || (typeof value === "string" && value.length <= max);
+/** How one field of a block or element must look. */
+export interface Spec {
+	is: "string" | "boolean" | "object" | "array";
+	required?: boolean;
+	/** Characters of a string, or items of an array. */
+	min?: number;
+	max?: number;
+	/** The values that a string may have. */
+	values?: readonly string[];
+	/** The schema of an object, or of each item of an array. */
+	of?: string;
+	/** The field is allowed only while a sibling field has this value: `[field, value]`. */
+	onlyWhen?: readonly [string, string];
 }
 
-/** A text object (https://docs.slack.dev/reference/block-kit/composition-objects/text-object/): 1 to `max` characters. */
-function textObject(value: unknown, kinds: readonly string[], max: number): boolean {
-	return (
-		isObject(value) &&
-		typeof value.type === "string" &&
-		kinds.includes(value.type) &&
-		typeof value.text === "string" &&
-		value.text.length > 0 &&
-		value.text.length <= max
-	);
+/** The fields that Slack defines for a block, an element or a composition object. A field that is not here is refused. */
+export interface Schema {
+	fields: Readonly<Record<string, Spec>>;
+	/** Groups of fields, one of which must be present in full: a section needs `text` or `fields`. */
+	anyOf?: readonly (readonly string[])[];
 }
 
-/** An array of `min` to `max` items that all pass `valid`. */
-function items(
-	value: unknown,
-	min: number,
-	max: number,
-	valid: (item: unknown) => boolean,
-): boolean {
-	return Array.isArray(value) && value.length >= min && value.length <= max && value.every(valid);
+const PLAIN = ["plain_text"] as const;
+const ANY = ["plain_text", "mrkdwn"] as const;
+const STYLES = ["primary", "danger"] as const;
+
+/** A text object: https://docs.slack.dev/reference/block-kit/composition-objects/text-object/ */
+function textSchema(types: readonly string[], max: number): Schema {
+	return {
+		fields: {
+			type: { is: "string", required: true, values: types },
+			text: { is: "string", required: true, min: 1, max },
+			emoji: { is: "boolean", onlyWhen: ["type", "plain_text"] },
+			verbatim: { is: "boolean", onlyWhen: ["type", "mrkdwn"] },
+		},
+	};
 }
 
-/** A confirmation dialog object: a title, a text and both labels. */
-function confirmation(value: unknown): boolean {
-	return (
-		isObject(value) &&
-		textObject(value.title, PLAIN_TEXT, 100) &&
-		textObject(value.text, ANY_TEXT, 300) &&
-		textObject(value.confirm, PLAIN_TEXT, 30) &&
-		textObject(value.deny, PLAIN_TEXT, 30)
-	);
+/** `type` of a block or element: always the one value. */
+function kind(value: string): Spec {
+	return { is: "string", required: true, values: [value] };
 }
 
-/** A button element: https://docs.slack.dev/reference/block-kit/block-elements/button-element/ */
-function button(value: unknown): boolean {
-	return (
-		isObject(value) &&
-		value.type === "button" &&
-		textObject(value.text, PLAIN_TEXT, 75) &&
-		optionalString(value, "action_id", 255) &&
-		optionalString(value, "url", 3000) &&
-		optionalString(value, "value", 2000) &&
-		optionalString(value, "accessibility_label", 75) &&
-		(value.style === undefined || value.style === "primary" || value.style === "danger") &&
-		(value.confirm === undefined || confirmation(value.confirm))
-	);
-}
-
-/** A feedback button of `feedback_buttons`: a plain text of at most 75 characters and a value. */
-function feedbackButton(value: unknown): boolean {
-	return (
-		isObject(value) &&
-		textObject(value.text, PLAIN_TEXT, 75) &&
-		typeof value.value === "string" &&
-		value.value.length > 0 &&
-		value.value.length <= 2000 &&
-		optionalString(value, "accessibility_label", 75)
-	);
-}
-
-/** The element of `context_actions` that the server sends: https://docs.slack.dev/reference/block-kit/block-elements/feedback-buttons-element/ */
-function feedbackButtons(value: unknown): boolean {
-	return (
-		isObject(value) &&
-		value.type === "feedback_buttons" &&
-		feedbackButton(value.positive_button) &&
-		feedbackButton(value.negative_button) &&
-		optionalString(value, "action_id", 255)
-	);
-}
-
-/** What a section block needs: a text object, or fields, and an optional button as its accessory. */
-function section(block: Record<string, unknown>): boolean {
-	return (
-		(block.text !== undefined || block.fields !== undefined) &&
-		(block.text === undefined || textObject(block.text, ANY_TEXT, 3000)) &&
-		(block.fields === undefined ||
-			items(block.fields, 1, 10, (field) => textObject(field, ANY_TEXT, 2000))) &&
-		(block.accessory === undefined || button(block.accessory))
-	);
-}
+const BLOCK_ID: Spec = { is: "string", max: 255 };
 
 /**
- * Whether a block has what Slack requires of its type (https://docs.slack.dev/reference/block-kit/blocks/). Only the
- * types that the server sends in a message are known: `markdown`, `section`, `context`, `context_actions` and
- * `actions`. Another type is refused.
+ * The block types that the server sends in a message, with the fields that Slack documents for each
+ * (https://docs.slack.dev/reference/block-kit/blocks/ and https://docs.slack.dev/reference/block-kit/block-elements/).
+ * The `text-*` schemas are text objects with the limit of the place that uses them.
  */
-function validBlock(block: Record<string, unknown>): boolean {
-	if (!optionalString(block, "block_id", 255)) {
-		return false;
-	}
-	switch (block.type) {
-		case "markdown": {
-			return typeof block.text === "string" && block.text.length > 0;
+export const SCHEMAS: Readonly<Record<string, Schema>> = {
+	"text-3000": textSchema(ANY, 3000),
+	"text-2000": textSchema(ANY, 2000),
+	"text-300": textSchema(ANY, 300),
+	"plain-100": textSchema(PLAIN, 100),
+	"plain-75": textSchema(PLAIN, 75),
+	"plain-30": textSchema(PLAIN, 30),
+	markdown: {
+		fields: {
+			type: kind("markdown"),
+			text: { is: "string", required: true, min: 1 },
+			block_id: { is: "string" },
+		},
+	},
+	section: {
+		fields: {
+			type: kind("section"),
+			text: { is: "object", of: "text-3000" },
+			fields: { is: "array", of: "text-2000", min: 1, max: 10 },
+			block_id: BLOCK_ID,
+			accessory: { is: "object", of: "button" },
+			expand: { is: "boolean" },
+		},
+		anyOf: [["text"], ["fields"]],
+	},
+	context: {
+		fields: {
+			type: kind("context"),
+			elements: { is: "array", of: "text-3000", required: true, min: 1, max: 10 },
+			block_id: BLOCK_ID,
+		},
+	},
+	context_actions: {
+		fields: {
+			type: kind("context_actions"),
+			elements: { is: "array", of: "feedback_buttons", required: true, min: 1, max: 5 },
+			block_id: BLOCK_ID,
+		},
+	},
+	actions: {
+		fields: {
+			type: kind("actions"),
+			elements: { is: "array", of: "button", required: true, min: 1, max: 25 },
+			block_id: BLOCK_ID,
+		},
+	},
+	button: {
+		fields: {
+			type: kind("button"),
+			text: { is: "object", of: "plain-75", required: true },
+			action_id: { is: "string", max: 255 },
+			url: { is: "string", max: 3000 },
+			value: { is: "string", max: 2000 },
+			style: { is: "string", values: STYLES },
+			confirm: { is: "object", of: "confirm" },
+			accessibility_label: { is: "string", max: 75 },
+		},
+	},
+	feedback_buttons: {
+		fields: {
+			type: kind("feedback_buttons"),
+			positive_button: { is: "object", of: "feedback_button", required: true },
+			negative_button: { is: "object", of: "feedback_button", required: true },
+			action_id: { is: "string", max: 255 },
+		},
+	},
+	feedback_button: {
+		fields: {
+			text: { is: "object", of: "plain-75", required: true },
+			value: { is: "string", required: true, min: 1, max: 2000 },
+			accessibility_label: { is: "string", max: 75 },
+		},
+	},
+	confirm: {
+		fields: {
+			title: { is: "object", of: "plain-100", required: true },
+			text: { is: "object", of: "text-300", required: true },
+			confirm: { is: "object", of: "plain-30", required: true },
+			deny: { is: "object", of: "plain-30", required: true },
+			style: { is: "string", values: STYLES },
+		},
+	},
+};
+
+/** The schemas that a message's `blocks` may start from: the block types, by their `type`. */
+export const BLOCK_TYPES = [
+	"markdown",
+	"section",
+	"context",
+	"context_actions",
+	"actions",
+] as const;
+
+function conformsTo(value: unknown, spec: Spec): boolean {
+	switch (spec.is) {
+		case "string": {
+			return (
+				typeof value === "string" &&
+				value.length >= (spec.min ?? 0) &&
+				value.length <= (spec.max ?? Number.POSITIVE_INFINITY) &&
+				(spec.values === undefined || spec.values.includes(value))
+			);
 		}
-		case "section": {
-			return section(block);
+		case "boolean": {
+			return typeof value === "boolean";
 		}
-		case "context": {
-			return items(block.elements, 1, 10, (element) => textObject(element, ANY_TEXT, 3000));
+		case "object": {
+			return spec.of !== undefined && conforms(value, spec.of);
 		}
-		case "context_actions": {
-			return items(block.elements, 1, 5, feedbackButtons);
-		}
-		case "actions": {
-			return items(block.elements, 1, 25, button);
+		case "array": {
+			const { of } = spec;
+			return (
+				of !== undefined &&
+				Array.isArray(value) &&
+				value.length >= (spec.min ?? 0) &&
+				value.length <= (spec.max ?? Number.POSITIVE_INFINITY) &&
+				value.every((item) => conforms(item, of))
+			);
 		}
 		default: {
 			return false;
 		}
 	}
+}
+
+/**
+ * Whether `value` has what the schema `name` defines: every field it carries is one of the schema's, of its type, enum
+ * and limits; every required field is there. A JSON `null` counts as absent, as the Java SDK's JSON leaves unset fields.
+ */
+export function conforms(value: unknown, name: string): boolean {
+	const schema = Object.hasOwn(SCHEMAS, name) ? SCHEMAS[name] : undefined;
+	if (schema === undefined || !isObject(value)) {
+		return false;
+	}
+	const given = (key: string) => value[key] !== undefined && value[key] !== null;
+	const known = Object.keys(value).every((key) => {
+		const spec = Object.hasOwn(schema.fields, key) ? schema.fields[key] : undefined;
+		return (
+			!given(key) ||
+			(spec !== undefined &&
+				conformsTo(value[key], spec) &&
+				(spec.onlyWhen === undefined || value[spec.onlyWhen[0]] === spec.onlyWhen[1]))
+		);
+	});
+	return (
+		known &&
+		Object.entries(schema.fields).every(([key, spec]) => spec.required !== true || given(key)) &&
+		(schema.anyOf === undefined || schema.anyOf.some((group) => group.every(given)))
+	);
+}
+
+/** Whether a block is one of the types the server sends, and has what Slack defines for that type. */
+function validBlock(block: Record<string, unknown>): boolean {
+	return (
+		typeof block.type === "string" &&
+		(BLOCK_TYPES as readonly string[]).includes(block.type) &&
+		conforms(block, block.type)
+	);
 }
 
 /** All `markdown` blocks of one payload share 12,000 characters. */

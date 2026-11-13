@@ -10,7 +10,15 @@ import {
 	receivedCalls,
 	slackSignature,
 } from "./lib/slack-turn.ts";
-import { FAKE_INSTALL_CODE, FAKE_TEAM, postRefusal, slackFake } from "./slack-fake.ts";
+import {
+	conforms,
+	FAKE_INSTALL_CODE,
+	FAKE_TEAM,
+	postRefusal,
+	SCHEMAS,
+	type Spec,
+	slackFake,
+} from "./slack-fake.ts";
 
 async function withFake(body: (base: string, token: string) => Promise<void>): Promise<void> {
 	const { server, token } = slackFake();
@@ -494,7 +502,24 @@ await test("the fake refuses a block that lacks what Slack requires of its type"
 			"a button confirmation without a deny label",
 			[{ type: "actions", elements: [{ ...button, confirm: { ...confirm, deny: undefined } }] }],
 		],
-		["a block id of 256 characters", [{ ...markdown("x"), block_id: "b".repeat(256) }]],
+		[
+			"a block id of 256 characters",
+			[{ type: "section", text: mrkdwn("x"), block_id: "b".repeat(256) }],
+		],
+		// The optional fields that once passed unchecked.
+		[
+			"a text object with an emoji that is no boolean",
+			[{ type: "section", text: { ...plain("x"), emoji: "wrong" } }],
+		],
+		[
+			"a text object with a verbatim that is no boolean",
+			[{ type: "section", text: { ...mrkdwn("x"), verbatim: 42 } }],
+		],
+		[
+			"a section with an expand that is no boolean",
+			[{ type: "section", text: mrkdwn("x"), expand: "wrong" }],
+		],
+		["a field that Slack does not define", [{ type: "section", text: mrkdwn("x"), unknown: true }]],
 		["a block type that the server never sends", [{ type: "divider" }]],
 		["a header block", [{ type: "header", text: plain("Hephaestus") }]],
 	];
@@ -507,6 +532,122 @@ await test("the fake refuses a block that lacks what Slack requires of its type"
 		blocksError([markdown("x".repeat(6000)), markdown("x".repeat(6001))]),
 		"msg_blocks_too_long",
 	);
+});
+
+/** A value that satisfies `spec`. */
+function validValue(spec: Spec): unknown {
+	switch (spec.is) {
+		case "string": {
+			return spec.values?.[0] ?? "x".repeat(Math.max(spec.min ?? 1, 1));
+		}
+		case "boolean": {
+			return true;
+		}
+		case "object": {
+			return minimal(spec.of ?? "");
+		}
+		case "array": {
+			return Array.from({ length: Math.max(spec.min ?? 1, 1) }, () => minimal(spec.of ?? ""));
+		}
+	}
+}
+
+/** The smallest object that satisfies the schema `name`: its required fields, and the first group of `anyOf`. */
+function minimal(name: string): Record<string, unknown> {
+	const schema = SCHEMAS[name];
+	assert.ok(schema, name);
+	const wanted = (key: string, spec: Spec) =>
+		spec.required === true || schema.anyOf?.[0]?.includes(key) === true;
+	return Object.fromEntries(
+		Object.entries(schema.fields)
+			.filter(([key, spec]) => wanted(key, spec))
+			.map(([key, spec]) => [key, validValue(spec)]),
+	);
+}
+
+/** Objects of the schema `name` that each break one rule of one field, as the table defines it. */
+function broken(name: string): [string, unknown][] {
+	const schema = SCHEMAS[name];
+	assert.ok(schema, name);
+	const base = minimal(name);
+	const cases: [string, unknown][] = [
+		["a field that is not defined", { ...base, unknown_field: true }],
+	];
+	for (const [key, spec] of Object.entries(schema.fields)) {
+		const wrongType = { string: 42, boolean: "wrong", object: "wrong", array: "wrong" }[spec.is];
+		cases.push([`${key} of the wrong type`, { ...base, [key]: wrongType }]);
+		if (spec.required === true) {
+			const { [key]: _removed, ...without } = base;
+			cases.push([`${key} missing`, without]);
+		}
+		if (spec.values !== undefined) {
+			cases.push([`${key} outside its values`, { ...base, [key]: "not-a-value" }]);
+		}
+		if (spec.is === "string" && spec.max !== undefined) {
+			cases.push([`${key} over ${String(spec.max)}`, { ...base, [key]: "x".repeat(spec.max + 1) }]);
+		}
+		if (spec.is === "string" && (spec.min ?? 0) > 0) {
+			cases.push([`${key} empty`, { ...base, [key]: "" }]);
+		}
+		if (spec.is === "array") {
+			const item = minimal(spec.of ?? "");
+			if ((spec.min ?? 0) > 0) {
+				cases.push([`${key} with fewer than ${String(spec.min)} items`, { ...base, [key]: [] }]);
+			}
+			if (spec.max !== undefined) {
+				cases.push([
+					`${key} with more than ${String(spec.max)} items`,
+					{ ...base, [key]: Array.from({ length: spec.max + 1 }, () => item) },
+				]);
+			}
+			cases.push([`${key} with an item of the wrong type`, { ...base, [key]: ["wrong"] }]);
+		}
+		if (spec.onlyWhen !== undefined) {
+			const [sibling, value] = spec.onlyWhen;
+			const other = schema.fields[sibling]?.values?.find((candidate) => candidate !== value);
+			if (other !== undefined) {
+				cases.push([
+					`${key} while ${sibling} is ${other}`,
+					{ ...base, [sibling]: other, [key]: validValue(spec) },
+				]);
+			}
+		}
+	}
+	if (schema.anyOf !== undefined) {
+		cases.push(["none of its alternative groups", { ...base, text: undefined, fields: undefined }]);
+	}
+	return cases;
+}
+
+await test("every schema of the fake accepts its minimal object and each optional field with a valid value", () => {
+	for (const [name, schema] of Object.entries(SCHEMAS)) {
+		assert.equal(conforms(minimal(name), name), true, name);
+		for (const [key, spec] of Object.entries(schema.fields)) {
+			if (spec.onlyWhen === undefined) {
+				assert.equal(
+					conforms({ ...minimal(name), [key]: validValue(spec) }, name),
+					true,
+					`${name}.${key}`,
+				);
+			}
+		}
+	}
+	// `emoji` goes with plain text and `verbatim` with mrkdwn.
+	assert.equal(conforms({ type: "plain_text", text: "x", emoji: true }, "text-3000"), true);
+	assert.equal(conforms({ type: "mrkdwn", text: "x", verbatim: false }, "text-3000"), true);
+	assert.equal(conforms({ type: "mrkdwn", text: "x", emoji: true }, "text-3000"), false);
+	assert.equal(conforms({ type: "plain_text", text: "x", verbatim: true }, "text-3000"), false);
+});
+
+await test("every field of every schema of the fake refuses a value that breaks its rule", () => {
+	let count = 0;
+	for (const name of Object.keys(SCHEMAS)) {
+		for (const [what, value] of broken(name)) {
+			count += 1;
+			assert.equal(conforms(value, name), false, `${name}: ${what}`);
+		}
+	}
+	assert.ok(count > 150, `${count} generated cases`);
 });
 
 await test("the fake lists the words of the blocks that a post carried", async () => {

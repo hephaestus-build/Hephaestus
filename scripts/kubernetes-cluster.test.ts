@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 import { parseAllDocuments } from "yaml";
@@ -715,6 +716,14 @@ await test("the sign-in Pod's extra variables replace the template's own", () =>
 	assert.ok(env.some((variable) => variable.name === "KEEP"));
 });
 
+const row = (requestId: string, status: string, replyTs: string | null, post: string | null) => ({
+	requestId,
+	status,
+	answer: "a",
+	replyTs,
+	post,
+});
+
 await test("the drill reads what the Slack fake received, and the state of the Slack turn", () => {
 	assert.deepEqual(
 		receivedCalls(
@@ -745,20 +754,29 @@ await test("the drill reads what the Slack fake received, and the state of the S
 		],
 	);
 	assert.throws(() => receivedCalls('[{"method":1}]'), /method/u);
-	assert.equal(slackTurnState(""), null);
-	assert.deepEqual(slackTurnState('{"status":"DONE","answer":"a","replyTs":"1.2","post":"DONE"}'), {
-		status: "DONE",
+	assert.equal(slackTurnState("", "slack:T:D:1.0"), null);
+	assert.equal(slackTurnState("[]", "slack:T:D:1.0"), null);
+	assert.deepEqual(
+		slackTurnState(JSON.stringify([row("slack:T:D:1.0", "DONE", "1.2", "DONE")]), "slack:T:D:1.0"),
+		{ status: "DONE", answer: "a", replyTs: "1.2", post: "DONE" },
+	);
+	assert.deepEqual(
+		slackTurnState(JSON.stringify([row("slack:T:D:1.0", "QUEUED", null, null)]), "slack:T:D:1.0"),
+		{ status: "QUEUED", answer: "a", replyTs: null, post: null },
+	);
+	assert.throws(() => slackTurnState('[{"requestId":"r","status":"DONE"}]', "r"), /answer/u);
+	// Two turns: only the other one has a reply. It is not this turn's.
+	const two = JSON.stringify([
+		row("slack:T:D:2.0", "DONE", "9.9", "DONE"),
+		row("slack:T:D:1.0", "RUNNING", null, null),
+	]);
+	assert.deepEqual(slackTurnState(two, "slack:T:D:1.0"), {
+		status: "RUNNING",
 		answer: "a",
-		replyTs: "1.2",
-		post: "DONE",
-	});
-	assert.deepEqual(slackTurnState('{"status":"QUEUED","answer":"","replyTs":null,"post":null}'), {
-		status: "QUEUED",
-		answer: "",
 		replyTs: null,
 		post: null,
 	});
-	assert.throws(() => slackTurnState('{"status":"DONE"}'), /answer/u);
+	assert.equal(slackTurnState(two, "slack:T:D:3.0"), null);
 });
 
 const turn = (
@@ -898,6 +916,97 @@ await test("no wait of the drill outlasts its deadline", async () => {
 	await assert.rejects(awaitSlackReply(1200, unsettled.watch), /did not settle by the deadline/u);
 	assert.deepEqual(unsettled.waits, [1200, 500, 500, 200]);
 	assert.equal(unsettled.clock(), 1200);
+});
+
+await test("a slow call ends the wait at the deadline, and its process gets the abort", async () => {
+	const signals: AbortSignal[] = [];
+	const slowSnapshot: SlackWatch = {
+		now: Date.now,
+		receive: async (_after, _timeoutMs, signal) => {
+			signals.push(signal);
+			return [accepted];
+		},
+		// It ignores its signal and then succeeds: the wait must not wait for it.
+		snapshot: async (signal) => {
+			signals.push(signal);
+			await sleep(300);
+			return turn("DONE", "DONE", accepted.ts);
+		},
+	};
+	const started = Date.now();
+	await assert.rejects(
+		awaitSlackReply(started + 50, slowSnapshot),
+		/did not settle by the deadline/u,
+	);
+	assert.ok(
+		Date.now() - started < 200,
+		"the wait ended at the deadline, not when the snapshot did",
+	);
+	assert.equal(signals.length, 2);
+	assert.ok(
+		signals.every((signal) => signal.aborted),
+		"every call's signal aborted at the deadline",
+	);
+
+	const slowReceive: SlackWatch = {
+		now: Date.now,
+		receive: async () => {
+			await sleep(300);
+			return [];
+		},
+		snapshot: async () => turn("RUNNING", null),
+	};
+	const begun = Date.now();
+	await assert.rejects(awaitSlackReply(begun + 50, slowReceive), /did not settle by the deadline/u);
+	assert.ok(Date.now() - begun < 200);
+});
+
+await test("no call starts after the deadline", async () => {
+	let snapshots = 0;
+	let receives = 0;
+	const deadline = 5000;
+	let now = 1000;
+	const watch: SlackWatch = {
+		now: () => now,
+		// This call uses the whole time that was left.
+		receive: async () => {
+			receives += 1;
+			now = deadline + 1;
+			return [];
+		},
+		snapshot: async () => {
+			snapshots += 1;
+			return null;
+		},
+	};
+	await assert.rejects(awaitSlackReply(deadline, watch), /did not settle by the deadline/u);
+	assert.equal(receives, 1);
+	assert.equal(snapshots, 0, "the snapshot did not start");
+	// A deadline that has passed starts nothing at all.
+	await assert.rejects(awaitSlackReply(deadline, watch), /did not settle by the deadline/u);
+	assert.equal(receives, 1);
+});
+
+await test("a reply of another turn does not settle this turn", async () => {
+	const other: ReceivedCall = { ...accepted, ts: "1760000009.000100" };
+	const rows = JSON.stringify([
+		{
+			requestId: "slack:T:D:2.0",
+			status: "DONE",
+			answer: "other",
+			replyTs: other.ts,
+			post: "DONE",
+		},
+		{ requestId: "slack:T:D:1.0", status: "RUNNING", answer: "", replyTs: null, post: null },
+	]);
+	const { watch, waits } = clocked(0, [[other]], []);
+	watch.snapshot = async () => slackTurnState(rows, "slack:T:D:1.0");
+	await assert.rejects(awaitSlackReply(11_000, watch), /did not settle by the deadline/u);
+	assert.ok(waits.length > 1, "it kept waiting");
+	// The fake's accepted post must be the one whose ts this turn's answer holds.
+	const mismatch = clocked(0, [[accepted]], []);
+	mismatch.watch.snapshot = async () => turn("DONE", "DONE", "1760000009.000100");
+	await assert.rejects(awaitSlackReply(11_000, mismatch.watch), /did not settle by the deadline/u);
 });
 
 await test("the drill reads the local port that kubectl port-forward reports", () => {

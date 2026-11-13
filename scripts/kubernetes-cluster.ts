@@ -260,9 +260,12 @@ export function useKubectl(command: readonly [string, ...string[]]): () => void 
 	};
 }
 
-async function kubectl(args: string[], input?: string): Promise<string> {
+async function kubectl(args: string[], input?: string, signal?: AbortSignal): Promise<string> {
 	const [command, ...prefix] = kubectlCommand;
-	return output(command, [...prefix, ...args], input === undefined ? {} : { input });
+	return output(command, [...prefix, ...args], {
+		...(input === undefined ? {} : { input }),
+		signal,
+	});
 }
 
 /** Applies a manifest from standard input, so that no generated value appears in an argument list. */
@@ -1196,26 +1199,30 @@ const BUCKET = "hephaestus-backups";
 const S3_IMAGE =
 	"docker.io/rclone/rclone:1.75.2@sha256:2687085f718d3c628f7fdfb77c52a1d344332aed543110bb88088f2c70d43eb5";
 
-async function psql(sql: string): Promise<string> {
-	return kubectl([
-		"-n",
-		NAMESPACE,
-		"exec",
-		`${RELEASE}-postgresql-0`,
-		"-c",
-		"postgresql",
-		"--",
-		"psql",
-		"-U",
-		"postgres",
-		"-d",
-		"hephaestus",
-		"-v",
-		"ON_ERROR_STOP=1",
-		"-At",
-		"-c",
-		sql,
-	]);
+async function psql(sql: string, signal?: AbortSignal): Promise<string> {
+	return kubectl(
+		[
+			"-n",
+			NAMESPACE,
+			"exec",
+			`${RELEASE}-postgresql-0`,
+			"-c",
+			"postgresql",
+			"--",
+			"psql",
+			"-U",
+			"postgres",
+			"-d",
+			"hephaestus",
+			"-v",
+			"ON_ERROR_STOP=1",
+			"-At",
+			"-c",
+			sql,
+		],
+		undefined,
+		signal,
+	);
 }
 
 /** Waits until the Job completed; a Job that failed ends the wait at once. */
@@ -2029,18 +2036,26 @@ const SLACK_API_BASE_ENV = "HEPHAESTUS_INTEGRATION_SLACK_API_BASE";
 const SLACK_ANSWER = "The commands printed";
 
 /** The calls from the `after`th on; the fake holds the request until there is one, or `timeoutMs` passes. */
-async function slackReceived(after: number, timeoutMs: number): Promise<ReceivedCall[]> {
+async function slackReceived(
+	after: number,
+	timeoutMs: number,
+	signal: AbortSignal,
+): Promise<ReceivedCall[]> {
 	return receivedCalls(
-		await kubectl([
-			"-n",
-			ROLL_PROVIDER,
-			"exec",
-			"deployment/slack",
-			"--",
-			"node",
-			"-e",
-			`fetch('http://127.0.0.1:8080/received?after=${after}&timeoutMs=${Math.floor(timeoutMs)}').then((r)=>r.text()).then((t)=>process.stdout.write(t))`,
-		]),
+		await kubectl(
+			[
+				"-n",
+				ROLL_PROVIDER,
+				"exec",
+				"deployment/slack",
+				"--",
+				"node",
+				"-e",
+				`fetch('http://127.0.0.1:8080/received?after=${after}&timeoutMs=${Math.floor(timeoutMs)}').then((r)=>r.text()).then((t)=>process.stdout.write(t))`,
+			],
+			undefined,
+			signal,
+		),
 	);
 }
 
@@ -2078,7 +2093,7 @@ async function installSlack(base: string, token: string): Promise<void> {
 }
 
 /** Sends the member's direct message as a signed Events API request, which the server stores for its workspace. */
-async function sendSlackMessage(base: string, signingSecret: string): Promise<void> {
+async function sendSlackMessage(base: string, signingSecret: string): Promise<string> {
 	const sent = Math.floor(Date.now() / 1000);
 	const event = directMessageEvent({
 		team: FAKE_TEAM.id,
@@ -2107,17 +2122,28 @@ async function sendSlackMessage(base: string, signingSecret: string): Promise<vo
 					: `the webhook answered ${String(delivery.status)} ${deliveryBody.slice(0, 200)}`,
 		},
 	]);
+	return `${sent}.000100`;
 }
 
 /** The whole wait for the Slack reply, after the event was stored. */
 const SLACK_REPLY_MINUTES = 5;
 
-/** What the server records of the Slack turn and of its reply post. */
-async function slackSnapshot(): Promise<SlackTurnState | null> {
+/** The request id of a Slack direct message: team, channel and message `ts` (`SlackMentorService.requestId`). */
+function slackRequestId(ts: string): string {
+	return `slack:${FAKE_TEAM.id}:${SLACK_DM}:${ts}`;
+}
+
+/**
+ * What the server records of every Slack turn of the workspace and of the outbox post of its reply. The post is the
+ * action whose key names the turn's own question, so another turn's reply is never this turn's.
+ */
+async function slackSnapshot(ts: string, signal: AbortSignal): Promise<SlackTurnState | null> {
 	return slackTurnState(
 		await psql(
-			`SELECT json_build_object('status', t.status, 'answer', coalesce((SELECT string_agg(e.text, E'\\n' ORDER BY e.seq) FROM mentor_entry e WHERE e.turn_id = t.id AND e.kind = 'HEPH'), ''), 'replyTs', (SELECT e.slack_ts FROM mentor_entry e WHERE e.turn_id = t.id AND e.kind = 'HEPH' LIMIT 1), 'post', (SELECT a.state || coalesce(':' || a.stop_reason, '') FROM agent_action a WHERE a.workspace_id = 986600 AND a.kind = 'SLACK_POST' AND a.idempotency_key LIKE 'slack_reply:%' ORDER BY a.created_at DESC LIMIT 1)) FROM mentor_turn t WHERE t.workspace_id = 986600 AND t.surface = 'SLACK'`,
+			`SELECT coalesce(json_agg(json_build_object('requestId', q.request_id, 'status', t.status, 'answer', coalesce((SELECT string_agg(e.text, E'\\n' ORDER BY e.seq) FROM mentor_entry e WHERE e.turn_id = t.id AND e.kind = 'HEPH'), ''), 'replyTs', (SELECT e.slack_ts FROM mentor_entry e WHERE e.turn_id = t.id AND e.kind = 'HEPH' ORDER BY e.seq LIMIT 1), 'post', (SELECT a.state || coalesce(':' || a.stop_reason, '') FROM agent_action a WHERE a.workspace_id = t.workspace_id AND a.kind = 'SLACK_POST' AND a.idempotency_key = 'slack_reply:' || q.id))), '[]'::json) FROM mentor_entry q JOIN mentor_turn t ON t.id = q.turn_id AND t.workspace_id = q.workspace_id WHERE q.workspace_id = 986600 AND q.kind = 'USER' AND q.surface = 'SLACK'`,
+			signal,
 		),
+		slackRequestId(ts),
 	);
 }
 
@@ -2169,11 +2195,11 @@ export function slackTurnChecks(reply: ReceivedCall, turn: SlackTurnState | null
  */
 async function slackTurn(base: string, token: string, signingSecret: string): Promise<void> {
 	await installSlack(base, token);
-	await sendSlackMessage(base, signingSecret);
+	const ts = await sendSlackMessage(base, signingSecret);
 	const { reply, turn } = await awaitSlackReply(Date.now() + SLACK_REPLY_MINUTES * 60_000, {
 		now: Date.now,
 		receive: slackReceived,
-		snapshot: slackSnapshot,
+		snapshot: async (signal) => slackSnapshot(ts, signal),
 	});
 	report(slackTurnChecks(reply, turn));
 }

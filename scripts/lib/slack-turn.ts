@@ -3,6 +3,7 @@
  * request, and the cookie that binds an install to the browser that started it.
  */
 import { createHash, createHmac } from "node:crypto";
+import { once } from "node:events";
 
 import { asArray, asRecord, asString, parseJson } from "./json.ts";
 
@@ -100,12 +101,20 @@ export interface SlackTurnState {
 	post: string | null;
 }
 
-/** The state of the workspace's one Slack turn; null before the server stored the question. */
-export function slackTurnState(text: string): SlackTurnState | null {
+/**
+ * The state of the Slack turn that `requestId` names, from the rows of every Slack turn of the workspace. Null before the
+ * server stored that question. Another turn's reply never stands for it.
+ */
+export function slackTurnState(text: string, requestId: string): SlackTurnState | null {
 	if (text.trim() === "") {
 		return null;
 	}
-	const row = asRecord(parseJson(text), "Slack turn");
+	const row = asArray(parseJson(text), "Slack turns")
+		.map((entry) => asRecord(entry, "Slack turn"))
+		.find((candidate) => candidate.requestId === requestId);
+	if (row === undefined) {
+		return null;
+	}
 	const nullable = (key: string) =>
 		row[key] === null ? null : asString(row[key], `Slack turn ${key}`);
 	return {
@@ -141,12 +150,12 @@ export const SLACK_POLL_MS = 5000;
 /** How long it waits for the server to settle a post that the fake accepted. */
 export const SLACK_SETTLE_MS = 500;
 
-/** What the wait for the Slack reply reads and what it uses for time. */
+/** What the wait for the Slack reply reads and what it uses for time. Each call gets a signal that aborts at the deadline. */
 export interface SlackWatch {
 	now: () => number;
 	/** The calls from the `after`th on; resolves as soon as there is one, or after `timeoutMs`. */
-	receive: (after: number, timeoutMs: number) => Promise<ReceivedCall[]>;
-	snapshot: () => Promise<SlackTurnState | null>;
+	receive: (after: number, timeoutMs: number, signal: AbortSignal) => Promise<ReceivedCall[]>;
+	snapshot: (signal: AbortSignal) => Promise<SlackTurnState | null>;
 }
 
 function summary(calls: readonly ReceivedCall[]): string {
@@ -155,11 +164,17 @@ function summary(calls: readonly ReceivedCall[]): string {
 	);
 }
 
+const isPost = (call: ReceivedCall) => call.method === "chat.postMessage";
+
 /**
- * Waits until the fake accepted the reply's `chat.postMessage` and the server committed the answer's `ts`. The fake
- * answers the moment a call arrives. After each wait the server's record is read, so a failed turn, a failed,
- * cancelled or uncertain post, and a post that the fake refused, each end the wait at once, before and after the fake
- * accepted a post. No wait lasts longer than the time left before `deadline`.
+ * Waits until the fake accepted the reply's `chat.postMessage` and the server committed that post's `ts` on the
+ * answer of this turn. The fake answers the moment a call arrives. After each wait the server's record is read, so a
+ * failed turn, a failed, cancelled or uncertain post, and a post that the fake refused, each end the wait at once,
+ * before and after the fake accepted a post.
+ *
+ * The deadline bounds every call: each gets the time left as a signal that aborts it, which kills the process behind
+ * it, and the wait returns at the deadline even for a call that ignores its signal. No call starts when no time is
+ * left.
  */
 export async function awaitSlackReply(
 	deadline: number,
@@ -167,31 +182,50 @@ export async function awaitSlackReply(
 ): Promise<{ reply: ReceivedCall; turn: SlackTurnState }> {
 	const calls: ReceivedCall[] = [];
 	let state: SlackTurnState | null = null;
-	for (;;) {
+	const expired = () =>
+		new Error(
+			`turn roll: the Slack reply did not settle by the deadline; the fake received ${summary(calls)}; the server has ${JSON.stringify(state)}`,
+		);
+	const bounded = async <T>(run: (signal: AbortSignal, left: number) => Promise<T>): Promise<T> => {
 		const left = deadline - watch.now();
 		if (left <= 0) {
-			throw new Error(
-				`turn roll: the Slack reply did not settle by the deadline; the fake received ${summary(calls)}; the server has ${JSON.stringify(state)}`,
-			);
+			throw expired();
 		}
-		const accepted = calls.some((call) => call.method === "chat.postMessage");
-		calls.push(
-			...(await watch.receive(
+		const signal = AbortSignal.timeout(left);
+		const over = (async () => {
+			await once(signal, "abort");
+			throw expired();
+		})();
+		try {
+			return await Promise.race([run(signal, left), over]);
+		} catch (error) {
+			throw signal.aborted ? expired() : error;
+		}
+	};
+	for (;;) {
+		const accepted = calls.some(isPost);
+		const fresh = await bounded(async (signal, left) =>
+			watch.receive(
 				calls.length,
 				Math.min(accepted ? SLACK_SETTLE_MS : SLACK_POLL_MS, left),
-			)),
+				signal,
+			),
 		);
-		const post = calls.find((call) => call.method === "chat.postMessage");
-		if (post?.error !== undefined && post.error !== null) {
-			throw new Error(`turn roll: the fake Slack refused the reply with ${post.error}`);
+		calls.push(...fresh);
+		const posts = calls.filter(isPost);
+		const refused = posts.find((post) => post.error !== null);
+		if (refused !== undefined) {
+			throw new Error(`turn roll: the fake Slack refused the reply with ${String(refused.error)}`);
 		}
-		state = await watch.snapshot();
+		state = await bounded(async (signal) => watch.snapshot(signal));
 		const failure = slackDeliveryFailure(state);
 		if (failure !== null) {
 			throw new Error(`turn roll: the Slack reply failed: ${failure}`);
 		}
-		if (post !== undefined && state?.status === "DONE" && state.replyTs !== null) {
-			return { reply: post, turn: state };
+		const replyTs = state?.status === "DONE" ? state.replyTs : null;
+		const mine = replyTs === null ? undefined : posts.find((post) => post.ts === replyTs);
+		if (state !== null && mine !== undefined) {
+			return { reply: mine, turn: state };
 		}
 	}
 }
