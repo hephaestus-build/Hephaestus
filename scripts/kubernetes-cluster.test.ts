@@ -35,15 +35,21 @@ import {
 	signInPod,
 	statefulPods,
 	outcomeChecks,
-	slackDeliveryFailure,
-	slackTurnState,
 	turnOutcome,
 	turnState,
 	useKubectl,
 	verify,
 } from "./kubernetes-cluster.ts";
 import { asArray, asRecord, isRecord } from "./lib/json.ts";
-import { receivedCalls } from "./lib/slack-turn.ts";
+import {
+	awaitSlackReply,
+	receivedCalls,
+	type ReceivedCall,
+	slackDeliveryFailure,
+	type SlackTurnState,
+	slackTurnState,
+	type SlackWatch,
+} from "./lib/slack-turn.ts";
 
 const chart = fileURLToPath(new URL("../deploy/chart/hephaestus/", import.meta.url));
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
@@ -740,36 +746,158 @@ await test("the drill reads what the Slack fake received, and the state of the S
 	);
 	assert.throws(() => receivedCalls('[{"method":1}]'), /method/u);
 	assert.equal(slackTurnState(""), null);
-	assert.deepEqual(slackTurnState('{"status":"DONE","answer":"a","replyTs":"1.2"}'), {
+	assert.deepEqual(slackTurnState('{"status":"DONE","answer":"a","replyTs":"1.2","post":"DONE"}'), {
 		status: "DONE",
 		answer: "a",
 		replyTs: "1.2",
+		post: "DONE",
 	});
-	assert.equal(slackTurnState('{"status":"QUEUED","answer":"","replyTs":null}')?.replyTs, null);
+	assert.deepEqual(slackTurnState('{"status":"QUEUED","answer":"","replyTs":null,"post":null}'), {
+		status: "QUEUED",
+		answer: "",
+		replyTs: null,
+		post: null,
+	});
 	assert.throws(() => slackTurnState('{"status":"DONE"}'), /answer/u);
 });
 
+const turn = (
+	status: string,
+	post: string | null,
+	replyTs: string | null = null,
+): SlackTurnState => ({
+	status,
+	answer: "The commands printed: .",
+	replyTs,
+	post,
+});
+
 await test("the drill ends its wait for the Slack reply when the server records a failure", () => {
-	assert.equal(slackDeliveryFailure(""), null);
-	assert.equal(slackDeliveryFailure('{"turn":null,"post":null}'), null);
-	assert.equal(slackDeliveryFailure('{"turn":"RUNNING","post":null}'), null);
-	assert.equal(slackDeliveryFailure('{"turn":"DONE","post":"ADMITTED"}'), null);
-	assert.equal(slackDeliveryFailure('{"turn":"DONE","post":"EXECUTING"}'), null);
-	assert.equal(slackDeliveryFailure('{"turn":"DONE","post":"DONE"}'), null);
-	assert.equal(slackDeliveryFailure('{"turn":"FAILED","post":null}'), "the Slack turn is FAILED");
-	assert.equal(slackDeliveryFailure('{"turn":"STOPPED","post":null}'), "the Slack turn is STOPPED");
+	assert.equal(slackDeliveryFailure(null), null);
 	for (const state of [
+		turn("QUEUED", null),
+		turn("RUNNING", null),
+		turn("DONE", "ADMITTED"),
+		turn("DONE", "EXECUTING"),
+		turn("DONE", "DONE", "1.2"),
+	]) {
+		assert.equal(slackDeliveryFailure(state), null, JSON.stringify(state));
+	}
+	assert.equal(slackDeliveryFailure(turn("FAILED", null)), "the Slack turn is FAILED");
+	assert.equal(slackDeliveryFailure(turn("STOPPED", null)), "the Slack turn is STOPPED");
+	for (const post of [
 		"FAILED:REJECTED",
 		"CANCELLED:RECIPIENT_UNAVAILABLE",
 		"UNCERTAIN:WRITE_UNCONFIRMED",
 		"FAILED",
 	]) {
-		assert.equal(
-			slackDeliveryFailure(JSON.stringify({ turn: "DONE", post: state })),
-			`the server's Slack post is ${state}`,
-		);
+		assert.equal(slackDeliveryFailure(turn("DONE", post)), `the server's Slack post is ${post}`);
 	}
-	assert.throws(() => slackDeliveryFailure('{"turn":1,"post":null}'), /status/u);
+});
+
+const accepted: ReceivedCall = {
+	method: "chat.postMessage",
+	authorized: true,
+	channel: "D1",
+	threadTs: null,
+	text: "The commands printed: .",
+	blocksText: "The commands printed: .",
+	ts: "1760000001.000100",
+	error: null,
+};
+
+/** A watch on a clock that only the waits move: it records how long each wait asked for. */
+function clocked(
+	start: number,
+	arrivals: ReceivedCall[][],
+	states: (SlackTurnState | null)[],
+): { watch: SlackWatch; waits: number[]; clock: () => number; snapshots: () => number } {
+	let now = start;
+	let read = 0;
+	const waits: number[] = [];
+	return {
+		waits,
+		clock: () => now,
+		snapshots: () => read,
+		watch: {
+			now: () => now,
+			receive: async (_after, timeoutMs) => {
+				waits.push(timeoutMs);
+				const next = arrivals.shift() ?? [];
+				// A wait with a call returns at once; an empty one lasts its whole time.
+				now += next.length === 0 ? timeoutMs : 0;
+				return next;
+			},
+			snapshot: async () => {
+				read += 1;
+				return states.shift() ?? states.at(-1) ?? null;
+			},
+		},
+	};
+}
+
+await test("the drill's wait fails at once when the post that the fake accepted ends UNCERTAIN", async () => {
+	const { watch, waits, clock } = clocked(
+		1000,
+		[[accepted]],
+		[turn("DONE", "UNCERTAIN:WRITE_UNCONFIRMED", null)],
+	);
+	await assert.rejects(
+		awaitSlackReply(1000 + 300_000, watch),
+		/the Slack reply failed: the server's Slack post is UNCERTAIN:WRITE_UNCONFIRMED/u,
+	);
+	assert.equal(waits.length, 1);
+	assert.equal(clock(), 1000, "it did not wait for its deadline");
+});
+
+await test("the drill's wait fails at once on a failed turn, and on a post that the fake refused", async () => {
+	const failed = clocked(0, [[]], [turn("FAILED", null)]);
+	await assert.rejects(awaitSlackReply(60_000, failed.watch), /the Slack turn is FAILED/u);
+	assert.equal(failed.waits.length, 1);
+	const refused = clocked(
+		0,
+		[[{ ...accepted, ts: null, error: "invalid_blocks" }]],
+		[turn("DONE", null)],
+	);
+	await assert.rejects(
+		awaitSlackReply(60_000, refused.watch),
+		/refused the reply with invalid_blocks/u,
+	);
+	assert.equal(
+		refused.snapshots(),
+		0,
+		"a refused post ends the wait before the server's record is read",
+	);
+});
+
+await test("the drill's wait returns once the fake accepted the post and the server committed its ts", async () => {
+	const { watch, waits } = clocked(
+		0,
+		[[], [accepted], []],
+		[turn("RUNNING", null), turn("DONE", "DONE", null), turn("DONE", "DONE", accepted.ts)],
+	);
+	const settled = await awaitSlackReply(300_000, watch);
+	assert.deepEqual(settled.reply, accepted);
+	assert.equal(settled.turn.replyTs, accepted.ts);
+	// Five seconds while no post has arrived, then a short wait for the commit.
+	assert.deepEqual(waits, [5000, 5000, 500]);
+});
+
+await test("no wait of the drill outlasts its deadline", async () => {
+	const { watch, waits, clock } = clocked(10_000, [], [turn("RUNNING", null)]);
+	const deadline = 10_000 + 12_000;
+	await assert.rejects(awaitSlackReply(deadline, watch), /did not settle by the deadline/u);
+	assert.deepEqual(waits, [5000, 5000, 2000]);
+	assert.equal(clock(), deadline, "the clock stops at the deadline");
+	// A deadline that has passed waits for nothing.
+	const late = clocked(50_000, [], [null]);
+	await assert.rejects(awaitSlackReply(40_000, late.watch), /did not settle by the deadline/u);
+	assert.deepEqual(late.waits, []);
+	// A post that the server never settles ends at the deadline too, with a wait that is clamped to what is left.
+	const unsettled = clocked(0, [[accepted]], [turn("DONE", "DONE", null)]);
+	await assert.rejects(awaitSlackReply(1200, unsettled.watch), /did not settle by the deadline/u);
+	assert.deepEqual(unsettled.waits, [1200, 500, 500, 200]);
+	assert.equal(unsettled.clock(), 1200);
 });
 
 await test("the drill reads the local port that kubectl port-forward reports", () => {

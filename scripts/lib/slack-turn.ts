@@ -89,3 +89,109 @@ export function receivedCalls(text: string): ReceivedCall[] {
 		};
 	});
 }
+
+/** What the server records of the drill's one Slack turn and of the outbox post of its reply. */
+export interface SlackTurnState {
+	status: string;
+	answer: string;
+	/** The `ts` that Slack gave the posted reply, once the server settled it. */
+	replyTs: string | null;
+	/** The state of the reply's `agent_action`, with its stop reason: `DONE`, `FAILED:REJECTED`; null before one exists. */
+	post: string | null;
+}
+
+/** The state of the workspace's one Slack turn; null before the server stored the question. */
+export function slackTurnState(text: string): SlackTurnState | null {
+	if (text.trim() === "") {
+		return null;
+	}
+	const row = asRecord(parseJson(text), "Slack turn");
+	const nullable = (key: string) =>
+		row[key] === null ? null : asString(row[key], `Slack turn ${key}`);
+	return {
+		status: asString(row.status, "Slack turn status"),
+		answer: asString(row.answer, "Slack turn answer"),
+		replyTs: nullable("replyTs"),
+		post: nullable("post"),
+	};
+}
+
+/**
+ * Why the server gave up on the Slack reply: the turn failed or stopped, or the outbox post ended `FAILED`,
+ * `CANCELLED` or `UNCERTAIN`, before or after Slack accepted it. Null while neither shows a failure.
+ */
+export function slackDeliveryFailure(state: SlackTurnState | null): string | null {
+	if (state === null) {
+		return null;
+	}
+	if (state.status === "FAILED" || state.status === "STOPPED") {
+		return `the Slack turn is ${state.status}`;
+	}
+	if (
+		state.post !== null &&
+		["FAILED", "CANCELLED", "UNCERTAIN"].includes(state.post.split(":")[0] ?? "")
+	) {
+		return `the server's Slack post is ${state.post}`;
+	}
+	return null;
+}
+
+/** How long the drill waits at the fake for a call when no post has arrived. */
+export const SLACK_POLL_MS = 5000;
+/** How long it waits for the server to settle a post that the fake accepted. */
+export const SLACK_SETTLE_MS = 500;
+
+/** What the wait for the Slack reply reads and what it uses for time. */
+export interface SlackWatch {
+	now: () => number;
+	/** The calls from the `after`th on; resolves as soon as there is one, or after `timeoutMs`. */
+	receive: (after: number, timeoutMs: number) => Promise<ReceivedCall[]>;
+	snapshot: () => Promise<SlackTurnState | null>;
+}
+
+function summary(calls: readonly ReceivedCall[]): string {
+	return JSON.stringify(
+		calls.map(({ method, authorized, channel, error }) => ({ method, authorized, channel, error })),
+	);
+}
+
+/**
+ * Waits until the fake accepted the reply's `chat.postMessage` and the server committed the answer's `ts`. The fake
+ * answers the moment a call arrives. After each wait the server's record is read, so a failed turn, a failed,
+ * cancelled or uncertain post, and a post that the fake refused, each end the wait at once, before and after the fake
+ * accepted a post. No wait lasts longer than the time left before `deadline`.
+ */
+export async function awaitSlackReply(
+	deadline: number,
+	watch: SlackWatch,
+): Promise<{ reply: ReceivedCall; turn: SlackTurnState }> {
+	const calls: ReceivedCall[] = [];
+	let state: SlackTurnState | null = null;
+	for (;;) {
+		const left = deadline - watch.now();
+		if (left <= 0) {
+			throw new Error(
+				`turn roll: the Slack reply did not settle by the deadline; the fake received ${summary(calls)}; the server has ${JSON.stringify(state)}`,
+			);
+		}
+		const accepted = calls.some((call) => call.method === "chat.postMessage");
+		calls.push(
+			...(await watch.receive(
+				calls.length,
+				Math.min(accepted ? SLACK_SETTLE_MS : SLACK_POLL_MS, left),
+			)),
+		);
+		const post = calls.find((call) => call.method === "chat.postMessage");
+		if (post?.error !== undefined && post.error !== null) {
+			throw new Error(`turn roll: the fake Slack refused the reply with ${post.error}`);
+		}
+		state = await watch.snapshot();
+		const failure = slackDeliveryFailure(state);
+		if (failure !== null) {
+			throw new Error(`turn roll: the Slack reply failed: ${failure}`);
+		}
+		if (post !== undefined && state?.status === "DONE" && state.replyTs !== null) {
+			return { reply: post, turn: state };
+		}
+	}
+}

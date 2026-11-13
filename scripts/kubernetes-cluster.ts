@@ -68,7 +68,10 @@ import {
 	installState,
 	type ReceivedCall,
 	receivedCalls,
+	awaitSlackReply,
 	slackSignature,
+	slackTurnState,
+	type SlackTurnState,
 } from "./lib/slack-turn.ts";
 import { parseResolvedImages } from "./resolve-release-images.ts";
 import { isolationGate, type Target } from "./sandbox-isolation.ts";
@@ -2025,52 +2028,6 @@ const SLACK_API_BASE_ENV = "HEPHAESTUS_INTEGRATION_SLACK_API_BASE";
 /** What the fake model says once the drill released it and no `bash` result is left to repeat. */
 const SLACK_ANSWER = "The commands printed";
 
-/** The Slack turn of the drill, from the database: its status, and its answer once the reply carries a Slack `ts`. */
-export interface SlackTurnState {
-	status: string;
-	answer: string;
-	/** The `ts` that Slack gave the posted reply, once the server settled it. */
-	replyTs: string | null;
-}
-
-/** The state of the workspace's one Slack turn; null before the server stored the question. */
-export function slackTurnState(text: string): SlackTurnState | null {
-	if (text.trim() === "") {
-		return null;
-	}
-	const row = asRecord(parseJson(text), "Slack turn");
-	return {
-		status: asString(row.status, "Slack turn status"),
-		answer: asString(row.answer, "Slack turn answer"),
-		replyTs: row.replyTs === null ? null : asString(row.replyTs, "Slack turn reply ts"),
-	};
-}
-
-/** How long the drill waits at the fake for a call before it looks at what the server recorded. */
-const SLACK_POLL_MS = 5000;
-/** The whole wait for the Slack reply, after the event was stored. */
-const SLACK_REPLY_MINUTES = 5;
-
-/**
- * Why the server gave up on the Slack reply, from what it records: the Slack turn's status, and the state of the
- * outbox action that posts the reply (`agent_action`). Null while neither shows a failure.
- */
-export function slackDeliveryFailure(text: string): string | null {
-	if (text.trim() === "") {
-		return null;
-	}
-	const row = asRecord(parseJson(text), "Slack delivery");
-	const turn = row.turn === null ? null : asString(row.turn, "Slack turn status");
-	const post = row.post === null ? null : asString(row.post, "Slack post state");
-	if (turn === "FAILED" || turn === "STOPPED") {
-		return `the Slack turn is ${turn}`;
-	}
-	if (post !== null && ["FAILED", "CANCELLED", "UNCERTAIN"].includes(post.split(":")[0] ?? "")) {
-		return `the server's Slack post is ${post}`;
-	}
-	return null;
-}
-
 /** The calls from the `after`th on; the fake holds the request until there is one, or `timeoutMs` passes. */
 async function slackReceived(after: number, timeoutMs: number): Promise<ReceivedCall[]> {
 	return receivedCalls(
@@ -2152,62 +2109,15 @@ async function sendSlackMessage(base: string, signingSecret: string): Promise<vo
 	]);
 }
 
-/**
- * Waits for the reply's `chat.postMessage` at the fake, which answers the moment a call arrives. Between waits, the
- * server's own record of a failed turn or post ends the wait at once, and so does a post that the fake refused. One
- * deadline covers it all.
- */
-async function awaitSlackReply(deadline: number): Promise<ReceivedCall> {
-	const calls: ReceivedCall[] = [];
-	for (;;) {
-		const left = deadline - Date.now();
-		if (left <= 0) {
-			throw new Error(
-				`turn roll: the Slack reply did not arrive in ${String(SLACK_REPLY_MINUTES)} minutes; the fake received ${JSON.stringify(
-					calls.map(({ method, authorized, channel, error }) => ({
-						method,
-						authorized,
-						channel,
-						error,
-					})),
-				)}`,
-			);
-		}
-		calls.push(...(await slackReceived(calls.length, Math.min(SLACK_POLL_MS, left))));
-		const post = calls.find((call) => call.method === "chat.postMessage");
-		if (post?.error !== undefined && post.error !== null) {
-			throw new Error(`turn roll: the fake Slack refused the reply with ${post.error}`);
-		}
-		if (post !== undefined) {
-			return post;
-		}
-		const failure = slackDeliveryFailure(
-			await psql(
-				`SELECT json_build_object('turn', (SELECT t.status FROM mentor_turn t WHERE t.workspace_id = 986600 AND t.surface = 'SLACK' LIMIT 1), 'post', (SELECT a.state || coalesce(':' || a.stop_reason, '') FROM agent_action a WHERE a.workspace_id = 986600 AND a.kind = 'SLACK_POST' AND a.idempotency_key LIKE 'slack_reply:%' ORDER BY a.created_at DESC LIMIT 1))`,
-			),
-		);
-		if (failure !== null) {
-			throw new Error(`turn roll: the Slack reply failed: ${failure}`);
-		}
-	}
-}
+/** The whole wait for the Slack reply, after the event was stored. */
+const SLACK_REPLY_MINUTES = 5;
 
-/** The Slack turn once the server settled it: ended, with the reply's `ts` on the answer when it was DONE. */
-async function settledSlackTurn(deadline: number): Promise<SlackTurnState | null> {
-	return until(
-		"the server did not settle the Slack turn",
-		Math.max(deadline - Date.now(), 1000) / 60_000,
-		async () =>
-			slackTurnState(
-				await psql(
-					`SELECT json_build_object('status', t.status, 'answer', coalesce((SELECT string_agg(e.text, E'\\n' ORDER BY e.seq) FROM mentor_entry e WHERE e.turn_id = t.id AND e.kind = 'HEPH'), ''), 'replyTs', (SELECT e.slack_ts FROM mentor_entry e WHERE e.turn_id = t.id AND e.kind = 'HEPH' LIMIT 1)) FROM mentor_turn t WHERE t.workspace_id = 986600 AND t.surface = 'SLACK'`,
-				),
-			),
-		(observed) =>
-			observed !== null &&
-			(observed.status === "FAILED" ||
-				observed.status === "STOPPED" ||
-				(observed.status === "DONE" && observed.replyTs !== null)),
+/** What the server records of the Slack turn and of its reply post. */
+async function slackSnapshot(): Promise<SlackTurnState | null> {
+	return slackTurnState(
+		await psql(
+			`SELECT json_build_object('status', t.status, 'answer', coalesce((SELECT string_agg(e.text, E'\\n' ORDER BY e.seq) FROM mentor_entry e WHERE e.turn_id = t.id AND e.kind = 'HEPH'), ''), 'replyTs', (SELECT e.slack_ts FROM mentor_entry e WHERE e.turn_id = t.id AND e.kind = 'HEPH' LIMIT 1), 'post', (SELECT a.state || coalesce(':' || a.stop_reason, '') FROM agent_action a WHERE a.workspace_id = 986600 AND a.kind = 'SLACK_POST' AND a.idempotency_key LIKE 'slack_reply:%' ORDER BY a.created_at DESC LIMIT 1)) FROM mentor_turn t WHERE t.workspace_id = 986600 AND t.surface = 'SLACK'`,
+		),
 	);
 }
 
@@ -2260,10 +2170,12 @@ export function slackTurnChecks(reply: ReceivedCall, turn: SlackTurnState | null
 async function slackTurn(base: string, token: string, signingSecret: string): Promise<void> {
 	await installSlack(base, token);
 	await sendSlackMessage(base, signingSecret);
-	const deadline = Date.now() + SLACK_REPLY_MINUTES * 60_000;
-	const reply = await awaitSlackReply(deadline);
-	// The server settles the reply in its own transaction after the fake answered, so this waits for that commit.
-	report(slackTurnChecks(reply, await settledSlackTurn(deadline)));
+	const { reply, turn } = await awaitSlackReply(Date.now() + SLACK_REPLY_MINUTES * 60_000, {
+		now: Date.now,
+		receive: slackReceived,
+		snapshot: slackSnapshot,
+	});
+	report(slackTurnChecks(reply, turn));
 }
 
 async function rollRestart(

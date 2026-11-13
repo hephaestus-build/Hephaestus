@@ -57,6 +57,131 @@ function isObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+const PLAIN_TEXT = ["plain_text"];
+const ANY_TEXT = ["plain_text", "mrkdwn"];
+
+/** A string of at most `max` characters when present. */
+function optionalString(object: Record<string, unknown>, key: string, max: number): boolean {
+	const value = object[key];
+	return value === undefined || (typeof value === "string" && value.length <= max);
+}
+
+/** A text object (https://docs.slack.dev/reference/block-kit/composition-objects/text-object/): 1 to `max` characters. */
+function textObject(value: unknown, kinds: readonly string[], max: number): boolean {
+	return (
+		isObject(value) &&
+		typeof value.type === "string" &&
+		kinds.includes(value.type) &&
+		typeof value.text === "string" &&
+		value.text.length > 0 &&
+		value.text.length <= max
+	);
+}
+
+/** An array of `min` to `max` items that all pass `valid`. */
+function items(
+	value: unknown,
+	min: number,
+	max: number,
+	valid: (item: unknown) => boolean,
+): boolean {
+	return Array.isArray(value) && value.length >= min && value.length <= max && value.every(valid);
+}
+
+/** A confirmation dialog object: a title, a text and both labels. */
+function confirmation(value: unknown): boolean {
+	return (
+		isObject(value) &&
+		textObject(value.title, PLAIN_TEXT, 100) &&
+		textObject(value.text, ANY_TEXT, 300) &&
+		textObject(value.confirm, PLAIN_TEXT, 30) &&
+		textObject(value.deny, PLAIN_TEXT, 30)
+	);
+}
+
+/** A button element: https://docs.slack.dev/reference/block-kit/block-elements/button-element/ */
+function button(value: unknown): boolean {
+	return (
+		isObject(value) &&
+		value.type === "button" &&
+		textObject(value.text, PLAIN_TEXT, 75) &&
+		optionalString(value, "action_id", 255) &&
+		optionalString(value, "url", 3000) &&
+		optionalString(value, "value", 2000) &&
+		optionalString(value, "accessibility_label", 75) &&
+		(value.style === undefined || value.style === "primary" || value.style === "danger") &&
+		(value.confirm === undefined || confirmation(value.confirm))
+	);
+}
+
+/** A feedback button of `feedback_buttons`: a plain text of at most 75 characters and a value. */
+function feedbackButton(value: unknown): boolean {
+	return (
+		isObject(value) &&
+		textObject(value.text, PLAIN_TEXT, 75) &&
+		typeof value.value === "string" &&
+		value.value.length > 0 &&
+		value.value.length <= 2000 &&
+		optionalString(value, "accessibility_label", 75)
+	);
+}
+
+/** The element of `context_actions` that the server sends: https://docs.slack.dev/reference/block-kit/block-elements/feedback-buttons-element/ */
+function feedbackButtons(value: unknown): boolean {
+	return (
+		isObject(value) &&
+		value.type === "feedback_buttons" &&
+		feedbackButton(value.positive_button) &&
+		feedbackButton(value.negative_button) &&
+		optionalString(value, "action_id", 255)
+	);
+}
+
+/** What a section block needs: a text object, or fields, and an optional button as its accessory. */
+function section(block: Record<string, unknown>): boolean {
+	return (
+		(block.text !== undefined || block.fields !== undefined) &&
+		(block.text === undefined || textObject(block.text, ANY_TEXT, 3000)) &&
+		(block.fields === undefined ||
+			items(block.fields, 1, 10, (field) => textObject(field, ANY_TEXT, 2000))) &&
+		(block.accessory === undefined || button(block.accessory))
+	);
+}
+
+/**
+ * Whether a block has what Slack requires of its type (https://docs.slack.dev/reference/block-kit/blocks/). Only the
+ * types that the server sends in a message are known: `markdown`, `section`, `context`, `context_actions` and
+ * `actions`. Another type is refused.
+ */
+function validBlock(block: Record<string, unknown>): boolean {
+	if (!optionalString(block, "block_id", 255)) {
+		return false;
+	}
+	switch (block.type) {
+		case "markdown": {
+			return typeof block.text === "string" && block.text.length > 0;
+		}
+		case "section": {
+			return section(block);
+		}
+		case "context": {
+			return items(block.elements, 1, 10, (element) => textObject(element, ANY_TEXT, 3000));
+		}
+		case "context_actions": {
+			return items(block.elements, 1, 5, feedbackButtons);
+		}
+		case "actions": {
+			return items(block.elements, 1, 25, button);
+		}
+		default: {
+			return false;
+		}
+	}
+}
+
+/** All `markdown` blocks of one payload share 12,000 characters. */
+const MARKDOWN_LIMIT = 12_000;
+
 /** Every string under a key `text`, at any depth, in order: the words that a reader sees in blocks. */
 function textsOf(value: unknown): string[] {
 	if (Array.isArray(value)) {
@@ -91,10 +216,18 @@ export function postRefusal(fields: ReadonlyMap<string, string>): {
 		if (!Array.isArray(parsed)) {
 			return { error: "invalid_blocks_format", blocksText: null };
 		}
-		if (!parsed.every((block) => isObject(block) && typeof block.type === "string")) {
+		if (!parsed.every((block) => isObject(block) && validBlock(block))) {
 			return { error: "invalid_blocks", blocksText: null };
 		}
 		blocks = parsed;
+		const markdown = parsed.reduce<number>(
+			(sum, block) =>
+				sum + (isObject(block) && block.type === "markdown" ? String(block.text).length : 0),
+			0,
+		);
+		if (markdown > MARKDOWN_LIMIT) {
+			return { error: "msg_blocks_too_long", blocksText: null };
+		}
 	}
 	const blocksText = blocks.length === 0 ? null : textsOf(blocks).join("\n");
 	const refuse = (error: string) => ({ error, blocksText });

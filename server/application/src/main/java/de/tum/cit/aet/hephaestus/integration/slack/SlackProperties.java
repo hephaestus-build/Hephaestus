@@ -30,12 +30,20 @@ public record SlackProperties(
     public SlackProperties {
         apiBase = validated(apiBase);
         if (!SLACK.equals(apiBase)) {
+            // Only the origin: the path of a proxy can hold a token.
             log.warn(
                     "hephaestus.integration.slack.api-base is {}, not {}: every workspace's Slack bot token and all"
                             + " Slack traffic go to that host. Set it only in tests.",
-                    apiBase,
+                    origin(apiBase),
                     SLACK);
         }
+    }
+
+    /** The scheme, host and port of a validated base. */
+    private static String origin(String apiBase) {
+        URI uri = URI.create(apiBase);
+        return uri.getScheme().toLowerCase(Locale.ROOT) + "://" + uri.getHost()
+                + (uri.getPort() < 0 ? "" : ":" + uri.getPort());
     }
 
     private static String validated(String value) {

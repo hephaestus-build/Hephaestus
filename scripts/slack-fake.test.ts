@@ -109,7 +109,7 @@ await test("the fake lists a posted message with its channel, its text and wheth
 		const asJson = await postMessage(
 			base,
 			auth,
-			JSON.stringify({ channel: "D2", text: "as JSON", blocks: [{ type: "markdown" }] }),
+			JSON.stringify({ channel: "D2", text: "as JSON", blocks: [{ type: "markdown", text: "x" }] }),
 			"application/json; charset=utf-8",
 		);
 		assert.equal(asJson.channel, "D2");
@@ -140,7 +140,7 @@ await test("the fake lists a posted message with its channel, its text and wheth
 				channel: "D2",
 				threadTs: null,
 				text: "as JSON",
-				blocksText: "",
+				blocksText: "x",
 				ts: asJson.ts,
 				error: null,
 			},
@@ -287,6 +287,226 @@ await test("the fake refuses what chat.postMessage refuses, with Slack's error, 
 			],
 		);
 	});
+});
+
+const markdown = (text: string) => ({ type: "markdown", text });
+const mrkdwn = (text: string) => ({ type: "mrkdwn", text });
+const plain = (text: string) => ({ type: "plain_text", text });
+const feedbackButtons = {
+	type: "feedback_buttons",
+	action_id: "heph_feedback",
+	positive_button: { text: plain("Helpful"), value: "HELPFUL:1", accessibility_label: "Helpful" },
+	negative_button: { text: plain("Not helpful"), value: "NOT_HELPFUL:1" },
+};
+const confirm = {
+	title: plain("Sure?"),
+	text: plain("Do not use my messages."),
+	confirm: plain("Yes"),
+	deny: plain("No"),
+};
+const button = {
+	type: "button",
+	text: plain("Link account"),
+	action_id: "link",
+	url: "https://x.example",
+};
+
+/** The error that `chat.postMessage` answers for these blocks, or null when it accepts them. */
+const blocksError = (blocks: unknown) =>
+	postRefusal(
+		new Map([
+			["channel", "D1"],
+			["text", "fallback"],
+			["blocks", JSON.stringify(blocks)],
+		]),
+	).error;
+
+await test("the fake accepts the blocks that the server sends", () => {
+	for (const blocks of [
+		[markdown("an answer")],
+		[
+			markdown("an answer"),
+			{ type: "context", elements: [plain("Hephaestus answers with an AI model.")] },
+		],
+		[markdown("an answer"), { type: "context_actions", elements: [feedbackButtons] }],
+		[
+			{ type: "section", text: mrkdwn("*Your weekly digest is ready*") },
+			{ type: "actions", elements: [{ ...button, style: "primary", confirm }] },
+			{ type: "context", elements: [mrkdwn("Reply in this thread to go through it.")] },
+		],
+		[
+			{
+				type: "section",
+				fields: [mrkdwn("one"), plain("two")],
+				accessory: button,
+				block_id: "b".repeat(255),
+			},
+		],
+	]) {
+		assert.equal(blocksError(blocks), null, JSON.stringify(blocks));
+	}
+});
+
+await test("the fake refuses a block that lacks what Slack requires of its type", () => {
+	const invalid: [string, unknown][] = [
+		// A section needs a text object, not a string: the shape that once passed every assertion.
+		["a section with a text string", [{ type: "section", text: "The commands printed" }]],
+		["a section with no text and no fields", [{ type: "section" }]],
+		["a section whose text is no text object", [{ type: "section", text: { text: "x" } }]],
+		[
+			"a section whose text type is image",
+			[{ type: "section", text: { type: "image", text: "x" } }],
+		],
+		["a section with an empty text", [{ type: "section", text: mrkdwn("") }]],
+		[
+			"a section whose text is 3001 characters",
+			[{ type: "section", text: mrkdwn("x".repeat(3001)) }],
+		],
+		[
+			"a section with more than 10 fields",
+			[{ type: "section", fields: Array.from({ length: 11 }, () => mrkdwn("x")) }],
+		],
+		["a section with no field", [{ type: "section", fields: [] }]],
+		[
+			"a section field of 2001 characters",
+			[{ type: "section", fields: [mrkdwn("x".repeat(2001))] }],
+		],
+		["a section field that is a string", [{ type: "section", fields: ["x"] }]],
+		[
+			"a section accessory that is no button",
+			[{ type: "section", text: mrkdwn("x"), accessory: { type: "image" } }],
+		],
+		["a markdown block with no text", [{ type: "markdown" }]],
+		["a markdown block with an empty text", [markdown("")]],
+		[
+			"a markdown block whose text is no string",
+			[{ type: "markdown", text: { type: "mrkdwn", text: "x" } }],
+		],
+		["a context block with no elements", [{ type: "context" }]],
+		["a context block with an empty list", [{ type: "context", elements: [] }]],
+		[
+			"a context block with 11 elements",
+			[{ type: "context", elements: Array.from({ length: 11 }, () => plain("x")) }],
+		],
+		["a context element that is a string", [{ type: "context", elements: ["x"] }]],
+		[
+			"a context element of 3001 characters",
+			[{ type: "context", elements: [plain("x".repeat(3001))] }],
+		],
+		["a context_actions block with no elements", [{ type: "context_actions" }]],
+		[
+			"a context_actions block with 6 elements",
+			[{ type: "context_actions", elements: Array.from({ length: 6 }, () => feedbackButtons) }],
+		],
+		[
+			"a context_actions element of another type",
+			[{ type: "context_actions", elements: [{ type: "icon_button" }] }],
+		],
+		[
+			"feedback buttons without a negative button",
+			[{ type: "context_actions", elements: [{ ...feedbackButtons, negative_button: undefined }] }],
+		],
+		[
+			"a feedback button whose text is mrkdwn",
+			[
+				{
+					type: "context_actions",
+					elements: [
+						{ ...feedbackButtons, positive_button: { text: mrkdwn("Helpful"), value: "v" } },
+					],
+				},
+			],
+		],
+		[
+			"a feedback button without a value",
+			[
+				{
+					type: "context_actions",
+					elements: [{ ...feedbackButtons, positive_button: { text: plain("Helpful") } }],
+				},
+			],
+		],
+		[
+			"a feedback button value of 2001 characters",
+			[
+				{
+					type: "context_actions",
+					elements: [
+						{
+							...feedbackButtons,
+							positive_button: { text: plain("Helpful"), value: "v".repeat(2001) },
+						},
+					],
+				},
+			],
+		],
+		[
+			"a feedback button text of 76 characters",
+			[
+				{
+					type: "context_actions",
+					elements: [
+						{ ...feedbackButtons, positive_button: { text: plain("t".repeat(76)), value: "v" } },
+					],
+				},
+			],
+		],
+		[
+			"a feedback button label of 76 characters",
+			[
+				{
+					type: "context_actions",
+					elements: [
+						{
+							...feedbackButtons,
+							positive_button: {
+								text: plain("Helpful"),
+								value: "v",
+								accessibility_label: "l".repeat(76),
+							},
+						},
+					],
+				},
+			],
+		],
+		["an actions block with no elements", [{ type: "actions" }]],
+		[
+			"an actions block with 26 buttons",
+			[{ type: "actions", elements: Array.from({ length: 26 }, () => button) }],
+		],
+		[
+			"an actions element that is no button",
+			[{ type: "actions", elements: [{ type: "static_select" }] }],
+		],
+		[
+			"a button whose text is mrkdwn",
+			[{ type: "actions", elements: [{ ...button, text: mrkdwn("Link") }] }],
+		],
+		[
+			"a button with an unknown style",
+			[{ type: "actions", elements: [{ ...button, style: "loud" }] }],
+		],
+		[
+			"a button value of 2001 characters",
+			[{ type: "actions", elements: [{ ...button, value: "v".repeat(2001) }] }],
+		],
+		[
+			"a button confirmation without a deny label",
+			[{ type: "actions", elements: [{ ...button, confirm: { ...confirm, deny: undefined } }] }],
+		],
+		["a block id of 256 characters", [{ ...markdown("x"), block_id: "b".repeat(256) }]],
+		["a block type that the server never sends", [{ type: "divider" }]],
+		["a header block", [{ type: "header", text: plain("Hephaestus") }]],
+	];
+	for (const [name, blocks] of invalid) {
+		assert.equal(blocksError(blocks), "invalid_blocks", name);
+	}
+	// All markdown blocks of a payload share 12,000 characters.
+	assert.equal(blocksError([markdown("x".repeat(12_000))]), null);
+	assert.equal(
+		blocksError([markdown("x".repeat(6000)), markdown("x".repeat(6001))]),
+		"msg_blocks_too_long",
+	);
 });
 
 await test("the fake lists the words of the blocks that a post carried", async () => {

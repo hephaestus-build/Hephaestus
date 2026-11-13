@@ -13,6 +13,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.bind.BindException;
@@ -43,19 +44,29 @@ class SlackPropertiesTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(
-            strings = {
-                "http://slack-fake.ns.svc.cluster.local:8080",
-                "http://127.0.0.1:9999/",
-                "https://proxy.example/slack"
-            })
-    void anotherHttpOrHttpsHostIsAcceptedAndWarnedOnce(String value) {
+    @CsvSource({
+        "http://slack-fake.ns.svc.cluster.local:8080,http://slack-fake.ns.svc.cluster.local:8080",
+        "http://127.0.0.1:9999/,http://127.0.0.1:9999",
+        "https://proxy.example/slack,https://proxy.example",
+    })
+    void anotherHttpOrHttpsHostIsAcceptedAndWarnedOnceWithItsOriginOnly(String value, String origin) {
         assertThat(new SlackProperties(value).apiBase()).isEqualTo(value.replaceAll("/+$", ""));
 
         assertThat(logged.list).singleElement().satisfies(event -> {
             assertThat(event.getLevel()).isEqualTo(Level.WARN);
+            assertThat(event.getFormattedMessage()).contains("bot token", "go to that host", origin);
+        });
+    }
+
+    @Test
+    void theWarningNeverRepeatsThePathOfTheBase() {
+        new SlackProperties("https://proxy.example/probe-secret/more");
+
+        assertThat(logged.list).singleElement().satisfies(event -> {
             assertThat(event.getFormattedMessage())
-                    .contains("bot token", "go to that host", value.replaceAll("/+$", ""));
+                    .contains("https://proxy.example")
+                    .doesNotContain("probe-secret");
+            assertThat(event.getArgumentArray()).containsExactly("https://proxy.example", "https://slack.com");
         });
     }
 
