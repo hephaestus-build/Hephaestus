@@ -32,16 +32,15 @@ export function EvidenceFileBlock({ location }: EvidenceFileBlockProps) {
 	const locatedByLine = source.locator === "code" && hasText(location.path);
 	const { directory, fileName } = splitPath(location.path ?? "");
 	const { change, side, snippet } = location;
-	// A range over the two sides of a change would be true of one of them only.
-	const lineRange =
-		locatedByLine && change === undefined ? evidenceLineRangeLabel(location) : undefined;
+	// Folded sides have the same recorded coordinates; the range locates both quoted versions.
+	const lineRange = locatedByLine ? evidenceLineRangeLabel(location) : undefined;
 	const sideLabel = change === undefined && side !== undefined ? DIFF_SIDE_LABELS[side] : undefined;
 	const language = locatedByLine ? codeLanguage(location.path) : "";
 	// Each side of a change is a passage of a different version of the file, so each is read alone.
 	const before = useHighlightedCode(change?.before ?? "", language);
 	const after = useHighlightedCode(change?.after ?? "", language);
 	const quoted = useHighlightedCode(snippet ?? "", language);
-	const copyText = change === undefined ? snippet : unifiedDiff(change);
+	const copyText = change === undefined ? snippet : undefined;
 	const SourceIcon = source.icon;
 
 	return (
@@ -80,19 +79,48 @@ export function EvidenceFileBlock({ location }: EvidenceFileBlockProps) {
 				)}
 			</CodeBlockHeader>
 			{change !== undefined && (
-				// max-h-36 shows about six code lines before the region scrolls on its own.
-				<CodeBlockContent className="max-h-36">
-					{before.map((line, index) => (
-						<CodeBlockLine key={`OLD-${index}`} variant="removed">
-							{line}
-						</CodeBlockLine>
-					))}
-					{after.map((line, index) => (
-						<CodeBlockLine key={`NEW-${index}`} variant="added">
-							{line}
-						</CodeBlockLine>
-					))}
-				</CodeBlockContent>
+				<>
+					<CodeBlockHeader>
+						<CodeBlockTitle>Before</CodeBlockTitle>
+						<CodeBlockActions>
+							<CodeBlockCopyButton
+								value={change.before}
+								aria-label={
+									locatedByLine ? `Copy before passage from ${fileName}` : "Copy before passage"
+								}
+							/>
+						</CodeBlockActions>
+					</CodeBlockHeader>
+					<CodeBlockContent
+						className="max-h-36"
+						lineNumbers={locatedByLine && location.startLine !== undefined}
+						startLine={location.startLine}
+					>
+						{before.map((line, index) => (
+							<CodeBlockLine key={index}>{line}</CodeBlockLine>
+						))}
+					</CodeBlockContent>
+					<CodeBlockHeader>
+						<CodeBlockTitle>After</CodeBlockTitle>
+						<CodeBlockActions>
+							<CodeBlockCopyButton
+								value={change.after}
+								aria-label={
+									locatedByLine ? `Copy after passage from ${fileName}` : "Copy after passage"
+								}
+							/>
+						</CodeBlockActions>
+					</CodeBlockHeader>
+					<CodeBlockContent
+						className="max-h-36"
+						lineNumbers={locatedByLine && location.startLine !== undefined}
+						startLine={location.startLine}
+					>
+						{after.map((line, index) => (
+							<CodeBlockLine key={index}>{line}</CodeBlockLine>
+						))}
+					</CodeBlockContent>
+				</>
 			)}
 			{change === undefined && snippet !== undefined && (
 				<CodeBlockContent
@@ -114,12 +142,4 @@ export function EvidenceFileBlock({ location }: EvidenceFileBlockProps) {
 			)}
 		</CodeBlock>
 	);
-}
-
-/** A change as a diff reads: every line before it marked `-`, every line after it marked `+`. */
-function unifiedDiff({ before, after }: { before: string; after: string }): string {
-	return [
-		...before.split("\n").map((line) => `-${line}`),
-		...after.split("\n").map((line) => `+${line}`),
-	].join("\n");
 }

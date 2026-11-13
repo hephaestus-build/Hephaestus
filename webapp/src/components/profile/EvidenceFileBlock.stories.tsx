@@ -176,11 +176,7 @@ export const CodeSourceKeepsItsLines: Story = {
 	},
 };
 
-/**
- * One change, folded from the diff's two citations of it: the line as it was, marked removed, and
- * the line as it became, marked added. The marks are a sign and a wash, so the change does not rest
- * on colour alone. The copy button copies the change as a diff reads.
- */
+/** Both cited versions are shown as passages, without inferring a line diff from the quotes. */
 export const OneChangedLine: Story = {
 	args: {
 		location: {
@@ -200,24 +196,19 @@ export const OneChangedLine: Story = {
 	},
 	play: async ({ canvas }) => {
 		const quote = canvas.getByRole("figure", { name: /pagination\.ts/u });
-		// The file is named once, and neither a line range nor a side word is up there: a range over
-		// two sides would be true of one of them.
-		await expect(canvas.queryByText("line 4")).toBeNull();
-		await expect(canvas.queryByText("Before")).toBeNull();
-		await expect(canvas.queryByText("After")).toBeNull();
-
-		const lines = [...quote.querySelectorAll<HTMLElement>("[data-slot=code-block-line]")];
-		await expect(lines.map((line) => [line.dataset.variant, line.textContent])).toEqual([
-			["removed", "export const PAGE_SIZE = 25;"],
-			["added", "export const PAGE_SIZE = 20;"],
-		]);
-
-		await userEvent.click(canvas.getByRole("button", { name: "Copy passage from pagination.ts" }));
-		await expect(writeText).toHaveBeenLastCalledWith(
-			"-export const PAGE_SIZE = 25;\n+export const PAGE_SIZE = 20;",
+		await expect(canvas.getByText("line 4")).toBeVisible();
+		await expect(canvas.getByText("Before")).toBeVisible();
+		await expect(canvas.getByText("After")).toBeVisible();
+		await expect(quote).toHaveTextContent("export const PAGE_SIZE = 25;");
+		await expect(quote).toHaveTextContent("export const PAGE_SIZE = 20;");
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Copy before passage from pagination.ts" }),
 		);
-		// A screen reader hears it from the live region beside the button.
-		await expect(await canvas.findByText("Copied")).toHaveAttribute("aria-live", "polite");
+		await expect(writeText).toHaveBeenLastCalledWith("export const PAGE_SIZE = 25;");
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Copy after passage from pagination.ts" }),
+		);
+		await expect(writeText).toHaveBeenLastCalledWith("export const PAGE_SIZE = 20;");
 	},
 };
 
@@ -281,5 +272,41 @@ export const HistoricalSource: Story = {
 		await expect(canvas.getByText("service.ts")).toBeVisible();
 		await expect(canvas.getByText("line 12")).toBeVisible();
 		await expect(canvas.getByText("b".repeat(40))).toBeVisible();
+	},
+};
+
+/** Shared lines remain in their quoted versions, without being labelled removed or added. */
+export const SharedLinesInBothVersions: Story = {
+	args: {
+		location: {
+			path: "src/pagination.ts",
+			startLine: 10,
+			endLine: 12,
+			sourceKind: "scm.pull-request.diff",
+			change: { before: "a\nb\nc\n", after: "a\nB\nc\n" },
+		},
+	},
+	beforeEach: () => {
+		const clipboard = spyOn(navigator.clipboard, "writeText").mockImplementation(writeText);
+		return () => clipboard.mockRestore();
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Before")).toBeVisible();
+		await expect(canvas.getByText("After")).toBeVisible();
+		await expect(canvas.getAllByText("a", { exact: true })).toHaveLength(2);
+		await expect(canvas.getAllByText("c", { exact: true })).toHaveLength(2);
+		await expect(
+			canvas
+				.getByRole("figure", { name: /pagination\.ts/u })
+				.querySelectorAll('[data-variant="removed"], [data-variant="added"]'),
+		).toHaveLength(0);
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Copy before passage from pagination.ts" }),
+		);
+		await expect(writeText).toHaveBeenLastCalledWith("a\nb\nc\n");
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Copy after passage from pagination.ts" }),
+		);
+		await expect(writeText).toHaveBeenLastCalledWith("a\nB\nc\n");
 	},
 };
