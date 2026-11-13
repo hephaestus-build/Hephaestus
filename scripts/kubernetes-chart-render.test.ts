@@ -4055,7 +4055,7 @@ await test("the small database holds its bounded holders, overlap, reserved slot
 		const layers = [...base, change];
 		const result = render(layers);
 		assert.ok(result.ok, `${JSON.stringify(change)}: ${result.stderr}`);
-		const resources = result.resources;
+		const { resources } = result;
 		const server = workload(resources, "server");
 		const pool = Number(envValue(server, "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE"));
 		const handlers = Number(envValue(server, "HEPHAESTUS_INTEGRATION_CONSUMER_CLAIMERS"));
