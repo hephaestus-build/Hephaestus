@@ -387,7 +387,7 @@ The chart then opens only these paths:
 | `server` | `networkPolicy.externalEgress` | 443 |
 | `server`, if `config.email.host` is set | `networkPolicy.externalEgress` | `config.email.port` |
 | `server` | The Kubernetes API, `networkPolicy.kubernetesApi` | Its port |
-| `server`, if `networkPolicy.workerGatewayPorts` is set | `networkPolicy.gateway` pods | `networkPolicy.workerGatewayPorts` |
+| `server`, if `networkPolicy.modelGatewayPorts` is set | `networkPolicy.gateway` pods | `networkPolicy.modelGatewayPorts` |
 | `server`, for each item of `networkPolicy.modelEndpoints` | Its `cidr` | Its `ports` |
 | Review and conversation sandboxes | `server` | 8081, the sandbox gateway |
 | PostgreSQL and the backup Jobs, with backups on | `postgresql.backup.s3`, or `networkPolicy.externalEgress` | `postgresql.backup.s3.port` |
@@ -400,7 +400,7 @@ Sandboxes are in the sandbox namespace, where every pod also starts with no ingr
 
 A model endpoint that this cluster's own Gateway serves resolves to a public address, but the connection ends at a Gateway Pod.
 That private address is outside `networkPolicy.externalEgress`, so the server cannot reach the endpoint.
-Set `networkPolicy.workerGatewayPorts` to the container ports of the Gateway Pods, for example `[8443, 8000]` for the Traefik of the one-host platform.
+Set `networkPolicy.modelGatewayPorts` to the container ports of the Gateway Pods, for example `[8443, 8000]` for the Traefik of the one-host platform.
 
 `networkPolicy.gateway` must name the namespace and at least one pod label of the Gateway data plane.
 A namespace without labels would admit every pod in it, so the chart refuses it.

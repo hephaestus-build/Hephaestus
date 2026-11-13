@@ -23,7 +23,7 @@ Keep PostgreSQL and NATS running until the servers have drained:
 
 1. Suspend [pull-based reconciliation](./pull-based-deployment#operating-it) and wait for an active reconciliation to finish.
    Suspend any other automation that restores the release.
-   Record the replica counts and take the [database and broker backups](./backup-restore#back-up-the-database).
+   Record the replica counts and take the [database backup](./backup-restore#back-up-the-database).
 2. Cordon the node: `kubectl cordon <node>`.
 3. Stop the servers with `kubectl --namespace hephaestus scale deployment/hephaestus-server --replicas=0`.
    Wait for their Pods to disappear: `kubectl --namespace hephaestus wait --for=delete pod -l app.kubernetes.io/instance=hephaestus,app.kubernetes.io/component=server --timeout=35m`.
@@ -72,7 +72,7 @@ Phase 2 applies the change.
 The change can be the new release values, a new PostgreSQL configuration, or a new CA in the TLS Secret and a restart of PostgreSQL.
 Phase 3 runs the new release's migration Job while the server stays stopped.
 
-Before phase 1, record the current `server.replicas`, and back up the database and the NATS JetStream data.
+Before phase 1, record the current `server.replicas`, and back up the database.
 On a host with [pull-based reconciliation](./pull-based-deployment#settings-for-the-chart), pause the timer before phase 1 and resume it after phase 4.
 A tick applies `/etc/hephaestus/chart.yaml` with its own replica counts.
 

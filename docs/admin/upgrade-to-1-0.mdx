@@ -130,7 +130,7 @@ These migration entries also apply to a host that upgrades to 1.0:
 - *Update custom practice script imports*: remove the imports that the release deletes from your custom scripts.
 - *Remove broker consumer settings*: remove `config.durableConsumerName` and `config.consumerInactiveThreshold` from every values file.
 - *Remove the Git checkout switch*: remove `config.gitCheckoutEnabled` from every values file.
-- *Move the GitHub webhook byte bound into the stream map*: replace `webhook.stream.maxBytesGithub` with `webhook.stream.maxBytesByStream`.
+- *Move the GitHub webhook byte bound into the stream map*: remove the whole `webhook` block from every values file. This chart has no `webhook` key and refuses one.
 - *GitHub synchronization is incremental*: remove `HEPHAESTUS_SYNC_INCREMENTAL_ENABLED` from your configuration.
 - *Change the model call queries that read `class` or `queue`*: your own queries and alerts read the `band` label.
 - *Decide whether GitHub App installations need an instance admin's approval*: by default, an instance admin adopts each new installation.

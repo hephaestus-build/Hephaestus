@@ -1,6 +1,6 @@
 ---
 title: Production operations runbook
-description: Safe deployment, incident containment, external feedback removal, and PostgreSQL × JetStream recovery.
+description: Safe deployment, incident containment, external feedback removal, and recovery after a restore.
 page_type: how-to
 ---
 
@@ -12,7 +12,7 @@ This runbook is for the **instance operator**.
 :::caution[CAUTION: Before broad or unattended delivery]
 The operator must execute and sign off three drills on isolated, representative infrastructure.
 The [failed-migration drill](./upgrade#if-migration-fails) is on the Upgrade page.
-The broker and un-delivery drills are below.
+The restore and un-delivery drills are below.
 An operator-owned silent run requires the silent deployment checklist first.
 :::
 
@@ -153,7 +153,9 @@ Record the action in your incident record.
 [Upgrade](./upgrade) owns the staging rehearsal, the upgrade, and [failed-migration recovery](./upgrade#if-migration-fails).
 The silent deployment checklist above owns startup.
 
-## Backup, restore and PostgreSQL × JetStream
+## Backup and restore
+
+<a id="backup-restore-and-postgresql--jetstream"></a>
 
 [Backup & restore](./backup-restore) owns the data inventory and the backup and restore procedures. A dump restores
 one snapshot, not an arbitrary point in time. Use **pgBackRest** for scheduled backups and WAL archiving
@@ -189,25 +191,8 @@ For backup and recovery:
 8. If the backup overlaps a [key rotation](./credential-key-rotation), preserve active **and prior** credential-encryption keys and versions.
 9. Disable rotation during recovery.
 
-   :::caution[CAUTION: Broker snapshot consistency]
-   Never treat a live filesystem copy as a consistent broker backup.
-   Per-stream snapshots are not atomic with each other, PostgreSQL, or external provider writes.
-   Preserve them for gap analysis, not automatic replay after PITR.
-   :::
-
-10. For incident forensics, take broker-supported snapshots or a cold copy of the stopped JetStream store.
-11. Use an authenticated CLI on the isolated broker network.
-12. For **each** stream, run the [NATS backup command](https://github.com/nats-io/natscli/blob/main/cli/backup_command.go):
-
-    ```bash
-    nats stream backup --check STREAM /restricted/incident/STREAM
-    ```
-
-13. Record start/end time, stream sequence, consumer ACK positions, CLI version, and each snapshot's checksum.
-14. Encrypt the snapshots.
-15. Move them off-host under the database's access and expiry policy.
-
-Snapshots include message payloads and, by default, consumers.
+Provider events wait in the PostgreSQL inbox, so the database backup holds them.
+NATS holds no data that a restore needs. Do not back it up for recovery.
 
 ### Pre-boot isolation — mandatory for every restore
 
@@ -253,90 +238,41 @@ A disabled Hephaestus row alone is never an isolation boundary.
 22. Before such a run, upgrade.
 23. Before such a silent review run, validate the egress brake.
 
-### Choose the broker recovery strategy before starting consumers
+### Restore the broker
 
-Restoring PostgreSQL to T-1 while JetStream retains T can replay work whose local processing/delivery
-records disappeared. Broker publish deduplication and consumer ACKs are **not** external-delivery
-idempotency. A provider comment written after T-1 can still exist with no restored ledger entry.
+<a id="choose-the-broker-recovery-strategy-before-starting-consumers"></a>
 
-**Default: quarantine and recreate the instance's broker state.**
-Accept and record event loss rather than silently replaying a divergent buffer.
-The self-host broker publishes no host port.
+NATS carries only sync status hints between server replicas.
+The server keeps no state in NATS, and it reads no message that a restore could replay.
 
-1. Stop publishers and consumers.
-2. Use an authenticated NATS CLI context for the intended instance on its isolated cluster network.
-3. Record each stream and consumer's configuration, sequence/ACK positions, and pending counts.
-4. Use these commands:
+- Do not restore a NATS snapshot or volume into the restored instance.
+- Start NATS with its current store, or with an empty store on a new host.
 
-   ```bash
-   nats stream report
-   nats stream info STREAM
-   nats consumer info STREAM CONSUMER
-   ```
+A restore to time T loses the provider deliveries that arrived after T, because they were in the PostgreSQL inbox.
+A provider comment that Hephaestus wrote after T can still exist with no restored record.
 
-5. Stop NATS.
-6. Identify the **exact** NATS PersistentVolumeClaim through its StatefulSet specification and Helm release labels.
-7. Preserve a cold snapshot and configuration in restricted incident storage.
+1. Keep silent mode on, and keep public ingress blocked.
+2. Run the migration.
+3. Start the server with the `erasure-recovery` profile, as [Reapply erasure decisions before processing resumes](./backup-restore#reapply-erasure-decisions-before-processing-resumes) describes.
+4. Check the restored provider event inbox and review jobs for work that Hephaestus delivered after T.
+   Work that was pending at T runs again when the server starts.
+5. Inventory the gap from T to the restore.
+6. Run the supported provider reconciliation within its configured monitoring window.
+7. Observe that reconciliation.
+8. Record each interval that you cannot recover.
+9. Turn off silent mode only after the [silent deployment checklist](#silent-deployment-checklist) passes.
 
-   :::caution[CAUTION: Remove only confirmed instance storage]
-   Never delete storage by wildcard or by an unverified name suffix.
-   On a shared broker, do not remove the broker volume.
-   Have its owner export this instance's streams and consumers first.
-   Have the owner delete/recreate only those streams and consumers.
-   :::
-
-8. For a dedicated self-host broker, remove only that instance's stopped NATS workload and confirmed PersistentVolumeClaim.
-9. For a dedicated self-host broker, recreate NATS with an empty store.
-10. Run the isolated database migration first, then start the application server.
-11. Turn on silent mode and read it back.
-12. Check that the server recreated the streams at its start: `nats stream report`.
-
-13. Keep public ingress blocked.
-14. Verify that server consumers attach after streams exist.
-15. If necessary, restart only the isolated server.
-16. Before provider ingress returns, check fresh stream/consumer positions and no old pending deliveries.
-17. Keep silent mode on during reconciliation.
-18. Inventory the gap.
-19. Run supported provider reconciliation within its configured monitoring window.
-20. Observe that reconciliation.
-21. Explicitly record unrecoverable intervals.
-
-Reconciliation can restore current source state, **not all historical events or deleted sources**.
+Reconciliation can restore the current source state, **not all historical events or deleted sources**.
 GitHub, GitLab, Slack, and Outline have different recovery limits.
-
-**Replay is an exception requiring a separate drill.**
 The [send recovery contract](./practice-review-operations#running-instance) covers interrupted writes.
-It does not establish that identities derived from lost jobs survive a database rewind.
-
-1. Preserve the retained stream.
-2. Record the exact consumer start sequence/time.
-3. Recreate only the chosen consumer under isolation.
-4. Do not merely reset an ACK cursor and reconnect production writers.
-5. Exercise provider-marker reconciliation with the specific target release and all enabled destinations.
-
-   Do not release replay externally under any of these conditions:
-
-   - A stable identity cannot be reconstructed.
-   - Provider lookup is inconclusive.
-   - Any live copy is unaccounted for.
-
-6. Under those conditions, leave delivery suppressed.
-7. Under those same conditions, reconcile manually.
 
 **Drill**
 
 1. Create a controlled delivery after the chosen restore point.
-2. Retain newer broker events.
-3. Restore PostgreSQL.
-4. Exercise the chosen reset/replay strategy.
-5. Include duplicate delivery and provider success with lost local acknowledgment.
-6. Include a partially written summary/inline package and a provider lookup outage.
-7. Verify no duplicate provider objects.
-8. Verify no historical suppressed work was released.
-9. Verify the recorded data-loss window.
-10. Before release, also check restored PostgreSQL jobs/proposals and reviews created by source sync.
-
-An empty broker does not remove those jobs/proposals or prevent source sync from creating new reviews.
+2. Restore PostgreSQL to a point before that delivery.
+3. Follow the steps above.
+4. Verify that no provider object is duplicated.
+5. Verify that the recorded gap matches the controlled delivery.
 
 ## Access and erasure for one person
 
@@ -720,13 +656,13 @@ The signal names the alerts of the shipped rules that it answers.
 | Review calls wait for a model (`HephaestusReviewModelWaitLong`) | A sandbox stays idle while its call waits, and its deadline keeps running. Compare `llm_pool_limit` with the running review width. Raise the pool's limit if the provider allows it, or lower the review width ([Sizing](./sizing.mdx)). Short bursts stay below the alert. | Under a quarter of review calls wait over two minutes for one hour |
 | Model permits expired or renewals failing (`HephaestusModelPermitsExpired`, `HephaestusModelPermitRenewalFailing`) | A server stopped renewing a call in flight. The pool keeps that call's debit, and its room returns one lease later. Find why the server stopped: an out-of-memory kill (`HephaestusContainerOomKilled`), an eviction, or a lost database connection. Failed renewals with no restart point to the database: check `HephaestusDatabaseConnectionTimeouts` and the server log. The count rises when the pool next admits a call, so it can come after the cause. | `llm_pool_permits_expired_total` and `llm_pool_lease_renewal_failures_total` stop rising while calls run |
 | A review stage runs past its bound (`HephaestusReviewStageSlow`) | The `stage` label names it. The bound is 30 minutes for `sandbox` and 10 minutes for the others. For `capture`, check the provider sync and its rate limits. For `sandbox`, check the model waits and the review width. For `composition`, check the model pool and the review sandboxes that are waiting to start. | A review of the same size ends each stage inside its bound |
-| Containers killed for memory (`HephaestusContainerOomKilled`) | The `pod` and `container` labels name it. Read the container's limit against [Sizing](./sizing.mdx) and its memory before the kill. A role or a stateful Pod that repeats needs a larger limit. A sandbox that repeats needs a smaller review or a larger sandbox limit. A kill loses the work in flight. The job lease and the broker recover it. The alert reads every namespace. | The container runs through a full cycle of its work with no new kill |
+| Containers killed for memory (`HephaestusContainerOomKilled`) | The `pod` and `container` labels name it. Read the container's limit against [Sizing](./sizing.mdx) and its memory before the kill. A role or a stateful Pod that repeats needs a larger limit. A sandbox that repeats needs a smaller review or a larger sandbox limit. A kill loses the work in flight. The job lease and the inbox lease recover it. The alert reads every namespace. | The container runs through a full cycle of its work with no new kill |
 | Privacy jobs fail or stop (`HephaestusPrivacyJobFailing`, `HephaestusPrivacyJobNotRunning`) | Account erasure and retention are legal duties, so act on the same day. The `exported_job` label names the job. Read the server log of that sweep for the failure. `incomplete` means that the run ended with eligible work left: check for one account or export that blocks it, and for slow database statements. A job that ended no run points to a stuck lock or a stopped scheduler: check the `shedlock` row of the sweep. | `privacy_job_completed_total{outcome="success"}` rises for that job, and its backlog is empty |
 | GitHub redelivery reads only part of the deliveries (`HephaestusWebhookRedeliveryTruncated`) | A run read only part of the App's deliveries, so older failed events can leave GitHub's window unrecovered. Check `HephaestusWebhookEventsUnrecovered`, and fix the cause of the failed deliveries first. | Runs stop adding to `github_webhook_redelivery_total{outcome="truncated"}`, and `github_webhook_unrecovered` is 0 |
 | Backup stale / restore failed (`HephaestusBackupStale`) | Preserve the last good backup, check destination credentials, disk, WAL coverage and encryption-key recovery. On Kubernetes, read the log of the latest backup Job ([Troubleshooting](./kubernetes.mdx#troubleshooting)). A failed WAL archive also stops the backups. Escalate at the agreed RPO, not after the next deploy. | A new off-host backup and isolated restore succeed within measured objectives.                                                                                                                  |
 | Person erasure retry pending (`person_data.erasure.retry_pending`) | Check database availability. The request retains completed receipts and has one automatic retry. | The request reaches `COMPLETE` or reports a failure for an instance admin to resume. |
 | Person erasure stopped (`person_data.erasure.failed`) | Check the request's failure code. Temporary database failures retry once. Repeated or permanent failures require an instance admin to correct the store and resume the request. See [An erasure store fails](#an-erasure-store-fails). | The request reaches `COMPLETE`, and its identifying scope is cleared. |
-| Erasure recovery blocked startup (`person_data.recovery.failed`, then `HephaestusMetricsUnavailable`) | Keep the server stopped. Check the private manifest and the existing erasure receipts. Do not log the manifest or bypass the recovery profile. | Complete [erasure reapplication](./backup-restore#reapply-erasure-decisions-before-processing-resumes), then complete broker recovery before access resumes. |
+| Erasure recovery blocked startup (`person_data.recovery.failed`, then `HephaestusMetricsUnavailable`) | Keep the server stopped. Check the private manifest and the existing erasure receipts. Do not log the manifest or bypass the recovery profile. | Complete [erasure reapplication](./backup-restore#reapply-erasure-decisions-before-processing-resumes), then recover the provider gap, as [Restore the broker](#restore-the-broker) describes, before access resumes. |
 | Provider events stay behind (`HephaestusEventsDelayed`, `HephaestusProviderEventsWaiting`) | The `kind` or `provider` label names the provider. Compare `integration_message_process_duration_seconds` with the event rate. Slow handling points to the database or the provider's API. A due event that waits while handling is fast means that no server claims. Check that the servers run and are ready. Check that `hephaestus.integration.consumer.claimers` is above 0. A long `LEASED` backlog with a handler timeout points to a handler that holds its resource's order. A suspended workspace's events also wait until it is active again. | Under 10 % of `integration_message_lag_seconds` is over 5 minutes, and `integration_consumer_oldest_due_seconds` falls. |
 | Webhook publish failures / unrecovered GitHub events (`HephaestusWebhookPublishFailing`, `HephaestusWebhookEventsUnrecovered`) | Check PostgreSQL first: the receiver fails a delivery that it cannot store in the inbox. The log names `webhook.publish.reason=store-failed`. GitHub deliveries are redelivered for up to 80 minutes after their first failure. Do not restart the receiver to clear the alert. | `webhook.publish` failures stop and `github.webhook.unrecovered` returns to zero. Redeliver older GitHub deliveries in the App settings within three days, or let reconciliation recover the rest. |
 | Webhook connection admission refuses a delivery (`webhook.rejected`, reason `connection-not-active`) | Check the connection's state. `PENDING`, `SUSPENDED` and `UNINSTALLED` connections admit no work payload. The admission log names the provider and refusal reason. An inactive source App also prevents delivery to matching PAT workspaces. `work-event-without-source` means the GitHub work event has no source repository or signed installation ID. Check the App's configured webhook. `connection-route-mismatch` means the source server, signed installation or route no longer matches. | Restore the connection deliberately or complete its upstream cleanup. A new delivery after activation can enter the inbox. No rejected payload is available for replay. |
@@ -735,7 +671,7 @@ The signal names the alerts of the shipped rules that it answers.
 | Many GitHub redeliveries requested (`HephaestusWebhookRedeliveriesRequested`) | GitHub recorded no successful delivery for these events, so the cause can be before the receiver: the Gateway, its timeout, or an unready receiver. Read the App's **Advanced** → **Recent Deliveries** for the status of the failed deliveries. Then check the receiver's readiness and `webhook.publish` failures. | `github.webhook.redelivery` with `outcome=requested` stops increasing. |
 | No available server (`HephaestusServerDown`) | The API is down and every provider delivery fails now. Check the server Deployment's events, and its pods' readiness probe and log. A pod that waits for the schema needs the migration Job. GitHub deliveries are redelivered for up to 80 minutes after their first failure. Other providers need reconciliation. | The server Deployment has an available replica, and `webhook.publish` counts successes. |
 | Unavailable server replica (`HephaestusServerUnready`) | The other server replicas serve. Read the unavailable pod's events and log, and delete it if it does not recover. | The server Deployment has no unavailable replica. |
-| Broker storage exhaustion (`HephaestusJetStreamVolumeFilling`) | Follow the documented broker/receiver restart order after freeing space. Keep ingress loss visible. Do not purge streams merely to clear an alert.                                                                                                                                                                                                           | Receiver durable acknowledgments and consumption recover. Inventory missing events and verify configured bounds.                                                                                |
+| Broker storage exhaustion (`HephaestusJetStreamVolumeFilling`) | The server stores nothing in JetStream, and provider deliveries in PostgreSQL are not affected. To clear the volume, stop NATS, delete its confirmed PersistentVolumeClaim `data-<release>-nats-0`, and run the install command again.                                                                                                                                                                                                           | The NATS volume has more than 10 % free space.                                                                                |
 | Provider event backlog gauges fail (`HephaestusProviderEventBacklogUnsampled`) | Read the server log for `provider_event.backlog.sampler_failed` and its `error.type`. Check the database connection. The backlog gauges show their last values meanwhile. | `integration_consumer_backlog_sampler_failures_total` stops increasing. |
 | Metrics target down (`HephaestusMetricsUnavailable`) | Check that the pod or container runs and is ready, and that the network policy admits the scraper. The other application alerts of that target cannot fire meanwhile. | The target's `up` is 1. |
 | Dead-man check (`HephaestusWatchdog`) | This alert always fires while the monitoring works. Route it to an outside dead-man check, not to a person. When the outside check reports that it stopped, find the broken link. Check the Alertmanager and its receiver first, then vmalert and its rule file. Then check VictoriaMetrics, its scrape, and the roles' `up` series. | The outside check receives the alert again. |
@@ -817,16 +753,15 @@ It must include these facts:
 - Operator/reviewer and UTC date.
 - Release locks and isolated URL/project.
 - Provider fixtures, backup checksum, and recovery target.
-- Broker strategy/positions and measured recovery point/time.
+- Measured recovery point and time, and the recorded provider gap.
 - Provider counts before/after.
 - Failures and follow-up owner.
 
-1. Repeat drills after changes to migrations, write identity, provider APIs, broker configuration, or backups.
+1. Repeat drills after changes to migrations, write identity, provider APIs, or backups.
 
 - [GitLab Silent Mode](https://docs.gitlab.com/administration/silent_mode/)
 - [PostgreSQL continuous archiving](https://www.postgresql.org/docs/current/continuous-archiving.html)
 - [pgBackRest user guide](https://pgbackrest.org/user-guide.html)
-- [NATS delivery and acknowledgment](https://docs.nats.io/learn/jetstream/delivery-and-acknowledgment)
 - [AWS runbook guidance](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/ops_ready_to_support_use_runbooks.html)
 - [Google SRE launch guidance](https://sre.google/sre-book/reliable-product-launches/)
 
