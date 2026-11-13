@@ -105,5 +105,36 @@ void test("only test sources are read", () => {
 	assert.equal(isTestSource("webapp/src/routes/-a-route.test.tsx"), true);
 	assert.equal(isTestSource("webapp/e2e/a.spec.ts"), true);
 	assert.equal(isTestSource("webapp/src/a.ts"), false);
-	assert.equal(isTestSource("scripts/check-quarantine.test.ts"), false);
+	assert.equal(isTestSource("scripts/check-quarantine.test.ts"), true);
+});
+
+void test("quoted skip fixtures and comments cannot quarantine a test", () => {
+	const source = [
+		'const quoted = "it.skip(\\\"fixture\\\")";',
+		"const template = `it.skip('fixture')`;",
+		String.raw`const pattern = /it.skip\(/;`,
+		"// it.skip('comment', () => {});",
+		'it("runs", () => {});',
+	].join("\n");
+	assert.deepEqual(lines("src/a.test.ts", source), []);
+});
+
+void test("a skip executed inside a template expression is still rejected", () => {
+	const source = `const text = \`result: \${test.skip()}\`;`;
+	assert.deepEqual(lines("src/a.test.ts", source), [{ line: 1, problem: missing }]);
+});
+
+void test("test syntax errors cannot turn into an empty passing scan", () => {
+	assert.throws(() => lines("src/a.test.ts", "it.skip("), /cannot parse test source/u);
+});
+
+void test("reading or wrapping a disabled test method keeps its quarantine obligation", () => {
+	for (const source of [
+		"const disabled = it.skip;",
+		'(it.skip)("case", () => {});',
+		'foo.test.skip("case", () => {});',
+	]) {
+		assert.deepEqual(lines("src/a.test.ts", source), [{ line: 1, problem: missing }], source);
+	}
+	assert.deepEqual(lines("src/a.test.ts", 'api["it.skip"]();'), []);
 });
