@@ -78,8 +78,8 @@ class PrometheusSecurityIntegrationTest {
             int managementPort = environment.getRequiredProperty("local.management.port", Integer.class);
             int applicationPort = environment.getRequiredProperty("local.server.port", Integer.class);
             // Not compared: the two listeners bind different addresses (127.0.0.1 and ::1), and the kernel
-            // allocates ephemeral ports per address, so both may get the same number. The status checks below
-            // prove which listener serves what.
+            // allocates ephemeral ports per address, so both may get the same number. The requests below address
+            // each listener by its own host and port.
             assertThat(environment.getRequiredProperty("management.server.address"))
                     .isEqualTo("::1");
             var registry = context.getBean(MeterRegistry.class);
@@ -116,6 +116,8 @@ class PrometheusSecurityIntegrationTest {
             assertThat(send(client, applicationPort, "/actuator/prometheus", "GET", true)
                             .statusCode())
                     .isEqualTo(403);
+            // A refusal alone could hide metrics served behind security: the application listener must not carry them.
+            assertNoListenerProbe(client, "127.0.0.1", applicationPort, listenerId);
             assertThat(send(client, "::1", managementPort, "/actuator/prometheus", "POST", false)
                             .statusCode())
                     .isEqualTo(403);
