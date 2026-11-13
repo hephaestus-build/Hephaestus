@@ -9,9 +9,13 @@ import { HttpResponse, http, type PathParams } from "msw";
 import type {
 	AccountAiChoice,
 	AccountAiChoiceRequest,
+	Contributor,
+	FeatureFlags,
+	OffsetPageDtoFeedbackItem,
 	PasskeyStatus,
 	ProductFeedbackSharing,
 	WorkspacePasskeyPolicy,
+	WorkspaceProviders,
 } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 
@@ -81,6 +85,25 @@ export const handlers = [
 		} satisfies Wire<AccountAiChoice>);
 	}),
 	http.get("*/user", () => HttpResponse.json(currentUser)),
+	// The app chrome reads these on every signed-in page. The defaults describe an instance with
+	// nothing configured and nothing waiting; a test of one of these surfaces installs its own answer.
+	http.get("*/user/features", () =>
+		HttpResponse.json({
+			ADMIN: currentUser.appRole === "APP_ADMIN",
+			PAGE_EXPERIENCE_METRICS: false,
+		} satisfies FeatureFlags),
+	),
+	http.get("*/admin/product-feedback", () =>
+		HttpResponse.json({
+			content: [],
+			page: 0,
+			size: 1,
+			totalElements: 0,
+			totalPages: 0,
+		} satisfies OffsetPageDtoFeedbackItem),
+	),
+	http.get("*/workspaces/providers", () => HttpResponse.json({} satisfies WorkspaceProviders)),
+	http.get("*/contributors", () => HttpResponse.json([] satisfies Contributor[])),
 	// No public repository: the composer asks nothing, and settings shows no product feedback section.
 	http.get("*/product-feedback/sharing", () =>
 		HttpResponse.json({

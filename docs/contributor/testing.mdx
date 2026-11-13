@@ -211,6 +211,22 @@ Those discovery reports are not evidence that tests passed.
 Execution tasks do not accept the removed `-PtestSelection` property.
 Use the selection command for discovery.
 
+## Web app requests
+
+MSW answers every request of a web app test (`webapp/src/mocks/handlers.ts`).
+A request that no handler answers gets a network error and fails the test that sent it.
+Thus, no test request reaches a real host, such as another checkout's server on the API port.
+
+- Answer each request in the test that depends on it.
+  Use a fixture in the wire shape from `webapp/src/mocks/fixtures`.
+- Add a shared default only for a read that every signed-in page sends.
+  Its answer must be neutral, such as no waiting product feedback.
+- `/workspaces` and `members/me` have no default. Each test states the reader's workspaces and role.
+
+`webapp/src/test/unanswered-request-debt.ts` lists the test files that do not fail on an unanswered request yet.
+The list only shrinks.
+A listed file that runs in full with every request answered fails until you remove its entry.
+
 ## Flaky tests
 
 A flaky test fails and then passes on the same commit.

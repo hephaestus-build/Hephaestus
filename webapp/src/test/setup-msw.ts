@@ -1,18 +1,26 @@
-// Global Vitest setup: stand up the MSW Node server so RTL tests of the query-driven auth
-// components hit deterministic mocked endpoints (the same handlers Storybook uses).
-//
-// `onUnhandledRequest: "bypass"` keeps tests that issue no network calls unaffected — only
-// the explicitly-mocked auth endpoints are intercepted. Handlers reset after each test so a
-// `server.use(...)` override in one test never leaks into the next.
+// Global Vitest setup: stand up the MSW Node server so RTL tests hit deterministic mocked endpoints
+// (the same handlers Storybook uses). Handlers reset after each test so a `server.use(...)` override
+// in one test never leaks into the next.
 
-import { afterAll, afterEach, beforeAll, vi } from "vitest";
+import path from "node:path";
+
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	beforeEach,
+	vi,
+	type RunnerTask,
+	type RunnerTestFile,
+} from "vitest";
 import { toast } from "@/lib/toast";
 
 import { client } from "@/api/client.gen";
 import { clearDrafts } from "@/lib/composer-drafts";
-import { server } from "@/mocks/server";
+import { server, unansweredRequests } from "@/mocks/server";
 import { FakeEventSource } from "@/test/fake-event-source";
 import { ObserverStub } from "@/test/observers";
+import { unansweredRequestDebt } from "@/test/unanswered-request-debt";
 
 // DOM-only route tests exercise the form contract; the production runtime check uses real Monaco.
 vi.mock("@/components/common/CodeEditor", async () => import("./code-editor.mock"));
@@ -90,8 +98,16 @@ if (typeof globalThis.EventSource !== "function") {
 	vi.stubGlobal("EventSource", FakeEventSource);
 }
 
-beforeAll(() => server.listen({ onUnhandledRequest: "bypass" }));
-afterEach(() => {
+// A request that no handler answers fails the test that sent it, unless its file is still listed in
+// `unansweredRequestDebt`. `@/mocks/server` answers it with a network error either way.
+let currentFile: Readonly<RunnerTestFile> | undefined;
+let fileSentUnansweredRequest = false;
+beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+// A request that an earlier test left in flight belongs to that test, not to this one.
+beforeEach(() => {
+	unansweredRequests.length = 0;
+});
+afterEach(({ task }) => {
 	server.resetHandlers();
 	// Sonner's toast store is a module singleton that outlives a test's render, and a `Toaster`
 	// replays every still-active toast to itself on mount — so a toast raised in one test reappears
@@ -104,5 +120,34 @@ afterEach(() => {
 	// as a fresh browser tab.
 	sessionStorage.clear();
 	FakeEventSource.instances = [];
+	currentFile = task.file;
+	const unanswered = unansweredRequests.splice(0);
+	if (unanswered.length === 0) {
+		return;
+	}
+	fileSentUnansweredRequest = true;
+	if (!unansweredRequestDebt.has(debtKey(task.file.filepath))) {
+		throw new Error(
+			`No MSW handler answered (docs/contributor/testing.mdx § Web app requests):\n${unanswered.join("\n")}`,
+		);
+	}
 });
-afterAll(() => server.close());
+afterAll(() => {
+	server.close();
+	if (currentFile === undefined) {
+		return;
+	}
+	const key = debtKey(currentFile.filepath);
+	if (unansweredRequestDebt.has(key) && !fileSentUnansweredRequest && ranInFull(currentFile)) {
+		throw new Error(`${key} answers every request now: remove it from unansweredRequestDebt`);
+	}
+});
+
+function debtKey(filepath: string): string {
+	return path.relative(path.resolve(import.meta.dirname, "../.."), filepath);
+}
+
+/** A filtered run, such as `-t`, skips tests that may be the ones still sending a request. */
+function ranInFull(task: Readonly<RunnerTask>): boolean {
+	return task.type === "test" ? task.mode === "run" : task.tasks.every(ranInFull);
+}
