@@ -45,6 +45,9 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             Map.entry(
                     "de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventConsumer",
                     RuntimeRole.SERVER_PROPERTY),
+            Map.entry(
+                    "de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventClaimers",
+                    RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.workspace.WorkspaceStartupListener", RuntimeRole.SERVER_PROPERTY),
             // Admin surfaces and the services behind them are server-only: a context without the server role does
             // not load core.auth, so an admin controller mapped there is a route with no authentication layer under it.

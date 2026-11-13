@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.List;
@@ -59,7 +60,7 @@ class SandboxDispatchConfiguration {
      * own scheduler thread.
      */
     @Bean
-    @Profile("!test")
+    @ConditionalOnBackgroundWork
     DispatchPasses sandboxDispatchPasses(
             SandboxDispatcher dispatcher, AgentRunNotifications notifications, AgentCapacityProperties capacity) {
         return new DispatchPasses(dispatcher, notifications, capacity.leaseRenewal());

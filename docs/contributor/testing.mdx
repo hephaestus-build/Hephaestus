@@ -23,6 +23,16 @@ names for readers.
   The application role cannot change the schema. A fixture that changes it uses `PostgreSQLTestContainer.ownerJdbc()`.
 - For webhook tests, deserialize recorded fixtures into the handler's event DTO.
 
+The `test` profile starts no background work: no scheduled task, provider-event claimer, startup thread or `LISTEN` subscriber that acts on its own.
+`hephaestus.background-work.enabled` is false there, as in the `specs` and `cds-training` profiles.
+Thus no background write races a test or the cleanup that truncates its tables.
+A `LISTEN` connection that wakes the waits and streams of requests still runs, since the tests of those requests need it.
+
+A test runs the work by calling it, for example `ProviderEventConsumer#claimAndHandle` or a sweeper's method.
+A test that receives over HTTP and needs claimer threads starts them with `StoredEventHandling.runningClaimers` and stops them after the test.
+A bean that starts background work carries `@ConditionalOnBackgroundWork`.
+`BackgroundWorkArchTest` finds each such start and fails without the condition.
+
 The integration tier fails when a virtual thread is pinned to its carrier for 20 ms or more.
 On Java 21, a virtual thread that blocks under a monitor keeps its carrier.
 A few such threads can stall every virtual thread, the waiters of a connection pool among them.

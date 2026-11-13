@@ -24,6 +24,11 @@ public class ProviderEventNotifications {
 
     /** Wakes the subscribers once the caller's transaction commits. */
     void queuedAfterCommit() {
-        TransactionCallbacks.afterCommit(() -> claimers.forEach(Runnable::run));
+        TransactionCallbacks.afterCommit(this::queued);
+    }
+
+    /** Wakes the subscribers now, for events that are due again without a commit of this server. */
+    void queued() {
+        claimers.forEach(Runnable::run);
     }
 }

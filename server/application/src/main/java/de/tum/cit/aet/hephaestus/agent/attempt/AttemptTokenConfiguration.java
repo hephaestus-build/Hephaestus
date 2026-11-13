@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.attempt;
 
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.HashMap;
@@ -11,7 +12,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.config.FixedDelayTask;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 
@@ -72,7 +72,7 @@ public class AttemptTokenConfiguration {
     /** Its own scheduler thread, so the key never waits behind a {@code @Scheduled} task. */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnAgentRuntime
-    @Profile("!test & !specs & !cds-training")
+    @ConditionalOnBackgroundWork
     static class ScheduleConfiguration {
 
         /** Runs before the web server starts, so a gateway never opens with no keys loaded and refuses a live token. */

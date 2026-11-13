@@ -14,7 +14,6 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -33,14 +32,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.availability.AvailabilityChangeEvent;
 import org.springframework.boot.availability.LivenessState;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.SmartLifecycle;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Handles the provider events in the inbox. Each claimer leases the oldest due event of a scope ({@link
+ * Handles the provider events in the inbox. A claim leases the oldest due event of a scope ({@link
  * ProviderEventStore#claim}), runs its handler under the handler timeout, and ends the lease: done, retried later, or a
- * dead letter. The lease is renewed while the handler runs, so a server that stops loses its leases within {@link
+ * dead letter. {@link ProviderEventClaimers} claim on their own threads. The lease is renewed while the handler runs, so a server that stops loses its leases within {@link
  * #LEASE}, and the reaper gives them to another server.
  *
  * <p>A handler that outlives the handler timeout is interrupted. One that stops within {@link #HANDLER_STOP_GRACE}
@@ -50,7 +48,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @ConditionalOnServerRole
-public class ProviderEventConsumer implements SmartLifecycle {
+public class ProviderEventConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(ProviderEventConsumer.class);
 
@@ -59,19 +57,12 @@ public class ProviderEventConsumer implements SmartLifecycle {
 
     private static final Duration RENEWAL = Duration.ofSeconds(30);
 
-    /** How long an idle claimer waits for a notification before it looks again. */
-    private static final Duration IDLE_POLL = Duration.ofSeconds(5);
-
-    /** How long a stopping server waits for running handlers before it interrupts them. */
-    public static final Duration SHUTDOWN_WAIT = Duration.ofSeconds(10);
-
     /** How long an interrupted handler may take to stop before this server breaks its liveness. */
     static final Duration HANDLER_STOP_GRACE = Duration.ofSeconds(30);
 
-    /** The part of {@link #SHUTDOWN_WAIT} that an interrupted claimer has to stop its handler and give its lease back. */
-    private static final Duration SHUTDOWN_RELEASE = Duration.ofSeconds(4);
-
-    /** How long a stopping server waits for an interrupted handler; it fits {@link #SHUTDOWN_RELEASE}. */
+    /**
+     * How long a stopping server waits for an interrupted handler; it fits {@link ProviderEventClaimers#SHUTDOWN_RELEASE}.
+     */
     private static final Duration SHUTDOWN_STOP_GRACE = Duration.ofSeconds(2);
 
     private final ProviderEventStore store;
@@ -82,13 +73,14 @@ public class ProviderEventConsumer implements SmartLifecycle {
     private final EventTraceContext traceContext;
     private final IntegrationMessageMeters meters;
     private final ConnectionActivityRecorder activityRecorder;
+    private final ProviderEventNotifications notifications;
     private final ProviderEventConsumerProperties properties;
     private final ApplicationEventPublisher events;
     private final Clock clock;
 
-    private final Object idle = new Object();
-    private final AtomicBoolean running = new AtomicBoolean();
-    private final List<Thread> claimers = new CopyOnWriteArrayList<>();
+    /** Set once the claimers stop: an interrupted handler then gets the shorter grace, and breaks no liveness. */
+    private final AtomicBoolean stopping = new AtomicBoolean();
+
     private final ExecutorService handlers = Executors.newVirtualThreadPerTaskExecutor();
     private final ScheduledExecutorService renewals = Executors.newSingleThreadScheduledExecutor(
             Thread.ofPlatform().name("provider-event-renewal").daemon(true).factory());
@@ -116,63 +108,31 @@ public class ProviderEventConsumer implements SmartLifecycle {
         this.traceContext = traceContext;
         this.meters = meters;
         this.activityRecorder = activityRecorder;
+        this.notifications = notifications;
         this.properties = properties;
         this.events = events;
         this.clock = clock;
-        notifications.subscribe(this::wake);
     }
 
-    @Override
-    public void start() {
-        if (!running.compareAndSet(false, true)) return;
-        claimers.clear();
-        for (int i = 0; i < properties.claimers(); i++) {
-            claimers.add(Thread.ofPlatform().name("provider-event-claimer-" + i).start(this::claimLoop));
-        }
-    }
-
-    @Override
-    public void stop() {
-        if (!running.compareAndSet(true, false)) return;
-        wake();
-        // A handler gets the first part of the wait to end. Then its claimer is interrupted and gets the rest to stop
-        // it and give its lease back, before the context closes the pool that the release needs.
-        long deadline = System.nanoTime() + SHUTDOWN_WAIT.toNanos();
-        long interruptAt = deadline - SHUTDOWN_RELEASE.toNanos();
-        try {
-            for (Thread claimer : claimers) {
-                if (!claimer.join(Duration.ofNanos(Math.max(1, interruptAt - System.nanoTime())))) claimer.interrupt();
-            }
-            for (Thread claimer : claimers) {
-                claimer.join(Duration.ofNanos(Math.max(1, deadline - System.nanoTime())));
-            }
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-        }
+    /** Called by the claimers when the server stops, before they interrupt the handlers that still run. */
+    void stopping() {
+        stopping.set(true);
     }
 
     @PreDestroy
     void close() {
-        stop();
         renewals.shutdownNow();
         handlers.shutdownNow();
     }
 
-    @Override
-    public boolean isRunning() {
-        return running.get();
+    @Nullable
+    Instant lastHandledAt() {
+        return lastHandledAt;
     }
 
-    /** Whether this server handles events, and when it last handled or failed one. */
-    public record Status(
-            boolean running,
-            int claimers,
-            @Nullable Instant lastHandledAt,
-            @Nullable Instant lastFailedAt) {}
-
-    public Status status() {
-        int alive = (int) claimers.stream().filter(Thread::isAlive).count();
-        return new Status(running.get(), alive, lastHandledAt, lastFailedAt);
+    @Nullable
+    Instant lastFailedAt() {
+        return lastFailedAt;
     }
 
     /** Gives the leases of a stopped server to another; an event that used its attempts becomes a dead letter. */
@@ -182,7 +142,7 @@ public class ProviderEventConsumer implements SmartLifecycle {
         int reaped = store.reapExpired(properties.poison().maxAttempts());
         if (reaped > 0) {
             log.warn("Took back expired provider event leases: count={}", reaped);
-            wake();
+            notifications.queued();
         }
     }
 
@@ -202,27 +162,6 @@ public class ProviderEventConsumer implements SmartLifecycle {
                     .addKeyValue("event.name", "provider_event.retention_failed")
                     .addKeyValue("error.type", failure.getClass().getName())
                     .log("Provider event retention failed; the next pass deletes what this one left");
-        }
-    }
-
-    private void wake() {
-        synchronized (idle) {
-            idle.notifyAll();
-        }
-    }
-
-    private void claimLoop() {
-        while (running.get()) {
-            if (claimAndHandle()) continue;
-            synchronized (idle) {
-                if (!running.get()) return;
-                try {
-                    idle.wait(IDLE_POLL.toMillis());
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                    return;
-                }
-            }
         }
     }
 
@@ -435,13 +374,13 @@ public class ProviderEventConsumer implements SmartLifecycle {
 
     /** Restarts this replica through Kubernetes, so a handler thread that would not stop dies with the Pod. */
     private void breakLiveness() {
-        if (!running.get()) return;
+        if (stopping.get()) return;
         AvailabilityChangeEvent.publish(events, this, LivenessState.BROKEN);
     }
 
     private Duration stopGrace() {
         // While the server stops, the release has to fit its shutdown wait.
-        Duration grace = running.get() ? HANDLER_STOP_GRACE : SHUTDOWN_STOP_GRACE;
+        Duration grace = stopping.get() ? SHUTDOWN_STOP_GRACE : HANDLER_STOP_GRACE;
         Duration timeout = properties.handlerTimeout();
         return timeout.compareTo(grace) < 0 ? timeout : grace;
     }

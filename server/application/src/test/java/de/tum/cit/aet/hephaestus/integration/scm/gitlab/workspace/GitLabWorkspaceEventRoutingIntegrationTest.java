@@ -34,6 +34,10 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventClaimers;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventConsumer;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventNotifications;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.StoredEventHandling;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -194,8 +198,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         registry.add("hephaestus.sync.nats.enabled", () -> "true");
         registry.add("hephaestus.sync.nats.server", NatsTestContainer::getServerUrl);
         registry.add("hephaestus.sync.run-on-startup", () -> "true");
-        // The server's claimers handle what the receiver stores, as in production.
-        registry.add("hephaestus.integration.consumer.claimers", () -> "2");
     }
 
     /** The test profile's executor drops connect-time initialization; these tests run it. */
@@ -256,6 +258,15 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ProviderEventReceiver eventReceiver;
+
+    @Autowired
+    private ProviderEventConsumer eventConsumer;
+
+    @Autowired
+    private ProviderEventNotifications eventNotifications;
+
+    /** The server's claimers handle what the receiver stores, as in production. */
+    private @Nullable ProviderEventClaimers claimers;
 
     @Autowired
     private JdbcTemplate eventJdbc;
@@ -376,6 +387,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     @BeforeEach
     void setUp() throws Exception {
         databaseTestUtils.cleanDatabase();
+        claimers = StoredEventHandling.runningClaimers(eventConsumer, eventNotifications);
         doReturn(GROUP_ID).when(preflightService).resolveAccountId(anyString(), any(), anyString());
 
         when(gitLabSyncServices.getGroupSyncService()).thenReturn(groupSync);
@@ -430,12 +442,16 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @AfterEach
     void tearDown() throws Exception {
-        releaseSync.countDown();
-        if (restart != null) {
-            restart.join(Duration.ofSeconds(10));
+        try {
+            releaseSync.countDown();
+            if (restart != null) {
+                restart.join(Duration.ofSeconds(10));
+            }
+            awaitMonitoringIdle();
+            awaitAcknowledged();
+        } finally {
+            if (claimers != null) claimers.stop();
         }
-        awaitMonitoringIdle();
-        awaitAcknowledged();
     }
 
     @Test

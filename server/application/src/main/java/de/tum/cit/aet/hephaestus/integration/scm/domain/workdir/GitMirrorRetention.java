@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.workdir;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.metrics.ScmMetrics;
@@ -14,7 +15,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.config.FixedDelayTask;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 import org.springframework.stereotype.Component;
@@ -140,7 +140,7 @@ public class GitMirrorRetention {
     /** Its own scheduler thread: a sweep must not wait on a {@code @Scheduled} task. */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnServerRole
-    @Profile("!test & !specs & !cds-training")
+    @ConditionalOnBackgroundWork
     static class ScheduleConfiguration {
         @Bean
         ScheduledTaskRegistrar gitMirrorRetentionTasks(GitMirrorRetention retention) {

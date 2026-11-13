@@ -54,4 +54,13 @@ public final class StoredEventHandling {
         }
         throw new IllegalStateException("The event was not handled");
     }
+
+    /** Starts two claimer threads, as a server runs them, for a test that receives over HTTP. The caller stops them. */
+    public static ProviderEventClaimers runningClaimers(
+            ProviderEventConsumer consumer, ProviderEventNotifications notifications) {
+        var claimers =
+                new ProviderEventClaimers(consumer, notifications, ProviderEventConsumerPropertiesFixture.defaults());
+        claimers.start();
+        return claimers;
+    }
 }
