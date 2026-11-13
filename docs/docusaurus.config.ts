@@ -285,8 +285,16 @@ const config: Config = {
 	],
 
 	themeConfig: {
-		// Mermaid 12 otherwise lays every diagram out with ELK and draws it in its new look. An ERD asks for ELK in its own front matter.
-		mermaid: { options: { layout: "dagre", look: "classic" } },
+		// Mermaid 12 otherwise lays every diagram out with ELK and draws it in its new look. A diagram asks for ELK in its own front matter.
+		// The neutral and dark themes are monochrome, and Roboto is the font of the HyLiMo views, so all diagrams read as one set.
+		mermaid: {
+			theme: { light: "neutral", dark: "dark" },
+			options: {
+				layout: "dagre",
+				look: "classic",
+				fontFamily: "Roboto, ui-sans-serif, system-ui, sans-serif",
+			},
+		},
 		image: "img/hephaestus-social-card.png",
 		colorMode: {
 			respectPrefersColorScheme: true,
@@ -437,7 +445,12 @@ const config: Config = {
 			darkTheme: prismThemes.vsDark,
 			additionalLanguages: ["bash", "json", "yaml", "java"],
 		},
-	} satisfies UserThemeConfig & { mermaid: { options: { layout: string; look: string } } },
+	} satisfies UserThemeConfig & {
+		mermaid: {
+			theme: { light: string; dark: string };
+			options: { layout: string; look: string; fontFamily: string };
+		};
+	},
 };
 
 export default config;

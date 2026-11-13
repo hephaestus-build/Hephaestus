@@ -79,10 +79,8 @@ accDescr: The diagram separates independently controlled systems, the operator e
   L -->|stored provider credential| M
   A -->|purpose-specific client, mirror fetch| X
 
-  classDef external fill:#ffd7d7,stroke:#a00,color:#111
-  classDef managed fill:#dceeff,stroke:#075985,color:#111
+  classDef external stroke-width:2px,stroke-dasharray:6 4
   class U,V,X,M,S external
-  class P,A,W,L,N,DB managed
 ```
 
 Arrows show permitted logical flows, not network-level reachability.

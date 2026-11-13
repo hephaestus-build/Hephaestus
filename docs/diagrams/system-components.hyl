@@ -1,0 +1,128 @@
+// Component view: the server of Hephaestus, as a UML white box. Page: docs/contributor/system-design.mdx.
+// Parts are wired by provided (ball) and required (socket) interfaces, named after their Java type or route.
+// A socket at its ball is an assembly connector; a dashed arrow from a socket to a ball is the same wiring, routed
+// (UML 2.5.1 § 10.4.4). A port on the frame delegates to the part that handles it (§ 11.3.3).
+umlDiagram(showComponentKeyword = false) {
+    // @shared-style
+    server = component("Server", keyword = "subsystem") layout {
+        pos = apos(360, 225)
+        width = 940
+        height = 670
+    }
+    component("Web API") layout {
+        pos = apos(0, 0)
+        width = 180
+    }
+    component("Provider events") layout {
+        pos = apos(300, 0)
+        width = 200
+    }
+    component("Integration adapters") layout {
+        pos = apos(600, 0)
+        width = 260
+    }
+    component("Conversation") layout {
+        pos = apos(0, 260)
+        width = 180
+    }
+    component("Action outbox") layout {
+        pos = apos(300, 260)
+        width = 180
+    }
+    component("Review pipeline") layout {
+        pos = apos(600, 260)
+        width = 260
+    }
+    component("Agent control") layout {
+        pos = apos(0, 500)
+        width = 180
+    }
+    component("Sandbox gateway") layout {
+        pos = apos(580, 500)
+        width = 180
+    }
+    p0 = server.port(0.6543)
+    server.provides("/api", 0.6543, dist = 40, namePos = [47, 0])
+    p0 -- `Web API` with {
+        over = start(0.25).line(end(0.75))
+    }
+    p1 = server.port(0.7181)
+    server.provides("/webhooks", 0.7181, dist = 40, namePos = [68, 0])
+    p1 -- `Provider events` with {
+        over = start(0.25).line(end(0.675))
+    }
+    p2 = server.port(0.8404)
+    server.requires("provider APIs", 0.8404, dist = 40, namePos = [-92, 0])
+    p2 -- `Integration adapters` with {
+        over = start(0.25).line(end(0.8462))
+    }
+    p3 = server.port(0.3457)
+    server.requires("Kubernetes API", 0.3457, dist = 40, namePos = [89, 0])
+    p3 -- `Agent control` with {
+        over = start(0.75).line(end(0.25))
+    }
+    p4 = server.port(0.2101)
+    server.provides("/internal/agent", 0.2101, dist = 40, namePos = [-93, 0])
+    p4 -- `Sandbox gateway` with {
+        over = start(0.75).line(end(0.3472))
+    }
+    p6 = server.port(0.1968)
+    server.provides("/internal/llm", 0.1968, dist = 40, namePos = [0, 34])
+    p6 -- `Sandbox gateway` with {
+        over = start(0.75).line(end(0.2778))
+    }
+    p5 = server.port(0.1835)
+    server.requires("model API", 0.1835, dist = 40, namePos = [68, 0])
+    p5 -- `Sandbox gateway` with {
+        over = start(0.75).line(end(0.2083))
+    }
+    mcs = `Conversation`.provides("MentorConversationService", 0.6806, dist = 92, namePos = [112, 32])
+    `Web API`.requires(0.3194, mcs)
+    slack = `Integration adapters`.requires(0.3558, dist = 30)
+    slack dependsOn mcs with {
+        over = start(0).line(apos(490, 65)).line(apos(100, 65)).line(apos(100, 150)).line(end(0))
+    }
+    reviews = `Review pipeline`.provides("ReviewService", 0.6298, dist = 80, namePos = [-85, 0])
+    webReviews = `Web API`.requires(0.1667, dist = 30)
+    webReviews dependsOn reviews with {
+        over = start(0).line(apos(60, 110)).line(apos(475, 110)).line(end(0.75))
+    }
+    handler = `Integration adapters`.provides("IntegrationMessageHandler", 0.5, dist = 45, namePos = [0, -42])
+    `Provider events`.requires(0, handler)
+    adapters = `Integration adapters`.provides("ActionAdapter", 0.3077, dist = 60, namePos = [-85, 0])
+    outboxAdapters = `Action outbox`.requires(0.75, dist = 25)
+    outboxAdapters dependsOn adapters with {
+        over = start(0).line(apos(300, 130)).line(apos(540, 130)).line(end(0.25))
+    }
+    items = `Integration adapters`.provides("provider SPI", 0.1462, dist = 120, namePos = [66, 0])
+    `Review pipeline`.requires(0.8538, items)
+    itemEvents = `Review pipeline`.provides("ItemEventRecorded", 0.8173, dist = 70, namePos = [-92, 0])
+    `Integration adapters`.requires(0.1827, itemEvents)
+    actionsL = `Action outbox`.provides("AgentActions", 0.5, dist = 55, namePos = [0, 36])
+    `Conversation`.requires(0, actionsL)
+    actionsR = `Action outbox`.provides("AgentActions", 0, dist = 40, namePos = [0, 32])
+    `Review pipeline`.requires(0.5, actionsR)
+    runs = `Agent control`.provides("AgentRuns", 0, dist = 90, namePos = [0, 32])
+    `Sandbox gateway`.requires(0.5, runs)
+    convRuns = `Conversation`.requires(0.3194, dist = 30)
+    convRuns dependsOn runs with {
+        over = start(0).line(apos(-50, 430)).line(apos(180, 430)).line(end(0.75))
+    }
+    pipeRuns = `Review pipeline`.requires(0.2885, dist = 30)
+    pipeRuns dependsOn runs with {
+        over = start(0).line(apos(560, 430)).line(apos(180, 430)).line(end(0.75))
+    }
+    pipeKind = `Review pipeline`.provides("SandboxRunKind", 0.2308, dist = 55, namePos = [89, 0])
+    `Sandbox gateway`.requires(0.8056, pipeKind)
+    convKind = `Conversation`.provides("SandboxRunKind", 0.1944, dist = 55, namePos = [89, 0])
+    gwConv = `Sandbox gateway`.requires(0.7708, dist = 30)
+    gwConv dependsOn convKind with {
+        over = start(0).line(apos(595, 402)).line(apos(40, 402)).line(end(0.25))
+    }
+    feedbackSend = `Review pipeline`.provides("ActionAdapter", 0.3558, dist = 60, namePos = [0, 30])
+    outboxFeedback = `Action outbox`.requires(0.25, dist = 25)
+    outboxFeedback dependsOn feedbackSend with {
+        over = start(0).line(apos(300, 346)).line(end(0.5))
+    }
+    legendComponents(-55, 720)
+}

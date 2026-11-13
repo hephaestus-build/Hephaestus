@@ -1,16 +1,16 @@
 {
 	"pnpm-lock.yaml": {
 		"envPackages": 15,
-		"packages": 2382,
+		"packages": 2403,
 		"importers": {
 			".": {
 				"direct": {
 					"prod": 0,
-					"dev": 50
+					"dev": 47
 				},
 				"transitive": {
 					"prod": 0,
-					"all": 861
+					"all": 882
 				}
 			},
 			"docs": {
@@ -19,8 +19,8 @@
 					"dev": 6
 				},
 				"transitive": {
-					"prod": 1403,
-					"all": 1428
+					"prod": 1404,
+					"all": 1429
 				}
 			},
 			"extension": {
@@ -30,7 +30,7 @@
 				},
 				"transitive": {
 					"prod": 10,
-					"all": 847
+					"all": 848
 				}
 			},
 			"scripts/api-generator": {
@@ -50,7 +50,7 @@
 				},
 				"transitive": {
 					"prod": 222,
-					"all": 1151
+					"all": 1152
 				}
 			}
 		}
@@ -73,16 +73,16 @@
 	},
 	"docker/agents/practice-scripts/pnpm-lock.yaml": {
 		"envPackages": 0,
-		"packages": 62,
+		"packages": 49,
 		"importers": {
 			".": {
 				"direct": {
-					"prod": 11,
+					"prod": 6,
 					"dev": 0
 				},
 				"transitive": {
-					"prod": 62,
-					"all": 62
+					"prod": 49,
+					"all": 49
 				}
 			}
 		}

@@ -163,8 +163,94 @@ Use the same name for the same section on every page.
 - Never put a fact only in an image. The text must give it too.
 - A screenshot shows the current UI with synthetic data only. Do not show a real person, repository, organization, or secret. [PostHog](https://posthog.com/handbook/docs-and-wizard/docs-style-guide) gives the same rule.
 - Write alt text that says what the image shows, in at most 155 characters, as [GitLab](https://docs.gitlab.com/development/documentation/styleguide/) sets. Markdownlint rejects a Markdown image without alt text. `gate:docs-pages` rejects a `Screenshot` without alt text or with a longer one.
-- Draw a diagram in Mermaid, not as an image, with `accTitle` and `accDescr`. `gate:diagrams` checks them.
+- Draw a diagram as code, as the next section says. Never put a diagram only in an image that has no source.
 - Do not add an animated GIF.
+
+### Diagrams
+
+Each diagram answers one question that a reader asks, at the point in the page where the reader asks it.
+Two sentences before it state the question and what to look for.
+[System design § Diagram map](./system-design.mdx#diagram-map) lists the architecture diagrams.
+These rules come from the [C4 model](https://c4model.com/diagrams/notation), [arc42](https://docs.arc42.org/home/), *Documenting Software Architectures: Views and Beyond* (Clements et al., 2010) and [Diátaxis](https://diataxis.fr/):
+
+- Show about 9 elements or fewer. Open a box in its own view instead of crowding one view.
+- Label each arrow with what crosses it, such as `SandboxClaim` or `model calls, API key`. Do not write "uses".
+- Put no notes in the diagram. The text gives the responsibilities and the reasons.
+- Map every box and arrow to code or to an ADR. A catalogue table under a structural view names the package.
+- Leave out what is implied, such as a standard OAuth flow or an arrow from every part to PostgreSQL.
+- Never mark a meaning by color alone. Add a keyword such as `«cluster admin»`, a word such as "Stop:", or a line style. Show it in the legend or the lead-in.
+
+Choose the tool by what the diagram is:
+
+| Diagram | Tool | Cost |
+| --- | --- | --- |
+| A structural map that readers come back to and that changes rarely: the system context, the containers, the deployment, the components of the server | HyLiMo | A hand layout, a render step and committed SVGs |
+| A flow, a lifecycle, a data model, or a diagram that changes with the code | Mermaid | An automatic layout that you cannot place by hand |
+
+#### Structural maps in HyLiMo
+
+[HyLiMo](https://github.com/hylimo/hylimo) draws UML component and deployment diagrams with the layout that the source sets. That gives a grid, orthogonal routes and few crossings.
+It has no C4 module. The C4 model is independent of notation, so a C4 level is drawn as a UML component or deployment diagram.
+
+1. Edit or add the source in `docs/diagrams/<name>.hyl`. Keep the line `// @shared-style`, and call one legend once. `docs/diagrams/style.hyl` holds the shared style and the legends.
+2. Run `vp run generate:diagrams`. `scripts/render-diagrams.ts` renders each source with the pinned `@hylimo/cli` into `docs/static/img/diagrams/<name>.light.svg` and `<name>.dark.svg`.
+3. Show it with `<SystemDiagram name="<name>" title="<view>: <scope>" alt="…">` from `@site/src/components/SystemDiagram`. The title states the view and its scope. The alt text has at most 155 characters. The children are a table with every connection of the view. The page shows it under "Connections as text", and the image refers to it with `aria-describedby`.
+4. Commit the source and both SVGs. `gate:system-diagrams` fails when an SVG does not match its source.
+
+Draw each frame first, then place every box at an absolute position, `apos(x, y)`. HyLiMo lays out the children of a nested frame on its own, so a box is never a child of a frame. Compute the outline position of each end of an edge, so that each edge is straight or orthogonal.
+A UML node or device is a 3-D box: its front face is 20 units lower and 20 units narrower than the box. Keep each box at least 16 units inside the front face of every frame it is in.
+
+Each kind of view has one meaning for each line, and its legend or lead-in states it:
+
+| View | Boxes | Lines |
+| --- | --- | --- |
+| Context | Actors, Hephaestus as one box, the services | An arrow from the side that starts the exchange |
+| Containers | The parts that run on their own, the services | An arrow from the side that opens the connection. The label names what crosses and the credential. A label with no protocol means HTTPS. A dashed `«instantiate»` arrow means "creates". |
+| Components | The parts of one container | Ball and socket: the provided and the required interface, named after the Java type or route. A dashed arrow from a socket to a ball is a routed connection. An event type is provided by its publisher and required by its listener. A port on the frame passes a request to the part that handles it. |
+| Deployment | Nodes, Pods as execution environments, and the image (`«artifact»`) in each Pod. A namespace is a tagged value of the Pod, not a box. | A communication path with its protocol and port, from the side that opens the connection |
+
+A deployment view answers who deploys and runs each box. Its keyword names that owner, and its fill repeats the keyword, so the view reads in greyscale and on paper:
+
+| Box | Who deploys and runs it |
+| --- | --- |
+| White, `«Hephaestus chart»` | The Hephaestus chart, in the namespaces of the operator |
+| White, `«created at runtime»` | The agent-sandbox controller, from a template that the chart deploys |
+| Yellow, `«cluster admin»` | The cluster admins |
+| Grey, dashed, `«external»` | Nobody in the deployment: a service outside it |
+
+Write `«operator-provided»` on a box that the operator deploys beside the chart, such as an external PostgreSQL, and add it to the legend of that view.
+A context, container or component view shows no owner. Its white boxes are part of Hephaestus, and its grey dashed `«external»` boxes are outside the deployment.
+
+Call the legend that matches the view: `legendDeployment(x, y)` for a deployment view, `legendComponents(x, y)` for a component view, and `legendExternal(x, y)` for every other view.
+Draw each view at most 960 units wide. The docs column is at most 720 px wide, so the 16-unit text is then at least 12 px.
+
+Each SVG has the page background of its scheme, so its contrast does not depend on the viewer.
+The SVGs draw their text as paths, because embedded fonts make the render unstable. A reader cannot select or search that text, so the alt text and the connections table carry the words.
+
+To move a box by hand, put the content of `docs/diagrams/style.hyl` in place of the `// @shared-style` line, and paste the result into the [HyLiMo editor](https://hylimo.github.io). The legends are defined only in `style.hyl`.
+Each drag changes the text. Copy back only the lines below the style.
+
+#### Flows and lifecycles in Mermaid
+
+Write the source inline in the page, with `accTitle` and `accDescr`.
+Use the type that fits:
+
+| Diagram | Mermaid type |
+| --- | --- |
+| A flow between parts | `sequenceDiagram` |
+| A lifecycle, with the state names of its enum | `stateDiagram-v2` |
+| A few core tables | `erDiagram` |
+| The steps on one page | a small `flowchart` |
+
+Leave every color to the site theme. The site draws Mermaid in the monochrome `neutral` theme in the light scheme and in the `dark` theme in the dark scheme. Its font is Roboto, the font of the HyLiMo views. Thus all diagrams read as one set. A `classDef` sets a stroke width or a dash only, and the label carries the same meaning.
+
+Use only the subset that [Mermaid 13](https://mermaid.js.org/intro/v13-alpha.html) keeps. The maintainers track the upgrade, and this subset survives it:
+
+- No `C4*`, `architecture`, `block` or `requirementDiagram` type. Mermaid 13 does not port them.
+- No HTML in a label, no `click` callback, and no `style` on an element id.
+- No `htmlLabels`, `securityLevel` or `themeCSS` setting.
+
+`gate:diagrams` parses every Mermaid block and refuses each of these.
 
 ### Screenshots of the web app
 

@@ -1,0 +1,103 @@
+// Container view: Hephaestus, what runs and what each part reaches. Page: docs/contributor/system-design.mdx.
+// The logical view: no namespace, no node, no owner. An unlabelled protocol is HTTPS. The deployment view (deployment-cluster.hyl) shows those.
+// Every box sits at an absolute position around the Server, so each edge is straight or orthogonal.
+// Stacked boxes keep at least 24 units between them.
+// Outline positions: 0 is the right middle, 0.25 the bottom middle, 0.5 the left middle and 0.75 the top middle.
+umlDiagram(showComponentKeyword = false) {
+    // @shared-style
+    component("Server") layout {
+        pos = apos(0, -20)
+        width = 120
+        height = 260
+    }
+    component("PostgreSQL", keywords = list("database")) layout {
+        pos = apos(-55, 205)
+        width = 170
+    }
+    component("Sandbox, one per subject", keywords = list("untrusted")) layout {
+        pos = apos(0, 320)
+        width = 260
+    }
+    webapp = component("Web app") layout {
+        pos = apos(-365, -125)
+        width = 160
+    }
+    extension = component("Browser extension") layout {
+        pos = apos(-365, -45)
+        width = 160
+    }
+    providers = component("GitHub, GitLab, Slack, Outline", keywords = list("external")) styles {
+        class += "ext"
+    } layout {
+        pos = apos(-365, 62)
+        width = 160
+        height = 124
+    }
+    model = component("Model provider", keywords = list("external")) styles {
+        class += "ext"
+    } layout {
+        pos = apos(400, -75)
+        width = 180
+    }
+    mail = component("Email server", keywords = list("external")) styles {
+        class += "ext"
+    } layout {
+        pos = apos(400, 0)
+        width = 180
+    }
+    k8s = component("Kubernetes API server", keywords = list("external")) styles {
+        class += "ext"
+    } layout {
+        pos = apos(400, 75)
+        width = 180
+    }
+    controller = component("agent-sandbox controller", keywords = list("upstream")) layout {
+        pos = apos(400, 205)
+        width = 180
+    }
+    webapp --> Server with {
+        over = start(0).line(end(0.60096))
+        label("SPA, API, JWT cookie", 0.5, 22)
+    }
+    extension --> Server with {
+        over = start(0).line(end(0.52404))
+        label("API, bearer token", 0.5, 22)
+    }
+    providers --> Server with {
+        over = start(0.9355).line(end(0.45192))
+        label("verified webhooks", 0.5, 22)
+    }
+    Server --> providers with {
+        over = start(0.40385).line(end(0.0363))
+        label("reads, writes, provider token", 0.47, -28)
+    }
+    Server --> model with {
+        over = start(0.94712).line(end(0.5))
+        label("model calls, API key", 0.5, 22)
+    }
+    Server --> mail with {
+        over = start(0.01923).line(end(0.5))
+        label("SMTP, SMTP login", 0.5, 22)
+    }
+    Server --> k8s with {
+        over = start(0.09135).line(end(0.5))
+        label("SandboxClaim, ServiceAccount", 0.455, 22)
+    }
+    controller --> k8s with {
+        over = start(0.75).line(end(0.25))
+        label("watches claims, creates Pods", 0.5, 113)
+    }
+    controller ..> `Sandbox, one per subject` with {
+        over = start(0.25).line(apos(400, 320)).line(end(0))
+        label("«instantiate»", 0.75, -22)
+    }
+    Server --> PostgreSQL with {
+        over = start(0.3542).line(end(0.7574))
+        label("TCP 5432, database login", 0.4, -100)
+    }
+    `Sandbox, one per subject` --> Server with {
+        over = start(0.7981).line(end(0.1458))
+        label("HTTP 8081, sandbox token", 0.2, 100)
+    }
+    legendExternal(-300, 410)
+}

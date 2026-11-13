@@ -20,18 +20,30 @@ Review jobs and conversation turns are on runs. `AgentRuns` in `agent.run` is th
 | `LEASED` | One holder drives the run under the current `lease_epoch`, until `leased_until`. | `LEASED` (renewal), `QUEUED`, `ENDED` |
 | `ENDED` | Final. Work that must go on gets a new run (`AgentRuns.continueAfter`). | none |
 
+This state diagram shows the lifecycle of one agent run, with every transition that `AgentRunState` allows.
+Each label names the `AgentRuns` method or the reaper that makes the transition. A condition in brackets is the guard of that transition.
+A loop on one state changes the run's row, not its state. The holder's `renew`, `requeue` and `end` hold only with the current epoch.
+The diagram has no edge from `ENDED`: work that goes on gets a new run. Retirement and erasure delete rows outside this lifecycle.
+
 ```mermaid
+---
+config:
+  layout: elk
+---
 stateDiagram-v2
-    accTitle: Agent run lifecycle
-    accDescr: A queued run can be leased or ended. A lease can renew, requeue, or end. Continued work uses a new run.
-    [*] --> QUEUED
-    QUEUED --> LEASED: Claim takes next epoch
-    LEASED --> LEASED: Renew
-    LEASED --> QUEUED: Requeue
-    LEASED --> ENDED: Complete, cancel, replace or expire
-    QUEUED --> ENDED: Cancel or wait limit
+    direction TB
+    accTitle: Lifecycle of an agent run
+    accDescr: enqueue or a continuation creates a run in QUEUED. A hold, a release of holds or a move to another subject keeps it QUEUED. A claim leases it and raises its epoch. A renewal keeps it LEASED. The holder's requeue, or the reaper for an expired lease with attempts left, queues it again. It ends by the holder's end, by a cancel, by a replacement when its continuation takes over an expired lease, or by the reaper at its attempt limit or deadline. A queued run ends by a cancel, or by the reaper past its deadline or start limit.
+    [*] --> QUEUED: enqueue, continueAfter, continueAs, continueExpired
+    QUEUED --> QUEUED: hold, releaseHolds, moveQueued
+    QUEUED --> LEASED: claim, epoch + 1
+    LEASED --> LEASED: renew
+    LEASED --> QUEUED: requeue
+    LEASED --> QUEUED: reaper [expired, attempts left]
+    LEASED --> ENDED: end, cancel, continueExpired
+    LEASED --> ENDED: reaper [attempt limit or deadline]
+    QUEUED --> ENDED: cancel, reaper [deadline or start limit]
     ENDED --> [*]
-    note right of ENDED: Continuation creates a different run
 ```
 
 `AgentRunState` holds this table. The trigger `guard_agent_run` refuses every other transition, and every change of a run's identity.

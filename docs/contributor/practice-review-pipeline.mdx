@@ -12,26 +12,147 @@ Each boundary can stop with its own reason.
 A capture failure never becomes a claim about the work.
 Withheld feedback is never reported as missing evidence.
 
+This flowchart shows the stages of one review, and the unit that each refusal applies to.
+Each row is one stage. The arrow between two rows names what the next stage gets.
+Most refusals apply to one practice, one candidate, one destination or one copy. The review goes on with the rest.
+
+Each refusal box starts with the unit that it withholds, and has a dashed border. It records its own reason, and none of them is a claim about the developer's work.
+A run that ends normally is not a refusal: the measuring run ends and hands on to the composing run in one transaction.
+The sections below give the reasons.
+
 ```mermaid
-flowchart TD
-  accTitle: Practice review and feedback
-  accDescr: Selection and capture permit result admission. Admitted results can support feedback or a scan report.
-  E[Event, request, schedule or backfill] --> S{Select review}
-  S -->|eligible| C{Capture evidence}
-  S -->|refused| W[Recorded reason]
-  C -->|ready| Q{Applies when}
-  Q -->|eligible or undecidable| P[Practice script]
-  Q -->|proven false| A
-  C -->|not ready| W
-  P --> A{Admit candidate}
-  A -->|withheld| W
-  A -->|admitted| R[Result and problems]
-  R --> F[Compose feedback]
-  F --> D{Delivery checks}
-  D -->|allowed| CP[Persist copies before provider write]
-  D -->|withheld| W
-  R --> SR[Scan report]
+---
+config:
+  layout: dagre
+  flowchart:
+    rankSpacing: 30
+    nodeSpacing: 24
+    padding: 8
+    wrappingWidth: 200
+---
+flowchart TB
+    accTitle: The stages of a practice review and what each refusal withholds
+    accDescr: An event, a request, a schedule or a backfill starts selection. Selection either holds or withholds the event, or selects the practices that run now and queues a REVIEW run. The run's first request in the review's sandbox captures the sources: it withholds each practice that it cannot capture. The sandbox then measures. A lost lease with attempts left queues the run again, and the next lease captures again. A run that fails with no attempt left gives each open practice a runtime non-result. When the sandbox proposes its candidates, admission withholds each refused candidate, and a practice with no outcome gets a runtime non-result. The server seals the admitted results and the withholdings. When the sandbox uploads its result, the server ends the REVIEW run and queues REVIEW_COMPOSE in one transaction. Composition prepares or withholds each destination. Delivery withholds a copy for policy, rejection or silent mode, and delivers and reads back the rest.
+    Start([Event, request, schedule or backfill]) --> Selection
+    subgraph Selection
+        direction LR
+        Select[Select the practices that run now] -->|nothing runs now| StopS[The event: waits or is withheld, with its reason]:::stop
+    end
+    subgraph Capture
+        direction LR
+        Cap[REVIEW run, leased in the review's sandbox: capture the sources of each practice] -->|cannot capture| StopC[This practice: withheld, with its capture reason]:::stop
+    end
+    subgraph Measurement
+        direction LR
+        Measure[The sandbox measures] -->|lease lost, attempts left| Retry[The run is queued again, and the next lease captures again]
+        Measure -->|run fails, no attempt left| StopF[Each open practice: runtime non-result]:::stop
+    end
+    subgraph Admission
+        direction LR
+        Admit[Admit each candidate] -->|every candidate decided| Seal[Seal the results and withholdings]
+        Seal -->|result uploaded| Hand[End REVIEW and queue REVIEW_COMPOSE, in one transaction]
+        Admit -->|refused| StopA[This candidate: withheld, with its admission reason]:::stop
+        Admit -->|no outcome| StopR[This practice: runtime non-result]:::stop
+    end
+    subgraph Composition
+        direction LR
+        Compose[REVIEW_COMPOSE run: compose each destination] -->|composition stop| StopP[This destination: withheld, with its cause]:::stop
+    end
+    subgraph Delivery
+        direction LR
+        Deliver[Deliver each copy] -->|policy, rejection, silent mode| StopD[This copy: withheld, with its reason]:::stop
+        Deliver -->|sent| Done([Copy delivered and read back])
+    end
+    Selection -->|practices selected| Capture
+    Capture -->|captured| Measurement
+    Measurement -->|candidates proposed| Admission
+    Admission -->|handed on| Composition
+    Composition -->|prepared| Delivery
+    classDef stop stroke-width:2px,stroke-dasharray:6 4
 ```
+
+The server owns every stage except measurement and composition, which run in the review's sandbox.
+Admitted observations also feed [scan reports](#scans).
+
+## One review from event to feedback
+
+This sequence diagram shows one successful review, from the provider's event to the copies on a pull request or merge request. [System design](./system-design.mdx) names what `main` still runs.
+Other destinations, the practice page and the conversation, are in [Deliver copies](#deliver-copies).
+Look at the two runs in one sandbox. The measuring run ends and hands on to the composing run in one transaction. Then the sandbox asks for its next run.
+
+```mermaid
+---
+config:
+  sequence:
+    actorMargin: 10
+    width: 130
+    wrap: true
+    messageAlign: left
+    mirrorActors: false
+---
+sequenceDiagram
+    accTitle: One practice review from event to feedback
+    accDescr: GitHub or GitLab sends a webhook. The server writes it to the inbox and answers 202. The event consumer leases the event, syncs the item, records an item event and queues a REVIEW run. With no live sandbox, the server writes a SandboxClaim to the Kubernetes API, and the controller starts the sandbox. The sandbox leases the REVIEW run. Its first request, for the run context, makes the server capture the work, fenced by the run. The sandbox downloads the captured inputs and measures. For each practice it stages a result, which the server admits. Then it asks the server to seal the results, and uploads its runtime result. In one transaction, the server ends the REVIEW run and queues REVIEW_COMPOSE. The sandbox leases REVIEW_COMPOSE and proposes feedback, which the server admits. Then the sandbox ends that run. When the workspace requires approval, a workspace admin approves the feedback first. The outbox then writes each copy and reads it back.
+    autonumber
+    participant P as GitHub or GitLab
+    participant A as Workspace admin
+    participant S as Server
+    participant DB as PostgreSQL
+    participant X as Review sandbox
+    participant K as Kubernetes API
+    P->>S: Webhook
+    S->>DB: Inbox row
+    S-->>P: 202
+    S->>DB: Lease, item event
+    S->>DB: Queue REVIEW
+    opt No sandbox
+        S->>K: SandboxClaim
+        K-->>X: Pod (controller)
+    end
+    X->>S: Next run
+    S->>DB: Lease, epoch + 1
+    S-->>X: REVIEW
+    X->>S: Run context
+    S->>P: Capture the work
+    S-->>X: Command, deadlines
+    X->>S: Workspace
+    S-->>X: Captured inputs
+    loop Each practice
+        X->>S: Stage a result
+        S->>DB: Admit, stage
+    end
+    X->>S: Seal
+    S->>DB: Seal results, withholdings
+    X->>S: Result
+    critical One transaction
+        S->>DB: End REVIEW
+        S->>DB: Queue REVIEW_COMPOSE
+    end
+    X->>S: Next run
+    S->>DB: Lease REVIEW_COMPOSE
+    S-->>X: REVIEW_COMPOSE
+    X->>S: Feedback proposals
+    S->>DB: Admit feedback
+    X->>S: End
+    S->>DB: End REVIEW_COMPOSE
+    opt Approve first, the default
+        A->>S: Approve
+    end
+    S->>DB: Queue deliveries
+    S->>P: Write, read back
+```
+
+These are the parts of the review that the arrows alone do not explain:
+
+- **Durability.** The provider gets its `202` only after the event is a row in the `provider_event` inbox. The event consumer leases the oldest open event of each scope ([Ingest durability](./ingest-durability.md)). A server can stop at any step, and the next one starts again from PostgreSQL.
+- **The fence.** Each lease raises the run's epoch. The gateway accepts a call on a run (`…/runs/{runId}/…`) only with the current epoch. Thus a sandbox that lost its lease cannot write.
+  Capture runs on the run's first request, `…/runs/{runId}/context` (`ReviewAttemptPreparation`), under the same fence.
+- **Admission commits on each request.** Each staged result and the seal commit on their own requests, under the fence. A run that stops after them keeps what the server admitted.
+- **Two runs, one lease each.** One subject has at most one leased run. The measuring run therefore ends before its continuation exists. `ReviewRunKind.continueToCompose` ends `REVIEW` and inserts `REVIEW_COMPOSE` in one transaction. The new run keeps the lineage ([Agent runs](./agent-runs.mdx)).
+- **Admission.** The sandbox only proposes. The server admits every candidate and every feedback proposal against the evidence that it captured with its own credentials.
+- **External delivery.** Each copy is an `agent_action` row. The outbox executor writes each copy and then reads it back ([The outbox](./outbox.md)).
+
+The review's sandbox stays for both runs and goes when the review has no queued or leased run.
 
 ## Select a review
 

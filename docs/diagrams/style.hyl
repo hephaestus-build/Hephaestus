@@ -1,0 +1,97 @@
+    // The shared style of every system diagram. scripts/render-diagrams.ts fills in the colors of each scheme.
+    styles {
+        type("span") {
+            fontSize = 16
+        }
+        cls("classifier") {
+            fill = "$ours"
+        }
+        cls("ext") {
+            cls("classifier") {
+                fill = "$ext"
+                strokeDash = 6
+                strokeDashSpace = 4
+            }
+        }
+        cls("admin") {
+            cls("classifier") {
+                fill = "$admin"
+            }
+        }
+    }
+
+    // The shared legends. A keyword names the owner, and the fill repeats it, so a legend reads without color.
+
+    // legendExternal(x, y): a context, container or component view, which shows no owners.
+    legendExternal = {
+        (x, y) = args
+        component("Part of Hephaestus", keyword = false) layout {
+            pos = apos(x, y)
+            width = 190
+        }
+        component("Outside the deployment", keywords = list("external")) styles {
+            class += "ext"
+        } layout {
+            pos = apos(x + 200, y)
+            width = 190
+        }
+    }
+
+    // legendComponents(x, y): the key of a component view: a part, a provided and a required interface, a port.
+    legendComponents = {
+        (x, y) = args
+        provider = component("Part", keyword = false) layout {
+            pos = apos(x, y)
+            width = 110
+        }
+        provider.provides("provided interface", 0, dist = 45, namePos = [92, 0])
+        user = component("Part", keyword = false) layout {
+            pos = apos(x + 330, y)
+            width = 110
+        }
+        user.requires("required interface", 0, dist = 45, namePos = [94, 0])
+        holder = component("Server", keyword = false) layout {
+            pos = apos(x + 660, y)
+            width = 140
+        }
+        holder.port(0)
+        holder.provides("port", 0, dist = 40, namePos = [44, 0])
+        caller = component("Part", keyword = false) layout {
+            pos = apos(x, y + 90)
+            width = 110
+        }
+        callee = component("Part", keyword = false) layout {
+            pos = apos(x + 560, y + 90)
+            width = 110
+        }
+        routedBall = callee.provides(0.5, dist = 45)
+        routedSocket = caller.requires(0, dist = 30)
+        routedSocket dependsOn routedBall with {
+            label("the same connection, routed", 0.45, 20)
+        }
+    }
+
+    // legendDeployment(x, y): the key of the deployment view: who deploys and runs each element.
+    legendDeployment = {
+        (x, y) = args
+        component("Deployed by the Hephaestus chart", keywords = list("Hephaestus chart")) layout {
+            pos = apos(x, y)
+            width = 220
+        }
+        component("Created at runtime from a chart template", keywords = list("created at runtime")) layout {
+            pos = apos(x + 230, y)
+            width = 220
+        }
+        component("Run by the cluster admins", keywords = list("cluster admin")) styles {
+            class += "admin"
+        } layout {
+            pos = apos(x + 460, y)
+            width = 220
+        }
+        component("Outside the deployment", keywords = list("external")) styles {
+            class += "ext"
+        } layout {
+            pos = apos(x + 690, y)
+            width = 220
+        }
+    }

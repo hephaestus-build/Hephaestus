@@ -71,3 +71,18 @@ The incidents teach five lessons:
 
 - The registries make a release-age delay or a trust check unnecessary, for example with mandatory staged publishing.
 - The count of owned modules grows to the point where their upkeep costs more than the packages that they replaced.
+
+## Update — 2026-11-10: two diagram tools, split by what the diagram is
+
+The maintainer decided how the docs draw diagrams. The rule is in [Documentation guide § Diagrams](../contributor/documentation-guide.md#diagrams).
+
+- **HyLiMo for the few structural maps.** These are the system context, the containers, the deployment and the components of the server. Readers come back to them, and they change rarely, so a hand layout pays off. [HyLiMo](https://github.com/hylimo/hylimo) draws UML with the layout that its source sets. The [C4 model](https://c4model.com/diagrams/notation) is independent of notation, so each C4 level is a UML component or deployment diagram.
+- **Mermaid for everything else.** A flow, a lifecycle, a few core tables or the steps on one page change with the code. An inline source that the diff shows is worth more there than a hand layout.
+- **The Mermaid subset that Mermaid 13 keeps.** [Mermaid 13](https://mermaid.js.org/intro/v13-alpha.html) is an alpha rewrite. It does not port the C4, architecture, block and requirement types. It drops HTML labels, click callbacks and CSS on element ids. `gate:diagrams` refuses each of these now, so the upgrade breaks no page. We do not depend on the alpha.
+
+The cost of HyLiMo is a pinned development dependency, a render step and committed SVGs.
+
+`@hylimo/cli` is pinned to `3.0.0-alpha.2`, and its alpha status is accepted.
+One account publishes it, so [Exceptions to the bar](../contributor/dependencies.md#exceptions-to-the-bar) has its row.
+It runs only in `scripts/render-diagrams.ts`. The docs build and the site never run it, and `gate:system-diagrams` fails when a committed SVG does not match its source.
+The cost of Mermaid is an automatic layout. Thus a Mermaid diagram stays small.

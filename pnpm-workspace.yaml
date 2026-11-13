@@ -67,6 +67,10 @@ packageExtensions:
       "@docusaurus/logger": ^3
       "@docusaurus/utils": ^3
       "@docusaurus/utils-validation": ^3
+  # Its SVG renderer imports the wasm libraries without declaring them (render-diagrams.ts).
+  "@hylimo/diagram-render-svg@3.0.0-alpha.2":
+    dependencies:
+      "@hylimo/wasm-libs": 3.0.0-alpha.2
 
 overrides:
   # CVE-2026-116689.

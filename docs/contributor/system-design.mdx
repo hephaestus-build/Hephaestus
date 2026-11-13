@@ -5,20 +5,112 @@ title: System design
 description: Runtime roles, module boundaries, and the paths from connected work to practice feedback and Hephaestus.
 ---
 
-## Runtime topology
+import SystemDiagram from "@site/src/components/SystemDiagram";
 
-```mermaid
-flowchart TB
-    accTitle: Hephaestus runtime topology
-    accDescr: The webapp calls the server. The server verifies provider events and stores them in its PostgreSQL inbox. It claims provider events and review and conversation runs from PostgreSQL. Sandbox drivers renew run leases and call any server replica through the sandbox gateway. The gateway streams conversation deltas through PostgreSQL to each live hub.
-    Providers[GitHub, GitLab, Slack, Outline] --> Server[Server role]
-    SPA[React webapp] --> Server
-    Server -->|Provider inbox, runs and entries| DB[(PostgreSQL)]
-    Server --> Sandbox[Review and conversation sandboxes]
-    Sandbox --> Proxy[Sandbox gateway and LLM proxy]
-    Proxy --> Models[Configured model services]
-    Server -->|Feedback and Hephaestus replies| Providers
-```
+The container view also shows two decided changes that `main` does not have yet. The text below it names them.
+[Runtime roles](/admin/runtime-roles) describes what runs today.
+
+## Containers and trust boundaries
+
+This logical view shows the parts of Hephaestus that run on their own, and what each part reaches.
+Each arrow points from the side that opens the connection. Its label names what crosses it and the credential.
+A connection with no protocol in its label uses HTTPS.
+
+`«upstream»` marks a part that a release deploys but does not build: the agent-sandbox controller.
+Look at the sandbox. It is marked `«untrusted»` because it runs the agent's code. It holds a token for one subject, and it reaches only the server's sandbox gateway, on port 8081.
+
+The server and the agent-sandbox controller never connect to each other. Both use the Kubernetes API server: the server writes a `SandboxClaim`, and the controller watches the claims and creates the Pods.
+[Helm chart reference § Where each part runs on a managed cluster](/admin/helm-chart#where-each-part-runs-on-a-managed-cluster) shows where each part runs, and who deploys and runs it.
+
+<SystemDiagram name="containers" title="Container view: Hephaestus and its trust boundaries" alt="Container diagram: the web app, extension, server, PostgreSQL, the untrusted sandbox, the controller and the services they reach, with each credential.">
+
+| From | To | What crosses, and the credential |
+| --- | --- | --- |
+| Web app | Server | HTTPS: the SPA and the API, with the JWT cookie |
+| Browser extension | Server | HTTPS: the API, with a bearer token |
+| GitHub, GitLab, Slack, Outline | Server | HTTPS: webhooks, each verified as the next table shows |
+| Server | GitHub, GitLab, Slack, Outline | HTTPS: reads and writes, with a provider token |
+| Server | Model provider | HTTPS: model calls, with an API key |
+| Server | Email server | SMTP, with the SMTP login |
+| Server | Kubernetes API server | HTTPS: `SandboxClaim` writes, with the server's ServiceAccount |
+| agent-sandbox controller | Kubernetes API server | HTTPS: watches the claims and creates the Pods, with the controller's ServiceAccount |
+| agent-sandbox controller | Sandbox | Creates it, through the Kubernetes API server |
+| Server | PostgreSQL | TCP 5432, with the database login |
+| Sandbox | Server | HTTP on port 8081, with the sandbox token |
+
+</SystemDiagram>
+
+The view shows two decided changes that `main` does not have yet. The rest of the view is on `main`.
+The server serves the SPA ([ADR 0100](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0100-the-server-serves-the-web-app.md)). Until that change lands, a webapp container with nginx serves it.
+PostgreSQL notifications carry the sync-status hints to the open browsers. Until [#4243](https://github.com/hephaestus-build/Hephaestus/pull/4243) lands, a NATS server carries them.
+
+| Container | What it is | Code |
+| --- | --- | --- |
+| Web app | The React SPA. The server serves it, and it runs in the browser. It calls the server through the generated OpenAPI client, with the `__Host-HEPHAESTUS_AT` cookie ([ADR 0100](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0100-the-server-serves-the-web-app.md)). | `webapp/` |
+| Browser extension | The Chrome extension. It signs in with PKCE and sends a bearer token ([ADR 0048](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0048-installed-clients-sign-in-with-a-pkce-handoff.md)). | `extension/` |
+| Server | One JAR in one runtime role, as several replicas. It serves the SPA and owns the API, provider events, reviews, conversations, agent control, the sandbox gateway and the outbox. | `server/application/` |
+| PostgreSQL | The only truth. A server process or a sandbox is a cache. | `server/application/src/main/resources/db/changelog/` |
+| Sandbox | One agent-sandbox `Sandbox` for each subject, with one container: the driver, the tools and the workspace. | `docker/agents/pi/`, `agent.sandbox` |
+| agent-sandbox controller | The upstream controller. It turns a `SandboxClaim` into a `Sandbox` and its Pod. | platform manifest |
+
+Each provider verifies its webhooks in its own way. Only some of them sign the body:
+
+| Provider | How the server verifies a webhook |
+| --- | --- |
+| GitHub | The `X-Hub-Signature-256` HMAC of the body, with the app's webhook secret |
+| GitLab | The route credential in `X-Gitlab-Token`. Its signature covers the route, not the body. |
+| Slack | The `X-Slack-Signature` HMAC of the timestamp and the body, with the signing secret |
+| Outline | The `Outline-Signature` HMAC of the timestamp and the body, with the webhook secret |
+
+The server holds the application secrets: the provider tokens, the model API keys and the SMTP login.
+The agent-sandbox controller holds only its own ServiceAccount. A sandbox holds only its token for one subject.
+The agent proposes and the server acts. A sandbox cannot write to a provider or send a message.
+The sandbox gateway accepts a sandbox token only for the token's own subject, and only on port 8081 ([ADR 0079](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md)).
+
+Tenancy has no box of its own, because SQL enforces it.
+Every workspace-owned table carries `workspace_id`, and every workspace endpoint is a `@WorkspaceScopedController`.
+`DataIsolationArchitectureTest` checks both. [Workspace context](./workspace-context) gives the rules.
+
+## Components of the server
+
+This view opens the server box. It is a UML component diagram: it shows which part owns which work, and which interface wires two parts.
+
+A ball is an interface that a part provides. A socket is an interface that a part requires, so the socket is on the calling side.
+A socket on a ball, or a dashed arrow from a socket to a ball, is one connection.
+
+An event is an interface too: the part that listens to it provides it, and the part that publishes it requires it.
+A small square on the frame is a port. It passes a request from outside to the part that handles it.
+
+Each interface carries the name of its Java type or route. "Provider SPI" is the neutral `integration.core.spi` package. The order of the steps is in the sequences: [one review](./practice-review-pipeline.mdx#one-review-from-event-to-feedback) and [one turn](#conversation).
+
+<SystemDiagram name="system-components" title="Component view: the server of Hephaestus" alt="Component diagram of the server: eight parts wired by their provided and required interfaces, with the ports /api, /webhooks, /internal/agent and /internal/llm.">
+
+| Part | Requires | From |
+| --- | --- | --- |
+| Web API, through the port `/api` | `MentorConversationService`, `ReviewService` | Conversation, review pipeline |
+| Provider events, through the port `/webhooks` | `IntegrationMessageHandler` | Integration adapters |
+| Integration adapters | `MentorConversationService`, `ItemEventRecorded` (an event that sync publishes). Provider APIs, through a port. | Conversation, review pipeline |
+| Review pipeline | The provider SPI (`ItemSource`, `SummaryWriter`, `LineNoteWriter`), `AgentActions`, `AgentRuns` | Integration adapters, action outbox, agent control |
+| Conversation | `AgentActions`, `AgentRuns` | Action outbox, agent control |
+| Action outbox | `ActionAdapter` | Review pipeline (feedback copies), integration adapters (Slack posts) |
+| Sandbox gateway, through the ports `/internal/agent` and `/internal/llm` | `AgentRuns`, `SandboxRunKind`. The model API, through a port. | Agent control, review pipeline, conversation |
+| Agent control | The Kubernetes API, through a port | — |
+
+</SystemDiagram>
+
+| Part | What it owns | Code |
+| --- | --- | --- |
+| Web API | The `/api` endpoints in `server/openapi.yaml`, the live stream of server-sent events, and sign-in. Review requests and feedback approvals reach the review pipeline here. | each module's controllers, `core.auth`, `agent.mentor.web` |
+| Provider events | The `/webhooks/**` endpoints, the `provider_event` inbox, and the event consumer that leases the oldest open event of each scope ([ADR 0080](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0080-provider-events-go-to-a-postgresql-inbox.md)). | `integration.core.webhook`, `integration.core.consumer` |
+| Integration adapters | One for each provider: GitHub, GitLab, Slack and Outline. Each owns sync and implements the provider SPI: the capture reads behind `ItemSource`, and the feedback writes behind `SummaryWriter` and `LineNoteWriter`. Slack posts its answers behind `ActionAdapter`. Sync records item events and publishes `ItemEventRecorded`. | `integration.scm`, `integration.slack`, `integration.outline` |
+| Review pipeline | Selection, capture, admission, composition and delivery ([Practice review pipeline](./practice-review-pipeline.mdx)). It captures each item through `ItemSource`. Its `FeedbackSendAdapter` delivers each copy for the outbox and reads it back. | `practices`, `agent.practice` |
+| Conversation | The conversation of each account, its turns and its digests ([Conversation runtime](./unified-pi-runtime)). | `mentor`, `agent.mentor` |
+| Agent control | The run queue behind `AgentRuns`, the sandbox of each subject and the reapers ([Agent runs](./agent-runs.mdx)). It writes the `SandboxClaim` to the Kubernetes API. | `agent.run`, `agent.sandbox` |
+| Sandbox gateway | Port 8081, for sandbox tokens only. `/internal/agent` serves the next run, its context, the lease, the proposals and the answer deltas. Each run kind plugs in as a `SandboxRunKind`. `/internal/llm` serves the LLM proxy, which holds the model API keys and the call permits, and the staging and sealing of review results. | `agent.gateway`, `agent.proxy` |
+| Action outbox | The `agent_action` table behind `AgentActions`, and its executor: every effect on the outside world ([The outbox](./outbox.md)). The view leaves out the `ActionAdapter` for email (`EmailAdapter`) and those for product feedback. | `core.action`, `notification.email` |
+
+Every part stores its state in PostgreSQL, so the view leaves that connection out.
+The view also leaves out `AgentRunHandler`: through it, the reaper moves a review or a turn together with its run ([Agent runs](./agent-runs.mdx)).
 
 One JAR boots in the server role, which also receives provider webhooks. Only a server with `AGENT_ENABLED` creates sandbox Pods and runs conversation turns.
 Each conversation sandbox uses the same driver, run claim and gateway as review sandboxes.
@@ -57,7 +149,7 @@ All GitHub installation control events share one system scope.
 [Ingest durability](./ingest-durability#claim-lease-and-order) owns the claim, renewal, retry and replay rules.
 
 Work that must run one at a time on every server takes a `ClusterLock` ([Transactions](./transactions.md#6-concurrent-writers)).
-The chart still runs one server.
+The chart runs two servers by default.
 
 ## Module boundaries
 
@@ -121,29 +213,84 @@ Missing required capture produces no result.
 
 ## Conversation
 
+This sequence diagram shows one successful conversation turn, from a question in the app or in Slack to the answer.
+Look at the two streams. The model's tokens go from the model provider through the sandbox gateway to the sandbox. The answer deltas go from the sandbox to the server, and only these reach the app.
+Slack gets only the finished answer, through the outbox.
+
+The sequence starts with a live sandbox. A conversation with no live sandbox gets one in the same way as a review ([One review from event to feedback](./practice-review-pipeline.mdx#one-review-from-event-to-feedback)).
+
 ```mermaid
+---
+config:
+  sequence:
+    actorMargin: 10
+    width: 130
+    wrap: true
+    messageAlign: left
+    mirrorActors: false
+---
 sequenceDiagram
     accTitle: One conversation turn
-    accDescr: The server stores the question, queued turn and TURN run. The conversation sandbox driver claims the run, renews its lease and sends deltas through any server gateway. PostgreSQL notifies each live hub for app SSE. The end stores the final entries and ends the turn and run together.
-    participant C as App or Slack
-    participant S as Server role
+    accDescr: The app subscribes to the conversation stream. A question arrives from the app, or from Slack through the inbox, which the server then leases. The server stores it and queues a TURN run. The sandbox leases the run. It calls the model through the sandbox gateway, which opens a usage row, forwards the call and closes the row. The sandbox sends answer deltas. The server stores no row for them: it sends each one as notification frames through PostgreSQL to every server, and the live hub that holds the app's stream sends the partial answer to the app while the app is open. At the end, in one transaction, the server stores the entries, ends the run and, for Slack, queues the post in the outbox. The outbox then posts the whole answer to Slack.
+    autonumber
+    participant A as App
+    participant L as Slack
+    participant S as Server
     participant DB as PostgreSQL
-    participant W as Any server gateway
-    participant L as Conversation sandbox driver
-    C->>S: Question
-    S->>DB: Question entry, queued turn and TURN run
-    L->>W: Next run with sandbox token
-    W->>DB: Claim run and turn, admit, lease
-    W-->>L: Assignment and epoch
-    L->>W: Context, lease renewal, tools and model calls
-    L->>W: Answer deltas
-    W->>DB: Progress events
-    DB-->>S: NOTIFY mentor_ledger
-    S-->>C: App SSE events
-    L->>W: End with final entries and last partial
-    W->>DB: Store entries, end turn and run together
-    DB-->>S: End-run event
+    participant X as Conversation sandbox
+    participant M as Model provider
+    A->>S: Subscribe (SSE)
+    alt App
+        A->>S: Question
+    else Slack
+        L->>S: Event
+        S->>DB: Inbox row
+        S-->>L: 202
+        S->>DB: Lease the event
+    end
+    S->>DB: Queue TURN run
+    X->>S: Next run
+    S->>DB: Lease, epoch + 1
+    S-->>X: TURN run
+    loop Until done
+        X->>S: Model call
+        S->>DB: Open usage row
+        S->>M: Model call
+        M-->>S: Tokens
+        S-->>X: Tokens
+        S->>DB: Close usage row
+        X->>S: Answer delta
+        S-)DB: Notify frames, no row
+        opt App open
+            DB--)S: Frames to every server
+            S-->>A: Partial answer
+        end
+    end
+    X->>S: End of turn
+    critical One transaction
+        S->>DB: Entries, end run
+        opt Slack
+            S->>DB: Queue Slack post
+        end
+    end
+    opt Slack
+        S->>L: Post the whole answer
+    end
 ```
+
+These are the parts of the turn that the arrows alone do not explain:
+
+- **Durability.** A Slack event is a row in the `provider_event` inbox before Slack gets its `202` ([Ingest durability](./ingest-durability.md)). A question from the app is a row before the server answers. A server can stop at any step, and the next one starts again from PostgreSQL.
+- **The fence.** The lease raises the run's epoch. The gateway accepts a call on a run (`…/runs/{runId}/…`) only with the current epoch. Thus a sandbox that lost its lease cannot write.
+- **Two streams.** The LLM proxy forwards the model's tokens to the sandbox and accounts for them in the usage row. The answer that a person sees is a separate stream of deltas that the sandbox sends.
+- **Any replica.** The server writes no row for a delta. It sends the delta to every server as PostgreSQL notification frames. Each server keeps the partial answer in memory (`MentorTurnProgress`). The live hub of the server that holds the app's stream sends it on. Thus the sandbox and the app can use different server replicas.
+- **Only the end is stored.** The entries are stored once, when the turn ends. A server that misses a frame shows the partial answer again at the next whole snapshot. A whole snapshot comes at least every two seconds.
+- **Slack delivery.** The answer for Slack is an `agent_action` row that the outbox executes ([The outbox](./outbox.md)). The executor confirms the post with the message timestamp that Slack returns.
+- **Out of scope.** This success path leaves out a stopped turn and a retry. [Conversation runtime](./unified-pi-runtime) owns them.
+
+Each turn is a `TURN` run in band `INTERACTIVE`, keyed to its conversation.
+A conversation keeps one sandbox while it is in use. Thus a follow-up turn starts at once.
+The reaper deletes the sandbox when it leased no run for `conversation-sandbox-idle` (15 minutes). The next question starts a new one from PostgreSQL.
 
 PostgreSQL holds the whole conversation in three workspace-scoped tables.
 The server role owns the HTTP API, the live stream, Slack ingress and posts, submission, and the weekly digest.
@@ -175,3 +322,20 @@ Scans pin a monitored default branch and keep durable practice/file membership.
 Serial execution jobs can expire while report membership and product history remain.
 Reports have separate recorded totals and current open-problem counts.
 The [scan guide](/admin/practice-scans) owns procedures and export availability.
+
+## Diagram map
+
+Each architecture diagram answers one question.
+Every structural view uses one legend. [Documentation guide § Structural maps in HyLiMo](./documentation-guide.md#structural-maps-in-hylimo) explains it.
+
+| Question | View | Page |
+| --- | --- | --- |
+| Who uses Hephaestus, and what does it connect to? | System context | [Admin overview](/admin/overview#what-a-deployment-consists-of) |
+| What runs, and what may each part reach? | Containers and trust boundaries | [Containers and trust boundaries](#containers-and-trust-boundaries) |
+| Where does each part run on a cluster, and who deploys and runs it? | Deployment | [Helm chart reference](/admin/helm-chart#where-each-part-runs-on-a-managed-cluster) |
+| Which part of the server owns which work? | Components of the server | [Components of the server](#components-of-the-server) |
+| Where can a review stop, and why? | Review stages | [Practice review pipeline](./practice-review-pipeline.mdx) |
+| Who calls whom during one review? | Review sequence | [Practice review pipeline](./practice-review-pipeline.mdx#one-review-from-event-to-feedback) |
+| How does one answer reach the app or Slack? | Turn sequence | [Conversation](#conversation) |
+| How does a run move between states? | `agent_run` lifecycle | [Agent runs](./agent-runs.mdx#states) |
+| How do the review records relate? | Core data model | [Practice review glossary](./practice-review-glossary.mdx#the-core-data-model) |

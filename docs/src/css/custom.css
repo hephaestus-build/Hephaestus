@@ -316,3 +316,29 @@ article:has(> .theme-doc-markdown) ~ .pagination-nav {
 	font-weight: 650;
 	letter-spacing: 0.01em;
 }
+
+/*
+ * Mermaid's default theme fills an edge label at 80 % opacity, so the line under the label shows through its text.
+ * Mermaid scopes that rule to the generated id of each SVG, so only !important overrides it.
+ */
+[data-theme="light"] .docusaurus-mermaid-container span.edgeLabel,
+[data-theme="light"] .docusaurus-mermaid-container span.edgeLabel p {
+	background-color: rgb(232 232 232) !important;
+}
+
+/* Roboto, the font of the HyLiMo views, for the Mermaid diagrams. `vp run generate:diagrams` writes the faces. */
+@font-face {
+	font-family: Roboto;
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url("/fonts/roboto-regular.ttf") format("truetype");
+}
+
+@font-face {
+	font-family: Roboto;
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url("/fonts/roboto-bold.ttf") format("truetype");
+}

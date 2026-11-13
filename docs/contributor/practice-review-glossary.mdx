@@ -9,6 +9,46 @@ This page owns terms for the review operation and runtime.
 The [product vocabulary](./practice-feedback-language.md) owns practices, observations, problems, feedback and people.
 A term has one definition in one of these pages.
 
+## The core data model
+
+This entity-relationship diagram is a logical overview. It shows how the records of one review relate, from the items and practices to the copies of feedback.
+Each box is a table, and the entity names are the table names in PascalCase. It leaves out the columns and every foreign key that it does not draw.
+Look at `FeedbackBasis`: each row links one feedback to one result, and can name one problem of that result. Feedback rests on one or more of them.
+
+A result concerns a practice and an item of its own. In a scan, the review covers the repository, and each result concerns one item that the repository holds, such as a file.
+A result of migrated history can have no pinned practice version, so that link is zero or one.
+
+```mermaid
+---
+config:
+  layout: elk
+---
+erDiagram
+    accTitle: The core data model of a practice review
+    accDescr: A workspace owns its items, practices and reviews. A practice has fixed versions. A review of an item records results. Each result concerns one practice and one item, at most one pinned practice version and at most one developer, and lists problems. Feedback comes from a review and addresses one developer. Feedback basis rows link feedback to one or more results, and each can name one problem. Feedback appears as copies.
+    Workspace ||--o{ Review : owns
+    Workspace ||--o{ Item : owns
+    Workspace ||--o{ Practice : owns
+    Item ||--o{ Review : "is reviewed in"
+    Practice ||--o{ Result : "is judged in"
+    Practice ||--|{ PracticeVersion : has
+    Review ||--o{ Feedback : yields
+    Feedback ||--o{ FeedbackCopy : "appears as"
+    Feedback ||--|{ FeedbackBasis : "rests on"
+    Feedback }o--|| Membership : addresses
+    Review ||--o{ Result : records
+    Item ||--o{ Result : "is concerned by"
+    PracticeVersion |o--o{ Result : pins
+    Result ||--o{ FeedbackBasis : supports
+    Result }o--o| Membership : concerns
+    Result ||--o{ Problem : lists
+    Problem |o--o{ FeedbackBasis : "is named in"
+```
+
+Every table here except `Workspace` carries `workspace_id NOT NULL`, so each row belongs to exactly one workspace.
+The product calls a `Result` an observation, and the `Membership` that it concerns the developer ([product vocabulary](./practice-feedback-language.md#observations)).
+[Database schema](./database-schema.mdx) has the full, generated schema.
+
 ## Review terms
 
 | Term                    | Meaning                                                                                                                                                       | Identifier                                          |
