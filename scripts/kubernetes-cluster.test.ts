@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -36,6 +36,8 @@ import {
 	outcomeChecks,
 	turnOutcome,
 	turnState,
+	useKubectl,
+	verify,
 } from "./kubernetes-cluster.ts";
 import { asArray, asRecord, isRecord } from "./lib/json.ts";
 
@@ -674,4 +676,56 @@ void test("a policy that names no field manager fails the control, as a read wit
 		() => soleManager([policy(["helm", "Update"]), stripped]),
 		/heph-sandbox-gateway name no field manager/u,
 	);
+});
+
+/**
+ * A kubectl stand-in that records each call. It lists no workloads, one server Pod, and the sandbox gateway
+ * Service only under `release`; every later call fails, so verify() stops right after the Service lookup.
+ */
+function fakeKubectl(release: string): { calls: () => string; restore: () => void } {
+	const directory = mkdtempSync(path.join(tmpdir(), "fake-kubectl-"));
+	const log = path.join(directory, "calls");
+	const script = path.join(directory, "kubectl.mjs");
+	writeFileSync(log, "");
+	writeFileSync(
+		script,
+		`import { appendFileSync } from "node:fs";
+const call = process.argv.slice(2).join(" ");
+appendFileSync(${JSON.stringify(log)}, call + "\\n");
+const answers = [
+	[/get (deployment|statefulset|daemonset) -o name$/u, ""],
+	[/get pods -l app\\.kubernetes\\.io\\/component=server -o json$/u, '{"items":[{"metadata":{"name":"server-0"}}]}'],
+	[new RegExp(${JSON.stringify(`get service ${release}-sandbox-gateway -o json$`)}, "u"), '{"spec":{"clusterIP":"10.43.0.12"}}'],
+];
+const answer = answers.find(([pattern]) => pattern.test(call));
+if (answer === undefined) process.exit(1);
+process.stdout.write(answer[1]);
+`,
+	);
+	const restore = useKubectl([process.execPath, script]);
+	return {
+		calls: () => readFileSync(log, "utf8"),
+		restore: () => {
+			restore();
+			rmSync(directory, { recursive: true, force: true });
+		},
+	};
+}
+
+await test("verify queries the release that it is given, and the dev cluster's release by default", async () => {
+	for (const [release, run] of [
+		["hephaestus", async () => verify("hephaestus")],
+		[RELEASE, async () => verify()],
+	] as const) {
+		const fake = fakeKubectl(release);
+		try {
+			// The fake serves only the given release's gateway, so a wrong name fails at that lookup.
+			await assert.rejects(run());
+			const calls = fake.calls();
+			assert.match(calls, new RegExp(`get service ${release}-sandbox-gateway -o json`, "u"));
+			assert.match(calls, /get pod\/server-0 -o json/u);
+		} finally {
+			fake.restore();
+		}
+	}
 });

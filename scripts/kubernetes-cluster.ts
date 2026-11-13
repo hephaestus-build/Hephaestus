@@ -232,8 +232,24 @@ export function applicationSecret(): Record<string, string> {
 	};
 }
 
+/**
+ * The kubectl command line: the binary on PATH, or a stand-in that a test installs. A stand-in is a
+ * command line, such as `process.execPath` and a script, because process creation without a shell
+ * runs neither a script nor a `.cmd` shim on Windows.
+ */
+let kubectlCommand: readonly [string, ...string[]] = ["kubectl"];
+
+/** Runs kubectl as `command` until the returned function restores the default. */
+export function useKubectl(command: readonly [string, ...string[]]): () => void {
+	kubectlCommand = command;
+	return () => {
+		kubectlCommand = ["kubectl"];
+	};
+}
+
 async function kubectl(args: string[], input?: string): Promise<string> {
-	return output("kubectl", args, input === undefined ? {} : { input });
+	const [command, ...prefix] = kubectlCommand;
+	return output(command, [...prefix, ...args], input === undefined ? {} : { input });
 }
 
 /** Applies a manifest from standard input, so that no generated value appears in an argument list. */
@@ -867,7 +883,11 @@ export async function keepsStatefulPods(upgrade: () => Promise<void>): Promise<v
 }
 
 /** Every workload ready and each SandboxTemplate passes the isolation gate; the number of servers. */
-export async function verify(): Promise<number> {
+/**
+ * Verifies the installed release. The release name defaults to the dev cluster's; the one-host release smoke
+ * installs the release name that the platform files name.
+ */
+export async function verify(release = RELEASE): Promise<number> {
 	for (const kind of ["deployment", "statefulset", "daemonset"]) {
 		const listed = await kubectl(["-n", NAMESPACE, "get", kind, "-o", "name"]);
 		const names = listed.split("\n").filter(Boolean);
@@ -907,7 +927,7 @@ export async function verify(): Promise<number> {
 				NAMESPACE,
 				"get",
 				"service",
-				`${RELEASE}-sandbox-gateway`,
+				`${release}-sandbox-gateway`,
 				"-o",
 				"json",
 			]),
@@ -931,7 +951,7 @@ export async function verify(): Promise<number> {
 	// application port, by its Service or by any Pod.
 	const server = asRecord(
 		parseJson(
-			await kubectl(["-n", NAMESPACE, "get", "service", `${RELEASE}-server`, "-o", "json"]),
+			await kubectl(["-n", NAMESPACE, "get", "service", `${release}-server`, "-o", "json"]),
 		),
 		"server Service",
 	);
@@ -944,7 +964,7 @@ export async function verify(): Promise<number> {
 		},
 	];
 	const gatewayPorts: Target[] = [];
-	for (const pod of await runningPods("server")) {
+	for (const pod of await runningPods("server", release)) {
 		applicationPorts.push({
 			name: `the application port of server ${pod.name}`,
 			host: pod.ip,
@@ -961,7 +981,7 @@ export async function verify(): Promise<number> {
 	for (const kind of SANDBOX_KINDS) {
 		await isolationGate({
 			namespace: SANDBOXES,
-			template: `${RELEASE}-sandbox-${kind}`,
+			template: `${release}-sandbox-${kind}`,
 			gateway: sandboxGateway,
 			reach: gatewayPorts,
 			forbid: [
@@ -978,7 +998,7 @@ export async function verify(): Promise<number> {
 	// It opens the boundary for a minute, so only the disposable CI cluster runs it.
 	const controlled = process.env.CI === "true";
 	if (controlled) {
-		await negativeControl(sandboxGateway);
+		await negativeControl(sandboxGateway, release);
 	}
 	process.stdout.write(
 		`${servers.length} servers run; the ${SANDBOX_KINDS.join(", ")} templates passed the sandbox isolation gate${controlled ? ", and failed it without the sandbox namespace's policies" : ""}; every workload is ready\n`,
@@ -987,7 +1007,10 @@ export async function verify(): Promise<number> {
 }
 
 /** The name and address of each running, not terminating Pod of one component of the release. */
-async function runningPods(component: string): Promise<{ name: string; ip: string }[]> {
+async function runningPods(
+	component: string,
+	release: string,
+): Promise<{ name: string; ip: string }[]> {
 	const { items } = asRecord(
 		parseJson(
 			await kubectl([
@@ -996,7 +1019,7 @@ async function runningPods(component: string): Promise<{ name: string; ip: strin
 				"get",
 				"pods",
 				"-l",
-				`app.kubernetes.io/instance=${RELEASE},app.kubernetes.io/component=${component}`,
+				`app.kubernetes.io/instance=${release},app.kubernetes.io/component=${component}`,
 				"-o",
 				"json",
 			]),
@@ -1023,7 +1046,10 @@ async function runningPods(component: string): Promise<{ name: string; ip: strin
  * the gate answers, applied server-side by the field manager that owned them before, which is Helm's:
  * a client-side apply would take their fields from Helm, and the next upgrade would conflict.
  */
-async function negativeControl(sandboxGateway: { host: string; port: number }): Promise<void> {
+async function negativeControl(
+	sandboxGateway: { host: string; port: number },
+	release: string,
+): Promise<void> {
 	// kubectl leaves managedFields out of its output unless asked, and both the restore and its check read them.
 	const policiesWithOwners = [
 		"-n",
@@ -1047,7 +1073,7 @@ async function negativeControl(sandboxGateway: { host: string; port: number }): 
 		await kubectl(["-n", SANDBOXES, "delete", "networkpolicies", "--all", "--wait=true"]);
 		await isolationGate({
 			namespace: SANDBOXES,
-			template: `${RELEASE}-sandbox-${SANDBOX_KINDS[0]}`,
+			template: `${release}-sandbox-${SANDBOX_KINDS[0]}`,
 			gateway: sandboxGateway,
 		});
 	} catch (error) {
@@ -2547,7 +2573,7 @@ export async function releaseSmoke(options: SmokeOptions): Promise<void> {
 		stdin: "ignore",
 	});
 	process.env.KUBECONFIG = path.join(options.assets, "kubeconfig");
-	const servers = await verify();
+	const servers = await verify(ONE_HOST_RELEASE);
 	await reviewsOn();
 
 	const node = asRecord(
@@ -2582,7 +2608,7 @@ export async function releaseSmoke(options: SmokeOptions): Promise<void> {
 	if ((await secretDigest()) !== secretBefore) {
 		throw new Error("a second run of k3s-install.sh changed the release Secret");
 	}
-	await verify();
+	await verify(ONE_HOST_RELEASE);
 	process.stdout.write("a second run of k3s-install.sh kept the Secret and every workload\n");
 
 	// An upgrade that rolls every role but PostgreSQL, with a new migration Job: the new server
@@ -2603,7 +2629,7 @@ export async function releaseSmoke(options: SmokeOptions): Promise<void> {
 			"20m",
 		]),
 	);
-	await verify();
+	await verify(ONE_HOST_RELEASE);
 	await reviewsOn();
 	await gatewayRequests(options.work, nodeAddress, gatewayTls);
 
