@@ -1,5 +1,469 @@
 # Changelog
 
+## 1.0.0-rc.6
+
+### Major Changes
+
+- Hephaestus 1.0.0 is the stable release of the 1.0 candidates, with the same source and images as the last qualified candidate. From 1.0.0 on, any 1.x release upgrades to any later 1.y release, and only the Helm chart installs it.
+
+  **Operators:** the cutover is a stopped upgrade with no mixed-version window. Follow [Upgrade to 1.0](https://docs.hephaestus.build/admin/upgrade-to-1-0): it orders the steps and names the migration entry of each change. To go back, restore the verified backup and install the previous release.
+
+### Minor Changes
+
+- Account deletion is immediate. When a person deletes their own account, Hephaestus erases it as soon as the deletion is saved, instead of after a 48-hour wait. The hourly job retries an erasure that did not finish. Hephaestus no longer sends the "scheduled for deletion" email. The setting `hephaestus.auth.delete-cooldown` (`HEPHAESTUS_AUTH_DELETE_COOLDOWN`) is gone; remove it from your configuration.
+- The self-service data export now holds what you wrote and received in every workspace. It includes your conversations with Hephaestus: your messages, its replies and its weekly digests. It also includes the feedback delivered to you, with the notes posted on your work, and every response you gave to feedback. Withdrawn feedback keeps its dates without its text, as in the app. Tool results in your conversations, observations and undelivered feedback stay with the privacy contact. The file's `schemaVersion` is now `2.2`.
+- Workspace admins now see a developer's answer to feedback and, for a disagreement, its explanation. A developer's rating and their other notes are no longer shown in the feedback sheet, and a rating without an answer is not shown at all. The time of an answer is when the developer gave it, also after they change their rating. For API clients: the feedback detail of a workspace admin, and the answers to its recheck and retry, replace `response` with `answer`. `answer` holds `resolution`, `createdAt`, and `comment` only for a disagreement, and it is `null` when the developer gave no answer.
+- An admin's passkey verification now opens protected admin access for six hours, not for the whole seven-day session. After six hours, Hephaestus asks the admin to verify a passkey again; the session and member access continue. Sensitive actions still ask for a verification within the last five minutes.
+
+  Operators can change the window with `config.auth.passkeys.adminMaxAge` (`HEPHAESTUS_AUTH_PASSKEYS_ADMIN_MAX_AGE`).
+
+- A review whose server stops is now picked up again by any server replica within one lease, and never by two. Each review attempt holds a lease on the database clock, and only the server that runs the attempt renews it. A review that waits for a sandbox, a drain, or another replica is offered fairly: requested and event-driven reviews before scheduled ones, then the workspace with the fewest running reviews, then the oldest. A scheduled review that waits ten minutes is offered with the requested ones, so it never waits behind them for long.
+
+  **Operators:** the retry limit is now `hephaestus.agent.capacity.review-retries`, still set by `AGENT_MAX_RETRIES`. `hephaestus.agent.max-retries` is gone. The `HephaestusReviewWorkerLost` alert is now `HephaestusReviewHolderLost`, and it reads `agent_run_reaped_total`, and the new `HephaestusAgentRunReaperFailing` alert fires when the reaper keeps failing to take back an expired lease. The `agent.job.orphan.*` and `agent.job.zombie.reaped` metrics are gone. Stop every role for this upgrade; see the migration guide.
+
+- Instance admins can now block an account and unblock it again under **Instance administration → Users**. Blocking signs the person out everywhere at once and refuses every later sign-in, so signing in again through GitHub, GitLab or another linked provider no longer undoes it. The person sees that an admin blocked the account. Unblocking lets them sign in again and sends them a security notice by email when the account has a verified address. You cannot block yourself or the last active instance admin. Both actions need a recent sign-in and appear in the audit log as **Account blocked or unblocked**.
+
+  The `auth.token.refresh.result` counter uses `result="inactive"` for an account that cannot sign in, instead of `result="suspended"`. Update custom metric queries that use the old value.
+
+- GitLab and Outline webhook registration now uses the configured API origin, which is the chart host. Receiver paths stay outside the `/api` prefix.
+
+  **Operators:** Remove `WEBHOOK_EXTERNAL_URL` and `hephaestus.webhook.external-url`. If the previous full receiver base differs, including its path prefix, record and remove this installation's old GitLab group hooks during the stopped upgrade. After upgrading, run GitLab workspace synchronization. Outline collection synchronization replaces a subscription at a different address automatically. Follow the migration instructions before upgrading.
+
+- **Operators:** Set `config.auth.bootstrapAdmins`, `config.auth.browserExtensionIds`, `config.auth.passkeys.allowedOrigins`, and `config.outline.allowedOrigins` as YAML arrays. Use `[]` for an empty list. Comma-separated strings are no longer accepted.
+- With `sandbox.enabled`, the chart installs a sandbox template for each kind of agent sandbox: review and conversation. It also keeps the agent image on each sandbox node, so that a new sandbox does not wait for the image to download.
+
+  **Operators:** on a cluster other than the one-host k3s platform, apply the release's `k3s-agent-sandbox.yaml` before you upgrade the chart. The one-host installer does this for you.
+
+- A new job corrects commit links from GitHub's own answer for each email on a repository. It is off by default: set `config.commitIdentityResolutionEnabled` to `true` in your Helm values to run it. It replaces a link that GitHub contradicts, and it clears a link when GitHub says that no account owns the email. Each changed link is recorded for 90 days. The operations runbook has the steps. Load the rule file of the release to get the new alerts `HephaestusCommitIdentityResolutionStalled` and `HephaestusCommitIdentityResolutionUnanswered`.
+- The review and conversation runtimes now run as JavaScript compiled during the build. Custom practice programs can still use TypeScript.
+
+  **Operators:** Rebuild custom agent images from the updated Dockerfile before you upgrade the server. The runtime requires the compiled toolkit and program child. Official releases include matching images.
+
+- A review's feedback is now written in the review's own sandbox, in a run that follows the review's measurement, instead of on the worker. The model calls go through the same model gateway and budget as the review's own calls. The worker no longer reads `AGENT_MAX_ACTIVE_COMPOSITIONS` or `AGENT_MAX_CONCURRENT_COMPOSITIONS`, and the Helm chart no longer sets them; you can remove them from your configuration. `SANDBOX_MAX_CONCURRENT` alone bounds the reviews that one worker runs.
+- Every conversation turn now runs in the conversation loop, a new Deployment that the chart runs beside the server. Any server serves any turn, and a server update no longer removes the tools of a running turn. The loop runs two replicas on different nodes where the cluster has them, and one replica in the single-node profile. `conversationLoop.replicas`, `conversationLoop.turns` and `conversationLoop.resources` set it. The turn count is now the count of the whole installation, not of each server. The single-node profile admits 31 turns, and 29 with backups on. The metrics `mentor_host_ready` and `mentor_host_turns_active` are removed.
+
+  **Operators:** Stop every role for this upgrade. Before the migration, add `HEPHAESTUS_CONVERSATION_LOOP_SECRET` to the release Secret: run `hephaestus-keys.sh` from the release, or set the output of `openssl rand -hex 32`. Move `worker.conversationTurns` to `conversationLoop.turns`, because the chart refuses the old value. `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX` is removed.
+
+- Conversation turns now run in their conversation's sandbox through the same gateway and lease as practice reviews. Commands, search, and context tools run in that sandbox's container. Answer updates reach the app through the live hub.
+
+  **Operators:** Stop the old conversation loop and drain the servers before this upgrade. Remove the old loop and runtime settings as described in the migration note. Rename `conversationLoop.turns` to `sandbox.conversationTurns`. The chart counts the actual conversation template requests and removes the old tools-Pod, isolation-probe, and loop reservations. Run the sandbox isolation gate before enabling work.
+
+  Automatic turn capacity now fits the declared CPU and memory budget at steady state and during a drained upgrade. The small profile admits eleven turns with backups and fourteen without them, alongside five review slots. It keeps the current template requests; workload peaks have not been measured yet.
+
+  **Operators:** `auto` requires `sandbox.budget.cpu` and `sandbox.budget.memory`. The small profile supplies them. Managed clusters have no assumed budget: enter the allocatable CPU and memory assigned to the release before selecting `auto`. An explicit count is checked whenever a budget is supplied, and an oversized count stops chart validation. Finish review work before the upgrade's transient peak.
+
+  Idle warm conversation sandboxes yield to queued conversations when all physical slots are occupied. A turn count of zero stops new turns. A busy erasure fence asks the sandbox to retry instead of abandoning its answer. Context loads acquire a capture session only after a load permit is available, and their response task stops at the turn's work deadline.
+
+- Hephaestus now runs a conversation's commands in a tools Pod of their own. The conversation loop reaches it over the network, and the server no longer opens a shell in any sandbox Pod: the server's Role in the sandbox namespace drops `pods/exec`. The chart adds a network policy there, so that only the conversation loop reaches a tools Pod, and a tools Pod still reaches nothing. The release's agent image and server change together, as every release's do.
+- Weekly digests now include a short model-written recap in your conversation. The recap follows your AI choice and the same evidence checks as other answers. Slack and email notes are queued only after the answer is ready.
+
+  **Operators:** Drain and stop the servers before this cutover, and deploy matching server and agent images for runtime contract 19. Weekly digests share conversation capacity; a zero turn count stops both requested turns and digests. See the migration note for the stop, backup and rollback procedure.
+
+- Email is sent at most once. Each notification email keeps one Message-ID across retries. If a mail server connection breaks after the message was handed over, or a server stops while it sends, Hephaestus no longer sends a second copy: the email ends as not confirmed. A retry now happens only when the mail server proved that it did not take the message. Before every retry, Hephaestus checks again that the recipient still wants the email. The test email in **Instance settings → Email** can report the new outcome **Not confirmed**. Operators can watch every delivery in the `action.ended` metric and in the new `agent_action` table, which deleting an account clears.
+- Person data erasure now waits for review sandboxes and their gateway archives to be removed before it acknowledges evidence removal. Erasure can release an attempt whose preparation is waiting for capture admission.
+
+  **Operators:** stop the old workers. Before starting the new workers, remove their remaining sandbox claims with foreground deletion. Follow the [Planned node maintenance guide](https://docs.hephaestus.build/admin/maintenance#planned-node-maintenance). Existing claims keep their old expiry policy. New claims wait for sandbox and Pod termination before expiry deletion completes.
+
+- A review attempt's sandbox can now reach any server replica. A server that did not capture the attempt rebuilds its evidence from PostgreSQL and its own Git mirror, and checks every checkout against the recorded commit, tree and digest before it uses it. A checkout that cannot be verified ends the attempt as a capture failure, never as missing evidence. Person erasure and workspace purge no longer wait for the server that holds a copy, so a server that a rolling update replaced no longer blocks an erasure. Servers check for erased copies every 30 seconds and after an erasure notification. A runtime-held copy or a failed removal can delay physical deletion. Cleanup retries until it succeeds, and a stalled cleanup raises an alert.
+
+  Two new alerts watch this, with no action needed to install them: `HephaestusEvidenceReconcileStalled` and `HephaestusCheckoutUnverified`. The production operations runbook gives their response. The Git cache volume now also holds the checkouts that a server builds for other servers' captures.
+
+  Practice programs keep their executable permissions when another server rebuilds a review’s inputs.
+
+- Each release now includes the Chrome extension as `hephaestus-chrome-extension-X.Y.Z.zip`, signed and attested like the k3s bundle. You can verify the package and give it to your users before the extension is in the Chrome Web Store. The admin and user guides describe how to verify it, load it in Chrome, and allow each user's extension ID.
+- Operators with an external VictoriaMetrics can keep its dashboards in step with each release. Set `observability.dashboards.namespace` to its namespace and mount the release's dashboard ConfigMap in that workload.
+- Feedback is erased 400 days after delivery, or after it was written if never delivered. A practice result is erased 400 days after it was recorded, once no kept feedback cites it. **Operators:** existing installations get the 400-day default on upgrade, so the first daily run after the upgrade irreversibly erases every older feedback and result. To keep them longer, set the Helm value `config.feedbackRetention` (environment variable `HEPHAESTUS_FEEDBACK_RETENTION`), for example `P730D`, before you upgrade. This value also sets the conversation retention and replaces `config.conversationRetention`, which the chart now rejects. The server refuses to start while the old `HEPHAESTUS_MENTOR_CONVERSATION_RETENTION` is set.
+- The chart no longer accepts a broker consumer prefix or an inactivity timeout. Provider events and replay use the PostgreSQL inbox and its scope leases.
+
+  **Operators:** Remove `config.durableConsumerName` and `config.consumerInactiveThreshold` from every values file before upgrading. Complete the provider inbox cutover in the migration instructions. The chart refuses the retired keys.
+
+- GitHub App installations now follow the workspace creation policy. Under the default `ADMIN_ONLY` policy, a new installation waits in **Instance administration → GitHub installations** until an instance admin adopts it; adopting creates its workspace with that admin as the owner, and the audit log records each adopt and decline. A declined installation stays listed and can still be adopted. When GitHub returns the installer to Hephaestus, a setup page confirms the installation and says what happens next, instead of the home page. The new chart value `config.workspaceCreationPolicy` sets the policy.
+
+  **Operators:** Under the default `ADMIN_ONLY` creation policy, a new GitHub App installation by another account now waits for an instance admin to approve it in the instance admin console. Existing workspaces are unaffected. To keep App installations creating workspaces without approval, set `config.workspaceCreationPolicy: SELF_SERVICE` (it also opens `POST /workspaces` to every signed-in user).
+
+- You can now comment `/hephaestus review` on a GitHub pull request to ask for a review, as on a GitLab merge request. The same checks apply as for **Request review**. Hephaestus answers with a comment on the pull request when no feedback answers the request.
+- GitHub synchronization always uses the buffered update watermark. The first sync still uses the configured timeframe, and historical backfill still reads older work.
+
+  **Operators:** Remove `HEPHAESTUS_SYNC_INCREMENTAL_ENABLED` and `hephaestus.integration.github.sync.incremental-sync-enabled` from your configuration.
+
+- The one-host installation requests a ten-year lifetime for the internal PostgreSQL server certificate, matching its CA.
+
+  **Operators:** After applying the updated platform certificate manifest, wait for cert-manager to issue the replacement certificate. Restart PostgreSQL to load it, as the TLS certificate procedure describes.
+
+- Deleting your account and deleting a workspace now ask for a recent sign-in. If your sign-in is older than the configured window, Hephaestus asks you to sign in again and deletes nothing. The audit log records a refused workspace deletion as **Workspace deletion**, and a refused account deletion under **Account deleted** as a failure.
+- Issue discussions with an unknown comment count no longer count as complete evidence. Existing zero issue comment counts show as unknown until the next backfill. Positive counts and pull request counts keep their values.
+
+  **Workspace administrators:** after the upgrade, select **Run backfill** on each GitHub or GitLab connection in the integration settings. Until then, the issue comment counts that were zero show as unknown. After the backfill, request a new review for work whose evidence was incomplete.
+
+  **Operators:** Stop every runtime role before this upgrade and take a verified database backup. Run the migration, then start only the upgraded roles. The previous server cannot read unknown comment counts. Restore that backup before rolling back the server.
+
+- The server now connects to PostgreSQL as `hephaestus_app`, a role that only reads and writes rows. Only the migration Job connects as `hephaestus_owner`, the owner of the schema. Neither role is a superuser or creates roles, and row-level security applies to the application role, so a compromised process or an injected query can no longer administer the database server. PostgreSQL receives only the SCRAM verifiers of the database passwords, never the passwords, and not even the verifiers reach the statement statistics or the server log. The setup also works with the administrator of a managed PostgreSQL service. No Hephaestus process logs in as the PostgreSQL administrator.
+
+  **Operators:** the release Secret replaces `DATABASE_USERNAME` and `DATABASE_PASSWORD` with `DATABASE_OWNER_PASSWORD`, `DATABASE_APP_PASSWORD` and, for the bundled PostgreSQL, `DATABASE_ADMIN_USERNAME` and `DATABASE_ADMIN_PASSWORD`. With an external PostgreSQL, set up the two roles with the chart's `files/database-roles.sql` first. `helm upgrade` stops while a key is missing or the Secret still holds an old one. See the migration guide.
+
+- Outbox attempts carry their action ID, kind, attempt count, and workspace where applicable on every log record, including records from provider adapters.
+
+  **Operators:** Update searches for `context.installation_id` to `context.installation.id` and `context.proxy.apiProtocol` to `context.proxy.api_protocol`.
+
+- Log records name their trace in the Elastic Common Schema fields `trace.id` and `span.id`, so a log store or a collector's trace parser links each record to its trace without a custom mapping. A local development server writes readable text to its console. Every deployed role still writes JSON.
+
+  **Operators:** Search, parse and alert on `trace.id` and `span.id` instead of `context.traceId` and `context.spanId`.
+
+- You can now install Hephaestus on a managed Kubernetes cluster on which you are not a cluster-admin. The new `cluster.yaml` profile runs reviews on the cluster's default runtime with user namespaces and runs the agent-sandbox controller in the release namespace. With it, the chart creates no cluster-scoped object. The release's k3s bundle now carries an admin bundle for the cluster's admins: the agent-sandbox definitions, the three PriorityClasses and one read-only ClusterRole for the controller. A preflight checks your access, the admin bundle, the namespaces, the Gateway and the storage before you install, and gives one line per missing item that you can forward to the admins. The admin guide's new page, "Install on a managed cluster without cluster-admin", gives the steps. The sandbox isolation gate takes the cluster's DNS Service with `--dns`, for distributions such as RKE2.
+- Links in Hephaestus's answers and in feedback text now open only when they point to Hephaestus or to a service that your workspace connects, such as GitHub, GitLab, Slack or Outline. Any other address shows as text, in the web app and in Slack, so a link that a repository or document planted cannot carry your context to another site. Slack mentions such as `@here` in an answer show as text too. Practice guides keep their links.
+- One-host installers refuse release changes and failed or pending releases instead of starting an unsafe migration.
+  **Operators:** Use the stopped schema-upgrade procedure for a release change: stop every role, verify a matching restore point, migrate, then start the new roles.
+  Restore that backup before returning to the old release after a migration failure or refusal.
+- Single-node installs use the `small` profile on both 16 GiB and 32 GiB hosts.
+
+  **Operators:** Remove `small-16gib` from `HEPHAESTUS_CHART_PROFILE` and remove the `profiles/small-16gib.yaml` values argument before upgrading. Keep `small`.
+
+- You can now see whether the outbox keeps up. New gauges count the actions that have not ended (`action_backlog`), and show how long the oldest due action of each kind has waited (`action_oldest_due_seconds`). `HephaestusOutboxStalled` fires when an action has been due for more than 15 minutes, and `HephaestusOutboxUncertain` fires when an action ends uncertain, such as an email whose sending cannot be confirmed. The runbook has a row for each.
+- Model calls now wait for a model in bands, with a fair share for each workspace. A conversation's calls go first. A requested or event review's calls and every composition come next, and scheduled and backfill reviews' calls come last. Within a band, the workspace with the fewest calls in flight goes first, and then the review with the fewest. Calls in flight of every band count toward a workspace's share. A scheduled or backfill review's call that waits 30 seconds moves up one band, so it no longer waits behind a steady stream of other reviews' calls.
+
+  **Operators:** the model call metrics `llm_pool_permits_active`, `llm_pool_permit_wait_seconds`, `llm_pool_permit_abandoned_total`, `llm_pool_permits_granted_total`, `gen_ai_client_operation_time_to_first_chunk_seconds`, `gen_ai_client_operation_duration_seconds`, `gen_ai_client_calls_total` and `gen_ai_client_tokens_total` replace the `class` label with `band`, which is `interactive`, `batch` or `background`. `llm_pool_waiters` replaces the `queue` label with `band`. The bundled alerts and dashboards read the new label. Change your own queries that read `class` or `queue`. `hephaestus.agent.capacity.permit-aging` sets how long a call waits before it moves up one band.
+
+- The one-host installer adds more host names to the Gateway with `--extra-host NAME`, for an alias or a redirect from an old host name. Each name gets its own HTTPS listener and a `Let's Encrypt` certificate, and the redirect from HTTP to HTTPS covers it. Attach your own route to the listener of the name. `--render-platform` prints the platform file that a run would install.
+- On the one-host k3s platform, the agent sandbox templates now use gVisor, which puts a kernel of its own between a sandbox's code and the host. The installer downloads the pinned gVisor release, checks it, and installs it with the platform.
+
+  **Operators:** the host must reach `storage.googleapis.com` during the installer run, and the first run with gVisor restarts k3s once.
+
+- The one-host installer sets the node address and the node name of k3s with `--node-ip` and `--node-name`. It writes them to `/etc/rancher/k3s/config.yaml.d/50-node.yaml`, so `/etc/rancher/k3s/config.yaml` stays the shipped file. `--check-platform` shows the keys of that file, reports any other key in it, and reports each other file in `config.yaml.d/`.
+
+  The installer replaces `config.yaml` with the shipped file on each run, as before. If you added `node-ip` or `node-name` to it yourself, give them with these options. The installer stops when a run would rename the running node, or when `--node-ip` names an address that the host does not have.
+
+- The one-host installer can install the platform alone. `k3s-install.sh --platform-only` installs the pinned k3s and the platform files, and no release, for a host where pull-based deployment applies the chart. `k3s-install.sh --check-platform` changes nothing: it names each installed platform file that differs from the files beside the installer, and it stops with an error when one differs.
+- New practice identifiers cannot use names reserved for practice API routes. The practice editor and both create APIs use the same validation rule. Group identifiers keep their format, and existing identifiers are not renamed.
+
+  **Operators:** Check existing workspace and catalog practices for reserved identifiers before upgrading. Resolve any collision before the upgrade. The migration guide lists the preflight query. Practice identifiers remain immutable.
+
+- CSRF denials use RFC 9457 problem responses in both workspace address modes. The generated API contract declares the problem media type and keeps extension fields, such as validation errors and request references, at the top level.
+
+  **Operators:** Update custom API clients to read `application/problem+json` responses and their top-level fields. CSRF denials use the `csrf-token-rejected` problem type. The migration guide gives the client steps.
+
+- Product feedback drafts use the server's model gateway, with shared capacity and egress checks. A busy model delays a draft without spending a retry. Each provider call records its frozen price and usage in the instance ledger. Drafts have up to three failed-call attempts. Queued drafts expire after ten minutes. Recovery of an in-flight claim can take longer.
+
+  **Operators:** Keep a verified pre-upgrade database backup for recovery. If your firewall limits server egress, allow the provider of the instance model selected for product feedback. Drafts need the agent runtime enabled on the server.
+
+- **Members** now shows whether each workspace role comes from GitHub or GitLab, or was set in Hephaestus. A role that an admin changes in Hephaestus now stays when GitHub or GitLab syncs again. **Use GitHub role** or **Use GitLab role** lets the provider set it again at the next sync.
+
+  Concurrent provider syncs and manual role changes keep the role set in Hephaestus and record each role change once.
+
+- Webhook deliveries now wait in PostgreSQL instead of NATS JetStream. The server stores each verified delivery for every workspace that monitors its repository, channel or connection before it answers the provider, so a repository that a workspace starts to monitor misses no event. A delivery that a provider sends again is stored once. Dead letters keep their payload: a replay works for 30 days after the failure. Erasing a person also deletes the deliveries that name them, including GitLab push deliveries that carry their provider ID. Erasure includes deliveries being processed and blocks late handler writes from restoring their content. It removes inbox data before the final conversation copy scrub, including when a failed erasure resumes. Erasure keeps deliveries from other source servers separate. Invalid UTF-8 deliveries are rejected before storage.
+
+  **Operators:** drain the webhook streams before you upgrade, and replay the dead letters that you want to keep: the upgrade does not carry them over. The chart refuses `webhook`, whose last setting `webhook.stream` is gone, and `config.consumerInactiveThreshold`. The stream alerts are gone; `HephaestusProviderEventsWaiting` and `HephaestusProviderEventBacklogUnsampled` watch the inbox, and `integration_consumer_retry_total` replaces `integration_consumer_nak_total`.
+
+- Provider events of a workspace stay in order when an event takes longer than the handling lease, and a webhook replay no longer runs at the same time as a live event of the same workspace. A replay that finds another event of the same stream still in progress or waiting for its retry, or another replay of that stream, now returns HTTP 503, so you can try again.
+
+  **Operators:** The broker is removed. Follow the complete removal list in **Remove the retired sync broker values before upgrading** instead of the previous external broker version instructions.
+
+- A public activity page no longer names contributors who have no account that chose to show. It counts them instead, as "and N more contributors". A workspace administrator can name them with **Show contributors without an account** in the public activity page settings, and turn it off again.
+
+  Turning that choice on asks for confirmation before it publishes names. Turning it off takes effect at once.
+
+  The public activity page also no longer sends the logins of the people who helped most, which no page showed. In instance administration, the product feedback entry is now called Reports.
+
+  Public activity settings save only the choice you change, so one save cannot restore names that another save hid.
+
+  **Operators:** After the upgrade, published public activity pages stop naming contributors without an account. To keep naming them, a workspace administrator turns on **Show contributors without an account**. API clients that call `PATCH /workspaces/{workspaceSlug}/public-activity` can omit the settings that they do not change. Follow the migration instructions before upgrading.
+
+- Models for practice scripts are gone, because a practice script now makes no direct model call. **AI models** no longer offers decision, embedding or reranking assignments, and a connection can no longer use the Decisions, Embeddings or Rerank API. **AI usage** no longer has the table of these models by practice, and a review's **Practice scripts** section no longer has the **Script models** and **Script calls** columns. Past usage of these models stays in **By use** and **By day**.
+
+  **Operators:** The upgrade deletes the decision, embedding and reranking assignments, and the instance connections that use the Decisions, Embeddings or Rerank API, with their models. `PRACTICE_REVIEW_DIRECT_MODEL_TOKENS_PER_ATTEMPT`, `PRACTICE_REVIEW_DIRECT_MODEL_SEARCH_UNITS_PER_ATTEMPT` and the `llm.proxy.practice_script.unattributed` metric are gone. Remove the two variables from your configuration if you set them. Without the 4 direct script calls, an attempt has at most 170 model calls in flight, and the default of `SANDBOX_API_REQUESTS_PER_MINUTE` falls from 696 to 680. Stop every role for this upgrade; follow the migration guide.
+
+- Hephaestus no longer needs a NATS broker. Live sync hints travel between server replicas through PostgreSQL; the app still reads sync state through REST and polls if a hint is missed.
+
+  **Operators:** Remove the retired broker values and image entry from every values file before upgrading, as the migration note lists. Remove broker environment settings and unused credentials. The chart refuses retired keys and no longer creates broker objects. The PostgreSQL budget includes the sync notification listener during rolling updates.
+
+  With the existing template requests, removing the broker lets the small profile admit eleven automatic turns without backups and seven with backups, alongside five reviews. The requests remain unmeasured template values; qualification owns workload right-sizing.
+
+- The API no longer serves reads that no Hephaestus client uses: `GET /workspaces/{workspaceSlug}/practices/feedback/resolution-counts`, `GET /workspaces/{workspaceSlug}/connections/{id}/audit` and `GET /product-feedback/{feedbackId}`. A review's detail no longer carries `stageTiming` (its jobs carry the same times), a connection no longer carries `instanceKey`, `stateReason` or `capabilities`, and Slack preferences no longer carry `slackUserId` or `slackDisplayName`. **API clients:** read a report through `GET /product-feedback/mine`, and a review's timing from `runtime.jobs`.
+- Practice reviews always have Git checkout enabled on the server and worker.
+
+  **Operators:** Remove `config.gitCheckoutEnabled` from chart values and retained `site.yaml` files before you upgrade. The chart refuses this retired key.
+
+- Workers no longer run practice reviews themselves. Every review runs in its own agent sandbox, so the worker's review Job runtime is removed.
+
+  **Operators:** remove `AGENT_POLL_INTERVAL` and `AGENT_CLAIM_BATCH_SIZE` from your configuration. They have no effect. These metrics are no longer exported: `sandbox_containers_active`, `sandbox_executions_total`, `sandbox_execution_duration_seconds`, `sandbox_start_failures_total`, `sandbox_review_starved_seconds`, `sandbox_cleanup_failures_total`, `sandbox_reconciler_*`, `worker_capacity_*`, `worker_drain_active`, `agent_job_drained_total` and `agent_job_execution_duration_seconds`. Remove dashboards and alerts of your own that read them.
+
+- A review's commands and custom practice programs now run in their own containers, without its credential and with no way to reach the network. Only the review's own process holds the credential, and it can no longer start a process. A repository search shows that something is absent only when Hephaestus has confirmed it, so a result that rests on a search it could not confirm is withheld.
+
+  **Operators:** rebuild custom agent images from this release to match the official image's runtime contract.
+
+- Each practice review now runs in an agent sandbox of its own. When a review is due, the server starts the review's sandbox. The sandbox measures the review, then composes its feedback in the same sandbox. A review sandbox reaches only the server's gateway, and every model call and result that it sends counts only for the review it runs and only while that run holds its lease.
+
+  Reviews use the agent-sandbox controller and the chart's sandbox templates, which the chart already installs. `SANDBOX_MAX_CONCURRENT` still sets how many review sandboxes run at once. The new alert `HephaestusAgentSandboxDispatchFailing` fires when the server keeps failing to start the sandboxes of due reviews. `HephaestusAgentSandboxUnisolated` fires for a sandbox whose network policy did not hold in time.
+
+- The production server now refuses to start unless its API issuer is a root HTTPS origin.
+
+  **Operators:** Set `hephaestus.auth.issuer` to the public API root origin, for example `https://api.example.test`. Keep an API prefix in `hephaestus.auth.api-base-path`. Changing the issuer rejects existing access tokens, so users must sign in again. Follow the migration instructions before upgrading.
+
+- Sandbox quotas now count each template's resource requests and RuntimeClass overhead. The conversations quota also holds the two sandboxes used by the isolation gate. The one-host gVisor RuntimeClass declares 48 MiB and 10m of overhead. Set `sandbox.templates.podOverhead` to match a custom RuntimeClass. The single-node profile reserves memory for five review sandboxes.
+- Scheduled scan runs now end with **Run limit reached** when they use their fixed spending cap.
+  They no longer block later scheduled checks in the workspace.
+  Existing scheduled checks in a budget pause at their fixed run cap end automatically the next time they are checked.
+  In-flight scans must first finish, and their costs must be known.
+  Runs with no remaining targets finish even when no budget remains.
+  Temporary funding pauses and unknown review costs still pause the run.
+- Practice scripts now import from the core, SCM, chat, and docs entries only. The direct-model entry `@hephaestus/practice-scripts/models` is removed. A stored script with any metadata is refused as invalid when you validate or run it. Decision, embedding and reranking assignments do not apply to public scripts. Chat and document record schemas are private; use the `chat` and `docs` helpers to read these records.
+
+  **Operators:** Before upgrading, update custom scripts that import model helpers or record schemas. Keep script `meta` empty, prepare evidence, and call `ctx.review`. Configure the review model and budget in the workspace. Validate the updated scripts before enabling them.
+
+- The server now receives provider webhooks itself, so an installation runs one application Deployment. There is no webhook Deployment to size, update or watch, and its alerts now watch the server: `HephaestusServerDown` and `HephaestusServerUnready` replace `HephaestusWebhookReceiverDown` and `HephaestusWebhookReceiverUnready`. While no server runs, providers cannot deliver: GitHub redelivers the deliveries that failed in the past two hours, Slack retries, and the routine sync repairs GitLab and Outline.
+
+  **Operators:** the chart refuses `webhook.replicas` and `webhook.resources`. Remove them before you upgrade. `webhook.stream` stays. Outside the chart, `HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED` and the `webhook` Spring profile are gone: route `/webhooks` to the server.
+
+  Logs keep the run, claim epoch, subject and review at sandbox boundaries. The retired `runtime.role` field is removed.
+
+- Server updates can keep the API and provider webhook reception available. The chart uses two servers by default and a rolling update; the small profile keeps one steady server and reserves its replacement. Sandboxes retry an interrupted model stream and admit the completed answer once.
+
+  **Operators:** Remove `server.rolloutStrategy` from your site values. Reserve room for the draining servers and their replacements before updating. Use the target release's small profile. Its database pool follows the inbox and sandbox holder caps, and its PostgreSQL connection limit includes both servers and all other clients. Remove copied pool and `postgresql.parameters.max_connections: 80` overrides, or recalculate them against the complete budget. Its automatic conversation capacity includes the replacement server. The stopped cutover to 1.0 still applies.
+
+- The server now runs the practice review and conversation sandboxes itself, so an installation has two roles: the server and the webhook receiver. There is no worker Deployment to size, update or watch. The server's API stays ready while its sandbox isolation probe runs or fails; only the sandboxes wait for the probe.
+
+  **Operators:** the chart refuses the `worker` values. Move them before you upgrade:
+
+  - `worker.enabled` is now `sandbox.enabled`.
+  - `worker.sandbox.namespace`, `worker.sandbox.reviewMemory`, `worker.sandbox.quota` and `worker.sandbox.templates` are now `sandbox.namespace`, `sandbox.reviewMemory`, `sandbox.quota` and `sandbox.templates`.
+  - `worker.runtime` is now `sandbox.runtime`, with the same keys.
+  - `worker.sandboxGateway.maxConnections` is now `sandbox.gateway.maxConnections`.
+  - `networkPolicy.workerGatewayPorts` is now `networkPolicy.modelGatewayPorts`.
+  - `worker.replicas`, `worker.rolloutStrategy`, `worker.drainTimeoutSeconds`, `worker.databasePool`, `worker.gitCache` and `worker.resources` are gone. Set `server.rolloutStrategy`, `server.drainTimeoutSeconds`, `server.databasePool`, `server.gitCache` and `server.resources` instead. The server's defaults now hold its sandboxes' reviews: a pool of 48 connections, 3 GiB of memory and a 70 GiB git cache.
+  - Outside the chart, `HEPHAESTUS_RUNTIME_WORKER_ENABLED` and the `worker` Spring profile are gone. Set `AGENT_ENABLED=true` on the server to run sandboxes.
+
+  The server keeps one replica and uses `Recreate`, so two server versions do not process provider events at once. It waits for in-flight review runs for up to 30 minutes, or 10 minutes in the small profile, before it closes the gateway. The Pod grace and Helm timeout cover that window and shutdown.
+
+  A server with agent jobs enabled now refuses startup without `HEPHAESTUS_CONVERSATION_LOOP_SECRET`. Outside the chart, replace `HEPHAESTUS_WORKER_DRAIN_TIMEOUT` with `HEPHAESTUS_AGENT_DRAIN_TIMEOUT`.
+
+- Signing out other sessions, one at a time or all together, now asks you to confirm access when your last sign-in is not recent. You can still sign out the current session through the account menu. The admin guide now says how many sessions an account can hold and how an operator ends every session on the instance.
+- Slack workspace connections no longer need a separately configured redirect address. Hephaestus derives the OAuth callback from the API address, and uses the same callback to authorize and to exchange the code.
+
+  **Operators:** Remove `config.slack.redirectUri`, `HEPHAESTUS_INTEGRATION_SLACK_REDIRECT_URI` and `hephaestus.integration.slack.redirect-uri`. Register the canonical callback, normally `https://<host>/api/oauth/callback/slack`, on the Slack app before upgrading. The chart refuses the retired key.
+
+- Heph posts its complete answer in Slack. Direct messages and thread replies arrive as one message. The app keeps showing the answer as Hephaestus writes it. You can stop an unfinished answer in the app.
+
+  **Operators:** Stop all server replicas and keep a verified pre-upgrade database backup before upgrading. The migration removes the old Slack delivery and stream fields. Replies already in flight during the cutover can remain unconfirmed; their full answers remain in the app.
+
+- Scheduled repository sync settings now use `config.sync` in the chart. The schedule, lookback, startup behavior, and cooldown keep their values. The server's explicit sync and backfill environment names now start with `SYNC_`.
+
+  **Operators:** Before upgrading, move the site-file group `config.monitoring` to `config.sync`. Keep its four child settings. Replace any explicit `MONITORING_*` sync or backfill variables with the names in the migration guide. The old chart group and environment bindings are removed.
+
+- Team API routes now use `/teams`. Send visibility updates with PATCH and a required `{ "hidden": true }` or `{ "hidden": false }` JSON body. Query-only and primitive boolean requests are no longer accepted.
+
+  Add a team label with PUT and remove it with DELETE at `/api/workspaces/{workspaceSlug}/teams/{teamId}/labels/{labelId}`. The repository and label-name POST route is removed.
+
+  **Operators:** Before upgrading, update API callers to use these routes and request bodies.
+
+- A stopped conversation answer keeps what Hephaestus wrote before the stop. Questions run in their conversation's order, including after two accounts are linked.
+
+  **Operators:** stop every role before you upgrade; see the migration guide. `hephaestus.mentor.turn.capacity` is now `hephaestus.agent.capacity.turns`, and the turn lease is `hephaestus.agent.capacity.turn-lease-ttl`. The chart's `conversationLoop.turns` and the `HEPHAESTUS_MENTOR_TURN_CAPACITY` variable are unchanged. `hephaestus.mentor.turn.lease`, `hephaestus.mentor.turn.lease-reaper-delay` and the metric `mentor_turn_lease_reaper_failure_total` are gone: the run reaper's `agent_run_reaper_failure_total` covers turns. The `worker_registry` table, the `hephaestus.agent.heartbeat-interval` setting, the metric `worker_liveness_heartbeat_failures_total` and the review queue's `activeWorkers` field are gone: an agent run's lease shows whether its worker lives.
+
+- An exemption on a whole class of code no longer turns off the server's check that a database statement stays inside one workspace. Only an exemption on one method does. A statement that the check refuses is counted in `tenancy_violation_total` and logged as `Tenancy violation (throw)`. The new alert `HephaestusTenancyViolations` fires on it. Load the rule file of the release to get it. The `tenancy_bypassed_violation_total` metric is removed. It counted what the class-wide exemptions let through. Its bundled dashboard panel is removed, and your own panel that reads it shows no data now.
+- Concurrent requests can no longer create two monitors with the same repository name in one workspace. A conflicting request returns a conflict response.
+
+  **Operators:** Stop every role before upgrading. The upgrade stops if duplicate monitor names exist. Reconcile those monitors against the provider’s repository IDs before retrying. It does not remove or merge your monitors.
+
+- Each model call of a review or a conversation answer now has its own usage row, written when the call starts and measured when it ends. Spend counts toward a budget as soon as a call ends, not when its review or answer ends.
+
+  Every model call now has an output limit, so each call has a most it can cost: its upper bound. A call counts toward a budget at its upper bound while it runs. A call whose usage Hephaestus cannot measure, such as a call without a usage block, a call cut off before its answer, or a call still open when its worker stopped, is now recorded without a cost and keeps counting at its upper bound. Before, some of these calls left no record, and others paused a capped budget for the rest of the month. **AI usage** shows the upper bound apart from the confirmed spend, as "Up to $X more from N calls whose usage was not measured", and a review's cost that includes one reads "Up to".
+
+  **Operators:** stop every role before you upgrade; see the migration guide. A chat model needs an output limit: the proxy refuses a call to a chat model without one with status 400. It clamps the output limit of each chat request to the model's limit, and writes the limit into a request that names none. Multiple completion choices count toward the call's upper bound. The proxy accepts text inputs and client-run tools; it refuses images, audio, files and provider-stored inputs because their token counts cannot be bounded by the request size. An OpenAI-compatible server that ignores the output-limit field can write past a call's upper bound. A capped purse now starts a call only while the call's upper bound fits in what is left of the cap, and refuses it otherwise as a reached cap. The `llm.budget.exhausted` counter counts measured spend only. A call of a model without a price has no upper bound and still pauses a capped purse. The new column `llm_usage_event.cost_bound_usd` holds each call's upper bound. The `review_job_attempt_usage`, `review_job_attempt_charge`, `review_job_script_usage` and `mentor_turn_attempt_usage` tables and the usage columns of `review_job` and `mentor_turn` are gone: `llm_usage_event` holds each call. The repricing pass now prices unpriced usage of every month, oldest first, not only of the current month. The metrics `llm_proxy_usage_late_settled_total`, `llm_proxy_usage_accumulate_superseded_total`, `llm_proxy_usage_mentor_failure_total` and `llm_proxy_usage_mentor_superseded_total` are gone. `llm_proxy_usage_accumulate_failure_total` now counts a call whose measurement could not be written, and `llm_usage_unverifiable_total` also counts the open calls that the end of a run settles.
+
+- A signed-in person who is not a member of a workspace now gets the same "not found" answer as for a workspace that does not exist, so nobody can find out which workspaces exist on an instance. Members who lack the role for an action still see that they need more access.
+- Making someone a workspace owner, or taking the owner role from another owner, now asks for a recent sign-in, as instance admin role changes already do. If your sign-in is older than the configured window, Hephaestus asks you to sign in again and leaves the role unchanged. Taking the owner role from another owner now also asks you to confirm first. Changes between member and admin, and lowering your own role, stay one step. The audit log records a refused change as **Workspace owner change**.
+
+### Patch Changes
+
+- A review that says the repository lacks something now needs a search for that thing. A search for anything else no longer backs the claim, and such a result is withheld as `absence_not_searched`. When that search found matches, the result must also say what they are, and practice pages show this.
+
+  A Does not apply result must also account for search matches. Generic test labels and a different inflection of a search term cannot justify an absence claim.
+
+- Account settings now show an error when an export download fails. No file is saved for a failed request, and you can try the download again.
+- The admin guide's Kubernetes and Observability pages are now split into focused pages. Kubernetes becomes these pages:
+
+  - Install on a Kubernetes cluster
+  - Install on one host
+  - Helm chart reference
+  - Sandboxes
+  - Use an external PostgreSQL
+  - Connect to services on a private network
+  - Maintain nodes and the database
+
+  Observability becomes Set up monitoring, Alert rules, Metrics and Log records. The backup and restore commands are now on Backup & Restore. The upgrade procedures are on Upgrade. The chart's install notes and the one-host installer link to the new pages.
+
+- A review that reads the earlier feedback on its pull request or issue now holds one database connection instead of two, so many reviews composing at once no longer risk exhausting the connection pool. Feedback that another review delivers during that read still stops the new feedback as Public history changed.
+- Model calls that the instance admitted no longer fail as provider errors when more than 100 calls to one provider run at once.
+- The Pod that keeps the agent image on each sandbox node is no longer at risk of an out-of-memory stop. On a gVisor node it used 15 MiB against its 16 MiB limit (staging bench, 2026-11-10), and a stop lets the node remove the image. It now requests 16 MiB with a limit of 32 MiB.
+- A server with agent jobs off can start without Kubernetes Pod metadata under the E2E profile. The profile now honors `AGENT_ENABLED=false`, including during the seeded release upgrade.
+- The server can now request and delete agent-sandbox claims in the sandbox namespace, and it deletes each claim that no work needs. The chart grants this in the server's Role in the sandbox namespace and gives the server the names of the sandbox warm pools and the gateway address. No operator action is needed. A new alert, `HephaestusAgentSandboxReaperFailing`, fires when the server keeps failing to delete such claims.
+- The API reference and generated clients now show the status codes the server returns. This covers catalog creation, data exports, sessions, account deletion, login providers, and monitored repositories.
+- When a practice review cannot run because its author is a bot, admins now see “Hephaestus does not review work by bots.” Unknown authors and other unavailable roles keep their own explanation.
+- Model calls of one workspace that start at the same moment no longer stall the server while it checks the workspace's model budget. Before, such calls could hold every request thread, so that other requests waited until they failed with a database connection timeout.
+- Reading a repository's files and getting a GitHub installation token no longer hold up the server's other work while they wait on Git or on GitHub. Before, concurrent requests for the same repository version or installation could hold every request thread until they finished.
+- A call pool now reads the rate limit headers of Anthropic and OpenAI and pauses briefly when a provider's bucket is empty, so an empty bucket no longer lowers the limit of calls in flight. An instance admin can set `inputTokensPerMinute` and `outputTokensPerMinute` for a provider with separate token buckets. The tokens that a provider reports now replace `tokensPerCall` when a call ends, so a conservative bound no longer holds back calls for a full minute. Anthropic's spend limit now reaches the caller at once instead of waiting.
+- The pull-based reconciler now treats the step from a release candidate to its stable release, such as `1.0.0-rc.6` to `1.0.0`, as a stopped cutover. Before, a host that ran a candidate applied 1.0.0 as a rolling upgrade, though [Upgrade to 1.0](/admin/upgrade-to-1-0) requires every role to stop.
+- A review that needs more than one attempt now finishes. Before this fix, a retry whose remaining practices read only the code, such as the diff and the repository tree, could not prepare: it captured no record of the pull request or issue, so every later attempt failed and the review stayed open. Each capture now always reads the work's record, whatever its practices declare.
+- The configuration reference now shows the unit and the parser of each chart resource size, time interval, retention and raw byte limit, beside its schema bounds.
+- Scrubbing the GitHub issue of an erased product feedback report now goes through the same outbox as filing. Each scrub retries with the outbox's backoff and still becomes a manual step for an admin when it has not finished after 30 days. A scrub whose answer from GitHub was lost first looks for an issue it may already have moved, and repeats only the redaction and the close, which are safe to repeat. A step that GitHub refuses goes to an admin at once.
+- Workspace notices clear the previous workspace name when no workspace is available to open.
+- Feedback composition no longer fails on its first model call after a review is sealed. Each composition receives its configured work window after any retry delay. Model calls and provider readback share the same deadline.
+
+  Provider readback preserves explicit editor facts, so feedback that no one edited remains available for checked correction.
+
+- Connecting GitHub or Slack to a workspace now finishes only in the browser that started it. If the provider sends you back to Hephaestus in another browser, Hephaestus connects nothing and asks you to start again from Hephaestus in that browser.
+- Counts use consistent English thousands separators across activity, review, and administration pages. Date labels keep their English day-first format regardless of browser language.
+- Hephaestus handles conversation notifications once after a pause and resume.
+- When the commit link correction job is enabled, commit Activity now follows corrected provider identities, including a provider answer with no account. The source link and Activity update commit together, so a failed correction can retry without leaving different actors.
+- The role setup no longer passes the database passwords on to `psql`: `psql` receives only their SCRAM verifiers, also when you run `files/database-roles.sh` or `files/database-monitor.sh` for an external PostgreSQL.
+- The undocumented `hephaestus.practices.seed-default-catalog` setting is gone: the default practice catalog always installs, as it did unless you turned it off. A leftover `HEPHAESTUS_PRACTICES_SEED_DEFAULT_CATALOG` has no effect. Server code that nothing called is gone too; nothing else changes.
+- Reviews no longer treat unread GitHub or GitLab discussions as proof that no one commented. Practices that need a whole discussion are withheld with a capture reason instead of recording Does not apply. This includes new work received through a webhook before its first whole discussion sync. For work without a recorded whole read, select **Run backfill** on its integration, then request a new review after the read completes. A withheld review does not restart automatically.
+- The chart has no sandbox template for product feedback drafts, because a draft is one model call in the server. No release shipped that template or its value `worker.sandbox.templates.action`, so an upgrade from a release needs no action.
+- Temporary recording failures no longer silently drop GitHub or GitLab activity.
+  The existing retry job retries failed records every five minutes. A large backlog can take longer to clear.
+  If a workspace stops monitoring the source repository or its provider connection is not active, its queued activity ends without a new record.
+
+  Before upgrading, let running person-erasure requests finish. This update adds queued activity to their store inventory.
+
+- The usage ledger retains each failed model call across server replicas.
+  The usage ledger records only the failure kind and HTTP status.
+  Late usage reports and price changes keep the first recorded failure.
+- Passkey changes and verifications now commit with their audit records. If an audit record cannot be written, the passkey operation rolls back. A server stop after commit no longer loses the record. Practice feedback preparation can also resume after a server stop when the provider readback already completed. Repeated recovery does not resume it twice.
+- One-click unsubscribe links in emails now include the public API prefix, so mail clients can unsubscribe without opening the web app.
+- Erasing a person now also removes their login from a purged workspace that was installed on their personal account. Its slug, login and connection names become `erased-<id>` and its name becomes `Erased workspace`. Only a keyed hash of the old slug remains, so nobody can take that slug. While such a workspace is still active, it keeps the login; purge it first if the person asks for the login to go.
+- Reviews that a push or another pull request event starts now give feedback again. Before this fix, every practice of such a review was withheld with "The sources changed before this practice started", and no review reached the model. The cause was the check that runs before a practice starts: it compared the pull request as the event recorded it with the pull request after the next sync. That sync adds the merge state and the checks of the new commit, also when the repository runs no CI, so unchanged work looked changed on GitHub and GitLab. The check now reads the same record that the review read. Feedback from these reviews also stays current when the next sync runs. A new commit, a new comment or other real changes still withhold the practice with that reason. The labels of linked issues are now always read in the same order. Because of this, feedback that read a linked issue with several labels can show as outdated once after the upgrade.
+- Temporary Git snapshots now keep their workspace and cleanup owner in the evidence home. Failed removal stays visible to reconciliation and keeps capture admission until the files are gone. Review gateway archives use the review attempt's existing receipt and folder lease.
+
+  Server startup removes abandoned spool copies before accepting new work. If cleanup fails, startup stops; restore the evidence volume's access and free space, then restart. A restart no longer leaves these copies for the attempt-retention grace period. Existing evidence cleanup alerts also report failed spool removal. No new storage service or database table is required.
+
+- A slow model no longer decides where a product feedback report goes. A draft call now gets 120 seconds and up to three attempts before filing goes on without a draft. An issue filed without a draft now says so, gives a real reason and keeps a readable title.
+- Feedback is shown as current only while the sources its review could read remain unchanged. An unavailable source for one result does not affect feedback that relies on other readable sources. Frozen scans retain their reviewed scope. Earlier item results without source fingerprints remain available as unverified history. Practices whose sources change before they start stop with a recorded reason. Requested reviews can keep a result for a newer version of the work when their readable sources match.
+- Feedback reads back the text and position shown on your work. When the provider shows a problem, Hephaestus can correct its own comments quietly, with at most three edits for one review. Changed words or link destinations need approval again where approval is required. Hephaestus respects comments that people edit and threads that people resolve, reopen or delete. An uncertain write is read back without posting another comment.
+- Practice reviews identify earlier posted feedback from delivery receipts. A copied feedback marker in a person's review no longer removes that review from the captured discussion. Text with uncertain authorship stays separate from reviewer advice in the review input.
+
+  Practice reviews focus their summaries on guidance that the line notes do not carry and keep unchanged earlier advice quiet.
+
+  Practice-page feedback and conversation notes can check a recorded explanation against the full verified code it cites.
+
+- Repeated feedback send attempts raise an alert before readback stops retrying. Alerts also report when the server cannot read the attempt count.
+- Feedback on the reviewed work now goes out through the same outbox as email and product feedback issues. Each post, correction, readback and withdrawal of a feedback is one action in that feedback's own lane, so the sends of one feedback never overlap and run in order. A send that may have reached GitHub or GitLab looks for its copy by its marker before it writes again. A send that was waiting or in progress during the upgrade runs again after it and reads back first. A manual retry or recheck is a new send with its own attempts, so `practice_feedback_send_attempts` no longer counts the attempts of earlier sends. Operators can watch these sends in the `action.ended` metric with `kind=DELIVER_FEEDBACK`, `EDIT_FEEDBACK` or `RETRACT_FEEDBACK`.
+- You can now open **Send feedback** from any page with Cmd+Shift+F on a Mac, or Ctrl+Shift+F elsewhere. The tooltip on the button shows the shortcut. In the dialog, Cmd+Enter or Ctrl+Enter sends from any field, and **Send** shows that shortcut.
+- GitHub sign-in and installation checks no longer wait indefinitely for a stalled provider.
+  A failed GitHub email lookup still lets you sign in with an unverified email address.
+- A local development checkout now creates its PostgreSQL database with a random password instead of the fixed password `root`. The first `vp run dev` writes the password to `server/.env`. A local database that already exists keeps working with its old password until you run `vp run dev:reset`. Kubernetes installations are not affected: the chart always reads the database password from your Secret.
+- Each request that an agent sandbox makes to the gateway is now traceable to its sandbox and run. Every log record of the request names the sandbox, its subject and its workspace (`sandbox.name`, `subject.key`, `workspace.id`). A request for one run also names the run and the epoch of its claim (`run.id`, `run.epoch`), but only after the gateway has checked that the run belongs to the sandbox. The request's trace span carries the same attributes.
+- GitHub pull requests now retain closing links to issues in the same repository beyond the first 50 references.
+  If a GitHub issue or pull request sync reaches its page limit, it keeps its last sync time so the next run can resume.
+- A GitHub App installation no longer fails when several workspaces share its account name. An installation on an organization joins only the workspace that already recorded that organization's GitHub identity.
+- GitHub sync recognizes native GraphQL error types for its existing retry and missing-resource policies.
+  Repository monitors show an unavailable state when GitHub refuses access to the repository, with a scheduled recheck instead of repeated sync errors.
+  Unclassified GitHub GraphQL failures include a bounded message in server logs for diagnosis.
+- Commit link correction can now ask GitLab for a commit author’s account. Commit capture preserves an existing actor link when it fills in commit details. The correction job remains off by default.
+- GitLab issue dependencies now sync for every issue of a project, not only for 200 of them. A sync that could not read some issues' links now reports a warning instead of success.
+- GitLab groups with many projects or long project descriptions no longer fail group verification while connecting.
+- On GitLab, a `/hephaestus review` comment starts a review only when the comment holds nothing else, as on GitHub and as the user guide says. Before, any text after the command also started one.
+- Hephaestus retries removal of suspended GitLab connections' upstream webhooks. This includes hooks whose registration finished after suspension.
+- Inbox lease renewals no longer produce false handler-error logs. Routine fence contention is reported as a retry rather than a handler failure.
+- Logs from provider event handlers now carry the workspace ID. Installation events have no workspace ID, and dispatch restores the previous log context afterward.
+- A slow GitHub API no longer holds a database connection open while Hephaestus checks whether a GitHub App installation is suspended.
+- When the first install of the one-host installer fails, its Jobs and Pods now stay for diagnosis, and the installer links to the troubleshooting steps. Before, Helm rolled the install back and removed them. Run the installer again with the same release to retry.
+- Commit channels use the image inventory of their target commit, so a change to image names does not require another verifier. A runtime rollback or reconciliation restart keeps newer installed verifier tooling, including a version installed by an operator before an upgrade.
+- A sandbox whose call reaches another server moments after the one that started it is no longer refused: an unknown signing key is loaded at once, at most once per second.
+- The database now refuses a workspace, erasure request, evidence copy, product feedback report, issue, release check, model call permit or review run in a state that Hephaestus never writes. If an existing row has such a state, the upgrade stops before it changes anything and names the check.
+- Routine evidence capture details appear at DEBUG. Encryption failures are logged at the operation boundary. Review lifecycle events remain visible at INFO. Provider setup and workspace diagnostics use IDs instead of account logins and workspace slugs.
+- Server logs no longer name people by their GitHub or GitLab login, username or commit email address. They name them by Hephaestus and provider ids instead. On an instance with bootstrap admins, the sign-in of a new account that is not on the list now logs only its provider subject; add `provider:subject` to make it an admin. The data retention guide recommends an age limit for your log store.
+- **Make private** on a public product feedback issue now moves the issue through the same outbox as filing. When GitHub's answer to the move is lost, Hephaestus says so, then looks for the moved issue in the private repository and finishes the move, instead of moving it again.
+- A model whose **Context window** and **Max output tokens** are not set now gets them from its provider, so new practice reviews and product-feedback drafts on it keep running after the upgrade. Work admitted before its limits were read stays refused; start it again. Hephaestus reads them when you test a saved connection, and when a server starts for each enabled model that has no output limit. It reads Anthropic's and OpenRouter's model listings, vLLM's `max_model_len`, LiteLLM's `/model/info` and the `num_ctx` that Ollama's `/api/show` reports, and ships the published limits of OpenAI's current models. When only the context window is known, or you set only the context window, the output limit is a quarter of it, at most 16,384 tokens. A value that you set always wins and is never overwritten: clear the field to use the provider's value again. The model form shows each value and where it comes from.
+
+  A model that still has no output limit is marked **Limits missing** in **AI providers**, and the `llmModelLimits` component of `/actuator/health` names it. Its calls are refused, as before, until you set **Max output tokens** or **Context window**. A model that had only a context window now runs with a quarter of it as its output limit, at most 16,384 tokens, instead of the whole window; set **Max output tokens** to allow more.
+
+- Waiting model calls can start as soon as another call releases capacity, including calls on another server. Servers make fewer database checks while they wait.
+- The `hephaestus.workspace.auto-seed-membership` setting is removed. A server never makes the first person who opens a workspace with no members its admin, whatever profile it runs with. The Helm chart never turned it on, so a chart install needs no action. Operators who set it elsewhere can drop it: the server ignores it.
+- Hephaestus no longer comments on a draft pull or merge request. Feedback about a draft goes only to the developer's practice page and conversation. When the work is marked ready, Hephaestus reviews it again, and that review can comment.
+
+  Hephaestus also no longer comments on work that is already merged or closed, unless the workspace turns on **Post feedback after merge**. Before, that setting had no effect and feedback was posted after a merge anyway. The developer's private feedback can still arrive either way, and the timing card counts the feedback that was held back after a merge.
+
+  A reviewer's feedback that is not sent to their conversation now says that the destination gets only feedback about the author's own work, instead of naming public feedback.
+
+- GitHub OAuth secret updates now point to the login-provider rotation procedure.
+  When you rotate a sign-in credential, update the existing login provider in Instance administration and mirror it in the Kubernetes Secret.
+  Where the provider permits more than one active secret, test a new sign-in before you revoke the old secret.
+  A server restart still seeds a missing login provider.
+- Disconnecting Outline now also erases the practice results and the feedback that Hephaestus derived from its documents, as a GitHub, GitLab or Slack disconnect already does.
+- Operators now get the `HephaestusEventPublicationsOverdue` alert when durable server work, such as an email or an account export, is still incomplete one hour after it started. The `event_publications_overdue` metric names the work that keeps retrying.
+- Private practice feedback can name the earlier work that supports a recurring concern.
+- A review result can rest an absence only on a source that Hephaestus captured whole. A partly captured source still supports what its cited lines show.
+- The one-host k3s platform now installs the agent-sandbox controller, pinned to v1.0.10, beside Traefik and cert-manager. The installer waits until the controller is ready. A later installer run upgrades it when the pin changes.
+- The release vulnerability policy now also judges the platform images that the one-host installer installs: k3s and the images it runs, cert-manager, Traefik and the agent-sandbox controller. A fixable HIGH or CRITICAL finding in one of them passes only through a named exception. Each exception records that the pin is the newest upstream release, and it expires after 90 days.
+
+  The one-host platform uses Traefik chart 42.4.0 with the same pinned Traefik v3.7.18 image. Its HTTP and HTTPS entrypoints now continue to accept requests for five seconds after SIGTERM so Kubernetes can remove the Pod from Service endpoints before it stops accepting requests. Pod termination takes five seconds longer.
+
+  The platform proxy has its own policy subject. Its findings no longer share reviewed exceptions with the older Compose proxy.
+
+- The one-host k3s platform now runs k3s v1.37.2+k3s1 and Traefik v3.7.18, which fix known vulnerabilities in the k3s binary, its Helm controller image and Traefik. k3s no longer runs its ServiceLB load balancer or its metrics server, which the platform never used, so `kubectl top` reports no metrics on a one-host install. Traefik keeps the host's ports 80 and 443. The installer of this release upgrades k3s and restarts it once.
+- On the one-host k3s platform, Traefik now watches only Gateway API resources. It no longer reads Traefik's own route and middleware resources, which the platform never used, and it no longer has cluster-wide permissions for them. The Kubernetes guide now names the two Gateway route features that a controller must support. It also states that live streams need an idle timeout of at least 60 seconds, not a route timeout.
+- The bundled monitoring stack no longer alerts on the lifetime deadlock total first seen after the metrics exporter starts.
+  New counter increases still trigger the alert.
+- Your Practice profile overview loads faster, most of all when you have a long review history.
+- Practices of a review no longer end as "sources changed" when the pull request did not change. A review that started while the discussion sync was still running read the same work later as changed, so every practice was withheld and the review ended partial without a single model call. A practice now starts when the work holds what its capture read, and a real change still withholds it with its reason. Results recorded before this release are not reused for a new review once, because their source fingerprints follow the new rule.
+- Two admins who change the product feedback destinations at the same time no longer overwrite each other, and a background refresh of the public repository's issue titles no longer undoes an admin's change such as **Pause**.
+- Product feedback reports go to GitHub through the same outbox as email. When GitHub's answer to a new issue is lost, Hephaestus looks for that issue by its marker before it files again, so a report never becomes two issues. A report that a server was filing during the upgrade is looked up first, and filed again only if it is not on GitHub. Operators can watch filing in the `action.ended` metric with `kind=FILE_ISSUE`.
+- If the web app cannot load its runtime configuration, it keeps API requests on the current installation instead of contacting localhost. Production builds also keep development tools off by default.
+- Hephaestus rejects provider work events before it stores their payload when the connection is not active. Rejections record a reason for GitHub, GitLab, Slack and Outline.
+- Provider event handling resumes after a server lifecycle pause without leaving deliveries leased.
+- A provider event whose handling hangs no longer holds back the later events of its workspace. After 30 minutes, the event returns to its stream and is retried like a failed event. After the retries, it is stored for replay. A handler that does not stop when it is told to restarts its server, so it never runs beside the next event. The `HephaestusConsumerHandlerTimedOut` alert reports each timeout, and `HEPHAESTUS_INTEGRATION_CONSUMER_HANDLER_TIMEOUT` changes the limit.
+- Model tool-choice tests now share model capacity and usage accounting with other AI work. Each synthetic call has a 15-second deadline and a 64-token output limit. Tests respect a paused connection without changing its health record. Disabled models can be tested before activation. Set a price before testing a model in a workspace with a provider spending cap.
+- Created-resource and asynchronous status links now use the configured public API origin and prefix. Links stay on the canonical API host when requests come from a workspace host. The API specification advertises the public `/api` prefix.
+- Operators and integrators can now see which API operations, browser routes, discovery fields, and posted links stay compatible in 1.x.
+- A maintainer's `/publish` on a private product feedback issue now goes out through the same outbox as filing, in order with the report's other GitHub writes. When GitHub's answer to the new public issue is lost, Hephaestus looks for that issue before it creates one again, so a report is never published twice. A pause still holds the command until filing resumes. Resuming a partial publication keeps its existing comment on the private issue.
+- A purged workspace stays purged. The database now refuses any change of a purged workspace's status, whatever path writes it.
+- The pull-based reconciler applies a change to `/etc/hephaestus/chart.yaml` or to `HEPHAESTUS_CHART_PROFILE` at its next tick. Before, such a change waited for the next promotion, and so did undoing it. The reconciler keeps a digest of these values in `applied.json`. A host that updates its tooling adopts the values that run, without a Helm upgrade.
+- Automatic updates remove obsolete release trees even when kubectl has written its discovery cache.
+  The current release, rollback release, locked restore points, and local operator files stay on disk.
+- Workspace admins can reconnect a disconnected GitLab integration with a new token. Hephaestus verifies access to the same group before it restores sync. Workspaces that used selected projects must select those projects again.
+- Release verification applies stricter checks to image build provenance. Each first-party image must match the release source commit and come from a GitHub-hosted build.
+- The unused development setting `HEPHAESTUS_DEV_SEED_ENABLED` (`hephaestus.dev.seed-enabled`) and the hidden endpoint that it turned on are gone. No production installation uses them.
+- There is no change to behavior. This update removes internal code that nothing used.
+  No operator action is required.
+- A review whose remaining practices were withheld because the work changed while it ran now ends Partial with the reason "The work changed, so its next review measures what this one did not." Before, it said that it did not record an observation for every practice, or, when the change withheld every practice, that running the review failed. Both pointed operators at the review runtime. A review whose withheld practices all wait for checks now ends with "Something the review needs was not ready." The "Item reviews that end incomplete" alert no longer counts reviews that the work replaced.
+- Reviews replaced by a newer update now count in review end metrics and logs.
+- Paused reviews of past work and scheduled review runs now continue automatically when their workspace or review model becomes available again.
+  They continue from their saved position.
+  Runs paused by an administrator still require **Resume**.
+- A review's cancel request is now stored in its own database column. An upgrade moves the requests of existing reviews there.
+- Large review feedback lists no longer repeat database lookups for each entry. Private text and feedback without readable evidence keep their existing visibility rules.
+- Review Pods renew their own attempt leases through the sandbox gateway. Another server can handle renewal during a server replacement. The existing rollout drain stays unchanged.
+- Review sandboxes that prepare, compose or hand in results at the same moment no longer hold up the server's other requests. Before, their database work could hold the request threads that other requests needed.
+- The review results list reads marks, problem summaries and counts, feedback counts, and developer references in batches. Evidence visibility and result details keep their existing behavior.
+- Data retention no longer deletes or empties a review run before its practices get their final results, and a workspace purge waits until every ended review run has them.
+- Review lists, details, counts, practice pages and Hephaestus now read the same stored review status. A review waiting for a retry, for room or for its next file shows as queued, and it shows as running only while it runs.
+- Reviews wait for a disconnected sandbox gateway to return within their attempt lease and work deadline. A gateway connection failure does not use a model retry. Repeated disconnected responses stop after bounded replays and use the existing infrastructure retry, so an outage cannot keep starting billed calls. Provider failures keep their existing retry behavior.
+
+  Deploy the matching server and agent image; their runtime image contract advances together.
+
+- You can follow one agent run through the server log and its trace. Each record of a review attempt names its run, the epoch of its claim and its subject (`run.id`, `run.epoch`, `subject.key`), and so does the attempt's trace span. When the run reaper takes back a lease, or when an outbox action fails or ends uncertain, the server writes a structured event with a stable `event.name` and the run or action it concerns (`agent.run.requeued`, `agent.run.ended`, `agent.run.reaper.failed`, `action.attempt.failed`, `action.ended.uncertain`). The events name no person and no message content. A log query that matched the message text of these reaper and outbox lines should match their `event.name` now; the observability guide lists the events and their fields.
+- Conversation turns can keep their lease through a server restart when a renewal loses its connection. Renewals leave time to reconnect before the lease expires.
+- Sandboxes run with a read-only root filesystem. A sandbox writes only to its workspace and to `/tmp`, so no tool in a sandbox can change the files of the agent image.
+- A scan review no longer spends past its model budget when two workers serve its model calls: its calls now run one at a time across all workers. If a worker stops during a call, the next call waits up to one minute.
+- A repository scan no longer ends with an error when a sync writes the same work at the moment the scan lists it. The scan lists the work again.
+- A scheduled scan whose priced spend already reached its budget now ends as out of budget, even when part of its model usage has no price yet. It no longer stays paused until someone cancels it.
+- Feedback that says the repository lacks something is sent only when the search behind it read the repository exactly as Hephaestus captured it. If the files changed before the search, the result is held back with its reason.
+- The sign-in cookie no longer carries your name or login. Hephaestus reads them from the server when a page needs them, so the cookie holds only what identifies the session.
+- After you sign out, the back button no longer shows the page that you left.
+- Hephaestus says in Slack that it answers with an AI model: "Hephaestus answers with an AI model and can be wrong." Its first answer in a direct message carries this notice. Its first streamed answer in each thread starts with it. The Home tab carries it too. Later answers in the same conversation do not repeat it.
+
+  The Slack app manifest template now describes Hephaestus as an AI assistant. Operators can show this in Slack: update the app's description and agent description in your Slack app settings.
+
+- Hephaestus's replies in Slack and its weekly digest notes now go out through the same outbox as email and feedback. The server that streams a reply still finishes it. When that server is gone, another server finishes the reply within about two minutes after the turn ends: it posts a reply that nobody started, and it looks for a started one in the Slack history and never posts it twice. The separate Slack reconciler job is gone. Operators find how a reply ended in `mentor_entry.slack_delivery` of its question, a reply in progress in `agent_action` under `slack_reply:<question id>`, and can watch these posts in the `action.ended` metric with `kind=SLACK_POST`.
+- When Hephaestus stops receiving events for a workspace, it no longer starts receiving them again from a retry that was waiting when the stop happened.
+- A sync that a server restart interrupts no longer shows "Stopping after current step" as if an admin had cancelled it. It shows as running until Hephaestus records it as abandoned by the restart.
+- The workspace isolation guard is stricter. A database read or write by a single key now passes without a workspace check only when that key is the row's own identity or the key of a list the row belongs to. For reads without a mapped key, the guard checks every table of a comma-separated join.
+- The agent image and the webapp image build with Node.js 24.22.2 and pnpm 12.18.0.
+- Hephaestus's answer now appears smoothly while it writes, also when your installation runs more than one worker. Before, its words could arrive in jumps of up to two seconds.
+- The web app now connects only to its own address and to the Hephaestus API.
+- The server's Role in the sandbox namespace no longer lets it patch or delete a Pod, or read single events. A cancelled or timed-out sandbox now stops when the server deletes its Job, and Kubernetes deletes the Pod first. A compromised server can no longer change the image of a sandbox that runs.
+- Workspace details and the workspace selector read connection metadata in fewer database queries. The selector keeps a fixed query count as your workspace list grows.
+- The API now lists the real workspace states, `ACTIVE`, `SUSPENDED` and `PURGED`, as the allowed values of a workspace's `status`. It no longer names states that a workspace never has.
+
 ## 1.0.0-rc.5
 
 ### Minor Changes
