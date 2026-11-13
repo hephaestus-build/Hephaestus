@@ -406,9 +406,8 @@ for (const name of profiles) {
 		assert.equal(envValue(server, "SPRING_PROFILES_ACTIVE"), "prod");
 		assert.equal(env(server, "HEPHAESTUS_RUNTIME_SERVER_ENABLED"), undefined);
 		assert.equal(env(server, "SPRING_LIQUIBASE_ENABLED"), undefined, "the server owns migrations");
-		assert.equal(get(server, "spec", "replicas"), 1);
-		// The single-node profile cannot hold two servers; every other profile rolls without a gap.
-		assert.equal(get(server, "spec", "strategy", "type"), "Recreate");
+		assert.equal(get(server, "spec", "replicas"), name === "small" || name === "external" ? 1 : 2);
+		assert.equal(get(server, "spec", "strategy", "type"), "RollingUpdate");
 		assert.equal(envValue(server, "AGENT_ENABLED"), String(runsReviews(name)));
 		for (const role of [server]) {
 			assert.equal(envValue(role, "HEPHAESTUS_AGENT_IMAGE_REFERENCE"), prepared.images["agent-pi"]);
@@ -607,9 +606,9 @@ await test("a release package refuses a later quoted images key, which Helm woul
 	);
 });
 
-await test("small: a Recreate server stops and starts within the upgrade's Helm timeout", () => {
+await test("small: a rolling server can finish its drain and start within the upgrade's Helm timeout", () => {
 	const server = workload(rendered([...layersFor("small"), sandboxLayer]), "server");
-	assert.equal(get(server, "spec", "strategy", "type"), "Recreate");
+	assert.equal(get(server, "spec", "strategy", "type"), "RollingUpdate");
 	// Past the timeout, Helm rolls the release back, also after its migration ran.
 	const installer = readFileSync(
 		new URL("../deploy/platform/k3s-install.sh", import.meta.url),
@@ -1356,12 +1355,13 @@ await test("a server with sandboxes receives its runtime settings, its sandbox n
 		"no cap per server",
 	);
 
-	// The server finishes in-flight reviews before its replacement starts. HTTP stays open during the drain,
+	// The server finishes in-flight reviews beside its replacement. HTTP stays open during the drain,
 	// with two additional minutes for the remaining shutdown phases.
 	assert.equal(kindOf(server), "Deployment");
 	assert.equal(get(server, "spec", "replicas"), 1);
 	assert.deepEqual(get(server, "spec", "strategy"), {
-		type: "Recreate",
+		type: "RollingUpdate",
+		rollingUpdate: { maxSurge: 1, maxUnavailable: 0 },
 	});
 	const spec = podSpec(server);
 	assert.equal(envValue(server, "HEPHAESTUS_AGENT_DRAIN_TIMEOUT"), "600s");
@@ -2161,7 +2161,7 @@ await test("practice reviews run exactly when the sandboxes run, with the instal
 	}
 	const capacity = (layers: readonly Layer[]) =>
 		envValue(workload(rendered(layers), "server"), "HEPHAESTUS_MENTOR_TURN_CAPACITY");
-	assert.equal(capacity(layersFor("small")), "14");
+	assert.equal(capacity(layersFor("small")), "8");
 	assert.equal(capacity([...layersFor("small"), { sandbox: { conversationTurns: 5 } }]), "5");
 	const exhausted = render([
 		...layersFor("small"),
@@ -2322,9 +2322,13 @@ function podRequests(spec: unknown) {
 		memory: Math.max(sum(running, "memory"), most(init, "memory")),
 	};
 }
-/** The Pods that a rollout adds beside the old ones: maxSurge, 25 % by default, none for Recreate. */
+/** The Pods that a rollout adds beside the old ones: the old draining server set, or maxSurge for other workloads. */
 function surge(deployment: Resource): number {
 	const replicas = Number(get(deployment, "spec", "replicas") ?? 1);
+	// Every old server can remain in its long drain after all replacements become ready.
+	if (componentOf(deployment) === "server") {
+		return replicas;
+	}
 	if (get(deployment, "spec", "strategy", "type") === "Recreate") {
 		return 0;
 	}
@@ -2455,8 +2459,17 @@ await test("auto is the largest turn count whose rendered steady and drained-upg
 			overhead: { cpuMillis: 0, memoryMi: 0 },
 		},
 		{
+			name: "three server replicas",
+			values: {
+				server: { replicas: 3 },
+				postgresql: { parameters: { max_connections: 300 } },
+				sandbox: { budget: { cpu: "8", memory: "32Gi" } },
+			},
+			overhead: { cpuMillis: 0, memoryMi: 0 },
+		},
+		{
 			name: "upgrade memory",
-			values: { migration: { resources: { requests: { memory: "5Gi" } } } },
+			values: { migration: { resources: { requests: { memory: "4Gi" } } } },
 			overhead: { cpuMillis: 0, memoryMi: 0 },
 		},
 	];
@@ -2466,7 +2479,12 @@ await test("auto is the largest turn count whose rendered steady and drained-upg
 		const turns = Number(
 			envValue(workload(resources, "server"), "HEPHAESTUS_MENTOR_TURN_CAPACITY"),
 		);
-		const room = { ...nodeRoom(), ...(scenario.name === "CPU" ? { cpu: 2.3 } : {}) };
+		const budget = get(scenario.values, "sandbox", "budget");
+		const room = {
+			cpu: get(budget, "cpu") === undefined ? nodeRoom().cpu : amount(get(budget, "cpu")),
+			memory:
+				get(budget, "memory") === undefined ? nodeRoom().memory : amount(get(budget, "memory")),
+		};
 		const phases = Object.values(fitTotals(resources, scenario.overhead));
 		for (const phase of phases) {
 			assert.ok(phase.cpu <= room.cpu + 1e-9, `${scenario.name}: CPU fits`);
@@ -2535,7 +2553,7 @@ await test("the single-node profile's requests, one upgrade beside them and its 
 	};
 	for (const resource of workloads(resources)) {
 		const replicas = Number(get(resource, "spec", "replicas") ?? 1);
-		// An upgrade runs the old Pods beside the new ones; the single-node server stops first.
+		// The server replacement starts beside its draining predecessor.
 		add(podSpec(resource), replicas + (kindOf(resource) === "Deployment" ? surge(resource) : 0));
 		for (const claim of list(get(resource, "spec", "volumeClaimTemplates"))) {
 			disk += amount(get(claim, "spec", "resources", "requests", "storage"));
@@ -2566,7 +2584,7 @@ await test("the single-node profile's requests, one upgrade beside them and its 
 	// The backup's request comes out of the turns too.
 	assert.equal(
 		Number(envValue(workload(resources, "server"), "HEPHAESTUS_MENTOR_TURN_CAPACITY")),
-		11,
+		4,
 	);
 	assert.ok(cpu <= node.cpu, `${cpu.toFixed(2)} CPU requested, ${node.cpu} on the node`);
 	assert.ok(
@@ -2810,17 +2828,22 @@ await test("quotas admit schema-supported template quantities and round fraction
 const strategy = (name: (typeof profiles)[number], component: string) =>
 	get(workload(rendered(layersFor(name)), component), "spec", "strategy");
 
-await test("one server version drains before its replacement", () => {
+await test("a replacement is ready before an old server drains", () => {
 	for (const profileName of profiles) {
-		assert.deepEqual(strategy(profileName, "server"), { type: "Recreate" });
+		assert.deepEqual(strategy(profileName, "server"), {
+			type: "RollingUpdate",
+			rollingUpdate: { maxSurge: 1, maxUnavailable: 0 },
+		});
 	}
 	const draining = rendered([...layersFor("small"), { server: { drainTimeoutSeconds: 600 } }]);
 	const server = workload(draining, "server");
 	assert.equal(get(podSpec(server), "terminationGracePeriodSeconds"), 720);
 	assert.equal(envValue(server, "HEPHAESTUS_AGENT_DRAIN_TIMEOUT"), "600s");
-	const rolling = render([...layersFor("small"), { server: { rolloutStrategy: "RollingUpdate" } }]);
-	assert.equal(rolling.ok, false);
-	assert.match(rolling.stderr, /rolloutStrategy/u);
+	for (const retired of ["Recreate", "RollingUpdate"]) {
+		const rejected = render([...layersFor("small"), { server: { rolloutStrategy: retired } }]);
+		assert.equal(rejected.ok, false);
+		assert.match(rejected.stderr, /rolloutStrategy/u);
+	}
 	const idle = render([...layersFor("small"), { sandbox: { enabled: false } }]);
 	assert.equal(idle.ok, true, idle.stderr);
 });
@@ -2884,14 +2907,14 @@ await test("the small profile fits its declared budget at steady state and the d
 		cpu: reviewSlots * sandboxPods.review.cpu + conversations * sandboxPods.conversation.cpu,
 		memory: (reviewSlots * sandboxGib.review + conversations * sandboxGib.conversation) * 2 ** 30,
 	});
-	assert.equal(turns, 11);
+	assert.equal(turns, 4);
 	assert.equal(reviewSlots, 5);
 	assert.ok(steady.cpu <= node.cpu, `steady: ${steady.cpu.toFixed(2)} CPU of ${node.cpu}`);
 	assert.ok(
 		steady.memory <= node.memory,
 		`steady: ${gib(steady.memory)} of ${gib(node.memory)} GiB`,
 	);
-	// An upgrade stops the old server before its replacement starts. Other Deployments can surge,
+	// An upgrade keeps the old server beside its replacement. Other Deployments can surge,
 	// and the migration and stanza Jobs can run beside the resident conversation sandboxes.
 	const jobs = resources
 		.filter((resource) => kindOf(resource) === "Job")
@@ -3466,7 +3489,7 @@ await test("replica counts stop the server and restore the release", () => {
 		stopped.map((resource) => `${String(kindOf(resource))}/${nameOf(resource)}`),
 		running.map((resource) => `${String(kindOf(resource))}/${nameOf(resource)}`),
 	);
-	assert.equal(get(workload(stopped, "server"), "spec", "strategy", "type"), "Recreate");
+	assert.equal(get(workload(stopped, "server"), "spec", "strategy", "type"), "RollingUpdate");
 	for (const component of ["postgresql", "nats", "webapp"]) {
 		assert.equal(get(workload(stopped, component), "spec", "replicas"), 1, component);
 	}
@@ -3591,14 +3614,9 @@ await test("values that the chart does not accept fail the render", () => {
 			/networkPolicy\.kubernetesApi\.cidr is required/u,
 		],
 		[
-			"a second server",
-			[...layersFor("small"), { server: { replicas: 2 } }],
-			/server[./]replicas/u,
-		],
-		[
-			"a server rollout of an unknown kind",
-			withSandbox({ server: { rolloutStrategy: "BlueGreen" } }),
-			/server[./]rolloutStrategy/u,
+			"a retired server rollout setting",
+			withSandbox({ server: { rolloutStrategy: "Recreate" } }),
+			/server.*rolloutStrategy/u,
 		],
 		[
 			"no PostgreSQL TLS Secret",
@@ -4020,7 +4038,7 @@ await test("small PostgreSQL overrides the image calculator and gives each datab
 	assert.equal(settings.shared_buffers, "256MB");
 	assert.equal(settings.work_mem, "2MB");
 	assert.equal(settings.hash_mem_multiplier, "1");
-	assert.equal(settings.max_connections, "80");
+	assert.equal(settings.max_connections, "120");
 	assert.equal(settings.maintenance_work_mem, "64MB");
 	assert.equal(settings.autovacuum_work_mem, "32MB");
 	assert.equal(settings.autovacuum_max_workers, "3");
@@ -4037,7 +4055,7 @@ await test("small PostgreSQL overrides the image calculator and gives each datab
 	);
 	assert.ok(migration);
 	for (const [role, maximum, minimum] of [
-		[workload(resources, "server"), "40", "2"],
+		[workload(resources, "server"), "36", "2"],
 		[migration, "2", "1"],
 	] as const) {
 		assert.equal(envValue(role, "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE"), maximum);
@@ -4052,17 +4070,17 @@ const maxConnections = (layers: readonly Layer[]) => {
 
 await test("without an explicit max_connections the database gets what the role pools need", () => {
 	const base = [prepared, operator, reviews, { sandbox: { enabled: true } }];
-	// One server, its listener, the migration pool and the reserves.
-	assert.equal(maxConnections(base), "max_connections=100");
+	// Two old servers and two replacements, their four listeners each, migration and reserves.
+	assert.equal(maxConnections(base), "max_connections=200");
 	// A larger pool is not limited by a number that the image derives from memory alone.
 	assert.equal(
 		maxConnections([...base, { server: { databasePool: { maximumPoolSize: 200 } } }]),
-		"max_connections=212",
+		"max_connections=840",
 	);
 	// An explicit value stays the operator's.
 	assert.equal(
-		maxConnections([...base, { postgresql: { parameters: { max_connections: 200 } } }]),
-		"max_connections=200",
+		maxConnections([...base, { postgresql: { parameters: { max_connections: 250 } } }]),
+		"max_connections=250",
 	);
 });
 
@@ -4074,7 +4092,7 @@ await test("restore configuration preserves max_connections while application ro
 		migration: { enabled: false },
 		server: { replicas: 0 },
 	};
-	assert.equal(maxConnections([...base, paused]), "max_connections=100");
+	assert.equal(maxConnections([...base, paused]), "max_connections=120");
 	const preserved = {
 		postgresql: {
 			parameters: { max_connections: Number(source.slice("max_connections=".length)) },
@@ -4084,17 +4102,101 @@ await test("restore configuration preserves max_connections while application ro
 	assert.equal(maxConnections([...base, preserved]), source);
 });
 
-await test("the small database holds its one server and rejects a surge or pools beyond the connection budget", () => {
-	const base = [prepared, profile("small"), operator, reviews];
-	assert.ok(render(base).ok);
-	assert.ok(render([...base, { server: { databasePool: { maximumPoolSize: 68 } } }]).ok);
-	for (const layer of [
-		{ server: { databasePool: { maximumPoolSize: 69 } } },
-		{ postgresql: { parameters: { max_connections: 40 } } },
+function javaCapacityConstant(file: string, name: string): number {
+	const source = readFileSync(
+		new URL(
+			`../server/application/src/main/java/de/tum/cit/aet/hephaestus/${file}`,
+			import.meta.url,
+		),
+		"utf8",
+	);
+	const match = new RegExp(`${name} = (?<count>\\d+);`, "u").exec(source)?.groups?.count;
+	assert.ok(match !== undefined, name);
+	return Number(match);
+}
+
+await test("the small database holds its bounded holders, overlap, reserved slots and operator margin", () => {
+	const base = [
+		...layersFor("small"),
+		{
+			postgresql: {
+				metrics: { enabled: true },
+				backup: {
+					enabled: true,
+					clientTlsSecret: "backup-tls",
+					s3: { bucket: "backups", endpoint: "s3.example.com", region: "eu" },
+				},
+			},
+		},
+	];
+
+	const loads = javaCapacityConstant("agent/mentor/sandbox/TurnContextLoads.java", "LOADS_AT_ONCE");
+	const permits = javaCapacityConstant("agent/proxy/LlmCallPermits.java", "MAINTENANCE_THREADS");
+	const monitorSql = readFileSync(path.join(chart, "files/database-monitor.sql"), "utf8");
+	const monitor = /CONNECTION LIMIT (?<count>\d+)/u.exec(monitorSql)?.groups?.count;
+	assert.ok(monitor !== undefined, "the exporter must have a cluster-wide connection bound");
+	for (const change of [
+		{},
+		{ server: { inboxClaimers: 12 } },
+		{ sandbox: { reviewMemory: memoryFor(8) } },
 	]) {
-		const result = render([...base, layer]);
-		assert.equal(result.ok, false);
-		assert.match(result.stderr, /max_connections needs at least/u);
+		const layers = [...base, change];
+		const resources = rendered(layers);
+		const server = workload(resources, "server");
+		const pool = Number(envValue(server, "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE"));
+		const handlers = Number(envValue(server, "HEPHAESTUS_INTEGRATION_CONSUMER_CLAIMERS"));
+		const captures = Number(envValue(server, "SANDBOX_MAX_CONCURRENT"));
+		const bounded = handlers + 2 * captures + 2 * loads + permits;
+		const syncReserve = 4 * 2;
+		const httpReserve = 4;
+		assert.equal(
+			pool,
+			bounded + syncReserve + httpReserve,
+			"the pool follows the actual runtime caps and reserve",
+		);
+		const migration = resources.find(
+			(resource) => kindOf(resource) === "Job" && componentOf(resource) === "migration",
+		);
+		assert.ok(migration);
+		const peakServers = 2 * Number(get(server, "spec", "replicas"));
+		const backupSessions = 2;
+		const probeAndSetupSessions = 3;
+		const ordinary =
+			peakServers * (pool + 4) +
+			Number(envValue(migration, "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE")) +
+			Number(monitor) +
+			backupSessions +
+			probeAndSetupSessions;
+		const postgres = workload(resources, "postgresql");
+		const database = containers(postgres).find((entry) => get(entry, "name") === "postgresql");
+		assert.ok(isRecord(database));
+		const args = list(get(database, "args"));
+		const setting = (name: string) => {
+			const value = args.findLast((arg) => typeof arg === "string" && arg.startsWith(`${name}=`));
+			assert.equal(typeof value, "string", name);
+			return Number(String(value).slice(name.length + 1));
+		};
+		const maximum = setting("max_connections");
+		const reserved = setting("superuser_reserved_connections");
+		const margin = 4;
+		assert.ok(pool >= bounded, "the declared holders fit before reserve");
+		assert.ok(
+			ordinary <= maximum - reserved - margin,
+			`${ordinary} ordinary clients leave reserved slots and margin`,
+		);
+		assert.equal(maximum, 120);
+		const tooSmall = render([
+			...layers,
+			{ postgresql: { parameters: { max_connections: ordinary + reserved + margin - 1 } } },
+		]);
+		assert.equal(tooSmall.ok, false);
+		assert.match(tooSmall.stderr, /max_connections needs at least.*exporter=.*operator margin=/u);
+		const shortPool = render([
+			...layers,
+			{ server: { databasePool: { maximumPoolSize: pool - 1 } } },
+		]);
+		assert.equal(shortPool.ok, false);
+		assert.match(shortPool.stderr, /maximumPoolSize=.*needs at least/u);
 	}
 });
 
@@ -4135,17 +4237,17 @@ await test("every resident small-profile PostgreSQL container reserves its full 
 	}
 });
 
-await test("disruption budgets protect singleton roles and select only their own Pods", () => {
+await test("disruption budgets protect singleton stores and permit one of two servers to stop", () => {
 	const resources = rendered([prepared, operator, sandboxLayer]);
 	const budgets = resources.filter((resource) => kindOf(resource) === "PodDisruptionBudget");
 	assert.equal(budgets.length, 3);
-	// Singleton roles reject voluntary eviction.
+	// Singleton stores reject eviction; one server may stop while the other stays available.
 	for (const component of ["postgresql", "nats", "server"]) {
 		const budget = budgets.find((resource) => componentOf(resource) === component);
 		assert.ok(budget, component);
 		const spec = get(budget, "spec");
-		assert.equal(get(spec, "minAvailable"), 1, component);
-		assert.equal(get(spec, "maxUnavailable"), undefined, component);
+		assert.equal(get(spec, "minAvailable"), component === "server" ? undefined : 1, component);
+		assert.equal(get(spec, "maxUnavailable"), component === "server" ? 1 : undefined, component);
 		const selector = get(spec, "selector", "matchLabels");
 		assert.deepEqual(
 			selector,
@@ -4161,6 +4263,15 @@ await test("disruption budgets protect singleton roles and select only their own
 			);
 		}
 	}
+});
+
+await test("the singleton small server retains its voluntary-eviction protection", () => {
+	const resources = rendered(layersFor("small"));
+	const budget = resources.find(
+		(resource) => kindOf(resource) === "PodDisruptionBudget" && componentOf(resource) === "server",
+	);
+	assert.equal(get(budget, "spec", "minAvailable"), 1);
+	assert.equal(get(budget, "spec", "maxUnavailable"), undefined);
 });
 
 await test("external services and disabled sandboxes have no disruption budget", () => {

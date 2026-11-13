@@ -697,3 +697,17 @@ Fetched 2026-11-09.
 - [Temporal](https://docs.temporal.io/temporal), [Restate](https://docs.restate.dev/), [DBOS](https://docs.dbos.dev/).
 - [E2B sandboxes](https://docs.e2b.dev/sandbox.md), [Modal Sandboxes](https://modal.com/docs/guide/sandbox), [Codex cloud environments](https://learn.chatgpt.com/docs/environments/cloud-environment), [Devin snapshots](https://docs.devin.ai/onboard-devin/snapshots).
 - [Anthropic prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching), [OpenAI prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching).
+
+## Update — 2026-11-13: servers roll with ordered inbox claims
+
+This update supersedes the `Recreate` and single-replica restriction in § Runtime components and § Open items.
+[ADR 0080](0080-provider-events-go-to-a-postgresql-inbox.md) supplies per-scope PostgreSQL leases and epoch-fenced completion. There is one current provider event per scope across replicas.
+The chart can therefore run two servers with a rolling update. The small profile keeps one steady server and reserves its replacement.
+
+[Helm chart](../admin/helm-chart.md) owns the rollout, disruption budget and capacity rules.
+[Upgrade](../admin/upgrade.mdx) keeps the stopped procedure for incompatible schemas and the initial 1.0 cutover.
+
+The server's model connection can stop during a rollout. The native sandbox runtime retries a cut stream within its run deadline and discards its partial answer. Per-call usage rows retain the interrupted attempt separately from the measured completion. The run epoch admits the result once.
+`HephTurnGatewayIntegrationTest.shouldRetryACutModelStreamOnAnotherServerAndAdmitAndChargeTheAnswerOnce` exercises two real gateway applications on PostgreSQL, stops the first during streaming, and checks the surviving server's completion, usage rows and single admitted result.
+
+The reservation counts all old and new servers during one update, because Kubernetes excludes terminating Pods from `maxSurge`. A PodDisruptionBudget protects voluntary evictions. The Deployment strategy governs the rollout. See the Kubernetes sources on [Deployment termination](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#terminating-pods) and [disruption budgets](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/#pod-disruption-budgets).

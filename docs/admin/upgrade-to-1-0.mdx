@@ -96,6 +96,7 @@ The migration guide owns each change. This table gives the names.
 | Site file | `conversationLoop.turns` | `sandbox.conversationTurns`, a count for the whole installation | *Stop every role before moving conversation turns to sandboxes* |
 | Site file | `worker.enabled`, `worker.sandbox.*`, `worker.runtime`, `worker.sandboxGateway.maxConnections`, `networkPolicy.workerGatewayPorts`, and the worker's drain, pool, git cache and resources | `sandbox.enabled`, `sandbox.*`, `sandbox.runtime`, `sandbox.gateway.maxConnections`, `networkPolicy.modelGatewayPorts`, and the same settings under `server` | *Move the worker values to the server and the sandboxes* |
 | Site file | `worker.replicas`, `worker.rolloutStrategy` | No key. `server.replicas` counts the servers. | *Move the worker values to the server and the sandboxes* |
+| Site file | `server.rolloutStrategy` | Remove the key. The server always uses a rolling update. | *Reserve room for rolling server updates* |
 | Site file | `webhook.replicas`, `webhook.resources` | None: the server receives provider webhooks | *Route provider webhooks to the server* |
 | Profile | `small-16gib` in `HEPHAESTUS_CHART_PROFILE` and `profiles/small-16gib.yaml` | `small` and `profiles/small.yaml` | *Use the small profile on every single-node install* |
 | Server settings | `hephaestus.agent.max-retries` | `hephaestus.agent.capacity.review-retries`. `AGENT_MAX_RETRIES` still works. | *Stop every role before moving review leases to agent runs* |

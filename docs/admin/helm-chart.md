@@ -75,10 +75,17 @@ No role runs Liquibase: each new Pod waits for the schema before it starts, for 
 The Job is a plain part of the release and not a Helm hook, because a hook would run before the bundled PostgreSQL exists.
 [Runtime roles](./runtime-roles) describes the run mode and the wait.
 
-The server has at most one replica and uses `Recreate`.
-The schema refuses a rolling update or a larger replica count.
-[Ingest durability](/contributor/ingest-durability) describes the database leases that order provider events.
-Two server versions never serve the schema at the same time.
+The server defaults to two replicas and uses `RollingUpdate`, with `maxSurge: 1` and `maxUnavailable: 0`.
+A replacement must be ready before an old Pod stops serving.
+The server PodDisruptionBudget permits one unavailable replica when there are two or more servers.
+With one replica, it prevents voluntary eviction.
+The Deployment strategy controls the rollout.
+See [Kubernetes disruption budgets](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/#pod-disruption-budgets).
+
+[Ingest durability](/contributor/ingest-durability) owns the database leases that order provider events across replicas.
+[Runtime roles](./runtime-roles#graceful-drain) owns the drain and interrupted-call recovery.
+Schema-compatible releases can serve together during an update.
+An incompatible schema, including the cutover to 1.0, requires the stopped procedure in [Upgrade](./upgrade).
 
 The server also runs the sandboxes when `sandbox.enabled` is on.
 [Database maintenance](./maintenance#database-maintenance) gives the order of the roles for a change of the database or of a schema that needs every role stopped.
@@ -103,10 +110,10 @@ It runs one server with bundled PostgreSQL and NATS. Its sandbox quotas follow t
 Check the complete request totals against the node's allocatable resources before installation.
 [Sizing and scaling](./sizing) owns the resource planning rules and the limits of the available measurements.
 
-The server uses `Recreate` in the `small` profile.
-The old server drains before its replacement starts. Its gateway stays available during that drain.
+The `small` profile keeps one steady server and reserves room for its replacement during an update.
+The old server drains beside the ready replacement. Its gateway stays available during that drain.
 [Upgrade](./upgrade) gives the procedure, including the stopped cutover to 1.0.
-Measure the deployment outage against the 99.5% availability budget.
+Measure restart errors against the 99.5% availability budget.
 
 `sandbox.conversationTurns: auto` uses the declared CPU and memory budget.
 [Sandbox capacity budget](#sandbox-capacity-budget) owns the inputs, formula and validation rules.
@@ -147,7 +154,7 @@ For CPU and memory separately, the chart computes:
 
 ```text
 steady slots  = floor((budget - resident requests - one backup - review requests) / conversation Pod request)
-upgrade slots = floor((budget - resident requests - rollout surge - migration/stanza Jobs - one backup) / conversation Pod request)
+upgrade slots = floor((budget - resident requests - draining servers and rollout surge - migration/stanza Jobs - one backup) / conversation Pod request)
 auto turns    = min(steady CPU slots, steady memory slots, upgrade CPU slots, upgrade memory slots)
 ```
 
@@ -162,10 +169,17 @@ Requests round up to millicores and MiB. Budget values round down to those units
 The upgrade model requires reviews to finish before its transient peak. Conversation sandboxes can remain warm.
 [Upgrade](./upgrade#sandbox-capacity-during-upgrade) gives that operating requirement.
 The chart counts one concurrent backup and the migration and stanza Jobs beside rolling replacement Pods.
+Every old server can still be draining when every replacement is ready.
+
+The resource and database connection budgets therefore reserve twice `server.replicas` for servers during one update.
+Start no further update until those old Pods have stopped.
+
+Kubernetes does not count terminating Pods against `maxSurge` ([Deployment termination](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#terminating-pods)).
+
 It reads the workload templates directly, so adding a sidecar or changing a request also changes admission.
 The old loop's 50m estimate, fixed turn ceiling and JSON budget table no longer size sandbox turns.
 
-With the current templates, `small` admits fourteen turns without backups and eleven with backups, while retaining five review slots.
+With the current templates, `small` admits eight turns without backups and four with backups, while retaining five review slots.
 These are request totals. Review and conversation workload peaks have not been measured.
 Qualification must measure their memory and CPU before proposing smaller requests.
 
@@ -503,7 +517,7 @@ The conversation template owns its resources. the quota counts those requests an
 
 - NATS JetStream runs as one server with one replica of each stream. A lost NATS volume loses the provider deliveries that the server had not processed ([Storage and retention](#storage-and-retention)).
 - PostgreSQL runs as one instance. A lost node stops the release until PostgreSQL runs again. A lost volume needs a [restore](./backup-restore#restore).
-- The server runs as one replica until the server processes provider events in order across replicas.
+- A server update requires space for its draining Pods and their replacements. See [Sandbox capacity budget](#sandbox-capacity-budget).
 - The server records the isolation tier in its log and metrics, not with each review. A record for each review needs a schema change.
 - The kubelet enforces sandbox disk limits by eviction after it measures the use, not when a process writes.
   A sandbox can pass its limit until the next measurement, for some seconds.

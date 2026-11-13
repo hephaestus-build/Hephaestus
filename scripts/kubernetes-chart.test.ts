@@ -339,18 +339,13 @@ await test("the schema refuses a value that it does not name, at every level", (
 await test("the schema refuses settings the chart does not own", () => {
 	const valid = install(prepared, operator);
 	assert.equal(validate(valid), true, JSON.stringify(validate.errors));
-	// Each database role runs at most its bound, and zero stops it for maintenance.
-	for (const [role, bound, fallback] of [["server", 1, 1]] as const) {
-		assert.equal(at(defaults, [role, "replicas"]), fallback, `${role} default`);
-		for (const replicas of [0, bound]) {
-			const change = { [role]: { replicas } };
-			assert.equal(validate(merge(valid, change)), true, `${role} at ${replicas}`);
-		}
+	assert.equal(at(defaults, ["server", "replicas"]), 2);
+	for (const replicas of [0, 1, 2, 3]) {
+		assert.equal(validate(merge(valid, { server: { replicas } })), true, `server at ${replicas}`);
 	}
 	for (const [label, change] of [
 		["a generic environment hatch", { server: { extraEnv: [{ name: "X", value: "y" }] } }],
 		["a pod spec hatch", { server: { podSpec: { hostNetwork: true } } }],
-		["a second server replica", { server: { replicas: 2 } }],
 		["a negative server count", { server: { replicas: -1 } }],
 		["a fractional server count", { server: { replicas: 0.5 } }],
 		["the retired worker role", { worker: { replicas: 1 } }],
@@ -360,7 +355,7 @@ await test("the schema refuses settings the chart does not own", () => {
 		["network policy turned off", { networkPolicy: { enabled: false } }],
 		["no Gateway to attach to", { route: { parentRefs: [] } }],
 		["a Gateway the chart creates", { route: { gateway: { create: true } } }],
-		["a server rollout of an unknown kind", { server: { rolloutStrategy: "BlueGreen" } }],
+		["the retired rollout setting", { server: { rolloutStrategy: "Recreate" } }],
 		["a class name beside classes the chart creates", { priorityClasses: { roles: "high" } }],
 		[
 			"existing classes without all three names",

@@ -50,6 +50,8 @@ import {
 	toolRuns,
 } from "./turn-worker.ts";
 
+import { assertRecoveredTurn, CUT_ANSWER, WHOLE_ANSWER } from "./turn-stream-cut.ts";
+
 // The faux provider ships in pi-ai, which the root package reaches only through pi-coding-agent.
 const piAi: unknown = await import(
 	new URL("../../pi-ai/dist/index.js", import.meta.resolve("@earendil-works/pi-coding-agent")).href
@@ -313,37 +315,87 @@ void test("a failure in the host's log is its kind and the worker's status, what
 	assert.equal(failureSummary("text"), "host_error");
 });
 
-void test("a model call that Pi retries leaves its cut-off text out of the end and the partial answer", async () => {
-	const worker = fakeWorker(contextOf([], "question"));
+void test(
+	"a model call that Pi retries leaves its cut-off text out of the end and the partial answer",
+	{ timeout: 30_000 },
+	async (t) => {
+		const interrupted = Promise.withResolvers<undefined>();
+		const answered = Promise.withResolvers<undefined>();
+		const worker = fakeWorker(contextOf([], "question"), DOCUMENTS, (snapshot) => {
+			const text = JSON.stringify(snapshot);
+			if (text.includes("first half")) {
+				interrupted.resolve(undefined);
+			}
+			if (text.includes("whole answer")) {
+				answered.resolve(undefined);
+			}
+		});
+		let calls = 0;
+		const server = createServer((request, response) => {
+			request.resume();
+			request.on("end", () => {
+				void (async () => {
+					response.writeHead(200, { "content-type": "text/event-stream" });
+					calls += 1;
+					if (calls === 1) {
+						response.write(completionChunk({ role: "assistant", content: CUT_ANSWER }, null));
+						await interrupted.promise;
+						if (response.destroyed) {
+							return;
+						}
+						// A terminating proxy loses the TCP connection before a completion or usage frame.
+						response.destroy();
+						return;
+					}
+					response.write(
+						completionChunk({ role: "assistant", content: "Here is the whole answer. " }, null),
+					);
+					await answered.promise;
+					if (response.destroyed) {
+						return;
+					}
+					response.write(
+						completionChunk(
+							{ content: WHOLE_ANSWER.slice("Here is the whole answer. ".length) },
+							null,
+						),
+					);
+					response.write(completionChunk({}, "stop"));
+					response.end("data: [DONE]\n\n");
+				})();
+			});
+		});
+		server.listen(0, "127.0.0.1");
+		await once(server, "listening");
+		const address = server.address();
+		assert.ok(address !== null && typeof address !== "string");
+		const turn = startTurn(
+			worker.api(),
+			proxyModels(`http://127.0.0.1:${address.port}`, AGENT_DIR),
+		);
+		const stop = () => {
+			turn.stop("developer");
+			server.closeAllConnections();
+			server.close();
+			interrupted.resolve(undefined);
+			answered.resolve(undefined);
+		};
+		// A missing partial must fail this test, then abort the model and release the server's handshakes.
+		t.signal.addEventListener("abort", stop, { once: true });
+		let end: TurnEnd;
+		try {
+			end = await worker.waitForEnd();
+			await turn.done;
+		} finally {
+			t.signal.removeEventListener("abort", stop);
+			stop();
+			await turn.done;
+		}
 
-	const end = await runTurn(
-		worker,
-		fauxModels(
-			[
-				() =>
-					faux.fauxAssistantMessage("Here is the first half of my ans", {
-						stopReason: "error",
-						errorMessage: "terminated",
-					}),
-				() => faux.fauxAssistantMessage(`Here is the whole answer. ${"More of it. ".repeat(20)}`),
-			],
-			// Slow enough that the partial answer is reported while the retried answer streams.
-			500,
-		),
-	);
-
-	assert.equal(end.outcome, "DONE");
-	assert.deepEqual(
-		messages(worker.appended, "assistant").map((entry) => textOf(entry.message)),
-		[`Here is the whole answer. ${"More of it. ".repeat(20)}`],
-	);
-	assert.ok(worker.appended.every((entry) => entry.type !== "context_edit"));
-	const answering = worker.partials.filter((snapshot) =>
-		JSON.stringify(snapshot).includes("whole answer"),
-	);
-	assert.ok(answering.length > 0);
-	assert.ok(answering.every((snapshot) => !JSON.stringify(snapshot).includes("first half")));
-});
+		assert.equal(calls, 2);
+		assertRecoveredTurn(worker, end);
+	},
+);
 
 void test("the situation reaches every model request last and is never stored", async () => {
 	const requests: FauxRequest[] = [];

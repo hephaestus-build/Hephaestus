@@ -21,7 +21,7 @@ The server now runs the sandboxes, their gateway and the model proxy. The chart 
 
    Remove `worker.replicas`. `server.replicas` counts the servers.
    Add the worker's memory and its git cache to the server's, or keep the server's new defaults.
-   Remove `worker.rolloutStrategy`. The server supports only `Recreate` until provider events have ordering across replicas.
+   Remove `worker.rolloutStrategy`. [Helm chart](https://docs.hephaestus.build/admin/helm-chart) owns the server rollout and capacity rules.
    Keep a review drain window: `server.drainTimeoutSeconds` defaults to 1800, or 600 in the small profile.
    The Pod grace is the drain plus two minutes; the Helm timeout must also cover the new Pod's start.
 

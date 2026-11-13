@@ -741,23 +741,40 @@
 			"additionalProperties": false,
 			"required": [
 				"replicas",
-				"rolloutStrategy",
 				"gitCache",
 				"resources",
 				"databasePool",
-				"drainTimeoutSeconds"
+				"drainTimeoutSeconds",
+				"inboxClaimers"
 			],
 			"properties": {
 				"databasePool": {
-					"$ref": "#/definitions/databasePool"
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["maximumPoolSize", "minimumIdle"],
+					"properties": {
+						"maximumPoolSize": {
+							"oneOf": [
+								{
+									"type": "integer",
+									"minimum": 1,
+									"maximum": 400
+								},
+								{
+									"const": "auto"
+								}
+							]
+						},
+						"minimumIdle": {
+							"type": "integer",
+							"minimum": 0,
+							"maximum": 400
+						}
+					}
 				},
 				"replicas": {
 					"type": "integer",
-					"minimum": 0,
-					"maximum": 1
-				},
-				"rolloutStrategy": {
-					"enum": ["Recreate"]
+					"minimum": 0
 				},
 				"gitCache": {
 					"$ref": "#/definitions/cache"
@@ -770,6 +787,10 @@
 					"minimum": 0,
 					"maximum": 86400,
 					"description": "Whole seconds. The chart emits a Spring Boot Duration for the server's drain and an integer Kubernetes termination grace period."
+				},
+				"inboxClaimers": {
+					"type": "integer",
+					"minimum": 0
 				}
 			}
 		},

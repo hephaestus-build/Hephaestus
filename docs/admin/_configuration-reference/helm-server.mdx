@@ -2,15 +2,15 @@
 
 | Key | Type | Default | Required in object | Constraints |
 | --- | --- | --- | --- | --- |
-| `server.databasePool.maximumPoolSize` | integer | `48` | yes | `minimum: 1. maximum: 400` |
+| `server.databasePool.maximumPoolSize` | integer or string | `"auto"` | yes | `oneOf: [{"type":"integer","minimum":1,"maximum":400},{"const":"auto"}]` |
 | `server.databasePool.minimumIdle` | integer | `5` | yes | `minimum: 0. maximum: 400` |
 | `server.drainTimeoutSeconds` | integer | `1800` | yes | Whole seconds. The chart emits a Spring Boot Duration for the server's drain and an integer Kubernetes termination grace period.<br />`minimum: 0. maximum: 86400` |
 | `server.gitCache.sizeLimit` | string | `"70Gi"` | yes | This role's Git cache volume, in whole Mi or Gi. Kubernetes reads this quantity as written. The chart converts it to bytes for the application's eviction threshold. Above 80 % of the limit, the role deletes the Git mirrors that it used least recently.<br />`pattern: "^[1-9][0-9]*(?:Mi\|Gi)$"` |
-| `server.replicas` | integer | `1` | yes | `minimum: 0. maximum: 1` |
+| `server.inboxClaimers` | integer | `8` | yes | `minimum: 0` |
+| `server.replicas` | integer | `2` | yes | `minimum: 0` |
 | `server.resources.limits.cpu` | string | `"4"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
 | `server.resources.limits.ephemeral-storage` | string | `"72Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
 | `server.resources.limits.memory` | string | `"3Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
 | `server.resources.requests.cpu` | string | `"500m"` | yes | Positive CPU as a Kubernetes Quantity. 1000m is one CPU.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
 | `server.resources.requests.ephemeral-storage` | string | `"512Mi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
 | `server.resources.requests.memory` | string | `"3Gi"` | yes | Positive memory or storage as a Kubernetes Quantity, such as Mi or Gi.<br />`pattern: "^(?:[1-9][0-9]*(?:\\.[0-9]+)?\|0\\.[0-9]*[1-9][0-9]*)(?:m\|k\|M\|G\|T\|P\|E\|Ki\|Mi\|Gi\|Ti\|Pi\|Ei)?$"` |
-| `server.rolloutStrategy` | string | `"Recreate"` | yes | `enum: ["Recreate"]` |

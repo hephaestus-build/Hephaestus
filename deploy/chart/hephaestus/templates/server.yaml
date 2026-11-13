@@ -3,7 +3,7 @@
 {{- $config := .Values.config }}
 {{- $sandbox := .Values.sandbox }}
 {{- $drain := int .Values.server.drainTimeoutSeconds }}
-{{- $recreate := eq .Values.server.rolloutStrategy "Recreate" }}
+{{- $connections := include "hephaestus.databaseConnectionCapacity" . | fromJson }}
 {{- $grace := ternary (add $drain 120) 45 $sandbox.enabled }}
 {{- $startupFailures := 60 }}
 {{- if $sandbox.enabled }}
@@ -12,9 +12,6 @@
 {{- if eq (int $api.port) 0 }}
 {{- fail "networkPolicy.kubernetesApi.port is required: state the API endpoint port that the network plugin sees" }}
 {{- end }}
-{{- end }}
-{{- if not $recreate }}
-{{- fail "server.rolloutStrategy must be Recreate until provider events have cross-replica ordering" }}
 {{- end }}
 apiVersion: v1
 kind: ServiceAccount
@@ -47,14 +44,14 @@ metadata:
 spec:
   # The migration Job owns the schema; the server waits for it. 0 stops it for database maintenance.
   replicas: {{ include "hephaestus.replicas" (dict "root" . "replicas" .Values.server.replicas) }}
-  {{- if $recreate }}
-  # At least the shutdown and the start: with an earlier rollout unfinished, a shorter deadline fails the
-  # upgrade while the old server stops.
+  # Allow the old servers to drain and their replacements to start before declaring a stalled rollout.
   progressDeadlineSeconds: {{ add $grace (mul 10 $startupFailures) }}
-  {{- end }}
-  # One version serves the schema at a time, including while it drains reviews.
+  # The inbox leases order each item across replicas; claim epochs fence sandbox results.
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       {{- include "hephaestus.selectorLabels" (dict "root" . "component" "server") | nindent 6 }}
@@ -94,7 +91,9 @@ spec:
               value: {{ .Values.workspaceSubdomains.enabled | quote }}
             - name: HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN
               value: {{ .Values.host | quote }}
-            {{- include "hephaestus.env.databasePool" .Values.server.databasePool | nindent 12 }}
+            {{- include "hephaestus.env.databasePool" (dict "maximumPoolSize" $connections.serverPool "minimumIdle" .Values.server.databasePool.minimumIdle) | nindent 12 }}
+            - name: HEPHAESTUS_INTEGRATION_CONSUMER_CLAIMERS
+              value: {{ .Values.server.inboxClaimers | quote }}
             {{- include "hephaestus.env.pod" . | nindent 12 }}
             {{- include "hephaestus.env.release" . | nindent 12 }}
             {{- include "hephaestus.env.shared" . | nindent 12 }}

@@ -823,6 +823,9 @@ are unchanged. Steady includes one backup; upgrade includes migration/stanza Job
 {{- $upgrade = add $upgrade (divf (mulf $steady (trimSuffix "%" $surge)) 100 | ceil | int) -}}
 {{- else -}}{{- $upgrade = add $upgrade (int $surge) -}}{{- end -}}
 {{- end -}}
+{{- if and (eq $file "server.yaml") (gt $steady 0) -}}
+{{- $upgrade = int (include "hephaestus.serverRolloutInstances" $) -}}
+{{- end -}}
 {{- else if eq $kind "Job" -}}
 {{- $steady = 0 -}}
 {{- else if eq $kind "CronJob" -}}
@@ -921,22 +924,75 @@ are unchanged. Steady includes one backup; upgrade includes migration/stanza Job
   value: {{ .minimumIdle | quote }}
 {{- end -}}
 
-{{/* All server replicas can surge once; another overlapping rollout is outside this budget. */}}
-{{- define "hephaestus.databaseConnectionsRequired" -}}
-{{- $servers := int .Values.server.replicas -}}
-{{- if eq .Values.server.rolloutStrategy "RollingUpdate" -}}{{- $servers = mul 2 $servers -}}{{- end -}}
-{{- $pooled := mul $servers (int .Values.server.databasePool.maximumPoolSize) -}}
-{{- $listeners := $servers -}}
-{{- /* One listener per role replica, migration pool, two backup sessions, four operator sessions, three superuser slots. */ -}}
-{{- add $pooled $listeners (int .Values.migration.databasePool.maximumPoolSize) 2 4 3 -}}
+{{/* A rollout can retain every old server in its drain beside every replacement, beyond maxSurge. */}}
+{{- define "hephaestus.serverRolloutInstances" -}}
+{{- mul 2 (int .Values.server.replicas) -}}
 {{- end -}}
 
-{{/* An explicit max_connections must hold the role pools. Without one, the chart sets what they need. */}}
+{{/*
+The same inbox and review caps that the server reads size its pool. Review preparation can hold its
+capture lease and a transaction together. Long loads retain at most two such pairs (TurnContextLoads),
+and LlmCallPermits has two maintenance threads. Model streaming itself holds no pooled connection.
+The reserve is eight connections for four syncs with two holders each and four for HTTP/control work.
+Hikari queues excess callers, then throws SQLException at connection-timeout (45000 ms in application.yml).
+Loaded qualification measures that reserve; the bounded holders already fit without it.
+The full overlap budget also reserves optional monitoring and backup sessions when disabled.
+*/}}
+{{- define "hephaestus.databaseConnectionCapacity" -}}
+{{- $captures := 0 -}}
+{{- $loads := 0 -}}
+{{- $permits := 0 -}}
+{{- if .Values.sandbox.enabled -}}
+{{- $captures = int (include "hephaestus.serverReviews" .) -}}
+{{- $loads = 2 -}}
+{{- $permits = 2 -}}
+{{- end -}}
+{{- $inbox := int .Values.server.inboxClaimers -}}
+{{- $captureConnections := mul 2 $captures -}}
+{{- $loadConnections := mul 2 $loads -}}
+{{- $sync := mul 4 2 -}}
+{{- $http := 4 -}}
+{{- $required := add $inbox $captureConnections $loadConnections $permits $sync $http -}}
+{{- $holders := dict "inbox" $inbox "captures" $captureConnections "loads" $loadConnections "permits" $permits
+  "sync" $sync "http" $http "required" $required -}}
+{{- $servers := int (include "hephaestus.serverRolloutInstances" .) -}}
+{{- $pool := int $holders.required -}}
+{{- if ne (toString .Values.server.databasePool.maximumPoolSize) "auto" -}}
+{{- $pool = int .Values.server.databasePool.maximumPoolSize -}}
+{{- if lt $pool (int $holders.required) -}}
+{{- fail (printf "server.databasePool.maximumPoolSize=%d needs at least %d: inbox=%d, capture=%d, long loads=%d, permit maintenance=%d, sync reserve=%d, HTTP/control reserve=%d"
+  $pool (int $holders.required) (int $holders.inbox) (int $holders.captures) (int $holders.loads)
+  (int $holders.permits) (int $holders.sync) (int $holders.http)) -}}
+{{- end -}}
+{{- end -}}
+{{- $pooled := mul $servers $pool -}}
+{{- /* Run wakeups, conversation ledger, evidence erasure and model pools each own one LISTEN connection. */ -}}
+{{- $listeners := mul 4 $servers -}}
+{{- $migration := int .Values.migration.databasePool.maximumPoolSize -}}
+{{- /* database-monitor.sql bounds the monitor role to two sessions across old and new exporters. */ -}}
+{{- $exporter := 2 -}}
+{{- $backup := 2 -}}
+{{- /* Two overlapping PostgreSQL probes and one monitor/role setup session. Init waits precede their pool. */ -}}
+{{- $maintenance := 3 -}}
+{{- $reserved := 3 -}}
+{{- $margin := 4 -}}
+{{- $ordinary := add $pooled $listeners $migration $exporter $backup $maintenance -}}
+{{- dict "servers" $servers "serverPool" $pool "serverPools" $pooled "listeners" $listeners
+  "migration" $migration "exporter" $exporter "backup" $backup "maintenance" $maintenance
+  "superuserReserved" $reserved "operatorMargin" $margin "ordinary" $ordinary
+  "required" (add $ordinary $reserved $margin)
+  "maximum" (max 120 (mul 20 (divf (add $ordinary $reserved $margin) 20 | ceil | int))) | toJson -}}
+{{- end -}}
+
+{{/* An explicit max_connections must preserve reserved slots and the operator margin after all clients. */}}
 {{- define "hephaestus.databaseConnectionBudget" -}}
 {{- if hasKey .Values.postgresql.parameters "max_connections" -}}
-{{- $required := int (include "hephaestus.databaseConnectionsRequired" .) -}}
-{{- if gt $required (int .Values.postgresql.parameters.max_connections) -}}
-{{- fail (printf "PostgreSQL max_connections needs at least %d for role pools, one server surge, listeners and maintenance/admin reserves" $required) -}}
+{{- $capacity := include "hephaestus.databaseConnectionCapacity" . | fromJson -}}
+{{- if gt (int $capacity.required) (int .Values.postgresql.parameters.max_connections) -}}
+{{- fail (printf "PostgreSQL max_connections needs at least %d: %d servers x pool %d=%d, LISTEN=%d, migration=%d, exporter=%d, backup=%d, probes/setup=%d, superuser reserved=%d, operator margin=%d"
+  (int $capacity.required) (int $capacity.servers) (int $capacity.serverPool) (int $capacity.serverPools)
+  (int $capacity.listeners) (int $capacity.migration) (int $capacity.exporter) (int $capacity.backup)
+  (int $capacity.maintenance) (int $capacity.superuserReserved) (int $capacity.operatorMargin)) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

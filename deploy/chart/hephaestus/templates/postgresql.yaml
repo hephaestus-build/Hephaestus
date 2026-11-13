@@ -2,6 +2,7 @@
 {{- include "hephaestus.databaseConnectionBudget" . }}
 {{- $name := include "hephaestus.name" (dict "root" . "component" "postgresql") }}
 {{- $backup := .Values.postgresql.backup.enabled }}
+{{- $connections := include "hephaestus.databaseConnectionCapacity" . | fromJson }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -71,6 +72,8 @@ spec:
             - -c
             - archive_command=pgbackrest --stanza=hephaestus archive-push %p
             {{- end }}
+            - -c
+            - {{ printf "superuser_reserved_connections=%d" (int $connections.superuserReserved) | quote }}
             {{- range $key, $value := .Values.postgresql.parameters }}
             - -c
             - {{ printf "%s=%v" $key $value | quote }}
@@ -78,7 +81,7 @@ spec:
             {{- if not (hasKey .Values.postgresql.parameters "max_connections") }}
             # The image derives this from memory alone, which says nothing about the pools of these roles.
             - -c
-            - {{ printf "max_connections=%d" (max 100 (int (include "hephaestus.databaseConnectionsRequired" .))) | quote }}
+            - {{ printf "max_connections=%d" (int $connections.maximum) | quote }}
             {{- end }}
           env:
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "POSTGRES_USER" "key" "DATABASE_ADMIN_USERNAME") | nindent 12 }}

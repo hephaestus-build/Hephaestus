@@ -37,8 +37,8 @@ The server creates sandbox Pods and sandbox claims through its Kubernetes servic
 No application Pod needs a Docker socket.
 
 While no server is available, providers cannot deliver.
-The chart uses `Recreate` and permits one server.
-An upgrade stops reception for the time of the restart.
+The chart keeps a ready server during a schema-compatible update ([Helm chart](./helm-chart)).
+A stopped upgrade or a loss of all server replicas stops reception.
 GitHub deliveries that fail in that time are redelivered (`GitHubWebhookRedelivery`).
 Slack retries a failed event.
 The routine sync repairs the lifecycle facts of GitLab and Outline.
@@ -725,7 +725,13 @@ Completed measurement and queued composition stay recorded for the replacement s
 `hephaestus.agent.drain-timeout` bounds the wait, 30 minutes by default.
 The chart sets it from `server.drainTimeoutSeconds`: 1800 by default, 600 in the small profile.
 It gives the Pod that interval plus two minutes for the other shutdown phases.
-The server uses `Recreate`, so the replacement starts after the old Pod finishes its drain and stops.
+The replacement is ready before an old Pod drains ([Helm chart](./helm-chart)).
+A model stream that loses its server connection is retried by the native sandbox runtime, within the run deadline.
+The retry discards the interrupted answer before it streams the next answer.
+
+Each proxy call has its own usage row. An interrupted call without usage remains unverifiable. It is not charged as a measured completion.
+The run's end settles any open call rows. `settle_after` recovers runless calls instead.
+The claim epoch admits the turn result once, also when its terminal request is repeated.
 
 The private gateway Service includes a terminating server so existing runs can renew their leases and finish.
 New claims require startup readiness, and are refused while the server drains.

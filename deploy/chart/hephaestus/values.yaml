@@ -193,14 +193,14 @@ nats:
 server:
   # The API, sync, delivery, and with sandbox.enabled the sandboxes' reviews and their gateway. Preparing code
   # evidence can hold two connections per review.
+  # Each inbox handler can hold one pooled connection; the same count sizes the pool.
+  inboxClaimers: 8
   databasePool:
-    maximumPoolSize: 48
+    # The chart derives the holder floor plus sync and HTTP reserve. An explicit count must hold it.
+    maximumPoolSize: auto
     minimumIdle: 5
-  # 1, or 0 to stop it.
-  replicas: 1
-  # One version at a time: JetStream replay fences are local to each server.
-  # The PostgreSQL inbox must provide per-item ordering before a rolling update is safe.
-  rolloutStrategy: Recreate
+  # Two servers keep reception available during a restart. 0 stops them for maintenance.
+  replicas: 2
   # How long a stopping server finishes its running reviews and claims none. A practice review's median run is
   # 10 to 16 minutes, and its bound is 3 hours. When the drain ends, a review that still runs stops and is tried
   # again, within its separate limit on drains.

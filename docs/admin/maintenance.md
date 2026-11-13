@@ -49,7 +49,7 @@ Keep PostgreSQL and NATS running until the servers have drained:
    This restores the budgets. Verify that the roles and budgets are ready before you resume reconciliation.
 
 The commands use the release and namespace `hephaestus`. Substitute your own names and allow more time if you configured a longer drain.
-The `small` profile retains a ten-minute drain and `Recreate` updates until upgrade capacity is qualified.
+The `small` profile retains a ten-minute drain and reserves the replacement server in its upgrade budget.
 After a reboot or an interrupted drain, fenced attempts retry through durable recovery.
 
 ## Database maintenance
