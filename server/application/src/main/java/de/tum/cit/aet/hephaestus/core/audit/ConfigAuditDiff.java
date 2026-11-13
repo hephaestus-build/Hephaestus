@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.audit;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -10,6 +9,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import org.jspecify.annotations.Nullable;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Computes {@code config_audit_event.changed_keys} — the dot-paths whose value differs between two

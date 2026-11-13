@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.audit;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditAction;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
@@ -12,6 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Writes {@link ConfigAuditEvent} rows. Sole implementation of {@link ConfigAuditPort}.

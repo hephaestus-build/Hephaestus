@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.dto.GitHubTeamEventDTO;
@@ -12,6 +11,8 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The repository-tier {@code team} handler exists solely to stop {@code added_to_repository} /
@@ -21,7 +22,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 class GitHubTeamRepositoryMessageHandlerTest extends BaseUnitTest {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
+    // As spring.jackson in application.yml configures the mapper that reads provider payloads.
+    private static final JsonMapper JSON = JsonMapper.builder()
+            .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+            .build();
 
     @Mock
     private GitHubTeamMessageHandler delegate;

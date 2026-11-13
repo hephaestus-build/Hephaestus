@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -23,6 +21,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Persist + flush + clear + re-fetch each {@link ConnectionConfig} sealed subtype and
@@ -41,7 +41,7 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private EntityManager entityManager;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final JsonMapper objectMapper = new JsonMapper();
 
     private Workspace workspace;
 
@@ -379,7 +379,7 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
             assertThat(tree.has("type"))
                     .as("JSONB column must carry 'type' discriminator")
                     .isTrue();
-            assertThat(tree.get("type").asText()).isEqualTo(expectedType);
+            assertThat(tree.get("type").asString()).isEqualTo(expectedType);
         } catch (Exception e) {
             throw new AssertionError("Failed parsing JSONB column for connection " + id, e);
         }

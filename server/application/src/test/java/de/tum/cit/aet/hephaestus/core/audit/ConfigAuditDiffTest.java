@@ -2,8 +2,6 @@ package de.tum.cit.aet.hephaestus.core.audit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
@@ -11,6 +9,8 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * {@code changed_keys} is what per-control history filters on, so its shape is an API contract, not an
@@ -19,7 +19,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 @Tag("unit")
 class ConfigAuditDiffTest {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final JsonMapper MAPPER = new JsonMapper();
 
     static Stream<Arguments> diffs() {
         return Stream.of(
@@ -78,13 +78,6 @@ class ConfigAuditDiffTest {
     }
 
     private static @Nullable JsonNode node(@Nullable String json) {
-        if (json == null) {
-            return null;
-        }
-        try {
-            return MAPPER.readTree(json);
-        } catch (Exception e) {
-            throw new IllegalArgumentException(e);
-        }
+        return json == null ? null : MAPPER.readTree(json);
     }
 }

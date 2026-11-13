@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.oauth;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -20,6 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.oauth2.client.web.AuthorizationRequestRepository;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Stores the in-flight {@link OAuth2AuthorizationRequest} in an AES-GCM-encrypted cookie
@@ -57,7 +57,7 @@ public class CookieOAuth2AuthorizationRequestRepository
     private static final int MAX_COOKIE_AGE_SECONDS = 600; // 10 minutes
     private static final Logger log = LoggerFactory.getLogger(CookieOAuth2AuthorizationRequestRepository.class);
     private static final SecureRandom RNG = new SecureRandom();
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final JsonMapper MAPPER = new JsonMapper();
 
     /**
      * Constrained JSON projection of {@link OAuth2AuthorizationRequest}. Replaces Java native

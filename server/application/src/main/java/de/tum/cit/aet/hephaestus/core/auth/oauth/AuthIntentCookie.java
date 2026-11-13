@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.auth.oauth;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -15,6 +14,7 @@ import javax.crypto.spec.SecretKeySpec;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.databind.json.JsonMapper;
 
 /** Auth intent and {@link CookieOAuth2AuthorizationRequestRepository} use separate cookies and encryption AADs. */
 public class AuthIntentCookie {
@@ -26,7 +26,7 @@ public class AuthIntentCookie {
     private static final int MAX_COOKIE_AGE_SECONDS = 600;
     private static final Logger log = LoggerFactory.getLogger(AuthIntentCookie.class);
     private static final SecureRandom RNG = new SecureRandom();
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final JsonMapper MAPPER = new JsonMapper();
 
     private final SecretKeySpec key;
     private final Clock clock;
@@ -52,7 +52,7 @@ public class AuthIntentCookie {
      * AES-GCM-authenticated plaintext, so it cannot be forged or replayed past the TTL. The cookie
      * {@code Max-Age} is client-controlled and therefore only a hint; this field is the
      * authoritative freshness check (see {@link AuthIntentCookie#read}). An old cookie minted
-     * before this field existed deserializes with {@code issuedAt == 0L} and is rejected as stale.
+     * before this field existed fails to deserialize and is rejected.
      */
     public record Intent(
             @Nullable String workspaceSlug,
@@ -135,12 +135,7 @@ public class AuthIntentCookie {
                     return intent;
                 } catch (RuntimeException ex) {
                     log.warn(
-                            "auth.oauth: rejecting tampered/expired auth-intent cookie: errorType={}",
-                            ex.getClass().getName());
-                    return null;
-                } catch (Exception ex) {
-                    log.warn(
-                            "auth.oauth: auth-intent cookie deserialize failed: errorType={}",
+                            "auth.oauth: rejecting tampered, expired or unreadable auth-intent cookie: errorType={}",
                             ex.getClass().getName());
                     return null;
                 }
