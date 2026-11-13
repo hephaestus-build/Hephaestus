@@ -331,7 +331,8 @@ Do not put two callouts in a row.
   Released entries in `CHANGELOG.md` and `MIGRATION.md` keep their links.
 - Do not add a redirect. A removed page shows the 404 page, which offers search and the three guides.
 - When a page keeps its topic, keep the IDs of the headings that other pages or the app link to.
-  If you reword such a heading, give it its old ID: `## Respond to feedback {#respond-to-feedback}`.
+  If you reword such a heading, give it its old ID in the compact MDX form: `## Respond to feedback {/*#respond-to-feedback*/}`.
+  The bare `{#id}` form fails the MDX build, and a space inside the comment fails the Markdown lint.
 - Do not put a date in a file name. A page states the current behavior. Git keeps the history.
 
 ## Checks
