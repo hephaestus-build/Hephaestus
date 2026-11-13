@@ -33,7 +33,7 @@
 		]
 	},
 	"rangeStrategy": "replace",
-	"constraints": { "java": "21" },
+	"constraints": { "java": "25" },
 	"packageRules": [
 		{
 			"description": "CI tool checksums require independent supply-chain review",

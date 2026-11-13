@@ -79,7 +79,7 @@ class TurnContextLoadsTest extends BaseUnitTest {
     void leaseTheAttempt() {
         layout = new FabricLayout(temp.toString());
         folder = new TurnContextLoads(turns, beans.getBeanProvider(ContextLoader.class), clock, copies, layout);
-        lenient().when(copies.capture()).thenAnswer(unused -> {
+        lenient().when(copies.capture()).thenAnswer(_ -> {
             captures.incrementAndGet();
             return new PersonDataCopyFence.Lease() {
                 private boolean closed;

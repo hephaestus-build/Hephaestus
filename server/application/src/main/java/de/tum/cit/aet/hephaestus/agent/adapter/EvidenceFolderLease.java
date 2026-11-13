@@ -19,10 +19,8 @@ import org.jspecify.annotations.Nullable;
  * deletion while another process can still write or read the attempt. Locks are outside the job folder
  * so removing a folder never replaces the inode on which another process holds its lease.
  * Erasure and the attempt-folder sweeps take it exclusively before they remove a job's folders. A runtime shares
- * its published capture's lease with admission and retirement only, which remove under its lock one at a time. The
- * lock is a {@link ReentrantLock}, not a monitor: a removal does I/O, and on Java 21 a virtual thread that blocks under
- * a monitor pins its carrier.
- * https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/channels/FileLock.html
+ * its published capture's lease with admission and retirement only, which remove under its lock one at a time.
+ * https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/nio/channels/FileLock.html
  */
 public final class EvidenceFolderLease implements AutoCloseable {
     /**

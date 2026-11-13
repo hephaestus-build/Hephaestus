@@ -8,9 +8,8 @@ import java.util.function.Function;
 
 /**
  * Loads a Caffeine entry whose load blocks, such as a database read, a Git read or an HTTP call. Caffeine runs a
- * synchronous loader inside {@code ConcurrentHashMap.compute}, under the map bin's monitor. On Java 21 a virtual thread
- * that blocks under a monitor pins its carrier, and so does every caller of the same key that waits on that monitor.
- * Here the lock only installs a future: the caller that installed it loads the value on its own thread, outside the
+ * synchronous loader inside {@code ConcurrentHashMap.compute}, under the map bin's lock, so a blocking load would stall
+ * every write to that bin and every caller of the same key. Here the lock only installs a future: the caller that installed it loads the value on its own thread, outside the
  * lock, and the callers of the same key wait on the future, which unmounts a virtual thread. An entry invalidated while
  * it loads is not put back. A load that fails throws to the caller that ran it, and each caller that waited on it loads
  * the key itself, as with a synchronous cache.

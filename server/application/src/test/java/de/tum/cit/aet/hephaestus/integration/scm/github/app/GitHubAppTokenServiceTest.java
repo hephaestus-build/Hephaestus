@@ -33,7 +33,7 @@ class GitHubAppTokenServiceTest extends BaseUnitTest {
         var github = WebClient.builder().exchangeFunction(request -> {
             mints.incrementAndGet();
             return Mono.delay(Duration.ofMillis(50))
-                    .map(unused -> ClientResponse.create(HttpStatus.CREATED)
+                    .map(_ -> ClientResponse.create(HttpStatus.CREATED)
                             .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                             .body("{\"token\":\"ghs_test\",\"expires_at\":\""
                                     + Instant.now().plus(Duration.ofHours(1)) + "\"}")
@@ -43,7 +43,7 @@ class GitHubAppTokenServiceTest extends BaseUnitTest {
                 new GitHubProperties(new GitHubProperties.App(7, null, pem, null, null, null)), github);
     }
 
-    /** Callers on virtual threads mint a token; a GitHub call under the cache's lock would pin each one that waits. */
+    /** Callers on virtual threads mint a token; no park while it is minted may pin one to its carrier. */
     @Test
     void shouldMintATokenWithoutPinningTheVirtualThreadThatAsks() throws Exception {
         var tokens = service();
