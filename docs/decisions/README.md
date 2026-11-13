@@ -174,5 +174,6 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0098](0098-each-email-is-one-outbox-action-and-is-sent-at-most-once.md) | Each email is one outbox action that the deciding transaction enqueues, and Hephaestus sends it at most once | Accepted |
 | [0099](0099-aggregates-own-their-lifecycle-and-module-boundaries.md) | Each module owns its aggregates, declares its dependencies, and changes a lifecycle only through the aggregate | Accepted |
 | [0100](0100-the-server-serves-the-web-app.md) | The server serves the web app | Accepted |
+| [0101](0101-a-connection-cannot-adopt-an-upstream-resource-whose-removal-is-unresolved.md) | A connection cannot adopt an upstream resource whose removal is unresolved | Accepted |
 
 Template: [0000-template.md](0000-template.md).
