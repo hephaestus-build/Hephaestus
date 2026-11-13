@@ -1,4 +1,4 @@
 ---
 ---
 
-Only a unit test of the outbox gauges changes: it no longer fails when a garbage collection runs between its steps. No behavior changes.
+Only tests change: tests that read a gauge no longer fail when a garbage collection runs between their steps. No behavior changes.

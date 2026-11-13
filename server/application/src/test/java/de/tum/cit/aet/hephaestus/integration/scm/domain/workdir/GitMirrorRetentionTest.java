@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
+import java.lang.ref.Reference;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
@@ -47,13 +48,19 @@ class GitMirrorRetentionTest extends BaseUnitTest {
         mirror(NEWEST, BLOCK, 3);
         Path checkout = write(fabric.resolve("jobs/1/job/attempt/checkout"), 50);
 
-        assertThat(retention().evictLeastRecentlyUsedMirrors()).isEqualTo(1);
+        var retention = retention();
+        try {
+            assertThat(retention.evictLeastRecentlyUsedMirrors()).isEqualTo(1);
 
-        assertThat(manager().localRepositories()).containsExactlyInAnyOrder(MIDDLE, NEWEST);
-        assertThat(checkout).exists();
-        assertThat(meters.get("git.mirror.evictions").counter().count()).isEqualTo(1);
-        assertThat(meters.get("git.cache.bytes").gauge().value()).isLessThanOrEqualTo(VOLUME * 0.8);
-        assertThat(meters.get("git.cache.limit.bytes").gauge().value()).isEqualTo(VOLUME);
+            assertThat(manager().localRepositories()).containsExactlyInAnyOrder(MIDDLE, NEWEST);
+            assertThat(checkout).exists();
+            assertThat(meters.get("git.mirror.evictions").counter().count()).isEqualTo(1);
+            assertThat(meters.get("git.cache.bytes").gauge().value()).isLessThanOrEqualTo(VOLUME * 0.8);
+            assertThat(meters.get("git.cache.limit.bytes").gauge().value()).isEqualTo(VOLUME);
+        } finally {
+            // Micrometer holds a gauge's state by weak reference, and the retention owns that state.
+            Reference.reachabilityFence(retention);
+        }
     }
 
     @Test
@@ -71,10 +78,16 @@ class GitMirrorRetentionTest extends BaseUnitTest {
     void shouldKeepAMirrorThatACaptureFetchedMomentsAgoWhenTheVolumeStaysFull() throws Exception {
         mirror(OLDEST, 3 * BLOCK, Instant.now().getEpochSecond());
 
-        assertThat(retention().evictLeastRecentlyUsedMirrors()).isZero();
+        var retention = retention();
+        try {
+            assertThat(retention.evictLeastRecentlyUsedMirrors()).isZero();
 
-        assertThat(manager().localRepositories()).containsExactly(OLDEST);
-        assertThat(meters.get("git.cache.bytes").gauge().value()).isGreaterThan(VOLUME * 0.8);
+            assertThat(manager().localRepositories()).containsExactly(OLDEST);
+            assertThat(meters.get("git.cache.bytes").gauge().value()).isGreaterThan(VOLUME * 0.8);
+        } finally {
+            // Micrometer holds a gauge's state by weak reference, and the retention owns that state.
+            Reference.reachabilityFence(retention);
+        }
     }
 
     /** A fetch that ends while eviction waits for the lock makes the mirror used; eviction must see that under it. */
