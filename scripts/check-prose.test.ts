@@ -442,6 +442,7 @@ await test("each Vale rule has a passing sample, a failing sample, and a repair 
 			"PassiveVoice",
 			"IngForms",
 			"Vocabulary",
+			"Timeless",
 		];
 		for (const rule of rules) {
 			const good = `.vale/fixtures/${rule}-good.md`;
@@ -457,7 +458,9 @@ await test("each Vale rule has a passing sample, a failing sample, and a repair 
 			assert.match(alert.Message, /Write|write|Use|use|Name|Split/u);
 			assert.equal(
 				alert.Severity,
-				["PassiveVoice", "IngForms", "Vocabulary"].includes(rule) ? "suggestion" : "error",
+				["PassiveVoice", "IngForms", "Vocabulary", "Timeless"].includes(rule)
+					? "suggestion"
+					: "error",
 			);
 		}
 		assert.deepEqual(

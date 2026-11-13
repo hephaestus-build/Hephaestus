@@ -37,12 +37,28 @@ Langfuse uses the same line: its [self-hosting docs](https://langfuse.com/self-h
 - **Contributor guide.** A contributor page does not repeat an operator procedure or a user procedure. Link the admin or user page.
 - **Decision records.** An ADR in `docs/decisions/` records a decision and its reasons once. A guide page states the current behavior and links the ADR for the reason.
 
+### One home for each fact
+
+Give each fact one page, and link to it where the reader needs it: `Hephaestus keeps feedback for 400 days after delivery ([Data retention](/admin/data-retention))`.
+Do not write a sentence that only says which page owns a fact.
+Do not start a page with what it does not cover.
+
 ## Current release only
 
 Every page describes what the current release does.
 Delete a page or a section that describes removed or interim behavior, an old setting, or an upgrade path that the release drops.
 Do not write a note about what a feature did before.
 The release note carries the steps that an operator takes to upgrade.
+
+- Do not name a release version, such as `1.0` or `rc.5`, on a page.
+  Release notes, upgrade pages, and the [compatibility policy](/admin/compatibility-policy) are the exceptions.
+  A minimum version of a dependency is a fact, such as `PostgreSQL 18 or later`.
+- Do not use time words that go stale: `now`, `new` for a feature, `currently`, `no longer`, `still`, `yet`, `used to`, `previously`, `soon`.
+  `STE.Timeless` suggests a change for the most common of these words.
+- Do not describe a feature that is planned. State what the product does not do as a plain fact.
+- These rules also apply to diagrams, captions, alt text, anchors, and file names.
+
+[Google](https://developers.google.com/style/timeless-documentation), [Kubernetes](https://kubernetes.io/docs/contribute/style/style-guide/), and [Grafana](https://grafana.com/docs/writers-toolkit/contribute/release-notes/) use the same rules.
 
 ## Page types
 
