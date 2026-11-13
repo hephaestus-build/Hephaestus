@@ -2,13 +2,17 @@ package de.tum.cit.aet.hephaestus.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.auth.AccountService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.event.RoleChangedEvent;
 import de.tum.cit.aet.hephaestus.core.privacy.CorePrivacyPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.notification.email.CapturingJavaMailSender;
+import de.tum.cit.aet.hephaestus.notification.email.CapturingMailTestConfiguration;
 import de.tum.cit.aet.hephaestus.notification.email.EmailNotice.Prepared;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
@@ -28,8 +32,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -39,6 +45,8 @@ import tools.jackson.databind.ObjectMapper;
  * A committed role change queues one email per recipient on the outbox. The emails' text is proven by
  * {@code RoleChangeEmailListenerTest}; this class proves who gets one, through the real transactions.
  */
+@Import(CapturingMailTestConfiguration.class)
+@TestPropertySource(properties = "hephaestus.email.from=noreply@hephaestus.test")
 class RoleChangeEmailIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
@@ -67,6 +75,37 @@ class RoleChangeEmailIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private RoleChangeEmailListener roleNotices;
+
+    @Autowired
+    private ActionExecutor executor;
+
+    @Autowired
+    private CapturingJavaMailSender mailSender;
+
+    @Test
+    void shouldClaimAndSendTheRoleChangedVariantThroughTheRegisteredEmailAdapter() throws Exception {
+        long actor = verified(
+                Objects.requireNonNull(persistInstanceAdmin("Admission actor").getId()));
+        long target = verified(
+                Objects.requireNonNull(persistAccount("Admission recipient").getId()));
+        accountService.adminSetRole(target, "APP_ADMIN", actor);
+        UUID action = Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT id FROM agent_action WHERE kind='EMAIL' AND payload ->> 'kind'='ROLE_CHANGED'"
+                        + " AND subject_account_id=?",
+                UUID.class,
+                target));
+
+        assertThat(executor.runNow(action))
+                .hasValueSatisfying(result -> assertThat(result).isInstanceOf(ActionResult.Done.class));
+
+        assertThat(jdbc.queryForObject("SELECT state FROM agent_action WHERE id=?", String.class, action))
+                .isEqualTo("DONE");
+        assertThat(mailSender.sent()).isNotEmpty();
+        assertThat(mailSender.sent().getLast().getAllRecipients())
+                .extracting(Object::toString)
+                .containsExactly(
+                        accountRepository.findById(target).orElseThrow().getPrimaryEmail());
+    }
 
     @Test
     @WithMentorUser
