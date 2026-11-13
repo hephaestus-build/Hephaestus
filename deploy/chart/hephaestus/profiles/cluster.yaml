@@ -19,7 +19,7 @@ server:
     limits: { cpu: "4", memory: 3072Mi }
 sandbox:
   enabled: true
-  # Sixteen reviews of 384 MiB at once, across the sandbox nodes.
+  # Twelve reviews of 512 MiB at once, across the sandbox nodes.
   reviewMemory: 6144Mi
   # The agent-sandbox controller runs in the release namespace with Roles; the admin bundle grants
   # it the one read-only ClusterRole that its caches need.

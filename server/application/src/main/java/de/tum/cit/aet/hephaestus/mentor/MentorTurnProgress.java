@@ -17,7 +17,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * The partial answers of running attempts, kept in memory only. The conversation loop, an attempt's one writer, sends
+ * The partial answers of running attempts, kept in memory only. The conversation sandbox, an attempt's one writer, sends
  * each partial answer as a change to the one before it, with a whole snapshot at least every two seconds; any server
  * forwards it in {@link MentorLedgerEvents.ProgressChanged} frames. Each process that listens to the ledger rebuilds
  * the snapshots here.

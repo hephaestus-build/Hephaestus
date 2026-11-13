@@ -1,6 +1,5 @@
-{{- $loop := and .Values.sandbox.enabled (gt (int (include "hephaestus.conversationTurns" .)) 0) }}
-{{- $replicas := dict "server" .Values.server.replicas "conversation-loop" .Values.conversationLoop.replicas }}
-{{- range $component, $enabled := dict "postgresql" .Values.postgresql.bundled "nats" .Values.nats.bundled "server" true "conversation-loop" $loop }}
+{{- $replicas := dict "server" .Values.server.replicas }}
+{{- range $component, $enabled := dict "postgresql" .Values.postgresql.bundled "nats" .Values.nats.bundled "server" true }}
 {{- if $enabled }}
 ---
 apiVersion: policy/v1

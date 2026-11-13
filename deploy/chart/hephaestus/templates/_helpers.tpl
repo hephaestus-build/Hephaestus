@@ -84,7 +84,7 @@ capabilities:
 {{- end -}}
 
 {{/*
-The sandbox namespace, of review sandboxes and tools Pods. The operator creates
+The namespace of review and conversation sandboxes. The operator creates
 it with the Restricted Pod Security level and names it here; the chart writes into it and never
 creates it. The server receives the same string, and the runtime derives no name of its own.
 */}}
@@ -501,11 +501,6 @@ readinessProbe:
       protocol: TCP
 {{- end -}}
 
-{{/* The port a conversation's tools Pod listens on. It must equal ToolsPods.PORT. */}}
-{{- define "hephaestus.toolsPort" -}}
-7100
-{{- end -}}
-
 {{/*
 The sandbox pods that may reach the servers' gateway, by their kind: review sandboxes and the sandboxes of
 every SandboxTemplate kind. A sandbox's credential, not this selector, binds it to its own subject. Tools
@@ -726,7 +721,8 @@ catch-up only slows (docs/admin/helm-chart.md § NATS memory).
 {{- $amount := regexFind "^[0-9]+([.][0-9]+)?" $value -}}
 {{- $suffix := trimPrefix $amount $value -}}
 {{- $scales := dict "" 1 "m" 0.001 "k" 1000 "M" 1000000 "G" 1000000000 "T" 1000000000000 "P" 1000000000000000 "E" 1000000000000000000 "Ki" 1024 "Mi" 1048576 "Gi" 1073741824 "Ti" 1099511627776 "Pi" 1125899906842624 "Ei" 1152921504606846976 -}}
-{{- divf (mulf $amount (get $scales $suffix)) .unit | ceil | int64 -}}
+{{- $units := divf (mulf $amount (get $scales $suffix)) .unit -}}
+{{- if .roundDown -}}{{- $units | floor | int64 -}}{{- else -}}{{- $units | ceil | int64 -}}{{- end -}}
 {{- end -}}
 
 {{/*
@@ -769,60 +765,132 @@ and heap (estimated), which server.resources holds.
 {{- include "hephaestus.clusterReviews" . -}}
 {{- end -}}
 
-{{/* The reviews tier's CPU: the review sandboxes, and each running server's isolation probe, with their overheads. */}}
+{{/* The review tier CPU requests, including RuntimeClass overhead for each review sandbox. */}}
 {{- define "hephaestus.reviewCpuMillis" -}}
-{{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson -}}
-{{- $replicas := int .Values.server.replicas -}}
-{{- $running := ternary $replicas (mul $replicas 2) (eq .Values.server.rolloutStrategy "Recreate") -}}
-{{- $reviews := int (include "hephaestus.reviews" .) -}}
-{{- $review := include "hephaestus.templateSandbox" (dict "root" . "kind" "review") | fromJson -}}
-{{- $probePods := mul $running (int $table.isolationProbe.pods) -}}
-{{- add (mul $reviews (int $review.cpuMillis)) (mul $running (int $table.isolationProbe.cpuMillis)) (mul $probePods (int .Values.sandbox.runtime.podOverhead.cpuMillis)) -}}
+{{- $requests := include "hephaestus.templateSandbox" (dict "root" . "kind" "review") | fromJson -}}
+{{- mul (int (include "hephaestus.reviews" .)) (int $requests.cpuMillis) -}}
+{{- end -}}
+
+{{/* CPU and memory requests of a rendered Pod, including its largest init container. */}}
+{{- define "hephaestus.podCapacity" -}}
+{{- $result := dict "cpu" 0 "memory" 0 -}}
+{{- range $resource, $unit := dict "cpu" 0.001 "memory" 1048576 -}}
+{{- $running := 0 -}}
+{{- range $.containers -}}
+{{- $requests := (default dict .resources).requests | default dict -}}
+{{- $running = add $running (include "hephaestus.quantityUnits" (dict "value" (get $requests $resource | default "0") "unit" $unit) | int64) -}}
+{{- end -}}
+{{- $initializing := 0 -}}
+{{- range $.initContainers -}}
+{{- $requests := (default dict .resources).requests | default dict -}}
+{{- $initializing = max $initializing (include "hephaestus.quantityUnits" (dict "value" (get $requests $resource | default "0") "unit" $unit) | int64) -}}
+{{- end -}}
+{{- $_ := set $result $resource (max $running $initializing) -}}
+{{- end -}}
+{{- $result | toJson -}}
 {{- end -}}
 
 {{/*
-The conversation turns that the whole installation runs at once: conversationLoop.turns, or auto. Auto
-uses the same declared CPU budget as the fit gate. It takes away the resident role requests, the loop's
-replicas and one surge replica, the tools Pods and the review reservations. Then it gives 50m to each
-turn, up to 32. Model calls and tools Pods have their own pool and quota admission. The ceiling is the
-qualified model-only replay, not provider capacity.
+Fixed requests from the workload templates themselves. The measurement render disables turn admission,
+so the server's capacity environment cannot recursively ask for its own fixed requests. Resource inputs
+are unchanged. Steady includes one backup; upgrade includes migration/stanza Jobs and rollout surge.
 */}}
+{{- define "hephaestus.fixedCapacity" -}}
+{{- $values := deepCopy .Values -}}
+{{- $_ := set $values.sandbox "conversationTurns" 0 -}}
+{{- $_ := set $values.sandbox "budget" dict -}}
+{{- $context := omit . "Values" -}}
+{{- $_ := set $context "Values" $values -}}
+{{- $totals := dict "steady" (dict "cpu" 0 "memory" 0) "upgrade" (dict "cpu" 0 "memory" 0) -}}
+{{- $backup := false -}}
+{{- range $file := list "server.yaml" "webapp.yaml" "postgresql.yaml" "nats.yaml" "migration.yaml" "postgresql-backup.yaml" "postgresql-metrics.yaml" "observability-stack.yaml" "agent-sandbox-controller.yaml" "sandbox-templates.yaml" -}}
+{{- range $document := splitList "\n---" (include (print $.Template.BasePath "/" $file) $context) -}}
+{{- $object := fromYaml $document | default dict -}}
+{{- $kind := get $object "kind" | default "" -}}
+{{- if has $kind (list "Deployment" "StatefulSet" "DaemonSet" "Job" "CronJob") -}}
+{{- $spec := $object.spec -}}
+{{- $steady := 1 -}}
+{{- $upgrade := 1 -}}
+{{- if has $kind (list "Deployment" "StatefulSet") -}}
+{{- if hasKey $spec "replicas" -}}{{- $steady = int $spec.replicas -}}{{- end -}}
+{{- $upgrade = $steady -}}
+{{- $strategy := $spec.strategy | default dict -}}
+{{- if and (eq $kind "Deployment") (gt $steady 0) (ne (get $strategy "type") "Recreate") -}}
+{{- $rolling := $strategy.rollingUpdate | default dict -}}
+{{- $surge := "25%" -}}
+{{- if hasKey $rolling "maxSurge" -}}{{- $surge = toString $rolling.maxSurge -}}{{- end -}}
+{{- if hasSuffix "%" $surge -}}
+{{- $upgrade = add $upgrade (divf (mulf $steady (trimSuffix "%" $surge)) 100 | ceil | int) -}}
+{{- else -}}{{- $upgrade = add $upgrade (int $surge) -}}{{- end -}}
+{{- end -}}
+{{- else if eq $kind "Job" -}}
+{{- $steady = 0 -}}
+{{- else if eq $kind "CronJob" -}}
+{{- /* Full and differential backups share one pgBackRest stanza; only one backup runs at once. */ -}}
+{{- if or $backup ($spec.suspend | default false) -}}
+{{- $steady = 0 -}}{{- $upgrade = 0 -}}
+{{- else -}}{{- $backup = true -}}{{- end -}}
+{{- $spec = $spec.jobTemplate.spec -}}
+{{- end -}}
+{{- $pod := $spec.template.spec -}}
+{{- $requests := include "hephaestus.podCapacity" $pod | fromJson -}}
+{{- if and $pod.runtimeClassName (eq $pod.runtimeClassName $.Values.sandbox.templates.runtimeClassName) -}}
+{{- $_ := set $requests "cpu" (add $requests.cpu $.Values.sandbox.templates.podOverhead.cpuMillis) -}}
+{{- $_ := set $requests "memory" (add $requests.memory $.Values.sandbox.templates.podOverhead.memoryMi) -}}
+{{- end -}}
+{{- range $phase, $count := dict "steady" $steady "upgrade" $upgrade -}}
+{{- range $resource := list "cpu" "memory" -}}
+{{- $_ := set (get $totals $phase) $resource (add (get (get $totals $phase) $resource) (mul $count (get $requests $resource))) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- $totals | toJson -}}
+{{- end -}}
+
+{{/* The largest turn count within both steady and drained-upgrade budgets. */}}
 {{- define "hephaestus.conversationTurns" -}}
-{{- $loop := .Values.conversationLoop -}}
-{{- if eq (toString $loop.turns) "auto" -}}
-{{- $budget := .Files.Get "turn-admission.json" | fromJson -}}
-{{- $roles := 0 -}}
-{{- range $component := list "server" "webapp" -}}
-{{- $role := get $.Values $component -}}
-{{- $roles = add $roles (mul (int $role.replicas) (int (include "hephaestus.cpuMillis" $role.resources.requests.cpu))) -}}
+{{- $value := .Values.sandbox.conversationTurns -}}
+{{- $auto := eq (toString $value) "auto" -}}
+{{- $budget := .Values.sandbox.budget | default dict -}}
+{{- if or $auto (gt (len $budget) 0) -}}
+{{- $help := "Set sandbox.budget.cpu and sandbox.budget.memory to the allocatable budget of the sandbox node pool; see https://docs.hephaestus.build/admin/helm-chart#sandbox-capacity-budget" -}}
+{{- $cpu := required (printf "sandbox.budget.cpu is required for auto capacity or a declared budget. %s" $help) $budget.cpu -}}
+{{- $memory := required (printf "sandbox.budget.memory is required for auto capacity or a declared budget. %s" $help) $budget.memory -}}
+{{- $room := dict
+  "cpu" (include "hephaestus.quantityUnits" (dict "value" $cpu "unit" 0.001 "roundDown" true) | int64)
+  "memory" (include "hephaestus.quantityUnits" (dict "value" $memory "unit" 1048576 "roundDown" true) | int64) -}}
+{{- $fixed := include "hephaestus.fixedCapacity" . | fromJson -}}
+{{- $review := include "hephaestus.templateSandbox" (dict "root" . "kind" "review") | fromJson -}}
+{{- $conversation := include "hephaestus.templateSandbox" (dict "root" . "kind" "conversation") | fromJson -}}
+{{- $reviews := 0 -}}
+{{- if .Values.sandbox.enabled -}}{{- $reviews = include "hephaestus.reviews" . | int -}}{{- end -}}
+{{- $maximum := 2147483647 -}}
+{{- range $phase := list "steady" "upgrade" -}}
+{{- range $resource, $field := dict "cpu" "cpuMillis" "memory" "memoryMi" -}}
+{{- $reserved := int64 (get (get $fixed $phase) $resource) -}}
+{{- /* Reviews finish before the drained-upgrade peak. Warm conversation sandboxes can remain. */ -}}
+{{- if eq $phase "steady" -}}{{- $reserved = add $reserved (mul $reviews (get $review $field)) -}}{{- end -}}
+{{- $available := sub (get $room $resource) $reserved -}}
+{{- if lt $available 0 -}}
+{{- fail (printf "sandbox.budget.%s cannot hold fixed %s requests: %d required, %d available. %s" $resource $phase $reserved (get $room $resource) $help) -}}
 {{- end -}}
-{{- range $component := list "postgresql" "nats" -}}
-{{- $role := get $.Values $component -}}
-{{- if $role.bundled -}}
-{{- $roles = add $roles (int (include "hephaestus.cpuMillis" $role.resources.requests.cpu)) -}}
+{{- $maximum = min $maximum (div $available (get $conversation $field | int64)) -}}
 {{- end -}}
 {{- end -}}
-{{- if and .Values.postgresql.bundled .Values.postgresql.backup.enabled -}}
-{{- $roles = add $roles (int (include "hephaestus.cpuMillis" .Values.postgresql.backup.resources.requests.cpu)) -}}
-{{- end -}}
-{{- if .Values.sandbox.enabled -}}
-{{- $roles = add $roles (mul (add (int $loop.replicas) 1) (int (include "hephaestus.cpuMillis" $loop.resources.requests.cpu))) -}}
-{{- end -}}
-{{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson -}}
-{{- $tools := add (int $table.activeToolsPods) (int $table.pooledToolsPods) -}}
-{{- $roles = add $roles (mul $tools (add (int $table.toolsPod.cpuMillis) (int .Values.sandbox.runtime.podOverhead.cpuMillis))) -}}
-{{- $gate := include "hephaestus.templateSandbox" (dict "root" . "kind" "conversation") | fromJson -}}
-{{- $roles = add $roles (mul 2 (int $gate.cpuMillis)) -}}
-{{- $reviews := int (include "hephaestus.reviewCpuMillis" .) -}}
-{{- $available := max 0 (sub (int $budget.allocatableCpuMillis) (add $roles $reviews)) -}}
-{{- $turns := min (int $budget.maximumTurns) (div $available (int $budget.cpuMillisPerTurn)) -}}
-{{- if and .Values.sandbox.enabled (gt (int .Values.server.replicas) 0) (lt $turns 1) -}}
-{{- fail "Automatic turn admission has no CPU room in its budget of one small node; set conversationLoop.turns to a count, or to 0 to disable turns" -}}
+{{- if not .Values.sandbox.enabled -}}0
+{{- else if $auto -}}
+{{- if lt $maximum 1 -}}{{- fail (printf "Automatic turn admission has no room for one conversation sandbox in the steady or drained-upgrade budget. %s" $help) -}}{{- end -}}
+{{- $maximum -}}
+{{- else -}}
+{{- $turns := int $value -}}
+{{- if gt $turns $maximum -}}
+{{- fail (printf "sandbox.conversationTurns=%d exceeds sandbox.budget at steady state or the drained-upgrade peak; at most %d turns fit. %s" $turns $maximum $help) -}}
 {{- end -}}
 {{- $turns -}}
-{{- else -}}
-{{- $loop.turns | int -}}
 {{- end -}}
+{{- else -}}{{- ternary (int $value) 0 .Values.sandbox.enabled -}}{{- end -}}
 {{- end -}}
 
 {{/* A database role's replica count: its own, or 0 while a restore runs. */}}
@@ -901,13 +969,11 @@ drain. docs/admin/kubernetes.mdx § Sandbox prerequisites.
 - name: SANDBOX_API_MAX_CONNECTIONS
   value: {{ $sandbox.gateway.maxConnections | quote }}
 {{- $capacity := int (include "hephaestus.conversationTurns" .) }}
-{{- if gt $capacity 0 }}
+{{- if .Values.sandbox.enabled }}
 # The installation's conversation turns. Each server's claim checks this cap across all servers.
 - name: HEPHAESTUS_MENTOR_TURN_CAPACITY
   value: {{ $capacity | quote }}
 {{- end }}
-# The conversation loop presents it when it pulls a turn.
-{{ include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_CONVERSATION_LOOP_SECRET") }}
 # Also the review capacity: a server claims no more reviews than it may run sandboxes.
 - name: SANDBOX_MAX_CONCURRENT
   value: {{ include "hephaestus.serverReviews" . | quote }}
@@ -926,28 +992,4 @@ drain. docs/admin/kubernetes.mdx § Sandbox prerequisites.
 {{- end }}
 - name: HEPHAESTUS_AGENT_SANDBOX_GATEWAY_URL
   value: {{ printf "http://%s.%s.svc:%v" (include "hephaestus.name" (dict "root" . "component" "sandbox-gateway")) .Release.Namespace $port | quote }}
-- name: HEPHAESTUS_SANDBOX_KUBERNETES_POD_NAME
-  valueFrom:
-    fieldRef:
-      fieldPath: metadata.name
-- name: HEPHAESTUS_SANDBOX_KUBERNETES_POD_IP
-  valueFrom:
-    fieldRef:
-      fieldPath: status.podIP
-- name: HEPHAESTUS_SANDBOX_KUBERNETES_GATEWAY_PROBE_SERVICE
-  value: {{ printf "%s.%s.svc" (include "hephaestus.name" (dict "root" . "component" "sandbox-gateway-probe")) .Release.Namespace | quote }}
-- name: HEPHAESTUS_SANDBOX_KUBERNETES_RUNTIME_CLASS_NAME
-  value: {{ $runtime.runtimeClassName | quote }}
-- name: HEPHAESTUS_SANDBOX_KUBERNETES_SECCOMP_PROFILE
-  value: {{ $runtime.seccompProfile | quote }}
-- name: HEPHAESTUS_SANDBOX_KUBERNETES_NODE_SELECTOR
-  value: {{ $runtime.nodeSelector | toJson | quote }}
-- name: HEPHAESTUS_SANDBOX_KUBERNETES_TOLERATIONS
-  value: {{ $runtime.tolerations | toJson | quote }}
-- name: HEPHAESTUS_SANDBOX_KUBERNETES_CONVERSATION_PRIORITY_CLASS
-  value: {{ include "hephaestus.priorityClass" (dict "root" . "tier" "conversations") | quote }}
-- name: HEPHAESTUS_SANDBOX_KUBERNETES_REVIEW_PRIORITY_CLASS
-  value: {{ include "hephaestus.priorityClass" (dict "root" . "tier" "reviews") | quote }}
-- name: HEPHAESTUS_SANDBOX_KUBERNETES_PROBE_INTERVAL
-  value: {{ $runtime.probeInterval | quote }}
 {{- end -}}

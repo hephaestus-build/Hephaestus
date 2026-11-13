@@ -1,13 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.Scheduler;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.ContextFolderPaths;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
-import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextFolder;
-import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextGenerations;
-import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnDocuments;
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextLoads;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnAdmission;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnEvidence;
 import de.tum.cit.aet.hephaestus.agent.runtime.FeedbackWritingGuide;
@@ -28,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.ZoneId;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,31 +37,11 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-/**
- * What a turn reads from this server: its context, and the tools it calls with the turn's credential. A turn's
- * context documents are built once, when its host asks for the context, and the tools Pod stages that build, so one
- * turn sees one consistent picture. A link tool shows only the developer's own results and problems, and
- * {@code show_feedback} claims the feedback's conversation copy for the attempt. The build is dropped when the turn
- * ends, and in any case once no call of the attempt read it for {@link #UNREAD}: a turn whose host is lost or stopped
- * never ends here. A turn that reads after that gets a new build for the same question.
- */
+/** Builds a turn's context from server-held data and admits its feedback links. */
 @Service
 @ConditionalOnAgentRuntime
 @Profile(HephTurnConfiguration.PROFILES)
 public class HephTurnContexts {
-
-    /**
-     * The situation of a turn that this server cannot give a context folder, for example when no tools Pod can start.
-     * The turn has no read, bash or load tool, and without this line its instructions still send it to read files.
-     */
-    static final String NO_CONTEXT_FOLDER =
-            "This turn has no context folder: you cannot read files, run commands or load repositories. Answer from"
-                    + " this conversation and your other tools, and say plainly what you could not check.";
-
-    static final Duration UNREAD = Duration.ofMinutes(15);
-
-    /** Builds a change may overtake in a row before the call fails. */
-    static final int MAX_BUILDS = 3;
 
     /** How far back, and over how many results, a problem link looks for the result that carries the problem. */
     static final Duration PROBLEM_LOOKBACK = Duration.ofDays(90);
@@ -82,16 +59,7 @@ public class HephTurnContexts {
     private final AccountDirectory accounts;
     private final ObjectMapper mapper;
     private final Clock clock;
-    private final TurnContextFolder folder;
-    private final TurnContextGenerations generations;
-
-    /** A build of the turn's documents, and the workspace's context generation it was built under. */
-    private record Build(long generation, Map<String, byte[]> documents) {}
-
-    private final Cache<Attempt, Build> inputs = Caffeine.newBuilder()
-            .expireAfterAccess(UNREAD)
-            .scheduler(Scheduler.systemScheduler())
-            .build();
+    private final TurnContextLoads folder;
 
     public HephTurnContexts(
             MentorContextPathBuilder paths,
@@ -105,8 +73,7 @@ public class HephTurnContexts {
             AccountDirectory accounts,
             ObjectMapper mapper,
             Clock clock,
-            TurnContextFolder folder,
-            TurnContextGenerations generations) {
+            TurnContextLoads folder) {
         this.paths = paths;
         this.situations = situations;
         this.turns = turns;
@@ -119,13 +86,6 @@ public class HephTurnContexts {
         this.mapper = mapper;
         this.clock = clock;
         this.folder = folder;
-        this.generations = generations;
-    }
-
-    private record Attempt(UUID turnId, int attempt) {
-        static Attempt of(TurnAttempt turn) {
-            return new Attempt(turn.turnId(), turn.attempt());
-        }
     }
 
     /** The model a loop runs a turn with: the one the turn was admitted with. */
@@ -158,7 +118,8 @@ public class HephTurnContexts {
             Model model,
             String situation,
             boolean contextFolder,
-            String systemPrompt) {}
+            String systemPrompt,
+            String documents) {}
 
     public Context context(TurnAttempt turn) {
         ZoneId zone = zone(turn);
@@ -167,9 +128,8 @@ public class HephTurnContexts {
                         turns.require(turn.workspaceId(), turn.turnId()).getAdmission())
                 .orElseThrow(
                         () -> new IllegalStateException("Mentor turn " + turn.turnId() + " has no admitted model"));
-        Map<String, byte[]> built = current(turn, path.questionEntryId(), zone);
-        boolean contextFolder = folder.available();
-        String loadable = contextFolder ? folder.situation(turn) : NO_CONTEXT_FOLDER;
+        Map<String, byte[]> built = build(turn, path.questionEntryId(), zone);
+        String loadable = folder.situation(turn);
         String situation = situations.render(turn, zone) + "\n" + (loadable.isEmpty() ? "" : loadable + "\n")
                 + MentorTurnEvidence.receipt(mapper, built);
         var effort = admitted.reasoningEffort();
@@ -184,61 +144,25 @@ public class HephTurnContexts {
                         admitted.maxOutputTokens(),
                         effort == null ? null : effort.name()),
                 situation,
-                contextFolder,
-                SYSTEM_PROMPT);
+                true,
+                SYSTEM_PROMPT,
+                Base64.getEncoder()
+                        .encodeToString(folder.documentsArchive(
+                                turn, prettyDocuments(built), ContextTimes.local(clock.instant(), zone))));
     }
 
-    /** The turn attempt's context documents, built once per attempt; the tools Pod stages them. */
-    public Map<String, byte[]> documents(TurnAttempt turn) {
-        Build cached = inputs.getIfPresent(Attempt.of(turn));
-        if (cached != null && cached.generation() == generations.current(turn.workspaceId())) {
-            return cached.documents();
-        }
-        return current(turn, turns.question(turn.workspaceId(), turn.turnId()).getId(), zone(turn));
+    private Map<String, byte[]> prettyDocuments(Map<String, byte[]> documents) {
+        Map<String, byte[]> pretty = new LinkedHashMap<>();
+        documents.forEach((path, bytes) -> pretty.put(path, pretty(bytes)));
+        return pretty;
     }
 
-    /**
-     * A build of the attempt's documents under the workspace's current context generation. A build that a change
-     * overtook is dropped and made again: it may hold data that is no longer allowed.
-     */
-    private Map<String, byte[]> current(TurnAttempt turn, UUID questionEntryId, ZoneId zone) {
-        for (int tries = 0; tries < MAX_BUILDS; tries++) {
-            long generation = generations.current(turn.workspaceId());
-            Map<String, byte[]> built = build(turn, questionEntryId, zone);
-            if (generations.current(turn.workspaceId()) == generation) {
-                inputs.put(Attempt.of(turn), new Build(generation, built));
-                return built;
-            }
-        }
-        throw new IllegalStateException("The context of workspace " + turn.workspaceId() + " keeps changing");
-    }
-
-    /**
-     * The attempt's documents as its context folder stages them: pretty-printed, so that {@code read} pages them by
-     * line, with item documents read on demand from their owning source.
-     */
-    public TurnDocuments folderDocuments(TurnAttempt turn) {
-        return new TurnDocuments() {
-            @Override
-            public Map<String, byte[]> built() {
-                Map<String, byte[]> pretty = new LinkedHashMap<>();
-                documents(turn).forEach((path, bytes) -> pretty.put(path, pretty(bytes)));
-                return pretty;
-            }
-
-            @Override
-            public Optional<byte[]> item(String path) {
-                return contextBuilder
-                        .read(turn.workspaceId(), turn.accountId(), path)
-                        .map(item -> mapper.writerWithDefaultPrettyPrinter()
-                                .writeValueAsBytes(ContextTimes.local(item, zone(turn))));
-            }
-
-            @Override
-            public String builtAt() {
-                return ContextTimes.local(clock.instant(), zone(turn));
-            }
-        };
+    /** Reads an item document from its owning source, with that source's workspace and developer checks. */
+    public Optional<byte[]> document(TurnAttempt turn, String path) {
+        return ContextFolderPaths.requestedDocument(path)
+                .flatMap(relative -> contextBuilder.read(turn.workspaceId(), turn.accountId(), relative))
+                .map(item -> mapper.writerWithDefaultPrettyPrinter()
+                        .writeValueAsBytes(ContextTimes.local(item, zone(turn))));
     }
 
     private byte[] pretty(byte[] document) {
@@ -304,11 +228,6 @@ public class HephTurnContexts {
                         hit.kind().name(),
                         hit.excerpt()))
                 .toList();
-    }
-
-    /** Drops what the turn attempt read. */
-    public void forget(TurnAttempt turn) {
-        inputs.invalidate(Attempt.of(turn));
     }
 
     private ZoneId zone(TurnAttempt turn) {

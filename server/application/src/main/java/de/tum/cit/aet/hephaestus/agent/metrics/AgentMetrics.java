@@ -80,11 +80,10 @@ public final class AgentMetrics {
     public static final String MENTOR_TURN_COMPLETED = "mentor.turn.completed";
     public static final String MENTOR_TURN_COST = "mentor.turn.cost";
     public static final String MENTOR_TURN_DURATION = "mentor.turn.duration";
-    public static final String MENTOR_TURN_FIRST_TOKEN = "mentor.turn.first_token";
+    public static final String AGENT_RUN_FIRST_TOKEN = "agent.run.first_token";
     public static final String MENTOR_TURN_STARTED = "mentor.turn.started";
     public static final String MENTOR_TURN_RETRIED = "mentor.turn.retried";
     public static final String MENTOR_TURN_QUEUED = "mentor.turn.queued";
-    public static final String MENTOR_TURN_TOOLS_WAIT = "mentor.turn.tools.wait";
     public static final String MENTOR_TURN_QUEUE_WAIT = "mentor.turn.queue_wait";
     public static final String MENTOR_TURN_CLAIM_FAILURE = "mentor.turn.claim.failure";
     public static final String MENTOR_LIVE_STREAMS = "mentor.live.streams";
@@ -98,10 +97,6 @@ public final class AgentMetrics {
     public static final String SANDBOX_GATEWAY_REQUEST_SIZE = "sandbox.gateway.request.size";
     /** Sandbox Pods removed, tagged by {@code kind} (what they ran) and {@code reason} (why they ended). */
     public static final String SANDBOX_EXITS = "sandbox.exits";
-
-    public static final String SANDBOX_ISOLATION_PASSED = "sandbox.isolation.passed";
-    public static final String SANDBOX_ISOLATION_PROCESS_LIMIT = "sandbox.isolation.process_limit";
-    public static final String SANDBOX_ISOLATION_USER_NAMESPACES = "sandbox.isolation.user_namespaces";
 
     private AgentMetrics() {}
 }

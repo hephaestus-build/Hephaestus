@@ -1,7 +1,7 @@
 /**
  * The sandbox footprint benchmark: what a practice review sandbox uses, measured, not assumed.
  *
- * It runs the review Pod's two containers from the agent image with the Pod's file systems (disk
+ * It runs one review container from the agent image with the Pod's file systems (disk
  * volumes for the attempt folders, /tmp and ~/.local, memory for /run, a read-only root) and its
  * limits, against a stand-in gateway in this process. The gateway serves a workspace that
  * `ReviewFootprintStagingLiveTest` staged with the real adapter, the bundled practices and a real
@@ -40,7 +40,6 @@ import {
 	BUDGETS,
 	footprintReadCalls,
 	largest,
-	NOT_STARTED,
 	parseSample,
 	positiveInteger,
 	REPORT_MAP_LIMIT,
@@ -648,14 +647,11 @@ function startSampler(): ChildProcess {
 
 interface ReviewRun {
 	index: number;
-	initExit: number;
 	runtimeExit: number;
-	initMs: number;
 	runtimeMs: number;
 	startMs: number;
 	diskBytes: Record<string, number>;
 	uploads: number;
-	initializeLog: string;
 	log: string;
 }
 
@@ -766,110 +762,11 @@ async function container(
 	return { exit, ms };
 }
 
-/** A stage from before the tools side has one container, which the benchmark runs as a baseline. */
-const hasSides = await stat(path.join(stage, "tool-client.ts")).then(
-	() => true,
-	() => false,
-);
-
-/** Whether the stage holds a custom program: a review then gets a program side, as the review Pod that the server builds does. */
-async function stagesPrograms(): Promise<boolean> {
-	const staged = await readdir(path.join(stage, "work/practice-scripts/practices")).catch(() => []);
-	return staged.some((name) => name.endsWith(".ts"));
-}
-
-/** A side of the review's Pod: its own user and `/tmp`, the workspace read-only, and no network at all. */
-async function side(
-	label: string,
-	name: string,
-	{
-		uid,
-		role,
-		socketVolume,
-		socket,
-		nonce,
-		volumes,
-	}: {
-		uid: number;
-		role: string;
-		socketVolume: string;
-		socket: string;
-		nonce: string;
-		volumes: string[];
-	},
-): Promise<() => Promise<void>> {
-	const git = Object.entries(gitEnvironment()).flatMap(([key, value]) => [
-		"--env",
-		`${key}=${value}`,
-	]);
-	const created = await output("docker", [
-		"create",
-		"--name",
-		name,
-		"--read-only",
-		"--cap-drop",
-		"ALL",
-		"--security-opt",
-		"no-new-privileges",
-		"--user",
-		`${String(uid)}:${String(uid)}`,
-		"--group-add",
-		"1000",
-		"--memory",
-		"768m",
-		"--memory-swap",
-		"768m",
-		"--pids-limit",
-		"256",
-		"--network",
-		"none",
-		"-w",
-		"/workspace",
-		"--mount",
-		`type=volume,src=${volumes[0] ?? ""},dst=/workspace,volume-nocopy,readonly`,
-		"--mount",
-		`type=volume,src=${volumes[1] ?? ""},dst=/workspace/work,volume-nocopy,readonly`,
-		"--mount",
-		`type=volume,src=${socketVolume},dst=${path.dirname(socket)},volume-nocopy`,
-		"--mount",
-		"type=tmpfs,dst=/tmp,tmpfs-size=1073741824,tmpfs-mode=1777",
-		...git,
-		"--env",
-		`TOOLS_NONCE=${nonce}`,
-		"--env",
-		`TOOLS_SOCKET=${socket}`,
-		"--env",
-		`TOOLS_ROLE=${role}`,
-		"--entrypoint",
-		RLIMITS[0] ?? "",
-		image,
-		...RLIMITS.slice(1),
-		"sh",
-		"/opt/pi-sdk/tools-launch.sh",
-	]);
-	const id = created.trim();
-	containers.add(id);
-	await watch(label, id);
-	await run("docker", ["start", id], { stdout: "ignore" });
-	return async () => {
-		await sleep(SAMPLE_MS * 2);
-		await writeFile(
-			path.join(work, `${name}.log`),
-			await output("sh", ["-c", `docker logs ${id} 2>&1 | tail -n 200`]).catch(() => ""),
-		);
-		await run("docker", ["rm", "-f", id], { stdout: "ignore" });
-		containers.delete(id);
-	};
-}
-
 async function review(index: number): Promise<ReviewRun> {
 	const sessionId = randomUUID();
 	sessions.add(sessionId);
 	const volumes = DISK_VOLUMES.map((_, v) => `${runId}-${index}-v${v}`);
-	const toolsSocket = `${runId}-${index}-tools`;
-	const programsSocket = `${runId}-${index}-programs`;
-	const socketVolumes = [toolsSocket, programsSocket];
-	for (const volume of [...volumes, ...socketVolumes]) {
+	for (const volume of volumes) {
 		await run("docker", ["volume", "create", volume], { stdout: "ignore" });
 		volumesCreated.add(volume);
 	}
@@ -879,18 +776,16 @@ async function review(index: number): Promise<ReviewRun> {
 		"--rm",
 		"--user",
 		"0",
-		...[...volumes, ...socketVolumes].flatMap((v, i) => ["-v", `${v}:/v${i}`]),
+		...volumes.flatMap((v, i) => ["-v", `${v}:/v${i}`]),
 		"--entrypoint",
 		"sh",
 		image,
 		"-c",
-		[...volumes, ...socketVolumes]
-			.map((_, i) => `chown 0:1000 /v${i} && chmod 2775 /v${i}`)
-			.join(" && "),
+		volumes.map((_, i) => `chown 0:1000 /v${i} && chmod 2775 /v${i}`).join(" && "),
 	]);
 	const startMs = Date.now();
-	const init = await container(`review-${index}/initialize`, `${runId}-${index}-init`, [
-		...podFlags(`${runId}-${index}-init`, volumes, false),
+	const runtime = await container(`review-${index}/runtime`, `${runId}-${index}-runtime`, [
+		...podFlags(`${runId}-${index}-runtime`, volumes, true),
 		...environment(sessionId),
 		"--entrypoint",
 		RLIMITS[0] ?? "",
@@ -898,70 +793,13 @@ async function review(index: number): Promise<ReviewRun> {
 		...RLIMITS.slice(1),
 		"sh",
 		"-c",
-		"ln -s /opt/pi-sdk/node_modules /workspace/node_modules && exec node /opt/pi-sdk/gateway-init.js",
+		'ln -s /opt/pi-sdk/node_modules /workspace/node_modules && node /opt/pi-sdk/gateway-init.js && exec "$@"',
+		"--",
+		"node",
+		"--disable-sigusr1",
+		"/opt/pi-sdk/gateway-run.js",
+		...specCommand,
 	]);
-	let runtime = { exit: NOT_STARTED, ms: 0 };
-	if (init.exit === 0) {
-		const nonce = randomUUID();
-		const programs = await stagesPrograms();
-		const sides = hasSides
-			? [
-					await side(`review-${index}/tools`, `${runId}-${index}-tools`, {
-						uid: 1001,
-						role: "tools",
-						socketVolume: toolsSocket,
-						socket: "/run/tools/tools.sock",
-						nonce,
-						volumes,
-					}),
-				]
-			: [];
-		if (hasSides && programs) {
-			sides.push(
-				await side(`review-${index}/programs`, `${runId}-${index}-programs`, {
-					uid: 1002,
-					role: "programs",
-					socketVolume: programsSocket,
-					socket: "/run/programs/programs.sock",
-					nonce,
-					volumes,
-				}),
-			);
-		}
-		runtime = await container(`review-${index}/runtime`, `${runId}-${index}-runtime`, [
-			...podFlags(`${runId}-${index}-runtime`, volumes, true),
-			...environment(sessionId),
-			...(hasSides
-				? [
-						"--mount",
-						`type=volume,src=${toolsSocket},dst=/run/tools,volume-nocopy`,
-						"--env",
-						"TOOLS_SOCKET=/run/tools/tools.sock",
-						"--env",
-						`TOOLS_NONCE=${nonce}`,
-					]
-				: []),
-			...(hasSides && programs
-				? [
-						"--mount",
-						`type=volume,src=${programsSocket},dst=/run/programs,volume-nocopy`,
-						"--env",
-						"PROGRAMS_SOCKET=/run/programs/programs.sock",
-					]
-				: []),
-			"--entrypoint",
-			RLIMITS[0] ?? "",
-			image,
-			...RLIMITS.slice(1),
-			"node",
-			"--disable-sigusr1",
-			"/opt/pi-sdk/gateway-run.js",
-			...specCommand,
-		]);
-		for (const stop of sides) {
-			await stop();
-		}
-	}
 	// What the review left in `out/`: its result, its coverage and its reports.
 	await run("docker", [
 		"run",
@@ -995,21 +833,18 @@ async function review(index: number): Promise<ReviewRun> {
 		const [bytes, mount] = line.split("\t");
 		disk[DISK_VOLUMES[Number(mount?.slice(2))] ?? String(mount)] = Number(bytes);
 	}
-	for (const volume of [...volumes, ...socketVolumes]) {
+	for (const volume of volumes) {
 		await run("docker", ["volume", "rm", "-f", volume], { stdout: "ignore" });
 		volumesCreated.delete(volume);
 	}
 	sessions.delete(sessionId);
 	return {
 		index,
-		initExit: init.exit,
 		runtimeExit: runtime.exit,
-		initMs: init.ms,
 		runtimeMs: runtime.ms,
 		startMs,
 		diskBytes: disk,
 		uploads: uploads.get(sessionId) ?? 0,
-		initializeLog: `${runId}-${index}-init.log`,
 		log: `${runId}-${index}-runtime.log`,
 	};
 }
@@ -1172,10 +1007,7 @@ try {
 		reviews: runs.map((r) => ({
 			...r,
 			diskMiB: Object.fromEntries(Object.entries(r.diskBytes).map(([k, v]) => [k, MiB(v)])),
-			initialize: summarize(`review-${r.index}/initialize`),
 			runtime: summarize(`review-${r.index}/runtime`),
-			tools: summarize(`review-${r.index}/tools`),
-			programs: summarize(`review-${r.index}/programs`),
 		})),
 		concurrentPeakMiB: MiB(Math.max(0, ...ticks.values())),
 	};
@@ -1186,7 +1018,6 @@ try {
 	const decided = verdict({
 		reviews: runs.map((r) => ({
 			...r,
-			initSamples: sampleCount(`review-${r.index}/initialize`),
 			runtimeSamples: sampleCount(`review-${r.index}/runtime`),
 		})),
 		practices,

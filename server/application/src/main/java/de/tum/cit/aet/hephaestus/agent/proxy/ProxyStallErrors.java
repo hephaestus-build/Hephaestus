@@ -46,7 +46,7 @@ final class ProxyStallErrors {
 
     /**
      * An error a model client reads as the provider's: a JSON body with {@code error}, whose message starts with the
-     * code. The Heph host recognizes the codes ({@code heph-host.ts}).
+     * code. The turn driver recognizes the codes ({@code turn.ts}).
      */
     ResponseEntity<String> providerError(HttpStatus status, String code, String message) {
         return ResponseEntity.status(status)

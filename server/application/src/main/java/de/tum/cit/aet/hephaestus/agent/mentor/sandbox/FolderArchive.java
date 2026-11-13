@@ -4,16 +4,15 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.TreeSet;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.apache.commons.compress.archivers.tar.TarConstants;
+import org.springframework.util.StreamUtils;
 
 /**
  * The tar streams that the server stages into a tools Pod. They keep a captured file's executable mode. The sandbox
@@ -55,53 +54,35 @@ final class FolderArchive {
         return bytes.toByteArray();
     }
 
-    /** A directory tree, with paths relative to it, into a temporary file the caller deletes. */
-    static Path directory(Path source) throws IOException {
-        Path archive = Files.createTempFile("heph-load-", ".tar");
-        try (OutputStream out = Files.newOutputStream(archive);
-                TarArchiveOutputStream tar = open(out)) {
-            Files.walkFileTree(source, new SimpleFileVisitor<>() {
-                @Override
-                public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes)
-                        throws IOException {
-                    if (!directory.equals(source)) {
-                        var entry = new TarArchiveEntry(name(directory) + "/");
-                        entry.setMode(0755);
-                        tar.putArchiveEntry(entry);
-                        tar.closeArchiveEntry();
-                    }
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
-                    if (attributes.isSymbolicLink()) {
-                        // A link stays a link: in the sandbox it reaches only what the sandbox holds.
-                        var entry = new TarArchiveEntry(name(file), TarConstants.LF_SYMLINK);
-                        entry.setLinkName(Files.readSymbolicLink(file).toString());
-                        tar.putArchiveEntry(entry);
-                        tar.closeArchiveEntry();
-                    } else if (attributes.isRegularFile()) {
-                        var entry = new TarArchiveEntry(name(file));
-                        entry.setMode(Files.isExecutable(file) ? 0755 : 0644);
-                        entry.setSize(attributes.size());
-                        tar.putArchiveEntry(entry);
-                        Files.copy(file, tar);
-                        tar.closeArchiveEntry();
-                    }
-                    return FileVisitResult.CONTINUE;
-                }
-
-                private String name(Path path) {
-                    return source.relativize(path).toString().replace('\\', '/');
-                }
-            });
+    /** Deterministic tar bytes from a retained directory; never closes the caller's output stream. */
+    static long directory(Path source, OutputStream out) throws IOException {
+        try (TarArchiveOutputStream tar = open(StreamUtils.nonClosing(out));
+                var paths = Files.walk(source)) {
+            for (Path path : paths.filter(path -> !path.equals(source))
+                    .sorted(Comparator.comparing(
+                            path -> source.relativize(path).toString().replace('\\', '/')))
+                    .toList()) {
+                String name = source.relativize(path).toString().replace('\\', '/');
+                TarArchiveEntry entry;
+                if (Files.isSymbolicLink(path)) {
+                    entry = new TarArchiveEntry(name, TarConstants.LF_SYMLINK);
+                    entry.setLinkName(Files.readSymbolicLink(path).toString());
+                } else if (Files.isDirectory(path)) {
+                    entry = new TarArchiveEntry(name + "/");
+                    entry.setMode(0755);
+                } else if (Files.isRegularFile(path)) {
+                    entry = new TarArchiveEntry(name);
+                    entry.setMode(Files.isExecutable(path) ? 0755 : 0644);
+                    entry.setSize(Files.size(path));
+                } else continue;
+                entry.setModTime(0);
+                tar.putArchiveEntry(entry);
+                if (entry.isFile() && !entry.isSymbolicLink()) Files.copy(path, tar);
+                tar.closeArchiveEntry();
+            }
             tar.finish();
-        } catch (IOException | RuntimeException e) {
-            Files.deleteIfExists(archive);
-            throw e;
+            return tar.getBytesWritten();
         }
-        return archive;
     }
 
     private static TarArchiveOutputStream open(OutputStream out) {

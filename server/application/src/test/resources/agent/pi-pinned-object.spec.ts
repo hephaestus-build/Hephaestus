@@ -3,7 +3,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { once } from "node:events";
 import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -14,10 +13,8 @@ import {
 	type ObjectSource,
 	PinnedHistory,
 	readPinnedObject,
-	toolObjects,
+	repositoryObjects,
 } from "../../../main/resources/agent/pi-pinned-object.ts";
-import { ToolClient } from "../../../main/resources/agent/tool-client.ts";
-import { startToolsServer } from "../../../main/resources/agent/tools-server.ts";
 
 const repository = mkdtempSync(path.join(tmpdir(), "pinned-object-"));
 const git = (...args: string[]) =>
@@ -243,37 +240,17 @@ void test("a tree whose hash is right but whose bytes are malformed reads as unr
 	});
 });
 
-void test("the walk reads a real repository through the tools side, and a file past one exec reads as too large", async () => {
-	const home = mkdtempSync(path.join(tmpdir(), "pinned-tools-"));
-	const mutable = path.join(home, "workspace");
-	mkdirSync(path.join(mutable, ".scratch"), { recursive: true });
-	const socketPath = path.join(home, "tools.sock");
-	const server = startToolsServer({
-		address: { path: socketPath },
-		nonce: "pod-nonce",
-		workspace: mutable,
-		roots: [mutable, repository],
-		scratch: path.join(mutable, ".scratch"),
-		putRoots: [path.join(mutable, ".scratch")],
-		soleUser: false,
+void test("the walk reads the sandbox repository and refuses a file beyond its byte limit", async () => {
+	const source = repositoryObjects(repository);
+	const history = pinned(source);
+	assert.deepEqual(await readPinnedObject(source, history, commit, "src/deep/kept.ts", 1000), {
+		kind: "regular",
+		bytes: Buffer.from("export const kept = 1;\n"),
 	});
-	await once(server, "listening");
-	const tools = await ToolClient.open({ path: socketPath }, "pod-nonce");
-	try {
-		const source = toolObjects(tools, repository);
-		const history = pinned(source);
-		assert.deepEqual(await readPinnedObject(source, history, commit, "src/deep/kept.ts", 1000), {
-			kind: "regular",
-			bytes: Buffer.from("export const kept = 1;\n"),
-		});
-		assert.deepEqual(await readPinnedObject(source, history, commit, "large.bin", 100), {
-			kind: "tooLarge",
-			size: 4096,
-		});
-		assert.equal(await source.size("0".repeat(40)), null);
-		assert.equal(await source.read("blob", "0".repeat(40), 100), null);
-	} finally {
-		tools.close();
-		server.close();
-	}
+	assert.deepEqual(await readPinnedObject(source, history, commit, "large.bin", 100), {
+		kind: "tooLarge",
+		size: 4096,
+	});
+	assert.equal(await source.size("0".repeat(40)), null);
+	assert.equal(await source.read("blob", "0".repeat(40), 100), null);
 });

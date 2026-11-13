@@ -147,6 +147,32 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
             @Param("epoch") int epoch,
             @Param("runId") UUID runId);
 
+    /** A sandbox's attempt by its run: the turn the run drives, and when the run ends whatever its lease. */
+    interface RunAttempt extends HeldAttempt {
+        UUID getId();
+
+        @Nullable
+        Instant getDeadline();
+    }
+
+    /**
+     * The attempt whose run lease is current on the database clock, with its stored work deadline.
+     *
+     * @return empty when the claim lost the run or its turn ended
+     */
+    @WorkspaceAgnostic("The sandbox's run names the workspace; the statement filters by it")
+    @Query(value = """
+            SELECT t.id AS id, t.status AS status, t.conversation_id AS conversationId, c.account_id AS accountId,
+                   t.started_at AS startedAt, t.finished_at AS finishedAt, r.deadline AS deadline
+              FROM mentor_turn t
+              JOIN mentor_conversation c ON c.id = t.conversation_id AND c.workspace_id = t.workspace_id
+            """ + LIVE_CLAIM + """
+             WHERE t.workspace_id = :workspaceId AND t.run_id = :runId AND t.attempt = :epoch
+               AND t.status IN ('RUNNING', 'STOPPED')
+            """, nativeQuery = true)
+    Optional<RunAttempt> findRunAttempt(
+            @Param("workspaceId") long workspaceId, @Param("runId") UUID runId, @Param("epoch") int epoch);
+
     /** An attempt that holds its lease, so an erasure can end it. */
     interface LeasedAttempt {
         UUID getId();

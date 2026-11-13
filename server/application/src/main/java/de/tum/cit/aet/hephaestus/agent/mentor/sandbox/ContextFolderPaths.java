@@ -4,10 +4,10 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Optional;
 
-/** Paths in the context folder: the tools workspace of the turn's tools Pod, where its host puts what it loads. */
-final class ContextFolderPaths {
+/** Paths in the context folder: the turn's working directory in its conversation sandbox. */
+public final class ContextFolderPaths {
 
-    static final String ROOT = "/tmp/tools/workspace";
+    static final String ROOT = "/workspace/work";
 
     /** Where the context documents are, as {@code ContentSource#OUTPUT_PREFIX} names them. */
     static final String DOCUMENTS = "inputs/context/";
@@ -48,7 +48,12 @@ final class ContextFolderPaths {
         return Optional.of(String.join("/", segments));
     }
 
-    /** Whether the server serves the path from the turn's memory: {@code INDEX.md}, {@code FIELDS.md} and the documents. */
+    /** An item document requested under the context folder, or no permitted document path. */
+    public static Optional<String> requestedDocument(String path) {
+        return relative(path).filter(ContextFolderPaths::document);
+    }
+
+    /** Whether the path names a context document: {@code INDEX.md}, {@code FIELDS.md} and the documents. */
     static boolean document(String relative) {
         return relative.equals(ContextFolderIndex.PATH)
                 || relative.equals(ContextFolderIndex.FIELDS_PATH)

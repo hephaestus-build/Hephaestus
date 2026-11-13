@@ -380,14 +380,13 @@ Configure these values on the Gateway:
    Replace `<revision>` with the successful install's revision number.
    The Job logs `Database migration completed` when it finishes.
    The JVM then prints a long native memory summary. It is not an error.
-2. Wait until the server is ready. A server is ready only after its [isolation probe](./sandboxes#sandbox-prerequisites) passed and it watches the sandbox namespace.
+2. Wait until the server is ready, then run the [sandbox isolation gate](./sandboxes#the-agent-image-on-the-sandbox-nodes) for each template.
 
    ```bash
    kubectl --namespace hephaestus rollout status deployment/hephaestus-server
-   kubectl --namespace hephaestus logs deployment/hephaestus-server | grep "sandbox isolation probe"
    ```
 
-   The log line `The sandbox isolation probe passed` ends the install. If the probe failed, read [Troubleshooting](#troubleshooting).
+   The server's readiness does not run the old isolation probe. The platform gate must pass before work is enabled.
 
 3. Continue with [First steps § 3. Sign in](./first-steps#3-sign-in).
 
@@ -396,7 +395,7 @@ Configure these values on the Gateway:
 1. Delete the sandbox namespace first.
    This stops every sandbox at once.
    If you remove the release first, its network policies go.
-   Then the tools Pods that are left run without them.
+   Then sandbox Pods that remain lose their policies.
 
    ```bash
    kubectl delete namespace hephaestus-sandboxes
@@ -454,16 +453,13 @@ For durable logs, configure a [log collector](./monitoring#ship-logs-to-a-log-st
 
 | Symptom | Cause and check |
 | --- | --- |
-| A server stays unready, and its log says that a sandbox namespace informer failed and retries | The server cannot watch the Pods, Jobs or ResourceQuotas of the sandbox namespace. The log gives the HTTP status. A `403` means that the server's Role lacks `list` or `watch` on one of them ([Sandbox prerequisites](./sandboxes#sandbox-prerequisites)). The server retries and becomes ready by itself once it can watch. |
-| A server stays unready, and its log says that the cluster does not hold the sandbox boundary | The isolation probe failed. The log names each failed check. A failed egress check usually means that the network plugin does not enforce NetworkPolicy, or that `networkPolicy.kubernetesApi` names an address that the plugin does not see. |
 | A server log says that the network policy did not filter a sandbox Pod in time | The network plugin applied the policy of a new Pod more than 60 seconds after the Pod started. The attempt is tried again. |
-| A sandbox Pod stays `Pending` with a quota error | Its tier's quota is full. The chart sizes each tier for its servers' capacity, so check a quota of your own, or `sandbox.reviewMemory` and `conversationLoop.turns`. |
+| A sandbox Pod stays `Pending` with a quota error | Its tier's quota is full. The chart sizes each tier for its servers' capacity, so check a quota of your own, or `sandbox.reviewMemory` and `sandbox.conversationTurns`. |
 | Every path returns `404`, and `kubectl get httproute` shows `Accepted=False NotAllowedByListeners` | The listener of the Gateway does not allow routes from the release namespace. Set `allowedRoutes.namespaces` on the listener, as [Gateway routes](./helm-chart#gateway-routes) shows. |
 | A new Pod restarts during an upgrade, and its log names a pending change set | It waited 10 minutes for the schema. Check the migration Job's log. A longer migration needs the [database maintenance](./maintenance#database-maintenance) procedure. |
 | A backup Job fails with `unable to find primary cluster` | The Job cannot reach pgBackRest's TLS server on port 8432 of the PostgreSQL Service, or its client certificate is not for `hephaestus-backup` from `ca.crt`. |
 | PostgreSQL's volume fills | A failed WAL archive keeps the WAL on the volume. Check the latest backup Job's log and the bucket's credentials. |
-| A review runs again or ends incomplete, and its diagnostics show `review.side_lost` or `review.side_unreachable` | The review's `tools` or `programs` container stopped, or never started. The `side` field names it. The attempt runs again within its retry limit. A review that keeps failing ends with `execution_incomplete` if it staged results, and with `execution_failed` if it staged none. The server log's sandbox exit names the container that ran out of memory or could not start. Hephaestus does not report the missing work as missing evidence. Repeated memory kills of `tools` point to a command of the review that needs more than the 768 MiB limit. |
 | A practice review fails with "The sandbox could not prepare its workspace." | The sandbox's initializer failed before any model call. The job runs again within its retry limit, so a failure that repeats on every attempt uses all of them. The server log names the initializer's exit code. After the last attempt, read the exit code and the last lines of the initializer's log on the job: `kubectl --namespace hephaestus exec hephaestus-postgresql-0 -c postgresql -- psql -U "$DATABASE_USERNAME" -d hephaestus -c "SELECT capture->'initializationFailure' FROM review_job WHERE id='<job id>'"`. Known credential formats in those lines are masked. |
 
-`kubectl --namespace <release namespace> logs deployment/<release>-server` shows a server's probe result and its isolation tier.
+Run `node scripts/sandbox-isolation.ts` to verify each template and its network boundary.
 The server's `/actuator/prometheus` on its management port shows the same tier in the `sandbox_isolation_*` metrics.

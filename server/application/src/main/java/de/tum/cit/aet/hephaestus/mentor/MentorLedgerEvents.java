@@ -46,8 +46,8 @@ public final class MentorLedgerEvents {
 
     /**
      * Data of the workspace that a Heph turn may have staged changed: a person was erased, chose not to have AI read
-     * their work, or a repository was hidden or no longer monitored. A server removes the tools Pods of the
-     * workspace, so no running turn reads a copy that is no longer allowed.
+     * their work, or a repository was hidden or no longer monitored. The server revokes the conversation sandboxes
+     * of the workspace, so no running turn reads a copy that is no longer allowed.
      */
     public record ContextChanged(long workspaceId) implements LedgerChanged {}
 

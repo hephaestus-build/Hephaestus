@@ -1,5 +1,5 @@
 /**
- * How Heph turns run, between the {@link de.tum.cit.aet.hephaestus.mentor} ledger and the conversation loop that runs
+ * How Heph turns run, between the {@link de.tum.cit.aet.hephaestus.mentor} ledger and the conversation sandbox that runs
  * them.
  *
  * <ul>
@@ -7,8 +7,8 @@
  *       conversational feedback delivery when a turn ends
  *       ({@link de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion}), and the run reaper
  *       ({@link de.tum.cit.aet.hephaestus.agent.run.AgentRunReaper}).</li>
- *   <li>{@code host/}: what every server serves the conversation loop: the turn assignments, and the endpoints the
- *       loop calls with each turn's credential ({@link de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurns}).</li>
+ *   <li>{@code host/}: what every server serves the conversation sandbox: the context and the endpoints
+ *       its driver calls with the run's claim ({@link de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurns}).</li>
  * </ul>
  *
  * <p>Turn cost is derived from the admission-frozen {@code LlmPriceSnapshot} — the single pricing

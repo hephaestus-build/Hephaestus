@@ -5,16 +5,10 @@ import java.util.Objects;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 
-/**
- * A verified gateway caller: a review job attempt, a Heph turn attempt, or the conversation loop pulling turns. An
- * attempt token or a sandbox's run names the attempt.
- * Contains no bearer credential or frozen configuration.
- *
- * @param loop the conversation loop, which reaches only its assignment pulls
- */
-record ProxyIdentity(@Nullable ProxyAttempt job, @Nullable ProxyAttempt turn, boolean loop) {
+/** A verified model-gateway caller. Its token or sandbox run names its attempt. */
+record ProxyIdentity(@Nullable ProxyAttempt job, @Nullable ProxyAttempt turn) {
     ProxyIdentity {
-        if (Stream.of(job, turn).filter(Objects::nonNull).count() + (loop ? 1 : 0) != 1)
+        if (Stream.of(job, turn).filter(Objects::nonNull).count() != 1)
             throw new IllegalArgumentException("Exactly one proxy identity is required");
     }
 
@@ -24,19 +18,14 @@ record ProxyIdentity(@Nullable ProxyAttempt job, @Nullable ProxyAttempt turn, bo
 
     static ProxyIdentity of(ProxyAttempt attempt) {
         return switch (attempt.caller()) {
-            case REVIEW -> new ProxyIdentity(attempt, null, false);
-            case TURN -> new ProxyIdentity(null, attempt, false);
+            case REVIEW -> new ProxyIdentity(attempt, null);
+            case TURN -> new ProxyIdentity(null, attempt);
         };
-    }
-
-    static ProxyIdentity conversationLoop() {
-        return new ProxyIdentity(null, null, true);
     }
 
     /** Names the caller for logs and rate limits, never with its credential. */
     String description() {
         if (job != null) return "job:" + job.id();
-        if (turn != null) return "mentor-turn:" + turn.id();
-        return "conversation-loop";
+        return "mentor-turn:" + Objects.requireNonNull(turn).id();
     }
 }

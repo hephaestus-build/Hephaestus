@@ -93,11 +93,15 @@ public class SandboxDispatcher implements DisposableBean {
 
     private void dispatch(AgentSandboxKind sandbox, Set<AgentRunKind> kinds, int limit) {
         int room = limit - sandboxes.live(sandbox);
-        if (room <= 0) return;
+        if (limit <= 0) return;
         for (AgentRuns.DueRun due : runs.due(kinds, limit)) {
-            if (room == 0) return;
             long workspace = due.run().workspaceId();
             if (sandboxes.hasLive(workspace, due.concurrencyKey())) continue;
+            if (room <= 0) {
+                if (sandbox != AgentSandboxKind.CONVERSATION || !sandboxes.releaseIdleConversation()) return;
+                room = limit - sandboxes.live(sandbox);
+                if (room <= 0) return;
+            }
             sandboxes.ensure(workspace, due.concurrencyKey(), sandbox);
             room -= 1;
             log.atInfo()

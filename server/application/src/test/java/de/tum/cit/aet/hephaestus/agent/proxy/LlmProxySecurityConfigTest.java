@@ -7,7 +7,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
@@ -34,8 +33,6 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -68,6 +65,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.slf4j.MDC;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.support.GenericApplicationContext;
@@ -79,6 +77,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.FilterChainProxy;
+import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -109,29 +108,27 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     private ProxyBudgetGate budgetGate;
 
     @Mock
-    private MentorTurnRepository turnRepository;
-
-    /** The loop's credential, as the test profile sets it. */
-    private static final String LOOP_SECRET = "0123456789abcdef".repeat(4);
-
-    @Mock
     private AgentSandboxes agentSandboxes;
 
     private final Map<String, Bucket> buckets = new HashMap<>();
     private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
     private long bodyBudgetBytes = 1L << 20;
     private FilterChainProxy chains;
+    private final SandboxRunKind turnKind = Mockito.mock(SandboxRunKind.class);
+    private @Nullable ProxyAttempt sandboxAttempt;
     private final AtomicReference<@Nullable Authentication> servedAs = new AtomicReference<>();
     private final AtomicReference<@Nullable Map<String, String>> servedWithLogContext = new AtomicReference<>();
 
     @BeforeEach
     void buildChains() throws Exception {
         SecurityContextHolder.clearContext();
+        Mockito.lenient().when(turnKind.kind()).thenReturn(AgentRunKind.TURN);
+        Mockito.lenient().when(turnKind.sandbox()).thenReturn(AgentSandboxKind.CONVERSATION);
         chains = chains(GATEWAY);
     }
 
     private FilterChainProxy chains(SandboxGatewayProperties gateway) throws Exception {
-        return chains(gateway, List.of());
+        return chains(gateway, List.of(turnKind));
     }
 
     private FilterChainProxy chains(SandboxGatewayProperties gateway, List<SandboxRunKind> kinds) throws Exception {
@@ -162,8 +159,6 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                         new SandboxGatewayConnector(GATEWAY_PORT, gateway.maxConnections()),
                         jobRepository,
                         agentRuns,
-                        turnRepository,
-                        new ConversationLoopProperties(LOOP_SECRET),
                         jwtVerifier,
                         owners.getBeanProvider(AgentSandboxes.class),
                         kinds,
@@ -179,29 +174,33 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void shouldCorrelateASandboxModelCallAndRestoreItsCallersContext(boolean fail) throws Exception {
+    @CsvSource({"REVIEW,false", "REVIEW,true", "TURN,false", "TURN,true"})
+    void shouldCorrelateASandboxModelCallAndRestoreItsCallersContext(AgentRunKind runKind, boolean fail)
+            throws Exception {
+        boolean review = runKind == AgentRunKind.REVIEW;
+        var sandboxKind = review ? AgentSandboxKind.REVIEW : AgentSandboxKind.CONVERSATION;
+        var subject = review ? "review:9" : "conversation:42";
         var token = new SandboxJwt(
-                UUID.randomUUID(), 7L, "review:9", "jti", Instant.now().plusSeconds(60));
-        var live = new AgentSandboxes.LiveSandbox(token.sandboxId(), 7L, "review:9", AgentSandboxKind.REVIEW);
+                UUID.randomUUID(), 7L, subject, "jti", Instant.now().plusSeconds(60));
+        var live = new AgentSandboxes.LiveSandbox(token.sandboxId(), 7L, subject, sandboxKind);
         when(jwtVerifier.verify("sandbox-token")).thenThrow(new AttemptTokenInvalidException("not an attempt", "typ"));
         when(jwtVerifier.verifySandbox("sandbox-token")).thenReturn(token);
         when(agentSandboxes.authenticate(token)).thenReturn(Optional.of(live));
         var run = mock(AgentRun.class);
         when(run.getConcurrencyKey()).thenReturn(live.subjectKey());
-        when(run.getKind()).thenReturn(AgentRunKind.REVIEW);
+        when(run.getKind()).thenReturn(runKind);
         when(run.getAttempt()).thenReturn(3);
         when(agentRuns.find(new AgentRunRef(LEASE, 7L))).thenReturn(Optional.of(run));
         when(agentRuns.isCurrent(new AgentRunRef(LEASE, 7L), 3)).thenReturn(true);
         var kind = mock(SandboxRunKind.class);
-        when(kind.kind()).thenReturn(AgentRunKind.REVIEW);
-        when(kind.sandbox()).thenReturn(AgentSandboxKind.REVIEW);
+        when(kind.kind()).thenReturn(runKind);
+        when(kind.sandbox()).thenReturn(sandboxKind);
         when(kind.attempt(any()))
                 .thenReturn(Optional.of(new ProxyAttempt(
-                        ProxyAttempt.Caller.REVIEW,
+                        review ? ProxyAttempt.Caller.REVIEW : ProxyAttempt.Caller.TURN,
                         UUID.randomUUID(),
                         7L,
-                        2,
+                        review ? 2 : 3,
                         LEASE,
                         Instant.now().plusSeconds(60))));
         chains = chains(GATEWAY, List.of(kind));
@@ -225,10 +224,17 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
             assertThat(servedWithLogContext.get())
                     .containsEntry(StructuredLogKeys.RUN_ID, LEASE.toString())
                     .containsEntry(StructuredLogKeys.RUN_EPOCH, "3")
-                    .containsEntry(StructuredLogKeys.JOB_ATTEMPT, "2")
                     .containsEntry(StructuredLogKeys.WORKSPACE_ID, "7")
-                    .containsEntry(StructuredLogKeys.SUBJECT_KEY, "review:9")
-                    .containsEntry(StructuredLogKeys.REVIEW_ID, "9");
+                    .containsEntry(StructuredLogKeys.SUBJECT_KEY, subject);
+            if (review) {
+                assertThat(servedWithLogContext.get())
+                        .containsEntry(StructuredLogKeys.JOB_ATTEMPT, "2")
+                        .containsEntry(StructuredLogKeys.REVIEW_ID, "9");
+            } else {
+                assertThat(servedWithLogContext.get())
+                        .doesNotContainKeys(
+                                StructuredLogKeys.REVIEW_ID, StructuredLogKeys.JOB_ID, StructuredLogKeys.JOB_ATTEMPT);
+            }
             assertThat(MDC.getCopyOfContextMap()).isEqualTo(previous);
         } finally {
             MDC.clear();
@@ -332,6 +338,25 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldAuthenticateAsyncGatewayCompletionAndRefuseARevokedSandbox() throws Exception {
+        var token = new SandboxJwt(
+                UUID.randomUUID(), 7L, "conversation:42", "jti", Instant.now().plusSeconds(60));
+        var live = new AgentSandboxes.LiveSandbox(
+                token.sandboxId(), 7L, token.subjectKey(), AgentSandboxKind.CONVERSATION);
+        when(jwtVerifier.verifySandbox("sandbox-token")).thenReturn(token);
+        when(agentSandboxes.authenticate(token)).thenReturn(Optional.of(live));
+        var completion = withToken(
+                request("POST", "/internal/agent/runs/" + UUID.randomUUID() + "/turn/sandbox/load", GATEWAY_PORT),
+                "sandbox-token");
+        completion.setDispatcherType(DispatcherType.ASYNC);
+        assertThat(answerTo(completion)).isEqualTo(200);
+        assertThat(servedAs.get()).extracting(Authentication::getPrincipal).isEqualTo(live);
+        when(agentSandboxes.authenticate(token)).thenReturn(Optional.empty());
+        assertThat(answerTo(completion)).isEqualTo(401);
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+    }
+
+    @Test
     void shouldRefuseAnAttemptTokenAndAMissingTokenOnTheAgentRoutes() throws Exception {
         when(jwtVerifier.verifySandbox("turn-token"))
                 .thenThrow(new AttemptTokenInvalidException("token type not allowed", "typ"));
@@ -398,6 +423,15 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     @Test
     void answersACapabilityCallWithNoCredentialAsUnauthenticated() throws Exception {
         assertThat(answerTo("POST", "/internal/llm/responses", GATEWAY_PORT)).isEqualTo(401);
+    }
+
+    @Test
+    void shouldHideTheRetiredTurnAndAssignmentRoutes() throws Exception {
+        for (String path :
+                List.of("/internal/llm/turn-assignments", "/internal/llm/turn/" + UUID.randomUUID() + "/end")) {
+            assertThat(answerTo(withToken(request("POST", path, GATEWAY_PORT), "anything")))
+                    .isEqualTo(404);
+        }
     }
 
     @Test
@@ -512,91 +546,6 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 .isEqualTo(404);
     }
 
-    /** The turn endpoints a Heph host calls with its turn credential, and their methods. */
-    private static final List<String[]> TURN_ENDPOINTS = List.of(
-            new String[] {"GET", "context"},
-            new String[] {"POST", "link-result"},
-            new String[] {"POST", "link-problem"},
-            new String[] {"POST", "show-feedback"},
-            new String[] {"POST", "search"},
-            new String[] {"PUT", "partial"},
-            new String[] {"POST", "end"});
-
-    @Test
-    void shouldServeATurnsModelCallAndItsOwnTurnEndpointsWhenItsTokenCallsThem() throws Exception {
-        AttemptJwt turn = turnJwt(2);
-        leased(turn, true);
-
-        assertThat(answerTo(withToken(request("POST", "/internal/llm/responses", GATEWAY_PORT), "turn-token")))
-                .isEqualTo(200);
-        assertThat(servedAs.get())
-                .isNotNull()
-                .extracting(Authentication::getPrincipal)
-                .asInstanceOf(type(ProxyIdentity.class))
-                .extracting(ProxyIdentity::description)
-                .isEqualTo("mentor-turn:" + turn.id());
-        for (String[] endpoint : TURN_ENDPOINTS) {
-            // One call a minute is this gateway's limit; each endpoint gets its own minute.
-            buckets.clear();
-            String path = "/internal/llm/turn/" + turn.id() + "/" + endpoint[1];
-            assertThat(answerTo(withToken(request(endpoint[0], path, GATEWAY_PORT), "turn-token")))
-                    .as(path)
-                    .isEqualTo(200);
-            assertThat(servedAs.get())
-                    .isNotNull()
-                    .extracting(Authentication::getDetails)
-                    .isEqualTo(turn);
-        }
-    }
-
-    @Test
-    void shouldRefuseATurnTokenOnAnotherTurnAndOnEveryReviewCapability() throws Exception {
-        AttemptJwt turn = turnJwt(1);
-        leased(turn, true);
-
-        for (String[] endpoint : TURN_ENDPOINTS) {
-            String path = "/internal/llm/turn/" + UUID.randomUUID() + "/" + endpoint[1];
-            assertThat(answerTo(withToken(request(endpoint[0], path, GATEWAY_PORT), "turn-token")))
-                    .as(path)
-                    .isEqualTo(401);
-            assertThat(servedAs.get()).isNull();
-        }
-        for (String path : List.of("/internal/llm/admit-results", "/internal/llm/stage-result")) {
-            assertThat(answerTo(withToken(request("POST", path, GATEWAY_PORT), "turn-token")))
-                    .as(path)
-                    .isEqualTo(403);
-            assertThat(servedAs.get()).isNull();
-        }
-        for (String path :
-                List.of("/internal/llm/runtime/" + turn.id(), "/internal/llm/runtime/" + turn.id() + "/workspace")) {
-            assertThat(answerTo(withToken(request("GET", path, GATEWAY_PORT), "turn-token")))
-                    .as(path)
-                    .isEqualTo(401);
-        }
-    }
-
-    @Test
-    void shouldAnswerConflictToTheModelCallOfAnAttemptThatNoLongerHoldsTheLease() throws Exception {
-        AttemptJwt turn = turnJwt(2);
-        leased(turn, false);
-
-        assertThat(answerTo(withToken(request("POST", "/internal/llm/responses", GATEWAY_PORT), "turn-token")))
-                .isEqualTo(409);
-        assertThat(servedAs.get()).isNull();
-    }
-
-    @Test
-    void shouldRefuseATurnTokenWithoutTheProxyScope() throws Exception {
-        AttemptJwt turn = turnJwt(1, "other");
-        leased(turn, true);
-
-        assertThat(answerTo(withToken(request("POST", "/internal/llm/responses", GATEWAY_PORT), "turn-token")))
-                .isEqualTo(403);
-        assertThat(answerTo(withToken(
-                        request("POST", "/internal/llm/turn/" + turn.id() + "/end", GATEWAY_PORT), "turn-token")))
-                .isEqualTo(403);
-    }
-
     /**
      * A review session is registered with its signed job token. A revoked or expired job token is rejected by the
      * signature check and must stay rejected, even while the review's session is open.
@@ -621,79 +570,12 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         }
     }
 
-    @Test
-    void shouldServeTheLoopsCredentialOnlyItsAssignmentPull() throws Exception {
-        assertThat(answerTo(withToken(request("POST", "/internal/llm/turn-assignments", GATEWAY_PORT), LOOP_SECRET)))
-                .isEqualTo(200);
-        assertThat(servedAs.get())
-                .isNotNull()
-                .extracting(Authentication::getPrincipal)
-                .asInstanceOf(type(ProxyIdentity.class))
-                .extracting(ProxyIdentity::description)
-                .isEqualTo("conversation-loop");
-
-        servedAs.set(null);
-        assertThat(answerTo(withToken(request("POST", "/internal/llm/turn-assignments", GATEWAY_PORT), "f".repeat(64))))
-                .isEqualTo(401);
-        when(jwtVerifier.verify(LOOP_SECRET)).thenThrow(new AttemptTokenInvalidException("unsigned", "malformed"));
-        assertThat(answerTo(withToken(
-                        request("GET", "/internal/llm/turn/" + UUID.randomUUID() + "/context", GATEWAY_PORT),
-                        LOOP_SECRET)))
-                .isEqualTo(401);
-        assertThat(answerTo(withToken(request("POST", "/internal/llm/responses", GATEWAY_PORT), LOOP_SECRET)))
-                .isEqualTo(401);
-        assertThat(servedAs.get()).isNull();
-    }
-
-    /** The pull compares the loop's credential alone: an attempt token there is never verified. */
-    @Test
-    void shouldRefuseAnAttemptTokenOnTheAssignmentPull() throws Exception {
-        assertThat(answerTo(withToken(request("POST", "/internal/llm/turn-assignments", GATEWAY_PORT), "job-token")))
-                .isEqualTo(401);
-        assertThat(servedAs.get()).isNull();
-        verifyNoInteractions(jwtVerifier);
-    }
-
-    @Test
-    void shouldRefuseAJobTokenOnTurnEndpointsAndServeNoCommandChannel() throws Exception {
-        ReviewJob job = runningJobOnAttempt(1);
-        when(jwtVerifier.verify("job-token")).thenReturn(jobJwt(job, 1));
-
-        assertThat(answerTo(withToken(
-                        request("GET", "/internal/llm/runtime/" + job.getId() + "/commands", GATEWAY_PORT),
-                        "job-token")))
-                .as("the gateway has no command channel")
-                .isEqualTo(404);
-        assertThat(answerTo(withToken(
-                        request("POST", "/internal/llm/turn/" + UUID.randomUUID() + "/end", GATEWAY_PORT),
-                        "job-token")))
-                .isEqualTo(401);
-    }
-
-    @Test
-    void shouldExemptOnlyTheTurnBookkeepingFromTheRateLimit() throws Exception {
-        AttemptJwt turn = turnJwt(1);
-        leased(turn, true);
-        String partial = "/internal/llm/turn/" + turn.id() + "/partial";
-
-        for (int i = 0; i < 5; i++) {
-            assertThat(answerTo(withToken(request("PUT", partial, GATEWAY_PORT), "turn-token")))
-                    .as("partial %d", i)
-                    .isEqualTo(200);
-        }
-        String search = "/internal/llm/turn/" + turn.id() + "/search";
-        assertThat(answerTo(withToken(request("POST", search, GATEWAY_PORT), "turn-token")))
-                .isEqualTo(200);
-        assertThat(answerTo(withToken(request("POST", search, GATEWAY_PORT), "turn-token")))
-                .as("a tool call of the same turn stays limited")
-                .isEqualTo(429);
-    }
-
     /** A spent source costs nothing more: its token is not read, whether it is valid or not. */
     @Test
     void shouldRefuseASpentSourceBeforeItsCredentialIsRead() throws Exception {
         chains = chains(new SandboxGatewayProperties(GATEWAY_PORT, 16, 1000, 1, 4096));
         when(jwtVerifier.verify("forged")).thenThrow(new AttemptTokenInvalidException("forged", "kid"));
+        when(jwtVerifier.verifySandbox("forged")).thenThrow(new AttemptTokenInvalidException("forged", "kid"));
 
         assertThat(answerToTokenCall("forged")).isEqualTo(401);
         assertThat(answerToTokenCall("forged")).isEqualTo(429);
@@ -706,6 +588,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     void shouldGiveEachSourceAddressItsOwnBudget() throws Exception {
         chains = chains(new SandboxGatewayProperties(GATEWAY_PORT, 16, 1000, 1, 4096));
         when(jwtVerifier.verify("forged")).thenThrow(new AttemptTokenInvalidException("forged", "kid"));
+        when(jwtVerifier.verifySandbox("forged")).thenThrow(new AttemptTokenInvalidException("forged", "kid"));
 
         assertThat(answerToTokenCall("forged")).isEqualTo(401);
         MockHttpServletRequest other = withToken(request("POST", "/internal/llm/responses", GATEWAY_PORT), "forged");
@@ -717,9 +600,10 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     /** Each refusal of the gateway shows under its reason, so an operator can tell a probe from a busy review. */
     @Test
     void shouldCountEachRefusalUnderItsReason() throws Exception {
-        AttemptJwt turn = turnJwt(1);
+        ProxyAttempt turn = turnAttempt(1);
         leased(turn, false);
         when(jwtVerifier.verify("forged")).thenThrow(new AttemptTokenInvalidException("forged", "kid"));
+        when(jwtVerifier.verifySandbox("forged")).thenThrow(new AttemptTokenInvalidException("forged", "kid"));
 
         assertThat(answerTo("GET", "/actuator/health", GATEWAY_PORT)).isEqualTo(404);
         assertThat(refused("unknown_route")).isEqualTo(1);
@@ -749,7 +633,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     void shouldRefuseABodyPastTheBudgetAndGiveTheBudgetBackAfterACall() throws Exception {
         bodyBudgetBytes = 1024;
         chains = chains(GATEWAY);
-        AttemptJwt turn = turnJwt(1);
+        ProxyAttempt turn = turnAttempt(1);
         leased(turn, true);
         MockHttpServletRequest held = withToken(request("POST", "/internal/llm/responses", GATEWAY_PORT), "turn-token");
         held.setContent(new byte[16]);
@@ -802,38 +686,40 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 .count();
     }
 
-    private AttemptJwt turnJwt(int attempt) {
-        return turnJwt(attempt, "llm_proxy");
-    }
-
-    private AttemptJwt turnJwt(int attempt, String scope) {
-        Instant now = Instant.now();
-        AttemptJwt turn = new AttemptJwt(
-                AttemptJwt.Kind.TURN,
-                UUID.randomUUID(),
-                7L,
-                attempt,
-                UUID.randomUUID(),
-                Set.of(scope),
-                "jti",
-                now,
-                now.plusSeconds(60),
-                now.plusSeconds(30));
-        when(jwtVerifier.verify("turn-token")).thenReturn(turn);
-        return turn;
-    }
-
     /** Whether the turn's credential still names its attempt's live lease; a turn endpoint reads no row. */
-    private void leased(AttemptJwt turn, boolean live) {
-        Mockito.lenient()
-                .when(turnRepository.findByIdAndWorkspaceId(turn.id(), turn.workspaceId()))
-                .thenReturn(Optional.of(Mockito.mock(MentorTurn.class)));
-        Mockito.lenient()
-                .when(turnRepository.hasLiveLease(turn.id(), turn.workspaceId(), turn.epoch(), turn.runId()))
+    private void leased(ProxyAttempt turn, boolean live) {
+        when(agentRuns.isCurrent(new AgentRunRef(turn.runId(), turn.workspaceId()), turn.epoch()))
                 .thenReturn(live);
     }
 
-    private static MockHttpServletRequest withToken(MockHttpServletRequest request, String token) {
+    private ProxyAttempt turnAttempt(int epoch) {
+        UUID runId = UUID.randomUUID();
+        var attempt = new ProxyAttempt(ProxyAttempt.Caller.TURN, UUID.randomUUID(), 7L, epoch, runId, null);
+        String subject = "conversation:" + UUID.randomUUID();
+        var token = new SandboxJwt(
+                UUID.randomUUID(), 7L, subject, "test", Instant.now().plusSeconds(300));
+        var sandbox = new AgentSandboxes.LiveSandbox(token.sandboxId(), 7L, subject, AgentSandboxKind.CONVERSATION);
+        when(jwtVerifier.verify("turn-token")).thenThrow(new AttemptTokenInvalidException("not an attempt", "typ"));
+        when(jwtVerifier.verifySandbox("turn-token")).thenReturn(token);
+        when(agentSandboxes.authenticate(token)).thenReturn(Optional.of(sandbox));
+        var row = BeanUtils.instantiateClass(AgentRun.class);
+        ReflectionTestUtils.setField(row, "id", runId);
+        ReflectionTestUtils.setField(row, "workspaceId", 7L);
+        ReflectionTestUtils.setField(row, "concurrencyKey", subject);
+        ReflectionTestUtils.setField(row, "kind", AgentRunKind.TURN);
+        when(agentRuns.find(new AgentRunRef(runId, 7L))).thenReturn(Optional.of(row));
+        when(turnKind.attempt(Mockito.any())).thenReturn(Optional.of(attempt));
+        sandboxAttempt = attempt;
+        return attempt;
+    }
+
+    private MockHttpServletRequest withToken(MockHttpServletRequest request, String token) {
+        ProxyAttempt attempt = sandboxAttempt;
+        if ("turn-token".equals(token) && attempt != null) {
+            request.addHeader("X-Agent-Run", attempt.runId().toString());
+            request.addHeader("X-Agent-Epoch", Integer.toString(attempt.epoch()));
+        }
+
         request.addHeader("Authorization", "Bearer " + token);
         return request;
     }
@@ -850,9 +736,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
 
     /** A capability call carrying a proxy-scoped bearer token, as a sandbox sends it. */
     private int answerToTokenCall(String token) throws Exception {
-        MockHttpServletRequest request = request("POST", "/internal/llm/responses", GATEWAY_PORT);
-        request.addHeader("Authorization", "Bearer " + token);
-        return answerTo(request);
+        return answerTo(withToken(request("POST", "/internal/llm/responses", GATEWAY_PORT), token));
     }
 
     private static MockHttpServletRequest request(String method, String path, int localPort) {

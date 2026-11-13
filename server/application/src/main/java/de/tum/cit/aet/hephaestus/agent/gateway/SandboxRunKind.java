@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAttempt;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
@@ -28,6 +29,9 @@ public interface SandboxRunKind {
      * gets no run from this pull.
      */
     boolean claimed(SandboxRun run);
+
+    /** Takes a domain write fence before the sandbox and run row locks. */
+    default void beforeWrite(AgentSandboxes.LiveSandbox sandbox) {}
 
     /**
      * The attempt that the model gateway routes and bills the run's model calls to, while the claim holds the run:

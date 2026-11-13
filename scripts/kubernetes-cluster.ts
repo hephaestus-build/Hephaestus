@@ -9,13 +9,12 @@
  *   install  `helm upgrade --install` with the dev profile, or each --profile in order, and the
  *            prepared values, until ready
  *   upgrade  install, and check that PostgreSQL and NATS kept their Pods
- *   verify   every workload ready, each server's isolation probe passed, and a sandbox of each
- *            SandboxTemplate passed the sandbox isolation gate (scripts/sandbox-isolation.ts)
+ *   verify   every workload ready, and a sandbox of each SandboxTemplate passed the isolation
+ *            gate (scripts/sandbox-isolation.ts)
  *   request  one HTTPS request to the webapp and the API through that Gateway
  *   backup-drill  pgBackRest to a throwaway S3 server, then a point-in-time restore on a fresh node
- *   turn-roll  a conversation turn that runs `bash` in its tools Pod through a rollout restart of
- *            the server and then of the conversation loop, with the capacity bench's fake model
- *            provider. --pod-cidr opens the provider to the release
+ *   turn-roll  a TURN run in its conversation sandbox through a server rollout, with the capacity
+ *            bench's fake model provider. --pod-cidr opens the provider to the release
  *   gvisor   the pinned gVisor of k3s-containerd.toml.tmpl, unpacked into --work, for k3s nodes to mount
  *   render   the manifests of those values for synthetic images, with backups on and with an external
  *            PostgreSQL, for a schema check without a cluster
@@ -24,7 +23,6 @@
  *            shutdown budget, requests through the Gateway, a second run and an upgrade
  *   dev      a local k3d cluster with a registry, this checkout's images built and pushed, the three
  *            steps above, and a Gateway on https://hephaestus.localhost; a second run reuses the cluster
- *   live     runs the credential-free sandbox suite in a Pod from the chart server template
  *   down     removes the qualification release and keeps its data and the shared cluster
  *   reset    deletes the dev cluster, its data, its registry and the work directory
  *
@@ -40,7 +38,6 @@ import {
 	chmod,
 	mkdir,
 	mkdtemp,
-	open,
 	readdir,
 	readFile,
 	rename,
@@ -87,11 +84,6 @@ const HOST = "hephaestus.cluster.test";
 export const DEV_CLUSTER = "hephaestus";
 export const DEV_HOST = "hephaestus.localhost";
 const DEV_WORK = path.join(homedir(), ".hephaestus", "kubernetes-cluster");
-
-/** What `verify` reads in a server's log once its probe passed (KubernetesIsolationProbe). */
-export const PROBE_PASSED = "The sandbox isolation probe passed";
-const PROBE_FAILED = "The cluster does not hold the sandbox boundary";
-const PROBE_WAIT_MS = 10 * 60_000;
 
 export type ChartImages = Record<ChartImage, string>;
 
@@ -828,227 +820,6 @@ export async function install(
 	]);
 }
 
-/** A one-shot server Pod: retain its authority and networking; replace only its image and restart policy. */
-export function livePod(deployment: unknown, image: string, name: string): Record<string, unknown> {
-	const root = asRecord(deployment, "server Deployment");
-	const metadata = asRecord(root.metadata, "server metadata");
-	const template = asRecord(asRecord(root.spec, "server spec").template, "server template");
-	const spec = asRecord(template.spec, "server Pod spec");
-	const containers = asArray(spec.containers, "server containers");
-	if (containers.length !== 1) {
-		throw new Error("the qualification needs the chart's single-container server template");
-	}
-	const container = asRecord(containers[0], "server container");
-	if (
-		container.command !== undefined ||
-		container.args !== undefined ||
-		container.imagePullPolicy === "Always"
-	) {
-		throw new Error(
-			"the qualification needs the chart server's image entrypoint and IfNotPresent pull policy",
-		);
-	}
-	return {
-		apiVersion: "v1",
-		kind: "Pod",
-		metadata: {
-			...asRecord(template.metadata, "server template metadata"),
-			name,
-			namespace: metadata.namespace,
-		},
-		spec: { ...spec, restartPolicy: "Never", containers: [{ ...container, image }] },
-	};
-}
-
-/**
- * Run the package job's compiled main/test classpath on the installed server image and chart server authority.
- * This adapter suite has its own health listener; install/verify separately qualifies application readiness.
- */
-export async function qualifySandboxes(
-	packaged: boolean,
-	selectedNamespace?: string,
-): Promise<void> {
-	const namespaceName = selectedNamespace ?? NAMESPACE;
-	if (!/^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$/u.test(namespaceName)) {
-		throw new Error("live qualification requires a valid namespace");
-	}
-	if (process.env.CI !== "true" && selectedNamespace === undefined) {
-		throw new Error(
-			"local live qualification requires --namespace to name the reserved shared qualification release",
-		);
-	}
-	const selectedContext = await output("kubectl", ["config", "current-context"]);
-	const context = selectedContext.trim();
-	if (context !== `k3d-${DEV_CLUSTER}`) {
-		throw new Error(`live qualification requires context k3d-${DEV_CLUSTER}`);
-	}
-	let reservation: Awaited<ReturnType<typeof open>> | undefined;
-	const lock = path.join(DEV_WORK, "live.lock");
-	if (process.env.CI !== "true") {
-		const admin = process.env.KUBECONFIG ?? (await requireDevCluster());
-		if (!(await ownsDevNamespace(admin, namespaceName, ROOT))) {
-			throw new Error("Start the qualification release from this worktree before running live");
-		}
-		await mkdir(DEV_WORK, { recursive: true, mode: 0o700 });
-		reservation = await open(lock, "wx", 0o600).catch(() => {
-			throw new Error(
-				`The shared live qualification is busy; check the owner before removing ${lock}`,
-			);
-		});
-	}
-	try {
-		await runSandboxQualification(packaged, namespaceName);
-	} finally {
-		if (reservation !== undefined) {
-			await reservation.close();
-			await rm(lock);
-		}
-	}
-}
-
-async function runSandboxQualification(packaged: boolean, namespaceName: string): Promise<void> {
-	const started = performance.now();
-	const server = `${RELEASE}-server`;
-	const deployment = asRecord(
-		parseJson(await kubectl(["-n", namespaceName, "get", "deployment", server, "-o", "json"])),
-		"server Deployment",
-	);
-	const deploymentSpec = asRecord(deployment.spec, "server spec");
-	const { replicas } = deploymentSpec;
-	if (typeof replicas !== "number" || !Number.isSafeInteger(replicas) || replicas < 0) {
-		throw new Error("the server Deployment has no replica count");
-	}
-	const template = asRecord(deploymentSpec.template, "server template");
-	const containers = asArray(
-		asRecord(template.spec, "server Pod spec").containers,
-		"server containers",
-	);
-	const base = asString(asRecord(containers[0], "server container").image, "server image");
-	if (!/@sha256:[a-f0-9]{64}$/u.test(base)) {
-		throw new Error("the qualification requires the installed server image by digest");
-	}
-	await run(
-		path.join(ROOT, "server", process.platform === "win32" ? "gradlew.bat" : "gradlew"),
-		[
-			":application:kubernetesLiveBundle",
-			...(packaged ? ["-PpackagedServer=true"] : []),
-			"--console=plain",
-		],
-		{ cwd: path.join(ROOT, "server") },
-	);
-	const bundle = path.join(ROOT, "server", "application", "build", "kubernetes-live");
-	await writeFile(
-		path.join(bundle, "Dockerfile"),
-		[
-			`FROM ${process.env.CI === "true" ? base : base.replace("ghcr.io/", "localhost:5111/")}`,
-			"COPY --chown=1000:1000 . /workspace/live/",
-			"ENV HEPHAESTUS_KUBERNETES_LIVE=true",
-			"ENV BPL_JAVA_NMT_ENABLED=false",
-			'ENTRYPOINT ["/cnb/lifecycle/launcher"]',
-			'CMD ["--", "java", "-cp", "/workspace/live/test:/workspace/live/main:/workspace/live/lib/*", "de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes.KubernetesLiveSuite"]',
-			"",
-		].join("\n"),
-	);
-	const suffix = randomBytes(5).toString("hex");
-	const image = `hephaestus-sandbox-live:${suffix}`;
-	const name = `${RELEASE}-sandbox-live-${suffix}`;
-	// Validate the server template before any scale or image mutation.
-	const pod = livePod(deployment, image, name);
-	await run("docker", ["build", "--tag", image, bundle]);
-	let scaled = false;
-	let created = false;
-	try {
-		await run("k3d", ["image", "import", "--mode", "direct", "--cluster", DEV_CLUSTER, image]);
-		await kubectl(["-n", namespaceName, "scale", `deployment/${server}`, "--replicas=0"]);
-		scaled = true;
-		await kubectl([
-			"-n",
-			namespaceName,
-			"wait",
-			"--for=delete",
-			"pod",
-			"-l",
-			`app.kubernetes.io/instance=${RELEASE},app.kubernetes.io/component=server`,
-			"--timeout=9m",
-		]);
-		await apply(pod);
-		created = true;
-		// logs --follow can return ContainerCreating before the first container starts.
-		await kubectl([
-			"-n",
-			namespaceName,
-			"wait",
-			"--for=jsonpath={.status.phase}=Running",
-			`pod/${name}`,
-			"--timeout=5m",
-		]);
-		await run("kubectl", [
-			"-n",
-			namespaceName,
-			"logs",
-			"--follow",
-			name,
-			"--pod-running-timeout=5m",
-			"--request-timeout=25m",
-		]);
-		await kubectl([
-			"-n",
-			namespaceName,
-			"wait",
-			"--for=jsonpath={.status.containerStatuses[0].state.terminated}",
-			`pod/${name}`,
-			"--timeout=30s",
-		]);
-		const ended = asRecord(
-			parseJson(await kubectl(["-n", namespaceName, "get", "pod", name, "-o", "json"])),
-			"qualification Pod",
-		);
-		const status = asRecord(ended.status, "qualification status");
-		const statuses = asArray(status.containerStatuses, "qualification container statuses");
-		const terminated = asRecord(
-			asRecord(asRecord(statuses[0], "qualification container").state, "qualification state")
-				.terminated,
-			"qualification exit",
-		);
-		if (terminated.exitCode !== 0) {
-			throw new Error(
-				`Kubernetes live qualification failed with exit ${String(terminated.exitCode)}`,
-			);
-		}
-		process.stdout.write(
-			`Kubernetes live qualification passed in ${Math.round((performance.now() - started) / 1000)} seconds; kernel evidence is in the qualification log.\n`,
-		);
-	} finally {
-		try {
-			if (created) {
-				await kubectl(["-n", namespaceName, "delete", "pod", name, "--wait=true", "--timeout=2m"]);
-			}
-		} finally {
-			try {
-				if (scaled) {
-					await kubectl([
-						"-n",
-						namespaceName,
-						"scale",
-						`deployment/${server}`,
-						`--replicas=${replicas}`,
-					]);
-					await kubectl([
-						"-n",
-						namespaceName,
-						"rollout",
-						"status",
-						`deployment/${server}`,
-						"--timeout=10m",
-					]);
-				}
-			} finally {
-				await succeeds("docker", ["image", "rm", image]);
-			}
-		}
-	}
-}
-
 const STATEFUL = new Set(["postgresql", "nats"]);
 
 /** The UID of each running PostgreSQL and NATS Pod, by Pod name, from `kubectl get pods -o json`. */
@@ -1098,64 +869,7 @@ export async function keepsStatefulPods(upgrade: () => Promise<void>): Promise<v
 	process.stdout.write(`the upgrade kept ${[...before.keys()].join(", ")}\n`);
 }
 
-/** A stopped server can leave a finished probe to the Job TTL; an active or failed probe is still a leftover. */
-export function remainingProbeResources(listed: unknown): string[] {
-	const resources = asArray(asRecord(listed, "Probe resources").items, "Probe resources").map(
-		(entry) => {
-			const resource = asRecord(entry, "Probe resource");
-			const metadata = asRecord(resource.metadata, "Probe metadata");
-			return {
-				kind: asString(resource.kind, "Probe kind"),
-				name: asString(metadata.name, "Probe name"),
-				uid: metadata.uid,
-				owners: metadata.ownerReferences,
-				probe:
-					isRecord(metadata.labels) &&
-					metadata.labels["hephaestus.build/isolation-probe"] === "true",
-				status: isRecord(resource.status) ? resource.status : {},
-			};
-		},
-	);
-	const completed = new Set(
-		resources
-			.filter(
-				(resource) =>
-					resource.probe &&
-					resource.kind === "Job" &&
-					Array.isArray(resource.status.conditions) &&
-					resource.status.conditions.some(
-						(condition: unknown) =>
-							isRecord(condition) && condition.type === "Complete" && condition.status === "True",
-					),
-			)
-			.map((resource) => asString(resource.uid, "Completed probe Job UID")),
-	);
-	return resources
-		.filter((resource) => {
-			if (!resource.probe) {
-				return true;
-			}
-			if (resource.kind === "Job") {
-				return !completed.has(asString(resource.uid, "Probe Job UID"));
-			}
-			return !(
-				resource.kind === "Pod" &&
-				resource.status.phase === "Succeeded" &&
-				Array.isArray(resource.owners) &&
-				resource.owners.some(
-					(owner: unknown) =>
-						isRecord(owner) &&
-						owner.kind === "Job" &&
-						owner.controller === true &&
-						typeof owner.uid === "string" &&
-						completed.has(owner.uid),
-				)
-			);
-		})
-		.map((resource) => `${resource.kind.toLowerCase()}/${resource.name}`);
-}
-
-/** Every workload ready and each server's isolation probe passed; the number of those servers. */
+/** Every workload ready and each SandboxTemplate passes the isolation gate; the number of servers. */
 export async function verify(): Promise<number> {
 	for (const kind of ["deployment", "statefulset", "daemonset"]) {
 		const listed = await kubectl(["-n", NAMESPACE, "get", kind, "-o", "name"]);
@@ -1186,50 +900,6 @@ export async function verify(): Promise<number> {
 		.map((metadata) => `pod/${asString(metadata.name, "Pod name")}`);
 	if (servers.length === 0) {
 		throw new Error("no server pod runs");
-	}
-	// Readiness does not wait for the probe: the server serves its API while the probe runs, and starts no
-	// sandbox until it passes. A failed probe is final for this check; the server tries again on its schedule.
-	const probeDeadline = Date.now() + PROBE_WAIT_MS;
-	for (const pod of servers) {
-		for (;;) {
-			const log = await kubectl(["-n", NAMESPACE, "logs", pod, "--tail=-1"]);
-			if (log.includes(PROBE_PASSED)) {
-				break;
-			}
-			const failed = log.split("\n").find((line) => line.includes(PROBE_FAILED));
-			if (failed !== undefined) {
-				throw new Error(`${pod} failed its isolation probe: ${failed}`);
-			}
-			if (Date.now() > probeDeadline) {
-				throw new Error(
-					`${pod} logged no passed isolation probe within ${PROBE_WAIT_MS / 60_000} minutes`,
-				);
-			}
-			await sleep(5000);
-		}
-	}
-	// The probe deletes each Job after reading its result. A stopped server can leave a completed Job
-	// to the TTL controller; only that Job and its succeeded Pod may remain after an upgrade.
-	let leftovers = "";
-	for (let tries = 0; tries < 30; tries += 1) {
-		const probes = await kubectl([
-			"-n",
-			SANDBOXES,
-			"get",
-			"jobs,pods",
-			"-l",
-			"hephaestus.build/isolation-probe=true",
-			"-o",
-			"json",
-		]);
-		leftovers = remainingProbeResources(parseJson(probes)).join("\n");
-		if (leftovers === "") {
-			break;
-		}
-		await sleep(2000);
-	}
-	if (leftovers !== "") {
-		throw new Error(`isolation probe Jobs or Pods stayed: ${leftovers}`);
 	}
 	// A sandbox of each template kind reaches the server's gateway and nothing else: not the
 	// management port of the server that serves it.
@@ -1314,7 +984,7 @@ export async function verify(): Promise<number> {
 		await negativeControl(sandboxGateway);
 	}
 	process.stdout.write(
-		`${servers.length} servers passed the isolation probe; the ${SANDBOX_KINDS.join(", ")} templates passed the sandbox isolation gate${controlled ? ", and failed it without the sandbox namespace's policies" : ""}; every workload is ready\n`,
+		`${servers.length} servers run; the ${SANDBOX_KINDS.join(", ")} templates passed the sandbox isolation gate${controlled ? ", and failed it without the sandbox namespace's policies" : ""}; every workload is ready\n`,
 	);
 	return servers.length;
 }
@@ -2069,23 +1739,46 @@ async function portForward(pod: string, port: number): Promise<{ port: number; s
 	}
 }
 
-/** The drill turn's status, attempt and bound tools Pod, from the database. */
+/** The drill turn's run fence and physical conversation sandbox, from the database. */
 export interface TurnState {
 	status: string;
 	attempt: number;
-	pod: string | null;
+	runId: string;
+	epoch: number;
+	sandboxId: string | null;
+	claim: string | null;
 }
 
 export function turnState(text: string): TurnState {
 	const row = asRecord(parseJson(text), "turn state");
-	const { status, attempt, pod } = row;
-	if (typeof status !== "string" || typeof attempt !== "number") {
+	const { status, attempt, runId, epoch, sandboxId, claim } = row;
+	if (
+		typeof status !== "string" ||
+		typeof attempt !== "number" ||
+		!Number.isInteger(attempt) ||
+		attempt < 0
+	) {
 		throw new TypeError(`the turn state has no status or attempt: ${text}`);
 	}
-	if (pod !== null && (typeof pod !== "string" || !DNS_LABEL.test(pod))) {
-		throw new TypeError(`the turn's tools Pod has no valid name: ${text}`);
+	if (
+		typeof runId !== "string" ||
+		!UUID.test(runId) ||
+		typeof epoch !== "number" ||
+		!Number.isInteger(epoch) ||
+		epoch < 0
+	) {
+		throw new TypeError(`the turn state has no run fence: ${text}`);
 	}
-	return { status, attempt, pod };
+	if (sandboxId !== null && (typeof sandboxId !== "string" || !UUID.test(sandboxId))) {
+		throw new TypeError(`the conversation sandbox has no valid id: ${text}`);
+	}
+	if (claim !== null && (typeof claim !== "string" || !DNS_LABEL.test(claim))) {
+		throw new TypeError(`the conversation sandbox claim has no valid name: ${text}`);
+	}
+	if ((sandboxId === null) !== (claim === null)) {
+		throw new TypeError(`the conversation sandbox and its claim disagree: ${text}`);
+	}
+	return { status, attempt, runId, epoch, sandboxId, claim };
 }
 
 /** What the drill turn left: its status and attempt, its answer, and each `bash` result in order. */
@@ -2115,10 +1808,10 @@ export interface RollCheck {
 	failure: string | undefined;
 }
 
-/** The checks that the turn still runs `recorded`'s attempt with the same tools Pod. */
+/** The checks that the turn still holds its run fence and physical conversation sandbox. */
 export function heldChecks(
 	after: string,
-	recorded: { attempt: number; pod: string },
+	recorded: { attempt: number; runId: string; epoch: number; sandboxId: string; claim: string },
 	observed: TurnState,
 ): RollCheck[] {
 	return [
@@ -2132,9 +1825,26 @@ export function heldChecks(
 				observed.attempt === recorded.attempt ? undefined : `it runs attempt ${observed.attempt}`,
 		},
 		{
-			claim: `${after}, the attempt holds tools Pod ${recorded.pod}`,
+			claim: `${after}, the turn holds run ${recorded.runId}`,
+			failure: observed.runId === recorded.runId ? undefined : `it holds run ${observed.runId}`,
+		},
+		{
+			claim: `${after}, the turn holds epoch ${recorded.epoch}`,
+			failure: observed.epoch === recorded.epoch ? undefined : `it holds epoch ${observed.epoch}`,
+		},
+		{
+			claim: `${after}, the turn holds sandbox ${recorded.sandboxId}`,
 			failure:
-				observed.pod === recorded.pod ? undefined : `it holds ${observed.pod ?? "no tools Pod"}`,
+				observed.sandboxId === recorded.sandboxId
+					? undefined
+					: `it holds sandbox ${observed.sandboxId ?? "none"}`,
+		},
+		{
+			claim: `${after}, the turn holds claim ${recorded.claim}`,
+			failure:
+				observed.claim === recorded.claim
+					? undefined
+					: `it holds claim ${observed.claim ?? "none"}`,
 		},
 	];
 }
@@ -2162,7 +1872,7 @@ export function outcomeChecks(outcome: TurnOutcome): RollCheck[] {
 			failure: outcome.attempt === 1 ? undefined : `it ran ${outcome.attempt} attempts`,
 		},
 		{
-			claim: `each of the ${outcome.bash.length} bash calls succeeded in the tools Pod`,
+			claim: `each of the ${outcome.bash.length} bash calls succeeded in the conversation sandbox`,
 			failure: bashFailure,
 		},
 		{
@@ -2204,23 +1914,37 @@ async function until<T>(
 	}
 }
 
-async function toolsJob(name: string): Promise<boolean> {
-	const found = await kubectl([
+/** The claim's Kubernetes identity; its DB sandbox label prevents an unrelated claim from passing. */
+async function sandboxClaimIdentity(name: string, sandboxId: string): Promise<string | null> {
+	const text = await kubectl([
 		"-n",
 		SANDBOXES,
 		"get",
-		"job",
+		"sandboxclaim",
 		name,
 		"--ignore-not-found",
 		"-o",
-		"name",
+		"json",
 	]);
-	return found.trim() !== "";
+	if (text.trim() === "") {
+		return null;
+	}
+	const metadata = asRecord(asRecord(parseJson(text), "SandboxClaim").metadata, "claim metadata");
+	const labels = asRecord(metadata.labels, "claim labels");
+	if (labels["hephaestus.build/sandbox-id"] !== sandboxId || metadata.deletionTimestamp != null) {
+		throw new Error(`the conversation sandbox claim ${name} is unrelated or is being deleted`);
+	}
+	const pod = asRecord(
+		parseJson(await kubectl(["-n", SANDBOXES, "get", "pod", name, "-o", "json"])),
+		"sandbox Pod",
+	);
+	const podMetadata = asRecord(pod.metadata, "sandbox Pod metadata");
+	return `${asString(metadata.uid, "claim uid")}/${asString(podMetadata.uid, "sandbox Pod uid")}`;
 }
 
 async function rollRestart(deployment: string): Promise<void> {
 	await kubectl(["-n", NAMESPACE, "rollout", "restart", `deployment/${deployment}`]);
-	// The rollout ends when the new Pods are available; an old loop Pod can still end its turn.
+	// The sandbox keeps running while server replicas are replaced.
 	await kubectl([
 		"-n",
 		NAMESPACE,
@@ -2232,10 +1956,8 @@ async function rollRestart(deployment: string): Promise<void> {
 }
 
 /**
- * The roll drill of docs/admin/runtime-roles.mdx § The conversation loop: a conversation turn that runs
- * `bash` in its tools Pod outlives a rollout restart of the server and then of the loop. The fake
- * model provider of the capacity bench scripts the turn: a 30 s command after each result, until
- * the drill releases it after both rollouts, then an answer with each command's output.
+ * A conversation sandbox's TURN run keeps its bash command and run fence while the server rolls.
+ * The fake model repeats a 30 s command until the drill releases it, then answers with each output.
  */
 export async function turnRoll(
 	work: string,
@@ -2345,41 +2067,68 @@ export async function turnRoll(
 		const state = async () =>
 			turnState(
 				await psql(
-					`SELECT json_build_object('status', t.status, 'attempt', t.attempt, 'pod', p.name) FROM mentor_turn t LEFT JOIN conversation_tools_pod p ON p.turn_id = t.id AND p.attempt = t.attempt WHERE t.id = '${submitted.id}'`,
+					`SELECT json_build_object('status', t.status, 'attempt', t.attempt, 'runId', t.run_id, 'epoch', r.lease_epoch, 'sandboxId', s.id, 'claim', s.claim_name) FROM mentor_turn t JOIN agent_run r ON r.id = t.run_id AND r.workspace_id = t.workspace_id LEFT JOIN agent_sandbox s ON s.workspace_id = t.workspace_id AND s.subject_key = 'conversation:' || t.conversation_id AND s.kind = 'CONVERSATION' AND s.state = 'READY' WHERE t.id = '${submitted.id}'`,
 				),
 			);
 		const running = await until(
-			"the turn did not run bash in a tools Pod",
+			"the turn did not start in its conversation sandbox",
 			5,
 			state,
 			(observed) =>
-				observed.status !== "QUEUED" && (observed.status !== "RUNNING" || observed.pod !== null),
+				observed.status !== "QUEUED" &&
+				(observed.status !== "RUNNING" || observed.sandboxId !== null),
 		);
-		const { pod } = running;
-		if (running.status !== "RUNNING" || pod === null) {
-			throw new Error(`turn roll: the turn ended ${running.status} before it held a tools Pod`);
+		const { sandboxId, claim } = running;
+		if (running.status !== "RUNNING" || sandboxId === null || claim === null || running.epoch < 1) {
+			throw new Error(
+				`turn roll: the turn ended ${running.status} before it held its conversation sandbox`,
+			);
 		}
-		const recorded = { attempt: running.attempt, pod };
-		process.stdout.write(
-			`turn roll: attempt ${recorded.attempt} runs bash in tools Pod ${recorded.pod}\n`,
+		const recorded = {
+			attempt: running.attempt,
+			runId: running.runId,
+			epoch: running.epoch,
+			sandboxId,
+			claim,
+		};
+		await until(
+			"the conversation sandbox did not start its bash command",
+			5,
+			async () =>
+				kubectl([
+					"-n",
+					SANDBOXES,
+					"exec",
+					`pod/${claim}`,
+					"--",
+					"node",
+					"-e",
+					String.raw`const fs=require('node:fs');const running=fs.readdirSync('/proc').filter((p)=>/^\d+$/.test(p)).some((p)=>{try{const [name,seconds]=fs.readFileSync('/proc/'+p+'/cmdline','utf8').split('\0');return /(?:^|\/)sleep$/.test(name)&&seconds==='30';}catch{return false;}});process.stdout.write(running?'running':'waiting');`,
+				]),
+			(observed) => observed.trim() === "running",
 		);
+		const claimUid = await sandboxClaimIdentity(claim, sandboxId);
 		report([
 			{
-				claim: `the tools Job ${pod} exists`,
-				failure: (await toolsJob(pod)) ? undefined : "it does not",
+				claim: `the physical conversation sandbox claim ${claim} exists`,
+				failure: claimUid === null ? "it does not" : undefined,
 			},
 		]);
+		process.stdout.write(
+			`turn roll: run ${recorded.runId} epoch ${recorded.epoch} runs in sandbox ${sandboxId} claim ${claim}\n`,
+		);
 
 		await rollRestart(`${RELEASE}-server`);
 		report([
 			...heldChecks("after the server roll", recorded, await state()),
 			{
-				claim: `after the server roll, the tools Job ${pod} exists`,
-				failure: (await toolsJob(pod)) ? undefined : "it is gone",
+				claim: `after the server roll, the physical claim and Pod ${claim} are unchanged`,
+				failure:
+					(await sandboxClaimIdentity(claim, sandboxId)) === claimUid
+						? undefined
+						: "the claim is gone or was replaced",
 			},
 		]);
-		await rollRestart(`${RELEASE}-conversation-loop`);
-		report(heldChecks("after the loop roll", recorded, await state()));
 
 		// The fake answers at the next model call, after the command that runs now.
 		await kubectl([
@@ -2404,14 +2153,24 @@ export async function turnRoll(
 			),
 		);
 		report(outcomeChecks(outcome));
-		// The server removes the tools Pod when the attempt ends.
-		await until(
-			"the tools Job stayed",
-			5,
-			async () => toolsJob(pod),
-			(present) => !present,
-		);
-		report([{ claim: `the tools Job ${pod} is removed`, failure: undefined }]);
+		// The conversation sandbox stays warm for the next TURN; its idle rule, not turn completion, reaps it.
+		const ended = await state();
+		report([
+			{
+				claim: "the completed turn kept its conversation sandbox",
+				failure:
+					ended.sandboxId === sandboxId && ended.claim === claim
+						? undefined
+						: "the sandbox row is gone or was replaced",
+			},
+			{
+				claim: "the completed turn kept its physical claim",
+				failure:
+					(await sandboxClaimIdentity(claim, sandboxId)) === claimUid
+						? undefined
+						: "the claim is gone or was replaced",
+			},
+		]);
 	} finally {
 		forward?.stop();
 		await kubectl(["-n", NAMESPACE, "delete", "pod", signIn, "--ignore-not-found", "--wait=false"]);
@@ -2831,7 +2590,7 @@ export async function releaseSmoke(options: SmokeOptions): Promise<void> {
 	process.stdout.write("a second run of k3s-install.sh kept the Secret and every workload\n");
 
 	// An upgrade that rolls every role but PostgreSQL and NATS, with a new migration Job: the new server
-	// proves the cluster with the isolation probe.
+	// proves the cluster with the sandbox isolation gate.
 	await keepsStatefulPods(async () =>
 		run("helm", [
 			"upgrade",
@@ -2888,7 +2647,7 @@ export async function releaseSmoke(options: SmokeOptions): Promise<void> {
 		);
 	}
 	process.stdout.write(
-		`k3s ${asString(info.kubeletVersion, "kubelet version")} on ${architecture}: the release ${options.release} serves through the Gateway after an install, a second run and an upgrade; ${servers} servers passed the isolation probe\n`,
+		`k3s ${asString(info.kubeletVersion, "kubelet version")} on ${architecture}: the release ${options.release} serves through the Gateway after an install, a second run and an upgrade; ${servers} servers run\n`,
 	);
 }
 
@@ -3648,8 +3407,6 @@ if (import.meta.main) {
 		allowPositionals: true,
 		options: {
 			work: { type: "string", default: DEV_WORK },
-			packaged: { type: "boolean", default: false },
-			namespace: { type: "string" },
 			images: { type: "string" },
 			commit: { type: "string" },
 			"external-postgresql-cidr": { type: "string" },
@@ -3692,10 +3449,6 @@ if (import.meta.main) {
 			const settings = values.set.flatMap((setting) => ["--set", setting]);
 			const upgrade = async () => install(work, settings, values.profile);
 			await (command === "upgrade" ? keepsStatefulPods(upgrade) : upgrade());
-			break;
-		}
-		case "live": {
-			await qualifySandboxes(values.packaged, values.namespace);
 			break;
 		}
 		case "verify": {
@@ -3831,7 +3584,7 @@ if (import.meta.main) {
 		}
 		default: {
 			throw new Error(
-				"usage: kubernetes-cluster <prepare|gateway|install|upgrade|verify|request|backup-drill|turn-roll|render|gvisor|live|dev|down|reset|release-smoke> [--work dir]",
+				"usage: kubernetes-cluster <prepare|gateway|install|upgrade|verify|request|backup-drill|turn-roll|render|gvisor|dev|down|reset|release-smoke> [--work dir]",
 			);
 		}
 	}

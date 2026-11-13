@@ -49,6 +49,12 @@ final class SandboxTokenAuthenticationFilter extends OncePerRequestFilter {
         this.accounting = accounting;
     }
 
+    /** Async response completion crosses the same authenticated gateway boundary as its initial dispatch. */
+    @Override
+    protected boolean shouldNotFilterAsyncDispatch() {
+        return false;
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {

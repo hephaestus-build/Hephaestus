@@ -7,16 +7,17 @@ description: Reserved paths, task envelope, and exit codes for the Pi sandbox wo
 
 # Agent workspace ABI
 
-This ABI covers the one-shot practice runner's container workspace at `/workspace/`.
-The conversation loop uses its own layout. See [Conversation runtime](../unified-pi-runtime.mdx).
+This ABI covers the practice and conversation runners' sandbox workspace at `/workspace/`.
+See [Conversation runtime](../unified-pi-runtime.mdx) for turn context.
 
-The server renders one disposable folder for an owned execution attempt.
-The runtime contract is version 8. Practice inputs and candidates use script contract version 3.
+For a practice review, the server renders one disposable folder for an owned execution attempt.
+[SandboxLayout](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/java/de/tum/cit/aet/hephaestus/agent/runtime/SandboxLayout.java) owns the runtime and practice-script contract versions.
 
 ## Folder layout
 
 ```text
 /workspace/
+├── .sessions/                       # Pi session files, outside the context folder.
 ├── context/                         # Authorized frozen source records.
 │   ├── scm/                         # SCM domain evidence.
 │   ├── chat/                        # Permitted thread evidence.
@@ -36,13 +37,10 @@ The runtime contract is version 8. Practice inputs and candidates use script con
 └── task.json                        # Owned runtime envelope.
 ```
 
-The conversation loop runs its compiled program from the agent image. No server stages it.
-It reads the stored path, the situation and the system prompt of a turn from the server (`GET context`).
-
-The conversation loop reads context documents and repositories from a [context folder](../practice-review-glossary.mdx#runtime-terms) ([Conversation runtime](../unified-pi-runtime.mdx#context-folder)).
-The server serves the documents, and the loop reaches the rest in the turn's tools Pod.
-That folder uses a layout similar to the job folder: documents under `inputs/context/` and repositories under `repos/`.
-The practice runner and the conversation loop execute on Node.
+The conversation runner executes its compiled program from the agent image in its conversation sandbox.
+It reads the stored path, situation and system prompt through the run's gateway (`GET context`).
+It stages documents and repositories in its local [context folder](../unified-pi-runtime.mdx#context-folder).
+The practice and conversation runners execute on Node.
 See [ADR 0036](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0036-agent-runtime-runs-on-node-24.md).
 
 Source identity and capture facts are frozen before evaluation.

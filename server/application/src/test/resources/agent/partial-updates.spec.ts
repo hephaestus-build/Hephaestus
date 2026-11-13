@@ -8,12 +8,8 @@ import {
 	MAX_PARTIAL_CHARS,
 	type PartialUpdate,
 } from "../../../main/resources/agent/heph-host-protocol.ts";
-import {
-	partialStream,
-	partialUpdates,
-	type TurnApi,
-} from "../../../main/resources/agent/heph-host.ts";
-import { applied, contextOf, fakeWorker } from "./heph-host-worker.ts";
+import { partialStream, partialUpdates, type TurnApi } from "../../../main/resources/agent/turn.ts";
+import { applied, contextOf, fakeWorker } from "./turn-worker.ts";
 
 /** Pi's assistant message, as a writing message's start carries it. */
 type AssistantMessage = Extract<

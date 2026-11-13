@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.gateway;
 
+import de.tum.cit.aet.hephaestus.agent.mentor.host.HephTurnController;
 import de.tum.cit.aet.hephaestus.agent.proxy.JobTokenAuthenticationFilter;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
@@ -15,7 +16,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * model call of such a claim: the loop reads both the same way and stops the run. It covers every route of the gateway
  * package, and it comes before the global advice, whose handler of every exception would answer {@code 500}.
  */
-@RestControllerAdvice(basePackageClasses = AgentRunController.class)
+@RestControllerAdvice(basePackageClasses = {AgentRunController.class, HephTurnController.class})
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @ConditionalOnAgentRuntime
 class AgentGatewayErrors {

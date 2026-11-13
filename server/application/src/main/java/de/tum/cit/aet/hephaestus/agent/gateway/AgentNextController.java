@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -12,6 +13,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.MDC;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -55,8 +57,18 @@ public class AgentNextController {
         return drain.claim(() -> sandboxes.lease(
                         sandbox,
                         offered,
-                        lease -> Objects.requireNonNull(kinds.get(lease.kind()))
-                                .claimed(new SandboxRun(sandbox, lease.fence(), lease.kind(), lease.attempt()))))
+                        () -> kinds.values().stream()
+                                .filter(kind -> kind.sandbox() == sandbox.kind())
+                                .forEach(kind -> kind.beforeWrite(sandbox)),
+                        lease -> {
+                            // The token filter restores the request scope after common advice records a failure.
+                            MDC.put(StructuredLogKeys.RUN_ID, lease.runId().toString());
+                            MDC.put(StructuredLogKeys.RUN_EPOCH, Integer.toString(lease.epoch()));
+                            return Objects.requireNonNull(kinds.get(lease.kind()))
+                                    .claimed(new SandboxRun(sandbox, lease.fence(), lease.kind(), lease.attempt()));
+                        }))
+                // A TURN binds its work deadline in claimed(), after this immutable lease snapshot was read.
+                // Its gateway writes and renewals enforce the stored deadline even when this field is null.
                 .map(lease -> ResponseEntity.ok(new Assignment(
                         lease.runId(), lease.epoch(), lease.kind(), lease.leasedUntil(), lease.deadline())))
                 .orElseGet(() -> ResponseEntity.noContent().build());

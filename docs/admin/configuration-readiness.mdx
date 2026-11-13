@@ -215,8 +215,8 @@ A server with `hephaestus.agent.enabled` requires digest enforcement and a SHA-2
 ## Sandbox isolation
 
 Servers run sandbox work through the Kubernetes API with the chart's service account.
-The server's isolation probe verifies the cluster policy before sandbox work starts.
-A failed probe keeps the server unready and prevents new sandboxes.
+Run the platform isolation gate before sandbox work starts.
+Server readiness does not qualify the cluster policy.
 The settings page does not test the cluster from the server role.
 See [Kubernetes isolation qualification](./sandboxes#server) for the server configuration and proof.
 

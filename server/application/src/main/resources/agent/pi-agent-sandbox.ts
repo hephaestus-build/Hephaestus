@@ -1,21 +1,9 @@
 // pi-agent-sandbox.ts — the sandbox trust posture every Pi session in this image runs under.
-// Shared by the practice runner (pi-runner.ts) and the Heph host (heph-host.ts): both execute the
+// Shared by the practice runner (pi-runner.ts) and the conversation turn (turn.ts): both execute the
 // same vendored SDK in the same image at the same working directory, so each trust and discovery
 // option must be set the same way in both.
 
-import {
-	type BashOperations,
-	createBashToolDefinition,
-	type SettingsManagerCreateOptions,
-} from "@earendil-works/pi-coding-agent";
-
-/** A review's shell tool: the commands run on the tools side, which gives each its own environment. */
-export function reviewShellTool(
-	cwd: string,
-	operations: BashOperations,
-): ReturnType<typeof createBashToolDefinition> {
-	return createBashToolDefinition(cwd, { operations, exposeSessionEnvironment: false });
-}
+import type { SettingsManagerCreateOptions } from "@earendil-works/pi-coding-agent";
 
 /**
  * Untrusted on purpose: a trusted project makes the SDK look for `.agents/skills` in every ancestor

@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentProperties;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ToolsPods;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -26,16 +25,13 @@ public class AgentReviewDrain implements SmartLifecycle {
     private final AgentRuns runs;
     private final AgentProperties properties;
     private final ApplicationAvailability availability;
-    private final ToolsPods runtime;
     private final ReentrantReadWriteLock claims = new ReentrantReadWriteLock();
     private volatile boolean running;
 
-    public AgentReviewDrain(
-            AgentRuns runs, AgentProperties properties, ApplicationAvailability availability, ToolsPods runtime) {
+    public AgentReviewDrain(AgentRuns runs, AgentProperties properties, ApplicationAvailability availability) {
         this.runs = runs;
         this.properties = properties;
         this.availability = availability;
-        this.runtime = runtime;
     }
 
     /** A claim commits before stop can count leases; startup and draining never admit new work. */
@@ -44,7 +40,6 @@ public class AgentReviewDrain implements SmartLifecycle {
         try {
             if (!running || availability.getReadinessState() != ReadinessState.ACCEPTING_TRAFFIC)
                 return Optional.empty();
-            if (!runtime.ready()) return Optional.empty();
             return claim.get();
         } finally {
             claims.readLock().unlock();

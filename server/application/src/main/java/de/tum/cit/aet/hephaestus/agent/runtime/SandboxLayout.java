@@ -208,17 +208,11 @@ public final class SandboxLayout {
      */
     public static final int EXIT_PARTIAL_REVIEW = 78;
 
-    /**
-     * Exit code emitted by the Pi runner when its tools or programs side stopped or never started, and the review staged
-     * nothing. It says nothing about the reviewed work, so the work is requeued.
-     */
-    public static final int EXIT_SIDE_LOST = 79;
-
     /** OCI label declaring the agent image runtime contract. */
     public static final String RUNTIME_CONTRACT_LABEL = "hephaestus.agent.runtime-contract";
 
     /** Runtime contract required by the staged runners. */
-    public static final int RUNTIME_CONTRACT_VERSION = 17;
+    public static final int RUNTIME_CONTRACT_VERSION = 18;
 
     /** Node major required by the staged runners. */
     public static final int NODE_MAJOR = 24;

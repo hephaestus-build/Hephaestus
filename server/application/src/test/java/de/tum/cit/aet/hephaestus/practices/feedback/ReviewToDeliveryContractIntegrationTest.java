@@ -1089,8 +1089,6 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             "hephaestus.agent.enabled=true",
                             "hephaestus.sync.nats.enabled=false",
                             "hephaestus.sandbox.kubernetes.namespace=lost-server-sandboxes",
-                            "hephaestus.sandbox.kubernetes.pod-name=lost-server",
-                            "hephaestus.sandbox.kubernetes.pod-ip=127.0.0.1",
                             "server.port=0",
                             "management.server.port=0")
                     .run(application -> {

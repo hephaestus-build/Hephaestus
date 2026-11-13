@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -40,9 +39,6 @@ public final class JobTokenAuthenticationFilter extends AuthenticationFilter {
     private static final String RUNTIME_PATH = "/internal/llm/runtime/";
     private static final String TURN_PATH = "/internal/llm/turn/";
 
-    /** Where the conversation loop pulls turn assignments, with its own credential. */
-    static final String ASSIGNMENTS_PATH = "/internal/llm/turn-assignments";
-
     private static final BearerTokenAuthenticationConverter CONVERTER = converter();
     private static final List<IpAddressMatcher> PRIVATE_RANGES = List.of(
             new IpAddressMatcher("10.0.0.0/8"),
@@ -57,15 +53,12 @@ public final class JobTokenAuthenticationFilter extends AuthenticationFilter {
     JobTokenAuthenticationFilter(
             ReviewJobRepository jobs,
             AgentRuns runs,
-            MentorTurnRepository turns,
-            ConversationLoopProperties loop,
             AttemptTokenVerifier verifier,
             @Nullable AgentSandboxes sandboxes,
             Map<AgentRunKind, SandboxRunKind> kinds,
             ProxyAccounting accounting) {
         super(
-                new ProviderManager(
-                        new JobTokenAuthenticationProvider(jobs, runs, turns, loop, verifier, sandboxes, kinds)),
+                new ProviderManager(new JobTokenAuthenticationProvider(jobs, runs, verifier, sandboxes, kinds)),
                 JobTokenAuthenticationFilter::convert);
         setSuccessHandler((request, response, authentication) -> {
             var identity = ((JobTokenAuthentication) authentication).getPrincipal();
@@ -124,7 +117,6 @@ public final class JobTokenAuthenticationFilter extends AuthenticationFilter {
             return new RequestIdentity(
                     segment(path, RUNTIME_PATH),
                     segment(path, TURN_PATH),
-                    "POST".equals(incoming.getMethod()) && path.equals(ASSIGNMENTS_PATH),
                     incoming.getHeader(SandboxRunArgumentResolver.RUN_HEADER),
                     incoming.getHeader(SandboxRunArgumentResolver.EPOCH_HEADER));
         });
@@ -149,13 +141,11 @@ public final class JobTokenAuthenticationFilter extends AuthenticationFilter {
      * What the request asks for, which decides what a credential may reach.
      *
      * @param turnId the turn a turn endpoint names
-     * @param assignments whether this is the conversation loop's assignment pull
      * @param run the run that a sandbox's call names, with {@code epoch} the claim it holds
      */
     record RequestIdentity(
             @Nullable String runtimeJobId,
             @Nullable String turnId,
-            boolean assignments,
             @Nullable String run,
             @Nullable String epoch) {}
 

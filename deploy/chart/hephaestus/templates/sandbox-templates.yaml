@@ -64,12 +64,7 @@ spec:
         runAsUser: 1000
         runAsGroup: 1000
         seccompProfile:
-          {{- if $runtime.seccompProfile }}
-          type: Localhost
-          localhostProfile: {{ $runtime.seccompProfile | quote }}
-          {{- else }}
           type: RuntimeDefault
-          {{- end }}
       containers:
         - name: agent
           image: {{ include "hephaestus.image" (dict "root" $ "name" "agent-pi") | quote }}

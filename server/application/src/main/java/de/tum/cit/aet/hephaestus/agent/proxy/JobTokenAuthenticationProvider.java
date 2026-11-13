@@ -12,7 +12,6 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import java.io.Serial;
 import java.util.Map;
 import java.util.Set;
@@ -22,19 +21,11 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthenticationToken;
 
-/**
- * Authenticates the gateway credentials: an attempt's, of a review or of a Heph turn, and the conversation loop's. A
- * review attempt's token reaches its own runtime and the model. A Heph turn attempt's token reaches the model while
- * the attempt holds its lease, and its own turn endpoints, which read the lease themselves. The conversation loop's
- * credential, which no signed claim backs, reaches only the assignment pull. A sandbox's token, with the claim of a
- * run that it holds, reaches the model and the review calls as the attempt that the run's kind names.
- */
+/** Authenticates the model gateway's attempt and sandbox credentials. */
 // Credential checks must not initialize model configuration.
 final class JobTokenAuthenticationProvider implements AuthenticationProvider {
     private final ReviewJobRepository jobs;
     private final AgentRuns runs;
-    private final MentorTurnRepository turns;
-    private final ConversationLoopProperties loop;
     private final AttemptTokenVerifier verifier;
     private final @Nullable AgentSandboxes sandboxes;
     private final Map<AgentRunKind, SandboxRunKind> kinds;
@@ -43,15 +34,11 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
     JobTokenAuthenticationProvider(
             ReviewJobRepository jobs,
             AgentRuns runs,
-            MentorTurnRepository turns,
-            ConversationLoopProperties loop,
             AttemptTokenVerifier verifier,
             @Nullable AgentSandboxes sandboxes,
             Map<AgentRunKind, SandboxRunKind> kinds) {
         this.jobs = jobs;
         this.runs = runs;
-        this.turns = turns;
-        this.loop = loop;
         this.verifier = verifier;
         this.sandboxes = sandboxes;
         this.kinds = kinds;
@@ -62,21 +49,14 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
         var token = (BearerTokenAuthenticationToken) authentication;
         var request = (JobTokenAuthenticationFilter.RequestIdentity) token.getDetails();
         if (request == null) throw invalid();
-        // The loop's credential reaches the assignment pull only, and nothing else reaches it.
-        if (request.assignments()) {
-            if (!loop.admits(token.getToken())) throw invalid();
-            return new JobTokenAuthentication(ProxyIdentity.conversationLoop(), Set.of(), null);
-        }
         AttemptJwt attempt;
         try {
             attempt = verifier.verify(token.getToken());
         } catch (AttemptTokenInvalidException notAnAttempt) {
             return sandbox(token.getToken(), request, notAnAttempt);
         }
-        return switch (attempt.kind()) {
-            case REVIEW -> review(attempt, request);
-            case TURN -> turn(attempt, request);
-        };
+        if (attempt.kind() != AttemptJwt.Kind.REVIEW) throw invalid();
+        return review(attempt, request);
     }
 
     private Authentication review(AttemptJwt jwt, JobTokenAuthenticationFilter.RequestIdentity request) {
@@ -89,7 +69,7 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
         if (!job.getRunId().equals(jwt.runId())
                 || !runs.isCurrent(new AgentRunRef(jwt.runId(), jwt.workspaceId()), jwt.epoch()))
             throw new AttemptLeaseConflict("This review attempt no longer holds its lease");
-        return new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes(), null);
+        return new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes());
     }
 
     /**
@@ -120,27 +100,9 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
             throw new AttemptLeaseConflict("This sandbox's claim no longer holds its run");
         var attempt = kind.attempt(run).orElseThrow(JobTokenAuthenticationProvider::invalid);
         var authentication =
-                new JobTokenAuthentication(ProxyIdentity.of(attempt), Set.of(AttemptTokenIssuer.LLM_PROXY_SCOPE), null);
+                new JobTokenAuthentication(ProxyIdentity.of(attempt), Set.of(AttemptTokenIssuer.LLM_PROXY_SCOPE));
         authentication.setDetails(run);
         return authentication;
-    }
-
-    /**
-     * A turn token never reaches a sandbox runtime, and on the turn endpoints only its own turn. A model call needs the
-     * attempt to hold its live lease; an attempt that ended or moved on gets {@code 409}, so its loop stops it.
-     */
-    private Authentication turn(AttemptJwt jwt, JobTokenAuthenticationFilter.RequestIdentity request) {
-        if (request.runtimeJobId() != null) throw invalid();
-        if (request.turnId() != null) {
-            if (!request.turnId().equals(jwt.id().toString())) throw invalid();
-        } else {
-            // An unknown turn, or one of another workspace, is no credential at all; only a known turn's ended attempt
-            // gets 409.
-            if (turns.findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId()).isEmpty()) throw invalid();
-            if (!turns.hasLiveLease(jwt.id(), jwt.workspaceId(), jwt.epoch(), jwt.runId()))
-                throw new AttemptLeaseConflict("This turn attempt no longer holds its lease");
-        }
-        return new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes(), jwt);
     }
 
     /**

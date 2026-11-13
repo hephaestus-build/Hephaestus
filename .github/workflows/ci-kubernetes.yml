@@ -1,7 +1,7 @@
 name: CI / Kubernetes
 
 # The chart on real clusters, with this run's images: an install, an upgrade that rolls every role
-# but PostgreSQL and NATS, each server's isolation probe, and the sandbox isolation gate of each
+# but PostgreSQL and NATS, and the sandbox isolation gate of each
 # SandboxTemplate. docs/admin/kubernetes.mdx § Supported clusters states what these
 # jobs show. They share scripts/kubernetes-cluster.ts with `vp run dev:kubernetes`.
 
@@ -36,10 +36,6 @@ on:
         description: Qualify replacement-storage recovery on the latest amd64 leg
         type: boolean
         default: false
-      application-artifact:
-        description: The package job's compiled server and tests; empty keeps a cluster-only qualification
-        type: string
-        default: ""
       ref:
         description: The commit whose chart and scripts to check out; empty checks out the caller's commit
         type: string
@@ -48,7 +44,6 @@ on:
 permissions: {}
 
 env:
-  QUALIFY: "false"
   # The schema sources of kubeconform, at pinned commits.
   KUBERNETES_SCHEMAS: https://raw.githubusercontent.com/yannh/kubernetes-json-schema/f7d855e49c34b039c9ef2196444910275e31e09e
   CRD_SCHEMAS: https://raw.githubusercontent.com/datreeio/CRDs-catalog/501527ab9c40c827144c8f45945b25a023e344ce/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
@@ -75,9 +70,6 @@ jobs:
       KUBERNETES_ARCH: amd64
       PROFILES: --profile dev
       GVISOR: "true"
-      # Adapter qualification stays on the PR's own packaged classes. The queue tests its combined
-      # tree's install here and runs roll in the independent drill cluster below.
-      QUALIFY: ${{ github.event_name != 'merge_group' }}
       DRILLS: "false"
     steps: &k3d-steps
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -113,12 +105,6 @@ jobs:
               -schema-location "$CRD_SCHEMAS" manifests.yaml
           done
 
-      - uses: ./.github/actions/setup-caches
-        if: ${{ inputs.application-artifact != '' && env.QUALIFY == 'true' }}
-      - uses: ./.github/actions/restore-server-build
-        if: ${{ inputs.application-artifact != '' && env.QUALIFY == 'true' }}
-        with:
-          artifact: ${{ inputs.application-artifact }}
       - name: Resolve this run's images
         env:
           RELEASE_IMAGE_DIGESTS: ${{ inputs.image-digests }}
@@ -131,7 +117,7 @@ jobs:
           fi
       - name: Free disk space for the cluster
         run: node scripts/prepare-kubernetes-runner.ts
-      # k3s enforces NetworkPolicy with its embedded controller, so the isolation probe judges it.
+      # k3s enforces NetworkPolicy with its embedded controller, so the sandbox isolation gate judges it.
       - name: Create a server and an agent node
         env:
           NODE_IMAGE: ${{ fromJSON(env.K3S_IMAGES)[env.KUBERNETES_MINOR] }}
@@ -180,9 +166,9 @@ jobs:
           node scripts/kubernetes-cluster.ts upgrade --work "$work" $PROFILES --set "release.version=v0.0.1-cluster"
           node scripts/kubernetes-cluster.ts verify
           node scripts/kubernetes-cluster.ts request --work "$work"
-      # A conversation turn runs bash in its tools Pod through a server roll and then a loop roll.
+      # A TURN run keeps its bash command, run fence and physical conversation sandbox through a server roll.
       # The fake model provider runs in the Pod network, which k3s gives 10.42.0.0/16.
-      - name: Keep a conversation turn through a server roll and a loop roll
+      - name: Keep a TURN run in its sandbox through a server roll
         background: true
         if: ${{ env.DRILLS == 'true' }}
         run: |
@@ -191,12 +177,6 @@ jobs:
           # shellcheck disable=SC2086 # PROFILES is a list of flags.
           node scripts/kubernetes-cluster.ts turn-roll --work "$RUNNER_TEMP/kubernetes-cluster" $PROFILES \
             --set "release.version=v0.0.1-cluster" --pod-cidr 10.42.0.0/16
-      - name: Qualify the sandbox adapters in the chart server Pod
-        if: ${{ inputs.application-artifact != '' && env.QUALIFY == 'true' }}
-        run: |
-          set -euo pipefail
-          echo "Live sandbox kernel: $(uname -r)" >> "$GITHUB_STEP_SUMMARY"
-          node scripts/kubernetes-cluster.ts live --packaged
       # k3s gives Pods 10.42.0.0/16, where the drill's S3 server runs.
       # Nightly and relevant pull requests opt in; merge groups keep the destructive drill off their path.
       - name: Back up, then restore to a point in time
@@ -225,7 +205,6 @@ jobs:
           kubectl -n hephaestus logs -l app.kubernetes.io/component=migration --all-containers --tail=400 --prefix || true
           kubectl -n hephaestus logs -l app.kubernetes.io/component=postgresql --all-containers --tail=200 --prefix || true
           kubectl -n hephaestus logs -l app.kubernetes.io/component=server --tail=300 --prefix || true
-          kubectl -n hephaestus logs -l app.kubernetes.io/component=conversation-loop --tail=300 --prefix || true
           kubectl -n hephaestus get jobs,cronjobs -o wide || true
           kubectl -n hephaestus logs -l app.kubernetes.io/component=postgresql-backup --tail=200 --prefix || true
           kubectl -n hephaestus-sandboxes get pods,jobs -o wide || true

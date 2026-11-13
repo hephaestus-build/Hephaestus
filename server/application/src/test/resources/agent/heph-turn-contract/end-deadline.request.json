@@ -2,5 +2,6 @@
   "outcome": "FAILED",
   "entries": [],
   "reason": "DEADLINE",
-  "detail": "deadline"
+  "detail": "deadline",
+  "lastPartial": null
 }

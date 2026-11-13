@@ -1,32 +1,15 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
-import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import jakarta.servlet.Filter;
-import java.util.Map;
 import org.mockito.Mockito;
 
-/**
- * The sandbox gateway's credential filter, for tests outside this package. The worker role is off in the test
- * context, so {@link LlmProxySecurityConfig} builds no gateway chain there.
- */
+/** The real gateway credential filter for isolated turn controllers. */
 public final class SandboxGatewayFixtures {
-
     private SandboxGatewayFixtures() {}
 
-    /** Authenticates a job or turn credential as the gateway does: by the attempt's live lease. */
-    public static Filter credentialFilter(
-            ReviewJobRepository jobs, AgentRuns runs, MentorTurnRepository turns, AttemptTokenVerifier verifier) {
-        return new JobTokenAuthenticationFilter(
-                jobs,
-                runs,
-                turns,
-                new ConversationLoopProperties(null),
-                verifier,
-                null,
-                Map.of(),
-                Mockito.mock(ProxyAccounting.class));
+    public static Filter sandboxCredentialFilter(AttemptTokenVerifier verifier, AgentSandboxes sandboxes) {
+        return new SandboxTokenAuthenticationFilter(verifier, sandboxes, Mockito.mock(ProxyAccounting.class));
     }
 }

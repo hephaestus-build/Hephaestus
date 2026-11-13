@@ -181,7 +181,7 @@ The same name is the source capture code that causes it.
 | **Attempt**                    | One claimed execution of a job, protected by its execution fence.                                         | attempt                        |
 | **Browser fault**              | A failure that a reader met in the browser and that the browser reported, such as an error that no code caught. It is not an SCM issue, and "fault" here is not the blame in a no-fault attempt. | browser.fault, browser_faults_total |
 | **Attempt token**              | The signed credential of one attempt, of a review or of a conversation turn. It names the attempt and its workspace, and nothing else. | AttemptJwt |
-| **Lease**                      | A running attempt's own identity, valid until a time on the database clock. Each claim sets a new one. The active step renews it by that identity: the review loop during execution and result upload, or the server before and after the loop runs. The conversation loop renews the lease of a turn attempt. Every write of the attempt names it. When it expires, the server recovers the attempt. | agent_run.lease_epoch, agent_run.leased_until |
+| **Lease**                      | A running attempt's own identity, valid until a time on the database clock. Each claim sets a new one. The active step renews it by that identity: the review loop during execution and result upload, or the server before and after the loop runs. The sandbox driver renews a turn run's lease. Every write of the attempt names it. When it expires, the server recovers the attempt. | agent_run.lease_epoch, agent_run.leased_until |
 | **Model assignment**           | A workspace's choice of a model for an execution purpose and AI tier.                                     | workspace model configuration  |
 | **Source contract**            | The definition of a source's identity, meaning, capture facts and permitted uses.                         | reads.contract                 |
 | **Source kind**                | A stable name for a logical source of captured material.                                                  | SourceKind                     |
@@ -213,32 +213,27 @@ The same name is the source capture code that causes it.
 | **Context document**           | One JSON document about the developer or the workspace in the context folder of a conversation.            | inputs/context/*.json          |
 | **Context loader**             | The integration part that stages a heavy item, such as a repository, into a context folder on request. | ContextLoader, load_context |
 | **Sandbox namespace**          | The Kubernetes namespace that an operator creates for the sandboxes of one release alone.   | sandbox.namespace              |
-| **Isolation probe**            | A server's check, with real Pods, that the cluster holds the sandbox boundary. No sandbox starts while it fails. | KubernetesIsolationProbe |
-| **Isolation tier**             | The runtime class and process limit that the isolation probe records. User namespaces are required by the sandbox boundary. | sandbox.isolation.*     |
-| **Runtime attempt**            | One attempt of a review job or of a conversation turn, with one lease, one attempt token and writes fenced on the lease. A sandbox gateway connection wait stays inside this attempt. | AttemptJwt |
-| **Review agent Pod**           | The Pod of one review attempt: a trusted loop container with the token and a tools container without one. A custom program adds a program container. | KubernetesPods.workspacePod |
-| **Tools Pod**                  | A Pod that runs only the tools program of a review agent Pod, bound to one conversation turn attempt, with no token and no egress. | conversation_tools_pod, ConversationToolsPods, KubernetesToolsPods |
-| **Conversation loop**          | The long-lived trusted Deployment that runs every conversation turn of an installation. It pulls turns from the servers and calls tools Pods for their tools. | `heph-host.ts`, `<release>-conversation-loop` |
-| **Tool protocol v1**           | The messages from a loop to its tools, each with a request id. It has hello, put, read, streamed exec, cancel and reset, and script runs for reviews. | tool-protocol.ts |
+| **Sandbox isolation gate** | A platform check of the installed sandbox templates against the required isolation boundary. Operators run it before enabling work. | scripts/sandbox-isolation.ts |
+| **Isolation tier** | The sandbox template's runtime class and enforced security settings. | sandbox.templates.runtimeClassName |
+| **Runtime attempt**            | One attempt of a review job or of a conversation turn, with a run lease and writes fenced on its epoch. A sandbox gateway connection wait stays inside this attempt. | agent_run.lease_epoch |
 | **Proved search**              | A search that the loop confirmed by searching the same files itself. Only a proved search can show that the work lacks something. | pi-verified-search.ts |
-| **Subject**                    | The thing that one sandbox serves: a review or a conversation. Its key, such as `review:<id>`, is the concurrency key of its runs. It is not the item that a review covers. | planned: agent_run.concurrency_key, agent_sandbox.subject_key |
-| **Run**                        | One leased unit of agent work for a subject, such as the measurement of a review or one turn. One run of a subject runs at a time, and its sandbox is its only writer. | planned: agent_run |
+| **Subject**                    | The thing that one sandbox serves: a review or a conversation. Its key, such as `review:<id>`, is the concurrency key of its runs. It is not the item that a review covers. | agent_run.concurrency_key, agent_sandbox.subject_key |
+| **Run**                        | One leased unit of agent work for a subject, such as the measurement of a review or one turn. One run of a subject runs at a time, and its sandbox is its only writer. | agent_run |
 | **Run kind**                   | What a run drives. A `REVIEW` run measures a review. A `REVIEW_COMPOSE` run composes the review's feedback after its `REVIEW` run ended, and it continues that run's epochs. | AgentRunKind |
-| **Lease epoch**                | The fencing number of a run. Each claim raises it, and the database refuses a write that names an older one. | planned: agent_run.lease_epoch |
+| **Lease epoch**                | The fencing number of a run. Each claim raises it, and the database refuses a write that names an older one. | agent_run.lease_epoch |
 | **Band**                       | The priority of a run and of its model calls: interactive, batch or background. An interactive call gets a grant first, and a batch call yields at grant time. Work that waits rises one band at a time, but never into the interactive band. | agent_run.band, llm_call_permit.band |
-| **Sandbox**                    | The one agent-sandbox `Sandbox` of a subject: one container with the loop, the tools and the workspace. It is a cache. The server deletes it when no run needs it, and rebuilds its context from PostgreSQL. | planned: agent_sandbox |
-| **Sandbox token**              | The credential of one sandbox. It names the workspace, the subject and the sandbox, and it expires at the sandbox's shutdown time. Only the gateway accepts it. | planned |
-| **Gateway**                    | The server port that sandboxes can reach, and their only egress. It holds the LLM proxy, the call permits, the context and checkout, lease renewal and proposals. | planned: server port 8081 |
+| **Sandbox**                    | The one agent-sandbox `Sandbox` of a subject: one container with the driver, the tools and the workspace. It is a cache. The server deletes it when no run needs it, and rebuilds its context from PostgreSQL. | agent_sandbox |
+| **Sandbox token**              | The credential of one sandbox. It names the workspace, the subject and the sandbox, and it expires at the sandbox's shutdown time. Only the gateway accepts it. | SandboxTokenService |
+| **Gateway**                    | The server port that sandboxes can reach, and their only egress. It holds the LLM proxy, the call permits, the context and checkout, lease renewal and proposals. | server port 8081 |
 | **Action**                     | One side effect that the server executes for a run or for a person, such as an email or a product-feedback issue. It has an idempotency key. Its adapter reads it back, or sends it at most once. | agent_action |
 
 Stage and Seal are decided for 1.0 and not shipped yet ([ADR 0063](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0063-each-practice-is-staged-when-it-ends.md)).
 [ADR 0079](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md) decides the subject, run, lease epoch, band, sandbox, sandbox token, gateway and action for 1.0.
-They are not shipped yet.
 When they ship, they replace the job, attempt, lease, attempt token and send.
 They also replace the review agent Pod, tools Pod, conversation loop, conversation host and tool protocol v1.
 
 The job folder of a review is the context folder of that review.
-The [Conversation runtime](./unified-pi-runtime.mdx) owns turns, the conversation loop, context documents, context loaders and tools Pods.
+The [Conversation runtime](./unified-pi-runtime.mdx) owns turns, the conversation sandbox, context documents, and context loaders.
 A turn is not a job: it has no job row and no review.
 
 A job can expire without removing its review or observations.

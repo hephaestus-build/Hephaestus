@@ -23,7 +23,11 @@ const pod = (spec: Record<string, unknown>) => ({
 		containers: [
 			{
 				name: "agent",
-				securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } },
+				securityContext: {
+					readOnlyRootFilesystem: true,
+					allowPrivilegeEscalation: false,
+					capabilities: { drop: ["ALL"] },
+				},
 			},
 		],
 		...spec,
@@ -40,8 +44,48 @@ void test("a sandbox Pod must state every isolation setting, and only gVisor may
 	assert.deepEqual(specFailures(pod({ initContainers: [{ name: "setup" }] })), ["init containers"]);
 	assert.deepEqual(
 		specFailures(pod({ containers: [{ name: "agent", securityContext: { privileged: true } }] })),
-		["privilege escalation allowed", "privileged", "capabilities not dropped"],
+		[
+			"the root filesystem is writable",
+			"privilege escalation allowed",
+			"privileged",
+			"capabilities not dropped",
+		],
 	);
+});
+
+void test("the actual sandbox Pod must keep its image root read-only", () => {
+	for (const readOnlyRootFilesystem of [undefined, false]) {
+		assert.deepEqual(
+			specFailures(
+				pod({
+					containers: [
+						{
+							name: "agent",
+							securityContext: {
+								readOnlyRootFilesystem,
+								allowPrivilegeEscalation: false,
+								capabilities: { drop: ["ALL"] },
+							},
+						},
+					],
+				}),
+			),
+			["the root filesystem is writable"],
+		);
+	}
+});
+
+void test("the actual sandbox Pod must use RuntimeDefault seccomp", () => {
+	for (const seccompProfile of [
+		undefined,
+		{},
+		{ type: "Localhost", localhostProfile: "legacy-filter" },
+	]) {
+		assert.deepEqual(
+			specFailures(pod({ securityContext: { runAsNonRoot: true, seccompProfile } })),
+			["seccomp is not RuntimeDefault"],
+		);
+	}
 });
 
 const targets: Target[] = [
@@ -218,7 +262,11 @@ void test("no credential reaches a sandbox: no token, no Secret, and no Service 
 				containers: [
 					{
 						name: "agent",
-						securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } },
+						securityContext: {
+							readOnlyRootFilesystem: true,
+							allowPrivilegeEscalation: false,
+							capabilities: { drop: ["ALL"] },
+						},
 						env: [{ name: "KEY", valueFrom: { secretKeyRef: { name: "keys", key: "k" } } }],
 					},
 				],

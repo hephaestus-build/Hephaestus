@@ -268,8 +268,8 @@ export function specFailures(pod: unknown): string[] {
 		failures.push("runAsNonRoot is not set");
 	}
 	const seccomp = asRecord(security.seccompProfile ?? {}, "seccompProfile");
-	if (seccomp.type !== "RuntimeDefault" && seccomp.type !== "Localhost") {
-		failures.push("no seccomp profile");
+	if (seccomp.type !== "RuntimeDefault") {
+		failures.push("seccomp is not RuntimeDefault");
 	}
 	const containers = Array.isArray(spec.containers) ? spec.containers : [];
 	if (containers.length !== 1) {
@@ -283,6 +283,9 @@ export function specFailures(pod: unknown): string[] {
 			asRecord(container, "container").securityContext ?? {},
 			"securityContext",
 		);
+		if (context.readOnlyRootFilesystem !== true) {
+			failures.push("the root filesystem is writable");
+		}
 		if (context.allowPrivilegeEscalation !== false) {
 			failures.push("privilege escalation allowed");
 		}

@@ -4,6 +4,7 @@
 import type { KindRunner } from "./driver.ts";
 import { composeReview } from "./review-composer.ts";
 import { measureReview } from "./review-measure.ts";
+import { turnRunner } from "./turn.ts";
 
 /** The feedback composer of a sealed review: it composes, then the driver ends or hands on the run. */
 const reviewCompose: KindRunner = async ({ assignment, gateway, signal }) => {
@@ -22,4 +23,5 @@ const reviewCompose: KindRunner = async ({ assignment, gateway, signal }) => {
 export const KINDS: Readonly<Record<string, KindRunner>> = {
 	REVIEW: measureReview,
 	REVIEW_COMPOSE: reviewCompose,
+	TURN: turnRunner(),
 };

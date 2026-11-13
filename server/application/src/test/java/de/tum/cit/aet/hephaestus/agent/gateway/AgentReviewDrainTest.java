@@ -1,13 +1,11 @@
 package de.tum.cit.aet.hephaestus.agent.gateway;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentProperties;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ToolsPods;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
 import java.util.Optional;
@@ -21,25 +19,12 @@ import org.springframework.boot.availability.ReadinessState;
 
 class AgentReviewDrainTest extends BaseUnitTest {
     private final AgentRuns runs = mock(AgentRuns.class);
-    private final ToolsPods runtime = mock(ToolsPods.class, CALLS_REAL_METHODS);
     private final ApplicationAvailability availability = mock(ApplicationAvailability.class);
 
     private AgentReviewDrain drain(Duration timeout) {
         when(availability.getReadinessState()).thenReturn(ReadinessState.ACCEPTING_TRAFFIC);
         return new AgentReviewDrain(
-                runs,
-                new AgentProperties(true, timeout, Duration.ofDays(14), Duration.ofDays(90)),
-                availability,
-                runtime);
-    }
-
-    @Test
-    void shouldRefuseNewClaimsWithoutPassingIsolationProof() {
-        AgentReviewDrain drain = drain(Duration.ZERO);
-        drain.start();
-        when(runtime.ready()).thenReturn(false);
-        assertThat(drain.claim(() -> Optional.of("unproved"))).isEmpty();
-        drain.stop();
+                runs, new AgentProperties(true, timeout, Duration.ofDays(14), Duration.ofDays(90)), availability);
     }
 
     @Test

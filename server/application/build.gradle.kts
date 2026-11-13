@@ -734,16 +734,6 @@ for ((taskName, command) in
     }
 }
 
-// A qualification image adds only the test classpath to the same server image that the chart runs.
-tasks.register<Sync>("kubernetesLiveBundle") {
-    if (!packagedServer.get()) dependsOn(tasks.testClasses)
-    into(layout.buildDirectory.dir("kubernetes-live"))
-    from(compiledMain) { into("main") }
-    from(layout.buildDirectory.dir("classes/java/test")) { into("test") }
-    from(layout.buildDirectory.dir("resources/test")) { into("test") }
-    from(configurations.testRuntimeClasspath) { into("lib") }
-}
-
 // Consumer jobs execute the package job's compiled test artifact; no compilation is scheduled.
 if (packagedServer.get()) {
     tasks.withType<Test>().configureEach {

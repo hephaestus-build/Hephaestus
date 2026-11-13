@@ -10,7 +10,6 @@ import { parseAllDocuments } from "yaml";
 
 import {
 	restoreFailures,
-	remainingProbeResources,
 	soleManager,
 	apiEndpoint,
 	applicationSecret,
@@ -27,7 +26,6 @@ import {
 	heldChecks,
 	trustSteps,
 	mergeSecret,
-	livePod,
 	NAMESPACE,
 	operatorValues,
 	RELEASE,
@@ -418,76 +416,7 @@ await test("an upgrade check names each PostgreSQL or NATS Pod that it replaced 
 	assert.deepEqual(restartedPods(before, after), ["heph-postgresql-0", "heph-nats-0"]);
 });
 
-await test("the live Pod keeps the chart server's UID, groups, capabilities, mounts, metadata and network labels", () => {
-	const template = {
-		metadata: {
-			labels: { "app.kubernetes.io/component": "server", "app.kubernetes.io/instance": "heph" },
-		},
-		spec: {
-			serviceAccountName: "heph-server",
-			securityContext: {
-				runAsUser: 1000,
-				runAsGroup: 1000,
-				fsGroup: 1000,
-				seccompProfile: { type: "RuntimeDefault" },
-			},
-			containers: [
-				{
-					name: "server",
-					image: "server@sha256:original",
-					imagePullPolicy: "IfNotPresent",
-					securityContext: {
-						allowPrivilegeEscalation: false,
-						capabilities: { drop: ["ALL"] },
-						readOnlyRootFilesystem: true,
-					},
-					env: [{ name: "POD_NAME", valueFrom: { fieldRef: { fieldPath: "metadata.name" } } }],
-					volumeMounts: [{ name: "git-cache", mountPath: "/data/git-repos" }],
-					readinessProbe: { httpGet: { path: "/actuator/health/readiness", port: "management" } },
-				},
-			],
-			volumes: [{ name: "git-cache", emptyDir: { sizeLimit: "2Gi" } }],
-		},
-	};
-	const deployment = { metadata: { namespace: "heph-checkout" }, spec: { template } };
-	const before = structuredClone(deployment);
-	const pod = livePod(deployment, "test-image:qualified", "heph-live");
-	assert.deepEqual(pod, {
-		apiVersion: "v1",
-		kind: "Pod",
-		metadata: { ...template.metadata, name: "heph-live", namespace: "heph-checkout" },
-		spec: {
-			...template.spec,
-			restartPolicy: "Never",
-			containers: [{ ...template.spec.containers[0], image: "test-image:qualified" }],
-		},
-	});
-	assert.deepEqual(deployment, before);
-});
-
-await test("live qualification refuses a server shape that would bypass the image entrypoint", () => {
-	for (const containers of [
-		[],
-		[{ command: ["unexpected"] }],
-		[{ imagePullPolicy: "Always" }],
-		[{}, {}],
-	]) {
-		assert.throws(
-			() =>
-				livePod(
-					{
-						metadata: { namespace: "heph" },
-						spec: { template: { metadata: {}, spec: { containers } } },
-					},
-					"test-image",
-					"live",
-				),
-			/qualification/u,
-		);
-	}
-});
-
-await test("local live qualification requires an explicit namespace before invoking cluster tools", () => {
+await test("the retired live qualifier invokes no cluster or build tool", () => {
 	const emptyPath = mkdtempSync(path.join(tmpdir(), "heph-live-no-tools-"));
 	try {
 		const result = spawnSync(
@@ -499,10 +428,7 @@ await test("local live qualification requires an explicit namespace before invok
 			},
 		);
 		assert.equal(result.status, 1);
-		assert.match(
-			result.stderr,
-			/requires --namespace to name the reserved shared qualification release/u,
-		);
+		assert.match(result.stderr, /usage: kubernetes-cluster/u);
 	} finally {
 		rmSync(emptyPath, { recursive: true, force: true });
 	}
@@ -591,36 +517,73 @@ await test("the drill reads the local port that kubectl port-forward reports", (
 	assert.equal(forwardedPort(""), undefined);
 });
 
-await test("the drill reads the turn's state and refuses a tools Pod name that is no DNS label", () => {
-	assert.deepEqual(turnState('{"status":"RUNNING","attempt":1,"pod":"hephaestus-tools-0a1b"}'), {
+const DRILL_RUN = "11111111-1111-4111-8111-111111111111";
+const DRILL_SANDBOX = "22222222-2222-4222-8222-222222222222";
+const OTHER_SANDBOX = "33333333-3333-4333-8333-333333333333";
+
+await test("the drill reads the turn's run fence and physical sandbox, and refuses malformed identities", () => {
+	const running = {
 		status: "RUNNING",
 		attempt: 1,
-		pod: "hephaestus-tools-0a1b",
-	});
-	assert.deepEqual(turnState('{"status":"QUEUED","attempt":0,"pod":null}'), {
+		runId: DRILL_RUN,
+		epoch: 2,
+		sandboxId: DRILL_SANDBOX,
+		claim: "heph-sandbox-a",
+	};
+	assert.deepEqual(turnState(JSON.stringify(running)), running);
+	const queued = {
+		...running,
 		status: "QUEUED",
 		attempt: 0,
-		pod: null,
-	});
-	assert.throws(() => turnState('{"status":"RUNNING","attempt":1,"pod":"../x"}'), /valid name/u);
-	assert.throws(() => turnState('{"attempt":1,"pod":null}'), /no status/u);
+		epoch: 0,
+		sandboxId: null,
+		claim: null,
+	};
+	assert.deepEqual(turnState(JSON.stringify(queued)), queued);
+	for (const changed of [
+		{ claim: "../x" },
+		{ sandboxId: "../x" },
+		{ epoch: -1 },
+		{ epoch: 0.5 },
+		{ runId: "../x" },
+		{ claim: null },
+	]) {
+		assert.throws(
+			() => turnState(JSON.stringify({ ...running, ...changed })),
+			/valid|fence|disagree/u,
+		);
+	}
+	assert.throws(() => turnState(JSON.stringify({ ...queued, status: undefined })), /no status/u);
 });
 
-await test("a roll keeps the turn only when it still runs the recorded attempt with the recorded tools Pod", () => {
-	const recorded = { attempt: 1, pod: "hephaestus-tools-a" };
-	const failures = (observed: { status: string; attempt: number; pod: string | null }) =>
-		heldChecks("after the roll", recorded, observed).flatMap((check) =>
-			check.failure === undefined ? [] : [check.failure],
+await test("a server roll keeps the exact TURN fence and physical conversation sandbox", () => {
+	const recorded = {
+		attempt: 1,
+		runId: DRILL_RUN,
+		epoch: 2,
+		sandboxId: DRILL_SANDBOX,
+		claim: "heph-sandbox-a",
+	};
+	const failures = (changed: Partial<ReturnType<typeof turnState>>) =>
+		heldChecks("after the roll", recorded, { status: "RUNNING", ...recorded, ...changed }).flatMap(
+			(check) => (check.failure === undefined ? [] : [check.failure]),
 		);
-	assert.deepEqual(failures({ status: "RUNNING", attempt: 1, pod: "hephaestus-tools-a" }), []);
-	assert.deepEqual(failures({ status: "QUEUED", attempt: 2, pod: null }), [
-		"the turn is QUEUED",
-		"it runs attempt 2",
-		"it holds no tools Pod",
+	assert.deepEqual(failures({}), []);
+	assert.deepEqual(
+		failures({ status: "QUEUED", attempt: 2, epoch: 3, sandboxId: null, claim: null }),
+		[
+			"the turn is QUEUED",
+			"it runs attempt 2",
+			"it holds epoch 3",
+			"it holds sandbox none",
+			"it holds claim none",
+		],
+	);
+	assert.deepEqual(failures({ sandboxId: OTHER_SANDBOX, claim: "heph-sandbox-b" }), [
+		`it holds sandbox ${OTHER_SANDBOX}`,
+		"it holds claim heph-sandbox-b",
 	]);
-	assert.deepEqual(failures({ status: "RUNNING", attempt: 1, pod: "hephaestus-tools-b" }), [
-		"it holds hephaestus-tools-b",
-	]);
+	assert.deepEqual(failures({ runId: OTHER_SANDBOX }), [`it holds run ${OTHER_SANDBOX}`]);
 });
 
 await test("the ended turn passes only DONE on attempt 1, with every bash output in its results and its answer", () => {
@@ -693,100 +656,5 @@ void test("a policy that names no field manager fails the control, as a read wit
 	assert.throws(
 		() => soleManager([policy(["helm", "Update"]), stripped]),
 		/heph-sandbox-gateway name no field manager/u,
-	);
-});
-
-await test("verification accepts a completed probe and its succeeded Pod left by a stopped server", () => {
-	assert.deepEqual(
-		remainingProbeResources({
-			items: [
-				{
-					kind: "Job",
-					metadata: {
-						name: "old-probe",
-						uid: "job-uid",
-						labels: { "hephaestus.build/isolation-probe": "true" },
-					},
-					status: { conditions: [{ type: "Complete", status: "True" }] },
-				},
-				{
-					kind: "Pod",
-					metadata: {
-						name: "old-probe-pod",
-						labels: { "hephaestus.build/isolation-probe": "true" },
-						ownerReferences: [{ kind: "Job", uid: "job-uid", controller: true }],
-					},
-					status: { phase: "Succeeded" },
-				},
-			],
-		}),
-		[],
-	);
-});
-
-await test("verification still rejects active, failed, unlabelled and unrelated probe resources", () => {
-	const label = { "hephaestus.build/isolation-probe": "true" };
-	const complete = { conditions: [{ type: "Complete", status: "True" }] };
-	const owner = [{ kind: "Job", uid: "complete", controller: true }];
-	assert.deepEqual(
-		remainingProbeResources({
-			items: [
-				{
-					kind: "Job",
-					metadata: { name: "complete", uid: "complete", labels: label },
-					status: complete,
-				},
-				{
-					kind: "Job",
-					metadata: { name: "active", uid: "active", labels: label },
-					status: { active: 1 },
-				},
-				{
-					kind: "Job",
-					metadata: { name: "failed", uid: "failed", labels: label },
-					status: { conditions: [{ type: "Failed", status: "True" }] },
-				},
-				{ kind: "Job", metadata: { name: "unlabelled", uid: "unlabelled" }, status: complete },
-				{
-					kind: "Job",
-					metadata: { name: "incomplete", uid: "incomplete", labels: label },
-					status: { conditions: [{ type: "Complete", status: "False" }] },
-				},
-				{
-					kind: "Pod",
-					metadata: { name: "running", labels: label, ownerReferences: owner },
-					status: { phase: "Running" },
-				},
-				{
-					kind: "Pod",
-					metadata: { name: "failed-pod", labels: label, ownerReferences: owner },
-					status: { phase: "Failed" },
-				},
-				{
-					kind: "Pod",
-					metadata: { name: "unlabelled-pod", ownerReferences: owner },
-					status: { phase: "Succeeded" },
-				},
-				{
-					kind: "Pod",
-					metadata: {
-						name: "unrelated",
-						labels: label,
-						ownerReferences: [{ kind: "Job", uid: "other", controller: true }],
-					},
-					status: { phase: "Succeeded" },
-				},
-			],
-		}),
-		[
-			"job/active",
-			"job/failed",
-			"job/unlabelled",
-			"job/incomplete",
-			"pod/running",
-			"pod/failed-pod",
-			"pod/unlabelled-pod",
-			"pod/unrelated",
-		],
 	);
 });

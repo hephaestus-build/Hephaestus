@@ -325,27 +325,23 @@ The annotations use `Execution(SAME_THREAD)`. Gradle also runs one test JVM at a
 3. Read credentials from `LiveLlmCredentials.fromEnv()` or the provider helpers. Never inline secrets or commit local credential files.
 4. Per-test wall-clock timeouts: 90s is reasonable for a single conversation turn. 5 minutes for a full practice run.
 
-### Kubernetes sandbox live suite
+### Kubernetes sandbox isolation
 
-`KubernetesSandboxLiveTest` runs in a Pod copied from the chart server Deployment.
-It uses that service account, namespace, Pod metadata, NetworkPolicy labels, security context and mounts.
-The image adds the package job's test classpath to its server image.
-The Pod runs once instead of restarting.
-The harness drains the server replicas, runs the suite, and restores the observed replica count even after failure.
+The platform gate qualifies each actual SandboxTemplate on the installed cluster.
+It starts synthetic sandboxes and verifies Pod settings, the runtime boundary, and network isolation.
+It reaches no model provider.
 
 Reserve the shared qualification release, start it with `vp run dev:kubernetes`, then run:
 
 ```bash
 KUBECONFIG="$HOME/.hephaestus/kubernetes-cluster/kubeconfig" \
-  node scripts/kubernetes-cluster.ts live --namespace hephaestus
+  node scripts/kubernetes-cluster.ts verify
 ```
 
-The Kubernetes PR job runs the same command with the restored package artifact and `--packaged`.
-The runner requires `HEPHAESTUS_KUBERNETES_LIVE=true` and rejects any skipped or aborted case.
-It records the kernel and elapsed time.
-The suite runs the isolation probe, then starts a tools Pod and removes it with its Job.
-It uses synthetic data and reaches no model provider.
-The ordinary provider live tests remain separate.
+The Kubernetes CI job runs `verify` after installation and upgrade.
+`scripts/sandbox-isolation.ts` owns the checks and accepts individual template and address arguments.
+The old Java tools-Pod live suite and its image overlay are removed.
+The provider live tests remain separate.
 
 ### Deterministic sandbox release qualification
 
@@ -378,8 +374,8 @@ A failure stops publication. Detailed evidence stays in the local temporary dire
 Do not publish those files before review. CI retains a summary with no captured content.
 This qualification tests the Docker host's native image architecture and the container and tool boundaries.
 
-It does not test the Kubernetes Job specification.
-`KubernetesSandboxLiveTest` qualifies the production sandbox on Kubernetes.
+It does not test the Kubernetes SandboxTemplate.
+The [Kubernetes sandbox isolation gate](#kubernetes-sandbox-isolation) qualifies the production templates.
 The database tenancy tests remain required.
 
 ### Offline feedback quality evaluation
@@ -388,9 +384,22 @@ The [feedback quality harness](./feedback-quality-evals.md) replays stored evide
 It checks selected claims and reports provisional labels, human judgments, and advisory rubric ratings separately.
 The [labelling guide](./label-feedback-quality.md) gives the independent human review procedure.
 
+### Live review runner image
+
+The live review suites use the prebuilt agent image, with its SDK and practice toolkit.
+Set `HEPHAESTUS_LIVE_AGENT_IMAGE` to the image to test. Otherwise, prepare `hephaestus/agent-pi:live` first.
+The harness never pulls it or installs dependencies during a run.
+
+The runner executes in one non-root container with a read-only root, its owned fixture workspace, and temporary storage.
+Testcontainers forwards only the stand-in proxy port through `host.testcontainers.internal`.
+The container receives the scoped proxy token. It receives no provider key.
+The harness removes its container after success, failure, or timeout.
+
+This checks real tools and model integration. The separate Kubernetes gate checks production network isolation.
+
 ### Hephaestus voice eval
 
-The eval in `server/application/src/test/resources/agent/heph-voice/` sends questions to a real model through the conversation loop's code.
+The eval in `server/application/src/test/resources/agent/heph-voice/` sends questions to a real model through the conversation runner.
 The eval composes the prompt as `HephTurnContexts` does, from `system.md` and the writing guide, and a fake server serves a small context folder.
 Each case asserts what an answer must never do and prints one line: `eval <case> outputTokens=<n> words=<n> fieldsRead=<true|false>`.
 
@@ -402,7 +411,7 @@ From the repository root:
 
 ```bash
 HEPHAESTUS_LIVE_LLM_BASE_URL=… HEPHAESTUS_LIVE_LLM_API_KEY=… HEPHAESTUS_LIVE_LLM_MODEL=… \
-  node --test --test-concurrency=1 'server/application/src/test/resources/agent/heph-voice/*.live.ts'
+  node --experimental-test-module-mocks --test --test-concurrency=1 'server/application/src/test/resources/agent/heph-voice/*.live.ts'
 ```
 
 `--test-concurrency=1` runs one case file at a time.

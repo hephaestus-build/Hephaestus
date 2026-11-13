@@ -62,7 +62,7 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
                 now.plusSeconds(60),
                 now.plusSeconds(30));
         var identity = ProxyIdentity.of(jwt);
-        var authentication = new JobTokenAuthentication(identity, jwt.scopes(), null);
+        var authentication = new JobTokenAuthentication(identity, jwt.scopes());
         when(admission.admit(new ResultAdmissionService.AdmissionIdentity(id, 1L, 0, LEASE), request))
                 .thenThrow(conflict);
         assertThatThrownBy(() -> new ResultAdmissionController(admission, mock(AttemptCaptureFailures.class))
@@ -92,7 +92,7 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
                 now.plusSeconds(30));
         when(admission.admit(new ResultAdmissionService.AdmissionIdentity(id, 1L, 0, LEASE), request))
                 .thenThrow(new UncheckedIOException(new IOException("disk temporarily unavailable")));
-        var authentication = new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes(), null);
+        var authentication = new JobTokenAuthentication(ProxyIdentity.of(jwt), jwt.scopes());
         assertThatThrownBy(
                         () -> new ResultAdmissionController(admission, failures).admitResults(request, authentication))
                 .isInstanceOfSatisfying(

@@ -1,7 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import nodePath from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -22,6 +21,8 @@ import {
 	type AgentToolResult,
 	createAgentSession,
 	createCodemodeExtension,
+	createBashToolDefinition,
+	createGrepToolDefinition,
 	DefaultResourceLoader,
 	defineTool,
 	ModelRuntime,
@@ -30,7 +31,6 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 import {
-	reviewShellTool,
 	SANDBOX_RESOURCE_LOADER_OPTIONS,
 	SANDBOX_SETTINGS_MANAGER_OPTIONS,
 } from "./pi-agent-sandbox.ts";
@@ -55,6 +55,7 @@ import {
 	readableKinds,
 	undeclaredCitedKinds,
 } from "./pi-declared-sources.ts";
+import { loopFindTool } from "./pi-find.ts";
 import { type CitableText, folderCitationIndex, citableTextIndex } from "./pi-folder-index.ts";
 import {
 	addModelCall,
@@ -65,7 +66,13 @@ import {
 	newModelCallTiming,
 	stopIfAttemptRefused,
 } from "./pi-model-failure.ts";
-import { PinnedHistory, pinnedText, readPinnedObject, toolObjects } from "./pi-pinned-object.ts";
+import {
+	PinnedHistory,
+	pinnedText,
+	readPinnedObject,
+	repositoryObjects,
+	TREE_BYTES,
+} from "./pi-pinned-object.ts";
 import { PracticeCoverageLedger } from "./pi-practice-coverage.ts";
 import { executionReport } from "./pi-practice-scripts-report.ts";
 import { ProblemDrafts } from "./pi-problem-drafts.ts";
@@ -120,19 +127,10 @@ import {
 } from "./pi-session-reads.ts";
 import { SUPPORTED_SCHEMA_VERSION, taskPaths, resolveTaskPaths } from "./pi-task-paths.ts";
 import { hasText, isBlank } from "./pi-text.ts";
-import {
-	loopFindTool,
-	openToolSide,
-	toolBashOperations,
-	toolGrepTool,
-	toolLines,
-} from "./pi-tool-side.ts";
 import { prepareTurnText } from "./pi-turn-context.ts";
 import { proveSearches } from "./pi-verified-search.ts";
-import type { ToolClient } from "./tool-client.ts";
-import { toolsProgram } from "./tool-program.ts";
-import { LIMITS } from "./tool-protocol.ts";
 import { parseDiff } from "./work/practice-scripts/kits/scm/diff-parser.ts";
+import { spawnedLines } from "./work/practice-scripts/kits/scm/grep.ts";
 import { fileRecordSchema } from "./work/practice-scripts/kits/scm/records.ts";
 import type { DiffFile } from "./work/practice-scripts/kits/scm/types.ts";
 import {
@@ -176,6 +174,7 @@ import {
 import { InputReader } from "./work/practice-scripts/lib/core/script-inputs.ts";
 import {
 	abortReasonOf,
+	forkedProgram,
 	RETURN_MS,
 	SCRIPT_HEAP_BYTES,
 } from "./work/practice-scripts/lib/core/script-run.ts";
@@ -202,9 +201,6 @@ interface TaskEnvelope {
 /** A pinned file that the loop could not prove. A failed read is not a statement about the file. */
 const UNREADABLE = Symbol("unreadable");
 const TOO_LARGE = Symbol("too large");
-
-/** The most bytes of a pinned file that the loop reads: what one `exec` streams. */
-const MAX_PINNED_BYTES = LIMITS.execStreamBytes;
 
 function requiredEnv(name: string): string {
 	const value = process.env[name];
@@ -698,7 +694,7 @@ export async function runReviewJob(): Promise<void> {
 		if (history === undefined) {
 			const change = readChange(INPUT_PATHS.contextRoot);
 			const pinned = [checkoutCommit, change?.head, change?.base].filter((id) => id != null);
-			history = new PinnedHistory(toolObjects(toolSide, repository), pinned);
+			history = new PinnedHistory(repositoryObjects(repository), pinned);
 			histories.set(repository, history);
 		}
 		return history;
@@ -1401,11 +1397,11 @@ export async function runReviewJob(): Promise<void> {
 			}
 			const repository = citationRepository(citation);
 			const blob = await readPinnedObject(
-				toolObjects(toolSide, repository),
+				repositoryObjects(repository),
 				pinnedHistory(repository),
 				citation.commit,
 				citation.path,
-				MAX_PINNED_BYTES,
+				TREE_BYTES,
 			);
 			if (blob.kind === "unreadable") {
 				return UNREADABLE;
@@ -1941,16 +1937,12 @@ export async function runReviewJob(): Promise<void> {
 		return {
 			repo: checkout,
 			headRevision: change?.head ?? (checkout === null ? null : checkoutCommit),
-			search: toolLines(toolSide, CWD),
+			search: spawnedLines,
 			proveSearch: async (claim) => {
 				const { proved, checkoutDigest } = await proveSearches(repository, [claim]);
 				return proved[0] === true ? checkoutDigest : null;
 			},
-			pinnedFile: pinnedText(
-				toolObjects(toolSide, repository),
-				pinnedHistory(repository),
-				MAX_PINNED_BYTES,
-			),
+			pinnedFile: pinnedText(repositoryObjects(repository), pinnedHistory(repository), TREE_BYTES),
 			treeSourceFile: `${taskEnvelope.paths.repositoryRoot}/.git/HEAD`,
 			contextDir: existsSync(INPUT_PATHS.contextRoot) ? INPUT_PATHS.contextRoot : null,
 			contextReference: taskEnvelope.paths.contextRoot,
@@ -2061,22 +2053,6 @@ export async function runReviewJob(): Promise<void> {
 	// The review staged what it could and left at least one practice without a result. The server decides from what is
 	// staged whether another attempt continues it; the code only tells this designed end from a failure.
 	const PARTIAL_REVIEW_EXIT = 78;
-	// A side of the Pod stopped or never started before anything was staged: the failure says nothing about the work,
-	// and another attempt can run it.
-	const SIDE_LOST_EXIT = 79;
-
-	/** Dials a side of the Pod. A review cannot run without its tools: the attempt ends as a failure to capture. */
-	async function openSide(side: string, socket: string): Promise<ToolClient> {
-		try {
-			return await openToolSide({ path: socket }, requiredEnv("TOOLS_NONCE"));
-		} catch (error) {
-			diagnose("review.side_unreachable", { side, error: errorKind(error) });
-			process.exit(SIDE_LOST_EXIT);
-		}
-	}
-	const toolSide = await openSide("tools", requiredEnv("TOOLS_SOCKET"));
-	const programSocket = process.env.PROGRAMS_SOCKET;
-	const programs = programSocket === undefined ? null : await openSide("programs", programSocket);
 
 	function readTaskEnvelope(): TaskEnvelope {
 		let raw: string;
@@ -2690,12 +2666,10 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		const registeredTools = new Set<string>();
 		const toolOf = (name: string) => (registeredTools.has(name) ? name : "other");
 		async function openSession(tools: string[], customTools: SessionOptions["customTools"]) {
-			const bash = reviewShellTool(CWD, toolBashOperations(toolSide));
-			// `bash` and `grep` run on the tools side; `find` globs in the loop, and only the loop's reads count.
+			const bash = createBashToolDefinition(CWD, { exposeSessionEnvironment: false });
+			// All tools run in this sandbox. Admission verifies the coverage against the server-held capture.
 			const evidenceTools = [
-				...(tools.includes("grep")
-					? [defineTool(toolGrepTool(toolSide, CWD, async (file) => readFile(file, "utf8")))]
-					: []),
+				...(tools.includes("grep") ? [defineTool(createGrepToolDefinition(CWD))] : []),
 				...(tools.includes("find") ? [defineTool(loopFindTool(CWD))] : []),
 			];
 			const sessionTools: NonNullable<SessionOptions["customTools"]> = tools.includes("bash")
@@ -2832,19 +2806,6 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		const inputReader = new InputReader({ practicesDir: INPUT_PATHS.practiceScripts });
 		let sessionStopFailure: Error | null = null;
 		const measuringEnded = new AbortController();
-		const lostSides = new Set<string>();
-		// The loop has one connection to each side: past its end no command, search or program can run.
-		const whenLost = async (side: string, client: ToolClient) => {
-			const reason = await client.ended;
-			diagnose("review.side_lost", { side, error: errorKind(reason) });
-			lostSides.add(side);
-			unreachedReason = "unavailable";
-			measuringEnded.abort(new UnratedError("unavailable", `the ${side} side stopped`));
-		};
-		void whenLost("tools", toolSide);
-		if (programs !== null) {
-			void whenLost("programs", programs);
-		}
 		function gatewayUnavailable(): void {
 			gatewayFailure ??= new GatewayUnavailableError(
 				"The gateway repeatedly disconnected a model response",
@@ -3234,12 +3195,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					},
 					{
 						reader: new EvidenceReader(sources, programReads),
-						start: (start) => {
-							if (programs === null) {
-								throw new Error("This Pod has no program side");
-							}
-							return toolsProgram(programs, start);
-						},
+						start: forkedProgram,
 						review: async (options, signal) =>
 							reviewPractice(slug, practiceHeading, options, signal, sessionReads),
 						signal: AbortSignal.any([stopped.signal, measuringEnded.signal]),
@@ -3361,11 +3317,8 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					return { slug, label, heading: `## Turn ${index + 1} of ${allSlugs.length}: ${slug}` };
 				});
 				const baseHeapBytes = getHeapStatistics().used_heap_size;
-				// A custom program holds a slot of the program connection for as long as its session runs.
-				const pace = new SessionPace(
-					(running) =>
-						(programs === null || running < LIMITS.inFlight) &&
-						roomForSession({ running, scriptHeapBytes: SCRIPT_HEAP_BYTES, baseHeapBytes }),
+				const pace = new SessionPace((running) =>
+					roomForSession({ running, scriptHeapBytes: SCRIPT_HEAP_BYTES, baseHeapBytes }),
 				);
 				let sessionsAtOnce = 0;
 				// Two unanswered sessions stop new starts only: a running session that is answered keeps its work, and
@@ -3472,10 +3425,6 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			throw stagingFailure.error;
 		}
 		if (!maybeWriteResultFile()) {
-			if (lostSides.size > 0) {
-				finalizeOutput();
-				process.exit(SIDE_LOST_EXIT);
-			}
 			if ((providerFailures > 0 || measurementReply.asked) && !measurementReply.received) {
 				diagnose("review.unreachable", { unanswered_calls: providerFailures });
 				finalizeOutput();

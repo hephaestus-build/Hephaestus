@@ -247,14 +247,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         SecurityContextHolder.clearContext();
         meterRegistry = new SimpleMeterRegistry();
         filter = new JobTokenAuthenticationFilter(
-                jobRepository,
-                agentRuns,
-                turnRepository,
-                new ConversationLoopProperties(null),
-                jwtVerifier,
-                null,
-                Map.of(),
-                Mockito.mock(ProxyAccounting.class));
+                jobRepository, agentRuns, jwtVerifier, null, Map.of(), Mockito.mock(ProxyAccounting.class));
         User owner = persistUser("proxy-owner");
         workspace = createWorkspace("proxy-ws", "Proxy Workspace", "proxy-org", AccountType.ORG, owner);
         for (String slug : List.of(PRACTICE, "test-coverage")) {
@@ -1362,12 +1355,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 policy,
                 mock(ScanCallGuard.class),
                 new ProxyRoutingService(
-                        jobRepository,
-                        turnRepository,
-                        objectMapper,
-                        reviewSnapshots,
-                        agentRuns,
-                        Mockito.mock(ProductFeedbackDraftCalls.class)),
+                        jobRepository, turnRepository, objectMapper, reviewSnapshots, agentRuns, draftCalls),
                 new ProxyCallsInFlight(12),
                 health,
                 capacity,
@@ -1437,12 +1425,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private ProxyRouting routingOf(AuthenticationResult result) {
         Authentication authentication = Objects.requireNonNull(result.authentication(), "token did not authenticate");
         return new ProxyRoutingService(
-                        jobRepository,
-                        turnRepository,
-                        objectMapper,
-                        reviewSnapshots,
-                        agentRuns,
-                        Mockito.mock(ProductFeedbackDraftCalls.class))
+                        jobRepository, turnRepository, objectMapper, reviewSnapshots, agentRuns, draftCalls)
                 .resolve((ProxyIdentity) Objects.requireNonNull(authentication.getPrincipal()));
     }
 

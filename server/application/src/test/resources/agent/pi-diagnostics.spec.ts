@@ -7,7 +7,6 @@ import {
 	errorKind,
 	formatDiagnostic,
 	isDiagnosticLine,
-	SCALAR_TEXT,
 } from "../../../main/resources/agent/pi-diagnostics.ts";
 import { REASONING_EFFORTS } from "../../../main/resources/agent/pi-provider.ts";
 import {
@@ -49,7 +48,7 @@ void test("a diagnostic line holds counts, flags and codes, and a field it does 
 	);
 });
 
-void test("the worker keeps only lines of the vocabulary, also when they have the shape of one", () => {
+void test("the vocabulary rejects untrusted text, also when it has the shape of a diagnostic", () => {
 	for (const line of [
 		`[pi-runner] review practice-a tool error: bash — cat: .env: API_KEY=${CANARY}`,
 		`[pi-runner] review provider call failed for good after 3 retries: 401 ${CANARY}`,
@@ -119,31 +118,5 @@ void test("every event that the runtime writes is in the vocabulary", () => {
 	assert.deepEqual(
 		written.filter((event) => !vocabulary.events.includes(event)),
 		[],
-	);
-});
-
-void test("the worker reads the same vocabulary with the same scalar patterns", () => {
-	const java = readFileSync(
-		new URL(
-			"../../../main/java/de/tum/cit/aet/hephaestus/agent/sandbox/kubernetes/DiagnosticVocabulary.java",
-			import.meta.url,
-		),
-		"utf8",
-	);
-	assert.match(java, /RESOURCE = "agent\/pi-diagnostics\.json";/u);
-	const patterns = Object.fromEntries(
-		[
-			...java.matchAll(/"(?<type>[a-z]+)", Pattern\.compile\("(?<pattern>(?:[^"\\]|\\.)*)"\)/gu),
-		].map(({ groups }): [string, string] => [
-			groups?.type ?? "",
-			groups?.pattern?.replaceAll(String.raw`\\`, "\\") ?? "",
-		]),
-	);
-	// Java's Matcher.matches() anchors the whole text; the runtime's patterns anchor it with ^ and $.
-	assert.deepEqual(
-		patterns,
-		Object.fromEntries(
-			Object.entries(SCALAR_TEXT).map(([type, pattern]) => [type, pattern.source.slice(1, -1)]),
-		),
 	);
 });

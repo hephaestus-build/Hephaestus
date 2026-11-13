@@ -155,11 +155,7 @@ class RuntimeRoleContextIntegrationTest {
                         RuntimeRole.SERVER_PROPERTY + "=true");
         if (agents) {
             // Resolve the real agent runtime graph; this test has no cluster and starts no sandbox.
-            runner = runner.withPropertyValues(
-                    "hephaestus.conversation-loop.secret=" + "a".repeat(64),
-                    "hephaestus.sandbox.kubernetes.namespace=role-test-sandboxes",
-                    "hephaestus.sandbox.kubernetes.pod-name=role-test-server",
-                    "hephaestus.sandbox.kubernetes.pod-ip=127.0.0.1");
+            runner = runner.withPropertyValues("hephaestus.sandbox.kubernetes.namespace=role-test-sandboxes");
         }
         runner.run(application -> {
             assertThat(application).hasNotFailed();

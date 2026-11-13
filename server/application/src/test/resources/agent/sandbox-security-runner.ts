@@ -210,25 +210,6 @@ const view = spawnSync(process.execPath, ["/workspace/pi-change-view.js"], {
 	stdio: "inherit",
 });
 assert.equal(view.status, 0);
-const toolsSocket = "/tmp/tools.sock";
-const toolsNonce = "security-nonce";
-// The leaky network control breaks the isolation on purpose, so it runs without the filter that would hide its leak.
-const tools = spawn(
-	...((process.env.SECURITY_SURFACE === "leaky-network"
-		? [process.execPath, ["/opt/pi-sdk/tools-server.js"]]
-		: ["sh", ["/opt/pi-sdk/tools-launch.sh"]]) as [string, string[]]),
-	{
-		cwd: "/workspace",
-		env: {
-			PATH: process.env.PATH,
-			TOOLS_SOCKET: toolsSocket,
-			TOOLS_NONCE: toolsNonce,
-			TOOLS_ROLE: "tools",
-			...git,
-		},
-		stdio: "ignore",
-	},
-);
 const child = spawn(process.execPath, ["--max-old-space-size=256", "/workspace/pi-runner.js"], {
 	cwd: "/workspace",
 	env: {
@@ -240,14 +221,9 @@ const child = spawn(process.execPath, ["--max-old-space-size=256", "/workspace/p
 		PI_PRACTICE_OUTPUT_TOKENS: "48000",
 		LLM_PROXY_URL: `http://127.0.0.1:${address.port}/v1`,
 		LLM_PROXY_TOKEN: "synthetic-attempt",
-		TOOLS_SOCKET: toolsSocket,
-		TOOLS_NONCE: toolsNonce,
 		...git,
 	},
 	stdio: ["ignore", "pipe", "pipe"],
-});
-child.once("close", () => {
-	tools.kill("SIGKILL");
 });
 const output: Buffer[] = [];
 child.stdout.on("data", (chunk: Buffer) => {
