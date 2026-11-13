@@ -25,7 +25,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.MonitoredRepositoryQuery;
-import de.tum.cit.aet.hephaestus.integration.core.webhook.JetStreamPublisher;
+import de.tum.cit.aet.hephaestus.integration.core.webhook.ProviderEventReceiver;
 import de.tum.cit.aet.hephaestus.integration.core.webhook.WebhookPayloadSizeFilter;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmRepositoryItemLifecycle;
 import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener;
@@ -54,7 +54,6 @@ import de.tum.cit.aet.hephaestus.workspace.MembershipService;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
-import io.nats.client.Nats;
 import jakarta.servlet.Filter;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -73,7 +72,6 @@ import java.util.Objects;
 import java.util.Set;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -95,23 +93,6 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @ContextConfiguration(classes = Application.class)
 class RuntimeRoleContextIntegrationTest {
     private static final String SLACK_INTERACTIVITY = "/webhooks/slack/interactivity";
-
-    /**
-     * The receiver creates its JetStream streams on the shared NATS container at startup. Left there, they
-     * make a later test that creates a stream of the same name with its own configuration fail.
-     */
-    @AfterEach
-    void deleteTheStreamsTheRoleCreated() throws Exception {
-        var connection = Nats.connect(NatsTestContainer.getServerUrl());
-        try {
-            var streams = connection.jetStreamManagement();
-            for (String name : streams.getStreamNames()) {
-                streams.deleteStream(name);
-            }
-        } finally {
-            connection.close();
-        }
-    }
 
     /** The processes a release runs: the server, with or without agent jobs. */
     enum Deployment {
@@ -205,7 +186,7 @@ class RuntimeRoleContextIntegrationTest {
             } else {
                 assertThat(application).doesNotHaveBean(SandboxDispatcher.class);
             }
-            assertThat(application).hasSingleBean(JetStreamPublisher.class);
+            assertThat(application).hasSingleBean(ProviderEventReceiver.class);
             assertThat(application).hasSingleBean(ResultMarkService.class);
             assertThat(application).hasSingleBean(CitedSourceAccess.class);
             assertThat(application).hasSingleBean(EvidenceDeliveryAuthorization.class);

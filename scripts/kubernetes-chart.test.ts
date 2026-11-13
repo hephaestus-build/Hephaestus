@@ -584,34 +584,3 @@ await test("the sync settings use config.sync without the old monitoring group",
 	);
 	assert.equal(validate(merge(valid, { config: { monitoring: { runOnStartup: false } } })), false);
 });
-
-await test("stream byte overrides are keyed by a supported provider without the old GitHub field", () => {
-	const valid = install(prepared, operator);
-	assert.equal(
-		validate(
-			merge(valid, {
-				webhook: {
-					stream: {
-						maxBytesByStream: {
-							github: "10GB",
-							gitlab: "2GB",
-							slack: "512MB",
-							outline: "256MB",
-						},
-					},
-				},
-			}),
-		),
-		true,
-		JSON.stringify(validate.errors),
-	);
-	assert.equal(validate(merge(valid, { webhook: { stream: { maxBytesGithub: "1GB" } } })), false);
-	assert.equal(
-		validate(merge(valid, { webhook: { stream: { maxBytesByStream: { other: "1GB" } } } })),
-		false,
-	);
-	assert.equal(
-		validate(merge(valid, { webhook: { stream: { maxBytesByStream: { gitlab: "-1GB" } } } })),
-		false,
-	);
-});

@@ -12,7 +12,6 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import io.nats.client.Message;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -25,13 +24,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 class AbstractIntegrationMessageHandlerTest extends BaseUnitTest {
 
-    private NatsMessageDeserializer deserializer;
+    private EventPayloadDeserializer deserializer;
     private TransactionTemplate transactionTemplate;
     private AtomicReference<String> capturedPayload;
 
     @BeforeEach
     void setUp() {
-        deserializer = mock(NatsMessageDeserializer.class);
+        deserializer = mock(EventPayloadDeserializer.class);
         transactionTemplate = mock(TransactionTemplate.class);
         lenient()
                 .doAnswer(invocation -> {
@@ -54,8 +53,8 @@ class AbstractIntegrationMessageHandlerTest extends BaseUnitTest {
     @Test
     void matchingSubject_deserializesAndDispatches() throws IOException {
         TestHandler handler = new TestHandler(IntegrationKind.GITHUB, "repository.issues");
-        Message msg = mock(Message.class);
-        when(msg.getSubject()).thenReturn("github.org.repo.issues");
+        ProviderEvent msg = mock(ProviderEvent.class);
+        when(msg.subject()).thenReturn("github.org.repo.issues");
         when(deserializer.deserialize(msg, String.class)).thenReturn("payload");
 
         handler.onMessage(msg);
@@ -67,8 +66,8 @@ class AbstractIntegrationMessageHandlerTest extends BaseUnitTest {
     @Test
     void mismatchedSubject_rejected() throws IOException {
         TestHandler handler = new TestHandler(IntegrationKind.GITHUB, "repository.issues");
-        Message msg = mock(Message.class);
-        when(msg.getSubject()).thenReturn("github.org.repo.pull_request");
+        ProviderEvent msg = mock(ProviderEvent.class);
+        when(msg.subject()).thenReturn("github.org.repo.pull_request");
 
         handler.onMessage(msg);
 
@@ -80,8 +79,8 @@ class AbstractIntegrationMessageHandlerTest extends BaseUnitTest {
     @DisplayName("tag_push subject is rejected by a 'push' handler (suffix-overlap guard)")
     void suffixOverlap_isNotMatchedByLastSegmentRule() throws IOException {
         TestHandler handler = new TestHandler(IntegrationKind.GITLAB, "push");
-        Message msg = mock(Message.class);
-        when(msg.getSubject()).thenReturn("gitlab.?connection.7.tag_push");
+        ProviderEvent msg = mock(ProviderEvent.class);
+        when(msg.subject()).thenReturn("gitlab.?connection.7.tag_push");
 
         handler.onMessage(msg);
 
@@ -92,8 +91,8 @@ class AbstractIntegrationMessageHandlerTest extends BaseUnitTest {
     @Test
     void deserializeIOException_translatesToPayloadParsing() throws IOException {
         TestHandler handler = new TestHandler(IntegrationKind.GITLAB, "merge_request");
-        Message msg = mock(Message.class);
-        when(msg.getSubject()).thenReturn("gitlab.?connection.7.merge_request");
+        ProviderEvent msg = mock(ProviderEvent.class);
+        when(msg.subject()).thenReturn("gitlab.?connection.7.merge_request");
         when(deserializer.deserialize(msg, String.class)).thenThrow(new IOException("bad json"));
 
         assertThatThrownBy(() -> handler.onMessage(msg))
@@ -109,8 +108,8 @@ class AbstractIntegrationMessageHandlerTest extends BaseUnitTest {
                 throw new RuntimeException("boom");
             }
         };
-        Message msg = mock(Message.class);
-        when(msg.getSubject()).thenReturn("gitlab.?connection.7.merge_request");
+        ProviderEvent msg = mock(ProviderEvent.class);
+        when(msg.subject()).thenReturn("gitlab.?connection.7.merge_request");
         when(deserializer.deserialize(msg, String.class)).thenReturn("payload");
 
         assertThatThrownBy(() -> handler.onMessage(msg))

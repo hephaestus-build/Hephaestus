@@ -15,12 +15,15 @@ import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
+import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import jakarta.annotation.PostConstruct;
 import jakarta.validation.Valid;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.repository.Repository;
+import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +32,41 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.bind.annotation.RequestBody;
 
 class SpringCorrectnessArchitectureTest extends HephaestusArchitectureTest {
+
+    @Test
+    void shouldKeepProviderHandlersAwayFromAutocommitDatabaseAccess() {
+        noClasses()
+                .that()
+                .areAssignableTo(IntegrationMessageHandler.class)
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage("org.springframework.jdbc..", "java.sql..", "javax.sql..", "jakarta.persistence..")
+                .because(
+                        "provider handlers delegate database writes to Spring transaction boundaries where inbox erasure is fenced")
+                .check(classes);
+    }
+
+    @Test
+    void shouldNotHandRawProviderEnvelopesToAsynchronousJobs() {
+        methods()
+                .that()
+                .areAnnotatedWith(Async.class)
+                .or()
+                .areAnnotatedWith(ApplicationModuleListener.class)
+                .should(new ArchCondition<JavaMethod>("accept owned domain events rather than raw inbox payloads") {
+                    @Override
+                    public void check(JavaMethod method, ConditionEvents events) {
+                        boolean raw = method.getRawParameterTypes().stream()
+                                .anyMatch(type -> type.isAssignableTo(ProviderEvent.class));
+                        events.add(new SimpleConditionEvent(
+                                method,
+                                !raw,
+                                method.getFullName()
+                                        + " must own capture and erasure independently of the dispatch thread"));
+                    }
+                })
+                .check(classes);
+    }
 
     @Test
     void shouldRequireTransactionalMethodsToBeProxyable() {

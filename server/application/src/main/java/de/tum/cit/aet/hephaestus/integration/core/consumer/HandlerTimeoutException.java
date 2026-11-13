@@ -16,9 +16,4 @@ public final class HandlerTimeoutException extends RuntimeException {
     HandlerTimeoutException(Duration timeout) {
         super("The handler did not finish within " + timeout);
     }
-
-    /** For a replay, which answers its caller and stores no dead-letter record. */
-    HandlerTimeoutException(Duration timeout, Throwable cause) {
-        super("The handler did not finish within " + timeout, cause);
-    }
 }

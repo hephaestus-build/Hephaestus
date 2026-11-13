@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.team;
 
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.dto.GitHubTeamEventDTO;
@@ -29,7 +29,7 @@ public class GitHubTeamRepositoryMessageHandler extends AbstractIntegrationMessa
 
     GitHubTeamRepositoryMessageHandler(
             GitHubTeamMessageHandler delegate,
-            NatsMessageDeserializer deserializer,
+            EventPayloadDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
                 IntegrationKind.GITHUB,

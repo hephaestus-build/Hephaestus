@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.webhook;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackUninstallService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,7 +28,7 @@ public class SlackTokensRevokedMessageHandler extends AbstractSlackEnvelopeHandl
     private final SlackUninstallService uninstallService;
 
     public SlackTokensRevokedMessageHandler(
-            SlackUninstallService uninstallService, NatsMessageDeserializer deserializer) {
+            SlackUninstallService uninstallService, EventPayloadDeserializer deserializer) {
         super("tokens_revoked", deserializer);
         this.uninstallService = uninstallService;
     }

@@ -9,7 +9,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookContextResolver;
@@ -18,7 +19,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.dto.GitLabWebhook
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.dto.GitLabWebhookUser;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.dto.GitLabIssueEventDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import io.nats.client.Message;
 import java.io.IOException;
 import java.util.List;
 import java.util.function.Consumer;
@@ -43,7 +43,7 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
     private GitLabWebhookContextResolver contextResolver;
 
     @Mock
-    private NatsMessageDeserializer deserializer;
+    private EventPayloadDeserializer deserializer;
 
     private TransactionTemplate transactionTemplate;
     private GitLabIssueMessageHandler handler;
@@ -81,7 +81,7 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
             GitLabIssueEventDTO event = createEvent("open", "opened", false);
             setupRepository();
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueProcessor).process(eq(event), any(ProcessingContext.class));
@@ -98,7 +98,7 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
             GitLabIssueEventDTO event = createEvent("update", "closed", false);
             setupRepository();
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueProcessor).processUpdated(eq(event), any(ProcessingContext.class));
@@ -110,7 +110,7 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
             GitLabIssueEventDTO event = createEvent("close", "closed", false);
             setupRepository();
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueProcessor).processClosed(eq(event), any(ProcessingContext.class));
@@ -122,7 +122,7 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
             GitLabIssueEventDTO event = createEvent("reopen", "opened", false);
             setupRepository();
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueProcessor).processReopened(eq(event), any(ProcessingContext.class));
@@ -134,7 +134,7 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
             GitLabIssueEventDTO event = createEvent("unknown_action", "opened", false);
             setupRepository();
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueProcessor, never()).process(any(), any());
@@ -175,7 +175,7 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
                     null,
                     null);
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueProcessor, never()).process(any(), any());
@@ -192,7 +192,7 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
         void confidentialIssue_purgesSnapshotInsteadOfProcessing() throws IOException {
             GitLabIssueEventDTO event = createEvent("update", "opened", true);
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueProcessor).purgeConfidential(eq(event), any(ProcessingContext.class));
@@ -222,7 +222,7 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
             GitLabIssueEventDTO event = new GitLabIssueEventDTO(
                     "issue", "confidential_issue", createUser(), createProject(), attrs, null, null, null);
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueProcessor).purgeConfidential(eq(event), any(ProcessingContext.class));
@@ -235,7 +235,7 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
             when(contextResolver.resolve(eq(PROJECT_PATH), any(), any())).thenReturn(null);
             GitLabIssueEventDTO event = createEvent("update", "opened", true);
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueProcessor, never()).purgeConfidential(any(), any());
@@ -251,7 +251,7 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
             GitLabIssueEventDTO event =
                     new GitLabIssueEventDTO("issue", "issue", createUser(), createProject(), null, null, null, null);
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueProcessor, never()).process(any(), any());
@@ -279,7 +279,7 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
             GitLabIssueEventDTO event =
                     new GitLabIssueEventDTO("issue", "issue", createUser(), null, attrs, null, null, null);
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueProcessor, never()).process(any(), any());
@@ -287,8 +287,8 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
 
         @Test
         void nonIssueSubject_rejected() throws IOException {
-            Message msg = mock(Message.class);
-            when(msg.getSubject()).thenReturn("gitlab.org.proj.merge_request");
+            ProviderEvent msg = mock(ProviderEvent.class);
+            when(msg.subject()).thenReturn("gitlab.org.proj.merge_request");
 
             handler.onMessage(msg);
 
@@ -305,7 +305,7 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
             when(contextResolver.resolve(eq(PROJECT_PATH), any(), any())).thenReturn(null);
             GitLabIssueEventDTO event = createEvent("open", "opened", false);
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(issueProcessor, never()).process(any(), any());
@@ -364,9 +364,9 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
                 246765L, "demo-repository", "https://gitlab.lrz.de/hephaestustest/demo-repository", PROJECT_PATH);
     }
 
-    private Message mockMessage(GitLabIssueEventDTO event) throws IOException {
-        Message msg = mock(Message.class);
-        when(msg.getSubject()).thenReturn(NATS_SUBJECT);
+    private ProviderEvent mockMessage(GitLabIssueEventDTO event) throws IOException {
+        ProviderEvent msg = mock(ProviderEvent.class);
+        when(msg.subject()).thenReturn(NATS_SUBJECT);
         when(deserializer.deserialize(msg, GitLabIssueEventDTO.class)).thenReturn(event);
         return msg;
     }

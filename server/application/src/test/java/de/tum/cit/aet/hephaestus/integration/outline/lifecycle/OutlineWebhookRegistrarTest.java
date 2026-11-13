@@ -25,7 +25,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineApiClient;
@@ -40,18 +39,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
-import org.springframework.beans.factory.ObjectProvider;
 
 /**
  * Correctness of the change-notification subscription lifecycle: without a stored id a subscription is
@@ -83,47 +77,16 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
     private Connection connection;
 
     @Mock
-    private IntegrationNatsConsumer natsConsumer;
-
-    @Mock
-    private OutlineRouteProjection routes;
-
-    @Mock
     private ConnectionRepository connectionRepository;
 
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
 
-    /**
-     * A provider whose {@code ifAvailable} runs its consumer against {@code bean}, or is a no-op when
-     * null. {@code lenient()} because most no-op tests never reach the reconcile call at all.
-     */
-    @SuppressWarnings("unchecked")
-    private static <T> ObjectProvider<T> providerOf(@Nullable T bean) {
-        ObjectProvider<T> provider = mock(ObjectProvider.class);
-        if (bean != null) {
-            lenient()
-                    .doAnswer(inv -> {
-                        inv.<Consumer<T>>getArgument(0).accept(bean);
-                        return null;
-                    })
-                    .when(provider)
-                    .ifAvailable(any());
-        }
-        return provider;
-    }
-
-    private OutlineWebhookRegistrar registrar(String issuer) {
-        return registrar(issuer, natsConsumer);
-    }
-
-    private OutlineWebhookRegistrar registrar(String issuer, @Nullable IntegrationNatsConsumer consumer) {
+    private OutlineWebhookRegistrar registrar(String externalUrl) {
         return new OutlineWebhookRegistrar(
                 connectionService,
                 outlineApiClient,
                 CREDENTIAL,
-                new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(issuer), "/api")),
-                providerOf(consumer),
-                providerOf(routes),
+                new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(externalUrl), "/api")),
                 connectionRepository,
                 ClusterLocks.free(),
                 meters);
@@ -169,16 +132,6 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         return OutlineClientModels.webhookSubscription(id, "Hephaestus", url, enabled, List.of());
     }
 
-    /**
-     * The subscription id changed (fresh register, self-heal re-register, or either deregister path) —
-     * both {@code startConsumingScope} and {@code updateScopeConsumer} are called so the reconcile lands
-     * regardless of whether the scope consumer was already running.
-     */
-    private void verifyScopeConsumerReconciled() {
-        verify(natsConsumer).startConsumingScope(WORKSPACE_ID);
-        verify(natsConsumer).updateScopeConsumer(WORKSPACE_ID);
-    }
-
     @Test
     void ensureSubscription_registersAndStoresSubscriptionWhenNoneStored() {
         stubActiveConnection(config(null, null));
@@ -211,20 +164,6 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         assertThat(updated.webhookRoute()).isEqualTo(route);
         // Without this reconcile, the scope consumer (created at boot with only the SCM stream) never
         // picks up the new outline.<subId>.> filter until a restart.
-        verifyScopeConsumerReconciled();
-    }
-
-    @Test
-    void ensureSubscription_allowsTheRouteBeforeOutlineCanDeliverOnIt() {
-        stubActiveConnection(config(null, null));
-        stubToken();
-        stubCreateReturning("sub-99");
-
-        registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
-
-        InOrder order = inOrder(routes, outlineApiClient);
-        order.verify(routes).allow(anyString());
-        order.verify(outlineApiClient).createWebhookSubscription(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -237,7 +176,6 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
         verify(outlineApiClient).deleteWebhookSubscription(SERVER_URL, "tok", "sub-99");
-        verifyNoInteractions(natsConsumer);
     }
 
     @Test
@@ -251,7 +189,6 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
         verify(outlineApiClient).deleteWebhookSubscription(SERVER_URL, "tok", "sub-99");
-        verifyNoInteractions(natsConsumer);
     }
 
     @Test
@@ -297,15 +234,12 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
                         outlineApiClient,
                         credential(""),
                         new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(API_ORIGIN), "/api")),
-                        providerOf(natsConsumer),
-                        providerOf(routes),
                         connectionRepository,
                         ClusterLocks.free(),
                         meters)
                 .ensureSubscription(WORKSPACE_ID);
 
         verify(connectionService, never()).findActive(anyLongMatcher(), any());
-        verifyNoInteractions(natsConsumer);
     }
 
     @Test
@@ -319,7 +253,6 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         verify(outlineApiClient, never()).createWebhookSubscription(any(), any(), any(), any(), any(), any());
         verify(connectionService, never()).updateConfig(anyLongMatcher(), any(), any());
         // Nothing changed upstream — the scope consumer must not be poked.
-        verifyNoInteractions(natsConsumer);
     }
 
     @Test
@@ -331,7 +264,6 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
         // A reactivated connection's route left the projection while the connection was not ACTIVE.
-        verify(routes).allow(ROUTE);
     }
 
     @Test
@@ -357,7 +289,6 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         assertThat(stored.webhookSubscriptionId()).isEqualTo("sub-2");
         // Self-heal mints a new subscription id, i.e. a new subject filter — the scope consumer must be
         // reconciled just like a fresh register, or the workspace stays deaf until a restart.
-        verifyScopeConsumerReconciled();
     }
 
     @Test
@@ -384,7 +315,6 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
 
         verify(outlineApiClient).deleteWebhookSubscription(SERVER_URL, "tok", "sub-1");
         verify(outlineApiClient).createWebhookSubscription(any(), any(), any(), any(), any(), any());
-        verifyScopeConsumerReconciled();
     }
 
     @Test
@@ -426,7 +356,6 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         registrar(API_ORIGIN).ensureSubscription(WORKSPACE_ID);
 
         verify(outlineApiClient).createWebhookSubscription(any(), any(), any(), any(), any(), any());
-        verifyScopeConsumerReconciled();
     }
 
     @Test
@@ -441,7 +370,6 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         verify(outlineApiClient, never()).createWebhookSubscription(any(), any(), any(), any(), any(), any());
         verify(connectionService, never()).updateConfig(anyLongMatcher(), any(), any());
         // An unverifiable upstream changes nothing — don't churn the scope consumer either.
-        verifyNoInteractions(natsConsumer);
     }
 
     @Test
@@ -455,7 +383,6 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         registrar(API_ORIGIN).deregister(WORKSPACE_ID, CONNECTION_ID);
 
         verify(outlineApiClient).deleteWebhookSubscription(SERVER_URL, "tok", "sub-77");
-        verifyScopeConsumerReconciled();
     }
 
     @Test
@@ -487,7 +414,6 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         verify(outlineApiClient, never()).deleteWebhookSubscription(any(), any(), any());
         // The connection already left ACTIVE — the scope consumer must still be reconciled down even
         // though no upstream delete was possible.
-        verifyScopeConsumerReconciled();
     }
 
     @Test
@@ -498,58 +424,6 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         registrar(API_ORIGIN).deregister(WORKSPACE_ID, CONNECTION_ID);
 
         verify(outlineApiClient, never()).deleteWebhookSubscription(any(), any(), any());
-        verifyNoInteractions(natsConsumer);
-    }
-
-    // Without the NATS-consumer bean, every reconcile-triggering call site must still succeed.
-
-    /** The four call sites whose scope-consumer reconcile must tolerate a missing {@code IntegrationNatsConsumer} bean. */
-    private enum NoNatsConsumerBeanCase {
-        ENSURE_SUBSCRIPTION_REGISTERS,
-        ENSURE_SUBSCRIPTION_RE_REGISTERS,
-        DEREGISTER_BY_CONNECTION_ID,
-    }
-
-    @ParameterizedTest
-    @EnumSource(NoNatsConsumerBeanCase.class)
-    @DisplayName("never NPEs when the NATS consumer ObjectProvider bean is absent")
-    void neverNPEsWithNoNatsConsumerBean(NoNatsConsumerBeanCase testCase) {
-        switch (testCase) {
-            case ENSURE_SUBSCRIPTION_REGISTERS -> {
-                stubActiveConnection(config(null, null));
-                stubToken();
-                stubCreateReturning("sub-99");
-
-                assertThatCode(() -> registrar(API_ORIGIN, null).ensureSubscription(WORKSPACE_ID))
-                        .doesNotThrowAnyException();
-
-                verify(connectionService).updateConfig(eq(WORKSPACE_ID), eq(IntegrationKind.OUTLINE), any());
-            }
-            case ENSURE_SUBSCRIPTION_RE_REGISTERS -> {
-                stubActiveConnection(config("sub-1", ROUTE));
-                stubToken();
-                when(outlineApiClient.listWebhookSubscriptions(SERVER_URL, "tok"))
-                        .thenReturn(List.of(upstream("sub-1", false)));
-                stubCreateReturning("sub-2");
-
-                assertThatCode(() -> registrar(API_ORIGIN, null).ensureSubscription(WORKSPACE_ID))
-                        .doesNotThrowAnyException();
-
-                verify(outlineApiClient).createWebhookSubscription(any(), any(), any(), any(), any(), any());
-            }
-            case DEREGISTER_BY_CONNECTION_ID -> {
-                when(connection.getConfig()).thenReturn(config("sub-77", ROUTE));
-                when(connectionService.findInWorkspace(WORKSPACE_ID, CONNECTION_ID))
-                        .thenReturn(Optional.of(connection));
-                when(connectionService.findBearerToken(WORKSPACE_ID, CONNECTION_ID))
-                        .thenReturn(Optional.of(new BearerToken("tok", null)));
-
-                assertThatCode(() -> registrar(API_ORIGIN, null).deregister(WORKSPACE_ID, CONNECTION_ID))
-                        .doesNotThrowAnyException();
-
-                verify(outlineApiClient).deleteWebhookSubscription(SERVER_URL, "tok", "sub-77");
-            }
-        }
     }
 
     private static long anyLongMatcher() {

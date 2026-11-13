@@ -1,10 +1,12 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.LiveJdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataStores;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -17,13 +19,17 @@ import tools.jackson.databind.ObjectMapper;
 @PersonDataStores({
     "oauth_state_nonce",
     "connection_audit",
-    "consumer_dead_letter",
+    "provider_event",
+    "provider_event_replay",
     "sync_job",
     "item_event",
     "item_event_evidence",
     "item_event_requester"
 })
 public class IntegrationCoreConnectionPersonDataCatalog implements PersonDataCatalog {
+    // Scan live inbox matches after source erasure, before the final mentor copy scrub records its receipt.
+    private static final int INBOX_ERASURE_ORDER = Integer.MAX_VALUE - 1;
+
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
 
@@ -50,16 +56,57 @@ public class IntegrationCoreConnectionPersonDataCatalog implements PersonDataCat
                         "id",
                         "actor_account_id=NULL,actor_ref=NULL,detail=NULL",
                         400),
-                new JdbcPersonDataStore(
+                // A stored provider delivery copies the words and ids of the people it names. An erasure deletes each
+                // one whose payload names one of the person's identities of that provider: a GitHub or GitLab user
+                // object with the person's id, a GitLab sender or item participant id, or a Slack or Outline id as a
+                // whole token.
+                // Names and email addresses do not prove an identity (PersonScope). Erasure includes leased events;
+                // their write steps lock the event and check its lease in the business transaction. The export
+                // lists the deliveries, not their payloads.
+                new LiveJdbcPersonDataStore(
                         jdbc,
                         mapper,
-                        "consumer_dead_letter",
-                        "consumer_dead_letter",
+                        "provider_event",
+                        "provider_event",
+                        "EXISTS (SELECT 1 FROM jsonb_to_recordset(CAST(:identities AS jsonb))"
+                                + " AS i(\"providerId\" bigint, subject text, \"teamId\" text)"
+                                + " JOIN identity_provider p ON p.id = i.\"providerId\""
+                                + " WHERE lower(p.type) = t.provider AND p.server_url = t.headers->>'"
+                                + ProviderEvent.SOURCE_SERVER_URL + "' AND CASE"
+                                // CASE, not AND: PostgreSQL evaluates CASE branches in order, so no cast meets a
+                                // subject or a payload that the guard refused.
+                                + " WHEN t.provider IN ('github', 'gitlab') THEN CASE"
+                                + " WHEN i.subject !~ '^[0-9]{1,18}$'"
+                                + " OR NOT pg_input_is_valid(convert_from(t.payload, 'UTF8'), 'jsonb') THEN false"
+                                + " ELSE (jsonb_path_exists(CAST(convert_from(t.payload, 'UTF8') AS jsonb),"
+                                + " '$.** ? (@.id == $id && (exists(@.login) || exists(@.username)))',"
+                                + " jsonb_build_object('id', CAST(i.subject AS numeric)))"
+                                + " OR (t.provider = 'gitlab' AND jsonb_path_exists("
+                                + " CAST(convert_from(t.payload, 'UTF8') AS jsonb),"
+                                + " '$.** ? (@.user_id == $id || @.author_id == $id || @.assignee_id == $id"
+                                + " || @.merge_user_id == $id || @.updated_by_id == $id || @.last_edited_by_id == $id"
+                                + " || exists(@.assignee_ids ? (@ == $id)))',"
+                                + " jsonb_build_object('id', CAST(i.subject AS numeric))))) END"
+                                + " WHEN i.subject !~ '^[A-Za-z0-9-]{1,64}$' THEN false"
+                                + " WHEN t.provider = 'slack' AND i.\"teamId\" IS NOT NULL"
+                                + " AND split_part(t.subject, '.', 2) <> i.\"teamId\" THEN false"
+                                + " ELSE convert_from(t.payload, 'UTF8')"
+                                + " ~ ('(^|[^A-Za-z0-9-])' || i.subject || '($|[^A-Za-z0-9-])') END)",
+                        "id,workspace_id,provider,state,error_class,received_at,ended_at",
+                        "id",
+                        "",
+                        INBOX_ERASURE_ORDER),
+                // The account that replayed a dead letter. The event stays; only the attribution goes.
+                new LiveJdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "provider_event_replay",
+                        "provider_event",
                         "t.replayed_by = :account",
-                        "id,workspace_id,stream_name,stream_sequence,error_class,received_at,failed_at,replayed_at,replayed_by",
-                        "id,replayed_by",
+                        "id,workspace_id,provider,state,replayed_at,replayed_by",
+                        "id",
                         "replayed_by=NULL",
-                        400),
+                        INBOX_ERASURE_ORDER),
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,

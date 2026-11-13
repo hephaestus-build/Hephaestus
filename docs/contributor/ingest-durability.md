@@ -1,102 +1,112 @@
 ---
 title: Webhook delivery and retry order
-description: The consumer's durability contract and its failure tests.
+description: The provider event inbox's durability contract and its failure tests.
 page_type: explanation
 ---
 
-The consumer acknowledges an event after its handler commits.
-Liveness reporting is best-effort and cannot repeat a completed handler.
-Database and provider transport failures retry with bounded exponential delay and equal jitter.
-The delivery count includes earlier transient attempts.
-Unknown exceptions retry up to `hephaestus.integration.consumer.poison.max-redeliver` (default 10).
-At that limit, the consumer commits a dead-letter record before termination.
-Only a `PayloadParsingException` in the cause chain proves a permanent failure and terminates early, also after capture.
-Capture failure always leaves the event retryable.
+The receiver stores a verified delivery in `provider_event` in the request's transaction, and answers `202` after the commit.
+The receiver requires UTF-8 JSON without raw NUL bytes, so person erasure can read every stored payload as PostgreSQL text.
+Each stored row keeps the connection's exact source URL in `Hephaestus-Source-Server-Url`.
+The receiver sets that header from the connection, and person erasure matches its registered source namespace.
+It reads the matching connection routes through `ProviderEventSubscriptions` in the same transaction.
+It then takes each connection's scoped lifecycle lock and reads its current state again.
+Only an `ACTIVE` connection can admit a workspace row.
+A concurrent suspension commits before this check or waits until the inbox insert commits.
+A refused connection adds no payload or dedupe row. Its refusal reason is recorded in `webhook.rejected` and the admission log.
+GitHub App deliveries match the installation ID from the signed body. A request header cannot set that ID.
+The source App connection must be ACTIVE, including when the event also matches a PAT workspace.
+A GitHub work event without a signed installation ID is dropped with `work-event-without-source`.
+Admission locks the source and recipient connections in connection-ID order across workspaces.
+GitLab and Outline deliveries must also match their connection's verified route.
+If the connection configuration changed while admission waited, the receiver fails the request so the provider can retry against the current route.
+The receiver stores one row for each admitted workspace.
+GitHub installation, installation-repositories and installation-target control events get one row with a NULL workspace, because their handlers can create or repair a connection.
+GitHub signs the body, not its event-type header. The adapter validates the control payload before it can enter the system scope.
+A signed work payload relabeled as a control event is refused with `invalid-event-route`.
+A work event without an organization or repository does not fall back into that system scope. Its payload is dropped.
+A subscription change is visible to every delivery that the receiver stores after the change commits.
+No consumer has to start or attach first, so a new repository or connection misses no event.
+
+The unique index `uq_provider_event_delivery` is (workspace, provider, delivery key) with NULLS NOT DISTINCT.
+`INSERT … ON CONFLICT DO NOTHING` makes a provider's retry or redelivery add no row.
+`SubjectKeyDeriver` owns the key of each provider.
+A handled row stays for `hephaestus.integration.consumer.replay-window` (default `3d`), the time in which GitHub can redeliver.
+The commit wakes the claimers of the receiving server through `ProviderEventNotifications`. Claimers of other servers find the row at their next poll, every 5 seconds.
+The inbox opens no `LISTEN` connection, so the chart's connection budget stays as it is.
+
+## Claim, lease and order
+
+Every installation control event shares one system `scope_key`, including a subject that names an organization.
+Other rows use their workspace and their subject without the event token.
+One scope is one resource of one workspace, such as a repository or a Slack channel.
+Order is serial per scope, in row id order, not provider event time.
+All installation events share one scope.
+
+`ProviderEventRepository.claim` leases the oldest due QUEUED row:
+
+- of an ACTIVE workspace, or of the installation;
+- whose scope has no LEASED row;
+- whose scope has no older QUEUED row.
+
+The row lock is `FOR UPDATE OF e SKIP LOCKED` inside the CTE, so concurrent claimers on every server pass over a locked row.
+The scope check reads the statement snapshot.
+A claimer therefore sees an older QUEUED row of its scope that another claimer locked but did not commit yet, and skips the scope.
+The partial unique index `uq_provider_event_leased_scope` (scope_key) WHERE state = 'LEASED' is the database backstop for one leased row per scope.
+A failed row returns to QUEUED with its retry time and stays the oldest row of its scope, so later rows of the scope wait for it.
+
+The claim increments `attempt` and `lease_epoch` and sets `leased_until` from `clock_timestamp()`.
+Every later write of the claimer names the epoch: `complete`, `retry`, `dead`, `renew` and `release` change nothing under a newer lease.
+The lease is 2 minutes. The claimer renews it every 30 seconds while its handler runs, up to `handler-timeout` (default `30m`).
+The reaper takes back an expired lease every 30 seconds on each server.
+A row that used `poison.max-attempts` becomes DEAD with `LeaseExpired`, so an event that stops every server cannot stop them in turn.
+A stopping server releases its unfinished leases without counting the attempt.
+
+A lease row, not an advisory lock, holds the scope.
+A handler runs outside a database transaction for up to its timeout.
+A session advisory lock would pin a pooled connection for that time and end with the session, not at a fenced expiry.
+
+## Retries and dead letters
+
+Database and provider transport failures retry with bounded exponential delay (`poison.base-delay` 2 s to `poison.max-delay` 5 min).
+They do not count against the unknown-failure budget.
+Unknown exceptions retry up to `hephaestus.integration.consumer.poison.max-attempts` (default 10), then the row becomes DEAD.
+Only a `PayloadParsingException` in the cause chain proves a permanent failure and makes the row DEAD on its first attempt.
 Stack overflows use the unknown-failure budget.
-Other fatal JVM errors stop the local subscription and mark the consumer stopped, so reconciliation can restart it.
+Sanitized cause types and stack frames are logged on the first attempt and when a row becomes DEAD.
 
-The server reconciles active workspaces once per minute when NATS is enabled.
-It reattaches stopped subscriptions and recreates a durable that the broker removed.
-An existing durable keeps its acknowledgement position; a fresh consumer starts with new deliveries.
-Suspended, purged and filtered-out workspaces stay stopped, and disabled adapters stay unbound.
-A workspace stop keeps its restart fence until the transaction completes.
-A rollback re-arms consumption; a committed purge keeps its permanent fence.
+A DEAD row keeps its payload, headers, subject and arrival time, and records its error class and end time.
+It stores no exception message or routing credential.
+It stays for `hephaestus.integration.consumer.dead-retention` (default `30d`).
+Workspace deletion cascades to its rows. Installation rows use NULL and separate instance-admin queries.
+All workspace list and replay queries bind the workspace.
 
-Each durable uses explicit acknowledgements, `MaxDeliver=-1` and `MaxAckPending=1`.
-The broker delivery limit stays unlimited so an outage cannot exhaust it before PostgreSQL can record the failure.
-The application applies the unknown-failure budget after each failed dispatch.
-The broker holds the failed sequence ahead of later sequences, including after a consumer restart.
-Order is serial per (workspace, stream), in stream sequence order, not provider event time.
-GitHub, GitLab, Slack and Outline use separate streams.
-Delivery keys include the stream; there is no total order across streams.
-The GitHub installation durable has no workspace and serializes all installation lifecycle events.
-A failed installation event delays later installation events until success or capture.
-The server runs as one replica with Recreate; this contract requires no consumer leader lock.
+Replay sets a DEAD row of the workspace back to QUEUED with attempt 0, and records the account and time.
+The row keeps its id, so it is at the head of its scope again, and its committed steps stay.
+Replay is an explicit late event. It does not rewind later events.
+[The stored work only moves forward](./sync-lifecycle.md#a-redelivered-or-older-payload-changes-nothing) defines provider versions and equal timestamps.
+An installation replay commits its audit record in the replay transaction.
+Operators follow [Replay a failed webhook event](../admin/webhook-replay).
 
-Synchronous dispatch carries the workspace that the consumer selected.
+Synchronous dispatch carries the workspace of the row.
 GitHub repository and team handlers use that workspace.
 A related issue uses it only when the workspace also monitors the related repository.
-Shared organization logins and shared monitored repositories do not select a different workspace.
 The dispatch scope ends when handling returns or throws and does not cross to asynchronous work.
-
-Copies of a sequence already queued or in progress share one queue entry.
-A redelivery after dispatch uses the same database inbox identity.
-A completed delivery skips the handler, including its provider preparation.
-A delivery that failed after a partial commit skips its committed write steps and resumes unfinished steps.
-Natural event identities still deduplicate separate deliveries of the same provider event.
-A missing acknowledgement times out after the configured `ack-wait`.
-Explicit negative acknowledgements carry their own retry delay.
-See [NATS pull consumers](https://docs.nats.io/learn/jetstream/pull-consumers).
-
-`consumer_dead_letter` stores the workspace, consumer, stream, sequence, subject, broker arrival time and diagnostic cause class.
-It stores no payload, headers, exception message or routing credential.
-Sanitized cause types and stack frames are logged on the first delivery and after each committed capture.
-The unique consumer, stream and sequence key makes capture idempotent across a crash between commit and termination.
-Workspace deletion cascades to its rows.
-Installation rows use NULL and separate instance-admin queries.
-All workspace list and replay queries include the workspace predicate.
-
-Replay reads the original event from NATS before opening a database transaction.
-The original broker timestamp and routing headers reach the dispatcher unchanged.
-The lookup compares the subject and arrival time to reject a replaced stream's reused sequence.
-Replay and live dispatch share a local lock for the workspace and stream.
-Replay is an explicit late event; it does not rewind subsequent events or establish order across streams.
-[The stored work only moves forward](./sync-lifecycle.md#a-redelivered-or-older-payload-changes-nothing) defines provider versions and equal timestamps.
-Handler dispatch runs without an outer database transaction, so dispatch holds no replay row lock or pooled connection.
-The live path and replay use the same inbox keys.
-Each step commits its key with its database writes; a failed step rolls back both.
-A row lock serializes the final replay completion and installation audit in a short transaction.
-If completion fails after a step committed, a retry keeps that step and finishes the replay record.
-
-A successful replay records the requesting account and completion time on the row.
-Failed replay preserves the pending row.
-Operators follow [Replay a failed webhook event](../admin/webhook-replay).
 
 ## The database inbox
 
-`consumer_inbox_step` belongs to a workspace from its first migration.
-Its `workspace_id` is NOT NULL and workspace deletion cascades to its rows.
-Workspace purge also removes its delivery keys through `ConsumerInboxPurge`; other workspaces and installation keys stay.
-`installation_inbox_step` is instance-owned: an installation event can create the workspace it needs.
-Both tables contain broker metadata and step names, without a payload, headers or person data.
+`provider_event_step` (event id, step name) records each committed handler step.
+It holds no person data, and the event's deletion cascades to its steps.
 
-The unique key is (workspace, consumer, stream, stream sequence, broker arrival time, step name).
-The installation key has no workspace component.
-Broker arrival time distinguishes a retained sequence from the same sequence in a replacement stream.
-The delivery count is not part of the key.
-A redelivery and an administrator replay must keep the original identity.
-
-`DeliveryInbox` binds this identity on the thread that executes dispatch and removes it in `finally`.
+`DeliveryInbox` binds the event id on the thread that executes dispatch and removes it in `finally`.
 `DeliveryInbox.claim` inserts a named step with `ON CONFLICT DO NOTHING` inside the business transaction.
 A conflict skips that step's writes.
+A retry or replay of an event therefore skips its committed steps and resumes the unfinished ones.
 A single-step event uses a fixed operation name, without message or direct-message channel identifiers.
 A loop names each step by a stable item id, such as repository id and commit SHA, rather than the loop position.
-Step names are part of stored delivery keys.
-Keep them stable across releases while those deliveries can remain in the broker.
-Calls from a sync job have no broker identity and follow their usual natural-key and version rules.
+Keep step names stable across releases while their events can stay in the inbox.
+Calls from a sync job have no event and follow their usual natural-key and version rules.
 A read can reconstruct the context that a later step needs after a committed step is skipped.
-The `complete` key is written only after the whole handler returns successfully.
-Failures still reach the consumer's retry and poison budget, also when an earlier step committed.
+Failures still reach the retry and poison budget, also when an earlier step committed.
 
 Orchestration handlers read providers outside their write transactions.
 `GitHubInstallationMessageHandler` still verifies installation status inside its default handler transaction.
@@ -105,14 +115,30 @@ A process can stop after an HTTP or SMTP side effect and before its database com
 Such an external effect can repeat unless its adapter has a provider idempotency key or a durable claim-and-reconcile protocol.
 The inbox guarantees database steps; it does not make a remote service part of a PostgreSQL transaction.
 
-Cleanup runs every 6 hours on the server role.
-It reads the broker's age limits outside the cleanup transaction.
-It retains keys for the largest live or configured `hephaestus.webhook.stream.max-age` or `max-age-by-stream` value, plus one day.
-A withheld limit reduction can leave the live bound longer than the configured one.
-An unavailable or unbounded stream keeps the keys and records a cleanup failure.
-Disabled NATS skips cleanup.
-The broker rejects replay after the original event has expired.
-Cleanup failure leaves keys in place and increments `integration_consumer_inbox_retention_failures_total`.
+Person erasure deletes matching events in every state, including LEASED, and cascades their step records.
+The inbox is a live-predicate erasure store: its preview counts can change without invalidating the frozen identity scope.
+Each erasure pass deletes current matches as well as the frozen keys, and resume repeats the pass even after an earlier receipt.
+Each pass covers deliveries stored before its inbox step. Webhook admission stays available during erasure.
+Both inbox stores run after ordinary source erasure and before the final conversation copy scrub.
+That scrub must stay last: its receipt also fences the tool results of turns that finish after erasure
+([Personal-data map](/admin/dsms/personal-data-map#shared-source-content-and-hephaestus-tool-results)).
+A named write step holds copy admission and a key-share row lock until commit. Renewal remains possible.
+The reaper uses FOR UPDATE SKIP LOCKED, which skips that key-share lock.
+Spring rechecks LEASED and the epoch with a shared row lock at commit in every write transaction.
+A changed epoch rolls the whole transaction back, including its step record.
+This covers independent natural-key upserts that have no named step.
+A write that finds erasure in progress rolls back before waiting on its outcome, so domain locks cannot deadlock erasure.
+After erasure, a missing event stops further writes and completion.
+The consumer records `erased-during-processing` in `integration.message.dropped` and does not retry the event.
+A replaced lease records `lease-lost` and cannot write under the new lease.
+Renewal and reaping use SKIP LOCKED. They do not wait on a fenced write, and reaping leaves that write's lease alone.
+Renewal continues until the outcome is recorded. Outcome checks hold no domain or global copy lock.
+A committed handler step that deliberately erases its own event is successful handling.
+A caught write-fence failure still reaches the consumer, which can retry the unfinished work.
+
+Retention runs every hour on one server.
+It deletes DONE rows after the replay window and DEAD rows after the dead retention.
+A failure leaves the rows in place and increments `integration_consumer_inbox_retention_failures_total`.
 [Alert response](../admin/production-operations-runbook#alert-response) owns the operator response.
 
 ## Handler boundaries
@@ -134,9 +160,13 @@ Cleanup failure leaves keys in place and increments `integration_consumer_inbox_
 
 A listener that writes inside the publisher's transaction joins its inbox step.
 An `AFTER_COMMIT` listener cannot roll back that step.
-An asynchronous listener or durable job is separate work; it does not inherit the broker thread's inbox identity.
+An asynchronous listener or durable job is separate work; it does not inherit the dispatch thread's inbox identity.
 Its existing natural keys, state transitions or delivery protocol own its idempotency.
-Do not carry a broker step into a later job by thread-local context.
+The inbox fence covers Spring write transactions on the dispatch thread. It does not cover autocommit writes or another thread.
+Provider handlers must delegate database writes to transactional services and must not send raw inbox envelopes to async jobs.
+Architecture guards both boundaries. `CommitEnrichmentEventListener`, `SyncPushService` and Modulith jobs are separate work.
+Their person-data contracts are recorded in the [personal-data map](/admin/dsms/personal-data-map).
+Do not carry an inbox step into a later job by thread-local context.
 
 ## Other ingestion listeners
 
@@ -144,13 +174,12 @@ Do not carry a broker step into a later job by thread-local context.
 | --- | --- |
 | `ScmItemEventRecorder`, `ScmRepositoryItemLifecycle`, `IntegrationAttentionService` and `ProviderTeardown.onActivated` | Synchronous or `BEFORE_COMMIT` writes join the publisher's transaction and inbox step. Item event identities also prevent duplicate occasions. |
 | `ActivityEventListener` | Its `AFTER_COMMIT` methods open separate transactions and catch recording failures. The activity write is best-effort. Redelivery skips a committed handler step, so it cannot repair a missing activity row. |
-| `CommitEnrichmentEventListener` | Async work has no broker inbox scope. It enriches commits without contributor rows; the next repository sync repairs a missed enrichment. |
+| `CommitEnrichmentEventListener` | Async work has no inbox scope. It enriches commits without contributor rows; the next repository sync repairs a missed enrichment. |
 | GitHub, GitLab, Slack and Outline connection-state listeners, `SlackDataSyncScheduler` and `OutlineCollectionAdminService.onCollectionResumed` | Start independent initialization, sync or teardown work after commit. Their sync, connection generation and provider-registration rules own repeated execution. |
-| `SlackChannelConsentProjection` and `OutlineRouteProjection` | Rebuild the current remote admission set. Repeated set updates are idempotent; scheduled rebuilds repair missed projections. |
 | `ConnectionActivityRecorder` and `SyncPushService` | Invalidate local lookups or send UI refresh hints after commit. These effects do not write provider state. |
 | `ActivityScmMirrorErasureListener` and `ItemEventEvidenceErasure` | Synchronous erasure joins its publisher's transaction. Repeated scoped deletes or evidence removal retain the erased state. |
 
-Startup listeners and scheduled sweepers do not consume broker deliveries.
+Startup listeners and scheduled sweepers do not claim provider events.
 They retain their own job and lifecycle rules.
 
 ## Event publication registry listeners
@@ -181,13 +210,11 @@ Therefore a registry redelivery still needs an idempotency rule; the framework c
 
 ## Proofs
 
-`DeliveryInboxIntegrationTest` redelivers after commit, rolls back a partial step, reorders remaining items and runs concurrent dispatch threads against PostgreSQL.
-It also checks workspace isolation, instance keys, stream replacement, workspace purge, cascade deletion and a longer per-stream retention override.
+`ProviderEventStoreIntegrationTest` stores a redelivery once, keeps a scope's order beside other scopes, holds a scope behind a failed row, and refuses a taken-back lease's outcome.
+It also makes a reaped row DEAD after its attempts, replays a DEAD row with its payload and committed steps, and deletes ended rows after their window.
+`DeliveryInboxIntegrationTest` retries after commit, rolls back a partial step, reorders remaining items and runs concurrent dispatch threads against PostgreSQL.
+`GitLabWorkspaceEventRoutingIntegrationTest` receives over HTTP and waits until running claimers handle the rows of each subscribing workspace.
 `OutlineDocumentSyncIntegrationTest` stops between mirror commit and event recording, then proves that retry completes the event without another mirror write.
-
-`IngestDurabilityIntegrationTest` pauses a private PostgreSQL container while real NATS redelivers a proven transient failure beyond the configured delivery count.
-It checks that the second event waits and that a consumer restart preserves the failed head.
-`ConsumerDeadLetterIntegrationTest` uses real NATS and PostgreSQL for capture, lost acknowledgement and termination, failed capture, permissions and replay.
-It redelivers after a committed handler and exhausts the poison budget after a partial commit.
+`ConsumerDeadLetterIntegrationTest` covers the dead-letter API, paging, permissions, workspace isolation, replay, the installation audit and person-data erasure.
 `SlackParticipantConsentFirewallIntegrationTest` resumes an edit after its base insert committed and checks that inbox steps contain no message or direct-message channel identifiers.
 `IntegrationPoisonHandlerTest` covers classification through wrapped causes and the unknown-failure budget.

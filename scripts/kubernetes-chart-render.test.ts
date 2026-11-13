@@ -515,13 +515,9 @@ for (const name of profiles) {
 		}
 	});
 
-	await test(`${name}: storage is bounded, and one value sizes the broker and the stream budget`, () => {
+	await test(`${name}: storage is bounded, and one value sizes the broker and its volume`, () => {
 		const resources = rendered(layersFor(name));
 		const budget = maxFileBytes[name];
-		assert.equal(
-			envValue(workload(resources, "server"), "HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET"),
-			String(budget),
-		);
 		// The git mirrors are caches on node storage: no role claims a volume of its own.
 		assert.equal(
 			resources.some((resource) => kindOf(resource) === "PersistentVolumeClaim"),
@@ -1271,100 +1267,20 @@ const grants = (role: unknown) =>
 		})
 		.toSorted(byCodePoint);
 
-for (const name of ["small", "external"] as const) {
-	await test(`${name}: stream bounds and thirty-day durable expiry reach their runtime roles`, () => {
-		const resources = rendered(layersFor(name));
-		const receiver = workload(resources, "server");
-		for (const [provider, ageKey, bytesKey, bytes] of [
-			["github", "MAX_AGE", "MAXBYTESBYSTREAM_GITHUB", "6442450944B"],
-			["gitlab", "MAX_AGE", "MAX_BYTES", "536870912B"],
-			["slack", "MAX_AGE", "MAX_BYTES", "536870912B"],
-			["outline", "MAX_AGE", "MAX_BYTES", "536870912B"],
-		] as const) {
-			assert.equal(
-				envValue(receiver, `HEPHAESTUS_WEBHOOK_STREAM_${ageKey}`),
-				"7d",
-				`${provider} age`,
-			);
-			assert.equal(
-				envValue(receiver, `HEPHAESTUS_WEBHOOK_STREAM_${bytesKey}`),
-				bytes,
-				`${provider} bytes`,
-			);
-		}
-		assert.equal(envValue(receiver, "HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET"), "8589934592");
-		assert.equal(
-			envValue(receiver, "HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES"),
-			"false",
+await test("the server receives no stream settings: the receiver stores into the provider event inbox", () => {
+	const server = workload(rendered(layersFor("small")), "server");
+	for (const variable of list(get(container(server), "env")).map((entry) =>
+		String(get(entry, "name")),
+	)) {
+		assert.doesNotMatch(
+			variable,
+			/^HEPHAESTUS_WEBHOOK_STREAM_|^HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE/u,
 		);
-	});
-}
-
-await test("per-stream ages accept a site override and reject an unknown provider", () => {
-	const receiver = workload(
-		rendered([...layersFor("small"), { webhook: { stream: { maxAgeByStream: { slack: "9d" } } } }]),
-		"server",
-	);
-	assert.equal(envValue(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_SLACK"), "9d");
-	assert.equal(env(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_OUTLINE"), undefined);
+	}
 	assert.match(
-		render([...layersFor("small"), { webhook: { stream: { maxAgeByStream: { unknown: "7d" } } } }])
-			.stderr,
-		/invalid propertyName 'unknown'/u,
+		render([...layersFor("small"), { webhook: { stream: { maxAge: "7d" } } }]).stderr,
+		/webhook/u,
 	);
-});
-
-await test("an existing installation can keep its broker budget and volume when it adopts smaller stream bounds", () => {
-	const resources = rendered([
-		...layersFor("small"),
-		{ nats: { jetstream: { maxFileBytes: 17_179_869_184 } } },
-	]);
-	assert.equal(
-		envValue(workload(resources, "server"), "HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET"),
-		"17179869184",
-	);
-	assert.equal(
-		envValue(workload(resources, "server"), "HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_GITHUB"),
-		"6442450944B",
-	);
-	assert.equal(
-		String(
-			get(
-				workload(resources, "nats"),
-				"spec",
-				"volumeClaimTemplates",
-				0,
-				"spec",
-				"resources",
-				"requests",
-				"storage",
-			),
-		),
-		"21474836480",
-	);
-});
-
-await test("a release can apply a stream limit that deletes stored messages only when its operator turns it on", () => {
-	// The migration that shortens an existing stream's age needs one start with this flag.
-	const defaults = workload(rendered(layersFor("small")), "server");
-	assert.equal(
-		envValue(defaults, "HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES"),
-		"false",
-	);
-	assert.equal(envValue(defaults, "HEPHAESTUS_WEBHOOK_STREAM_LIMIT_UPDATE_TIMEOUT"), "5m");
-
-	const migrating = workload(
-		rendered([
-			...layersFor("small"),
-			{ webhook: { stream: { allowDestructiveLimitUpdates: true, limitUpdateTimeout: "30m" } } },
-		]),
-		"server",
-	);
-	assert.equal(
-		envValue(migrating, "HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES"),
-		"true",
-	);
-	assert.equal(envValue(migrating, "HEPHAESTUS_WEBHOOK_STREAM_LIMIT_UPDATE_TIMEOUT"), "30m");
 });
 
 await test("a server with sandboxes receives its runtime settings, its sandbox namespace and only the authority its runtime uses", () => {
@@ -4695,25 +4611,6 @@ await test("each sandbox kind has a cold-start template of one container, behind
 		get(list(get(templates[0], "spec", "podTemplate", "spec", "containers"))[0], "image"),
 	);
 	assert.equal(get(podSpec(holder), "automountServiceAccountToken"), false);
-});
-
-await test("each provider's byte override reaches the server through the map", () => {
-	const bounds = { github: "7GB", gitlab: "2GB", slack: "1GB", outline: "1GB" };
-	const resources = rendered([
-		...layersFor("small"),
-		{
-			webhook: { stream: { maxBytesByStream: bounds } },
-			nats: { jetstream: { maxFileBytes: 17_179_869_184 } },
-		},
-	]);
-	for (const [provider, bound] of Object.entries(bounds)) {
-		const name = `HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_${provider.toUpperCase()}`;
-		assert.equal(envValue(workload(resources, "server"), name), bound, provider);
-	}
-	assert.equal(
-		env(workload(resources, "server"), "HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB"),
-		undefined,
-	);
 });
 
 /** Kinds that have no namespace: a release without cluster-admin cannot create any of them. */

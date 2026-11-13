@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository;
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.dto.GitLabProjectEventDTO;
@@ -29,7 +29,7 @@ public class GitLabProjectEventMessageHandler extends AbstractIntegrationMessage
 
     private static final Logger log = LoggerFactory.getLogger(GitLabProjectEventMessageHandler.class);
 
-    GitLabProjectEventMessageHandler(NatsMessageDeserializer deserializer, TransactionTemplate transactionTemplate) {
+    GitLabProjectEventMessageHandler(EventPayloadDeserializer deserializer, TransactionTemplate transactionTemplate) {
         super(
                 IntegrationKind.GITLAB,
                 GitLabEventType.PROJECT.getValue(),

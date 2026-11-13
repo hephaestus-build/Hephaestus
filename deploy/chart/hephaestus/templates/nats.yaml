@@ -25,7 +25,6 @@ data:
       max_mem: {{ .Values.nats.jetstream.maxMemory }}
       # Per-message fsync protects R1 acknowledgements at a throughput cost.
       sync_interval: always
-      # Shared with the server's HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET.
       max_file: {{ $maxFile }}
     }
 ---

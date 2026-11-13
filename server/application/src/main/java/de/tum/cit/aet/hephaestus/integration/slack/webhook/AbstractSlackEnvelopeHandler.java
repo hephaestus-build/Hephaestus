@@ -2,21 +2,21 @@ package de.tum.cit.aet.hephaestus.integration.slack.webhook;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.handler.PayloadParsingException;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import io.nats.client.Message;
 import java.io.IOException;
 import tools.jackson.databind.JsonNode;
 
 abstract class AbstractSlackEnvelopeHandler implements IntegrationMessageHandler {
 
     private final EventTypeKey key;
-    private final NatsMessageDeserializer deserializer;
+    private final EventPayloadDeserializer deserializer;
 
-    AbstractSlackEnvelopeHandler(String eventType, NatsMessageDeserializer deserializer) {
+    AbstractSlackEnvelopeHandler(String eventType, EventPayloadDeserializer deserializer) {
         if (eventType == null || eventType.isBlank()) {
             throw new IllegalArgumentException("eventType must not be blank");
         }
@@ -30,13 +30,13 @@ abstract class AbstractSlackEnvelopeHandler implements IntegrationMessageHandler
     }
 
     @Override
-    public void onMessage(Message msg) {
+    public void onMessage(ProviderEvent event) {
         JsonNode root;
         try {
-            root = deserializer.deserialize(msg, JsonNode.class);
+            root = deserializer.deserialize(event, JsonNode.class);
         } catch (IOException e) {
             throw new PayloadParsingException(
-                    "Payload parsing failed for Slack subject: " + sanitizeForLog(msg.getSubject()), e);
+                    "Payload parsing failed for Slack subject: " + sanitizeForLog(event.subject()), e);
         }
         handleEnvelope(root);
     }

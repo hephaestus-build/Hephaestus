@@ -10,8 +10,6 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
 import de.tum.cit.aet.hephaestus.core.event.ScmMirrorErasedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMembershipRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -29,7 +27,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.mockito.Mock;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 
 class ScmWorkspaceContentEraserTest extends BaseUnitTest {
@@ -55,9 +52,6 @@ class ScmWorkspaceContentEraserTest extends BaseUnitTest {
     private OrganizationMembershipRepository organizationMembershipRepository;
 
     @Mock
-    private ObjectProvider<IntegrationNatsConsumer> natsConsumerService;
-
-    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     @Mock
@@ -75,8 +69,6 @@ class ScmWorkspaceContentEraserTest extends BaseUnitTest {
                 repositoryMonitorService,
                 teamRepository,
                 organizationMembershipRepository,
-                new NatsConnectionProperties(false, null, null, null),
-                natsConsumerService,
                 eventPublisher);
     }
 

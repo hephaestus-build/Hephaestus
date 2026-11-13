@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandlerRegistry;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectParser;
@@ -12,7 +13,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.webhook.GitHubSubjectPar
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabSubjectParser;
 import de.tum.cit.aet.hephaestus.integration.slack.webhook.SlackSubjectParser;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import io.nats.client.Message;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -131,7 +131,7 @@ class IntegrationMessageDispatcherTest extends BaseUnitTest {
         }
 
         @Override
-        public void onMessage(Message msg) {
+        public void onMessage(ProviderEvent msg) {
             // No-op: these tests assert on dispatch resolution, not message handling.
         }
     }

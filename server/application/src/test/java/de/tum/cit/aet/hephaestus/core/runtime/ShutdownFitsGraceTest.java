@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.core.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.gateway.AgentShutdownConfiguration;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventConsumer;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -31,8 +31,7 @@ class ShutdownFitsGraceTest extends BaseUnitTest {
     void shouldStopTheServerWithinItsGrace() throws IOException {
         Duration stop = preStop("server.yaml")
                 .plus(httpPhase())
-                .plus(applicationDuration("drain-timeout"))
-                .plus(IntegrationNatsConsumer.SHUTDOWN_WAIT)
+                .plus(ProviderEventConsumer.SHUTDOWN_WAIT)
                 .plus(MARGIN);
 
         assertThat(Duration.ofSeconds(Long.parseLong(serverGrace().group(2))))
@@ -47,8 +46,7 @@ class ShutdownFitsGraceTest extends BaseUnitTest {
         Duration beyondDrain = preStop("server.yaml")
                 .plus(AgentShutdownConfiguration.drainPhaseTimeout(Duration.ZERO))
                 .plus(httpPhase())
-                .plus(applicationDuration("drain-timeout"))
-                .plus(IntegrationNatsConsumer.SHUTDOWN_WAIT)
+                .plus(ProviderEventConsumer.SHUTDOWN_WAIT)
                 .plus(MARGIN);
 
         assertThat(Duration.ofSeconds(Long.parseLong(serverGrace().group(1)))).isGreaterThanOrEqualTo(beyondDrain);
@@ -69,13 +67,6 @@ class ShutdownFitsGraceTest extends BaseUnitTest {
         Matcher matcher = Pattern.compile("timeout-per-shutdown-phase: \\$\\{SHUTDOWN_TIMEOUT:([^}]+)}")
                 .matcher(read("server/application/src/main/resources/application.yml"));
         assertThat(matcher.find()).isTrue();
-        return DurationStyle.detectAndParse(matcher.group(1));
-    }
-
-    private static Duration applicationDuration(String key) throws IOException {
-        Matcher matcher = Pattern.compile("\\n\\s+" + Pattern.quote(key) + ": (\\S+)\\n")
-                .matcher(read("server/application/src/main/resources/application.yml"));
-        assertThat(matcher.find()).as(key).isTrue();
         return DurationStyle.detectAndParse(matcher.group(1));
     }
 

@@ -203,7 +203,7 @@ tests:
               severity: warning
               kind: github
             exp_annotations:
-              summary: An integration event was stored for administrator replay
+              summary: An integration event became a dead letter for administrator replay
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a timed-out handler fires, completed and failed handling does not
@@ -224,15 +224,15 @@ tests:
               severity: warning
               kind: github
             exp_annotations:
-              summary: An integration event outlived the handler timeout and returned to its stream
+              summary: An integration event outlived the handler timeout and returned to the inbox
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: sustained retries fire while a brief failure stays quiet
     interval: 1m
     input_series:
-      - series: 'integration_consumer_nak_total{job="hephaestus",kind="github"}'
+      - series: 'integration_consumer_retry_total{job="hephaestus",kind="github"}'
         values: "0+1x30"
-      - series: 'integration_consumer_nak_total{job="hephaestus",kind="gitlab"}'
+      - series: 'integration_consumer_retry_total{job="hephaestus",kind="gitlab"}'
         values: "0 1+0x29"
     alert_rule_test:
       - eval_time: 10m
@@ -248,168 +248,47 @@ tests:
               summary: Integration events kept retrying for 15 minutes
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
-  - name: a stale or never refreshed poll age fires, a fresh one does not
+  - name: a due event that keeps waiting fires, a short wait does not
     interval: 1m
     input_series:
-      - series: 'webhook_stream_poll_age_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="github"}'
-        values: "200x5"
-      - series: 'webhook_stream_poll_age_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="gitlab"}'
-        values: "NaN NaN NaN NaN NaN NaN"
-      - series: 'webhook_stream_poll_age_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="slack"}'
-        values: "30x5"
-    alert_rule_test:
-      - eval_time: 1m
-        alertname: HephaestusStreamPollStale
-        exp_alerts: []
-      - eval_time: 3m
-        alertname: HephaestusStreamPollStale
-        exp_alerts:
-          - exp_labels:
-              severity: warning
-              job: hephaestus
-              instance: server:9090
-              runtime_role: server
-              stream: github
-            exp_annotations:
-              summary: Webhook stream gauges are stale or have never been refreshed
-              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-          - exp_labels:
-              severity: warning
-              job: hephaestus
-              instance: server:9090
-              runtime_role: server
-              stream: gitlab
-            exp_annotations:
-              summary: Webhook stream gauges are stale or have never been refreshed
-              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-
-  - name: a receiver without poll age fires, a receiver with poll age does not
-    interval: 1m
-    input_series:
-      - series: 'up{job="hephaestus",instance="server-a:9090",runtime_role="server"}'
-        values: "1x10"
-      - series: 'up{job="hephaestus",instance="server-b:9090",runtime_role="server"}'
-        values: "1x10"
-      - series: 'webhook_stream_poll_age_seconds{job="hephaestus",instance="server-b:9090",runtime_role="server",stream="github"}'
-        values: "10x10"
-    alert_rule_test:
-      - eval_time: 4m
-        alertname: HephaestusStreamPollMissing
-        exp_alerts: []
-      - eval_time: 6m
-        alertname: HephaestusStreamPollMissing
-        exp_alerts:
-          - exp_labels:
-              severity: warning
-              job: hephaestus
-              instance: server-a:9090
-              runtime_role: server
-            exp_annotations:
-              summary: A scraped webhook receiver exports no stream poll age
-              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-
-  - name: a backlog above 50 for 15 minutes fires, a small or emptied backlog does not
-    interval: 1m
-    input_series:
-      - series: 'webhook_stream_consumer_pending{job="hephaestus",instance="server:9090",runtime_role="server",stream="github"}'
-        values: "60x20"
-      - series: 'webhook_stream_consumer_pending{job="hephaestus",instance="server:9090",runtime_role="server",stream="gitlab"}'
-        values: "60x5 0 60x14"
-      - series: 'webhook_stream_consumer_pending{job="hephaestus",instance="server:9090",runtime_role="server",stream="slack"}'
-        values: "40x20"
+      - series: 'integration_consumer_oldest_due_seconds{job="hephaestus",instance="server:9090",provider="github"}'
+        values: "400x20"
+      - series: 'integration_consumer_oldest_due_seconds{job="hephaestus",instance="server:9090",provider="gitlab"}'
+        values: "400x5 0 400x14"
+      - series: 'integration_consumer_oldest_due_seconds{job="hephaestus",instance="server:9090",provider="slack"}'
+        values: "100x20"
     alert_rule_test:
       - eval_time: 10m
-        alertname: HephaestusStreamBacklog
+        alertname: HephaestusProviderEventsWaiting
         exp_alerts: []
       - eval_time: 16m
-        alertname: HephaestusStreamBacklog
+        alertname: HephaestusProviderEventsWaiting
         exp_alerts:
           - exp_labels:
               severity: warning
-              stream: github
+              provider: github
             exp_annotations:
-              summary: More than 50 events of a stream stayed undelivered to the consumers for 15 minutes
+              summary: A provider's oldest due event waited more than 5 minutes for 15 minutes
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
-  - name: a stream that sheds before its age bound fires; one at its bound that keeps the promise, and a young one, do not
+  - name: a backlog sampler that keeps failing fires, a single failure does not
     interval: 1m
     input_series:
-      - series: 'webhook_stream_oldest_message_age_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="github"}'
-        values: "432000x180"
-      - series: 'webhook_stream_age_bound_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="github"}'
-        values: "604800x180"
-      - series: 'webhook_stream_bytes_utilization{job="hephaestus",instance="server:9090",runtime_role="server",stream="github"}'
-        values: "1x180"
-      - series: 'webhook_stream_oldest_message_age_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="gitlab"}'
-        values: "600000x180"
-      - series: 'webhook_stream_age_bound_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="gitlab"}'
-        values: "604800x180"
-      - series: 'webhook_stream_bytes_utilization{job="hephaestus",instance="server:9090",runtime_role="server",stream="gitlab"}'
-        values: "0.97x180"
-      - series: 'webhook_stream_oldest_message_age_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="slack"}'
-        values: "3600x180"
-      - series: 'webhook_stream_age_bound_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="slack"}'
-        values: "259200x180"
-      - series: 'webhook_stream_bytes_utilization{job="hephaestus",instance="server:9090",runtime_role="server",stream="slack"}'
-        values: "0.01x180"
+      - series: 'integration_consumer_backlog_sampler_failures_total{job="hephaestus",instance="server-a:9090"}'
+        values: "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0+2x20"
+      - series: 'integration_consumer_backlog_sampler_failures_total{job="hephaestus",instance="server-b:9090"}'
+        values: "0 1+0x40"
     alert_rule_test:
+      - eval_time: 15m
+        alertname: HephaestusProviderEventBacklogUnsampled
+        exp_alerts: []
       - eval_time: 30m
-        alertname: HephaestusWebhookRetentionBelowAgeBound
-        exp_alerts: []
-      - eval_time: 90m
-        alertname: HephaestusWebhookRetentionBelowAgeBound
+        alertname: HephaestusProviderEventBacklogUnsampled
         exp_alerts:
           - exp_labels:
               severity: warning
-              stream: github
             exp_annotations:
-              summary: A webhook stream sheds deliveries at its byte bound before its age bound; it keeps less than it promises
-              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-
-  - name: a stream older than its age bound fires; one inside its bound does not
-    interval: 1m
-    input_series:
-      - series: 'webhook_stream_oldest_message_age_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="slack"}'
-        values: "500000x180"
-      - series: 'webhook_stream_age_bound_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="slack"}'
-        values: "259200x180"
-      - series: 'webhook_stream_oldest_message_age_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="github"}'
-        values: "600000x180"
-      - series: 'webhook_stream_age_bound_seconds{job="hephaestus",instance="server:9090",runtime_role="server",stream="github"}'
-        values: "604800x180"
-    alert_rule_test:
-      - eval_time: 30m
-        alertname: HephaestusWebhookStreamPastAgeBound
-        exp_alerts: []
-      - eval_time: 90m
-        alertname: HephaestusWebhookStreamPastAgeBound
-        exp_alerts:
-          - exp_labels:
-              severity: warning
-              stream: slack
-            exp_annotations:
-              summary: A webhook stream holds deliveries past its age bound; a shorter bound has not taken effect
-              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-
-  - name: a quiet stream that keeps undelivered events fires, a stream that drains does not
-    interval: 1m
-    input_series:
-      - series: 'webhook_stream_consumer_pending{job="hephaestus",instance="server:9090",runtime_role="server",stream="slack"}'
-        values: "3x480"
-      - series: 'webhook_stream_consumer_pending{job="hephaestus",instance="server:9090",runtime_role="server",stream="github"}'
-        values: "200x60 0 200x60 0 200x60 0 200x60 0 200x60 0 200x60 0 200x60 0 200x60"
-    alert_rule_test:
-      - eval_time: 3h
-        alertname: HephaestusStreamConsumerStopped
-        exp_alerts: []
-      - eval_time: 7h
-        alertname: HephaestusStreamConsumerStopped
-        exp_alerts:
-          - exp_labels:
-              severity: warning
-              stream: slack
-            exp_annotations:
-              summary: A stream kept undelivered events for 6 hours; a consumer that stays stopped past its retention loses them
+              summary: The provider event backlog gauges failed to refresh for 15 minutes and show old values
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a receiver that keeps refusing deliveries for memory fires, one that stops does not
@@ -449,7 +328,7 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              summary: The webhook receiver cannot store deliveries on the broker
+              summary: The server cannot store deliveries in the provider event inbox
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: successful publishes alone do not fire
@@ -3140,7 +3019,7 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              summary: Delivery inbox cleanup failed more than once in 24 hours
+              summary: Provider event inbox cleanup failed more than once in 24 hours
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: real thirty-second retries fire before exhaustion and clear when DONE

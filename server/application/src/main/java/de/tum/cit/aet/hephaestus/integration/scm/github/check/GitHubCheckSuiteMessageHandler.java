@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.check;
 
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
@@ -46,7 +46,7 @@ public class GitHubCheckSuiteMessageHandler extends AbstractIntegrationMessageHa
             GitHubCommitCheckRuns checkRuns,
             HeadCheckRunsRecorder checkRunsRecorder,
             GitHubProperties gitHubProperties,
-            NatsMessageDeserializer deserializer,
+            EventPayloadDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
                 IntegrationKind.GITHUB,

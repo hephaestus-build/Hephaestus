@@ -543,15 +543,17 @@ export const zConsentStatus = z.object({
 	researchOrganization: z.string().optional(),
 });
 
+/**
+ * A provider event that failed for good: its provider, why, and whether someone replayed it.
+ */
 export const zConsumerDeadLetter = z.object({
 	errorClass: z.string(),
 	failedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	id: z.int(),
+	provider: z.string(),
 	receivedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	replayedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	replayedBy: z.int().optional(),
-	sequence: z.int(),
-	stream: z.string(),
 });
 
 /**

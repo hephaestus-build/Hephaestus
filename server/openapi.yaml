@@ -13819,6 +13819,8 @@ components:
       - participateInResearch
     ConsumerDeadLetter:
       type: object
+      description: "A provider event that failed for good: its provider, why, and\
+        \ whether someone replayed it."
       properties:
         errorClass:
           type: string
@@ -13828,6 +13830,8 @@ components:
         id:
           type: integer
           format: int64
+        provider:
+          type: string
         receivedAt:
           type: string
           format: date-time
@@ -13837,18 +13841,12 @@ components:
         replayedBy:
           type: integer
           format: int64
-        sequence:
-          type: integer
-          format: int64
-        stream:
-          type: string
       required:
       - errorClass
       - failedAt
       - id
+      - provider
       - receivedAt
-      - sequence
-      - stream
     Contributor:
       type: object
       description: Information about a contributor to the Hephaestus project

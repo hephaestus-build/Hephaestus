@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository;
 
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -24,7 +24,7 @@ public class GitLabTagPushMessageHandler extends AbstractIntegrationMessageHandl
             RepositoryRepository repositories,
             GitLabRouteAdmission routes,
             RepositoryRefState refs,
-            NatsMessageDeserializer deserializer,
+            EventPayloadDeserializer deserializer,
             TransactionTemplate transactions) {
         super(
                 IntegrationKind.GITLAB,

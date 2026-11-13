@@ -30,13 +30,6 @@ nats:
   bundled: true
   jetstream:
     maxFileBytes: 8589934592
-# The small-installation replay policy is independent of general chart defaults.
-webhook:
-  stream:
-    maxAge: 7d
-    maxBytesByStream:
-      github: 6442450944B
-    maxBytes: 536870912B
 server:
   databasePool: { maximumPoolSize: 40, minimumIdle: 2 }
   # One node holds one server: the old server stops before its replacement starts. Each upgrade is an

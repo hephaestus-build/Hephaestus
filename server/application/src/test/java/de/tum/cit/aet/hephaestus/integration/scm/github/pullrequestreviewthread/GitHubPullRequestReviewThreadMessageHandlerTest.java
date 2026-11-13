@@ -8,7 +8,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.ProcessingContextFactory;
@@ -16,8 +17,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRe
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewthread.dto.GitHubPullRequestReviewThreadEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import io.nats.client.Message;
-import io.nats.client.impl.NatsJetStreamMetaData;
 import java.time.ZonedDateTime;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -44,7 +43,7 @@ class GitHubPullRequestReviewThreadMessageHandlerTest extends BaseUnitTest {
     private GitHubUserProcessor userProcessor;
 
     @Mock
-    private NatsMessageDeserializer deserializer;
+    private EventPayloadDeserializer deserializer;
 
     @Mock
     private TransactionTemplate transactionTemplate;
@@ -59,12 +58,9 @@ class GitHubPullRequestReviewThreadMessageHandlerTest extends BaseUnitTest {
                         new ClassPathResource("github/pull_request_review_thread.unresolved.json").getInputStream(),
                         GitHubPullRequestReviewThreadEventDTO.class);
         ZonedDateTime storedAt = ZonedDateTime.parse("2025-11-05T12:14:02Z");
-        Message msg = mock(Message.class);
-        NatsJetStreamMetaData metaData = mock(NatsJetStreamMetaData.class);
-        when(msg.getSubject()).thenReturn("github.HephaestusTest.demo-repository.pull_request_review_thread");
-        when(msg.isJetStream()).thenReturn(true);
-        when(msg.metaData()).thenReturn(metaData);
-        when(metaData.timestamp()).thenReturn(storedAt);
+        ProviderEvent msg = mock(ProviderEvent.class);
+        when(msg.subject()).thenReturn("github.HephaestusTest.demo-repository.pull_request_review_thread");
+        when(msg.receivedAt()).thenReturn(storedAt.toInstant());
         when(deserializer.deserialize(msg, GitHubPullRequestReviewThreadEventDTO.class))
                 .thenReturn(event);
         when(contextFactory.forWebhookEvent(event))

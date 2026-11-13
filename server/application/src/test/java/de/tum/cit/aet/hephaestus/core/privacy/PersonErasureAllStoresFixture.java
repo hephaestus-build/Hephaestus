@@ -273,7 +273,26 @@ final class PersonErasureAllStoresFixture {
                 "{\"text\":\"" + CANARY + "\"}",
                 "error_summary",
                 CANARY);
-        row("consumer_dead_letter", "workspace_id", workspace, "replayed_by", account);
+        row(
+                "provider_event",
+                "workspace_id",
+                workspace,
+                "provider",
+                "github",
+                "subject",
+                "github.acme.app.push",
+                "scope_key",
+                workspace + ":github.acme.app",
+                "payload",
+                "{}".getBytes(StandardCharsets.UTF_8),
+                "state",
+                "DEAD",
+                "ended_at",
+                Timestamp.from(Instant.now()),
+                "error_class",
+                "Failure",
+                "replayed_by",
+                account);
         row("activity_event", "workspace_id", workspace, "actor_id", person.user(), "event_key", CANARY);
         row("activity_automation", "workspace_id", workspace, "user_id", person.user());
         seedActivityPublication(workspace, person.user(), CANARY);
@@ -605,6 +624,31 @@ final class PersonErasureAllStoresFixture {
                 "changed_at",
                 Timestamp.from(Instant.now()));
         row("commit_file_change", "commit_id", base + 9, "filename", CANARY, "change_type", "MODIFIED");
+    }
+
+    /** A dead GitHub delivery whose sender is the person with {@code githubUserId}. */
+    void seedProviderEvent(long workspace, long githubUserId, String login) {
+        row(
+                "provider_event",
+                "workspace_id",
+                workspace,
+                "provider",
+                "github",
+                "subject",
+                "github.acme.app.issues",
+                "headers",
+                "{\"Hephaestus-Source-Server-Url\":\"https://github.com\"}",
+                "scope_key",
+                workspace + ":github.acme.app-" + githubUserId,
+                "payload",
+                ("{\"sender\":{\"login\":\"" + login + "\",\"id\":" + githubUserId + "}}")
+                        .getBytes(StandardCharsets.UTF_8),
+                "state",
+                "LEASED",
+                "lease_epoch",
+                1,
+                "leased_until",
+                Timestamp.from(Instant.now().plusSeconds(300)));
     }
 
     void seedOutline(long workspace, long connection, String subject) {

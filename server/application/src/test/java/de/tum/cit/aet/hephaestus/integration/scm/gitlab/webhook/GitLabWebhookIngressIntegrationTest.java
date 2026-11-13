@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -9,10 +10,11 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import de.tum.cit.aet.hephaestus.integration.core.webhook.JetStreamPublisher;
-import de.tum.cit.aet.hephaestus.integration.core.webhook.PublishRequest;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.webhook.ProviderEventReceiver;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -23,19 +25,21 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
- * A connection's GitLab hook over HTTP through to the JetStream publish: the route credential decides, the exact bytes
- * GitLab sent are published, and a rejected delivery is never published. GitLab has no shared endpoint.
+ * A connection's GitLab hook over HTTP through to the provider event inbox: the route credential decides, the exact bytes
+ * GitLab sent are stored, and a rejected delivery is never stored. GitLab has no shared endpoint.
  */
 class GitLabWebhookIngressIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private WebTestClient webTestClient;
 
-    @Autowired
-    private JetStreamPublisher publisher;
+    @MockitoSpyBean
+    private ProviderEventReceiver publisher;
 
     @Autowired
     private GitLabRouteCredential routeCredential;
@@ -66,7 +70,7 @@ class GitLabWebhookIngressIntegrationTest extends BaseIntegrationTest {
             });
             assertThat(status.is4xxClientError()).as("status %s", status).isTrue();
         }
-        verify(publisher, never()).publish(any());
+        verify(publisher, never()).receive(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -83,11 +87,16 @@ class GitLabWebhookIngressIntegrationTest extends BaseIntegrationTest {
                 .expectBody(String.class)
                 .isEqualTo("{\"status\":\"ok\"}");
 
-        ArgumentCaptor<PublishRequest> published = ArgumentCaptor.forClass(PublishRequest.class);
-        verify(publisher).publish(published.capture());
-        assertThat(published.getValue().body()).isEqualTo(ROUTED_BODY);
-        assertThat(published.getValue().subject()).isEqualTo("gitlab.?connection.7.issue");
-        assertThat(published.getValue().headers())
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, String>> published = ArgumentCaptor.forClass(Map.class);
+        verify(publisher)
+                .receive(
+                        eq(IntegrationKind.GITLAB),
+                        eq("gitlab.?connection.7.issue"),
+                        any(),
+                        published.capture(),
+                        eq(ROUTED_BODY));
+        assertThat(published.getValue())
                 .containsEntry(GitLabRouteCredential.HEADER_WORKSPACE, "3")
                 .containsEntry(GitLabRouteCredential.HEADER_GROUP_ID, "42")
                 .containsEntry(GitLabRouteCredential.HEADER_GROUP_PATH, "hephaestustest/introcourse")
@@ -106,11 +115,11 @@ class GitLabWebhookIngressIntegrationTest extends BaseIntegrationTest {
         postToConnection(7L, issued, ROUTED_BODY, sameEvent.andThen(headers -> headers.set("Idempotency-Key", "a")));
         postToConnection(7L, issued, ROUTED_BODY, sameEvent.andThen(headers -> headers.set("Idempotency-Key", "b")));
 
-        ArgumentCaptor<PublishRequest> published = ArgumentCaptor.forClass(PublishRequest.class);
-        verify(publisher, times(2)).publish(published.capture());
-        String dedupId = published.getAllValues().getFirst().dedupId();
+        ArgumentCaptor<String> published = ArgumentCaptor.forClass(String.class);
+        verify(publisher, times(2)).receive(any(), any(), published.capture(), any(), any());
+        String dedupId = published.getAllValues().getFirst();
         assertThat(dedupId).startsWith("gitlab-c7-");
-        assertThat(published.getAllValues()).extracting(PublishRequest::dedupId).containsOnly(dedupId);
+        assertThat(published.getAllValues()).containsOnly(dedupId);
     }
 
     @Test
@@ -144,7 +153,7 @@ class GitLabWebhookIngressIntegrationTest extends BaseIntegrationTest {
         assertThat(postToConnection(7L, issued, ROUTED_BODY, headers -> headers.set("X-Gitlab-Token", secret)))
                 .as("the instance webhook secret on a connection endpoint")
                 .isEqualTo(HttpStatus.UNAUTHORIZED);
-        verify(publisher, never()).publish(any());
+        verify(publisher, never()).receive(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -155,25 +164,22 @@ class GitLabWebhookIngressIntegrationTest extends BaseIntegrationTest {
                 postToConnectionResponse(7L, issued, body, headers -> headers.set("X-Gitlab-Token", issued.token())),
                 HttpStatus.BAD_REQUEST,
                 "invalid-json");
-        verify(publisher, never()).publish(any());
+        verify(publisher, never()).receive(any(), any(), any(), any(), any());
     }
 
     @Test
-    void shouldReturnRetryableProblemDetailsWhenPublishFails() {
-        doThrow(new JetStreamPublisher.PublishFailedException(
-                        new JetStreamPublisher.Failure(JetStreamPublisher.Cause.TIMEOUT, "private publish failure"),
-                        1,
-                        "gitlab.connection"))
+    void shouldReturnRetryableProblemDetailsWhenTheInboxCannotStore() {
+        doThrow(new CannotGetJdbcConnectionException("database down"))
                 .when(publisher)
-                .publish(any());
+                .receive(any(), any(), any(), any(), any());
         GitLabRouteCredential.Issued issued = routeCredential.issue(ROUTE);
         try {
             assertProblem(
                     postToConnectionResponse(
                             7L, issued, ROUTED_BODY, headers -> headers.set("X-Gitlab-Token", issued.token())),
                     HttpStatus.SERVICE_UNAVAILABLE,
-                    "publish-failed");
-            verify(publisher).publish(any());
+                    "store-failed");
+            verify(publisher).receive(any(), any(), any(), any(), any());
         } finally {
             reset(publisher);
         }

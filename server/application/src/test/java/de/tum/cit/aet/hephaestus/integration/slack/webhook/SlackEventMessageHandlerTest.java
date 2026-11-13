@@ -8,13 +8,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelJoinNoticeHandler;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackMentorService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackUninstallService;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackAppHomeService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import io.nats.client.Message;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -26,8 +26,8 @@ import tools.jackson.databind.json.JsonMapper;
 @Tag("unit")
 class SlackEventMessageHandlerTest extends BaseUnitTest {
 
-    private final NatsMessageDeserializer deserializer =
-            new NatsMessageDeserializer(JsonMapper.builder().build());
+    private final EventPayloadDeserializer deserializer =
+            new EventPayloadDeserializer(JsonMapper.builder().build());
 
     @Mock
     private SlackMentorService mentorService;
@@ -206,9 +206,9 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
         verify(uninstallService, never()).onUninstall(anyString(), anyString(), anyString());
     }
 
-    private static Message nats(String body) {
-        Message message = mock(Message.class);
-        when(message.getData()).thenReturn(body.getBytes(StandardCharsets.UTF_8));
+    private static ProviderEvent nats(String body) {
+        ProviderEvent message = mock(ProviderEvent.class);
+        when(message.payload()).thenReturn(body.getBytes(StandardCharsets.UTF_8));
         return message;
     }
 }

@@ -6,7 +6,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
@@ -48,7 +48,7 @@ public class GitLabSubgroupMessageHandler extends AbstractIntegrationMessageHand
             GitLabProperties gitLabProperties,
             GitLabRouteAdmission routeAdmission,
             TeamRepository teamRepository,
-            NatsMessageDeserializer deserializer,
+            EventPayloadDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
                 IntegrationKind.GITLAB,

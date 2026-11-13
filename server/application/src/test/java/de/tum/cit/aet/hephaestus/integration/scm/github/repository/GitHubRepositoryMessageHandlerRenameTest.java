@@ -12,7 +12,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -50,7 +50,7 @@ class GitHubRepositoryMessageHandlerRenameTest extends BaseUnitTest {
     private SyncTargetProvider syncTargetProvider;
 
     @Mock
-    private NatsMessageDeserializer deserializer;
+    private EventPayloadDeserializer deserializer;
 
     @Mock
     private IdentityProvider gitHubProvider;

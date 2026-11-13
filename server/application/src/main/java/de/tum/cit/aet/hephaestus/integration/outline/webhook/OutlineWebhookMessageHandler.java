@@ -6,12 +6,11 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.OutlineSubscription;
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.PayloadParsingException;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineDocumentModel;
 import de.tum.cit.aet.hephaestus.integration.outline.sync.OutlineDocumentSyncScheduler;
-import io.nats.client.Message;
-import io.nats.client.impl.Headers;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -69,8 +68,8 @@ public class OutlineWebhookMessageHandler implements IntegrationMessageHandler {
     }
 
     @Override
-    public void onMessage(Message msg) {
-        Delivery delivery = parse(msg.getData());
+    public void onMessage(ProviderEvent stored) {
+        Delivery delivery = parse(stored.payload());
         Optional<OutlineSubscription> subscription =
                 connectionService.findOutlineSubscription(delivery.subscriptionId());
         if (subscription.isEmpty() || !originPolicy.allows(subscription.get().serverUrl())) {
@@ -79,7 +78,7 @@ public class OutlineWebhookMessageHandler implements IntegrationMessageHandler {
             log.debug("outline.consumer: no ACTIVE subscription for delivery, skipping");
             return;
         }
-        if (!subscription.get().route().equals(route(msg))) {
+        if (!subscription.get().route().equals(stored.header(OutlineWebhookController.HEADER_ROUTE))) {
             log.warn("outline.consumer: delivery route does not match its subscription, dropping");
             return;
         }
@@ -98,11 +97,6 @@ public class OutlineWebhookMessageHandler implements IntegrationMessageHandler {
         } else {
             log.debug("outline.consumer: ignoring event '{}' for workspaceId={}", event, workspaceId);
         }
-    }
-
-    private static @Nullable String route(Message msg) {
-        Headers headers = msg.getHeaders();
-        return headers == null ? null : headers.getFirst(OutlineWebhookController.HEADER_ROUTE);
     }
 
     private Delivery parse(byte[] body) {

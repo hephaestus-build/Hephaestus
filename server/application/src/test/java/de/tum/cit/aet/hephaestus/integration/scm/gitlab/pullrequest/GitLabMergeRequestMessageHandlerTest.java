@@ -15,7 +15,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookContextResolver;
@@ -26,8 +27,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.dto.GitLabMe
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiscussionSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import io.nats.client.Message;
-import io.nats.client.impl.NatsJetStreamMetaData;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.ZonedDateTime;
@@ -64,7 +63,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
     private GitLabWebhookContextResolver contextResolver;
 
     @Mock
-    private NatsMessageDeserializer deserializer;
+    private EventPayloadDeserializer deserializer;
 
     @Mock
     private GitLabClosingIssueClient closingIssueClient;
@@ -131,7 +130,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
             GitLabMergeRequestEventDTO event = createEvent("open", "opened", false);
             setupRepository();
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(mergeRequestProcessor).process(eq(event), any(ProcessingContext.class));
@@ -147,11 +146,8 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
             GitLabMergeRequestEventDTO event = createEvent("update", "opened", false);
             setupRepository();
             ZonedDateTime storedAt = ZonedDateTime.parse("2026-01-31T18:05:00Z");
-            Message msg = mockMessage(event);
-            NatsJetStreamMetaData metaData = mock(NatsJetStreamMetaData.class);
-            when(metaData.timestamp()).thenReturn(storedAt);
-            when(msg.isJetStream()).thenReturn(true);
-            when(msg.metaData()).thenReturn(metaData);
+            ProviderEvent msg = mockMessage(event);
+            when(msg.receivedAt()).thenReturn(storedAt.toInstant());
 
             handler.onMessage(msg);
 
@@ -164,7 +160,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
             GitLabMergeRequestEventDTO event = createEvent("update", "opened", false);
             setupRepository();
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(mergeRequestProcessor).process(eq(event), any(ProcessingContext.class));
@@ -355,7 +351,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
             GitLabMergeRequestEventDTO event = createEvent("unknown_action", "opened", false);
             setupRepository();
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(mergeRequestProcessor, never()).process(any(), any());
@@ -405,7 +401,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
                     null,
                     null);
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(mergeRequestProcessor, never()).process(any(), any());
@@ -425,7 +421,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
             GitLabMergeRequestEventDTO event = new GitLabMergeRequestEventDTO(
                     "merge_request", "merge_request", createUser(), createProject(), null, null, null, null);
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(mergeRequestProcessor, never()).process(any(), any());
@@ -459,7 +455,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
             GitLabMergeRequestEventDTO event = new GitLabMergeRequestEventDTO(
                     "merge_request", "merge_request", createUser(), null, attrs, null, null, null);
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(mergeRequestProcessor, never()).process(any(), any());
@@ -467,8 +463,8 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
 
         @Test
         void nonMergeRequestSubject_rejected() throws IOException {
-            Message msg = mock(Message.class);
-            when(msg.getSubject()).thenReturn("gitlab.org.proj.issue");
+            ProviderEvent msg = mock(ProviderEvent.class);
+            when(msg.subject()).thenReturn("gitlab.org.proj.issue");
 
             handler.onMessage(msg);
 
@@ -485,7 +481,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
             when(contextResolver.resolve(eq(PROJECT_PATH), any(), any())).thenReturn(null);
             GitLabMergeRequestEventDTO event = createEvent("open", "opened", false);
 
-            Message msg = mockMessage(event);
+            ProviderEvent msg = mockMessage(event);
             handler.onMessage(msg);
 
             verify(mergeRequestProcessor, never()).process(any(), any());
@@ -547,9 +543,9 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
         return new GitLabWebhookProject(278964L, "gitlab", "https://gitlab.com/gitlab-org/gitlab", PROJECT_PATH);
     }
 
-    private Message mockMessage(GitLabMergeRequestEventDTO event) throws IOException {
-        Message msg = mock(Message.class);
-        when(msg.getSubject()).thenReturn(NATS_SUBJECT);
+    private ProviderEvent mockMessage(GitLabMergeRequestEventDTO event) throws IOException {
+        ProviderEvent msg = mock(ProviderEvent.class);
+        when(msg.subject()).thenReturn(NATS_SUBJECT);
         when(deserializer.deserialize(msg, GitLabMergeRequestEventDTO.class)).thenReturn(event);
         return msg;
     }

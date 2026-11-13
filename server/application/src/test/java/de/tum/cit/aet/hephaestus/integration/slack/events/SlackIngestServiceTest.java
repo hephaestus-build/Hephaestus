@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
@@ -72,6 +73,7 @@ class SlackIngestServiceTest extends BaseUnitTest {
                 threadRepository,
                 identityResolver,
                 conversationFeedbackErasure,
+                mock(ProviderEventStore.class),
                 conversationIngestEnabled,
                 new TransactionTemplate(mock(PlatformTransactionManager.class)));
     }

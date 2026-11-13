@@ -209,28 +209,15 @@ Each alert carries that section's address in its `runbook_url` annotation, so a 
 To adapt the rules, load your own copy of the file instead of the chart's values, and change the copy:
 
 1. Adjust windows, thresholds, and routing to your traffic and recovery objectives.
-2. If you change the monitor interval, increase the poll-age threshold.
-3. If you change `postgresql.backup.schedule`, change the age of `HephaestusBackupStale`.
-4. Enable stream rules only where you expect the webhook stream monitor.
-5. To detect an individually missing stream, add an `absent_over_time` rule for each expected `stream` and receiver target.
+2. If you change `postgresql.backup.schedule`, change the age of `HephaestusBackupStale`.
 
-   The missing-series rule detects loss of the whole monitor.
-   Counters created on their first event can be absent before that event.
-   An `increase` rule needs at least two samples.
-   It cannot recover an event that occurred before its first sample.
-   Scraping does not replace warning and error logs.
-
-   Poison counts mean the application stopped retrying a delivery.
-   They are not a durable dead-letter queue.
-   See [Webhook ingestion operations](./webhook-ingestion-operations.mdx#what-to-alert-on).
-
-6. Validate the config with:
+3. Validate the config with:
 
    ```bash
    promtool check config prometheus.yml
    ```
 
-7. Validate the rules and run their tests with:
+4. Validate the rules and run their tests with:
 
    ```bash
    promtool check rules hephaestus-alerts.yml
@@ -239,7 +226,16 @@ To adapt the rules, load your own copy of the file instead of the chart's values
 
    A changed threshold also needs a changed test.
 
-8. Before you rely on the rules, test the notification route.
+5. Before you rely on the rules, test the notification route.
+
+Counters created on their first event can be absent before that event.
+An `increase` rule needs at least two samples.
+It cannot recover an event that occurred before its first sample.
+Scraping does not replace warning and error logs.
+
+The poison counter counts the events that became dead letters.
+The dead letters themselves stay in the provider event inbox until you replay them or their retention ends.
+See [Webhook ingestion operations](./webhook-ingestion-operations.mdx#what-to-alert-on).
 
 Prometheus evaluates rules.
 Your Alertmanager or equivalent controls notification delivery, grouping, and silences.

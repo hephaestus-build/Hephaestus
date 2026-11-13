@@ -4,38 +4,29 @@ description: Inspect and replay failed webhook events.
 page_type: how-to
 ---
 
-Webhook events wait in NATS while PostgreSQL or a provider API is unavailable.
-A proven temporary failure does not use a poison-message budget.
-An unknown exception retries up to `hephaestus.integration.consumer.poison.max-redeliver` (default 10), then has a dead-letter record.
-Parsing failures have a dead-letter record on the first attempt.
+Each verified webhook delivery is a row in the provider event inbox in PostgreSQL.
+It waits there while a provider API or the handler is unavailable.
+A proven temporary failure retries with a backoff of 2 seconds up to 5 minutes, without a limit.
+An unknown exception retries up to `hephaestus.integration.consumer.poison.max-attempts` (default 10), then becomes a dead letter.
+A parsing failure becomes a dead letter on its first attempt.
 
-Each workspace and stream processes one event at a time.
-Later events wait until the first event succeeds or has a durable dead-letter record.
-GitHub, GitLab, Slack and Outline have independent stream orders.
-There is no shared inbox.
+Each workspace handles the events of one resource, such as a repository or a Slack channel, one at a time and in arrival order.
+A later event of that resource waits until the first one is done or is a dead letter.
+Events of other resources and other workspaces do not wait.
+GitHub App installation events have no workspace yet. They wait in one order for the whole instance.
 
-The unassigned GitHub installation consumer serializes installation events across the instance.
-The stream's configured retention still bounds events that wait in NATS.
-Restore service before that retention expires.
-
-A permanent failure or exhausted unknown failure has a dead-letter record in PostgreSQL before NATS stops delivering it.
-The `integration.consumer.poison` counter counts these terminations.
+A dead letter keeps its payload and headers in PostgreSQL.
+The `integration.consumer.poison` counter counts new dead letters.
 `HephaestusConsumerRetryStalled` alerts when retries continue for 15 minutes.
-It requires retries within each 10-minute window.
-Longer retry delays and a handler that does not return can prevent this alert from firing.
+`HephaestusProviderEventsWaiting` alerts when the oldest due event of a provider waits more than 5 minutes.
 
 For a repeated non-parse failure, inspect `error.root_type` and the sanitized stack frames.
-These diagnostics appear on the first delivery and when a dead-letter record commits.
-Fix the cause, then replay its dead-letter record.
+These diagnostics appear on the first attempt and when the event becomes a dead letter.
+Fix the cause, then replay the dead letter.
 
-If capture cannot commit, restore PostgreSQL.
-The original sequence stays retryable.
-A database outage also delays this capture and termination.
-
-A process crash or fatal JVM failure leaves the event unacknowledged for delivery after restart.
-Stack overflows use the unknown-failure budget and can have a dead-letter record.
-Other fatal JVM errors stop the consumer's local subscription.
-Reconciliation can restart it.
+A server that stops while it handles an event loses its lease.
+After 2 minutes, another server takes the event back and counts the attempt.
+An event that stops every server that handles it becomes a dead letter after its attempts.
 
 ## Inspect the records
 
@@ -45,7 +36,7 @@ Request `GET /workspaces/{workspaceSlug}/integrations/dead-letters`.
 The response is a cursor page: `content` holds up to 100 records in ID order.
 Pass its `nextCursor` as `cursor` to read the next page. The last page has no `nextCursor`.
 
-Each record contains its ID, stream sequence, error class, arrival time, failure time, replay time and requesting account ID.
+Each record contains its ID, provider, error class, arrival time, failure time, last replay time and requesting account ID.
 The API does not return payloads or routing credentials.
 
 Installation lifecycle events can arrive before a workspace exists.
@@ -61,39 +52,25 @@ An instance administrator uses the workspace endpoint for workspace-owned record
 2. Request `POST /workspaces/{workspaceSlug}/integrations/dead-letters/{id}/replays`.
    For an unassigned installation event, use `POST /admin/integration/dead-letters/{id}/replays` instead.
 3. Check `replayedAt` in the response.
-   A successful replay records this time.
-   Repeating the request returns that record without dispatching it again.
+   The event is queued again as its first attempt, at the head of its resource's order.
 
 ## Check that it worked
 
-Request the list again and find the record by its ID.
-Confirm that `replayedAt` contains a time.
+Request the list again.
+A replayed event that succeeds is no longer in the list.
+An event that fails again comes back with its `replayedAt`.
 
-A handler failure returns HTTP 409 and leaves the record pending.
-A broker outage returns HTTP 503.
-HTTP 503 also has two other causes. Try again later for both:
-
-- After 30 seconds, another event of the same workspace and stream is still in progress or waits for its retry.
-- Another replay of the same workspace and stream runs.
-
-An event that has expired or been removed from the stream returns HTTP 410.
-Reconcile that gap from the provider.
-The database record cannot restore an expired payload.
-A record from another workspace returns HTTP 404.
-
-Replay reads the original bytes, routing headers and arrival time from NATS.
-The database record contains no payload or headers.
-Replay pauses the workspace's consumer of that stream on every server, and waits for the event in progress.
-The next live event of that stream can wait up to 30 seconds after the replay.
-It does not publish the event to other workspaces.
+A record that is not a dead letter of that workspace returns HTTP 404.
+This includes a record that you already replayed, and a record of another workspace.
+If an installation replay cannot be written to the audit trail, the request returns HTTP 503 and queues nothing.
 
 A replay is an explicit late event.
 It does not rewind later events.
-Replay checks the current workspace subscription before using the original dispatcher and adapter admission.
+The handler skips the steps that an earlier attempt committed.
 Handlers must tolerate duplicate and stale events.
 A replay does not supply a new provider revision.
 
-Dead-letter metadata survives NATS stream retention, but replay is possible only while the original event remains in NATS.
-They remain until their workspace is deleted.
-Unassigned installation records remain until the instance is removed.
+Dead letters stay for `hephaestus.integration.consumer.dead-retention` (default `30d`) after they fail.
+Handled events stay for `hephaestus.integration.consumer.replay-window` (default `3d`), so a provider's redelivery in that time is not handled twice.
+Deleting a workspace deletes its events.
 Include PostgreSQL in the backup procedure and restrict database access to operators who can read provider data.

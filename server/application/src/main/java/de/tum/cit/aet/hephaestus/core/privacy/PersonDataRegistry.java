@@ -14,12 +14,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.stereotype.Component;
 
 @Component
 @ConditionalOnServerRole
 public class PersonDataRegistry {
+    private static final String FINAL_COPY_STORE = "mentor_entry_tool_result_copy";
+
     private final List<PersonDataContributor> stores;
 
     public PersonDataRegistry(List<PersonDataCatalog> catalogs) {
@@ -42,6 +45,13 @@ public class PersonDataRegistry {
                 .toList();
         if (stores.stream().map(PersonDataContributor::store).distinct().count() != stores.size())
             throw new IllegalStateException("Duplicate person data stores");
+        var last = stores.stream()
+                .filter(store -> store.getOrder() == Integer.MAX_VALUE)
+                .map(PersonDataContributor::store)
+                .toList();
+        if ((!last.isEmpty() || stores.stream().anyMatch(store -> store.store().equals(FINAL_COPY_STORE)))
+                && !last.equals(List.of(FINAL_COPY_STORE)))
+            throw new IllegalStateException("The mentor copy store must be the only store at the last erasure order");
     }
 
     public List<PersonDataContributor> stores() {
@@ -52,6 +62,16 @@ public class PersonDataRegistry {
         Map<String, PersonDataSelection> selected = new TreeMap<>();
         for (var store : stores) selected.put(store.store(), store.select(scope));
         return Collections.unmodifiableMap(selected);
+    }
+
+    public boolean unchanged(PersonScope scope, Map<String, PersonDataSelection> frozen) {
+        return frozen.keySet()
+                        .equals(stores.stream()
+                                .map(PersonDataContributor::store)
+                                .collect(Collectors.toSet()))
+                && stores.stream()
+                        .filter(PersonDataContributor::selectionMustStayUnchanged)
+                        .allMatch(store -> store.select(scope).equals(frozen.get(store.store())));
     }
 
     public Map<String, Long> counts(Map<String, PersonDataSelection> selected) {

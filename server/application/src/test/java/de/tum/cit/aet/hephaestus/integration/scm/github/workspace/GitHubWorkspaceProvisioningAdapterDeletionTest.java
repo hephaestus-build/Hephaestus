@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -19,12 +18,8 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.springframework.core.task.AsyncTaskExecutor;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 class GitHubWorkspaceProvisioningAdapterDeletionTest extends BaseUnitTest {
 
@@ -107,34 +102,6 @@ class GitHubWorkspaceProvisioningAdapterDeletionTest extends BaseUnitTest {
 
         adapter.onInstallationActivated(INSTALLATION_ID);
 
-        verify(githubLifecycleListener, never()).startNatsForInstallation(anyLong());
         verifyNoInteractions(dataSyncTrigger, monitoringExecutor);
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    void activationStartsConsumptionOnlyAfterCommit(boolean committed) {
-        Workspace workspace = new Workspace();
-        workspace.setId(11L);
-        workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
-        when(githubLifecycleListener.updateWorkspaceStatus(INSTALLATION_ID, Workspace.WorkspaceStatus.ACTIVE))
-                .thenReturn(Optional.of(workspace));
-        TransactionSynchronizationManager.initSynchronization();
-        try {
-            adapter.onInstallationActivated(INSTALLATION_ID);
-            verify(githubLifecycleListener, never()).startNatsForInstallation(anyLong());
-            var callbacks = TransactionSynchronizationManager.getSynchronizations();
-            TransactionSynchronizationManager.clearSynchronization();
-            if (committed) callbacks.forEach(TransactionSynchronization::afterCommit);
-            callbacks.forEach(callback -> callback.afterCompletion(
-                    committed
-                            ? TransactionSynchronization.STATUS_COMMITTED
-                            : TransactionSynchronization.STATUS_ROLLED_BACK));
-            verify(githubLifecycleListener, times(committed ? 1 : 0)).startNatsForInstallation(INSTALLATION_ID);
-        } finally {
-            if (TransactionSynchronizationManager.isSynchronizationActive()) {
-                TransactionSynchronizationManager.clearSynchronization();
-            }
-        }
     }
 }

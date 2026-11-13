@@ -17,6 +17,8 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.StoredEventHandling;
 import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
 import de.tum.cit.aet.hephaestus.integration.core.itemevent.ItemEventRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
@@ -39,12 +41,10 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollectionRep
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
-import de.tum.cit.aet.hephaestus.testconfig.InboxTestMessages;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -52,6 +52,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -68,6 +69,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @TestPropertySource(properties = "hephaestus.integration.outline.enabled=true")
 class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
+
+    private static final Instant RECEIVED_AT = Instant.parse("2026-11-10T10:00:00Z");
 
     private static final String SERVER_URL = "https://outline.example.test";
     private static final String COLLECTION_ID = "col-1";
@@ -113,6 +116,12 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private DeliveryInbox inbox;
+
+    @Autowired
+    private ProviderEventStore eventStore;
+
+    @Autowired
+    private JdbcTemplate eventJdbc;
 
     @Autowired
     private ItemRepository items;
@@ -167,9 +176,9 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldFinishTheEventAfterTheMirrorCommittedAndSkipCompletedRedeliveries() {
-        var delivery = InboxTestMessages.delivery("outline-inbox-" + workspaceId, 1, Instant.now());
-        assertThatThrownBy(() -> inbox.dispatch(workspaceId, delivery, () -> {
+    void shouldFinishTheEventAfterTheMirrorCommittedWithTheTimeTheEventWasReceived() {
+        long delivery = StoredEventHandling.leased(eventStore, eventJdbc, workspaceId, "outline.sub.documents~update");
+        assertThatThrownBy(() -> inbox.dispatch(delivery, 1, RECEIVED_AT, () -> {
                     mirrorWriter.upsertDocument(workspaceId, connectionId, DOC_ONE, T2, document -> {
                         document.setCollectionId(COLLECTION_ID);
                         document.setTitle("Accepted title");
@@ -200,8 +209,9 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
                 List.of(),
                 null);
         inbox.dispatch(
-                workspaceId,
                 delivery,
+                1,
+                RECEIVED_AT,
                 () -> scheduler.refreshDocumentNow(workspaceId, "documents.update", DOC_ONE, metadata));
         var item = items.findSource(workspaceId, DocumentEvents.DOCUMENT.value(), committed.getId())
                 .orElseThrow();
@@ -210,11 +220,7 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
                 .findByWorkspaceIdAndItemIdAndNameAndItemVersion(
                         workspaceId, item.getId(), DocumentEvents.UPDATED.value(), version.value())
                 .orElseThrow();
-        assertThat(event.getOccurredAt())
-                .isEqualTo(delivery.metaData().timestamp().toInstant().truncatedTo(ChronoUnit.MICROS));
-        inbox.dispatch(workspaceId, delivery, () -> {
-            throw new AssertionError("The completed delivery ran again");
-        });
+        assertThat(event.getOccurredAt()).isEqualTo(RECEIVED_AT);
         assertThat(documentById(DOC_ONE).getVersion()).isEqualTo(mirrorVersion);
         assertThat(itemEvents.findByIdAndWorkspaceId(event.getId(), workspaceId))
                 .isPresent();
@@ -230,10 +236,11 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
             document.setContentHash("archive-hash");
             document.setOutlineUpdatedAt(T1);
         });
-        var delivery = InboxTestMessages.delivery("outline-conflict-" + workspaceId, 1, Instant.now());
+        long delivery = StoredEventHandling.leased(eventStore, eventJdbc, workspaceId, "outline.sub.documents~update");
         assertThatThrownBy(() -> inbox.dispatch(
-                        workspaceId,
                         delivery,
+                        1,
+                        Instant.now(),
                         () -> mirrorWriter.updateDocument(workspaceId, connectionId, DOC_ONE, document -> {
                             throw new ObjectOptimisticLockingFailureException(OutlineDocument.class, document.getId());
                         })))
@@ -243,8 +250,9 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
         var metadata = OutlineClientModels.document(
                 DOC_ONE, "/doc/one", "Archive me", T0, T2, DOC_ONE, null, COLLECTION_ID, null, null, List.of(), T2);
         inbox.dispatch(
-                workspaceId,
                 delivery,
+                1,
+                Instant.now(),
                 () -> scheduler.refreshDocumentNow(workspaceId, "documents.archive", DOC_ONE, metadata));
         var archived = documentById(DOC_ONE);
         assertThat(archived.getArchivedAt()).isEqualTo(T2);
@@ -258,8 +266,8 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldNotRecreateADocumentErasedAfterItsInboxStepCommitted() {
-        var delivery = InboxTestMessages.delivery("outline-erased-" + workspaceId, 1, Instant.now());
-        assertThatThrownBy(() -> inbox.dispatch(workspaceId, delivery, () -> {
+        long delivery = StoredEventHandling.leased(eventStore, eventJdbc, workspaceId, "outline.sub.documents~update");
+        assertThatThrownBy(() -> inbox.dispatch(delivery, 1, Instant.now(), () -> {
                     mirrorWriter.upsertDocument(workspaceId, connectionId, DOC_ONE, null, document -> {
                         document.setCollectionId(COLLECTION_ID);
                         document.setTitle("A document later erased");
@@ -272,8 +280,9 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
                         workspaceId, connectionId, COLLECTION_ID));
 
         inbox.dispatch(
-                workspaceId,
                 delivery,
+                1,
+                Instant.now(),
                 () -> assertThat(mirrorWriter.upsertDocument(workspaceId, connectionId, DOC_ONE, null, document -> {
                             throw new AssertionError("The committed step must not apply its mutation again");
                         }))

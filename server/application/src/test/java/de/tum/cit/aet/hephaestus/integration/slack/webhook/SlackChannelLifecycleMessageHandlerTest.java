@@ -7,9 +7,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelLifecycleService;
-import io.nats.client.Message;
 import java.nio.charset.StandardCharsets;
 import java.util.function.BiFunction;
 import java.util.stream.Stream;
@@ -24,8 +24,8 @@ import tools.jackson.databind.json.JsonMapper;
 @Tag("unit")
 class SlackChannelLifecycleMessageHandlerTest {
 
-    private final NatsMessageDeserializer deserializer =
-            new NatsMessageDeserializer(JsonMapper.builder().build());
+    private final EventPayloadDeserializer deserializer =
+            new EventPayloadDeserializer(JsonMapper.builder().build());
     private final SlackChannelLifecycleService lifecycleService = mock(SlackChannelLifecycleService.class);
 
     private static Stream<Arguments> routing() {
@@ -67,15 +67,15 @@ class SlackChannelLifecycleMessageHandlerTest {
     }
 
     private interface Builder
-            extends BiFunction<SlackChannelLifecycleService, NatsMessageDeserializer, AbstractSlackEnvelopeHandler> {}
+            extends BiFunction<SlackChannelLifecycleService, EventPayloadDeserializer, AbstractSlackEnvelopeHandler> {}
 
     private interface Verifier {
         void check(SlackChannelLifecycleService service);
     }
 
-    private static Message nats(String body) {
-        Message message = mock(Message.class);
-        when(message.getData()).thenReturn(body.getBytes(StandardCharsets.UTF_8));
+    private static ProviderEvent nats(String body) {
+        ProviderEvent message = mock(ProviderEvent.class);
+        when(message.payload()).thenReturn(body.getBytes(StandardCharsets.UTF_8));
         return message;
     }
 }

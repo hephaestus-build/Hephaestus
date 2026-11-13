@@ -11,8 +11,6 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -26,7 +24,6 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
-import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAudit;
@@ -37,9 +34,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.ConsumerSubjectMath;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -55,7 +49,7 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.integration.core.sync.api.ConnectionHealth;
 import de.tum.cit.aet.hephaestus.integration.core.sync.api.SyncJobDTO;
 import de.tum.cit.aet.hephaestus.integration.core.sync.api.SyncStatusService;
-import de.tum.cit.aet.hephaestus.integration.core.webhook.JetStreamPublishers;
+import de.tum.cit.aet.hephaestus.integration.core.webhook.ProviderEventReceiver;
 import de.tum.cit.aet.hephaestus.integration.core.webhook.WebhookIngestPipeline;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -122,14 +116,6 @@ import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryTarget;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepository;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryRepository;
-import io.nats.client.JetStreamApiException;
-import io.nats.client.JetStreamManagement;
-import io.nats.client.Nats;
-import io.nats.client.api.ConsumerConfiguration;
-import io.nats.client.api.ConsumerInfo;
-import io.nats.client.api.DeliverPolicy;
-import io.nats.client.api.StorageType;
-import io.nats.client.api.StreamConfiguration;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
@@ -150,7 +136,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -187,7 +172,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         OfflineNetwork.answer("gitlab.lrz.de", OfflineNetwork.PUBLIC_ADDRESS);
     }
 
-    private static final String STREAM = "gitlab";
     private static final String SERVER_URL = "https://gitlab.lrz.de";
     private static final String GROUP = "hephaestustest";
     private static final String REPOSITORY = "hephaestustest/demo-repository";
@@ -210,8 +194,8 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         registry.add("hephaestus.sync.nats.enabled", () -> "true");
         registry.add("hephaestus.sync.nats.server", NatsTestContainer::getServerUrl);
         registry.add("hephaestus.sync.run-on-startup", () -> "true");
-        // Production receives webhooks in its own container; this test publishes to the stream
-        // itself.
+        // The server's claimers handle what the receiver stores, as in production.
+        registry.add("hephaestus.integration.consumer.claimers", () -> "2");
     }
 
     /** The test profile's executor drops connect-time initialization; these tests run it. */
@@ -270,11 +254,11 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private SyncStatusService syncStatusService;
 
-    @MockitoSpyBean
-    private IntegrationNatsConsumer integrationNatsConsumer;
+    @Autowired
+    private ProviderEventReceiver eventReceiver;
 
     @Autowired
-    private NatsConnectionProperties natsConnectionProperties;
+    private JdbcTemplate eventJdbc;
 
     @Autowired
     private ConnectionService connectionService;
@@ -362,9 +346,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     private GitLabSubjectKeyDeriver subjectKeyDeriver;
 
     @Autowired
-    private WebhookProperties webhookProperties;
-
-    @Autowired
     private ObjectMapper objectMapper;
 
     @Autowired
@@ -388,10 +369,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     private final GitLabIssueTypeSyncService issueTypeSync = mock(GitLabIssueTypeSyncService.class);
     private final CountDownLatch syncBlocked = new CountDownLatch(1);
     private final CountDownLatch releaseSync = new CountDownLatch(1);
-    private final AtomicReference<@Nullable Set<String>> filterWhenRegistered = new AtomicReference<>();
 
-    private io.nats.client.Connection natsConnection;
-    private JetStreamManagement jsm;
     private @Nullable Workspace workspace;
     private @Nullable Thread restart;
 
@@ -399,8 +377,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     void setUp() throws Exception {
         databaseTestUtils.cleanDatabase();
         doReturn(GROUP_ID).when(preflightService).resolveAccountId(anyString(), any(), anyString());
-        natsConnection = Nats.connect(NatsTestContainer.getServerUrl());
-        jsm = natsConnection.jetStreamManagement();
 
         when(gitLabSyncServices.getGroupSyncService()).thenReturn(groupSync);
         when(gitLabSyncServices.getIssueTypeSyncService()).thenReturn(issueTypeSync);
@@ -445,8 +421,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                 .when(gitLabWebhookClient)
                 .deregisterGroupWebhook(anyLong(), eq(GROUP_ID), anyLong());
         ingress = new GitLabConnectionWebhookController(
-                new WebhookIngestPipeline(
-                        List.of(), List.of(), JetStreamPublishers.of(natsConnection, webhookProperties), objectMapper),
+                new WebhookIngestPipeline(List.of(), List.of(), eventReceiver, objectMapper),
                 routeCredential,
                 subjectKeyDeriver);
         when(deletionSweepService.sweepScope(anyLong(), any()))
@@ -460,18 +435,11 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
             restart.join(Duration.ofSeconds(10));
         }
         awaitMonitoringIdle();
-        if (workspace != null) {
-            integrationNatsConsumer.stopConsumingScope(workspace.getId());
-        }
-        if (jsm.getStreamNames().contains(STREAM)) {
-            jsm.deleteStream(STREAM);
-        }
-        natsConnection.close();
+        awaitAcknowledged();
     }
 
     @Test
     void shouldRetainDiscoveryRateLimitInFinishedInitialJob() throws Exception {
-        createStream();
         when(groupSync.syncGroupProjects(anyLong(), eq(GROUP), eq(SERVER_URL)))
                 .thenReturn(GitLabSyncResult.aborted(GitLabSyncResult.Status.ABORTED_RATE_LIMIT, List.of(), 0, 0));
 
@@ -496,7 +464,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldRetainPartialDiscoveryWithoutClaimingARateLimit() throws Exception {
-        createStream();
         when(groupSync.syncGroupProjects(anyLong(), eq(GROUP), eq(SERVER_URL)))
                 .thenReturn(GitLabSyncResult.withErrors(List.of(), 1, 1, 0, 0));
 
@@ -513,7 +480,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldKeepCleanInitialJobSuccessful() throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
 
@@ -538,7 +504,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldPersistEventsDeliveredOnWebhookRegistrationWhenGroupIsFirstConnected() throws Exception {
-        createStream();
         when(gitLabWebhookClient.registerGroupWebhook(anyLong(), eq(GROUP_ID), any()))
                 .thenAnswer(invocation -> {
                     GitLabWebhookClient.WebhookInfo hook = registerHook(invocation.getArgument(2));
@@ -552,26 +517,16 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         Workspace connected = connectGroup();
 
         assertThat(syncBlocked.await(30, SECONDS)).isTrue();
-        assertThat(filterWhenRegistered.get()).isEqualTo(expectedFilter(connected));
         assertThat(webhookId(connected)).isEqualTo(WEBHOOK_ID);
         assertIssueAndNotePersistedOnce();
     }
 
     @Test
     void shouldPersistQueuedEventsWhileRestartedWorkspaceIsSyncing() throws Exception {
-        createStream();
         Workspace restarted = persistedWorkspace();
         repositoryToMonitorRepository.save(
                 WorkspaceTestFixtures.repositoryMonitor(restarted, REPOSITORY, REPOSITORY_NATIVE_ID));
         discoveredRepository();
-        jsm.addOrUpdateConsumer(
-                STREAM,
-                ConsumerConfiguration.builder()
-                        .durable(ConsumerSubjectMath.scopeConsumerName(
-                                natsConnectionProperties.durableConsumerName(), restarted.getId(), STREAM))
-                        .filterSubjects(expectedFilter(restarted).toArray(String[]::new))
-                        .deliverPolicy(DeliverPolicy.New)
-                        .build());
         deliverOnRoute(restarted, fixture("gitlab/issue.open.json"), "issue");
         deliverOnRoute(restarted, fixture("gitlab/note.issue.create.json"), "note");
         when(groupSync.syncGroupProjects(anyLong(), eq(GROUP), eq(SERVER_URL))).thenAnswer(invocation -> {
@@ -584,41 +539,16 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
         assertThat(syncBlocked.await(30, SECONDS)).isTrue();
         assertIssueAndNotePersistedOnce();
-        assertThat(filterSubjects()).isEqualTo(expectedFilter(restarted));
-    }
-
-    @Test
-    void shouldOpenWebhookOnReconcileOnceScopeConsumerIsReady() throws Exception {
-        Workspace connected = connectGroup();
-        awaitMonitoringIdle();
-
-        assertThat(webhookId(connected)).isNull();
-
-        assertThat(reconcile(connected)).isEqualTo(SyncJobStatus.SUCCEEDED_WITH_WARNINGS);
-        assertThat(webhookId(connected)).isNull();
-        verify(gitLabWebhookClient, never()).registerGroupWebhook(anyLong(), anyLong(), any());
-
-        createStream();
-        assertThat(reconcile(connected)).isEqualTo(SyncJobStatus.SUCCEEDED);
-
-        assertThat(webhookId(connected)).isEqualTo(WEBHOOK_ID);
-        assertThat(filterWhenRegistered.get()).isEqualTo(expectedFilter(connected));
-        verify(gitLabWebhookClient, times(1)).registerGroupWebhook(anyLong(), anyLong(), any());
-        deliver(connected, fixture("gitlab/issue.open.json"), "issue");
-        deliver(connected, fixture("gitlab/note.issue.create.json"), "note");
-        assertIssueAndNotePersistedOnce();
     }
 
     @Test
     void shouldOpenWebhookOnReconcileOnceDiscoveryListsEveryProject() throws Exception {
-        createStream();
         when(groupSync.syncGroupProjects(anyLong(), eq(GROUP), eq(SERVER_URL)))
                 .thenAnswer(invocation -> GitLabSyncResult.withErrors(List.of(discoveredRepository()), 1, 0, 0, 0));
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
 
         assertThat(webhookId(connected)).isNull();
-        assertThat(filterSubjects()).isEqualTo(expectedFilter(connected));
         verify(gitLabWebhookClient, never()).registerGroupWebhook(anyLong(), anyLong(), any());
 
         when(groupSync.syncGroupProjects(anyLong(), eq(GROUP), eq(SERVER_URL)))
@@ -630,65 +560,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldKeepTheScopeRoutingWhenAMonitorRemovalRollsBack() throws Exception {
-        createStream();
-        Workspace connected = connectGroup();
-        awaitMonitoringIdle();
-        Set<String> routed = expectedFilter(connected);
-        await().atMost(Duration.ofSeconds(10)).until(() -> filterSubjects().equals(routed));
-        clearInvocations(integrationNatsConsumer);
-
-        transactionTemplate.executeWithoutResult(status -> {
-            workspaceRepositoryMonitorService.removeRepositoryFromMonitor(connected.getWorkspaceSlug(), REPOSITORY);
-            verify(integrationNatsConsumer, never()).updateScopeConsumer(connected.getId());
-            status.setRollbackOnly();
-        });
-
-        verify(integrationNatsConsumer, never()).updateScopeConsumer(connected.getId());
-        assertThat(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(connected.getId(), REPOSITORY))
-                .isTrue();
-        assertThat(filterSubjects()).isEqualTo(routed);
-    }
-
-    @Test
-    void shouldKeepTheConnectionRouteWhenARemovalAndAnAdditionCommit() throws Exception {
-        createStream();
-        Workspace connected = connectGroup();
-        awaitMonitoringIdle();
-        // Monitors do not shape a GitLab scope's filter: route admission decides per delivery.
-        Set<String> routed = expectedFilter(connected);
-        await().atMost(Duration.ofSeconds(10)).until(() -> filterSubjects().equals(routed));
-        clearInvocations(integrationNatsConsumer);
-
-        transactionTemplate.executeWithoutResult(status -> {
-            workspaceRepositoryMonitorService.removeRepositoryFromMonitor(connected.getWorkspaceSlug(), REPOSITORY);
-            verify(integrationNatsConsumer, never()).updateScopeConsumer(connected.getId());
-        });
-
-        verify(integrationNatsConsumer, atLeastOnce()).updateScopeConsumer(connected.getId());
-        assertThat(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(connected.getId(), REPOSITORY))
-                .isFalse();
-        assertThat(filterSubjects()).isEqualTo(routed);
-        clearInvocations(integrationNatsConsumer);
-
-        doReturn(Optional.of(reported(REPOSITORY_NATIVE_ID, REPOSITORY)))
-                .when(projectSyncService)
-                .fetchProject(connected.getId(), REPOSITORY);
-
-        transactionTemplate.executeWithoutResult(status -> {
-            workspaceRepositoryMonitorService.addRepositoryToMonitor(connected.getWorkspaceSlug(), REPOSITORY);
-            verify(integrationNatsConsumer, never()).updateScopeConsumer(connected.getId());
-        });
-
-        verify(integrationNatsConsumer, atLeastOnce()).updateScopeConsumer(connected.getId());
-        assertThat(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(connected.getId(), REPOSITORY))
-                .isTrue();
-        assertThat(filterSubjects()).isEqualTo(routed);
-    }
-
-    @Test
     void shouldHandleANestedProjectAndItsFirstWorkWhenTheyArriveThroughTheConnectionRoute() throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         Team subgroup = subgroupTeam();
@@ -760,7 +632,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldNotLetOneConnectionActForAnotherOrOutsideItsGroup() throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         Workspace other = WorkspaceTestFixtures.persistGitLabWorkspace(
@@ -798,7 +669,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldNotLetAConnectedPathCarryAnotherWorkspacesProjectId() throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         Repository victim = foreignRepository("othergroup/secret-project", 555L);
@@ -852,7 +722,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     }
 
     private void assertMoveOutStopsOnlyThisWorkspacesMonitor(boolean destinationFirst) throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         Repository project = discoveredRepository();
@@ -894,7 +763,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldFollowARenameAnotherWorkspaceRecordedFirstWithASelectedMonitor() throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         long workspaceId = connected.getId();
@@ -926,7 +794,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldNotMonitorAnUnselectedSiblingWhenASelectedWorkspaceIsInitialized() throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         long workspaceId = connected.getId();
@@ -955,7 +822,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldStoreNothingFromANewSubgroupProjectOutsideTheSelectionWhileTheSelectedProjectSyncs() throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         long workspaceId = connected.getId();
@@ -996,7 +862,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldStoreNothingFromANewProjectAfterAnAdminNarrowsTheWorkspaceToItsMonitoredProjects() throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         long workspaceId = connected.getId();
@@ -1052,7 +917,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldAdmitANewSiblingButKeepAStoppedProjectOutWhenAnAdminWidensTheSelection() throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         long workspaceId = connected.getId();
@@ -1117,7 +981,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldRefuseAnAddThatReadAllProjectsWhenANarrowingCommitsWhileItWaitsForTheLock() throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         long workspaceId = connected.getId();
@@ -1216,7 +1079,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldCommitTheSelectionWithTheActiveConnectionBeforeInitializationDiscoversProjects() throws Exception {
-        createStream();
         Consumer<HttpHeaders> caller = gitLabCaller("selecting-owner");
         doReturn(List.of(
                         new RepositoryIdentity(NESTED_PROJECT_ID, NESTED_PROJECT),
@@ -1282,7 +1144,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldCreateNothingWhenGitLabDoesNotConfirmASelectedProject() throws Exception {
-        createStream();
         Consumer<HttpHeaders> caller = gitLabCaller("refused-owner");
         for (HttpStatus refusal : List.of(HttpStatus.UNPROCESSABLE_CONTENT, HttpStatus.BAD_GATEWAY)) {
             String slug = "refused-" + refusal.value();
@@ -1320,7 +1181,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldNotLetAReadFromBeforeAnAddAdmitTheAddedProjectWhenTheWorkspaceSelectedItsProjects() throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         long workspaceId = connected.getId();
@@ -1348,7 +1208,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldAdmitAProjectCreatedAfterTheReadWhenTheWorkspaceFollowsTheWholeGroup() throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         GitLabProjectAdmission.ConnectionRead read = admission
@@ -1361,7 +1220,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldNotLetAnotherWorkspacesSharedSourceAdmitAProjectOutsideTheSelection() throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         long workspaceId = connected.getId();
@@ -1412,7 +1270,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldKeepOneMonitorWhenWorkAtTheNewPathArrivesBeforeTheRename() throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         long workspaceId = connected.getId();
@@ -1473,7 +1330,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldFollowARenameADiscoveryListsWithTheExistingMonitor() throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         long workspaceId = connected.getId();
@@ -1500,7 +1356,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldWriteNoMonitorForAProjectTheCurrentConnectionDoesNotCover() throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         long workspaceId = connected.getId();
@@ -1576,7 +1431,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldNotAddByHandAProjectTheWorkspaceMonitorsUnderAnotherPath() throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         long workspaceId = connected.getId();
@@ -1625,7 +1479,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldCreateOneMonitorWhenCreatorsWaitOnTheConnectionLifecycleLock() throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         long workspaceId = connected.getId();
@@ -1662,7 +1515,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldNotResumeMonitoringWhenTheMonitorIsRemovedWhileADeliveryIsPrepared() throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         assertThat(repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(connected.getId(), REPOSITORY))
@@ -1687,7 +1539,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldRedeliverWorkOnAProjectUntilGitLabCanReportIt() throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         AtomicLong lookups = new AtomicLong();
@@ -1710,7 +1561,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldNotAdmitTheSameGroupPathOnAnotherInstance() throws Exception {
-        createStream();
         Workspace elsewhere = WorkspaceTestFixtures.persistGitLabWorkspace(
                 workspaceRepository,
                 connectionRepository,
@@ -1724,7 +1574,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         discoveredRepository();
         repositoryToMonitorRepository.save(
                 WorkspaceTestFixtures.repositoryMonitor(elsewhere, REPOSITORY, REPOSITORY_NATIVE_ID));
-        integrationNatsConsumer.establishScopeConsumer(elsewhere.getId(), STREAM);
         long connectionId = connectionId(elsewhere);
         GitLabRouteCredential.Issued issued = routeCredential.issue(new GitLabRouteCredential.Route(
                 connectionId, elsewhere.getId(), "https://gitlab.example.com", GROUP_ID, GROUP));
@@ -1744,7 +1593,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldAcknowledgeWithoutHandlingWhenTheRouteIsNoLongerActive() throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         GitLabWebhookClient.WebhookConfig hook = registeredHooks.getLast();
@@ -1812,7 +1660,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     }
 
     private PullRequest deliverMergeRequestUpdateWhileGitLabIsRead(Consumer<Workspace> duringRead) throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         deliver(connected, fixture("gitlab/issue.open.json"), "closed-issue");
@@ -1900,7 +1747,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     }
 
     private PullRequest deliverMergeWhileGitLabIsRead(Consumer<Workspace> duringRead) throws Exception {
-        createStream();
         Workspace connected = connectGroup();
         awaitMonitoringIdle();
         deliver(connected, fixture("gitlab/merge_request.update.json"), "merge-request-opened");
@@ -1971,7 +1817,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     }
 
     private GitLabWebhookClient.WebhookInfo registerHook(GitLabWebhookClient.WebhookConfig config) throws Exception {
-        filterWhenRegistered.set(filterSubjects());
         registeredHooks.add(config);
         GitLabWebhookClient.WebhookInfo hook =
                 new GitLabWebhookClient.WebhookInfo(nextHookId.getAndIncrement(), config.url());
@@ -2040,8 +1885,12 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     private void awaitAcknowledged() {
         await().atMost(Duration.ofSeconds(20))
-                .until(() -> jsm.getConsumers(STREAM).stream()
-                        .allMatch(durable -> durable.getNumPending() == 0 && durable.getNumAckPending() == 0));
+                .until(() -> Objects.requireNonNullElse(
+                                eventJdbc.queryForObject(
+                                        "SELECT count(*) FROM provider_event WHERE state IN ('QUEUED', 'LEASED')",
+                                        Long.class),
+                                0L)
+                        == 0);
     }
 
     private JsonNode fixture(String name) throws Exception {
@@ -2255,45 +2104,16 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                 .extracting(IssueComment::getIssue)
                 .satisfies(issue ->
                         assertThat(Objects.requireNonNull(issue).getNativeId()).isEqualTo(NATIVE_ISSUE_ID)));
-        // The handler commits before it acknowledges, so the acknowledgement can trail the rows.
-        await().atMost(Duration.ofSeconds(10)).until(() -> {
-            ConsumerInfo durable = jsm.getConsumers(STREAM).getFirst();
-            return durable.getNumPending() == 0 && durable.getNumAckPending() == 0;
-        });
-        assertThat(jsm.getConsumers(STREAM).getFirst().getRedelivered()).isZero();
+        // The handler commits before its event ends, so the event's end can trail the rows.
+        awaitAcknowledged();
+        assertThat(eventJdbc.queryForObject(
+                        "SELECT count(*) FROM provider_event WHERE provider = 'gitlab' AND attempt > 1", Long.class))
+                .isZero();
     }
 
     private long commentsWithNativeId() {
         return issueCommentRepository.findAll().stream()
                 .filter(comment -> NATIVE_NOTE_ID.equals(comment.getNativeId()))
                 .count();
-    }
-
-    private Set<String> expectedFilter(Workspace target) {
-        return Set.of(ConsumerSubjectMath.connectionFilter(STREAM, connectionId(target)));
-    }
-
-    private Set<String> filterSubjects() throws Exception {
-        try {
-            return jsm.getConsumers(STREAM).stream()
-                    .flatMap(info -> Objects.requireNonNullElse(
-                            info.getConsumerConfiguration().getFilterSubjects(), List.<String>of())
-                            .stream())
-                    .collect(Collectors.toSet());
-        } catch (JetStreamApiException e) {
-            return Set.of();
-        }
-    }
-
-    private void createStream() throws Exception {
-        // A receiver that an earlier test class booted leaves a stream of this name with its own configuration.
-        if (jsm.getStreamNames().contains(STREAM)) {
-            jsm.deleteStream(STREAM);
-        }
-        jsm.addStream(StreamConfiguration.builder()
-                .name(STREAM)
-                .subjects(STREAM + ".>")
-                .storageType(StorageType.Memory)
-                .build());
     }
 }

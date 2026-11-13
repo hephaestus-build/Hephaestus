@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
-import static de.tum.cit.aet.hephaestus.core.TransactionCallbacks.afterCommit;
 import static de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus;
 
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
@@ -8,8 +7,6 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
 import de.tum.cit.aet.hephaestus.workspace.audit.WorkspaceAuditSnapshots;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.exception.WorkspaceLifecycleViolationException;
@@ -19,7 +16,6 @@ import java.util.Comparator;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,32 +25,27 @@ public class WorkspaceLifecycleService {
     private static final Logger log = LoggerFactory.getLogger(WorkspaceLifecycleService.class);
 
     private final ConfigAuditPort configAudit;
-    private final NatsConnectionProperties natsProperties;
     private final WorkspaceRepository workspaceRepository;
 
     /** Absent under webhook profile (server.enabled=false). */
-    private final ObjectProvider<IntegrationNatsConsumer> natsConsumerService;
 
     // Repositories for workspace-scoped data cleanup
     private final MembershipRepository workspaceMembershipRepository;
+
     private final WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository;
 
     private final List<WorkspacePurgeGuard> purgeGuards;
     private final List<WorkspacePurgeContributor> purgeContributors;
 
     public WorkspaceLifecycleService(
-            NatsConnectionProperties natsProperties,
             WorkspaceRepository workspaceRepository,
-            ObjectProvider<IntegrationNatsConsumer> natsConsumerService,
             MembershipRepository workspaceMembershipRepository,
             WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository,
             List<WorkspacePurgeGuard> purgeGuards,
             List<WorkspacePurgeContributor> purgeContributors,
             ConfigAuditPort configAudit) {
         this.configAudit = configAudit;
-        this.natsProperties = natsProperties;
         this.workspaceRepository = workspaceRepository;
-        this.natsConsumerService = natsConsumerService;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.workspaceSlugHistoryRepository = workspaceSlugHistoryRepository;
         this.purgeGuards = purgeGuards;
@@ -91,7 +82,6 @@ public class WorkspaceLifecycleService {
             workspace = workspaceRepository.save(workspace);
             recordStatusChange(workspace, previous, WorkspaceStatus.SUSPENDED);
             log.info("Suspended workspace: workspaceSlug={}", LoggingUtils.sanitizeForLog(workspaceSlug));
-            stopNatsForWorkspace(workspace);
         }
 
         return workspace;
@@ -132,7 +122,6 @@ public class WorkspaceLifecycleService {
             workspace = workspaceRepository.save(workspace);
             recordStatusChange(workspace, previous, WorkspaceStatus.ACTIVE);
             log.info("Resumed workspace: workspaceSlug={}", LoggingUtils.sanitizeForLog(workspaceSlug));
-            startNatsForWorkspace(workspace);
         }
 
         return workspace;
@@ -165,8 +154,6 @@ public class WorkspaceLifecycleService {
         String sanitizedSlug = LoggingUtils.sanitizeForLog(workspaceSlug);
 
         purgeGuards.forEach(guard -> guard.verifyQuiescent(workspaceId));
-
-        stopNatsForWorkspacePurge(workspace);
 
         purgeContributors.stream()
                 .sorted(Comparator.comparingInt(WorkspacePurgeContributor::getOrder))
@@ -258,30 +245,6 @@ public class WorkspaceLifecycleService {
         }
 
         return slug;
-    }
-
-    // NATS consumer lifecycle helpers
-
-    private void stopNatsForWorkspace(Workspace workspace) {
-        if (shouldUseNats(workspace)) {
-            natsConsumerService.ifAvailable(svc -> svc.stopConsumingScope(workspace.getId()));
-        }
-    }
-
-    private void stopNatsForWorkspacePurge(Workspace workspace) {
-        if (shouldUseNats(workspace)) {
-            natsConsumerService.ifAvailable(svc -> svc.stopConsumingScopeForPurge(workspace.getId()));
-        }
-    }
-
-    private void startNatsForWorkspace(Workspace workspace) {
-        if (shouldUseNats(workspace)) {
-            natsConsumerService.ifAvailable(svc -> afterCommit(() -> svc.startConsumingScope(workspace.getId())));
-        }
-    }
-
-    private boolean shouldUseNats(Workspace workspace) {
-        return natsProperties.enabled() && workspace != null;
     }
 
     private void recordStatusChange(Workspace workspace, WorkspaceStatus from, WorkspaceStatus to) {

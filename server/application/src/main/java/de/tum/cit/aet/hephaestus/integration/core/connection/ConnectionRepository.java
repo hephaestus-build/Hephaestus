@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -35,10 +36,15 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
      * before checking their respective state, closing the check-then-act window in which a job could
      * start while an uninstall was committing.
      */
+    default Long acquireLifecycleLock(long id, long workspaceId) {
+        return findAndLockLifecycleConnection(id, workspaceId).orElseThrow(() -> new EmptyResultDataAccessException(1));
+    }
+
+    /** Locks an existing connection; admission can discard one removed while it waited for this lock. */
     @Query(
             value = "SELECT id FROM connection WHERE id = :id AND workspace_id = :workspaceId FOR UPDATE",
             nativeQuery = true)
-    Long acquireLifecycleLock(@Param("id") long id, @Param("workspaceId") long workspaceId);
+    Optional<Long> findAndLockLifecycleConnection(@Param("id") long id, @Param("workspaceId") long workspaceId);
 
     /**
      * The configuration of connection {@code id} when it is in {@code state}, read from the database rather than from an
@@ -63,7 +69,8 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     Optional<Connection> findByWorkspaceIdAndKindAndInstanceKey(
             long workspaceId, IntegrationKind kind, @Nullable String instanceKey);
 
-    @WorkspaceAgnostic("A connect refuses a Slack team or GitHub App installation that another workspace holds")
+    @WorkspaceAgnostic(
+            "Connect checks shared ownership; webhook admission locks the source GitHub App installation before fan-out")
     List<Connection> findAllByKindAndInstanceKeyAndStateIn(
             IntegrationKind kind, String instanceKey, Collection<IntegrationState> states);
 

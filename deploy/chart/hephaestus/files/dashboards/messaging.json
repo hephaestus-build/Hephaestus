@@ -6,8 +6,8 @@
 			"title": "Do provider events arrive?",
 			"panels": [
 				{
-					"title": "Events published, per minute",
-					"description": "By stream and outcome.",
+					"title": "Events stored, per minute",
+					"description": "By provider and outcome.",
 					"expr": [
 						"sum by (stream, outcome) (rate(webhook_publish_total{job=\"hephaestus\"}[5m])) * 60"
 					],
@@ -49,7 +49,7 @@
 			"panels": [
 				{
 					"title": "Wait p95, per provider",
-					"description": "From the stream to the first handling. The alert bound is 5 minutes.",
+					"description": "From the receipt to the first handling. The alert bound is 5 minutes.",
 					"expr": [
 						"histogram_quantile(0.95, sum by (le, kind) (rate(integration_message_lag_seconds_bucket{job=\"hephaestus\"}[5m])))"
 					],
@@ -75,42 +75,45 @@
 			"title": "Do consumers keep up?",
 			"panels": [
 				{
-					"title": "Events that wait for a consumer",
-					"description": "Per stream.",
-					"expr": ["max by (stream) (webhook_stream_consumer_pending{job=\"hephaestus\"})"],
-					"alias": ["{{stream}}"],
+					"title": "Events that wait in the inbox",
+					"description": "Queued and leased, per provider.",
+					"expr": [
+						"max by (provider) (integration_consumer_backlog{job=\"hephaestus\",state=\"QUEUED\"})",
+						"max by (provider) (integration_consumer_backlog{job=\"hephaestus\",state=\"LEASED\"})"
+					],
+					"alias": ["{{provider}} queued", "{{provider}} leased"],
 					"showLegend": true,
 					"width": 6
 				},
 				{
-					"title": "Oldest event against the age bound",
-					"description": "Per stream.",
+					"title": "Oldest due event",
+					"description": "Per provider. 0 when no event is due.",
 					"expr": [
-						"max by (stream) (webhook_stream_oldest_message_age_seconds{job=\"hephaestus\"})",
-						"max by (stream) (webhook_stream_age_bound_seconds{job=\"hephaestus\"})"
+						"max by (provider) (integration_consumer_oldest_due_seconds{job=\"hephaestus\"})"
 					],
-					"alias": ["{{stream}} oldest", "{{stream}} bound"],
+					"alias": ["{{provider}}"],
 					"unit": "s",
 					"showLegend": true,
 					"width": 6
 				},
 				{
-					"title": "Retries and stopped events, per hour",
-					"description": "Naks retry. A poison event stopped its retries.",
+					"title": "Retries and dead letters, per hour",
+					"description": "A retry waits for its backoff. A dead letter waits for an administrator's replay.",
 					"expr": [
-						"sum(increase(integration_consumer_nak_total{job=\"hephaestus\"}[1h]))",
+						"sum(increase(integration_consumer_retry_total{job=\"hephaestus\"}[1h]))",
 						"sum(increase(integration_consumer_poison_total{job=\"hephaestus\"}[1h]))"
 					],
-					"alias": ["nak", "poison"],
+					"alias": ["retry", "dead letter"],
 					"showLegend": true,
 					"width": 6
 				},
 				{
-					"title": "Stream fill",
-					"description": "The share of the byte bound in use.",
-					"expr": ["max by (stream) (webhook_stream_bytes_utilization{job=\"hephaestus\"})"],
-					"alias": ["{{stream}}"],
-					"unit": "share",
+					"title": "Dead letters",
+					"description": "Per provider, until their retention ends.",
+					"expr": [
+						"max by (provider) (integration_consumer_backlog{job=\"hephaestus\",state=\"DEAD\"})"
+					],
+					"alias": ["{{provider}}"],
 					"showLegend": true,
 					"width": 6
 				}

@@ -15,8 +15,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialUnreadableException;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AuthMode;
@@ -37,7 +35,6 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 
 class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
@@ -57,9 +54,6 @@ class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
     @Mock
     private ConnectionService connectionService;
 
-    @Mock
-    private ObjectProvider<IntegrationNatsConsumer> natsConsumerService;
-
     private WorkspaceSyncTargetProvider provider;
 
     @BeforeEach
@@ -69,8 +63,6 @@ class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
                 repositoryToMonitorRepository,
                 workspaceScopeFilter,
                 connectionService,
-                new NatsConnectionProperties(true, "nats://localhost:4222", null, null),
-                natsConsumerService,
                 mock(ReviewScopeRepositoryRepository.class),
                 mock(ApplicationEventPublisher.class),
                 new SimpleMeterRegistry());

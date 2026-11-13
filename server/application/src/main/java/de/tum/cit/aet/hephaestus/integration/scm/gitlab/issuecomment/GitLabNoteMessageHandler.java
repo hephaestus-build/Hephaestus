@@ -4,7 +4,7 @@ import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.integration.core.events.BotCommandReceivedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmPullRequestItems;
@@ -58,7 +58,7 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
             PullRequestRepository pullRequestRepository,
             GitLabUserService userService,
             GitLabReviewReconciler reviewReconciler,
-            NatsMessageDeserializer deserializer,
+            EventPayloadDeserializer deserializer,
             TransactionTemplate transactionTemplate,
             ApplicationEventPublisher eventPublisher,
             ScmPullRequestItems pullRequestItems) {

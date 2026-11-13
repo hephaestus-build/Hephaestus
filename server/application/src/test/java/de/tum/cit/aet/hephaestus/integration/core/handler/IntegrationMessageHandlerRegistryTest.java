@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import io.nats.client.Message;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -81,7 +80,7 @@ class IntegrationMessageHandlerRegistryTest extends BaseUnitTest {
         }
 
         @Override
-        public void onMessage(Message msg) {
+        public void onMessage(ProviderEvent msg) {
             // no-op — only key() is exercised in this suite
         }
     }
@@ -101,7 +100,7 @@ class IntegrationMessageHandlerRegistryTest extends BaseUnitTest {
         }
 
         @Override
-        public void onMessage(Message msg) {
+        public void onMessage(ProviderEvent msg) {
             // no-op
         }
     }

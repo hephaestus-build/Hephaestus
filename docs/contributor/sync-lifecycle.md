@@ -28,7 +28,7 @@ No integration hand-rolls a vendor DTO.
 
 | Phase | GitHub | GitLab | Slack | Outline |
 | --- | --- | --- | --- | --- |
-| **Initial sync** | App install: after monitors materialize from installation metadata. PAT: on the `Activated` AFTER_COMMIT event. Recorded as an `INITIAL` job. | On `Activated` → `GitLabWorkspaceInitializationService.initializeAsync`: discover projects and monitors. Then start the NATS scope consumer, group webhook, and full sync, in that order. With NATS enabled, the webhook requires complete discovery and a confirmed consumer on connection subject filter `gitlab.?connection.<connectionId>.>`. Discovery must reach the end of the group listing and direct-project pass, and match GitLab's project count. Otherwise the periodic reconcile (or **Sync now**) retries it. A hook that is already open stays open. The connection consumer receives events even for projects not yet discovered. At delivery time, `GitLabRouteAdmission` reads an unknown project from GitLab. It checks the stable ID and connected-group membership. Only when repository selection permits it does it create or reconcile the monitor. `INITIAL` job. | **None at connect.** Ingestion is per-channel and forward-only from the consent announcement. | On `Activated` → register the webhook subscription, then a recency sync. Recorded job. |
+| **Initial sync** | App install: after monitors materialize from installation metadata. PAT: on the `Activated` AFTER_COMMIT event. Recorded as an `INITIAL` job. | On `Activated` → `GitLabWorkspaceInitializationService.initializeAsync`: discover projects and monitors. Then register the group webhook and run the full sync. The webhook requires complete discovery. Discovery must reach the end of the group listing and direct-project pass, and match GitLab's project count. Otherwise the periodic reconcile (or **Sync now**) retries it. A hook that is already open stays open. The inbox admits events of the ACTIVE connection even for projects not yet discovered. At delivery time, `GitLabRouteAdmission` reads an unknown project from GitLab. It checks the stable ID and connected-group membership. Only when repository selection permits it does it create or reconcile the monitor. `INITIAL` job. | **None at connect.** Ingestion is per-channel and forward-only from the consent announcement. | On `Activated` → register the webhook subscription, then a recency sync. Recorded job. |
 | **Live updates** | `POST /webhooks/github` → `github.<owner>.<repo>.<event>`. Repository-lifecycle events ride `github.<owner>.?.repository`. | `POST /webhooks/gitlab/connections/{connectionId}/{keyId}/{routeId}` for group hooks Hephaestus registers on connect. `X-Gitlab-Token` carries a `GitLabRouteCredential` signed with `WEBHOOK_ROUTING_SECRET` and bound to that connection, key and route. The receiver rejects a supplied `X-Gitlab-Instance` that differs from the signed origin. It does not use that header to select a workspace. `GitLabSubjectKeyDeriver.deriveConnectionSubject` publishes `gitlab.?connection.<connectionId>.<event>`, independent of payload paths. Admission checks the active connection, workspace, configured GitLab instance and group before handling. GitLab has no shared endpoint. | Events API → `slack.<team>.<scope>.<event>`. Consent re-checked per message. | Vendor webhook subscription → `outline.<subscriptionId>.<event>`. |
 | **Periodic reconcile** | `hephaestus.sync.cron`, default daily 03:00. Per-repository cooldown. | Same cron and scheduler shape. | `hephaestus.sync.slack.cron`, default daily 04:00 — replays `conversations.history` for ACTIVE channels. | `…outline.sync.cron`, default every 6 h, plus a 5-minute catch-up tick for collections still awaiting a clean pass. |
 | **Backfill** | Supported. Scheduled cycle gated by `hephaestus.sync.backfill.enabled` (off by default). Manual backfill always offered and loops until complete or canceled. | Supported. One batch per pending repository per click. The scheduled cycle drains the rest at its 5-minute cooldown. | **Not supported**, deliberately: pre-consent and paused-gap history must never be fetched. | **Not supported.** The reconcile is a full enumeration. There is no older horizon to walk. |
@@ -176,9 +176,9 @@ connection by the sync-job pruner. Global identity rows (`user`, `organization`,
 ### A redelivered or older payload changes nothing
 
 A provider can deliver a webhook again, even hours later.
-JetStream drops a duplicate only inside its deduplication window.
-Two rules make a redelivery harmless.
-Hephaestus keeps no record of processed delivery ids.
+The inbox keeps each handled delivery identifier for its replay window.
+A later redelivery can arrive after that window.
+Two rules make it harmless.
 
 **The stored work only moves forward.**
 Each consumer compares the payload with the stored row.
@@ -261,18 +261,19 @@ An incomplete list is not applied.
 `GetMergeRequestReviewers` completes GitLab's nested `reviewers` connection.
 If GitHub counts more entries, its single `reviewRequests(first: 100)` page remains unused.
 
-The two dates come from two clocks. A webhook's is the time JetStream stored it, on the NATS server's
-clock, and a JetStream redelivery keeps it. A sync page's is the time Hephaestus asked for it, on the
+The two dates come from two clocks. A webhook's is the time PostgreSQL stored it, on the database server's
+clock, and an inbox replay keeps it. A sync page's is the time Hephaestus asked for it, on the
 application's clock. Comparing them assumes both hosts keep time by NTP, so their skew is far below
 the seconds between a reviewer change and the next read.
 
-Two gaps remain. A provider that delivers a
+One gap remains. A provider that delivers a
 webhook late, or retries a failed delivery, dates it by its arrival, not by when the provider sent
-it. And a provider's redelivery that reaches the receiver after `hephaestus.webhook.stream.duplicate-window`
-(3 hours by default) is a new message with a new date. Either can restate an old list over a sync
+it. A redelivery of a delivery that the inbox stored adds no event. The redelivery of a failed
+delivery is the first stored copy, so its arrival dates it. Such a late copy can restate an old list over a sync
 page read in between, until the next sync reads the list again.
+
 `GitHubWebhookRedelivery` asks GitHub to redeliver failed deliveries for up to two hours after the original.
-Thus, after a broker stall, a late copy is a normal event, not a rare one.
+Thus, after a database stall, a late copy is a normal event, not a rare one.
 
 GitLab's webhooks state each reviewer's review from 18.6
 ([`reviewers_hook_attrs`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.6.0-ee/app/models/concerns/issuable.rb#L589-597)). Before, they name
@@ -432,7 +433,7 @@ A pipeline that the page names with its SHA is still recorded for that SHA.
 
 A GitLab check observation records its request or send time at the provider (`head_check_observed_at`).
 Sync and readiness reads use their request time.
-Pipeline hooks use the time JetStream stored them.
+Pipeline hooks use the time PostgreSQL stored them in the inbox.
 An observation older than the stored observation changes nothing, regardless of either observation's commit.
 Thus, an earlier read or delayed hook cannot restore a state GitLab has since replaced.
 

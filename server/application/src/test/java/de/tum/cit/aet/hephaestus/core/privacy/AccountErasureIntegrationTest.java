@@ -45,7 +45,9 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateNonceStore;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -103,6 +105,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -116,6 +119,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -153,6 +157,9 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ObjectProvider<ReviewJobLifecycleService> lifecycles;
+
+    @Autowired
+    private ProviderEventStore providerEvents;
 
     @Autowired
     private PersonDataService personData;
@@ -261,6 +268,128 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
     @BeforeEach
     void clearRows() {
         databaseTestUtils.cleanDatabase();
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = IntegrationKind.class,
+            names = {"GITHUB", "GITLAB", "SLACK", "OUTLINE"})
+    void shouldEraseDeliveriesThatArriveBetweenPreviewAdmissionAndExecution(IntegrationKind kind) {
+        eraseArrivals(kind, false);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = IntegrationKind.class,
+            names = {"GITHUB", "GITLAB", "SLACK", "OUTLINE"})
+    void shouldEraseDeliveriesThatArriveBeforeAFailedRequestIsResumed(IntegrationKind kind) {
+        eraseArrivals(kind, true);
+    }
+
+    @Test
+    void shouldKeepTheErasurePreviewValidAfterReplayRetentionDeletesTheRow() {
+        Account administrator = new Account("Replay erasure administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long administratorId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
+        long person = Objects.requireNonNull(
+                accounts.saveAndFlush(new Account("Person with a replay")).getId());
+        var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("replayed-retention"));
+        String delivery = inboxArrival(workspace.getId(), IntegrationKind.GITHUB, "https://github.com", "owner", "{}");
+        jdbc.update(
+                "UPDATE provider_event SET replayed_by=?,state='DONE',ended_at=clock_timestamp()-interval '4 days' WHERE delivery_key=?",
+                person,
+                delivery);
+        var preview = personData.preview(administratorId, person, List.of());
+        providerEvents.deleteEnded(
+                Instant.now().minus(3, ChronoUnit.DAYS), Instant.now().minus(30, ChronoUnit.DAYS));
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM provider_event WHERE delivery_key=?", Long.class, delivery))
+                .isZero();
+        personData.requestErasure(preview.request().getId(), administratorId, true);
+        personData.run(preview.request().getId());
+        assertThat(personData.get(preview.request().getId()).request().getState())
+                .isEqualTo(PersonDataRequest.State.COMPLETE);
+    }
+
+    private void eraseArrivals(IntegrationKind kind, boolean resume) {
+        var administrator = new Account("Inbox erasure administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long administratorId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
+        String origin = kind == IntegrationKind.SLACK ? "https://slack.com" : "https://inbox-erasure.example.test";
+        var provider = providers.saveAndFlush(new IdentityProvider(IdentityProviderType.valueOf(kind.name()), origin));
+        var first = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("inbox-erasure-first"));
+        var second = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("inbox-erasure-second"));
+        String subject = kind == IntegrationKind.GITHUB || kind == IntegrationKind.GITLAB ? "42" : "U42";
+        String body = mapper.writeValueAsString(
+                switch (kind) {
+                    case GITHUB -> Map.of("sender", Map.of("id", 42, "login", "person"), "text", "private");
+                    case GITLAB ->
+                        Map.of("user_id", 42, "object_attributes", Map.of("author_id", 42), "text", "private");
+                    default -> Map.of("user", "U42", "text", "private");
+                });
+        String frozen = inboxArrival(first.getId(), kind, origin, "T1", body);
+        String foreign = inboxArrival(second.getId(), kind, "https://another-source.example.test", "T1", body);
+        String anotherTeam =
+                inboxArrival(second.getId(), kind, origin, "T2", kind == IntegrationKind.SLACK ? body : "{}");
+        var preview = personData.preview(
+                administratorId,
+                null,
+                List.of(new PersonIdentity(
+                        Objects.requireNonNull(provider.getId()),
+                        subject,
+                        kind == IntegrationKind.SLACK ? "T1" : null)));
+        UUID request = preview.request().getId();
+        String beforeAdmission = inboxArrival(second.getId(), kind, origin, "T1", body);
+        personData.requestErasure(request, administratorId, true);
+        String afterAdmission = inboxArrival(first.getId(), kind, origin, "T1", body);
+        List<String> erasedDeliveries = new ArrayList<>(List.of(frozen, beforeAdmission, afterAdmission));
+        if (resume) {
+            // The inbox step committed, then a later store failed. Recovery must run the live predicate again.
+            jdbc.update(
+                    "DELETE FROM provider_event WHERE delivery_key IN (?,?,?)",
+                    frozen,
+                    beforeAdmission,
+                    afterAdmission);
+            String completed = mapper.writeValueAsString(
+                    Map.of("provider_event", new PersonDataStoreReceipt(3, Instant.now(), administratorId)));
+            jdbc.update(
+                    "UPDATE person_data_request SET state='FAILED',failure_code='STORE_ERASURE_FAILED',completed_json=? WHERE id=?",
+                    completed,
+                    request);
+            erasedDeliveries.add(inboxArrival(second.getId(), kind, origin, "T1", body));
+            personData.requestErasure(request, administratorId, true);
+        }
+        personData.run(request);
+        var erasedRequest = personData.get(request).request();
+        assertThat(erasedRequest.getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(PersonDataStoreReceipt.counts(mapper, erasedRequest.getCompletedJson())
+                        .get("provider_event"))
+                .isEqualTo(resume ? 4L : 3L);
+        for (String erased : erasedDeliveries) {
+            assertThat(jdbc.queryForObject(
+                            "SELECT count(*) FROM provider_event WHERE delivery_key=?", Long.class, erased))
+                    .isZero();
+        }
+        for (String kept : List.of(foreign, anotherTeam)) {
+            assertThat(jdbc.queryForObject(
+                            "SELECT count(*) FROM provider_event WHERE delivery_key=?", Long.class, kept))
+                    .isEqualTo(1);
+        }
+    }
+
+    private String inboxArrival(long workspace, IntegrationKind kind, String origin, String team, String body) {
+        String delivery = UUID.randomUUID().toString();
+        String provider = kind.name().toLowerCase(Locale.ROOT);
+        providerEvents.store(List.of(new ProviderEventStore.Arrival(
+                workspace,
+                provider,
+                provider + "." + team + ".channel.message",
+                delivery,
+                Map.of(ProviderEvent.SOURCE_SERVER_URL, origin),
+                body.getBytes(StandardCharsets.UTF_8))));
+        return delivery;
     }
 
     @Test
@@ -976,6 +1105,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         var githubUser = users.saveAndFlush(TestUserFactory.createUser(4242L, "target-github", github));
         link(targetAccount, github, "4242", null);
         allStores.seedScm(githubUser.getId(), Objects.requireNonNull(github.getId()), 998000L);
+        allStores.seedProviderEvent(firstWorkspace, 4242L, PersonErasureAllStoresFixture.CANARY);
         installation("all-stores-personal", "target-github", AccountType.USER);
         // GitHub App installations: the target's own that no admin adopted, the target's adopted one, a decision
         // that the target made as an admin, and another person's own.
@@ -1004,6 +1134,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         var otherGitHub = users.saveAndFlush(TestUserFactory.createUser(8484L, "other-github", github));
         link(otherAccount, github, "8484", null);
         otherSourceRows.seedScm(otherGitHub.getId(), Objects.requireNonNull(github.getId()), 998100L);
+        otherSourceRows.seedProviderEvent(firstWorkspace, 8484L, "other-github");
         String otherOutlineSubject = "00000000-0000-4000-8000-000000000084";
         link(otherAccount, outline, otherOutlineSubject, null);
         otherSourceRows.seedOutline(

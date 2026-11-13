@@ -14,7 +14,8 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
@@ -35,7 +36,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteTes
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.PassThroughTransactionTemplate;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
-import io.nats.client.Message;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
@@ -88,7 +88,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
     private GitLabCommitMergeRequestLinker commitMergeRequestLinker;
 
     @Mock
-    private NatsMessageDeserializer deserializer;
+    private EventPayloadDeserializer deserializer;
 
     private GitLabPushMessageHandler handler;
     private IdentityProvider gitLabProvider;
@@ -301,8 +301,8 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
 
     @Test
     void nonPushSubject_rejected() throws IOException {
-        Message msg = mock(Message.class);
-        when(msg.getSubject()).thenReturn("gitlab.org.proj.merge_request");
+        ProviderEvent msg = mock(ProviderEvent.class);
+        when(msg.subject()).thenReturn("gitlab.org.proj.merge_request");
 
         handler.onMessage(msg);
 
@@ -348,7 +348,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
     }
 
     /** Delivers {@code msg} as admission would, on the connection route of the group {@code org}. */
-    private void onRoute(Message msg) {
+    private void onRoute(ProviderEvent msg) {
         GitLabRouteTestFixtures.handle(ROUTE, Map.of(), null, () -> handler.onMessage(msg));
     }
 
@@ -384,9 +384,9 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
                 List.of());
     }
 
-    private Message mockMessage(String subject, GitLabPushEventDTO event) throws IOException {
-        Message msg = mock(Message.class);
-        when(msg.getSubject()).thenReturn(subject);
+    private ProviderEvent mockMessage(String subject, GitLabPushEventDTO event) throws IOException {
+        ProviderEvent msg = mock(ProviderEvent.class);
+        when(msg.subject()).thenReturn(subject);
         when(deserializer.deserialize(msg, GitLabPushEventDTO.class)).thenReturn(event);
         return msg;
     }

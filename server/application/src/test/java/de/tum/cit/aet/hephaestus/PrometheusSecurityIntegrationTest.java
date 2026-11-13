@@ -88,9 +88,8 @@ class PrometheusSecurityIntegrationTest {
             registry.counter(AgentMetrics.LLM_BUDGET_BLOCKED, "surface", "agent_job", "cap", "instance")
                     .increment();
             registry.counter(AgentMetrics.AGENT_JOB_TOTAL, "outcome", "failed").increment();
-            Gauge.builder(IntegrationCoreMetrics.WEBHOOK_STREAM_POLL_AGE, () -> 0.0)
-                    .baseUnit("seconds")
-                    .tag("stream", "github")
+            Gauge.builder(IntegrationCoreMetrics.INTEGRATION_CONSUMER_OLDEST_DUE_SECONDS, () -> 0.0)
+                    .tag("provider", "github")
                     .register(registry);
 
             var scrape = send(client, "::1", managementPort, "/actuator/prometheus", "GET", false);
@@ -102,7 +101,7 @@ class PrometheusSecurityIntegrationTest {
                             "llm_budget_exhausted_total",
                             "llm_budget_blocked_total",
                             "agent_job_total",
-                            "webhook_stream_poll_age_seconds",
+                            "integration_consumer_oldest_due_seconds",
                             listenerId);
             assertNoListenerProbe(client, "127.0.0.1", managementPort, listenerId);
             // Irrelevant or expired user credentials must not break a scraper.

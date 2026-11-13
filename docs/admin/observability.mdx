@@ -29,7 +29,7 @@ The alert or the objective tells the operator when the answer needs work.
 | Do review attempts fail, and where? | `agent_job_total`, `agent_job_infra_retry_requeued_total`, `agent_run_reaped_total` | `HephaestusAgentJobsFailing` and the other review alerts |
 | How long does each stage of a review take? | `agent_job_stage_duration_seconds`, by `stage` and `outcome`. Admission: `http_server_requests_seconds` on the two [admission routes](./metrics#agent-job-metrics) | None |
 | Which statements take the most database time, and do tables collect dead rows? | `pg_stat_statements_seconds_total` by `queryid`, `pg_stat_user_tables_n_dead_tup`, `pg_long_running_transactions_oldest_timestamp_seconds`, with the [database metrics](./monitoring#turn-on-database-metrics) on | `HephaestusDatabaseDeadlocks`, `HephaestusDatabaseTransactionOpenLong`, `HephaestusDatabaseDeadRowsHigh`, `HephaestusDatabaseTransactionIdAgeHigh` |
-| How long does a provider event wait for its handling, and how long does the handling take? | `integration_message_lag_seconds`, `integration_message_process_duration_seconds`, by `kind`, with retries in `integration_consumer_nak_total` and dead letters in `integration_consumer_poison_total` | `HephaestusEventsDelayed` |
+| How long does a provider event wait for its handling, and how long does the handling take? | `integration_message_lag_seconds`, `integration_message_process_duration_seconds`, by `kind`, with retries in `integration_consumer_retry_total` and dead letters in `integration_consumer_poison_total` | `HephaestusEventsDelayed` |
 | Does feedback earn trust? | `practice_result_recorded_total`, `practice_result_marked_total`, `practice_feedback_response_total`, and the [query by practice](./metrics#feedback-trust) | `HephaestusResultsMarkedIncorrect` |
 | Does work wait for a server? | `agent_queue_oldest_age_seconds`, `agent_job_duration_seconds` with `phase="queue"` | `HephaestusAgentQueueStalled` |
 | Do model calls wait for their pool? | `llm_pool_permit_wait_seconds`, `llm_pool_upstream_throttled_total` | `HephaestusConversationModelWaitLong`, `HephaestusReviewModelWaitLong` |
@@ -43,7 +43,7 @@ The alert or the objective tells the operator when the answer needs work.
 | Does the database pool make requests wait? | `hikaricp_connections_acquire_seconds`, `hikaricp_connections_timeout_total` | `HephaestusDatabasePoolSlow`, `HephaestusDatabaseConnectionTimeouts` |
 | Do pages show their content fast enough? | `web_vital_duration_seconds` | `HephaestusPageExperiencePoor`, `HephaestusPageExperiencePoorWeekly` |
 | Does a conversation answer, and how fast does it start? | `mentor_turn_completed_total`, `mentor_turn_first_token_seconds` | `HephaestusConversationTurnsFailing` and the conversation objective |
-| Do provider events arrive and get processed? | `webhook_publish_total`, `webhook_stream_*`, `integration_consumer_*` | The webhook and stream alerts |
+| Do provider events arrive and get processed? | `webhook_publish_total`, `integration_consumer_*` | The webhook and provider event alerts |
 | Does a workspace sync wait for a new credential? | `workspace_sync_paused_total`, by `kind` and `reason` | None. Workspace admins receive the connection alert |
 | Does the GitLab sweep verify each note deletion? | `gitlab_note_reconciliation_unverified_total` counts issues and merge requests whose notes a sweep could not check | None. The next reconciliation checks them again, and the sync job of that workspace ends with a warning |
 | Is the data safe? | The WAL archive, backup and volume metrics | The critical alerts |
@@ -110,7 +110,7 @@ A slow or missing dependency therefore never restarts a Pod, and never takes eve
 | Liveness (`/actuator/health/liveness`, `/livez`) | `livenessState` | Does the process run? |
 | Readiness (`/actuator/health/readiness`, `/readyz`) | `readinessState` | Can this Pod serve now? |
 
-NATS (`integrationConsumer`, `natsBroker`), JetStream (`webhook`), `practiceReview` and `kubernetesSandbox` are in neither group.
+`integrationConsumer`, `practiceReview` and `kubernetesSandbox` are in neither group.
 A server serves its API whether or not it may start sandboxes, and it starts no sandbox before its isolation probe passes.
 They stay in `/actuator/health` and the metrics, which the alerts read.
 While the broker is slow, the receiver stays ready and answers deliveries with `503`.

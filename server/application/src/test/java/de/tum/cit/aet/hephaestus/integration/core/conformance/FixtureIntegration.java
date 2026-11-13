@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.conformance;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
+import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.Capability;
@@ -28,7 +29,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
 import de.tum.cit.aet.hephaestus.practices.PracticeReadSource;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
-import io.nats.client.Message;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -194,7 +194,7 @@ final class FixtureIntegration {
             }
 
             @Override
-            public void onMessage(Message msg) {}
+            public void onMessage(ProviderEvent msg) {}
         };
     }
 

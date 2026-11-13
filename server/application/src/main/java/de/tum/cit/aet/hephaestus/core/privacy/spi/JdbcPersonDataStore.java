@@ -119,26 +119,45 @@ public class JdbcPersonDataStore implements PersonDataContributor {
 
     @Override
     public List<JsonNode> export(PersonDataSelection selection, PersonScope frozenScope) {
+        return exportWhere(selectionParameters(selection), selected());
+    }
+
+    protected List<JsonNode> exportMatchingScope(PersonDataSelection selection, PersonScope frozenScope) {
+        var bindings = new LinkedHashMap<>(parameters(frozenScope, mapper));
+        bindings.putAll(selectionParameters(selection));
+        return exportWhere(bindings, "(" + selected() + ") AND (" + predicate + ")");
+    }
+
+    private List<JsonNode> exportWhere(Map<String, Object> bindings, String where) {
         String projection = "jsonb_build_object("
                 + String.join(
                         ",",
                         columns.stream().map(c -> "'" + c + "',t.\"" + c + "\"").toList()) + ")";
         return jdbc.query(
-                "SELECT " + projection + "::text FROM " + quotedTable() + " t WHERE " + selected() + " ORDER BY "
+                "SELECT " + projection + "::text FROM " + quotedTable() + " t WHERE " + where + " ORDER BY "
                         + keyExpression() + "::text",
-                selectionParameters(selection),
+                bindings,
                 (rs, row) -> mapper.readTree(Objects.requireNonNull(rs.getString(1))));
     }
 
     @Override
     public long erase(PersonDataSelection selection, PersonScope frozenScope) {
         if (selection.rows().isEmpty()) return 0;
+        return eraseWhere(selection, frozenScope, selected());
+    }
+
+    protected long eraseIncludingCurrentMatches(PersonDataSelection selection, PersonScope frozenScope) {
+        String where = redaction.isEmpty() ? "(" + selected() + ") OR (" + predicate + ")" : predicate;
+        return eraseWhere(selection, frozenScope, where);
+    }
+
+    private long eraseWhere(PersonDataSelection selection, PersonScope frozenScope, String where) {
         String command = redaction.isEmpty()
                 ? "DELETE FROM " + quotedTable() + " t"
                 : "UPDATE " + quotedTable() + " t SET " + redaction;
         var bindings = new LinkedHashMap<>(parameters(frozenScope, mapper));
         bindings.putAll(selectionParameters(selection));
-        return jdbc.update(command + " WHERE " + selected(), bindings);
+        return jdbc.update(command + " WHERE " + where, bindings);
     }
 
     protected List<JsonNode> querySelected(String projection, String from, PersonDataSelection selection) {

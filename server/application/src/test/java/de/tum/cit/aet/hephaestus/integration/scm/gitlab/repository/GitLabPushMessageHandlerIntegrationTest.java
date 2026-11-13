@@ -13,6 +13,8 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.StoredEventHandling;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
@@ -27,7 +29,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.dto.GitLabPus
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
-import de.tum.cit.aet.hephaestus.testconfig.InboxTestMessages;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
@@ -43,6 +44,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -90,6 +92,12 @@ class GitLabPushMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private DeliveryInbox inbox;
+
+    @Autowired
+    private ProviderEventStore eventStore;
+
+    @Autowired
+    private JdbcTemplate eventJdbc;
 
     @Autowired
     private ApplicationEvents events;
@@ -254,13 +262,14 @@ class GitLabPushMessageHandlerIntegrationTest extends BaseIntegrationTest {
         });
         var deliveries = new GitLabRouteTestFixtures.Deliveries(
                 connections, connectionService, admission, objectMapper, transactions, "https://gitlab.lrz.de");
-        var delivery = InboxTestMessages.delivery("gitlab-push-" + workspace.getId(), 1, Instant.now());
+        long delivery =
+                StoredEventHandling.leased(eventStore, eventJdbc, workspace.getId(), "gitlab.?connection.1.push");
         Workspace target = workspace;
         Repository project = repository;
         Runnable handling = () -> deliveries.handle(target, project, push, () -> handler.handleEvent(push));
         ReflectionTestUtils.setField(handler, "commitRepository", interrupted);
         try {
-            assertThatThrownBy(() -> inbox.dispatch(workspace.getId(), delivery, handling))
+            assertThatThrownBy(() -> inbox.dispatch(delivery, 1, Instant.now(), handling))
                     .isInstanceOf(IllegalStateException.class);
             assertThat(commits.findByShaAndRepositoryId(first.id(), repository.getId()))
                     .isPresent();
@@ -268,7 +277,7 @@ class GitLabPushMessageHandlerIntegrationTest extends BaseIntegrationTest {
                     .isEmpty();
             assertThat(commits.findByShaAndRepositoryId(thirdSha, repository.getId()))
                     .isPresent();
-            inbox.dispatch(workspace.getId(), delivery, handling);
+            inbox.dispatch(delivery, 1, Instant.now(), handling);
             for (var commit : commitsInPush) {
                 assertThat(commits.findByShaAndRepositoryId(commit.id(), repository.getId()))
                         .isPresent();
@@ -278,9 +287,6 @@ class GitLabPushMessageHandlerIntegrationTest extends BaseIntegrationTest {
                             .map(event -> event.commit().sha())
                             .toList())
                     .containsExactlyInAnyOrder(first.id(), failedSha, thirdSha);
-            inbox.dispatch(workspace.getId(), delivery, () -> {
-                throw new AssertionError("The completed push ran again");
-            });
         } finally {
             ReflectionTestUtils.setField(handler, "commitRepository", commits);
         }

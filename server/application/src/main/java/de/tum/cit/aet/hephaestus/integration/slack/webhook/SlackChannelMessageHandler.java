@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.slack.webhook;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
-import de.tum.cit.aet.hephaestus.integration.core.handler.NatsMessageDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackIngestService;
 import java.util.Set;
@@ -29,7 +29,7 @@ public class SlackChannelMessageHandler extends AbstractIntegrationMessageHandle
 
     public SlackChannelMessageHandler(
             SlackIngestService ingestService,
-            NatsMessageDeserializer deserializer,
+            EventPayloadDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(IntegrationKind.SLACK, "message", JsonNode.class, deserializer, transactionTemplate);
         this.ingestService = ingestService;

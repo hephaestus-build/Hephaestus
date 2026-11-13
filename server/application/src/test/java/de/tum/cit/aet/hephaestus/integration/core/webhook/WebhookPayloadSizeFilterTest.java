@@ -10,7 +10,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
-import de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.Counter;
@@ -32,9 +31,6 @@ class WebhookPayloadSizeFilterTest extends BaseUnitTest {
     private final WebhookProperties properties = new WebhookProperties(
             null,
             new WebhookProperties.TokenRotation(7, 90),
-            new WebhookProperties.Publish(Duration.ofSeconds(8), Duration.ofMillis(200)),
-            WebhookPropertiesFixture.stream(),
-            new WebhookProperties.Shutdown(Duration.ofSeconds(15)),
             new WebhookProperties.Http(MAX),
             new WebhookProperties.Routing(null, null));
 
@@ -50,9 +46,6 @@ class WebhookPayloadSizeFilterTest extends BaseUnitTest {
     private final WebhookProperties roomy = new WebhookProperties(
             null,
             new WebhookProperties.TokenRotation(7, 90),
-            new WebhookProperties.Publish(Duration.ofSeconds(8), Duration.ofMillis(200)),
-            WebhookPropertiesFixture.stream(),
-            new WebhookProperties.Shutdown(Duration.ofSeconds(15)),
             new WebhookProperties.Http(10L * LARGE),
             new WebhookProperties.Routing(null, null));
 

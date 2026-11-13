@@ -22,7 +22,8 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Receives a connection-scoped GitLab group hook. The hook's {@code X-Gitlab-Token} must be a
  * {@link GitLabRouteCredential} for exactly the connection, key and route named in the URL; nothing is read from the
- * database, so a verified delivery is published durably before any admission decision. {@code X-Gitlab-Instance} is
+ * database at this boundary. The inbox receiver checks the current connection under its lifecycle lock before it stores
+ * a verified payload. {@code X-Gitlab-Instance} is
  * compared with the signed origin only to turn away a mismatch: it never selects a route.
  */
 @RestController

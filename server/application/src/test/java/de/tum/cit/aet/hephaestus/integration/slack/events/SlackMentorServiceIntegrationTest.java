@@ -16,6 +16,9 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -24,6 +27,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorPosts;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackOnboardingService;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceContentEraser;
+import de.tum.cit.aet.hephaestus.integration.slack.webhook.SlackMentorDmMessageHandler;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
@@ -33,6 +37,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
 import de.tum.cit.aet.hephaestus.mentor.MentorRejectedException;
 import de.tum.cit.aet.hephaestus.mentor.MentorSlackMessages;
+import de.tum.cit.aet.hephaestus.mentor.MentorSlackReplies;
 import de.tum.cit.aet.hephaestus.mentor.MentorTimeline;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnClaims;
@@ -43,7 +48,10 @@ import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -112,6 +120,15 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private ProviderEventStore providerEvents;
+
+    @Autowired
+    private DeliveryInbox inbox;
+
+    @Autowired
+    private EventPayloadDeserializer eventPayloads;
 
     private final SlackMessageService slack = mock(SlackMessageService.class);
     private final SlackMentorIdentityResolver identities = mock(SlackMentorIdentityResolver.class);
@@ -227,6 +244,69 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .hasValueSatisfying(turn -> assertThat(turn.getId()).isEqualTo(question.getTurnId()));
         assertThat(entryRepository.findMaxSeqByWorkspaceIdAndConversationId(workspace.getId(), main().getId()))
                 .isEqualTo(question.getSeq());
+    }
+
+    @Test
+    void shouldStoreOneQuestionAndQueueOneCompleteReplyWhenTheInboxReceivesTheSameDmTwice() {
+        String delivery = "slack-" + UUID.randomUUID();
+        byte[] payload = """
+                {"team_id":"T1","event":{"type":"message","channel_type":"im","channel":"D9",
+                 "user":"U1","text":"How is my review practice?","ts":"100.1"}}
+                """.getBytes(StandardCharsets.UTF_8);
+        var arrival = new ProviderEventStore.Arrival(
+                workspace.getId(), "slack", "slack.T1.message_im", delivery, Map.of(), payload);
+        assertThat(providerEvents.store(List.of(arrival))).isOne();
+        assertThat(providerEvents.store(List.of(arrival))).isZero();
+
+        var claimed = providerEvents.claim(Duration.ofMinutes(2)).orElseThrow();
+        assertThat(claimed.workspaceId()).isEqualTo(workspace.getId());
+        assertThat(claimed.event().payload()).isEqualTo(payload);
+        assertThat(jdbc.queryForObject("SELECT state FROM provider_event WHERE id=?", String.class, claimed.id()))
+                .isEqualTo("LEASED");
+        var handler = new SlackMentorDmMessageHandler(service, eventPayloads);
+        for (int attempt = 0; attempt < 2; attempt++) {
+            assertThat(inbox.dispatch(
+                            claimed.id(),
+                            claimed.leaseEpoch(),
+                            claimed.event().receivedAt(),
+                            () -> handler.onMessage(claimed.event())))
+                    .isFalse();
+        }
+        assertThat(providerEvents.complete(claimed.id(), claimed.leaseEpoch())).isTrue();
+
+        MentorEntry question = question("100.1");
+        assertThat(question.getText()).isEqualTo("How is my review practice?");
+        assertThat(entryRepository.findMaxSeqByWorkspaceIdAndConversationId(workspace.getId(), main().getId()))
+                .isEqualTo(question.getSeq());
+        assertThat(jdbc.queryForObject("SELECT state FROM provider_event WHERE id=?", String.class, claimed.id()))
+                .isEqualTo("DONE");
+        String replyKey = MentorSlackReplies.replyKey(question.getId());
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM agent_action WHERE workspace_id=? AND idempotency_key=?",
+                        Integer.class,
+                        workspace.getId(),
+                        replyKey))
+                .as("Slack receives no partial answer while the turn is queued")
+                .isZero();
+
+        answerPostedAt("100.2");
+
+        assertThat(jdbc.queryForList(
+                        "SELECT state FROM agent_action WHERE workspace_id=? AND kind='SLACK_POST' AND idempotency_key=?",
+                        String.class,
+                        workspace.getId(),
+                        replyKey))
+                .containsExactly("ADMITTED");
+        assertThat(jdbc.queryForObject(
+                        "SELECT payload->>'entryId' FROM agent_action WHERE workspace_id=? AND idempotency_key=?",
+                        String.class,
+                        workspace.getId(),
+                        replyKey))
+                .isEqualTo(question.getId().toString());
+        assertThat(providerEvents.store(List.of(arrival)))
+                .as("a late redelivery also stays deduplicated")
+                .isZero();
+        verifyNoInteractions(slack);
     }
 
     @Test
