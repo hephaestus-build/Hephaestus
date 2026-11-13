@@ -1,9 +1,13 @@
 // A review's measurement reads the server's context strictly, and gives each program the gateway's routes and claim.
 
 import assert from "node:assert/strict";
+import { chmod, mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import {
+	emptyDirectory,
 	measureEnvironment,
 	parseMeasureContext,
 } from "../../../main/resources/agent/review-measure.ts";
@@ -62,4 +66,31 @@ void test("each program of the measurement reaches the gateway with the sandbox 
 	);
 	assert.equal(env.SANDBOX_WORK_DEADLINE_MS, "1000");
 	assert.equal(env.SANDBOX_UPLOAD_DEADLINE_MS, "2000");
+});
+
+void test("an attempt's workspace is emptied, read-only captured directories included, and the volume stays", async () => {
+	const root = await mkdtemp(path.join(tmpdir(), "review-measure-"));
+	const volume = path.join(root, "workspace");
+	const outside = path.join(root, "outside");
+	try {
+		await mkdir(path.join(volume, "repos", "reviewed", ".git"), { recursive: true });
+		await writeFile(path.join(volume, "repos", "reviewed", "pom.xml"), "<project/>");
+		await writeFile(path.join(volume, "INDEX.json"), "{}");
+		await mkdir(path.join(volume, "out"));
+		await writeFile(path.join(volume, "out", "result.json"), "{}");
+		await mkdir(outside);
+		await writeFile(path.join(outside, "kept"), "kept");
+		await symlink(outside, path.join(volume, "node_modules"));
+		await chmod(path.join(volume, "repos", "reviewed", "pom.xml"), 0o444);
+		await chmod(path.join(volume, "repos", "reviewed", ".git"), 0o555);
+		await chmod(path.join(volume, "repos", "reviewed"), 0o555);
+		await chmod(path.join(volume, "repos"), 0o555);
+
+		await emptyDirectory(volume);
+
+		assert.deepEqual(await readdir(volume), []);
+		assert.deepEqual(await readdir(outside), ["kept"]);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
 });

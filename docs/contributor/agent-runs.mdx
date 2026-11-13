@@ -201,6 +201,7 @@ A review's `REVIEW` run is measured in the review's own sandbox (`ReviewSandboxR
 2. The sandbox pulls the run. Its claim starts the job in the lease's transaction (`ReviewJobClaimService.claimLeased`), with the same checks as before.
 3. The first request of the run prepares the attempt (`ReviewAttemptPreparation`): it captures the work, records its provenance and marks the execution started. The attempt's inputs are held until the run ends (`ReviewAttemptCustody`).
 4. The driver's `REVIEW` kind (`agent/review-measure.ts`) downloads the workspace from `…/runs/{runId}/runtime/workspace` and runs the image's review programs in one container. Its model and review calls carry the sandbox token and the run's claim.
+   The kind first empties `/workspace`. Thus, a requeued attempt that the same sandbox pulls starts from its own captured workspace, not from the files that an earlier attempt left in `/workspace`.
 5. The runner's result arrives at `…/runs/{runId}/runtime/result`, with the runner's exit. `ReviewAttemptResults` then ends the attempt, requeues it, or hands an admitted review on to its `REVIEW_COMPOSE` run (`ReviewRunKind.continueToCompose`), which the same sandbox pulls next.
 
 ## Turns
