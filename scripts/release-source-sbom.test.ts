@@ -54,6 +54,33 @@ await test("the source inventory is bound to the release repository and exact co
 	assert.throws(() => validateReleaseSourceSbom(sbom, "main", repository), /full release commit/u);
 });
 
+const withLock = (lock: string) => ({
+	...sbom,
+	artifacts: [
+		...sbom.artifacts.slice(0, 3),
+		{ name: "spring", version: "4", type: "java-archive", locations: [{ path: lock }] },
+	],
+});
+
+await test("the buildscript lock counts at the archive root, as Syft reports it, and nowhere else", () => {
+	assert.doesNotThrow(() =>
+		validateReleaseSourceSbom(
+			withLock("/gradle-inputs/buildscript/gradle.lockfile"),
+			commit,
+			repository,
+		),
+	);
+	assert.throws(
+		() =>
+			validateReleaseSourceSbom(
+				withLock("/server/application/gradle.lockfile"),
+				commit,
+				repository,
+			),
+		/buildscript lock/u,
+	);
+});
+
 await test("omitted ecosystems, empty inventories, and unpinned remote actions fail verification", () => {
 	assert.throws(
 		() =>
