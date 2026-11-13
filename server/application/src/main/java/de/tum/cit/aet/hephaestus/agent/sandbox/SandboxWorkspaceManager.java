@@ -15,8 +15,10 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.SortedSet;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
@@ -81,55 +83,55 @@ public class SandboxWorkspaceManager {
                         throw new SandboxException("Workspace input path collision");
                 }
             }
-            for (String dir : ancestorDirs(allPaths)) {
-                TarArchiveEntry dirEntry = new TarArchiveEntry(dir + "/");
-                dirEntry.setModTime(System.currentTimeMillis());
-                boolean writable = isWritableRegion(dir + "/");
-                dirEntry.setUserId(writable ? 1000 : 0);
-                dirEntry.setGroupId(writable ? 1000 : 0);
-                dirEntry.setMode(writable ? 0755 : 0555);
-                tar.putArchiveEntry(dirEntry);
-                tar.closeArchiveEntry();
-            }
-
-            for (Map.Entry<String, byte[]> entry : files.entrySet()) {
-                TarArchiveEntry tarEntry = newInputEntry(validatePath(entry.getKey()), entry.getValue().length);
-                tar.putArchiveEntry(tarEntry);
-                tar.write(entry.getValue());
-                tar.closeArchiveEntry();
-            }
-
-            for (Map.Entry<String, Path> entry : filesOnDisk.entrySet()) {
-                String safe = validatePath(entry.getKey());
-                if (!coveredByDirectory(safe, entry.getValue(), directories))
-                    writeDiskFile(tar, safe, entry.getValue());
-            }
+            var memoryFiles = new TreeMap<String, byte[]>();
+            files.forEach((path, content) -> memoryFiles.put(validatePath(path), content));
+            var diskFiles = new TreeMap<String, Path>();
+            filesOnDisk.forEach((path, source) -> {
+                String safe = validatePath(path);
+                if (!coveredByDirectory(safe, source, directories)) diskFiles.put(safe, source);
+            });
+            var directoryNames = new TreeSet<String>();
+            for (String dir : ancestorDirs(allPaths)) directoryNames.add(dir + "/");
             for (var directory : directories) {
                 Files.walkFileTree(directory.source(), new SimpleFileVisitor<>() {
                     private String target(Path path) {
-                        String suffix = directory.source().relativize(path).toString();
-                        return directory.target() + suffix;
+                        return directory.target() + directory.source().relativize(path);
                     }
 
                     @Override
-                    public FileVisitResult preVisitDirectory(Path path, BasicFileAttributes attributes)
-                            throws IOException {
+                    public FileVisitResult preVisitDirectory(Path path, BasicFileAttributes attributes) {
                         String target = target(path);
-                        var entry = new TarArchiveEntry(target.endsWith("/") ? target : target + "/");
-                        entry.setMode(isWritableRegion(target) ? 0755 : 0555);
-                        tar.putArchiveEntry(entry);
-                        tar.closeArchiveEntry();
+                        directoryNames.add(target.endsWith("/") ? target : target + "/");
                         return FileVisitResult.CONTINUE;
                     }
 
                     @Override
-                    public FileVisitResult visitFile(Path path, BasicFileAttributes attributes) throws IOException {
+                    public FileVisitResult visitFile(Path path, BasicFileAttributes attributes) {
                         if (!attributes.isRegularFile())
                             throw new SandboxException("Workspace directories may contain only regular files");
-                        writeDiskFile(tar, target(path), path);
+                        diskFiles.put(target(path), path);
                         return FileVisitResult.CONTINUE;
                     }
                 });
+            }
+            // The same inputs have one archive identity on every server: entries in name order, no time or host user.
+            var names = new TreeSet<>(directoryNames);
+            names.addAll(memoryFiles.keySet());
+            names.addAll(diskFiles.keySet());
+            for (String name : names) {
+                if (directoryNames.contains(name)) {
+                    var entry = newInputEntry(name, 0);
+                    entry.setMode(isWritableRegion(name) ? 0755 : 0555);
+                    tar.putArchiveEntry(entry);
+                    tar.closeArchiveEntry();
+                } else if (memoryFiles.containsKey(name)) {
+                    byte[] content = memoryFiles.get(name);
+                    tar.putArchiveEntry(newInputEntry(name, content.length));
+                    tar.write(content);
+                    tar.closeArchiveEntry();
+                } else {
+                    writeDiskFile(tar, name, Objects.requireNonNull(diskFiles.get(name)));
+                }
             }
 
             tar.finish();
@@ -183,7 +185,9 @@ public class SandboxWorkspaceManager {
     private static TarArchiveEntry newInputEntry(String safePath, long size) {
         TarArchiveEntry entry = new TarArchiveEntry(safePath);
         entry.setSize(size);
-        entry.setModTime(System.currentTimeMillis());
+        entry.setModTime(0);
+        entry.setUserName("");
+        entry.setGroupName("");
         boolean writable = isWritableRegion(safePath);
         entry.setUserId(writable ? 1000 : 0);
         entry.setGroupId(writable ? 1000 : 0);
