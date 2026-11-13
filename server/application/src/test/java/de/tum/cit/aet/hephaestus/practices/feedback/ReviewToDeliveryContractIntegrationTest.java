@@ -419,6 +419,35 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
+    void shouldBuildTheFolderThatASealReadsAfterItsTransactionRollsBack(boolean interrupted) throws Exception {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admission.stage(review.identity(), request(review));
+            var job = jobs.findById(review.identity().jobId()).orElseThrow();
+            Path folder = files.verificationDirectory(job).source();
+            // This server lost the attempt's folder, and the seal keeps the composition inputs from that folder.
+            review.inputs().close();
+            try (var paths = Files.walk(folder)) {
+                paths.filter(Files::isDirectory)
+                        .forEach(directory -> directory.toFile().setWritable(true));
+            }
+            FileUtils.deleteDirectory(folder.toFile());
+            jdbc.update(
+                    "DELETE FROM review_composition_basis WHERE workspace_id=? AND job_id=?",
+                    review.workspaceId(),
+                    job.getId());
+
+            if (interrupted) admission.finishInterrupted(review.identity(), ReviewStopReason.EXECUTION_INCOMPLETE);
+            else assertThat(admission.sealIfComplete(review.identity())).isTrue();
+
+            assertThat(folder).as("built again after the seal rolled back").isDirectory();
+            var sealed = jobs.findById(job.getId()).orElseThrow();
+            assertThat(sealed.getAdmissionAttempt()).isZero();
+            assertThat(continuation.retainedInputs(sealed)).containsKey(RECORD);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
     void shouldKeepProvenInapplicabilityWhenSealingRetainedWork(boolean interrupted) {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             var scenario = review.pending().scenario();

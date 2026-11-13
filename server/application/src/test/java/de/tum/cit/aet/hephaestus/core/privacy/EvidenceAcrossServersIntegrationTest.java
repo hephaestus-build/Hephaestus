@@ -16,7 +16,6 @@ import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptInputRepository;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
-import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmittedResultProjectionService;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackCompositionService;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeResultStaging;
@@ -62,7 +61,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTransportFixt
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewWriteGuard;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
@@ -220,7 +218,7 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldBuildAMissingFolderForAdmissionOnlyWithNoTransactionOrLockHeld() throws Exception {
+    void shouldBuildAMissingFolderBeforeStagingTakesItsLocksAndNotBeforeASeal() throws Exception {
         var job = runningJob("evidence-admission-rebuild");
         var a = new Server(temporary.resolve("a"), job);
         try (var captured = a.capture(job)) {
@@ -243,34 +241,18 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
             assertThat(staging.builds).containsExactly(BUILT_WITHOUT_LOCKS);
             assertThat(staging.server.folder(recorded)).isDirectory();
 
-            // A seal that reads no folder builds none: the open practice refuses it first.
+            // A seal builds no folder before its transaction. Another review id refuses it before it reads any folder.
             var admitting = new Replica("admit", recorded);
             assertThatThrownBy(() -> admitting.admission.admit(
                             identity,
                             new SealResultsRequestDTO(
                                     SandboxLayout.PRACTICE_CONTRACT_VERSION,
-                                    recorded.getReviewId(),
+                                    UUID.randomUUID(),
                                     recorded.getId(),
                                     recorded.getAttempt())))
-                    .isInstanceOf(AdmissionConflictException.class);
-            var completing = new Replica("seal-if-complete", recorded);
-            assertThat(completing.admission.sealIfComplete(identity)).isFalse();
-            for (var replica : List.of(admitting, completing)) {
-                assertThat(replica.builds).isEmpty();
-                assertThat(replica.server.folder(recorded)).doesNotExist();
-            }
-
-            // This seal keeps the attempt's composition inputs from the folder: it rolls back, builds the folder and
-            // seals once more.
-            var interrupting = new Replica("finish-interrupted", recorded);
-            interrupting.admission.finishInterrupted(identity, ReviewStopReason.EXECUTION_INCOMPLETE);
-            assertThat(interrupting.builds).containsExactly(BUILT_WITHOUT_LOCKS);
-            assertThat(interrupting.server.folder(recorded)).isDirectory();
-            assertThat(jdbc.queryForObject(
-                            "SELECT admission_digest IS NOT NULL FROM review_job WHERE id=?",
-                            Boolean.class,
-                            job.getId()))
-                    .isTrue();
+                    .isInstanceOf(StaleAttemptException.class);
+            assertThat(admitting.builds).isEmpty();
+            assertThat(admitting.server.folder(recorded)).doesNotExist();
         }
     }
 
