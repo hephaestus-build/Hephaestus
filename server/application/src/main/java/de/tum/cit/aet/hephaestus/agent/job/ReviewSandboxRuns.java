@@ -4,6 +4,7 @@ import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptFolderBusyException;
+import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
@@ -374,17 +375,26 @@ public class ReviewSandboxRuns implements SandboxRunKind {
     /** A lost commit reply is resolved from the durable checkpoint before any terminal write. */
     private RuntimeException preparationFailed(
             SandboxRun run, ReviewJob job, PreparationFailure.Stage stage, RuntimeException failure) {
-        Optional<Boolean> published;
+        boolean transferred = false;
         try {
-            published = preparation.published(job.getId(), run.fence());
-        } catch (RuntimeException unreadable) {
-            if (!unreadable.equals(failure)) unreadable.addSuppressed(failure);
-            return preparationUnavailable(unreadable);
+            Optional<Boolean> published;
+            try {
+                published = preparation.published(job.getId(), run.fence());
+            } catch (RuntimeException unreadable) {
+                if (!unreadable.equals(failure)) unreadable.addSuppressed(failure);
+                return preparationUnavailable(unreadable);
+            }
+            if (published.isEmpty()) return new StaleRunException(run.fence(), failure);
+            if (stage == PreparationFailure.Stage.PROVENANCE && published.get()) return preparationUnavailable(failure);
+            var recorded = PreparationFailure.of(stage, failure);
+            transferred = true;
+            results.unprepared(job, run.fence(), recorded, failure);
+            return new StaleRunException(run.fence(), failure);
+        } finally {
+            // Refusal owns open inputs until result admission takes them, including when the checkpoint cannot be read.
+            if (!transferred && failure instanceof InsufficientEvidenceException refused)
+                refused.preparedInputs().close();
         }
-        if (published.isEmpty()) return new StaleRunException(run.fence(), failure);
-        if (stage == PreparationFailure.Stage.PROVENANCE && published.get()) return preparationUnavailable(failure);
-        results.unprepared(job, run.fence(), PreparationFailure.of(stage, failure), failure);
-        return new StaleRunException(run.fence(), failure);
     }
 
     private static ErrorResponseException preparationUnavailable(RuntimeException cause) {

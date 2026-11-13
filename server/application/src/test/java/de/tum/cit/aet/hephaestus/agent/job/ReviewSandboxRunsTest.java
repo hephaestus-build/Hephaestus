@@ -12,10 +12,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderLease;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.context.AttemptFolderBusyException;
+import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
@@ -50,6 +52,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.MDC;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -167,6 +170,95 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
         assertThat(archive).doesNotExist();
         assertThat(copiedPerson).doesNotExist();
         assertThatThrownBy(session::download).isInstanceOf(ResponseStatusException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldReleaseRefusedInputsWhenTheirCheckpointCannotAdmitThem(boolean unreadable) throws Exception {
+        var mapper = new JsonMapper();
+        var job = new ReviewJob();
+        job.setId(UUID.randomUUID());
+        job.setWorkspaceId(7);
+        job.setRunId(UUID.randomUUID());
+        job.setReviewId(UUID.randomUUID());
+        job.setStatus(ReviewJobStatus.RUNNING);
+        job.setConfigSnapshot(new ConfigSnapshot(
+                        ConfigSnapshot.SCHEMA_VERSION,
+                        new FrozenModel(
+                                LlmApiProtocol.OPENAI_COMPLETIONS,
+                                "https://model.invalid/v1",
+                                "model",
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                false),
+                        null,
+                        null,
+                        600)
+                .toJson(mapper));
+        var fence = new AgentRunFence(job.getRunId(), 7, 1);
+        var jobs = mock(ReviewJobRepository.class);
+        when(jobs.findByRunIdAndWorkspaceId(fence.runId(), 7)).thenReturn(Optional.of(job));
+        var preparation = mock(ReviewAttemptPreparation.class);
+        var results = mock(ReviewAttemptResults.class);
+        var terminal = mock(ReviewJobTerminal.class);
+        var reviewRuns = mock(ReviewRunKind.class);
+        var transactions = mock(TransactionTemplate.class);
+        var runs = mock(AgentRuns.class);
+        var workspaces = mock(SandboxWorkspaceManager.class);
+        var runtime = new ReviewSandboxRuns(
+                mock(ReviewJobClaimService.class),
+                preparation,
+                new ReviewAttemptCustody(runs),
+                terminal,
+                jobs,
+                workspaces,
+                new SandboxGatewaySessions(),
+                transactions,
+                mapper,
+                results,
+                reviewRuns,
+                runs,
+                mock(JobEvidenceFiles.class),
+                preparationLocks());
+        var sandbox = new AgentSandboxes.LiveSandbox(
+                UUID.randomUUID(), 7, ReviewRunKind.subject(job.getReviewId()), AgentSandboxKind.REVIEW);
+        var run = new SandboxRun(sandbox, fence, AgentRunKind.REVIEW, 0);
+        Path copiedPerson = Files.writeString(root.resolve("person.json"), "captured personal evidence");
+        var lease = EvidenceFolderLease.tryAcquire(root, 7, job.getId()).orElseThrow();
+        try (lease) {
+            lease.shareWithRemovals();
+            var inputs = new PreparedJobInputs(
+                    Map.of("context/person.json", copiedPerson), List.of(), List.of(lease), null, null);
+            when(preparation.prepare(any(), any(), any(), any(), any())).thenAnswer(invocation -> {
+                if (!unreadable) job.setStatus(ReviewJobStatus.CANCELLED);
+                throw new InsufficientEvidenceException("No practice is ready", inputs);
+            });
+            if (unreadable) {
+                when(preparation.published(job.getId(), fence))
+                        .thenThrow(new DataAccessResourceFailureException("The outcome cannot be read"));
+                assertThatThrownBy(() -> runtime.context(run))
+                        .isInstanceOfSatisfying(ErrorResponseException.class, busy -> {
+                            assertThat(busy.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+                            assertThat(busy.getHeaders().getFirst("Retry-After"))
+                                    .isEqualTo("1");
+                        });
+            } else {
+                when(preparation.published(job.getId(), fence)).thenReturn(Optional.empty());
+                assertThatThrownBy(() -> runtime.context(run)).isInstanceOf(StaleRunException.class);
+            }
+            assertThat(job.getStatus()).isEqualTo(unreadable ? ReviewJobStatus.RUNNING : ReviewJobStatus.CANCELLED);
+            verifyNoInteractions(terminal, results, reviewRuns, transactions, runs, workspaces);
+            var erasure = EvidenceFolderLease.tryAcquire(root, 7, job.getId()).orElseThrow();
+            try (erasure) {
+                Files.delete(copiedPerson);
+                assertThat(copiedPerson).doesNotExist();
+            }
+        }
     }
 
     @Test

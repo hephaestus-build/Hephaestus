@@ -35,7 +35,7 @@ export async function downloadWorkspace(
 		try {
 			const response = await fetchGatewayInput(`${endpoint}/workspace`, headers, signal);
 			if (!response.ok || !response.body) {
-				retryable = response.status === 425 || response.status === 429 || response.status >= 500;
+				retryable = response.status === 425 || response.status >= 500;
 				await response.body?.cancel();
 				throw new Error(`Workspace download refused: ${response.status}`);
 			}
