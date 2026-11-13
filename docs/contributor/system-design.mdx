@@ -282,8 +282,9 @@ A conversation keeps one sandbox while it is in use, so a follow-up turn starts 
 The reaper deletes the sandbox when it leased no run for `conversation-sandbox-idle` (15 minutes). The next question starts a new one from PostgreSQL.
 
 PostgreSQL holds the whole conversation in three workspace-scoped tables.
-The server role owns the HTTP API, the live stream, Slack ingress and posts, submission, and the weekly digest.
+The server role owns the HTTP API, the live stream, Slack ingress and posts, submission, and the schedule of the weekly digest.
 A server with `AGENT_ENABLED` owns run admission, sandbox claims and the turn gateway endpoints.
+The weekly digest is a `DIGEST` run in the conversation's sandbox, with the same runner, admission and fence as a turn ([Agent runs § Proactive digests](./agent-runs.mdx#proactive-digests)).
 No conversation state lives in a process, so any such server serves any call of any turn.
 [Conversation runtime](./unified-pi-runtime) owns the turn lifecycle, its runner and the context of a turn.
 
