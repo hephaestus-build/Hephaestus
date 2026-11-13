@@ -21,6 +21,16 @@ import {
 	selectLatencyRuns,
 } from "./report-ci-latency.ts";
 
+function queueTimelinePage(nodes: unknown[], hasPreviousPage: boolean, startCursor: string) {
+	return JSON.stringify({
+		data: {
+			repository: {
+				pullRequest: { timelineItems: { nodes, pageInfo: { hasPreviousPage, startCursor } } },
+			},
+		},
+	});
+}
+
 void test("a cancelled integration sibling does not turn a unit failure into a queue-tier catch", () => {
 	const failedJobs = failedJobNames([
 		{ name: "Test (unit) / App Server: Unit and architecture", conclusion: "failure" },
@@ -468,11 +478,11 @@ void test("the recorded 183 first attempts retain all 70 cancellations and their
 		limit: 0.1,
 		status: "within-budget",
 	});
-	const descendant = runs.find((run) => run.id === 43018554661);
+	const descendant = runs.find((run) => run.id === 43_018_554_661);
 	assert.ok(descendant);
 	const chain = queueAncestors(descendant, runs);
 	assert.ok(
-		chain.some((run) => run.id === 43015530065 && run.conclusion === "success"),
+		chain.some((run) => run.id === 43_015_530_065 && run.conclusion === "success"),
 		"a successful intermediate group remains in the invalidated chain",
 	);
 });
@@ -579,16 +589,8 @@ void test(
 				],
 			},
 		]);
-		const page = (nodes: unknown[], hasPreviousPage: boolean, startCursor: string) =>
-			JSON.stringify({
-				data: {
-					repository: {
-						pullRequest: { timelineItems: { nodes, pageInfo: { hasPreviousPage, startCursor } } },
-					},
-				},
-			});
-		const newest = page([], true, "older");
-		const older = page(
+		const newest = queueTimelinePage([], true, "older");
+		const older = queueTimelinePage(
 			[{ createdAt: removed, reason: "manual", beforeCommit: { oid: head } }],
 			false,
 			"oldest",
@@ -646,27 +648,31 @@ esac
 			index === 0 ? "b".repeat(40) : index.toString(16).padStart(40, "0"),
 		);
 		const old = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString();
-		const ancestors = ancestorHeads.slice(0, -1).map((sha, index) => ({
-			id: index + 2,
-			event: "merge_group",
-			status: "completed",
-			conclusion: "cancelled",
-			run_attempt: 1,
-			head_sha: sha,
-			head_branch: `gh-readonly-queue/main/pr-${index + 2}-${ancestorHeads[index + 1]}`,
-			created_at: old,
-			updated_at: old,
-		}));
+		const ancestors = ancestorHeads.slice(0, -1).map((sha, index) => {
+			const parent = ancestorHeads[index + 1];
+			assert.ok(parent !== undefined);
+			return {
+				id: index + 2,
+				event: "merge_group",
+				status: "completed",
+				conclusion: "cancelled",
+				run_attempt: 1,
+				head_sha: sha,
+				head_branch: `gh-readonly-queue/main/pr-${index + 2}-${parent}`,
+				created_at: old,
+				updated_at: old,
+			};
+		});
 		const original = asRecord(asArray(parseJson(runs), "pages")[0], "page");
 		const longChain = JSON.stringify([
 			{ workflow_runs: [...asArray(original.workflow_runs, "runs"), ...ancestors] },
 		]);
-		const noReason = page(
+		const noReason = queueTimelinePage(
 			[{ createdAt: removed, reason: null, beforeCommit: { oid: head } }],
 			false,
 			"unknown",
 		);
-		const merged = page(
+		const merged = queueTimelinePage(
 			[
 				{
 					createdAt: new Date(Date.parse(created) - 60_000).toISOString(),
@@ -696,8 +702,9 @@ esac
 		const bounded = invoke();
 		assert.equal(bounded.status, 0, bounded.stderr);
 		assert.match(bounded.stdout, /Unknown \| 1/u);
+		const boundedCalls = await readFile(calls, "utf8");
 		assert.deepEqual(
-			(await readFile(calls, "utf8")).match(/number=\d+/gu),
+			boundedCalls.match(/number=\d+/gu),
 			["number=1", "number=2"],
 			"only the cancelled group and its nearest merged predecessor need timeline reads",
 		);

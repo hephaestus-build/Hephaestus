@@ -152,9 +152,18 @@ export function queueTierFailures(
 	};
 }
 
-type QueueRemoval = { head: string; reason: string | null; at: string; pullRequest: number };
+interface QueueRemoval {
+	head: string;
+	reason: string | null;
+	at: string;
+	pullRequest: number;
+}
 type CancellationCause = "worker_failure" | "predecessor_drop" | "manual" | "timeout" | "unknown";
-type Cancellation = { cause: CancellationCause; failedJobs?: string[]; removal?: QueueRemoval };
+interface Cancellation {
+	cause: CancellationCause;
+	failedJobs?: string[];
+	removal?: QueueRemoval;
+}
 
 /** Queue branch suffixes identify the exact predecessor tree, not the PR's mutable head. */
 export function queueAncestors(
@@ -164,13 +173,15 @@ export function queueAncestors(
 	const chain = [run];
 	const seen = new Set<unknown>([run.head_sha]);
 	for (let current = run; ;) {
-		const parent = asString(current.head_branch, "queue branch").match(
-			/\/pr-\d+-([a-f0-9]{40})$/u,
-		)?.[1];
+		const parent = /\/pr-\d+-(?<parent>[a-f0-9]{40})$/u.exec(
+			asString(current.head_branch, "queue branch"),
+		)?.groups?.parent;
 		const ancestor = runs.find(
 			(candidate) => candidate.head_sha === parent && parent !== undefined,
 		);
-		if (!ancestor || seen.has(parent)) return chain;
+		if (!ancestor || seen.has(parent)) {
+			return chain;
+		}
 		seen.add(parent);
 		chain.push(ancestor);
 		current = ancestor;
@@ -187,8 +198,12 @@ export function classifyCancellation(
 	const failedJobs = failedJobNames(jobs).filter(
 		(name) => !verdictJob.test(canonicalCiJobName(name)),
 	);
-	if (failedJobs.length > 0) return { cause: "worker_failure", failedJobs };
-	if (jobs.some((job) => job.conclusion === "timed_out")) return { cause: "timeout" };
+	if (failedJobs.length > 0) {
+		return { cause: "worker_failure", failedJobs };
+	}
+	if (jobs.some((job) => job.conclusion === "timed_out")) {
+		return { cause: "timeout" };
+	}
 	const start = Date.parse(asString(run.created_at, "created_at"));
 	const cancelledEnds = jobs
 		.filter(
@@ -202,20 +217,26 @@ export function classifyCancellation(
 		cancelledEnds.length > 0
 			? Math.min(...cancelledEnds)
 			: Date.parse(asString(run.updated_at, "updated_at"));
-	if (![start, end, ...cancelledEnds].every(Number.isFinite))
+	if (![start, end, ...cancelledEnds].every(Number.isFinite)) {
 		throw new Error("Invalid cancellation timestamp");
+	}
 	const matching = (head: unknown) =>
 		removals.find(
 			(removal) =>
 				removal.head === head && Date.parse(removal.at) >= start && Date.parse(removal.at) <= end,
 		);
 	const own = matching(run.head_sha);
-	if (own?.reason === "manual") return { cause: "manual", removal: own };
-	if (own?.reason === "stack_invalidated") return { cause: "predecessor_drop", removal: own };
+	if (own?.reason === "manual") {
+		return { cause: "manual", removal: own };
+	}
+	if (own?.reason === "stack_invalidated") {
+		return { cause: "predecessor_drop", removal: own };
+	}
 	for (const ancestor of ancestors.slice(1)) {
 		const removal = matching(ancestor.head_sha);
-		if (removal && removal.reason !== null && removal.reason !== "merged")
+		if (removal && removal.reason !== null && removal.reason !== "merged") {
 			return { cause: "predecessor_drop", removal };
+		}
 	}
 	return { cause: "unknown" };
 }
@@ -225,11 +246,21 @@ export function cancellationBudget(
 ) {
 	const causes = { worker_failure: 0, predecessor_drop: 0, manual: 0, timeout: 0, unknown: 0 };
 	for (const group of groups) {
-		if (group.conclusion === "cancelled") causes[group.cancellation?.cause ?? "unknown"] += 1;
+		if (group.conclusion === "cancelled") {
+			causes[group.cancellation?.cause ?? "unknown"] += 1;
+		}
 	}
 	const cancelled = Object.values(causes).reduce((sum, count) => sum + count, 0);
 	const nonOwnFailure = cancelled - causes.worker_failure;
 	const share = groups.length === 0 ? null : nonOwnFailure / groups.length;
+	let status = "within-budget";
+	if (share === null) {
+		status = "insufficient-data";
+	} else if (share > 0.1) {
+		status = "exceeded";
+	} else if (causes.unknown > 0) {
+		status = "incomplete";
+	}
 	return {
 		groups: groups.length,
 		cancelled,
@@ -237,14 +268,7 @@ export function cancellationBudget(
 		nonOwnFailure,
 		share,
 		limit: 0.1,
-		status:
-			share === null
-				? "insufficient-data"
-				: share > 0.1
-					? "exceeded"
-					: causes.unknown > 0
-						? "incomplete"
-						: "within-budget",
+		status,
 	};
 }
 
@@ -334,14 +358,17 @@ async function batches<T, U>(values: readonly T[], read: (value: T) => Promise<U
 
 function runId(run: Record<string, unknown>) {
 	const { id } = run;
-	if (typeof id !== "number" || !Number.isSafeInteger(id) || id < 1)
+	if (typeof id !== "number" || !Number.isSafeInteger(id) || id < 1) {
 		throw new Error("Invalid run ID");
+	}
 	return id;
 }
 
 async function listRuns(repository: string, event: string, since: number, now: number) {
 	const days = [];
-	for (let day = Math.floor(since / DAY) * DAY; day <= now; day += DAY) days.push(day);
+	for (let day = Math.floor(since / DAY) * DAY; day <= now; day += DAY) {
+		days.push(day);
+	}
 	const daily = await batches(days, async (day) => {
 		const created = encodeURIComponent(
 			`${new Date(day).toISOString()}..${new Date(day + DAY - 1).toISOString()}`,
@@ -378,7 +405,9 @@ async function listRuns(repository: string, event: string, since: number, now: n
 					.flat()
 					.filter((run) => {
 						const created = Date.parse(asString(run.created_at, "created_at"));
-						if (!Number.isFinite(created)) throw new Error("Invalid run creation timestamp");
+						if (!Number.isFinite(created)) {
+							throw new Error("Invalid run creation timestamp");
+						}
 						return created >= since && created <= now;
 					})
 					.map((run) => [runId(run), run]),
@@ -389,24 +418,31 @@ async function listRuns(repository: string, event: string, since: number, now: n
 
 async function firstAttempt(repository: string, run: Record<string, unknown>) {
 	const id = runId(run);
-	if (run.run_attempt === 1) return run;
+	if (run.run_attempt === 1) {
+		return run;
+	}
 	if (
 		typeof run.run_attempt !== "number" ||
 		!Number.isSafeInteger(run.run_attempt) ||
 		run.run_attempt < 2
-	)
+	) {
 		throw new Error("Invalid run attempt");
+	}
 	const first = asRecord(
 		parseJson(await output("gh", ["api", `repos/${repository}/actions/runs/${id}/attempts/1`])),
 		"first attempt",
 	);
-	if (first.id !== id || first.run_attempt !== 1 || first.event !== "merge_group")
+	if (first.id !== id || first.run_attempt !== 1 || first.event !== "merge_group") {
 		throw new Error("Mismatched first attempt");
+	}
 	return first;
 }
 
 async function queueRemovals(repository: string, pullRequest: number, since: number) {
 	const [owner, name] = repository.split("/");
+	if (owner === undefined || name === undefined) {
+		throw new Error("Repository must be owner/repository");
+	}
 	const removals: QueueRemoval[] = [];
 	let cursor: string | undefined;
 	for (;;) {
@@ -429,9 +465,13 @@ async function queueRemovals(repository: string, pullRequest: number, since: num
 			"-F",
 			`number=${pullRequest}`,
 		];
-		if (cursor !== undefined) args.push("-f", `cursor=${cursor}`);
+		if (cursor !== undefined) {
+			args.push("-f", `cursor=${cursor}`);
+		}
 		const response = asRecord(parseJson(await output("gh", args)), "queue events response");
-		if (response.errors !== undefined) throw new Error("Queue timeline API returned errors");
+		if (response.errors !== undefined) {
+			throw new Error("Queue timeline API returned errors");
+		}
 		const repo = asRecord(asRecord(response.data, "data").repository, "repository");
 		const timeline = asRecord(
 			asRecord(repo.pullRequest, "pullRequest").timelineItems,
@@ -440,7 +480,9 @@ async function queueRemovals(repository: string, pullRequest: number, since: num
 		const events = asArray(timeline.nodes, "queue events").map((value) => {
 			const entry = asRecord(value, "queue removal");
 			const at = asString(entry.createdAt, "removal time");
-			if (!Number.isFinite(Date.parse(at))) throw new Error("Invalid queue removal timestamp");
+			if (!Number.isFinite(Date.parse(at))) {
+				throw new Error("Invalid queue removal timestamp");
+			}
 			return {
 				at,
 				reason: entry.reason === null ? null : asString(entry.reason, "removal reason"),
@@ -453,11 +495,16 @@ async function queueRemovals(repository: string, pullRequest: number, since: num
 		});
 		removals.push(...events);
 		const page = asRecord(timeline.pageInfo, "queue page info");
-		if (typeof page.hasPreviousPage !== "boolean") throw new Error("Invalid queue pagination");
-		if (!page.hasPreviousPage || events.some((entry) => Date.parse(entry.at) < since))
+		if (typeof page.hasPreviousPage !== "boolean") {
+			throw new Error("Invalid queue pagination");
+		}
+		if (!page.hasPreviousPage || events.some((entry) => Date.parse(entry.at) < since)) {
 			return removals;
+		}
 		const previous = asString(page.startCursor, "queue cursor");
-		if (previous === cursor) throw new Error("Queue pagination did not advance");
+		if (previous === cursor) {
+			throw new Error("Queue pagination did not advance");
+		}
 		cursor = previous;
 	}
 }
@@ -478,9 +525,12 @@ async function jobsOf(repository: string, run: Record<string, unknown>, attempt:
 	const jobs = pages.flatMap((page) =>
 		asArray(page.jobs, "jobs").map((job) => asRecord(job, "job")),
 	);
-	if (pages[0]?.total_count !== jobs.length) throw new Error("Incomplete attempt job list");
-	if (jobs.some((job) => job.run_id !== id || job.run_attempt !== attempt))
+	if (pages[0]?.total_count !== jobs.length) {
+		throw new Error("Incomplete attempt job list");
+	}
+	if (jobs.some((job) => job.run_id !== id || job.run_attempt !== attempt)) {
 		throw new Error("Mismatched attempt jobs");
+	}
 	return { total_count: jobs.length, jobs };
 }
 
@@ -518,10 +568,10 @@ if (import.meta.main) {
 		throw new Error("GITHUB_REPOSITORY must be owner/repository");
 	}
 	const now = Date.now();
+	const listedGroups = await listRuns(repository, "merge_group", now - WINDOW_DAYS * DAY, now);
 	const groups = {
-		workflow_runs: await batches(
-			(await listRuns(repository, "merge_group", now - WINDOW_DAYS * DAY, now)).workflow_runs,
-			(run) => firstAttempt(repository, run),
+		workflow_runs: await batches(listedGroups.workflow_runs, async (run) =>
+			firstAttempt(repository, run),
 		),
 	};
 	const pullRequests = await listRuns(repository, "pull_request", now - WINDOW_DAYS * DAY, now);
@@ -537,10 +587,11 @@ if (import.meta.main) {
 	const removalCache = new Map<number, Promise<QueueRemoval[]>>();
 	const outcomes = await batches(recent, async (run) => {
 		const conclusion = asString(run.conclusion, "conclusion");
-		const jobs =
+		const attemptJobs =
 			conclusion === "failure" || conclusion === "cancelled"
-				? (await jobsOf(repository, run, 1)).jobs
-				: [];
+				? await jobsOf(repository, run, 1)
+				: { jobs: [] };
+		const { jobs } = attemptJobs;
 		let cancellation: Cancellation | undefined;
 		if (
 			conclusion === "cancelled" &&
@@ -554,10 +605,12 @@ if (import.meta.main) {
 				// Read nearest first. A merged predecessor is main history, not part of this queue.
 				// Each of the eight outcome workers has at most one timeline request in flight.
 				for (const ancestor of ancestors) {
-					const number = asString(ancestor.head_branch, "queue branch").match(
-						/\/pr-(\d+)-[a-f0-9]{40}$/u,
-					)?.[1];
-					if (number === undefined) break;
+					const number = /\/pr-(?<number>\d+)-[a-f0-9]{40}$/u.exec(
+						asString(ancestor.head_branch, "queue branch"),
+					)?.groups?.number;
+					if (number === undefined) {
+						break;
+					}
 					const pr = Number(number);
 					let cached = removalCache.get(pr);
 					if (cached === undefined) {
@@ -575,8 +628,9 @@ if (import.meta.main) {
 								event.reason === "merged" &&
 								Date.parse(event.at) <= Date.parse(asString(run.created_at, "created_at")),
 						)
-					)
+					) {
 						break;
+					}
 				}
 			}
 		}
