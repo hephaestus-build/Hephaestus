@@ -322,6 +322,8 @@ Each server reports its own identity in `/actuator/info` only.
 
 ## Release-specific procedures
 
+The migration entry *Stop every server before the Slack delivery cutover* requires the stopped procedure for the new Slack action kinds and channel states.
+
 ### Remove the retired sync broker values before upgrading
 
 Remove `nats` and `images.nats` from every values file before rendering the target chart, including site and profile overrides.
