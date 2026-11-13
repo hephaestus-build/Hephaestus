@@ -327,6 +327,14 @@ Each server reports its own identity in `/actuator/info` only.
 Remove `nats` and `images.nats` from every values file before rendering the target chart, including site and profile overrides.
 The chart refuses those keys. Regenerate image values from the target release lock.
 
+This procedure replaces these pending entries:
+
+- **NATS broker certificate names**.
+- **External NATS broker: NATS Server 2.11 or later**.
+- **Move the GitHub webhook byte bound into the stream map**.
+
+Their broker instructions no longer apply.
+
 Remove `hephaestus.sync.nats.*` properties and broker environment settings and credentials as the migration entry of the same name lists.
 After the upgraded server delivers sync hints through PostgreSQL, stop any external broker used only by this release.
 
