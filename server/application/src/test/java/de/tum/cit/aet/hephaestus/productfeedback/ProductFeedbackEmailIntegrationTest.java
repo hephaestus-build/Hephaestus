@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.notification.email.CapturingMailTestConfigurati
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionService;
 import de.tum.cit.aet.hephaestus.notification.preferences.UpdateNotificationPreferencesDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackRequestDTO;
+import de.tum.cit.aet.hephaestus.testconfig.AccountFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
@@ -191,9 +192,12 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
                 subscribed(admin, true);
             }
             case "demoted" -> admin.setAppRole(Account.AppRole.USER);
-            case "suspended" -> admin.setStatus(Account.Status.BLOCKED);
-            case "deleting" -> admin.setStatus(Account.Status.DELETING);
-            case "deleted" -> admin.setStatus(Account.Status.DELETED);
+            case "suspended" -> admin.block();
+            case "deleting" -> admin.startDeletion(Instant.now());
+            case "deleted" -> {
+                admin.startDeletion(Instant.now());
+                admin.markDeleted();
+            }
             case "unverified" -> admin.setPrimaryEmailVerifiedAt(null);
             case "source-erased" -> feedback.deleteById(item.getId());
             default -> throw new IllegalArgumentException(change);
@@ -258,7 +262,7 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
         subscribed(account, enabled);
         account.setPrimaryEmailVerifiedAt(verified ? Instant.now() : null);
         account.setAppRole(role);
-        account.setStatus(status);
+        AccountFixtures.moveTo(account, status);
         account = accounts.save(account);
         createdAccounts.add(account);
         return account;

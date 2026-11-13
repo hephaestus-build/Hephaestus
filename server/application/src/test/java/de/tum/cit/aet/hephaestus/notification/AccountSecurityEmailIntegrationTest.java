@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
 import de.tum.cit.aet.hephaestus.notification.email.CapturingJavaMailSender;
 import de.tum.cit.aet.hephaestus.notification.email.CapturingMailTestConfiguration;
+import de.tum.cit.aet.hephaestus.testconfig.AccountFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
@@ -107,10 +108,9 @@ class AccountSecurityEmailIntegrationTest extends BaseIntegrationTest {
     }
 
     private Account account(Account.Status status) {
-        Account account = new Account("Security notice");
+        Account account = AccountFixtures.withStatus("Security notice", status);
         account.setPrimaryEmail("security-" + UUID.randomUUID() + "@hephaestus.test");
         account.setPrimaryEmailVerifiedAt(Instant.now());
-        account.setStatus(status);
         return repository.save(account);
     }
 

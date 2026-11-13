@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationQuery.GrantStanding;
+import de.tum.cit.aet.hephaestus.testconfig.AccountFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -152,7 +153,7 @@ class ConsentResearchGrantsIntegrationTest extends BaseIntegrationTest {
 
     private void setStatus(long id, Account.Status status) {
         Account account = accounts.findById(id).orElseThrow();
-        account.setStatus(status);
+        AccountFixtures.moveTo(account, status);
         accounts.save(account);
     }
 }

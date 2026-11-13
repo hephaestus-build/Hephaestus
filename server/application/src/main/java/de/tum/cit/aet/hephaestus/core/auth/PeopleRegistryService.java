@@ -41,8 +41,7 @@ public class PeopleRegistryService implements PeopleRegistry {
                 throw conflict("This account is being erased.");
             return Objects.requireNonNull(account.getId());
         }
-        var account = new Account(displayName);
-        account.setStatus(Account.Status.UNCLAIMED);
+        var account = Account.unclaimed(displayName);
         accounts.saveAndFlush(account);
         var row = new Identity();
         row.setAccount(account);
@@ -62,7 +61,7 @@ public class PeopleRegistryService implements PeopleRegistry {
                 .findFirst()
                 .orElseThrow(() -> conflict("This identity has no account to claim."));
         var account = lockedOwner(row);
-        if (account.getStatus() == Account.Status.UNCLAIMED) account.setStatus(Account.Status.ACTIVE);
+        if (account.getStatus() == Account.Status.UNCLAIMED) account.claim();
         if (account.getStatus() != Account.Status.ACTIVE) throw conflict("This account cannot sign in.");
         row.setDisabledAt(null);
         row.setLinkedVia(Identity.LinkedVia.SIGN_IN);

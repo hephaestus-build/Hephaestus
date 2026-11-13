@@ -267,7 +267,7 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
                     TestUserFactory.createUser(900_000 + index, "gitlab-profile-" + index, gitlab));
             var identity = new Identity();
             var account = accounts.findById(accountId(member)).orElseThrow();
-            account.setStatus(Account.Status.ACTIVE);
+            if (account.getStatus() == Account.Status.UNCLAIMED) account.claim();
             accounts.saveAndFlush(account);
             identity.setAccount(account);
             identity.setProviderId(Objects.requireNonNull(gitlab.getId()));

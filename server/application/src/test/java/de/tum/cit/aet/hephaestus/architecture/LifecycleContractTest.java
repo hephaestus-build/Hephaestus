@@ -6,6 +6,7 @@ import com.tngtech.archunit.core.domain.JavaClass;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
 import de.tum.cit.aet.hephaestus.core.Lifecycle;
 import de.tum.cit.aet.hephaestus.core.action.ActionState;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -25,6 +26,10 @@ class LifecycleContractTest extends HephaestusArchitectureTest {
                         ActionState.class,
                         Set.of(ActionState.PROPOSED),
                         Set.of(ActionState.DONE, ActionState.UNCERTAIN, ActionState.FAILED, ActionState.CANCELLED)),
+                new Contract<>(
+                        Account.Status.class,
+                        Set.of(Account.Status.UNCLAIMED, Account.Status.ACTIVE),
+                        Set.of(Account.Status.DELETED)),
                 new Contract<>(
                         IntegrationState.class, Set.of(IntegrationState.PENDING), Set.of(IntegrationState.UNINSTALLED)),
                 new Contract<>(

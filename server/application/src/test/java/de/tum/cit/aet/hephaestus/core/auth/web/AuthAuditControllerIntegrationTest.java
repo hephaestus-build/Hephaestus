@@ -448,7 +448,6 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
     private Account persist(String displayName, Account.AppRole role) {
         Account account = new Account(displayName);
         account.setAppRole(role);
-        account.setStatus(Account.Status.ACTIVE);
         return accountRepository.save(account);
     }
 

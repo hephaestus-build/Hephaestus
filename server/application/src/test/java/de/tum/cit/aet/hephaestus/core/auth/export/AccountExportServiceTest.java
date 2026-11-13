@@ -81,7 +81,6 @@ class AccountExportServiceTest extends BaseUnitTest {
         account.setPrimaryEmail("ada@example.com");
         account.setTimeZone("Europe/Berlin");
         account.setAppRole(Account.AppRole.USER);
-        account.setStatus(Account.Status.ACTIVE);
         account.setCreatedAt(clock.instant());
         account.setPasskeyProtectionEnabled(participating);
 

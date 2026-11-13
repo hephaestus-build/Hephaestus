@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794579257013-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <columnExists tableName="account" columnName="status"/>
+        </preConditions>
+        <comment>An account that is being deleted only moves on to deleted, and a deleted account keeps its status, including when a writer uses SQL. An AFTER trigger only validates, so it adds no row lock: a BEFORE row trigger would make each update that names the unique passkey handle lock the row FOR UPDATE and block foreign-key inserts until commit.</comment>
+        <sql splitStatements="false">
+CREATE FUNCTION guard_account() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF OLD.status = 'DELETED' AND NEW.status IS DISTINCT FROM OLD.status THEN
+  RAISE EXCEPTION 'a deleted account keeps its status' USING ERRCODE = '55000';
+ END IF;
+ IF OLD.status = 'DELETING' AND NEW.status NOT IN ('DELETING', 'DELETED') THEN
+  RAISE EXCEPTION 'an account that is being deleted only moves on to deleted' USING ERRCODE = '55000';
+ END IF;
+ RETURN NULL;
+END $$;
+CREATE TRIGGER account_transition AFTER UPDATE OF status ON account FOR EACH ROW EXECUTE FUNCTION guard_account();
+        </sql>
+        <rollback>DROP TRIGGER account_transition ON account; DROP FUNCTION guard_account();</rollback>
+    </changeSet>
+</databaseChangeLog>

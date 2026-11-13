@@ -241,7 +241,7 @@ class AccountAdminRoleIntegrationTest extends RealAuthIntegrationTest {
     void shouldLetABlockedAccountBackInWhenAnAdminUnblocksIt() {
         Account admin = persistAdmin("Unblocking Admin");
         Account user = persistUser("Returning User");
-        user.setStatus(Account.Status.BLOCKED);
+        user.block();
         accountRepository.save(user);
         long userId = persistedId(user.getId());
 
@@ -327,7 +327,7 @@ class AccountAdminRoleIntegrationTest extends RealAuthIntegrationTest {
     void shouldLetTheOnlyActiveAdminDemoteABlockedAdmin() {
         Account active = persistAdmin("Remaining Admin");
         Account blocked = persistAdmin("Blocked Admin");
-        blocked.setStatus(Account.Status.BLOCKED);
+        blocked.block();
         accountRepository.saveAndFlush(blocked);
         long blockedId = persistedId(blocked.getId());
 
@@ -415,14 +415,12 @@ class AccountAdminRoleIntegrationTest extends RealAuthIntegrationTest {
     private Account persistAdmin(String displayName) {
         Account account = new Account(displayName);
         account.setAppRole(Account.AppRole.APP_ADMIN);
-        account.setStatus(Account.Status.ACTIVE);
         return accountRepository.save(account);
     }
 
     private Account persistUser(String displayName) {
         Account account = new Account(displayName);
         account.setAppRole(Account.AppRole.USER);
-        account.setStatus(Account.Status.ACTIVE);
         return accountRepository.save(account);
     }
 

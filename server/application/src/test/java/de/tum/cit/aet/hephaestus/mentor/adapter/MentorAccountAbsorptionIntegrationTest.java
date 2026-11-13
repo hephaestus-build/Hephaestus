@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnClaims;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.testconfig.AccountFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -101,8 +102,7 @@ class MentorAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
 
     /** An account with one Slack identity, as the person-data write fence requires. */
     private long account(String name, Account.Status status) {
-        var account = new Account(name);
-        account.setStatus(status);
+        var account = AccountFixtures.withStatus(name, status);
         account = accounts.save(account);
         var slack = providers
                 .findByTypeAndServerUrl(IdentityProviderType.SLACK, "https://slack.com")

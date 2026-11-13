@@ -132,7 +132,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
         User member = persistUser("audit-member-admin");
         ensureMembership(workspace, member, Membership.WorkspaceRole.ADMIN);
         Account account = accountRepository.findById(accountId(member)).orElseThrow();
-        account.setStatus(Account.Status.ACTIVE);
+        if (account.getStatus() == Account.Status.UNCLAIMED) account.claim();
         account.setAppRole(Account.AppRole.APP_ADMIN);
         accountRepository.saveAndFlush(account);
         long accountId = persistedId(account);
