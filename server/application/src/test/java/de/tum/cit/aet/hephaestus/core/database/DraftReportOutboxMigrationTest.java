@@ -7,8 +7,6 @@ import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import java.sql.DriverManager;
 import java.sql.Timestamp;
 import java.util.UUID;
-import liquibase.Contexts;
-import liquibase.LabelExpression;
 import liquibase.Liquibase;
 import liquibase.database.DatabaseFactory;
 import liquibase.database.jvm.JdbcConnection;
@@ -21,9 +19,12 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 /** Legacy pending drafts continue without a model answer; new calls have instance scope and survive erasure. */
 @Tag("database")
 class DraftReportOutboxMigrationTest {
+    private static final String CHANGELOG = "-act-draft-report-outbox.xml";
+
     @Test
     void shouldRouteLegacyDraftsAndDetachAnOpenCallWhenItsReportIsErased() throws Exception {
         var database = PostgreSQLTestContainer.createDatabase("draft_report_outbox");
+        PracticeMigrationFixture.upgradeBefore(database, "prod", CHANGELOG);
         var jdbc = new JdbcTemplate(
                 new DriverManagerDataSource(database.jdbcUrl(), database.username(), database.password()));
         try (var connection =
@@ -33,12 +34,6 @@ class DraftReportOutboxMigrationTest {
                         new ClassLoaderResourceAccessor(),
                         DatabaseFactory.getInstance()
                                 .findCorrectDatabaseImplementation(new JdbcConnection(connection)))) {
-            var contexts = new Contexts("prod");
-            var labels = new LabelExpression();
-            var pending = liquibase.listUnrunChangeSets(contexts, labels);
-            int before = 0;
-            while (!pending.get(before).getFilePath().endsWith("-act-draft-report-outbox.xml")) before++;
-            liquibase.update(before, contexts, labels);
             jdbc.update("""
                 INSERT INTO account(id,display_name,app_role,status,created_at,updated_at,version)
                 VALUES (987630,'Migration reporter','USER','ACTIVE',clock_timestamp(),clock_timestamp(),0)
@@ -54,7 +49,7 @@ class DraftReportOutboxMigrationTest {
                 VALUES (?,'DRAFTING',false,false,1,0,0,true,0,clock_timestamp(),clock_timestamp(),clock_timestamp(),
                     'old-owner',clock_timestamp() + interval '5 minutes','obsolete answer',clock_timestamp())
                 """, report);
-            liquibase.update(contexts, labels);
+            PracticeMigrationFixture.upgradeOnly(liquibase, "prod", CHANGELOG);
             assertThat(jdbc.queryForObject(
                             "SELECT state FROM product_feedback_filing WHERE feedback_id=?", String.class, report))
                     .isEqualTo("ANSWERED");
@@ -82,7 +77,7 @@ class DraftReportOutboxMigrationTest {
             assertThatThrownBy(
                             () -> jdbc.update("UPDATE llm_usage_event SET source_type='REVIEW_JOB' WHERE id=?", call))
                     .hasMessageContaining("ck_llm_usage_event_scope");
-            assertThatThrownBy(() -> liquibase.rollback(1, contexts, labels))
+            assertThatThrownBy(() -> PracticeMigrationFixture.rollbackOnly(liquibase, "prod", CHANGELOG))
                     .hasMessageContaining("Restore the verified database backup");
         }
     }
