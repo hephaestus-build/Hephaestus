@@ -718,7 +718,6 @@ await test("the sign-in Pod's extra variables replace the template's own", () =>
 interface Entry {
 	text: string;
 	slackTs: string | null;
-	redacted?: boolean;
 }
 const row = (requestId: string, status: string, entries: Entry[], post: string | null) => ({
 	requestId,
@@ -775,8 +774,9 @@ await test("the drill reads what the Slack fake received, and the state of the S
 		post: null,
 	});
 	assert.throws(() => slackTurnState('[{"requestId":"r","status":"DONE"}]', "r"), /entries/u);
-	// The delivery links the Slack ts to the last entry that is shown. An entry before it, a tool call with no text,
-	// is not the answer; an entry that is redacted or has no text is not shown.
+	// The server records the ts on the entry that it posted as the answer, whatever that entry shows. The drill reads
+	// that entry and does not choose one: a tool call before the answer, or a final entry with no text that shows
+	// only feedback, may be the one.
 	assert.deepEqual(
 		read([
 			{ text: "", slackTs: null },
@@ -784,21 +784,20 @@ await test("the drill reads what the Slack fake received, and the state of the S
 		]),
 		{ status: "DONE", answer: "The commands printed: .", replyTs: "1.2", post: "DONE" },
 	);
-	assert.equal(
+	assert.deepEqual(
 		read([
-			{ text: "an answer", slackTs: "1.2" },
-			{ text: "", slackTs: null },
-			{ text: "withdrawn", slackTs: null, redacted: true },
-		])?.replyTs,
-		"1.2",
+			{ text: "The commands printed: .", slackTs: null },
+			{ text: "", slackTs: "1.2" },
+		]),
+		{ status: "DONE", answer: "The commands printed: .", replyTs: "1.2", post: "DONE" },
 	);
 	assert.equal(
 		read([
-			{ text: "first", slackTs: "1.1" },
-			{ text: "last", slackTs: null },
+			{ text: "an answer", slackTs: null },
+			{ text: "", slackTs: null },
 		])?.replyTs,
 		null,
-		"the last shown entry has no ts yet",
+		"no entry carries a ts yet",
 	);
 	assert.equal(
 		read([

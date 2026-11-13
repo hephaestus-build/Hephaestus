@@ -109,9 +109,10 @@ function nullable(record: Record<string, unknown>, key: string): string | null {
  * The state of the Slack turn that `requestId` names, from the rows of every Slack turn of the workspace. Null before the
  * server stored that question. Another turn's reply never stands for it.
  *
- * A row lists the turn's Hephaestus entries in order. As the delivery chooses them (`MentorSlackMessages.slackTurn`), the
- * entries that are shown are those that are not redacted and have text. The reply is all of them, and its Slack `ts` is
- * linked to the last: an entry before it, such as a tool call, never carries the `ts`.
+ * A row lists the turn's Hephaestus entries in order. The drill does not choose the answer itself. After Slack accepts the
+ * reply, the server records its `ts` on the one entry that it posted as the answer (`MentorSlackMessages.link`), so
+ * `replyTs` is the `ts` of the entry that carries one, whatever that entry shows. The answer text is the text of all the
+ * turn's entries.
  */
 export function slackTurnState(text: string, requestId: string): SlackTurnState | null {
 	if (text.trim() === "") {
@@ -123,13 +124,17 @@ export function slackTurnState(text: string, requestId: string): SlackTurnState 
 	if (row === undefined) {
 		return null;
 	}
-	const shown = asArray(row.entries, "Slack turn entries")
-		.map((entry) => asRecord(entry, "Slack turn entry"))
-		.filter((entry) => entry.redacted !== true && asString(entry.text, "entry text") !== "");
+	const entries = asArray(row.entries, "Slack turn entries").map((entry) =>
+		asRecord(entry, "Slack turn entry"),
+	);
+	const texts = entries
+		.map((entry) => asString(entry.text, "entry text"))
+		.filter((entryText) => entryText !== "");
+	const linked = entries.filter((entry) => entry.slackTs !== null);
 	return {
 		status: asString(row.status, "Slack turn status"),
-		answer: shown.map((entry) => asString(entry.text, "entry text")).join("\n\n"),
-		replyTs: shown.length === 0 ? null : nullable(shown.at(-1) ?? {}, "slackTs"),
+		answer: texts.join("\n\n"),
+		replyTs: linked.length === 0 ? null : nullable(linked.at(-1) ?? {}, "slackTs"),
 		post: nullable(row, "post"),
 	};
 }
