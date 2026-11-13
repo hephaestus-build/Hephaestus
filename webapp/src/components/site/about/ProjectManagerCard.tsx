@@ -21,7 +21,7 @@ interface ProjectManagerCardProps {
 
 export function ProjectManagerCard({ projectManager }: ProjectManagerCardProps) {
 	return (
-		<div className="mb-16 rounded-lg border border-muted bg-gradient-to-br from-background to-muted/30 p-6 sm:p-8">
+		<div className="mb-16 rounded-lg border border-muted bg-linear-to-br from-background to-muted/30 p-6 sm:p-8">
 			<div className="flex flex-col items-center gap-8 md:flex-row md:items-start">
 				<Avatar className="h-32 w-32 border-4 border-background">
 					<AvatarImage src={projectManager.avatarUrl} alt={projectManager.name} />

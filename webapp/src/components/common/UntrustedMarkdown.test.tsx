@@ -25,11 +25,11 @@ function fading(container: HTMLElement): Element[] {
 describe("UntrustedMarkdown", () => {
 	it("leaves the words of a link the model wrote alone, so no link lands inside another", () => {
 		render(
-			<ModelLinkHostsContext.Provider value={["example.com"]}>
+			<ModelLinkHostsContext value={["example.com"]}>
 				<UntrustedMarkdown renderText={linkReferences}>
 					See [**#12**](https://example.com/pull/12) and **#13**.
 				</UntrustedMarkdown>
-			</ModelLinkHostsContext.Provider>,
+			</ModelLinkHostsContext>,
 		);
 
 		const links = screen.getAllByRole("link");
@@ -44,12 +44,12 @@ describe("UntrustedMarkdown", () => {
 
 	it("shows a link to a host outside the workspace as its words and its address, never as a link", () => {
 		render(
-			<ModelLinkHostsContext.Provider value={["github.com", ".hephaestus.example"]}>
+			<ModelLinkHostsContext value={["github.com", ".hephaestus.example"]}>
 				<UntrustedMarkdown>
 					Read [this guide](https://evil.example/?q=secret), https://other.example/a, [the
 					PR](https://github.com/a/b/pull/1) and [your page](https://team.hephaestus.example/p).
 				</UntrustedMarkdown>
-			</ModelLinkHostsContext.Provider>,
+			</ModelLinkHostsContext>,
 		);
 
 		expect(screen.getAllByRole("link").map((link) => link.getAttribute("href"))).toStrictEqual([
@@ -62,9 +62,9 @@ describe("UntrustedMarkdown", () => {
 
 	it("keeps the links of text a person wrote, such as a practice guide", () => {
 		render(
-			<ModelLinkHostsContext.Provider value={["github.com"]}>
+			<ModelLinkHostsContext value={["github.com"]}>
 				<UntrustedMarkdown authored>See [the guide](https://docs.example/guide).</UntrustedMarkdown>
-			</ModelLinkHostsContext.Provider>,
+			</ModelLinkHostsContext>,
 		);
 
 		expect(screen.getByRole("link").getAttribute("href")).toBe("https://docs.example/guide");

@@ -20,11 +20,7 @@ export function SyncLivenessProvider({
 	livePushUnavailable: boolean;
 	children: React.ReactNode;
 }) {
-	return (
-		<SyncLivenessContext.Provider value={livePushUnavailable}>
-			{children}
-		</SyncLivenessContext.Provider>
-	);
+	return <SyncLivenessContext value={livePushUnavailable}>{children}</SyncLivenessContext>;
 }
 
 export function useLivePushUnavailable(): boolean {

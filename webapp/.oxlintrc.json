@@ -202,6 +202,7 @@
 
 		// -- House rules, defined in `tools/oxlint/` --------------------------------------------------
 		// Each states in its own `meta.docs.description` what it asks.
+		"hephaestus/no-context-provider": "error",
 		"hephaestus/no-manual-query-key": "error",
 		"hephaestus/no-unsafe-definition-lookup": "error"
 		// The rules that read a Storybook story object are scoped to story files in `overrides`.
@@ -242,7 +243,10 @@
 		{
 			// A registry install keeps upstream's classes: `webapp/AGENTS.md` § `src/components/ui/`.
 			"files": ["src/components/ui/**"],
-			"rules": { "hephaestus/focus-outline-in-forced-colors": "off" }
+			"rules": {
+				"hephaestus/focus-outline-in-forced-colors": "off",
+				"hephaestus/no-context-provider": "off"
+			}
 		},
 		{
 			// Vocabulary maps are consumed indirectly, beyond the plugin's one-hop analysis.

@@ -15,9 +15,9 @@ const meta = {
 	// A workspace page lists the hosts that its model-written links may reach; here, the example host.
 	decorators: [
 		(Story) => (
-			<ModelLinkHostsContext.Provider value={["example.com"]}>
+			<ModelLinkHostsContext value={["example.com"]}>
 				<Story />
-			</ModelLinkHostsContext.Provider>
+			</ModelLinkHostsContext>
 		),
 	],
 	args: {

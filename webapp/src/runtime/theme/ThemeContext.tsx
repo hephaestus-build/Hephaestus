@@ -87,9 +87,9 @@ export function ThemeProvider({
 	};
 
 	return (
-		<ThemeProviderContext.Provider {...props} value={contextValue}>
+		<ThemeProviderContext {...props} value={contextValue}>
 			{children}
-		</ThemeProviderContext.Provider>
+		</ThemeProviderContext>
 	);
 }
 

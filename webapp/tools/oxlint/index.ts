@@ -1,6 +1,7 @@
 import { definePlugin } from "@oxlint/plugins";
 
 import { focusOutlineInForcedColors } from "./rules/focus-outline-in-forced-colors.ts";
+import { noContextProvider } from "./rules/no-context-provider.ts";
 import { noManualQueryKey } from "./rules/no-manual-query-key.ts";
 import { noNonAsciiFilename } from "./rules/no-non-ascii-filename.ts";
 import { noNondeterministicRender } from "./rules/no-nondeterministic-render.ts";
@@ -20,6 +21,7 @@ export default definePlugin({
 	meta: { name: "hephaestus" },
 	rules: {
 		"ui-text-voice": uiTextVoice,
+		"no-context-provider": noContextProvider,
 		"no-manual-query-key": noManualQueryKey,
 		"no-unsafe-definition-lookup": noUnsafeDefinitionLookup,
 		"no-non-ascii-filename": noNonAsciiFilename,

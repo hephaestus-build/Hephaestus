@@ -66,9 +66,9 @@ export default function GlobalConversationPanel() {
 			errorComponent={ConversationPanelFailed}
 		>
 			{/* The panel sits outside the workspace layout, so it names the workspace's link hosts itself. */}
-			<ModelLinkHostsContext.Provider value={linkHosts ?? NO_HOSTS}>
+			<ModelLinkHostsContext value={linkHosts ?? NO_HOSTS}>
 				<WorkspaceConversationPanel key={workspaceSlug} workspaceSlug={workspaceSlug} />
-			</ModelLinkHostsContext.Provider>
+			</ModelLinkHostsContext>
 		</CatchBoundary>
 	);
 }

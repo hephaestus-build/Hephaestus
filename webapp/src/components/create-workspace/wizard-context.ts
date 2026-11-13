@@ -214,7 +214,7 @@ export const WizardContext = createContext<WizardContextValue | null>(null);
 export function useWizard(): WizardContextValue {
 	const ctx = useContext(WizardContext);
 	if (!ctx) {
-		throw new Error("useWizard must be used within a WizardContext.Provider");
+		throw new Error("useWizard must be used within a WizardContext");
 	}
 	return ctx;
 }

@@ -51,7 +51,7 @@ function SafeAnchor({ href, children, className }: AnchorHTMLAttributes<HTMLAnch
 	return (
 		<InlineLink href={href} external>
 			{/* A link's own words are left as written: a rewrite that links them would nest anchors. */}
-			<RenderTextContext.Provider value={plainText}>{children}</RenderTextContext.Provider>
+			<RenderTextContext value={plainText}>{children}</RenderTextContext>
 		</InlineLink>
 	);
 }
@@ -237,10 +237,10 @@ export function UntrustedMarkdown({
 }: UntrustedMarkdownProps) {
 	const linkHosts = useContext(ModelLinkHostsContext);
 	return (
-		<LinkRuleContext.Provider value={authored ? null : linkHosts}>
-			<HeadingLevelContext.Provider value={headingLevel}>
-				<RenderTextContext.Provider value={renderText ?? plainText}>
-					<RenderImageContext.Provider value={renderImage ?? noImage}>
+		<LinkRuleContext value={authored ? null : linkHosts}>
+			<HeadingLevelContext value={headingLevel}>
+				<RenderTextContext value={renderText ?? plainText}>
+					<RenderImageContext value={renderImage ?? noImage}>
 						<Streamdown
 							mode={streaming ? "streaming" : "static"}
 							isAnimating={streaming}
@@ -254,9 +254,9 @@ export function UntrustedMarkdown({
 						>
 							{children}
 						</Streamdown>
-					</RenderImageContext.Provider>
-				</RenderTextContext.Provider>
-			</HeadingLevelContext.Provider>
-		</LinkRuleContext.Provider>
+					</RenderImageContext>
+				</RenderTextContext>
+			</HeadingLevelContext>
+		</LinkRuleContext>
 	);
 }
