@@ -82,16 +82,12 @@ final class ReviewJobTelemetry {
 
     private final Tracer tracer;
     private final MeterRegistry registry;
-    private final Timer claimLatency;
     private final ReviewStageTelemetry stages;
 
     ReviewJobTelemetry(MeterRegistry registry, Tracer tracer) {
         this.tracer = tracer;
         this.registry = registry;
         stages = new ReviewStageTelemetry(registry, tracer);
-        claimLatency = Timer.builder(AgentMetrics.AGENT_JOB_CLAIM_LATENCY)
-                .description("Time between job submission and its claim")
-                .register(registry);
         for (Phase phase : Phase.values()) {
             durations.put(
                     phase,
@@ -116,10 +112,6 @@ final class ReviewJobTelemetry {
     /** Starts a stage of the attempt on this thread, as a child span of the execution. */
     ReviewStageTelemetry.Running stage(ReviewStageTelemetry.Stage stage) {
         return stages.start(stage);
-    }
-
-    void claimWait(Duration duration) {
-        claimLatency.record(duration);
     }
 
     void claimRefused(String reason) {

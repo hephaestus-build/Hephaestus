@@ -258,15 +258,22 @@ Within each group, the oldest job comes first.
 The job queue exposes its own metrics.
 Use them for alerts instead of application logs.
 
-- **`agent.queue.oldest_age_seconds`** — age of the oldest eligible queued job. It is `0` when empty.
+- **`agent.run.oldest_due_age_seconds`** — by `kind` and `band`: the time since the oldest due run became due.
+  A due run is queued, has no hold, and its `available_at` has passed.
+  It is `0` when no run is due.
   Sustained growth needs an alert.
-  Queue depth alone does not distinguish a temporary burst from a persistent backlog.
-- **`agent.queue.depth`** — queued jobs eligible to run now.
-- **`agent.queue.held`** — jobs held on an exhausted budget.
-- **`agent.queue.running`** — jobs active across the fleet.
-- **`agent.queue.health.sampler.failures`** — failed samples.
+  A count of due runs alone does not distinguish a temporary burst from a persistent backlog.
+- **`agent.run.due`** — by `kind` and `band`: queued runs that can start now.
+- **`agent.run.runs`** — runs that have not ended, by `kind`, `band`, `state` and `hold_reason`.
+  `state` is `queued` or `leased`.
+  `hold_reason` is `none`, `budget` or `sandbox_room`. A leased run always has `none`.
+  A held run is not due. `state="queued",hold_reason="budget"` separates a workspace that spent its budget from an idle instance.
+  `state="leased"` counts the runs that servers drive now.
+- **`agent.run.sampler.failure`** — failed samples.
   Gauges keep their last-good value instead of a false empty-queue report.
-- **`agent.job.claim.latency`** — time from a job's eligibility to its claim.
+- **`agent.run.claim.wait`** — by `kind` and `band`: the time from a run's `available_at` to its claim.
+  The server records it after the claim commits.
+  A run that returns to the queue waits again from its new `available_at`.
 - **`agent.job.infra.retry.requeued`** — attempts that run again after a retryable failure, tagged by `cause`.
   `preparation`: the attempt failed before its sandbox started.
   `sandbox`: the sandbox could not start, initialize or finish.

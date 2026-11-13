@@ -283,10 +283,6 @@ public class ReviewJobClaimService {
                 ? reviewStart.compose(job.getWorkspaceId(), job.getReviewId())
                 : reviewStart.start(job.getWorkspaceId(), job.getReviewId()))) return cancelWithParent(job);
         Instant claimedAt = Instant.now();
-        // The first claim only: a requeued review would sample its submission again, later each time.
-        if (fence.epoch() == 1) {
-            jobTelemetry.claimWait(Duration.between(job.getSubmittedAt(), claimedAt));
-        }
         job.setStatus(ReviewJobStatus.RUNNING);
         job.setStartedAt(claimedAt);
         job.setExecutionStartedAt(null);

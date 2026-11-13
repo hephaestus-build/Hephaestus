@@ -122,10 +122,10 @@
 					"width": 4
 				},
 				{
-					"title": "Oldest queued job",
-					"description": "Work that waits for a worker.",
-					"expr": ["max(agent_queue_oldest_age_seconds{job=\"hephaestus\"})"],
-					"alias": ["age"],
+					"title": "Oldest due run",
+					"description": "Work that is ready to start and waits for a claim, per band.",
+					"expr": ["max by (band) (agent_run_oldest_due_age_seconds{job=\"hephaestus\"})"],
+					"alias": ["{{band}}"],
 					"unit": "s",
 					"showLegend": true,
 					"width": 4

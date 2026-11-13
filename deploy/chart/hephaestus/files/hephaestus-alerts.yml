@@ -486,12 +486,12 @@ groups:
           summary: A review closed as partial because every attempt ended before it confirmed where its feedback went
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusAgentQueueStalled
-        expr: max(agent_queue_oldest_age_seconds{job="hephaestus"}) > 3600
+        expr: max by (band) (agent_run_oldest_due_age_seconds{job="hephaestus"}) > 3600
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: An agent job that can run has waited for a server with sandboxes for more than one hour
+          summary: An agent run that can start has waited for more than one hour
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusOutboxStalled
         expr: max by (kind) (action_oldest_due_seconds{job="hephaestus"}) > 900

@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.Duration;
@@ -12,6 +13,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -36,6 +38,17 @@ public class AgentRuns {
     private static final long BACKOFF_OFFSET_SECONDS = 15;
     private static final double BACKOFF_JITTER = 0.10;
 
+    /** A claim waits for seconds when the fleet is idle and for an hour when it is behind; the default has no tail. */
+    private static final Duration[] CLAIM_WAIT_BOUNDS = {
+        Duration.ofSeconds(1),
+        Duration.ofSeconds(5),
+        Duration.ofSeconds(30),
+        Duration.ofMinutes(1),
+        Duration.ofMinutes(5),
+        Duration.ofMinutes(15),
+        Duration.ofHours(1)
+    };
+
     private final AgentRunRepository runs;
     private final AgentCapacityProperties capacity;
     private final MeterRegistry meters;
@@ -47,6 +60,9 @@ public class AgentRuns {
         this.runs = runs;
         this.capacity = capacity;
         this.meters = meters;
+        // Registered at start, so a percentile over a band that has had no claim yet reads a series.
+        for (AgentRunKind kind : AgentRunKind.values())
+            for (AgentRunBand band : AgentRunBand.values()) claimWait(kind, tag(band));
     }
 
     /** The capacity numbers that leases and their kinds' attempt budgets follow. */
@@ -208,7 +224,7 @@ public class AgentRuns {
                         capacity.leaseTtl().toSeconds(),
                         capacity.turnLeaseTtl().toSeconds(),
                         capacity.bandAging().toSeconds())
-                .map(AgentRuns::lease);
+                .map(this::leased);
     }
 
     /**
@@ -246,7 +262,7 @@ public class AgentRuns {
                         capacity.leaseTtl().toSeconds(),
                         capacity.turnLeaseTtl().toSeconds(),
                         capacity.bandAging().toSeconds())
-                .map(AgentRuns::lease);
+                .map(this::leased);
     }
 
     /** A queued run that its sandbox claims next. */
@@ -503,6 +519,31 @@ public class AgentRuns {
 
     private static long seconds(Duration delay) {
         return Math.max(0, delay.toSeconds());
+    }
+
+    /**
+     * The lease of a claimed row, and its wait from {@code available_at}, recorded once the claim's transaction has
+     * committed: a claim that rolls back leased nothing. A requeued run waits from its new {@code available_at}.
+     */
+    private AgentRunLease leased(AgentRunRepository.LeaseRow row) {
+        Duration waited = Duration.ofNanos((long) (Math.max(0, row.getWaitedSeconds()) * 1_000_000_000));
+        Timer wait = claimWait(AgentRunKind.valueOf(row.getKind()), tag(AgentRunBand.valueOf(row.getBand())));
+        TransactionCallbacks.afterCommit(() -> wait.record(waited));
+        return lease(row);
+    }
+
+    private Timer claimWait(AgentRunKind kind, String band) {
+        return Timer.builder(AgentMetrics.AGENT_RUN_CLAIM_WAIT)
+                .description("Time from a run's available_at to its claim, after the claim committed")
+                .tag("kind", tag(kind))
+                .tag("band", band)
+                .serviceLevelObjectives(CLAIM_WAIT_BOUNDS)
+                .register(meters);
+    }
+
+    /** The value of a meter label for a kind, band or hold; the labels are closed and hold no run id. */
+    static String tag(Enum<?> value) {
+        return value.name().toLowerCase(Locale.ROOT);
     }
 
     private static AgentRunLease lease(AgentRunRepository.LeaseRow row) {

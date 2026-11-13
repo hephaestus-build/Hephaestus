@@ -54,7 +54,6 @@ class ScrapeContractIntegrationTest extends BaseIntegrationTest {
             Map.entry("tenancy_violation_total", "a refused statement creates its series"),
             Map.entry("agent_job_infra_retry_requeued_total", "worker role"),
             Map.entry("agent_job_server_error_total", "worker role"),
-            Map.entry("agent_queue_oldest_age_seconds", "worker role"),
             Map.entry("sandbox_gateway_connections", "worker role"),
             Map.entry("sandbox_gateway_connections_limit", "worker role"),
             Map.entry("sandbox_gateway_refused_total", "worker role"),

@@ -111,9 +111,9 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                     "de.tum.cit.aet.hephaestus.productfeedback.ProductFeedbackNotificationQueryService",
                     RuntimeRole.SERVER_PROPERTY),
             // ServerSchedulingConfig silences the @Scheduled tick off-server, but an ungated BEAN still
-            // registers its gauges — permanent zeros in agent.queue.* / mentor.in_flight.* from pods that
+            // registers its gauges — permanent zeros in agent.run.* / mentor.in_flight.* from pods that
             // never sample. Gate the bean, not just the tick.
-            Map.entry("de.tum.cit.aet.hephaestus.agent.job.AgentQueueHealthSampler", RuntimeRole.SERVER_PROPERTY),
+            Map.entry("de.tum.cit.aet.hephaestus.agent.run.AgentRunSampler", RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.core.database.WalArchiveMonitor", RuntimeRole.SERVER_PROPERTY),
             Map.entry("de.tum.cit.aet.hephaestus.agent.job.ReviewJobRetentionService", RuntimeRole.SERVER_PROPERTY),
             Map.entry(
