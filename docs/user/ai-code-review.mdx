@@ -1,24 +1,25 @@
 ---
 title: Practice feedback
-description: How Hephaestus reviews pull requests, merge requests, and issues for engineering practices.
+description: How Hephaestus reviews pull requests, merge requests, and issues for engineering practices, and why a review did not run.
 page_type: feature
 ---
 
-Hephaestus uses an AI model to review eligible work against your workspace’s practices.
+Hephaestus uses an AI model to review eligible work against the practices of your workspace.
 It records observations before it decides whether feedback would help you.
 The model can be wrong, so you decide what to do with feedback: fix the work, ask why, or disagree.
+[Respond to feedback](./practice-profile.mdx#respond-to-feedback) gives the steps.
 
 ## Observations
 
-An observation says Met, Not met, Does not apply or Could not determine.
+An observation says Met, Not met, Does not apply, or Could not determine.
 Not met lists the problems and their evidence.
-Each problem has its own severity: Critical, Major, Minor or Trivial.
+Each problem has its own severity: Critical, Major, Minor, or Trivial.
 An open question explains what the evidence could not settle.
 It is never sent as feedback.
 
 If Hephaestus cannot capture the evidence it needs, it records no observation.
 Withheld means that the review stopped feedback before delivery and recorded why.
-It does not mean your work failed a practice.
+It does not mean that your work failed a practice.
 
 ## What Hephaestus can and cannot do
 
@@ -38,124 +39,61 @@ Hephaestus cannot:
 - See context that the practice does not read, such as a decision your team made in a meeting.
 - Decide for you. Merge decisions stay with your reviewers.
 
-When feedback is wrong, [disagree in Hephaestus](#respond-to-feedback).
+When feedback is wrong, [disagree in Hephaestus](./practice-profile.mdx#disagree-with-feedback).
 A workspace admin can also [mark the observation incorrect](#corrections-by-workspace-admins).
 
 ## Where feedback appears
 
-- On the work: a summary, line note or file note about your current change.
-- On your [Practice profile](./practice-profile): private guidance about a pattern across your work.
+- On the work: a summary, line note, or file note about your current change.
+- On your [Practice profile](./practice-profile.mdx): private guidance about a pattern across your work.
 - In conversation: private feedback that Hephaestus can show when it fits your conversation.
 
-Feedback on the work waits until your pull or merge request is ready for review.
+Feedback on the work waits until your pull request or merge request is ready for review.
 While it is a draft, feedback goes only to your Practice profile and your conversation.
 When you mark it ready, Hephaestus reviews it again and can comment on it.
 After the work is merged or closed, Hephaestus comments on it only if your workspace turns on **Post feedback after merge**.
-Your private feedback can still arrive.
+Private feedback on your Practice profile and in conversation can arrive either way.
 
 On GitLab, a line note opens a discussion on the reviewed diff lines.
 If GitLab cannot place it on the diff, Hephaestus opens an overview discussion that links to the reviewed code.
 
-In feedback on the work, code appears as code and emphasis appears as emphasis.
-Other formatting and comments in the feedback text appear as written.
-Images and HTML appear as written too, partly as code.
+Mentions, issue references, and links in feedback appear as code.
+Thus, a comment notifies no one and runs no GitLab quick action.
 
-A name that starts with @ appears as code.
-So do a reference such as `#12`, `!3` or `GH-26`, a security advisory, a commit, an e-mail or web address, a link and math.
-A comment or its later edit therefore notifies no one.
-It adds no link, except for a reference that an administrator sets up for an issue tracker, such as `JIRA-123`.
-A line that starts with a slash runs no GitLab quick action.
+Feedback about your reviewing stays on your own Practice profile or in your conversation.
+It does not address the work of another author as yours.
 
-Some ordinary text appears as code as well.
-Examples are `50%`, `~5`, an emoji code such as `:smile:`, and a word or number that looks like a commit, such as `defaced` or `1000000`.
-
-A conversation link alone does not count as delivered feedback.
-Hephaestus must show the feedback to you.
-Feedback about your reviewing stays on your own practice pages or in your conversation.
-It does not address another author’s work as yours.
+To stop comments on the work that you author, turn off **Comments on your work** in [User settings](./user-settings.mdx).
 
 ## Feedback mode
 
-Your workspace’s feedback mode decides when feedback reaches you:
+The feedback mode of your workspace decides when feedback reaches you:
 
 - **Off** keeps observations and sends no feedback, on the work, on practice pages, or in conversation.
 - **Approve first** (the default) keeps feedback on the work until a workspace admin approves it. Feedback on practice pages and in conversations needs no approval.
 - **Automatic** sends feedback without waiting for approval.
 
 Workspace admins can set a different mode for a practice group or a single practice.
-[Workspace basics](./workspace#practices-and-ai) explains where they choose it.
+[Set up your workspace](./workspace.mdx#practices-and-ai) explains where they choose it.
 
 ## Corrections by workspace admins
 
 A workspace admin can mark an observation incorrect when it was wrong when made.
 The observation stays in history with the reason and stops supporting new feedback.
-Hephaestus withdraws only the comments that rest on that observation. Your other comments stay as they are.
-It edits each of those comments in GitHub or GitLab to say that the feedback was withdrawn.
-If the provider cannot make that edit, the posted words stay visible, and Hephaestus records the state of the correction.
+Hephaestus edits each comment that rests on that observation in GitHub or GitLab to say that the feedback was withdrawn.
+Your other comments stay as they are.
+If GitHub or GitLab cannot make that edit, the posted words stay visible.
 
-If the admin removes the mark later, Hephaestus checks again whether the observation can support feedback.
+If the admin removes the mark, Hephaestus checks again whether the observation can support feedback.
 It then puts the original words back in the same comments and does not post them again.
 
 A workspace admin can accept an observation to remove it from open-problem lists.
 Acceptance does not change the outcome or claim that you fixed the work.
 It does not override an incorrect mark.
 
-A workspace admin can withdraw a private card whose words were wrong.
+A workspace admin can withdraw a card on your Practice profile whose words were wrong.
 Its observations stay unchanged.
-Restoring the card reverses the withdrawal if the card can still be shown.
-A withdrawn card accepts no new response.
-
-## Respond to feedback
-
-Replies and reactions on GitHub or GitLab do not save your answer in Hephaestus.
-Answer in Hephaestus instead.
-The footer of each Hephaestus comment says “Answer or disagree in Hephaestus.”
-
-1. Follow the **Hephaestus** link in that footer. Or open the card on your [Practice profile](./practice-profile).
-2. If you addressed the feedback, select **I fixed this**. If it does not apply to your work, select **Does not fit my work**.
-3. To disagree, select **Disagree**, enter what is wrong in this feedback, and select **Send**.
-4. Optional: Rate the feedback with **Helpful** or **Not helpful**.
-
-The card shows your answer.
-Workspace admins can read your disagreement and inspect the observation.
-Your private card text and unrelated rating notes stay private.
-Other developers who follow the same link see only their own records.
-
-Your answer and your rating stay separate, so removing a rating does not remove a disagreement.
-A disagreement does not change the observation or your standing by itself.
-When you undo a response, its current answer goes away, and its history stays.
-
-## Request another review
-
-1. On your [Practice profile](./practice-profile), select the review chip beside the title to open **Reviews of your work**.
-2. In the row of the work’s latest review, select **Request another review**.
-3. Once Hephaestus accepts the request, select **View requested review** to see how far the new review got.
-
-You can also select **Request review** on eligible work in [Activity](./activity.mdx#request-a-review) or in the browser extension.
-A request follows your AI choice, the workspace’s review scope, and the access checks of the source.
-
-You can also comment `/hephaestus review` on a pull request or a merge request.
-The comment must contain only the command. An edited comment does not count.
-Hephaestus answers when no feedback answers it. On GitLab, the answer goes in the comment's thread. On GitHub, it is a new comment on the pull request.
-
-- If nothing that the practices read has changed since the last review, it does not review the work again. It says so and links the feedback.
-- If it cannot accept the request, it says why. For example, a review was requested a short time ago.
-
-The review you asked from keeps its own status.
-The new review keeps earlier observations in history.
-Of the reviews that can count, the one that Hephaestus recorded last counts, whoever started it.
-An older review cannot silently replace a newer one.
-
-## Stop comments on your work
-
-1. Open **User settings**.
-2. Under **Practice feedback**, turn off **Comments on your work**.
-
-This stops new comments on issues, pull requests, and merge requests you author, in all your workspaces.
-Reviews can still record observations that workspace admins may inspect.
-It does not delete earlier comments or observations.
-Turn the setting on again to allow future comments.
-Your AI choice is a separate account-wide limit.
+Restoring the card reverses the withdrawal if the card can be shown, and keeps your earlier response.
 
 ## Troubleshooting
 
@@ -164,9 +102,60 @@ Your AI choice is a separate account-wide limit.
 A review can record observations without sending a comment.
 Check these causes:
 
-- The feedback mode is **Approve first**, and a workspace admin has not approved the feedback yet.
+- The feedback mode is **Approve first**, and a workspace admin has not approved the feedback.
 - The feedback mode is **Off**.
 - You turned off **Comments on your work**.
 - Hephaestus could not capture the evidence, so it recorded no observation.
 - The review withheld the feedback. [Observations](#observations) explains what that means.
 - The work is a draft, or it was merged or closed. [Where feedback appears](#where-feedback-appears) explains why.
+
+### No review ran on your work
+
+When no review can run on your work, your [Practice profile](./practice-profile.mdx) names the reason.
+Find the message below.
+If you are a workspace admin, the message links to the setting that changes it.
+
+#### "Hephaestus does not review your work here"
+
+You chose No AI.
+Select **Change your AI choice**.
+
+#### "Choose your AI to get reviews"
+
+The workspace reviews your work only after you choose which AI may handle it.
+Select **Choose your AI**.
+
+#### "Practice reviews are not set up for your AI choice yet"
+
+The workspace has no review model that fits your AI choice.
+Ask a workspace admin to add one, or select **Your AI choice** to change it.
+
+#### "Reviews here start only on request"
+
+The workspace does not review work by itself.
+Select **Request a review on Activity**, and [request a review](./activity.mdx#request-a-review) of eligible work.
+
+#### "Practice reviews are off here"
+
+The workspace turned practice reviews off.
+Ask a workspace admin.
+
+#### "Your work is outside the review scope"
+
+A workspace admin chose whose work the workspace reviews, and your work is not in it.
+Ask a workspace admin.
+
+#### "Hephaestus cannot match your work to you here yet"
+
+The workspace cannot match your work to your membership.
+In [User settings](./user-settings.mdx), connect the account that the workspace uses, or ask a workspace admin.
+
+#### "No practice here reviews your work yet"
+
+No practice in the workspace reviews the work of the person who did it.
+Ask a workspace admin.
+
+#### "Reviews are paused in this workspace"
+
+The workspace is inactive.
+Ask a workspace admin to make it active again.

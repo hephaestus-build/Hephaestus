@@ -15,6 +15,7 @@ const sidebars: SidebarsConfig = {
 			collapsed: false,
 			items: [
 				"practice-profile",
+				"practices-across-the-workspace",
 				"activity",
 				"public-activity",
 				"ai-code-review",

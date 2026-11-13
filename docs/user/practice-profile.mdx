@@ -1,562 +1,244 @@
 ---
 title: Practice profile
-description: See how your work stands across practice groups, which practices were met and what changed, and the feedback behind it.
+description: Read your feedback cards, respond to them, ask for another review, and see how your work stands on each practice.
 page_type: feature
 ---
 
 import Screenshot from "@site/src/components/Screenshot";
 
-Use your Practice profile to read feedback, choose a next step, and check the evidence behind your practice standing.
-Other developers cannot see it.
-They see your observations only as part of the counts on [Practices across the workspace](#practices-across-the-workspace).
-[Your data in Hephaestus](./privacy.mdx#ai-processing-and-visibility) lists who else can.
+Your Practice profile shows the feedback that Hephaestus gives you about patterns in your work, and how your work stands on each practice.
+It is private to you.
+Other developers see your observations only inside the counts on [Practices across the workspace](./practices-across-the-workspace.mdx).
 
 <Screenshot
   src="practice-profile/overview"
   alt="Practice profile with a standing ring of four practices and an open feedback card that names the practice and why it was raised."
 />
 
-The profile uses practice review observations about your work on pull requests, merge requests, issues, conversations, and documents.
-This includes the reviews you write.
-Feedback on a pull request, merge request or issue addresses its author’s work.
-Feedback about your reviewing stays on your own Practice profile or in your own conversation.
-It never compares you with other developers.
+To act on feedback:
 
-An AI model writes these observations, so a standing can be wrong.
-[What Hephaestus can and cannot do](./ai-code-review#what-hephaestus-can-and-cannot-do) explains the limits.
+1. Open a card under **Your recurring feedback patterns**.
+2. Read **Why this was raised** and **Next step**.
+3. Change your next piece of work, or [respond to the feedback](#respond-to-feedback).
 
-Observations from an earlier version of practice review stay in your history, with a note that their evidence cannot be verified.
-Earlier feedback cards are marked as unverified history.
-They do not show whether the current standard is met and do not count as current proof.
-You can still read their retained text and evidence when access to their sources is available.
-
-## Opening your Practice profile
+## Open your Practice profile
 
 1. Select a workspace.
 2. Under **You**, select **Practice profile**.
 
-A workspace that reviews practices also opens here by default.
+A workspace that reviews practices opens on this page.
 A workspace that does not review practices has no Practice profile and opens on [Activity](./activity.mdx).
-If you turn on the [weekly digest](./ask-hephaestus#weekly-digest), it links here for what changed and for new feedback that waits for you.
 
-## Reading the top of the page
+To learn the page, select **How to read this page** under the header.
+For a guided tour with examples, select **Take the tour**.
+Nothing in the tour changes your feedback.
 
-The header says what Hephaestus reviews. [**How to read this page**](#how-to-read-this-page) explains the rest.
-The chip beside the title reads **Latest review** with the date and reviewed work.
-It can instead say that the review stopped before it finished.
-While a review runs, the chip reads **Review running** and names the work.
-Both states open [Reviews of your work](#reviews-of-your-work).
+## Where your feedback comes from
 
-A review appears here after it records an observation about your work.
-The chip keeps your latest recorded review even when it is older than the standing’s 90-day window or its evidence is hidden.
-Before your first recorded review, the chip reads **No review yet**.
-While that first review waits or runs, the chip reads **Review waiting** or **Review running**.
-It names the work but does not open a list, because the review has recorded nothing yet.
+Hephaestus reviews your pull requests, merge requests, issues, conversations, documents, and the reviews that you write.
+Each review records observations against the practices of your workspace.
+Feedback about your reviewing stays on your own Practice profile or in your own conversation.
+The profile never compares you with other developers.
 
-A review can take several attempts on a slow AI provider, and each attempt finishes some practices.
-Between attempts the chip reads **Review continuing** and counts the practices that are finished, such as **76 of 200 practices finished**.
-The review records its observations when it finishes, so this page shows them only then.
+An AI model writes the observations, so a standing or a card can be wrong.
+[What Hephaestus can and cannot do](./ai-code-review.mdx#what-hephaestus-can-and-cannot-do) explains the limits.
 
-A ring counts your practices by standing:
+Feedback that Hephaestus posts on a pull request, merge request, or issue stays on that work.
+It is not a card.
+[Find the feedback that a comment gave](#find-the-feedback-that-a-comment-gave) shows how to trace it.
+
+Workspace admins can see all practice reviews, and instance admins can open a read-only view.
+[Your data in Hephaestus](./privacy.mdx#who-can-see-what) lists who sees what.
+
+## Feedback cards
+
+Each card describes one problem that recurs in your work on one practice.
+Each practice has at most one open card.
+A newer card for the same practice replaces the open card.
+
+A card has four parts:
+
+- The top names the practice and the work that the problem recurs in, such as *Recurring in three pull requests*.
+  **Why this was raised** explains it.
+- **Next step** says what to try.
+- **Work reviewed for this practice** shows your recent reviewed work, oldest to newest.
+  It counts how many more clean pieces of work resolve the card.
+- The bottom gives the date, your rating, and **Disagree**.
+
+To open the practice, select the card or **Learn more about this practice**.
+
+The tabs list cards newest first:
+
+- **Open** shows open cards. The page opens on this tab.
+- **Resolved and closed** shows resolved and closed cards.
+- **All** shows every card, including withdrawn cards.
+
+### Card states
+
+| State | What it means |
+| --- | --- |
+| **Open** | The card waits for clean work or for your response. |
+| **Resolved** | Three pieces of reviewed work in a row had no problem on the practice. Work that shows the problem again resets the count. |
+| **Marked by you** | You selected **I fixed this** or **Does not fit my work**. Your next reviewed work confirms it, and the count of clean work continues. |
+| **Closed** | Your workspace changed the review settings of the practice after the card was written. |
+| **Withdrawn** | A workspace admin withdrew the card because its words were wrong. It says nothing about your standing. |
+
+A resolved, marked, or closed card leaves the page 30 days after it changed state.
+A withdrawn card appears under **All** as a short notice without its text, only if the card reached you before.
+It accepts no response.
+[Corrections by workspace admins](./ai-code-review.mdx#corrections-by-workspace-admins) explains withdrawals and restores.
+
+A card or an observation marked *Unverified history from an earlier review* does not show whether the current standard is met.
+You can read its text and evidence.
+
+## Practice standing
+
+The ring in the header counts your practices by standing:
 
 - **Going well**
 - **Mixed feedback**
 - **Needs attention**
-- **No standing yet**: no review has given the practice a standing yet.
-  It did not apply to your work, could not be judged, or no review has looked at it.
-
-**See all practice groups** opens the table of practice groups.
-[Your recurring feedback patterns](#your-recurring-feedback-patterns) follows the header.
-
-A practice that your workspace no longer reviews leaves the page, with its standing and its feedback.
-
-### How to read this page
-
-The **How to read this page** panel sits under the header's introduction and starts closed.
-It explains:
-
-- What a practice is.
-- Each standing and each trend, with the sentence that explains it.
-- When a feedback card appears and when it resolves.
-- Who can see your feedback.
-- That group colors are not a rating.
-
-1. To open the panel, select **How to read this page**.
-2. To close it again, select **How to read this page** again.
-
-This browser remembers whether you left it open or closed.
-
-### Take the guided tour
-
-The tour explains how your work becomes feedback and how to read this page. Its chapters answer different questions, so read the one that you need.
-
-1. Select **Take the tour**, beside **How to read this page**.
-2. Choose a chapter:
-   - **How it works**: how your work becomes feedback, and where you are now.
-   - **Your profile**: your page, and each part of a feedback card.
-   - **Going deeper**: the panels behind the page.
-   - **Across the workspace**: what the workspace shows, and who can see you.
-3. Select **Next** to go to the next step.
-4. At the end of a chapter, select **Next chapter**. At the end of the last chapter, select **Done**.
-
-To stop, close the tour. To continue where you stopped, select **Take the tour** again in the same browser and choose the chapter.
-
-The tour combines your real data with examples. Some steps show your own page, one of your open cards, and your workspace's practices. Other steps show an example with the label **Example, not your work**, even when you have real work. Nothing in the tour changes your feedback.
-Screen readers read the words of each step. The pictures beside them are not part of what they read.
-
-### Who can see your feedback
-
-Your Practice profile is yours.
-Feedback on a pull request is visible to everyone who can see that pull request.
-Workspace admins can see all practice reviews, and instance admins can open a read-only view.
-
-## Your recurring feedback patterns
-
-1. Select **Open** to see feedback that still needs a response or more reviewed work.
-2. Read the evidence and next step on a card.
-3. Decide what to change, or record your response below the card.
-
-For example, feedback about an unclear purpose can help you improve the description of your next pull request.
-
-Each card describes one repeated pattern in your work.
-It states what reviews observed, on which work, and when.
-It also gives one next step to try.
-Feedback posted on a piece of work stays there and is not a card.
-[Feedback on a piece of work](#feedback-on-a-piece-of-work) tells you how to find it.
-The tabs show cards newest first:
-
-- **Open** shows each open card. The page opens on this tab.
-- **Resolved and closed** shows each resolved or closed card.
-- **All** shows each card, including withdrawn cards.
-
-A card resolves in one of two ways:
-
-- **By your work.** Three consecutive pieces of reviewed work with no problem on the practice resolve the card. It reads *Resolved by the work* and names that work. Work that shows the problem again resets the count. **Work reviewed for this practice** on the card shows the count.
-- **By you.** Your response can mark the card *Marked as addressed* or *Marked as not applicable*, with the date. The card then shows **Marked by you** without the green color of a resolution, because your next work confirms it. The count of clean work continues.
-
-To record or undo your response:
-
-1. Under **Or mark it yourself**, select **I fixed this** or **Does not fit my work**.
-   Point to or focus an answer to read what it does.
-2. To undo your response, select it again.
-
-Both answers move the card to **Marked by you**.
-After **Does not fit my work**, a later review of the same work does not send you that point again.
-The card opens again when you undo the response.
-
-If you think that the feedback is wrong, select **Disagree** beside **Not helpful**.
-Write one or two sentences on what is wrong, then select **Send**.
-Workspace admins read your sentence and can correct the observations or withdraw the card.
-The card stays open until then.
-**Disagree** saves a disagreement on the feedback.
-To take the disagreement back, select **Disagree** again.
-
-If your workspace changes a practice after a review wrote its card, the card closes without resolution.
-It reads *Closed*, gives the date and reason, and stops counting work that shows no problem on the practice.
-A closed card stays on the page for 30 days after closure.
-A newer card for the same practice replaces the open card, so each practice has at most one open card.
-
-A workspace admin can withdraw a card with incorrect words.
-If you already saw the card, a recent withdrawal appears under **All** as a short notice, without the card’s text.
-A card you had not seen never appears.
-A withdrawn card accepts no new response.
-It resolved nothing and says nothing about your standing.
-The observations stay unchanged.
-
-Later reviews and conversations do not receive the withdrawn text.
-If the admin restores the card, it returns as it was.
-
-To rate a card:
-
-1. At the bottom right of the card, select **Helpful** or **Not helpful**.
-   Each is a small button with an icon. Point to it to read its name.
-2. Add a note about why. The note is optional.
-
-A rating says whether the feedback helped you.
-It does not record a disagreement with the card.
-While a disagreement stands, its sentence is the one note on the card, so a rating adds no note.
-If you take back your rating, the disagreement stays.
-
-Workspace admins can see that you have a current answer to feedback and when that record was made.
-A rating without an answer, including its time, stays private.
-Workspace admins read the sentence of a current disagreement on the observations behind it.
-They can mark an observation incorrect or withdraw the card.
-The card text stays private to you.
-Nobody else sees your other notes.
-
-### Reading a card
-
-Each card has four parts:
-
-1. The top part says what the feedback is about.
-   Beside its state, it names the work the pattern recurs in, for example *Recurring in three pull requests*. Hover, focus or tap it to see each piece of work, linked.
-   Its explanation is under **Why this was raised**.
-2. **Next step** says what to do.
-3. **Work reviewed for this practice** shows how close the feedback is to resolving.
-   The (i) beside it gives the rule. For example, the feedback resolves after three pieces of reviewed work come back clean.
-   It shows your reviewed work along a line, oldest to newest, with the date of each piece under it.
-   On the right, a gray line above the bar counts the clean work in a row.
-   For example: *2 clean in a row · 1 more resolves it*.
-   Your answers are under the bar.
-   On a narrow screen they are under the line.
-4. The bottom part gives the date and your rating.
-
-The line shows up to five of the most recent pieces of work behind this feedback, ordered by when they were reviewed.
-A short line with **…** at its start shows that earlier pieces are not shown.
-Each piece has the same icon as its observations.
-A wrench shows work that needed attention, and a check in a circle shows clean work.
-
-A thin upright mark with the caption **Feedback created** separates the work before the feedback from the work after it.
-It appears only when the line includes work reviewed before the feedback was created.
-Clean work before the feedback has a grey check, because only clean work after the feedback counts.
-The clean pieces in a row after the feedback are joined in green.
-Small empty dots show how many more clean pieces resolve the feedback.
-
-To open the practice, select anywhere on the card or **Learn more about this practice**.
-The links, the buttons, and the work on the line keep their own action.
-
-## Reviews of your work
-
-The title chip opens the reviews that recorded an observation about your work, newest first and grouped by day.
-A review that still runs may not appear yet, because a review appears only after it records an observation about your work.
-
-A review that someone requested has the **Requested** tag.
-It is a real review and retains earlier observations in history.
-The newest eligible observation follows recorded order, regardless of who started it.
-An older review cannot replace newer proof.
-A marked current observation does not make an earlier observation current again.
-Repository scans have no developer and do not move your personal standing.
-
-A review that a schedule started has the **Scheduled** tag.
-A review that caught up on work from before the connection has the **Backfilled** tag.
-
-Each row names the work and links to the original.
-Its sequence on the work, such as *Review 2 of 3*, sits under the work, and its status stands over the time of the review.
-Your latest review is framed in blue and says **Latest review** in its top left corner.
-
-**What it saw** counts the practices the review recorded about you on its first line, such as *8 practices*.
-The line under it counts each outcome, such as *5 met · 2 not met · 1 does not apply*.
-A review that is waiting or running and has recorded nothing yet says *No practices yet*.
-A review that ended with nothing recorded says *No practices*.
-
-The list does not link the feedback a review gave. Open an observation of the review to read its feedback.
-
-The filters work as on the admin **Reviews** tab:
-
-- **Work** selects one or more kinds of work.
-- **Status** selects one or more statuses: **Running**, **Completed**, **Partial**, **Failed** or **Cancelled**.
-  The list holds only reviews that recorded an observation about your work.
-  Thus, a review that failed or was cancelled before it recorded anything is not in it.
-- The timeframe shows the last 7, 30, or 90 days, or **All time**, the initial value.
-- **Sort** lists the newest review first, or the oldest.
-- **Reset** clears every filter, and a line counts the reviews that match.
-
-Each row ends in icon buttons: the play button is **Request another review**, the crosshair is **Track this work**.
-A line above the table says what each one does, and hovering or focusing a button shows its name.
-When a work has more than one review, its rows offer **Track this work**.
-
-**Track this work** narrows the list to every review of that work.
-**Tracking** above the table names the work. Its close button removes the work filter. **Reset** clears every filter.
-With any filter on, or oldest first, no row is framed as the **Latest review**, because the top review might not be your latest.
-
-Older reviews load when you scroll to the end of the list.
-You can also select **View earlier reviews**.
-If older reviews cannot load, select **Retry**.
-
-Every review of a work reviewed more than once shows its sequence, such as *Review 2 of 3*, whatever the filters keep.
-**Request another review** appears in the row of a work's latest review when you may ask for one as author, assignee, or workspace admin.
-
-If nothing that a practice reads has changed since its last review, the practice is not reviewed again. Its observation stands, and the review links to the earlier one. If this is true for everything the review lists, the review says that it kept these observations.
-While a review runs and has recorded nothing, it does not count.
-The review before it offers **Request another review** until it records something.
-If a filter hides that review, no row of the work offers it.
-
-**See the reviewed practices** opens a review.
-Its header names the work as a link to the original.
-The date and the status follow, then its sequence on the work when the list below it holds the review.
-To ask for another review, use **Request another review** in the list.
-
-A table lists every practice the review reached, with its outcome, under a gray heading for each practice group.
-Select **Open observation** to read that observation in its practice.
-When you come back to the review, the row of the observation you opened last keeps a blue bar on its left edge.
-During a review, practices appear as the review reaches them.
-
-These filters apply to the table:
-
-- **Outcome** selects one or more outcomes, as on the admin **Observations** tab.
-- **Group** selects one practice group.
-- **Practice** filters names by the text you enter.
-
-## The practice group table
-
-**See all practice groups** opens the **All practice groups** panel.
-Each row shows a workspace practice group, its standing, and a ring that splits its practices by standing.
-A practice group is a named set of related practices.
-The (i) beside the **Practice group** heading says so.
-
-A sentence describes what changed since the previous review.
-New feedback has no sentence here, because its card says it.
-The rows appear by standing, with groups that need attention first.
-
-1. To reverse the order, select the **Standing** heading.
-
-Some practices and groups have no standing yet.
-They fold into one line at the end of their table, so that they do not read as a gap.
-The line reads **Practices with no standing yet** or **Practice groups with no standing yet**.
-
-- A practice folds here when no review in the last 90 days gave it a standing.
-  The reviews found that it does not apply, could not judge it, or did not look at it.
-- A group folds here when none of its practices has a standing yet.
-  A group with no practice to review also folds here.
-  That is a group with no practices, with all of them switched off, or with only practices that people review.
-  A group that your workspace hides from developers is not listed.
-
-To see the rows of a fold, select its line.
-The rows open in the table above it.
-Select a row to open the practice or the group.
-
-Each folded row reads **No standing yet**.
-To see why, point at the label or select it.
-A practice reads **No standing yet** in its own panel too.
-If it does not apply to your work yet, its **Guide** tab says so.
-
-## Opening a group and a practice
-
-1. Select a group row.
-2. To see more detail, select a practice.
-
-The group panel shows the description that your workspace wrote for the group, if there is one.
-It lists each practice with its standing, trend and what changed.
-The practice panel shows the practice's name and your standing on it, when available, then its tabs:
-
-- **Feedback** shows the feedback about this practice. The panel opens on it.
-- **Observations** shows observations by review, newest first. Open an observation to read its available explanation, problems and next steps, evidence, and recorded feedback links.
-- **Guide** explains the practice. It appears when the practice has something to explain.
-
-In an open observation, each problem shows its number and its severity.
-When the observation gave feedback that reached you, a box per piece says where it went.
-It names the work, the practice page or your conversation with Hephaestus, and it links to the feedback there.
-You answer the feedback where it is, not in the observation.
-
-The newest observation opens on arrival.
-When you select **Open observation** on a review, the tab shows that work's observations, with the selected one open.
-An observation does not repeat how its review started, such as **Requested**.
-The list of reviews and the review itself show that.
-
-The search field filters by words, by work such as *#15*, and by problem.
-Every observation the search finds has a blue bar on its left edge.
-**Outcome** selects one or more outcomes, as on a review.
-**Reset** appears once you search or choose an outcome, and it clears only those.
-The timeframe stays as you chose it.
-
-The timeframe in the tab row, right of **Guide**, shows the last 7, 30 or 90 days, or **All time**, the initial value.
-It narrows both the feedback cards and the observations.
-Your open feedback card always shows, whatever the timeframe.
-A resolved card falls in the timeframe by the time it shows.
-An observation or card that you arrive at by a link shows even when it lies outside the timeframe.
-When the timeframe hides every card, the **Feedback** tab says so and offers **Show all time**.
-
-The number beside **Feedback** and **Observations** counts what each tab shows, with the timeframe and the tab's filters applied.
-The **Guide** tab has no timeframe, as a guide does not change over time.
-
-The **Guide** tab starts with an introduction:
-
-- Why the practice matters.
-- A picture of the idea, if the practice has one. A screen reader reads its description.
-- What work that meets the practice looks like. If the practice has a picture, this text is its caption.
-
-If the practice has a longer guide, it follows the introduction under **Practice guide**, with more pictures and links.
-When the introduction says why the practice matters or shows a picture, it sits under **At a glance**.
-**At a glance** and **Practice guide** each show their read time in minutes, such as *4 min read*.
-If the practice never applied to your work, the tab also says so.
-
-To open a practice from a feedback card, select **Learn more about this practice**.
-
-A practice with open feedback shows the label **Has open feedback** beside its name.
-The label also shows the clean work since then, as on the card.
-It is a label, not a button.
-
-### Feedback on a piece of work
-
-Feedback posted on a pull request, merge request, or issue stays on that work, not under **Feedback**.
-
-Anyone who can see a comment can follow its link to Hephaestus, but only the author of the work can answer the feedback there.
-Other members see that they have no feedback on that work.
-
-1. Open the practice panel.
-2. Select the **Observations** tab.
-3. Open the observation to read its available explanation, problems and next steps, evidence, and recorded feedback links.
-
-Under **Feedback from this observation**, each piece of feedback that reached you is numbered.
-It says where the feedback appeared and when.
-If only part appeared on the work, **First appeared** gives its first appearance time.
-The box says whether another part failed to post or is not confirmed yet.
-Feedback with no confirmed appearance does not appear here.
-
-For feedback on the work, select **Read the comment on the work** to open the recorded comment.
-If several comments carry it, they read **Read comment 1**, **Read comment 2** and so on.
-If no comment link was recorded, use the observation’s link to the original work.
-
-For feedback on the practice page, the link opens the practice’s Feedback tab at that card, and a blue sheen crosses the card once.
-The tab keeps your newest feedback and drops closed feedback a month after it closed.
-If the tab no longer lists the card, a line says so.
-For feedback in your conversation with Hephaestus, the link opens the conversation.
-Back on the Observations tab, the observation is still open.
-
-Feedback that a workspace admin withdrew does not appear here, in **Reviews of your work**, or on a review.
-If the admin restores it, it returns with your earlier response.
-Its links then open only the comments that still carry the feedback.
-After a restore, a comment on a line keeps its withdrawal notice.
-
-A standing is read from your newest reviewed work for each practice.
-Your latest work counts most, and older work counts less.
-When you change reviewed work, its last review keeps counting until a newer review of that work decides the practice again.
-For example, a practice that reviews a pull request only when it opens keeps counting that review after you push.
-
-To see how much work a standing rests on, point at its badge, move to it with the keyboard, or tap it.
-The trend beside the badge, such as *Met more often*, opens its own sentence in the same way.
-That sentence says in plain words whether your recent work meets the practice more or less often than before.
-For a practice, it compares your recent reviewed work with the work before it.
-When counts are available, the sentence shows how much work it compared.
-For a group, it says that the trend compares your recent work with the work before it, practice by practice.
-
-The trend reads **Met more often**, **Met less often** or **No clear direction**.
-When there is too little reviewed work to compare, the trend reads **Not enough to compare**.
-Its sentence then says that a trend needs more reviewed work.
-When a count is available, it says how much more work is needed.
-A tap opens the sentence, not the row.
-To close the sentence, press Escape or select a different part of the page.
-
-The sentence names the work it is read from.
-It also tells you how much of your work was reviewed for the practice or the group in the last 90 days.
-For example: "Read from your last 4 reviewed pull requests. In the last 90 days, 11 pull requests were reviewed for this practice."
-
-A piece of work counts when a review could judge the practice on it.
-Eligible decided observations provide the evidence for these counts.
-Your standing uses automatic reviews first.
-Requested reviews contribute where those reviews establish no standing.
-
-A practice or group marked **Based on earlier reviews, the criteria might have changed** includes historical assessments.
-Those assessments do not show whether the current criteria are met.
-They contribute no trend or feedback quotes.
-The mark reads the same when the original criterion version is unavailable.
-Only its icon differs.
-
-A group counts each piece of work once, even when several of its practices judged it.
-
+- **No standing yet**: no review in the last 90 days gave the practice a standing.
+  The practice did not apply to your work, could not be judged, or was not reviewed.
+
+A standing is read from your newest reviewed work on each practice.
+Your latest work counts most.
 If fewer than three pieces of work back a standing, its sentence calls it an early read.
 The next piece of work can change an early read.
 
-Each panel opens over the previous panel, with the page visible behind it.
-The short path above the title shows where you are, from the page to the panel.
+A trend shows whether your recent work meets the practice more or less often than your work before it.
+It reads **Met more often**, **Met less often**, **No clear direction**, or **Not enough to compare**.
+To see how much work a standing or a trend rests on, point to its badge or select it.
 
-1. To go to a position on the path, select it.
-2. To go back one level, select **Back**.
+A standing marked **Based on earlier reviews, the criteria might have changed** includes assessments from earlier reviews.
+They do not show whether the current criteria are met, and they give no trend.
 
-### Switching to the workspace
+A practice that your workspace stops reviewing leaves the page, with its standing and its feedback.
+The colors of the practice groups only tell the groups apart. They are not a rating.
 
-The foot of **All practice groups**, of a group, and of a practice has a button to the same place on [Practices across the workspace](#practices-across-the-workspace).
-On a practice, the workspace page marks that practice in its group.
-**See your own standing** on the workspace page goes back to your profile.
-However often you switch, one **Back** returns to where you started.
-An instance admin who reads your profile with **View as user** does not see the button.
+## Read the evidence behind a standing
 
-## Practices across the workspace
+1. Select **See all practice groups**.
+   The table lists each practice group with its standing, and what changed since the previous review.
+2. Select a group.
+3. Select a practice.
 
-Practices across the workspace shows where the developers in your workspace stand.
-Other developers appear only as counts.
-Each standing comes from AI review of the work and can be wrong.
-Your own standings stay in your Practice profile.
-The page keeps its explanations behind an info button (i).
-Point at the button, move to it with the keyboard, or tap it to read the explanation.
+The practice has three tabs:
 
-1. In the sidebar, under **Workspace**, select **Practices across the workspace**.
-   If the sidebar shows only icons, select the **Practices across the workspace** icon.
+- **Feedback** shows your feedback cards for the practice. The practice opens on this tab.
+- **Observations** shows the observations by review, newest first. Open one to read its explanation, problems, next steps, and evidence.
+- **Guide** explains the practice and what work that meets it looks like, if the practice has a guide.
 
-### Your figures
+The timeframe beside the tabs narrows the feedback and the observations to the last 7, 30, or 90 days, or **All time**.
+Your open card always shows.
 
-Four tiles set your own figure beside the workspace's typical range for that figure.
-The range is the middle half, from the 25th to the 75th percentile.
-The time-window figures count developers with a standing within that window.
-Open feedback can also count developers without a standing.
-A blue marker shows your value.
+Practices and groups with no standing fold into one line at the end of their table.
+Select the line to see them.
 
-- **Pieces of work reviewed**, **Practices going well**, and **Practices needing attention** use the selected time range.
-  Select **Last 7 days**, **Last 30 days**, **Last 90 days**, or **All time**.
-- **Open feedback** counts the feedback that is open now, whatever the time range.
+To go back, select **Back**, or select a position in the path above the title.
 
-### The bars
+### Find the feedback that a comment gave
 
-**All practice groups** has one bar for each practice group.
-Each bar counts the developers with a standing by the standing that their Practice profile shows.
-Each developer counts once, however much of their work was reviewed.
-The **You** bracket spans the part you are in, but only when the bar counts you.
-It marks the part, not a point within it.
-The bars show standings now, so the time range does not change them.
+1. Open the practice.
+2. Select **Observations**.
+3. Open the observation.
+4. Under **Feedback from this observation**, select **Read the comment on the work**.
 
-The colors of the group names only tell the groups apart, here and in **All practice groups** of your profile. They are not a rating.
+The box also says where else the observation gave feedback, such as on your practice page or in your conversation, and links to it.
 
-A practice that is reviewed only by people, or by nobody, has no standing and is not on the page.
-Turning feedback off does not remove the practice's standing.
+### Compare with the workspace
 
-If some standings include earlier assessments, the page says so.
-When your standing includes them, your own row carries **Based on earlier reviews, the criteria might have changed**, as your profile does.
+The foot of **All practice groups**, of a group, and of a practice links to the same place on [Practices across the workspace](./practices-across-the-workspace.mdx).
+One **Back** returns you to where you started.
 
-### Small counts
+## Reviews of your work
 
-The page shows every count, however small, and everyone sees the same counts.
-It never names a developer, but a small count can tell other members where you stand:
+The chip beside the title shows your latest review.
+It reads **Latest review** with the date and the work, or **Review running** while a review runs.
+Before your first review, it reads **No review yet**.
 
-- A small bar segment can identify one or two developers if a member knows them.
-- A typical range of one or two developers can show their values.
-- A member who compares the page before and after your next review can see the counts change.
+Select the chip to open **Reviews of your work**.
+It lists each review that recorded an observation about your work, newest first.
+A tag shows a review that someone asked for (**Requested**), that a schedule started (**Scheduled**), or that caught up on earlier work (**Backfilled**).
+**What it saw** counts the practices that the review recorded about you, by outcome.
 
-A workspace admin can hide you from the workspace. Then the page does not count you.
+- To open a review, select **See the reviewed practices**. Then select **Open observation** to read one observation in its practice.
+- To see every review of one piece of work, select **Track this work** in its row.
+- To narrow the list, use the **Work**, **Status**, and timeframe filters. **Reset** clears them.
 
-### Open a group
+## Respond to feedback
 
-1. Select **Open group**.
-   A panel shows the group's bar and a bar for each of its practices.
-2. To see your own standing, select **See your own standing** at the foot of the panel.
-   To go to one practice in your profile, select **Open in your Practice profile** on its row.
+Answer feedback in Hephaestus.
+Replies and reactions on GitHub or GitLab do not save your answer.
+The footer of each Hephaestus comment says "Answer or disagree in Hephaestus" and links to your feedback on that work.
+Only the author of the work can answer there.
+Other people who follow the link see no feedback of their own.
 
-At the end of the page, **See your own standing** opens **All practice groups** in your profile.
+### Mark feedback as fixed or not applicable
 
-## When nothing has been reviewed yet
+1. Open the card on your Practice profile, or follow the **Hephaestus** link in the comment footer.
+2. Under **Or mark it yourself**, select **I fixed this** or **Does not fit my work**.
 
-Before the first review, each practice counts as **No standing yet**.
-The chip reads **No review yet**.
-Under **Your recurring feedback patterns**, the page lists what can start a review in your workspace, such as opening a pull request.
+The card moves to **Marked by you**.
+After **Does not fit my work**, a later review of the same work does not send you that point again.
+To undo your answer, select it again. The card opens again.
+
+### Disagree with feedback
+
+1. On the card, select **Disagree**.
+2. In **What is wrong in this feedback?**, enter one or two sentences.
+3. Select **Send**.
+
+Workspace admins read your sentence, not the card.
+They can mark the observation incorrect or withdraw the card.
+The card stays open until then.
+A disagreement does not change the observation or your standing by itself.
+To take it back, select **Disagree** again.
+
+### Rate feedback
+
+1. At the bottom of the card, select **Helpful** or **Not helpful**.
+2. Optional: Enter a note, and select **Send**.
+
+A rating says whether the feedback helped you.
+It is separate from a disagreement, so removing your rating does not remove a disagreement.
+While a disagreement stands, its sentence is the only note on the card.
+
+### Who sees your response
+
+Workspace admins see that you have a current answer, when you gave it, and the sentence of a current disagreement.
+The card text, a rating without an answer, and your rating notes stay private.
+When you undo an answer, workspace admins stop seeing it, and its history stays.
+
+## Request another review
+
+Ask for another review after you change your work.
+You can ask as the author or an assignee of the work, or as a workspace admin.
+
+1. Select the chip beside the title to open **Reviews of your work**.
+2. In the row of the latest review of the work, select **Request another review**.
+3. Optional: When Hephaestus accepts the request, select **View requested review** to follow it.
+
+You can also ask in these places:
+
+- **Request review** on your own open work in [Activity](./activity.mdx#request-a-review) or in the [Chrome extension](./browser-extension.mdx).
+- A comment on a pull request or merge request that contains only `/hephaestus review`. An edited comment does not count. Comment from a GitHub or GitLab account that is connected to your Hephaestus account.
+
+A request follows your [AI choice](./user-settings.mdx#your-ai-choice), the review scope of the workspace, and the access checks of GitHub or GitLab.
+If Hephaestus cannot accept the request, it says why, for example that a review was requested a short time ago.
+If nothing that the practices read changed since the last review, Hephaestus does not review the work again, and its observations stand.
+When a comment request ends without feedback, Hephaestus answers the comment and says why.
+
+The new review keeps earlier observations in history.
+Of the reviews that can count, the one that Hephaestus recorded last counts, whoever started it.
+
+## Before your first review
+
+Before your first review, every practice reads **No standing yet**.
+The page lists what can start a review in your workspace, such as opening a pull request.
 Whether a review runs also depends on the repository and on each practice.
 **See what this workspace reviews** opens the practice groups.
-If a workspace admin approves feedback before it is posted on your work, the page says so.
+While your first review waits or runs, the page says so and links the work.
 
-While your first review waits, runs or continues, the page says so, counts the practices that are finished, and links the work.
-The first review with a recorded observation fills the page.
-To request a review of eligible work, use **Request review** on [Activity](./activity.mdx#request-a-review).
-
-### When no review runs on your work
-
-Sometimes no review can run on your work.
-Then the page names the reason instead:
-
-| The page says | Why | What you can do |
-| --- | --- | --- |
-| **Hephaestus does not review your work here** | You chose No AI. | Select **Change your AI choice**. |
-| **Choose your AI to get reviews** | The workspace reviews your work only after you choose which AI may handle it. | Select **Choose your AI**. |
-| **Practice reviews are not set up for your AI choice yet** | The workspace has no review model that fits your choice. | Ask a workspace admin, or select **Your AI choice**. |
-| **Reviews here start only on request** | The workspace does not review work by itself. | Select **Request a review on Activity** for eligible work. |
-| **Practice reviews are off here** | The workspace turned practice reviews off. | Ask a workspace admin. |
-| **Your work is outside the review scope** | A workspace admin chose whose work the workspace reviews. | Ask a workspace admin. |
-| **Hephaestus cannot match your work to you here yet** | The workspace cannot connect your work to your membership. | Connect the account that the workspace uses in **User settings**, or ask a workspace admin. |
-| **No practice here reviews your work yet** | No practice reviews the work of the person who did it. | Ask a workspace admin. |
-| **Reviews are paused in this workspace** | The workspace is inactive. | Ask a workspace admin. |
-
-If you are a workspace admin, five of these reasons also link to the place to change them.
-**Your work is outside the review scope** links to **review scope**.
-These four reasons link to the **setup summary** in the workspace settings:
-
-- **Practice reviews are off here**
-- **Reviews here start only on request**
-- **No practice here reviews your work yet**
-- **Practice reviews are not set up for your AI choice yet**
+If no review can run on your work, the page names the reason.
+[No review ran on your work](./ai-code-review.mdx#no-review-ran-on-your-work) lists each reason and what to do.

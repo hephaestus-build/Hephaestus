@@ -118,7 +118,7 @@ export const NONE_YET_SEGMENT = {
 	colorClass: NEUTRAL_GREY,
 } as const;
 
-/** The answer the legend's (i) leads with, in the words of `docs/user/practice-profile.mdx` § The bars. */
+/** The answer the legend's (i) leads with, in the words of `docs/user/practices-across-the-workspace.mdx` § The bars. */
 export function barsLead(scope: StandingScope): string {
 	return `Each bar counts developers by current standing in the ${scope}, each once.`;
 }
