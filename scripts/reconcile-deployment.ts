@@ -15,7 +15,7 @@ import {
 import path from "node:path";
 
 import { isCommit, parseInventory } from "./commit-image-lock.ts";
-import { commitChartValues, renderChartValues } from "./kubernetes-chart.ts";
+import { commitChartValues, renderChartValues, type ChartValues } from "./kubernetes-chart.ts";
 import { isSet, requiredEnv } from "./lib/env.ts";
 import { asArray, asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
 import { output, run, succeeds } from "./lib/process.ts";
@@ -995,7 +995,7 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		);
 	}
 	console.log(`Applied ${decision.release} to Helm release ${config.chart.release}`);
-	// Only now, with the release verified and running, does the host run that release's tooling.
+	// Only after verification and apply can the host advance its verifier along the source history.
 	await followTooling(config, releaseTree, unitsDirectory);
 	// Last, so a prune that fails leaves this release running, recorded and adopted; the next apply
 	// prunes again.
@@ -1305,16 +1305,26 @@ async function applyChart(
 	packaged?: string,
 	applied?: AppliedState,
 ): Promise<void> {
-	const values =
-		packaged === undefined
-			? commitChartValues(
-					lockedImages(lockEnv),
-					parseInventory(
-						await readJsonFile(path.join(releaseTree, "security/release-images.json")),
-					),
-					lockedReleaseCommit(lockEnv),
-				)
-			: undefined;
+	let values: ChartValues | undefined;
+	if (packaged === undefined) {
+		const inventory = parseInventory(
+			await readJsonFile(path.join(releaseTree, "security/release-images.json")),
+		);
+		const schema = asRecord(
+			await readJsonFile(path.join(releaseTree, "deploy/chart/hephaestus/values.schema.json")),
+			"chart schema",
+		);
+		const properties = asRecord(schema.properties, "chart properties");
+		const images = asRecord(properties.images, "chart images");
+		// Older inventories include scan-only images. Only the target chart's own image keys run.
+		const imageNames = Object.keys(asRecord(images.properties, "chart image properties"));
+		values = commitChartValues(
+			lockedImages(lockEnv),
+			inventory,
+			lockedReleaseCommit(lockEnv),
+			imageNames,
+		);
+	}
 	const profiles = await profileFiles(settings, releaseTree);
 	const directory = path.join(config.stateDirectory, "chart");
 	await mkdir(directory, { recursive: true });

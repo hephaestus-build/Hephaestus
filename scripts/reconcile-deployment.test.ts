@@ -18,7 +18,7 @@ import { test } from "node:test";
 import { parse } from "yaml";
 
 import { environmentForGitFixture, GIT_REPOSITORY_VARIABLES } from "./lib/git-environment.ts";
-import { asRecord, at, parseJson } from "./lib/json.ts";
+import { asArray, asRecord, at, parseJson } from "./lib/json.ts";
 import {
 	adoptTooling,
 	appliedCommit,
@@ -1007,6 +1007,31 @@ async function reconcilerFixture(directory: string, targetRelease = "v1.0.0") {
 			],
 		}),
 	);
+	const imageInventory = asRecord(
+		parseJson(await readFile(path.join(checkout, "security/release-images.json"), "utf8")),
+		"fixture inventory",
+	);
+	await writeFile(
+		path.join(checkout, "deploy/chart/hephaestus/values.schema.json"),
+		JSON.stringify({
+			properties: {
+				images: {
+					properties: Object.fromEntries(
+						Object.keys(chartChannelImages()).map((key) => [
+							key.slice("HEPHAESTUS_IMAGE_".length).toLowerCase().replaceAll("_", "-"),
+							{},
+						]),
+					),
+				},
+			},
+		}),
+	);
+	// A release inventory can include scan-only subjects that its chart must not receive.
+	imageInventory.images = [...asArray(imageInventory.images, "images"), "legacy-scan-only"];
+	await writeFile(
+		path.join(checkout, "security/release-images.json"),
+		JSON.stringify(imageInventory),
+	);
 	gitIn(checkout, "init", "--quiet", "--initial-branch=main");
 	gitIn(checkout, "config", "user.email", "host@example.invalid");
 	gitIn(checkout, "config", "user.name", "host");
@@ -1270,7 +1295,16 @@ await test(
 				path.join(fixture.checkout, "security/release-images.json"),
 				JSON.stringify({ images: ["engine", "executor"], upstream: [] }),
 			);
-			gitIn(fixture.checkout, "add", "security/release-images.json");
+			await writeFile(
+				path.join(fixture.checkout, "deploy/chart/hephaestus/values.schema.json"),
+				JSON.stringify({ properties: { images: { properties: { engine: {}, executor: {} } } } }),
+			);
+			gitIn(
+				fixture.checkout,
+				"add",
+				"security/release-images.json",
+				"deploy/chart/hephaestus/values.schema.json",
+			);
 			gitIn(fixture.checkout, "commit", "--quiet", "-m", "different image contract");
 			const candidate = gitIn(fixture.checkout, "rev-parse", "HEAD");
 			gitIn(fixture.checkout, "push", "--quiet", "origin", "main");
@@ -2456,7 +2490,10 @@ await test(
 			host.apply();
 			const tree = path.join(host.releases, first);
 			assert.equal(gitIn(tree, "rev-parse", "HEAD"), first);
-			assert.equal(await readlink(path.join(directory, "tooling")), tree);
+			assert.equal(
+				await readlink(path.join(directory, "tooling")),
+				path.join(host.releases, third),
+			);
 			const record = await host.record();
 			assert.equal(record?.release, first);
 			assert.equal(record.previous, third);

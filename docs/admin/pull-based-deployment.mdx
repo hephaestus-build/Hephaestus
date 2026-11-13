@@ -168,7 +168,9 @@ A runtime rollback keeps newer installed tooling.
 Startup recovery from `applied.json` also keeps a newer verifier that an operator installed by hand.
 The applied record describes the runtime; the tooling link names its installed verifier.
 
-A commit channel takes its image keys from the target commit's inventory and its references from the signed channel.
+A commit channel takes its runnable image keys from the target chart's schema.
+It checks them against the target commit's inventory and takes their references from the signed channel.
+Scan-only subjects in an older inventory do not become chart values.
 The verifier has no fixed list of commit image names.
 It still refuses a missing digest or an upstream reference that differs from the inventory pin.
 
@@ -185,10 +187,14 @@ Wait for an active reconciliation to finish before you continue.
 Do not stop a service that is applying a chart.
 
 ```bash
+(
 set -euo pipefail
 TOOLING_COMMIT=FULL_MERGED_SOURCE_COMMIT
+[[ "$TOOLING_COMMIT" =~ ^[0-9a-f]{40}$ ]]
 sudo systemctl stop hephaestus-reconcile.timer
-if sudo systemctl is-active --quiet hephaestus-reconcile.service; then
+service_state=$(sudo systemctl show hephaestus-reconcile.service --property=ActiveState --value)
+service_pid=$(sudo systemctl show hephaestus-reconcile.service --property=MainPID --value)
+if [[ ! "$service_state" =~ ^(inactive|failed)$ || "$service_pid" != 0 ]]; then
   echo "Wait for the active reconciliation to finish" >&2
   exit 1
 fi
@@ -204,7 +210,9 @@ if [ ! -e "$TREE" ]; then
 fi
 [ "$(git -C "$TREE" rev-parse HEAD)" = "$TOOLING_COMMIT" ]
 [ -z "$(git -C "$TREE" status --porcelain=v1 --untracked-files=no)" ]
-readlink "$STATE/tooling" > "$STATE/tooling-before-upgrade"
+if [ "$(readlink "$STATE/tooling")" != "$TREE" ]; then
+  readlink "$STATE/tooling" > "$STATE/tooling-before-upgrade"
+fi
 install -m 0644 "$TREE/deploy/reconcile/hephaestus-reconcile.service" \
   "$TREE/deploy/reconcile/hephaestus-reconcile.timer" /etc/systemd/system/
 rm -f "$STATE/tooling.next"
@@ -212,10 +220,20 @@ ln -s "$TREE" "$STATE/tooling.next"
 mv -Tf "$STATE/tooling.next" "$STATE/tooling"
 systemctl daemon-reload
 SCRIPT
-sudo systemctl start hephaestus-reconcile.service
+service_status=0
+sudo systemctl start hephaestus-reconcile.service || service_status=$?
 sudo journalctl -u hephaestus-reconcile.service -n 80 --no-pager
+if [ "$service_status" -ne 0 ]; then
+  echo "Reconciliation failed; the timer remains stopped. Inspect the journal before resuming." >&2
+  exit "$service_status"
+fi
 sudo systemctl start hephaestus-reconcile.timer
+)
 ```
+
+If a command fails after the timer stops, reconciliation stays paused.
+Read the error and the service journal, fix the cause, and run the procedure again.
+The undo target is kept when the selected tooling is already installed.
 
 Confirm that the service applied its signed channel or reported an unchanged target.
 Its journal can say `Keeping reconciler tooling` when the applied runtime predates the installed verifier.
@@ -224,6 +242,8 @@ That message preserves the newer verifier; it does not stop channel verification
 To undo the tooling installation before starting the service, stop the timer and select the tree recorded in `/var/lib/hephaestus/tooling-before-upgrade`.
 Restore its service and timer files, move the tooling link to it, and reload systemd.
 After a runtime change, follow [Rollback](./upgrade#rollback) instead.
+A channel cannot downgrade the verifier.
+If the verifier itself needs replacement, use this procedure with another reviewed source commit.
 
 
 ### Requirements for the chart

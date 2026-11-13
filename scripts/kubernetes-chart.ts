@@ -107,7 +107,8 @@ export function releaseValuesFile(source: string, values: ChartValues): string {
 
 /**
  * The values of a commit channel, from the digests its verified commit lock names under the keys
- * that commit-image-lock writes. An upstream image must be the inventory's pin, as in a release
+ * that commit-image-lock writes. Image names come from the target chart, which can run only a subset
+ * of an older release inventory. An upstream image must be the inventory's pin, as in a release
  * lock. A commit's version is the commit, as a promotion verifies it
  * (scripts/resolve-promotion.ts).
  */
@@ -115,6 +116,7 @@ export function commitChartValues(
 	images: Readonly<Record<string, string>>,
 	inventory: ImageInventory,
 	commit: string,
+	imageNames: readonly string[],
 ): ChartValues {
 	const reference = (name: string): string => {
 		const locked = images[environmentKey(name)];
@@ -125,15 +127,14 @@ export function commitChartValues(
 		if (upstream !== undefined && locked !== `${upstream.repository}@${upstream.digest}`) {
 			throw new Error(`${name} is locked at ${locked}, not the inventory pin ${upstream.digest}`);
 		}
+		if (upstream === undefined && !inventory.images.includes(name)) {
+			throw new Error(`the release image inventory has no ${name}, which the chart runs`);
+		}
 		return locked;
 	};
 	return {
 		release: { version: commit, commit },
-		images: Object.fromEntries(
-			[...inventory.images, ...inventory.upstream.map((entry) => entry.name)]
-				.toSorted()
-				.map((name) => [name, reference(name)]),
-		),
+		images: Object.fromEntries(imageNames.toSorted().map((name) => [name, reference(name)])),
 	};
 }
 

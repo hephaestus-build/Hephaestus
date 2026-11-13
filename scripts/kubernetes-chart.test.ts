@@ -221,14 +221,17 @@ await test("a commit lock names the chart images by digest, its upstream images 
 		// An image the chart does not run.
 		HEPHAESTUS_IMAGE_TRAEFIK: `docker.io/library/traefik@${digest("6")}`,
 	};
-	const values = commitChartValues(images, inventory, commit);
+	const values = commitChartValues(images, inventory, commit, chartImages);
 	assert.deepEqual(Object.keys(values.images), [...chartImages]);
 	assert.equal(values.images.postgres, images.HEPHAESTUS_IMAGE_POSTGRES);
 	// A followed commit reports the commit as its version, which the promotion verifies.
 	assert.equal(values.release.version, commit);
 
 	const { HEPHAESTUS_IMAGE_WEBAPP: _webapp, ...withoutWebapp } = images;
-	assert.throws(() => commitChartValues(withoutWebapp, inventory, commit), /no webapp digest/u);
+	assert.throws(
+		() => commitChartValues(withoutWebapp, inventory, commit, chartImages),
+		/no webapp digest/u,
+	);
 	assert.throws(
 		() =>
 			commitChartValues(
@@ -238,6 +241,7 @@ await test("a commit lock names the chart images by digest, its upstream images 
 				},
 				inventory,
 				commit,
+				chartImages,
 			),
 		/nats is locked at .*, not the inventory pin/u,
 	);
@@ -247,6 +251,7 @@ await test("a commit lock names the chart images by digest, its upstream images 
 				{ ...images, HEPHAESTUS_IMAGE_WEBAPP: "ghcr.io/hephaestus-build/webapp:main" },
 				inventory,
 				commit,
+				chartImages,
 			),
 		/no webapp digest/u,
 	);
@@ -258,7 +263,7 @@ await test("commit chart values follow the applied inventory across image contra
 	const executor = `ghcr.io/another-team/runtime@${digest("b")}`;
 	const broker = `docker.io/example/message-bus@${digest("c")}`;
 	const candidate = parseInventory({
-		images: ["engine", "executor"],
+		images: ["engine", "executor", "scan-only"],
 		upstream: [
 			{ name: "broker", repository: "docker.io/example/message-bus", digest: digest("c") },
 		],
@@ -272,6 +277,7 @@ await test("commit chart values follow the applied inventory across image contra
 			},
 			candidate,
 			commit,
+			["broker", "engine", "executor"],
 		),
 		{ release: { version: commit, commit }, images: { broker, engine, executor } },
 	);
@@ -281,6 +287,7 @@ await test("commit chart values follow the applied inventory across image contra
 				{ HEPHAESTUS_IMAGE_ENGINE: engine, HEPHAESTUS_IMAGE_BROKER: broker },
 				candidate,
 				commit,
+				["broker", "engine", "executor"],
 			),
 		/no executor digest/u,
 	);
@@ -294,6 +301,7 @@ await test("commit chart values follow the applied inventory across image contra
 				},
 				candidate,
 				commit,
+				["broker", "engine", "executor"],
 			),
 		/not the inventory pin/u,
 	);
