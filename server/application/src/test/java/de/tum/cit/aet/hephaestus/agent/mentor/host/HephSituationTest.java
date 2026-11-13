@@ -9,10 +9,9 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.mentor.MentorSituation;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -45,7 +44,7 @@ class HephSituationTest extends BaseUnitTest {
     GitProviderRegistry profiles;
 
     @Mock
-    IdentityProviderRepository providers;
+    IdentityProviderLookup providers;
 
     @Mock
     IntegrationManifestRegistry manifests;
@@ -58,8 +57,8 @@ class HephSituationTest extends BaseUnitTest {
                 new HephSituation(situations, accounts, identities, profiles, providers, manifests, clock);
         TurnAttempt turn = turn();
         when(situations.render(1L, turn.turnId(), BERLIN)).thenReturn("<situation>\nWorkspace facts.\n</situation>");
-        IdentityProvider gitLab = provider(10L, IdentityProviderType.GITLAB);
-        IdentityProvider slack = provider(20L, IdentityProviderType.SLACK);
+        IdentityProviderLookup.Provider gitLab = provider(10L, IdentityProviderType.GITLAB);
+        IdentityProviderLookup.Provider slack = provider(20L, IdentityProviderType.SLACK);
         when(accounts.find(5L))
                 .thenReturn(Optional.of(
                         new AccountDirectory.AccountView(5L, Account.Status.ACTIVE, "Ada Lovelace", null, null, true)));
@@ -103,11 +102,9 @@ class HephSituationTest extends BaseUnitTest {
         return new TurnAttempt(UUID.randomUUID(), 1L, 5L, UUID.randomUUID(), 1, UUID.randomUUID());
     }
 
-    private static IdentityProvider provider(long id, IdentityProviderType type) {
-        IdentityProvider provider =
-                new IdentityProvider(type, "https://" + type.name().toLowerCase(Locale.ROOT));
-        provider.setId(id);
-        return provider;
+    private static IdentityProviderLookup.Provider provider(long id, IdentityProviderType type) {
+        return new IdentityProviderLookup.Provider(
+                id, type, "https://" + type.name().toLowerCase(Locale.ROOT));
     }
 
     private static GitProviderRegistry.IdentityKey key(AccountIdentityQuery.IdentityView link) {

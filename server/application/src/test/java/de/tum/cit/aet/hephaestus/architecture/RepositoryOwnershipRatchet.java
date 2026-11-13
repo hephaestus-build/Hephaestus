@@ -64,12 +64,6 @@ final class RepositoryOwnershipRatchet {
                     Set.of("activity.overview.ActivityScopeResolver")),
             new Entry(
                     "agent",
-                    "integration.core.connection.IdentityProviderRepository",
-                    "DDD11 (integration.core)",
-                    "integration.core::spi IdentityProviderLookup; SourceProviderNamespaces registration",
-                    Set.of("agent.mentor.host.HephSituation")),
-            new Entry(
-                    "agent",
                     "mentor.MentorConversationRepository",
                     "DDD10",
                     "mentor::spi MentorTurnAccess and MentorConversationAccess",

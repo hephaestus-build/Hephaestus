@@ -5,9 +5,8 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.mentor.MentorSituation;
 import java.time.Clock;
 import java.time.DayOfWeek;
@@ -46,7 +45,7 @@ public class HephSituation {
     private final AccountDirectory accounts;
     private final AccountIdentityQuery identities;
     private final GitProviderRegistry profiles;
-    private final IdentityProviderRepository providers;
+    private final IdentityProviderLookup providers;
     private final IntegrationManifestRegistry manifests;
     private final Clock clock;
 
@@ -97,7 +96,7 @@ public class HephSituation {
                 + DAY.format(monday.minusDays(1)) + ". Use these days; do not compute others.\n";
     }
 
-    private String label(@Nullable IdentityProvider provider) {
+    private String label(IdentityProviderLookup.@Nullable Provider provider) {
         return provider == null ? "Account" : manifests.displayName(provider.kind());
     }
 }
