@@ -12,8 +12,9 @@ import org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory;
  *
  * <p>Boot's connector customizers do not reach an additional connector, so this one states its own settings. A model
  * call holds its request thread until its stream ends, so a platform pool would bound the calls of all attempts on
- * this server. Virtual threads leave {@code maxConnections} and the gateway's body budget as the bounds. Tomcat's blocking socket reads and writes
- * pin their carrier on Java 21, so the chart sets {@code jdk.virtualThreadScheduler.maxPoolSize} above that bound.
+ * this server. Virtual threads leave {@code maxConnections} and the gateway's body budget as the bounds. The chart's
+ * {@code jdk.virtualThreadScheduler.maxPoolSize} above that bound dates from Java 21, where Tomcat's blocking socket
+ * reads and writes pinned their carrier; ADR 0109 removes it with the chart.
  */
 public final class SandboxGatewayConnector {
 

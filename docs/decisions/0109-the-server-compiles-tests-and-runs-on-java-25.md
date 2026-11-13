@@ -47,7 +47,7 @@ The Paketo Spring Boot buildpack deprecates the CDS switch of ADR 0067 in favor 
 6. `CacheLoads` and the locks stay. A comment that gives Java 21 pinning as the reason states the constraint that still holds, or goes.
 7. The server uses no preview feature and no incubator module.
 8. CDS stays as ADR 0067 decides. A separate change moves the image to the AOT cache and turns on compact object headers, with its own measurement, and updates ADR 0067. The training run and the runtime then need the same JVM options ([JEP 483](https://openjdk.org/jeps/483)).
-9. A separate change removes `jdk.virtualThreadScheduler.maxPoolSize` from the chart. On 25 a Tomcat socket wait unmounts, so the setting has no effect, but it is harmless until then.
+9. A separate change removes `jdk.virtualThreadScheduler.maxPoolSize` from the chart. On 25 a Tomcat socket wait unmounts, so the gateway no longer needs it. Until then it still caps the carriers that the scheduler adds for pinned file I/O.
 
 ## Consequences
 
@@ -57,10 +57,10 @@ The Paketo Spring Boot buildpack deprecates the CDS switch of ADR 0067 in favor 
 - Good: Temurin 25 has updates until at least September 2031.
 - Bad: each contributor installs a JDK 25, because Gradle does not download toolchains here.
 - Bad: the first CI run after the change starts with a cold Gradle cache.
-- Bad: JDK 25 disables SHA-1 in TLS 1.2 handshake signatures ([JDK-8340321](https://bugs.openjdk.org/browse/JDK-8340321)). A self-hosted GitLab, Outline or SMTP server that still signs with SHA-1 fails the handshake.
+- Neutral: TLS defaults do not change. The SHA-1 ban in TLS 1.2 handshake signatures ([JDK-8340321](https://bugs.openjdk.org/browse/JDK-8340321)) already reached Java 21 in 21.0.10.
 - Bad: on JDK 24 and later, Netty's native library load prints a JNI warning ([JEP 472](https://openjdk.org/jeps/472)). The test JVM and `bootRun` enable native access. The image starts the application from a class path, not with `java -jar`, so a JAR manifest entry does not enable it there. The AOT cache change decides how the image does.
 - Bad: Lombok's annotation processor prints a `sun.misc.Unsafe` warning in javac ([JEP 498](https://openjdk.org/jeps/498)). JDK 26 makes that memory access throw by default.
-- Found by the move: since JDK 23 the JDK `HttpServer` sends the headers of a chunked response only with its body ([JDK-6968351](https://bugs.openjdk.org/browse/JDK-6968351), release note [JDK-8331847](https://bugs.openjdk.org/browse/JDK-8331847)). The live-test stand-in for the model proxy forwarded with `transferTo`, which never flushes. It held streamed frames even on 21, and on 25 its client waited for the headers. It now flushes each read.
+- Good: the move found a test defect. Since JDK 23 the JDK `HttpServer` sends the headers of a chunked response only with its body ([JDK-6968351](https://bugs.openjdk.org/browse/JDK-6968351), release note [JDK-8331847](https://bugs.openjdk.org/browse/JDK-8331847)). The live-test stand-in for the model proxy forwarded with `transferTo`, which never flushes. It held streamed frames even on 21, and on 25 its client waited for the headers. It now flushes each read.
 
 ## Rollback
 
@@ -87,4 +87,4 @@ Hosts roll back with the [upgrade rollback procedure](https://docs.hephaestus.bu
 - [NullAway JSpecify support](https://github.com/uber/NullAway/wiki/JSpecify-Support): JSpecify mode needs javac 22 or later, or the flag on 21. This is the basis of rule 4.
 - [JDK-6968351](https://bugs.openjdk.org/browse/JDK-6968351) and release note [JDK-8331847](https://bugs.openjdk.org/browse/JDK-8331847): the `HttpServer` header change in JDK 23.
 - [Gradle compatibility matrix](https://docs.gradle.org/current/userguide/compatibility.html): Gradle 9.1 and later run on and compile for Java 25.
-- [JDK 25 release notes](https://www.oracle.com/java/technologies/javase/25-relnote-issues.html): the TLS SHA-1 change.
+- [JDK-8367675](https://bugs.openjdk.org/browse/JDK-8367675): the TLS SHA-1 change in Java 21.0.10, so it is not part of this move.
