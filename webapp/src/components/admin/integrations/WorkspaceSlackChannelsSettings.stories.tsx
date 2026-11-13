@@ -128,17 +128,28 @@ export const AllStates: Story = {
 };
 
 /**
- * ACTIVATING — activation queued; the row has no actions while the outbox processes the
+ * ACTIVATING — activation queued; the row offers no consent change while the outbox processes the
  * announcement. The admin must wait; there is nothing to retry yet.
  */
 export const ActivatingChannel: Story = {
 	args: { channels: [activating] },
 	play: async ({ canvas }) => {
 		canvas.getByText("Activating");
-		// No action button while activation is in progress — the admin must wait.
-		await expect(
-			canvas.queryByRole("button", { name: /actions for team-announcements/iu }),
-		).not.toBeInTheDocument();
+		// The row waits for Slack to confirm the announcement. Its menu offers no consent change,
+		// only the history and the removal that every started channel has.
+		await userEvent.click(canvas.getByRole("button", { name: /actions for team-announcements/iu }));
+		await screen.findByRole("menuitem", { name: /view history/iu });
+		// `getByRole` fails on its own when the item is missing.
+		screen.getByRole("menuitem", { name: /remove and erase/iu });
+		for (const name of [
+			/activate monitoring/iu,
+			/retry activation/iu,
+			/^pause$/iu,
+			/^resume$/iu,
+			/set up again/iu,
+		]) {
+			await expect(screen.queryByRole("menuitem", { name })).not.toBeInTheDocument();
+		}
 	},
 };
 

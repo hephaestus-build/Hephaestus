@@ -1,0 +1,4 @@
+# #4335: A client asks a Slack channel for a requested outcome, never for a delivery state.
+# The consent change accepts only ACTIVE, PAUSED or REVOKED; PENDING is a starting state, not a request.
+# .changeset/slack-durable-effects.md and .migration/slack-durable-effects.md tell API clients.
+in API PATCH /workspaces/{workspaceSlug}/slack/channels/{slackChannelId} removed the enum value `PENDING` of the request property `consentState`
