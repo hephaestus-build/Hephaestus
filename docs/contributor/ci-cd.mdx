@@ -589,11 +589,16 @@ The workflow passes the settings to the live test as the three `HEPHAESTUS_LIVE_
 Without all three settings, the panel is inactive:
 
 - A night without both variables starts no job, and the tracking issue stays unchanged.
-- A night with both variables but no key runs only the provider check. A job condition cannot read a secret, so the check is a step. It ends without failure, names the missing setting in its summary, and starts no panel. The tracking issue stays unchanged.
+- A night with both variables but no key runs only the provider check. A job condition cannot read a secret, so the check is a step. It ends without failure, names `FEEDBACK_EVAL_API_KEY` as missing in its summary, and starts no panel. The tracking issue stays unchanged.
 - A manual run and an `eval:run` pull request run end without failure. Their summary says that the provider is not configured.
 
 The deterministic gate in `cicd.yml` still covers every pull request.
 GitHub Models, which needed no key, was retired on 2026-07-30, so the panel has no default provider.
+
+The last night whose panel measured and passed is kept as state, not searched for in run history.
+That night saves an Actions cache entry with the key `feedback-eval-last-green-<run ID>-<commit>`.
+A red or unfinished night reads the newest such entry and links the commits since that commit.
+GitHub evicts a cache entry that nobody used for 7 days. Without an entry, the comment says that the last green night is unknown and that the range is not computed.
 
 ## The `preview` label
 

@@ -54,8 +54,9 @@ jobs:
           retries: 2
           script: |
             const run = context.payload.workflow_run;
+            let jobs = [];
             if (['CI / Kubernetes nightly', 'CI / Feedback eval panel', 'Security / Rescan images'].includes(run.name)) {
-              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, {
+              jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, {
                 ...context.repo, run_id: run.id, attempt_number: run.run_attempt, per_page: 100,
               });
               const reporters = ['Report a failed rescan', 'Notify vulnerability response tracking',
@@ -69,9 +70,13 @@ jobs:
             }
             // The panel keeps one tracking issue with its commit range; its report script writes it.
             if (run.name === 'CI / Feedback eval panel') {
+              // A cancelled night whose panel never started measured nothing: an inactive night has no jobs.
+              const started = jobs.some(job => job.name === 'Model panel' && (job.steps ?? []).length > 0);
+              if (run.conclusion === 'cancelled' && !started) return;
               const { reportNight } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/feedback-eval-night.ts`);
               await reportNight(github, context.repo, {
-                runId: run.id, sha: run.head_sha, serverUrl: context.serverUrl, runUrl: run.html_url,
+                runId: run.id, attempt: run.run_attempt, date: run.run_started_at ?? run.created_at,
+                sha: run.head_sha, serverUrl: context.serverUrl, runUrl: run.html_url,
                 result: run.conclusion, status: '', artifactUrl: '',
               });
               return;

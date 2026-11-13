@@ -1,30 +1,32 @@
 /**
- * The tracking issue of the nightly feedback eval panel: docs/contributor/feedback-quality-evals.md § A skipped panel.
+ * The tracking issue of the nightly feedback eval panel: docs/contributor/ci-cd.mdx § Feedback eval panel provider.
  * The panel's own report job and the `CI / Scheduled failures` fallback both import this one implementation, from an
  * `actions/github-script` step. It loads no package: those jobs install nothing.
  */
 
 export const PANEL_WORKFLOW = "CI / Feedback eval panel";
 export const ISSUE_TITLE = "The nightly feedback eval panel is not green";
-const WORKFLOW_FILE = "feedback-eval-panel.yml";
+/**
+ * A night whose panel measured and passed saves an Actions cache entry under this prefix, with its run ID and commit
+ * in the key. The newest entry is the last green night. GitHub evicts an entry that nobody used for 7 days.
+ */
+export const LAST_GREEN_PREFIX = "feedback-eval-last-green-";
+const CACHE_LIFETIME_DAYS = 7;
 
 type Route = (parameters: Record<string, unknown>) => Promise<unknown>;
 
 /** The part of the github-script Octokit client that the report calls. */
 export interface GitHub {
-	paginate: ((route: Route, parameters: Record<string, unknown>) => Promise<unknown[]>) & {
-		iterator: (
-			route: Route,
-			parameters: Record<string, unknown>,
-		) => AsyncIterable<{ data: unknown }>;
-	};
+	paginate: (route: Route, parameters: Record<string, unknown>) => Promise<unknown[]>;
 	rest: {
-		issues: { listForRepo: Route; create: Route; createComment: Route; update: Route };
-		actions: {
-			listWorkflowRuns: Route;
-			listJobsForWorkflowRun: Route;
-			listWorkflowRunArtifacts: Route;
+		issues: {
+			listForRepo: Route;
+			listComments: Route;
+			create: Route;
+			createComment: Route;
+			update: Route;
 		};
+		actions: { getActionsCacheList: Route; listWorkflowRunArtifacts: Route };
 	};
 }
 
@@ -36,9 +38,12 @@ export interface Repo {
 /** One scheduled run of the panel, as its report or the fallback sees it. */
 export interface Night {
 	runId: number;
+	attempt: number;
 	sha: string;
 	runUrl: string;
 	serverUrl: string;
+	/** When the night ran, as an ISO timestamp. */
+	date: string;
 	/** The panel job's result, or the run's conclusion when the report job did not run. */
 	result: string;
 	/** The panel's status output: passed, failed, skipped or ceiling-reached. Empty when the job wrote none. */
@@ -56,38 +61,27 @@ const WHAT: Record<string, string> = {
 	"ceiling-reached": "stopped at its call ceiling",
 };
 
-/**
- * The commit of the newest earlier night whose panel measured and passed: its "Model panel" job succeeded. A night
- * without a provider succeeds with a skipped panel, so a successful run alone is not a green night. The search pages
- * through every successful scheduled run of the panel.
- */
-export async function lastMeasuredGreen(
+const GREEN_KEY = new RegExp(`^${LAST_GREEN_PREFIX}\\d+-(?<sha>[0-9a-f]{40})$`, "u");
+
+/** The last night whose panel measured and passed, from the newest cache entry under the prefix. */
+export async function lastGreen(
 	github: GitHub,
 	repo: Repo,
-	currentRunId: number,
-): Promise<string | null> {
-	const pages = github.paginate.iterator(github.rest.actions.listWorkflowRuns, {
-		...repo,
-		workflow_id: WORKFLOW_FILE,
-		event: "schedule",
-		status: "success",
-		per_page: 100,
-	});
-	for await (const page of pages) {
-		for (const run of Array.isArray(page.data) ? page.data.map(record) : []) {
-			if (run.id === currentRunId || typeof run.head_sha !== "string") {
-				continue;
-			}
-			const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
-				...repo,
-				run_id: run.id,
-				per_page: 100,
-			});
-			if (
-				jobs.map(record).some((job) => job.name === "Model panel" && job.conclusion === "success")
-			) {
-				return run.head_sha;
-			}
+): Promise<{ sha: string; date: string } | null> {
+	const response = record(
+		await github.rest.actions.getActionsCacheList({
+			...repo,
+			key: LAST_GREEN_PREFIX,
+			sort: "created_at",
+			direction: "desc",
+			per_page: 10,
+		}),
+	);
+	const caches = record(response.data).actions_caches;
+	for (const entry of Array.isArray(caches) ? caches.map(record) : []) {
+		const sha = typeof entry.key === "string" ? GREEN_KEY.exec(entry.key)?.groups?.sha : undefined;
+		if (sha !== undefined && typeof entry.created_at === "string") {
+			return { sha, date: entry.created_at };
 		}
 	}
 	return null;
@@ -108,9 +102,22 @@ async function artifactOf(github: GitHub, repo: Repo, night: Night): Promise<str
 		: "no artifact was kept";
 }
 
+async function range(github: GitHub, repo: Repo, night: Night): Promise<string> {
+	const green = await lastGreen(github, repo);
+	if (green === null) {
+		const since = new Date(Date.parse(night.date) - CACHE_LIFETIME_DAYS * 86_400_000)
+			.toISOString()
+			.slice(0, 10);
+		return `Last measured green night unknown (cache expired); range from ${since} not computed. This night ran on \`${night.sha}\`.`;
+	}
+	const compare = `${night.serverUrl}/${repo.owner}/${repo.repo}/compare`;
+	return `Commits since the last night that measured and passed (${green.date.slice(0, 10)}): ${compare}/${green.sha}...${night.sha}`;
+}
+
 /**
  * Keeps the one tracking issue in step with a night: a night that measured and passed closes it, and any other night
- * comments on it, or opens it, with the commits since the last night that measured and passed.
+ * comments on it, or opens it, with the commits since the last night that measured and passed. A replay of an attempt
+ * that the issue already holds adds nothing.
  */
 export async function reportNight(
 	github: GitHub,
@@ -139,14 +146,28 @@ export async function reportNight(
 		await github.rest.issues.update({ ...repo, issue_number: number, state: "closed" });
 		return "closed";
 	}
-	const green = await lastMeasuredGreen(github, repo, night.runId);
-	const compare = `${night.serverUrl}/${repo.owner}/${repo.repo}/compare`;
+	const marker = `<!-- run:${night.runId}:${night.attempt} -->`;
+	if (number !== null) {
+		const comments = await github.paginate(github.rest.issues.listComments, {
+			...repo,
+			issue_number: number,
+			per_page: 100,
+		});
+		const told = [open, ...comments.map(record)].some(
+			(entry) =>
+				typeof entry?.body === "string" &&
+				entry.body.includes(marker) &&
+				(entry === open || record(entry.user).login === "github-actions[bot]"),
+		);
+		if (told) {
+			return "unchanged";
+		}
+	}
 	const body = [
+		marker,
 		`@hephaestus-build/maintainer: the nightly feedback eval panel ${WHAT[night.status] ?? `did not finish (${night.result})`}.`,
 		"",
-		green === null
-			? `No night has measured and passed yet. This night ran on \`${night.sha}\`.`
-			: `Commits since the last night that measured and passed: ${compare}/${green}...${night.sha}`,
+		await range(github, repo, night),
 		`Run: ${night.runUrl}`,
 		`Result: ${await artifactOf(github, repo, night)}`,
 	].join("\n");

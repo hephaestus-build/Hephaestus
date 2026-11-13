@@ -348,12 +348,12 @@ Each such night comments on one tracking issue, "The nightly feedback eval panel
 The workflow opens the issue if it is not open.
 
 The comment links the run, the kept result and the commits since the last night whose panel measured and passed.
-A night counts as green only when its panel job succeeded. A successful run with a skipped panel does not count.
-The search pages through every successful scheduled run until it finds such a night. If there is none, the comment says so.
+[Feedback eval panel provider](./ci-cd.mdx#feedback-eval-panel-provider) says how the workflow keeps that night.
 The next night that measures and passes closes the issue with a link to its run.
 
 A pull request run and a manual run report in their job summary only.
-If the report job itself fails, or the night is cancelled before it reports, `CI / Scheduled failures` writes to the same issue.
+If the report job itself fails, or the night is cancelled after its panel started, `CI / Scheduled failures` writes to the same issue.
+A replay of an attempt that the issue already holds adds nothing.
 Both call one script, `scripts/feedback-eval-night.ts`, so the fallback gives the same commit range and result link.
 
 The cicd job keeps `feedback-eval-gate.json` as the `feedback-eval-gate` artifact for 14 days. The panel keeps it as `feedback-eval-panel`.

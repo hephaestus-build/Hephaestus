@@ -46,10 +46,14 @@ jobs:
             exit 0
           fi
           echo "configured=false" >> "$GITHUB_OUTPUT"
+          missing=()
+          [ "$BASE_URL_SET" = true ] || missing+=("FEEDBACK_EVAL_BASE_URL")
+          [ "$MODEL_SET" = true ] || missing+=("FEEDBACK_EVAL_MODEL")
+          [ "$KEY_SET" = true ] || missing+=("FEEDBACK_EVAL_API_KEY")
           {
             echo "## Feedback eval panel"
             echo
-            echo "The model provider is not configured, so the panel did not run."
+            echo "The model provider is not configured, so the panel did not run. Missing: ${missing[*]}."
             echo "The deterministic feedback eval gate still covers every pull request."
             echo "docs/contributor/ci-cd.mdx § Feedback eval panel provider lists the settings."
           } >> "$GITHUB_STEP_SUMMARY"
@@ -83,6 +87,20 @@ jobs:
           HEPHAESTUS_LIVE_LLM_MODEL: ${{ vars.FEEDBACK_EVAL_MODEL }}
           HEPHAESTUS_LIVE_LLM_API_KEY: ${{ secrets.FEEDBACK_EVAL_API_KEY }}
         run: node scripts/feedback-eval-gate.ts --model --output "$RUNNER_TEMP/feedback-eval-panel"
+
+      # The last night that measured and passed is state, not a search through run history: a cache
+      # entry whose key carries this run and commit (scripts/feedback-eval-night.ts reads the newest).
+      # These steps run only when the panel step passed.
+      - name: Record the measured green night
+        if: github.event_name == 'schedule'
+        run: echo "$GITHUB_SHA" > .feedback-eval-last-green
+
+      - name: Keep the measured green night
+        if: github.event_name == 'schedule'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .feedback-eval-last-green
+          key: feedback-eval-last-green-${{ github.run_id }}-${{ github.sha }}
 
       - name: Keep the panel result
         id: keep
@@ -126,6 +144,8 @@ jobs:
             const { reportNight } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/feedback-eval-night.ts`);
             await reportNight(github, context.repo, {
               runId: context.runId,
+              attempt: Number(process.env.GITHUB_RUN_ATTEMPT),
+              date: new Date().toISOString(),
               sha: context.sha,
               serverUrl: context.serverUrl,
               runUrl: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
