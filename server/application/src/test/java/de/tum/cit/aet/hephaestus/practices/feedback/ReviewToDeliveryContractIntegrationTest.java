@@ -2678,6 +2678,19 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                                 traced.add(entry.path("tool").asString());
                         });
                 assertThat(traced).containsExactly("check_package", "publish_package");
+                // Each tool call that ran is one the proxy served from the run's model, used once.
+                var modelCalls = jdbc.queryForList(
+                        "SELECT tool, used_at FROM composer_transcript_part"
+                                + " WHERE workspace_id = ? AND run_id = ? AND kind = 'CALL' ORDER BY created_at",
+                        review.workspaceId(),
+                        composeRun);
+                assertThat(modelCalls)
+                        .filteredOn(row ->
+                                "check_package".equals(row.get("tool")) || "publish_package".equals(row.get("tool")))
+                        .extracting(row -> row.get("tool"))
+                        .containsExactly("check_package", "publish_package");
+                assertThat(modelCalls)
+                        .allSatisfy(row -> assertThat(row.get("used_at")).isNotNull());
                 assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(
                                 review.workspaceId(), review.reviewId()))
                         .filteredOn(row -> row.getDestination() == FeedbackDestination.ON_WORK)
@@ -2706,6 +2719,87 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                 assertThat(created.getAvailableAt()).isEqualTo(created.getCreatedAt());
                 assertThat(ReviewRunKind.compositionWorkDeadline(Objects.requireNonNull(created.getDeadline())))
                         .isEqualTo(created.getAvailableAt().plus(reviewProperties.compositionTimeout()));
+            } finally {
+                model.disposeNow();
+            }
+        }
+    }
+
+    @Test
+    void shouldForwardOnlyTheComposersOwnRequestsAndRunOnlyToolCallsItsModelWrote() throws Exception {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var served = new CopyOnWriteArrayList<JsonNode>();
+            var admitted = new CompletableFuture<UUID>();
+            var model = HttpServer.create()
+                    .host("127.0.0.1")
+                    .port(0)
+                    .handle((request, response) -> request.receive()
+                            .aggregate()
+                            .asString()
+                            .flatMap(body -> Mono.fromFuture(admitted).flatMap(result -> {
+                                var parsed = mapper.readTree(body);
+                                served.add(parsed);
+                                return response.header("Content-Type", "application/json")
+                                        .sendString(
+                                                Mono.just(mapper.writeValueAsString(composerAnswer(parsed, result))))
+                                        .then();
+                            })))
+                    .bindNow();
+            try {
+                var job = jobs.findById(review.identity().jobId()).orElseThrow();
+                freezeComposeModel(job, "http://127.0.0.1:" + model.port() + "/v1");
+                UUID result = admitStaged(review.identity(), request(review))
+                        .admitted()
+                        .getFirst()
+                        .resultId();
+                review.inputs().close();
+                UUID composeRun = composeRun(job);
+                admitted.complete(result);
+                double refusedBefore = count(AgentMetrics.LLM_PROXY_REFUSED, "refusal", "not_composer_request");
+                JsonNode answer;
+                try (var gateway =
+                        new ComposeRunGateway(context, composingPolicy(true), new ReviewAttemptCustody(agentRuns))) {
+                    answer = mapper.readTree(
+                            gateway.forge(gateway.sandbox(review.workspaceId(), subjectOf(composeRun))));
+                }
+
+                assertThat(answer.path("kind").asString()).isEqualTo("REVIEW_COMPOSE");
+                // Each changed copy of the composer's request stops at the gateway, before any provider.
+                assertThat(answer.path("refused").propertyNames())
+                        .containsExactlyInAnyOrder("system", "tools", "toolChoice", "strict", "userTurn");
+                assertThat(answer.path("refused").valueStream()).allSatisfy(refused -> {
+                    assertThat(refused.path("status").asInt()).isEqualTo(403);
+                    assertThat(refused.path("refusal").asString()).isEqualTo("NOT_COMPOSER_REQUEST");
+                });
+                assertThat(served).hasSize(1);
+                assertThat(count(AgentMetrics.LLM_PROXY_REFUSED, "refusal", "not_composer_request"))
+                        .isEqualTo(refusedBefore + 5);
+                // The model's own tool call runs once; the same call again and a call no model wrote run nothing.
+                assertThat(answer.path("written").asInt()).isEqualTo(200);
+                assertThat(answer.path("replayed").asInt()).isEqualTo(403);
+                assertThat(answer.path("unwritten").asInt()).isEqualTo(403);
+                assertThat(compositionBases
+                                .findByWorkspaceIdAndJobId(review.workspaceId(), job.getId())
+                                .orElseThrow()
+                                .getPayload()
+                                .path("tools")
+                                .valueStream()
+                                .map(entry -> entry.path("tool").asString()))
+                        .containsExactly("check_package");
+                assertThat(jdbc.queryForList(
+                                "SELECT tool, used_at FROM composer_transcript_part"
+                                        + " WHERE workspace_id = ? AND run_id = ? AND kind = 'CALL'",
+                                review.workspaceId(),
+                                composeRun))
+                        .singleElement()
+                        .satisfies(row -> {
+                            assertThat(row).containsEntry("tool", "check_package");
+                            assertThat(row.get("used_at")).isNotNull();
+                        });
+                assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(
+                                review.workspaceId(), review.reviewId()))
+                        .filteredOn(row -> row.getDestination() == FeedbackDestination.ON_WORK)
+                        .isEmpty();
             } finally {
                 model.disposeNow();
             }

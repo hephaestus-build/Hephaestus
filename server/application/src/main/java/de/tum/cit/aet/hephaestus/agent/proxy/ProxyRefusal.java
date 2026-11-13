@@ -13,5 +13,7 @@ public enum ProxyRefusal {
     /** The endpoint could not grant capacity before the attempt ended. */
     CAPACITY,
     /** The attempt already had its most model calls in flight, or the gateway its most request bodies: ask again. */
-    CALLS_IN_FLIGHT
+    CALLS_IN_FLIGHT,
+    /** A compose run's request holds a part that the server did not issue or serve to its claim. */
+    NOT_COMPOSER_REQUEST
 }

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
+import de.tum.cit.aet.hephaestus.agent.composer.ComposerTranscript;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,8 @@ class AttemptEndedRefusalTest extends BaseUnitTest {
     void shouldAnswerAModelCallOfAnAttemptLostAfterAuthenticationWithTheAttemptEndedText() throws Exception {
         var proxy = mock(LlmProxyService.class);
         when(proxy.proxy(any(), any(), any(), any())).thenThrow(ProxyRoutingService.attemptEnded());
-        var gateway = MockMvcBuilders.standaloneSetup(new LlmProxyController(proxy))
+        var gateway = MockMvcBuilders.standaloneSetup(
+                        new LlmProxyController(proxy, mock(ComposerTranscript.class), mock(ProxyAccounting.class)))
                 .setControllerAdvice(new GlobalControllerAdvice())
                 .build();
 

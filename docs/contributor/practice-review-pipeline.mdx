@@ -595,6 +595,23 @@ A retry keeps the review's attempt limit and backoff.
 It reads the inputs that admission retained, the admitted results, and the server's reads of routing and history.
 It first composes the review on the work, then the private feedback, which reads the review it follows.
 
+The gateway keeps a transcript of each composition claim.
+It holds the sessions that the gateway issued, their turns, and the tool answers that it gave.
+It also holds each reply that it served, linked to the exact conversation that the reply answered, and each tool call.
+The transcript holds digests, never the content.
+
+The gateway forwards a model request of the claim only if the request continues that conversation as the composer does.
+The request has the session's instructions, tools and settings, and then the session's input.
+After that, each served reply follows the conversation that it answered.
+The answers to the reply's calls come next, with the session's nudge at most once.
+A reply without calls gets the session's finish, at most once.
+A conversation that already got its answer is not sent again, but copies sent at the same time can each get one.
+
+Any other request gets `403` with the refusal `NOT_COMPOSER_REQUEST`.
+
+A composer tool call runs only if the claim's model wrote it in a session of the same destination, and only once.
+Every other tool call gets `403`.
+
 Composition reads admitted, eligible results and their problems.
 It never sends an open question or an example alone.
 Feedback on the work speaks about Not met results for the eligible developer.

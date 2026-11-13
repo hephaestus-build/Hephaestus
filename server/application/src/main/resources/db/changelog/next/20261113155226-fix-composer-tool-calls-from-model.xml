@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794576836020-1" author="hephaestus">
+        <comment>The conversation that the server allows each claim of a review_compose run to have with its model, as digests, never the content: each session it issued (with its destination) and that session's turns, each tool answer it gave, each reply the gateway served (linked to the conversation it answered), each conversation that got its answer, and each tool call the model wrote. The gateway forwards a model request of the claim only when it continues that conversation, and a composition tool call runs only when it is one unused CALL row. The rows go with their run.</comment>
+        <sql>
+CREATE TABLE composer_transcript_part (
+    id uuid NOT NULL,
+    workspace_id bigint NOT NULL,
+    run_id uuid NOT NULL,
+    lease_epoch integer NOT NULL,
+    kind varchar(8) NOT NULL,
+    digest varchar(64) NOT NULL,
+    destination varchar(16),
+    call_id varchar(256),
+    tool varchar(64),
+    created_at timestamp(6) with time zone DEFAULT now() NOT NULL,
+    used_at timestamp(6) with time zone,
+    CONSTRAINT composer_transcript_part_pkey PRIMARY KEY (id),
+    CONSTRAINT sfk_composer_transcript_part_run FOREIGN KEY (run_id, workspace_id) REFERENCES agent_run (id, workspace_id) ON DELETE CASCADE,
+    CONSTRAINT ck_composer_transcript_part_kind CHECK (kind IN ('SESSION', 'TEXT', 'ANSWER', 'REPLY', 'SERVED', 'CALL')),
+    CONSTRAINT ck_composer_transcript_part_call CHECK ((kind = 'CALL') = (call_id IS NOT NULL AND tool IS NOT NULL)),
+    CONSTRAINT ck_composer_transcript_part_used CHECK (kind = 'CALL' OR used_at IS NULL),
+    CONSTRAINT ck_composer_transcript_part_destination CHECK ((kind = 'SESSION') = (destination IS NOT NULL))
+);
+CREATE INDEX idx_composer_transcript_part_claim ON composer_transcript_part (run_id, workspace_id, lease_epoch, kind, digest);
+        </sql>
+        <rollback>DROP TABLE composer_transcript_part;</rollback>
+    </changeSet>
+</databaseChangeLog>
