@@ -56,9 +56,8 @@ export const Complete: Story = {
 		await expect(row("Version")).toHaveTextContent("Version 4");
 		await expect(canvas.queryByText(/definePracticeScript/u)).not.toBeInTheDocument();
 		await userEvent.click(canvas.getByRole("button", { name: "Practice script" }));
-		// The source is plain text first and coloured once the highlighter has loaded.
+		// Each source line is separate; both the import and the call name the helper.
 		await waitFor(async () => {
-			// One line per element: the import names it, and so does the call.
 			await expect(canvas.getAllByText(/definePracticeScript/u)[0]).toBeVisible();
 		});
 		await expect(canvas.getByRole("button", { name: "Copy practice script" })).toBeEnabled();
