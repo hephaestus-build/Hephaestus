@@ -2,7 +2,9 @@
 
 import assert from "node:assert/strict";
 import { once } from "node:events";
+import { syncBuiltinESMExports } from "node:module";
 import test from "node:test";
+import { setImmediate, setTimeout as sleep } from "node:timers/promises";
 
 import type { Isolation } from "../../../main/resources/agent/driver-isolation.ts";
 import { drive, parseAssignment, type KindRunner } from "../../../main/resources/agent/driver.ts";
@@ -200,6 +202,68 @@ for (const failure of ["fail", "hang"] as const) {
 		assert.ok(Date.now() - started < 5000);
 	});
 }
+
+void test("a server roll cannot spend the remaining lease on one failed renewal", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
+	// The driver imports the promise timer as an ESM binding.
+	syncBuiltinESMExports();
+	t.after(() => {
+		t.mock.timers.reset();
+		syncBuiltinESMExports();
+	});
+	// AbortSignal uses a platform timer, which must share the fake clock with the driver.
+	t.mock.method(AbortSignal, "timeout", (milliseconds: number) => {
+		const controller = new AbortController();
+		setTimeout(() => controller.abort(new DOMException("timed out", "TimeoutError")), milliseconds);
+		return controller.signal;
+	});
+	const fake = gateway({
+		runs: [assignment("TURN")],
+		renewal: (count) => (count === 1 ? "hang" : 200),
+	});
+	const stop = new AbortController();
+	const finished = Promise.withResolvers<undefined>();
+	let aborted = false;
+	const fetch: typeof globalThis.fetch = async (input, init) => {
+		const response = await fake.fetch(input, init);
+		if (url(input).endsWith("/lease")) {
+			// The replacement is healthy, but a response still needs time to cross the network.
+			await sleep(500, undefined, { signal: init?.signal ?? undefined });
+			finished.resolve(undefined);
+		}
+		if (url(input).endsWith("/next") && response.status === 204) {
+			stop.abort();
+		}
+		return response;
+	};
+	const running = drive({
+		gatewayUrl: GATEWAY,
+		token: "sandbox-token",
+		kinds: {
+			TURN: async ({ signal }) => {
+				await Promise.race([finished.promise, once(signal, "abort")]);
+				aborted = signal.aborted;
+				return aborted ? { leaseLost: true } : { leaseLost: false, outcome: "completed" };
+			},
+		},
+		signal: stop.signal,
+		fetch,
+		log: quiet,
+		isolation: ISOLATED,
+	});
+	try {
+		for (let second = 0; second < 60; second += 1) {
+			await setImmediate();
+			t.mock.timers.tick(1000);
+			await setImmediate();
+		}
+		assert.equal(aborted, false);
+		assert.deepEqual(ends(fake.calls), [JSON.stringify({ outcome: "completed" })]);
+	} finally {
+		stop.abort();
+		await running;
+	}
+});
 
 void test("the run's deadline stops the kind, and the driver leaves the run to the server", async () => {
 	const deadline = new Date(Date.now() + 100).toISOString();
