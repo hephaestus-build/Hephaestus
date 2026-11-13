@@ -3,9 +3,8 @@ package de.tum.cit.aet.hephaestus.integration.scm.identity;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery.IdentityView;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import java.util.List;
@@ -19,25 +18,25 @@ import org.springframework.web.server.ResponseStatusException;
 public class AuthenticatedGitProviderUserService {
 
     private final UserRepository userRepository;
-    private final IdentityProviderRepository gitProviderRepository;
+    private final IdentityProviderLookup identityProviders;
     private final AccountIdentityQuery accountIdentityQuery;
 
     public AuthenticatedGitProviderUserService(
             UserRepository userRepository,
-            IdentityProviderRepository gitProviderRepository,
+            IdentityProviderLookup identityProviders,
             AccountIdentityQuery accountIdentityQuery) {
         this.userRepository = userRepository;
-        this.gitProviderRepository = gitProviderRepository;
+        this.identityProviders = identityProviders;
         this.accountIdentityQuery = accountIdentityQuery;
     }
 
     @Transactional
     public Optional<User> resolveCurrentUser() {
         for (IdentityView link : activeLinksForCurrentAccount()) {
-            Optional<IdentityProvider> provider = gitProviderRepository.findById(link.providerId());
+            Optional<IdentityProviderLookup.Provider> provider = identityProviders.findById(link.providerId());
             if (provider.isPresent()
-                    && (provider.get().getType() == IdentityProviderType.GITHUB
-                            || provider.get().getType() == IdentityProviderType.GITLAB)) {
+                    && (provider.get().type() == IdentityProviderType.GITHUB
+                            || provider.get().type() == IdentityProviderType.GITLAB)) {
                 return Optional.of(resolveUser(link));
             }
         }
@@ -51,12 +50,12 @@ public class AuthenticatedGitProviderUserService {
     }
 
     private User resolveUser(IdentityView link) {
-        IdentityProvider provider = gitProviderRepository
+        IdentityProviderLookup.Provider provider = identityProviders
                 .findById(link.providerId())
                 .orElseThrow(
                         () -> new IllegalStateException(
                                 "We could not find the provider for this connected account. Disconnect it in User settings, then connect it again."));
-        long nativeId = parseSubject(link.providerUserKey(), provider.getType());
+        long nativeId = parseSubject(link.providerUserKey(), provider.type());
         return userRepository
                 .findByNativeIdAndProviderId(nativeId, link.providerId())
                 .orElseThrow(() -> new ResponseStatusException(

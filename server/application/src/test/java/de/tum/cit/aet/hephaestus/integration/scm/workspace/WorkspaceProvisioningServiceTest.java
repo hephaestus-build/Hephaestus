@@ -17,8 +17,9 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
@@ -37,6 +38,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceSlugHistoryRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceSlugReservationRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceSlugService;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
@@ -72,7 +74,10 @@ class WorkspaceProvisioningServiceTest {
     private UserRepository userRepository;
 
     @Mock
-    private IdentityProviderRepository gitProviderRepository;
+    private IdentityProviderLookup identityProviders;
+
+    @Mock
+    private SourceProviderNamespaces sourceNamespaces;
 
     @Mock
     private MembershipRepository workspaceMembershipRepository;
@@ -109,7 +114,8 @@ class WorkspaceProvisioningServiceTest {
                 workspaceService,
                 workspaceSlugs,
                 userRepository,
-                gitProviderRepository,
+                identityProviders,
+                sourceNamespaces,
                 workspaceMembershipRepository,
                 workspaceMembershipService,
                 connectionService,
@@ -145,8 +151,8 @@ class WorkspaceProvisioningServiceTest {
         admin.setType(User.Type.USER);
 
         IdentityProvider githubProvider = TestEntities.gitProvider(100L, IdentityProviderType.GITHUB);
-        when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com"))
-                .thenReturn(Optional.of(githubProvider));
+        when(identityProviders.findId(IdentityProviderType.GITHUB, "https://github.com"))
+                .thenReturn(Optional.of(Objects.requireNonNull(githubProvider.getId())));
 
         when(workspaceRepository.count()).thenReturn(0L);
         when(workspaceMembershipService.accountIdForUser(admin.getId())).thenReturn(199L);
@@ -190,8 +196,8 @@ class WorkspaceProvisioningServiceTest {
         owner.setType(User.Type.USER);
 
         IdentityProvider githubProvider = TestEntities.gitProvider(100L, IdentityProviderType.GITHUB);
-        when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com"))
-                .thenReturn(Optional.of(githubProvider));
+        when(identityProviders.findId(IdentityProviderType.GITHUB, "https://github.com"))
+                .thenReturn(Optional.of(Objects.requireNonNull(githubProvider.getId())));
 
         when(workspaceRepository.count()).thenReturn(0L);
         when(workspaceService.createWorkspace(anyString(), anyString(), anyString(), any(AccountType.class), anyLong()))
@@ -257,7 +263,8 @@ class WorkspaceProvisioningServiceTest {
                 workspaceService,
                 workspaceSlugs,
                 userRepository,
-                gitProviderRepository,
+                identityProviders,
+                sourceNamespaces,
                 workspaceMembershipRepository,
                 workspaceMembershipService,
                 connectionService,
@@ -295,8 +302,7 @@ class WorkspaceProvisioningServiceTest {
                             + (bot == null ? "" : ",\"bot\":" + bot)
                             + "}")
                     .build());
-            when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITLAB, origin))
-                    .thenReturn(Optional.of(TestEntities.gitProvider(5L, IdentityProviderType.GITLAB)));
+            when(identityProviders.findId(IdentityProviderType.GITLAB, origin)).thenReturn(Optional.of(5L));
             when(userRepository.findByLoginAndProviderId("course", 5L)).thenReturn(Optional.empty());
             User owner = new User();
             owner.setId(7L);
@@ -340,8 +346,7 @@ class WorkspaceProvisioningServiceTest {
                 })
                 .build();
         when(endpoints.clientFor(origin)).thenReturn(client);
-        when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITLAB, origin))
-                .thenReturn(Optional.of(TestEntities.gitProvider(5L, IdentityProviderType.GITLAB)));
+        when(identityProviders.findId(IdentityProviderType.GITLAB, origin)).thenReturn(Optional.of(5L));
         User owner = new User();
         owner.setId(7L);
         when(userRepository.findByLoginAndProviderId("test-group", 5L))
@@ -373,7 +378,8 @@ class WorkspaceProvisioningServiceTest {
                 workspaceService,
                 workspaceSlugs,
                 userRepository,
-                gitProviderRepository,
+                identityProviders,
+                sourceNamespaces,
                 workspaceMembershipRepository,
                 workspaceMembershipService,
                 connectionService,

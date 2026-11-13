@@ -1,7 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.scm.workspace.adapter;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener;
@@ -41,7 +42,7 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
     private final OrganizationRepository organizationRepository;
     private final TeamMembershipRepository teamMembershipRepository;
     private final WorkspaceActorSelector actorSelector;
-    private final ConnectionRepository connections;
+    private final ConnectionCommands connections;
 
     @PersistenceContext
     private @Nullable EntityManager entityManager;
@@ -53,7 +54,7 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
             OrganizationRepository organizationRepository,
             TeamMembershipRepository teamMembershipRepository,
             WorkspaceActorSelector actorSelector,
-            ConnectionRepository connections) {
+            ConnectionCommands connections) {
         this.workspaceRepository = workspaceRepository;
         this.workspaceMembershipService = workspaceMembershipService;
         this.organizationMembershipRepository = organizationMembershipRepository;
@@ -92,13 +93,14 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
         if (workspaceRepository.findByIdForUpdate(workspaceId).isEmpty()) {
             return false;
         }
-        Optional<ConnectionConfig> locked = connections.lockActiveConfig(workspaceId, IntegrationKind.GITLAB);
+        Optional<ConnectionConfig> locked = connections
+                .holdActiveConnection(workspaceId, IntegrationKind.GITLAB)
+                .map(Connection::getConfig);
         if (locked.isEmpty()) {
             return false;
         }
         // Read what the lock now guards, not what this transaction loaded before it.
         EntityManager em = Objects.requireNonNull(entityManager);
-        connections.findActive(workspaceId, IntegrationKind.GITLAB).ifPresent(em::refresh);
         em.refresh(workspace);
         Long linked = workspace.getOrganizationId();
         Organization linkedGroup = linked == null

@@ -82,6 +82,18 @@ class ConnectionQueriesIntegrationTest extends BaseIntegrationTest {
                                 paused.getInstanceKey(),
                                 paused.getDisplayName()))
                 .noneMatch(row -> row.id() == foreignId);
+        assertThat(queries.findActive(mine.getId(), IntegrationKind.SLACK))
+                .contains(new ConnectionQueries.ConnectionSnapshot(
+                        active.getId(), active.getVersion(), active.getConfig()));
+        assertThat(queries.findActive(mine.getId(), IntegrationKind.OUTLINE)).isEmpty();
+        assertThat(queries.findActiveOrSuspendedConfig(mine.getId(), IntegrationKind.OUTLINE))
+                .contains(paused.getConfig());
+        assertThat(queries.findActiveOrSuspendedConfig(other.getId(), IntegrationKind.OUTLINE))
+                .isEmpty();
+        assertThat(queries.hasConnectionInState(mine.getId(), IntegrationKind.OUTLINE, IntegrationState.SUSPENDED))
+                .isTrue();
+        assertThat(queries.hasConnectionInState(other.getId(), IntegrationKind.OUTLINE, IntegrationState.SUSPENDED))
+                .isFalse();
         assertThat(session.getStatistics().getEntityCount()).isZero();
     }
 }

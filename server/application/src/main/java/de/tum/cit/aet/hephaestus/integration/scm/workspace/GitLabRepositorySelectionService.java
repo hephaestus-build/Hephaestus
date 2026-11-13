@@ -4,21 +4,17 @@ import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAudit;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAuditRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import io.micrometer.common.util.StringUtils;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import java.util.Objects;
 import java.util.UUID;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -32,24 +28,21 @@ import org.springframework.web.server.ResponseStatusException;
 @WorkspaceAgnostic("Manages workspace-repository mapping configuration")
 public class GitLabRepositorySelectionService {
 
-    @PersistenceContext
-    private @Nullable EntityManager entityManager;
-
     private static final Logger log = LoggerFactory.getLogger(GitLabRepositorySelectionService.class);
 
     private final WorkspaceRepository workspaceRepository;
-    private final ConnectionRepository connectionRepository;
-    private final ConnectionAuditRepository auditRepository;
+    private final ConnectionQueries connectionQueries;
+    private final ConnectionCommands connectionCommands;
     private final TransactionTemplate transactionTemplate;
 
     public GitLabRepositorySelectionService(
             WorkspaceRepository workspaceRepository,
-            ConnectionRepository connectionRepository,
-            ConnectionAuditRepository auditRepository,
+            ConnectionQueries connectionQueries,
+            ConnectionCommands connectionCommands,
             TransactionTemplate transactionTemplate) {
         this.workspaceRepository = workspaceRepository;
-        this.connectionRepository = connectionRepository;
-        this.auditRepository = auditRepository;
+        this.connectionQueries = connectionQueries;
+        this.connectionCommands = connectionCommands;
         this.transactionTemplate = transactionTemplate;
     }
 
@@ -58,9 +51,9 @@ public class GitLabRepositorySelectionService {
     public RepositorySelection getGitLabRepositorySelection(WorkspaceContext workspaceContext) {
         String slug = requireSlug(workspaceContext);
         Long workspaceId = requireWorkspace(slug).getId();
-        if (connectionRepository
+        if (connectionQueries
                 .findActive(workspaceId, IntegrationKind.GITLAB)
-                .filter(connection -> connection.getConfig() instanceof ConnectionConfig.GitLabConfig)
+                .filter(connection -> connection.config() instanceof ConnectionConfig.GitLabConfig)
                 .isEmpty()) {
             throw gitLabNotActive(slug);
         }
@@ -76,17 +69,10 @@ public class GitLabRepositorySelectionService {
             Workspace workspace = workspaceRepository
                     .findByIdForUpdate(workspaceId)
                     .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
-            if (connectionRepository
-                    .lockActiveConfig(workspaceId, IntegrationKind.GITLAB)
-                    .filter(ConnectionConfig.GitLabConfig.class::isInstance)
-                    .isEmpty()) {
-                throw gitLabNotActive(slug);
-            }
-            Connection current = connectionRepository
-                    .findActive(workspaceId, IntegrationKind.GITLAB)
+            Connection current = connectionCommands
+                    .holdActiveConnection(workspaceId, IntegrationKind.GITLAB)
+                    .filter(connection -> connection.getConfig() instanceof ConnectionConfig.GitLabConfig)
                     .orElseThrow(() -> gitLabNotActive(slug));
-            EntityManager em = Objects.requireNonNull(entityManager);
-            em.refresh(current);
             RepositorySelection stored = storedSelection(workspaceId);
             if (stored == requested) return stored;
             workspace.setRepositorySelection(requested);
@@ -112,18 +98,13 @@ public class GitLabRepositorySelectionService {
     /** Written in the caller's transaction, under the connection's lifecycle lock, beside the change it records. */
     private void recordChange(
             Connection connection, RepositorySelection from, RepositorySelection to, long actorAccountId) {
-        ConnectionAudit audit = new ConnectionAudit(
+        connectionCommands.recordAdministrativeChange(
                 connection,
                 "PROJECT_SELECTION_CHANGED",
-                connection.getState(),
-                connection.getState(),
-                "ADMIN",
-                null,
+                actorAccountId,
                 // The idempotency index treats an absent correlation id as one value, so each change carries its own.
                 UUID.randomUUID().toString(),
                 from + " → " + to);
-        audit.setActorAccountId(actorAccountId);
-        auditRepository.save(audit);
     }
 
     private Workspace requireWorkspace(String slug) {

@@ -10,8 +10,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener.OrganizationSyncedEvent;
@@ -60,7 +61,7 @@ class WorkspaceOrganizationMembershipAdapterTest extends BaseUnitTest {
     private WorkspaceActorSelector actorSelector;
 
     @Mock
-    private ConnectionRepository connections;
+    private ConnectionCommands connections;
 
     private WorkspaceOrganizationMembershipAdapter adapter;
 
@@ -200,9 +201,11 @@ class WorkspaceOrganizationMembershipAdapterTest extends BaseUnitTest {
 
     /** The workspace's GitLab connection is active once its lifecycle lock is held, and it stores this selection. */
     private void connectedWithSelection(long workspaceId, RepositorySelection selection) {
-        when(connections.lockActiveConfig(workspaceId, IntegrationKind.GITLAB))
-                .thenReturn(Optional.of(
-                        new ConnectionConfig.GitLabConfig("https://gitlab.lrz.de", 42L, null, Set.of(), null)));
+        var connection = mock(Connection.class);
+        when(connection.getConfig())
+                .thenReturn(new ConnectionConfig.GitLabConfig("https://gitlab.lrz.de", 42L, null, Set.of(), null));
+        when(connections.holdActiveConnection(workspaceId, IntegrationKind.GITLAB))
+                .thenReturn(Optional.of(connection));
         WorkspaceRepository.MonitorPolicy policy = mock(WorkspaceRepository.MonitorPolicy.class);
         lenient().when(policy.getRepositorySelection()).thenReturn(selection);
         when(workspaceRepository.findMonitorPolicy(workspaceId)).thenReturn(Optional.of(policy));

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.spi;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import java.util.List;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 /** Connection metadata for consumers outside the owning module. Never includes credentials. */
@@ -13,6 +14,18 @@ public interface ConnectionQueries {
     List<ConnectionView> findByWorkspaceId(long workspaceId);
 
     List<Long> findWorkspaceIdsByKindAndState(IntegrationKind kind, IntegrationState state);
+
+    Optional<ConnectionSnapshot> findActive(long workspaceId, IntegrationKind kind);
+
+    Optional<ConnectionConfig> findActiveOrSuspendedConfig(long workspaceId, IntegrationKind kind);
+
+    boolean hasConnectionInState(long workspaceId, IntegrationKind kind, IntegrationState state);
+
+    Optional<InstallationSnapshot> findActiveInstallationSnapshot(long installationId);
+
+    record InstallationSnapshot(Long connectionId, Long workspaceId, long lifecycleGeneration, Long version) {}
+
+    record ConnectionSnapshot(long id, long version, ConnectionConfig config) {}
 
     record ConnectionView(
             long id,
