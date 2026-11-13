@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBudget;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCadence;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
@@ -134,7 +135,7 @@ class ReviewBatchScopeIntegrationTest extends BaseIntegrationTest {
                 batches,
                 scope,
                 mock(ReviewBatchSubmitter.class),
-                workspaces,
+                WorkspacePortFixtures.queries(workspaces),
                 mock(ReviewBudget.class),
                 mock(PracticeReviewReadiness.class),
                 properties,

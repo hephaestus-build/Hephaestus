@@ -254,7 +254,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         for (String slug : List.of(PRACTICE, "test-coverage")) {
             var kind = new ItemKind("scm.pull_request");
             versions.create(new PracticeVersionService.NewPractice(
-                    workspace,
+                    workspace.getId(),
                     slug,
                     kind,
                     DefinitionTestFixtures.definition(kind, slug, "Review the work.", null),

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogLock;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
@@ -23,7 +24,8 @@ class PracticeCatalogInstallationManagerTest extends BaseUnitTest {
         var installer = new PracticeCatalogInstallationManager(
                 mock(CatalogService.class),
                 mock(CatalogLock.class),
-                workspaces,
+                WorkspacePortFixtures.queries(workspaces),
+                WorkspacePortFixtures.commands(workspaces),
                 mock(PracticeGroupService.class),
                 mock(PracticeGroupRepository.class),
                 mock(PracticeService.class),

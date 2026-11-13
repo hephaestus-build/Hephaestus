@@ -13,7 +13,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequest;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import java.time.Clock;
 import java.util.List;
 import java.util.Objects;
@@ -30,7 +30,7 @@ import org.springframework.stereotype.Component;
 public class ItemEventReviewListener {
     private final ItemEventService events;
     private final ProductItemQuery items;
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceQueries workspaces;
     private final ReviewService reviews;
     private final ResultCurrentness currentness;
     private final PracticeItemOptions itemOptions;

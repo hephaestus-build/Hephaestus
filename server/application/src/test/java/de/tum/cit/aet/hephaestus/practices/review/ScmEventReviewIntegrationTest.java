@@ -1838,7 +1838,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 original.lineNotes(),
                 original.guidance());
         versions.create(new PracticeVersionService.NewPractice(
-                workspaces.findById(workspace).orElseThrow(),
+                workspaces.findById(workspace).orElseThrow().getId(),
                 "only-when-opened",
                 ScmItemEvents.PULL_REQUEST,
                 definition,
@@ -2240,7 +2240,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         var definition = DefinitionTestFixtures.definition(
                 ScmItemEvents.PULL_REQUEST, "Describe the work " + number, "Explain the work.", null);
         versions.create(new PracticeVersionService.NewPractice(
-                workspace, "event-test-" + number, ScmItemEvents.PULL_REQUEST, definition, null, number, null));
+                workspace.getId(), "event-test-" + number, ScmItemEvents.PULL_REQUEST, definition, null, number, null));
     }
 
     private void deliver(Prepared prepared, String action, GitHubPullRequestDTO payload) {
@@ -3335,8 +3335,8 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 original.scan(),
                 original.lineNotes(),
                 original.guidance());
-        versions.create(
-                new PracticeVersionService.NewPractice(workspace, "event-test", kind, definition, null, 0, account));
+        versions.create(new PracticeVersionService.NewPractice(
+                workspace.getId(), "event-test", kind, definition, null, 0, account));
         var pull = new PullRequest();
         pull.setNativeId(nativeId());
         pull.setProvider(fixture.provider());
@@ -3436,7 +3436,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 original.lineNotes(),
                 original.guidance());
         versions.create(new PracticeVersionService.NewPractice(
-                workspace, "event-test", ScmItemEvents.PULL_REQUEST, definition, null, 0, authorAccount));
+                workspace.getId(), "event-test", ScmItemEvents.PULL_REQUEST, definition, null, 0, authorAccount));
         // Whole seconds, so the stored and the captured times compare exactly.
         Instant mergedAt = Instant.now().truncatedTo(ChronoUnit.SECONDS).minusSeconds(3600);
         var pull = new PullRequest();

@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBudget;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.math.BigDecimal;
@@ -44,7 +45,7 @@ class ReviewBatchDriverTest extends BaseUnitTest {
             batches,
             scope,
             submitter,
-            workspaces,
+            WorkspacePortFixtures.queries(workspaces),
             budget,
             readiness,
             new ReviewBatchProperties(2, Duration.ofDays(400), 100, Duration.ofDays(90)),

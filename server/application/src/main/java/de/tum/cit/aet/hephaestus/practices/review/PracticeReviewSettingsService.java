@@ -9,12 +9,13 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.review.dto.WorkspaceReviewScopeDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeReviewVolumeQuery;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewField;
-import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewSettings;
+import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewPolicy;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceReviewScope;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceCommands;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries.ReviewWorkspace;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class PracticeReviewSettingsService {
 
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceQueries workspaceRepository;
+    private final WorkspaceCommands workspaceCommands;
     private final PracticeReviewProperties reviewProperties;
     private final ConfigAuditPort configAudit;
     private final PracticeReviewCoverageService coverageService;
@@ -44,7 +46,7 @@ public class PracticeReviewSettingsService {
 
     public PracticeReviewScopePreviewDTO previewCoverage(
             WorkspaceContext workspaceContext, WorkspaceReviewScopeDTO proposed) {
-        Workspace workspace = requireWorkspace(workspaceContext);
+        ReviewWorkspace workspace = requireWorkspace(workspaceContext);
         return coverageService.preview(
                 workspace, coverageService.fromWire(workspaceContext.id(), proposed), recentVolume(workspace));
     }
@@ -54,52 +56,56 @@ public class PracticeReviewSettingsService {
             WorkspaceContext workspaceContext,
             UpdatePracticeReviewSettingsRequestDTO req,
             @Nullable EntityTagPrecondition precondition) {
-        Workspace workspace = requireWorkspaceForUpdate(workspaceContext);
-        PracticeReviewSettings settings = workspace.getReviewSettings();
+        ReviewWorkspace workspace = requireWorkspaceForUpdate(workspaceContext);
+        PracticeReviewPolicy settings = workspace.reviewSettings();
         if (precondition == null) {
             throw new PracticeReviewPreconditionRequiredException();
         }
-        if (!precondition.matches(Long.toString(settings.getConfigVersion()))) {
+        if (!precondition.matches(Long.toString(settings.configVersion()))) {
             throw new StalePracticeReviewSettingsException();
         }
         var beforeScope = coverageService.scope(workspace);
         PracticeReviewSnapshot before =
                 PracticeReviewSnapshot.of(settings, beforeScope, coverageService.generatedPaths(workspace));
         // Reset-to-inherit first, then the value patch, so a field can be reset and re-set in one request.
-        settings.reset(req.reset());
-        settings.applyPatch(req.deliverToMerged(), req.cooldownMinutes());
+        settings = settings.reset(req.reset()).applyPatch(req.deliverToMerged(), req.cooldownMinutes());
+        workspace = workspace.withReviewSettings(settings);
         if (req.reset() != null && req.reset().contains(PracticeReviewField.REVIEW_SCOPE)) {
-            coverageService.replace(workspace, WorkspaceReviewScope.ALL);
+            workspace = coverageService.replace(workspace, WorkspaceReviewScope.ALL);
         }
         if (req.reviewScope() != null) {
-            coverageService.replace(workspace, coverageService.fromWire(workspaceContext.id(), req.reviewScope()));
+            workspace = coverageService.replace(
+                    workspace, coverageService.fromWire(workspaceContext.id(), req.reviewScope()));
         }
         if (req.generatedPaths() != null) {
             coverageService.patchGeneratedPaths(workspace, req.generatedPaths());
         }
-        settings.applyRollout(null, null, req.deliveryStatus());
-        settings.applyDefaultFeedbackMode(
-                req.defaultFeedbackMode() == null
-                        ? null
-                        : req.defaultFeedbackMode().name());
+        settings = workspace
+                .reviewSettings()
+                .applyRollout(null, null, req.deliveryStatus())
+                .applyDefaultFeedbackMode(
+                        req.defaultFeedbackMode() == null
+                                ? null
+                                : req.defaultFeedbackMode().name());
+        workspace = workspace.withReviewSettings(settings);
         var afterScope = coverageService.scope(workspace);
         PracticeReviewSnapshot after =
                 PracticeReviewSnapshot.of(settings, afterScope, coverageService.generatedPaths(workspace));
-        if (!before.sameRolloutPolicyAs(after)) {
-            settings.incrementRolloutRevision();
+        boolean rolloutChanged = !before.sameRolloutPolicyAs(after);
+        settings = workspaceCommands.saveReviewPolicy(workspace.id(), settings, rolloutChanged);
+        workspace = workspace.withReviewSettings(settings);
+        if (rolloutChanged)
             after = PracticeReviewSnapshot.of(settings, afterScope, coverageService.generatedPaths(workspace));
-        }
-        settings.incrementConfigVersion();
         configAudit.record(ConfigAuditEntry.updated(
                 ConfigAuditEntityType.PRACTICE_REVIEW_SETTINGS,
                 workspaceContext.id(),
                 workspaceContext.id(),
                 before,
                 after));
-        return toView(workspaceRepository.save(workspace));
+        return toView(workspace);
     }
 
-    private Workspace requireWorkspace(WorkspaceContext workspaceContext) {
+    private ReviewWorkspace requireWorkspace(WorkspaceContext workspaceContext) {
         return workspaceRepository
                 .findById(workspaceContext.id())
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceContext.slug()));
@@ -109,34 +115,34 @@ public class PracticeReviewSettingsService {
      * Locking variant for the audited write: unserialized, two concurrent PATCHes snapshot the same
      * prior state and the audit trail records a transition the second write silently reverts.
      */
-    private Workspace requireWorkspaceForUpdate(WorkspaceContext workspaceContext) {
+    private ReviewWorkspace requireWorkspaceForUpdate(WorkspaceContext workspaceContext) {
         return workspaceRepository
                 .findByIdForUpdate(workspaceContext.id())
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceContext.slug()));
     }
 
-    private PracticeReviewSettingsDTO toView(Workspace workspace) {
-        PracticeReviewSettings s = workspace.getReviewSettings();
+    private PracticeReviewSettingsDTO toView(ReviewWorkspace workspace) {
+        PracticeReviewPolicy s = workspace.reviewSettings();
         WorkspaceReviewDefaults defaults = WorkspaceReviewDefaults.of(s);
         int recentVolume = recentVolume(workspace);
         return new PracticeReviewSettingsDTO(
-                EntityTagPrecondition.format(Long.toString(s.getConfigVersion())),
-                Long.toString(s.getRolloutRevision()),
+                EntityTagPrecondition.format(Long.toString(s.configVersion())),
+                Long.toString(s.rolloutRevision()),
                 s.resolveDeliverToMerged(reviewProperties.deliverToMerged()),
                 s.resolveCooldownMinutes(reviewProperties.cooldownMinutes()),
-                s.getDeliverToMerged(),
-                s.getCooldownMinutes(),
+                s.deliverToMerged(),
+                s.cooldownMinutes(),
                 coverageService.wireScope(workspace),
-                s.getDeliveryStatus(),
+                s.deliveryStatus(),
                 coverageService.summary(workspace, recentVolume),
                 defaults.defaultFeedbackMode(),
-                s.getDefaultFeedbackMode() == null ? null : FeedbackMode.valueOf(s.getDefaultFeedbackMode()),
+                s.defaultFeedbackMode() == null ? null : FeedbackMode.valueOf(s.defaultFeedbackMode()),
                 coverageService.generatedPaths(workspace));
     }
 
-    private int recentVolume(Workspace workspace) {
+    private int recentVolume(ReviewWorkspace workspace) {
         return volumeQuery.countSince(
-                workspace.getId(),
+                workspace.id(),
                 Instant.now().minus(PracticeReviewCoverageService.ESTIMATE_WINDOW_DAYS, ChronoUnit.DAYS));
     }
 }

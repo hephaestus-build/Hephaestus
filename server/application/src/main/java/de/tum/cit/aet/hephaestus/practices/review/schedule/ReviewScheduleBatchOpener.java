@@ -7,8 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -27,7 +26,7 @@ public class ReviewScheduleBatchOpener {
     private final ReviewBatchScopeQuery scope;
     private final ReviewBatchCostEstimator costs;
     private final ReviewBatchProperties properties;
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceQueries workspaces;
     private final ReviewRepository reviews;
 
     @Transactional
@@ -39,8 +38,7 @@ public class ReviewScheduleBatchOpener {
         schedule.setLastRunAt(now);
         schedule.setUpdatedAt(now);
         var workspace = workspaces.findById(schedule.getWorkspaceId()).orElse(null);
-        if (workspace == null || workspace.getStatus() != Workspace.WorkspaceStatus.ACTIVE)
-            return ReviewScheduleOutcome.SKIPPED_WORKSPACE_UNAVAILABLE;
+        if (workspace == null || !workspace.active()) return ReviewScheduleOutcome.SKIPPED_WORKSPACE_UNAVAILABLE;
         if (batches.existsByWorkspaceIdAndStatusIn(
                 schedule.getWorkspaceId(), List.of(ReviewBatchStatus.RUNNING, ReviewBatchStatus.PAUSED)))
             return ReviewScheduleOutcome.SKIPPED_BATCH_UNDER_WAY;

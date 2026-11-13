@@ -45,7 +45,7 @@ class PracticeGroupControllerIntegrationTest extends AbstractWorkspaceIntegratio
         var owner = persistUser("admin");
         var workspace = createWorkspace("wire-group", "Groups", "wire-group-org", AccountType.ORG, owner);
         var practice = versions.create(new PracticeVersionService.NewPractice(
-                workspace,
+                workspace.getId(),
                 "grouped-definition",
                 new ItemKind("scm.pull_request"),
                 DefinitionTestFixtures.definition(),

@@ -30,7 +30,7 @@ class PracticeServiceUpdateIntegrationTest extends AbstractWorkspaceIntegrationT
         var owner = persistUser("admin");
         var workspace = createWorkspace("edit-stale", "Edits", "edit-org", AccountType.ORG, owner);
         var practice = versions.create(new PracticeVersionService.NewPractice(
-                workspace,
+                workspace.getId(),
                 "edit-practice",
                 new ItemKind("scm.pull_request"),
                 DefinitionTestFixtures.definition(),

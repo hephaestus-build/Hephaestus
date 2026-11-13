@@ -157,7 +157,7 @@ class DisabledIntegrationHistoryIntegrationTest extends BaseIntegrationTest {
 
     private Scenario history(ItemRef ref) {
         var practice = versions.create(new PracticeVersionService.NewPractice(
-                scenario.workspace(),
+                scenario.workspace().getId(),
                 "history-" + ref.itemId(),
                 ref.kind(),
                 DefinitionTestFixtures.definition(ref.kind(), "Describe the work", "Explain the purpose.", null),

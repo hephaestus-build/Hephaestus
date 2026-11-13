@@ -4,7 +4,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.MonitoredRepositoryQuery;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemRepository;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -21,7 +21,7 @@ public class ReviewBatchScopeQuery {
     private final ProductItemRepository items;
     private final ReviewBatchTargetRepository targets;
     private final PracticeReviewCoverageService coverage;
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceQueries workspaces;
     private final MonitoredRepositoryQuery monitored;
 
     public List<Long> select(long ws, String kind, @Nullable Instant from, @Nullable Instant to, int limit) {

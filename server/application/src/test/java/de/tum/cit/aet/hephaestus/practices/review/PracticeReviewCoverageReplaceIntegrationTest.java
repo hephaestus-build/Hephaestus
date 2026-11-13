@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData.Scenario;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -64,14 +65,28 @@ class PracticeReviewCoverageReplaceIntegrationTest extends BaseIntegrationTest {
     @Test
     void selectedEmptyIsDifferentFromAll() {
         coverage.replace(
-                scenario.workspace(),
+                WorkspacePortFixtures.queries(workspaces)
+                        .findById(scenario.workspace().getId())
+                        .orElseThrow(),
                 new WorkspaceReviewScope(ReviewScopeMode.SELECTED, ReviewScopeMode.SELECTED, List.of(), List.of()));
-        assertThat(coverage.scope(scenario.workspace()).accountIds()).isEmpty();
-        assertThat(coverage.scope(scenario.workspace())
+        assertThat(coverage.scope(WorkspacePortFixtures.queries(workspaces)
+                                .findById(scenario.workspace().getId())
+                                .orElseThrow())
+                        .accountIds())
+                .isEmpty();
+        assertThat(coverage.scope(WorkspacePortFixtures.queries(workspaces)
+                                .findById(scenario.workspace().getId())
+                                .orElseThrow())
                         .admitsPerson(scenario.account().getId()))
                 .isFalse();
-        coverage.replace(scenario.workspace(), WorkspaceReviewScope.ALL);
-        assertThat(coverage.scope(scenario.workspace())
+        coverage.replace(
+                WorkspacePortFixtures.queries(workspaces)
+                        .findById(scenario.workspace().getId())
+                        .orElseThrow(),
+                WorkspaceReviewScope.ALL);
+        assertThat(coverage.scope(WorkspacePortFixtures.queries(workspaces)
+                                .findById(scenario.workspace().getId())
+                                .orElseThrow())
                         .admitsPerson(scenario.account().getId()))
                 .isTrue();
     }
@@ -79,30 +94,49 @@ class PracticeReviewCoverageReplaceIntegrationTest extends BaseIntegrationTest {
     @Test
     void selectedAccountsAreStoredOnMembership() {
         coverage.replace(
-                scenario.workspace(),
+                WorkspacePortFixtures.queries(workspaces)
+                        .findById(scenario.workspace().getId())
+                        .orElseThrow(),
                 new WorkspaceReviewScope(
                         ReviewScopeMode.ALL,
                         ReviewScopeMode.SELECTED,
                         List.of(),
                         List.of(scenario.account().getId())));
-        assertThat(coverage.scope(scenario.workspace()).accountIds())
+        assertThat(coverage.scope(WorkspacePortFixtures.queries(workspaces)
+                                .findById(scenario.workspace().getId())
+                                .orElseThrow())
+                        .accountIds())
                 .containsExactly(scenario.account().getId());
-        coverage.replace(scenario.workspace(), WorkspaceReviewScope.ALL);
-        assertThat(coverage.scope(scenario.workspace()).accountIds()).isEmpty();
+        coverage.replace(
+                WorkspacePortFixtures.queries(workspaces)
+                        .findById(scenario.workspace().getId())
+                        .orElseThrow(),
+                WorkspaceReviewScope.ALL);
+        assertThat(coverage.scope(WorkspacePortFixtures.queries(workspaces)
+                                .findById(scenario.workspace().getId())
+                                .orElseThrow())
+                        .accountIds())
+                .isEmpty();
     }
 
     @Test
     void foreignAccountIsRejectedWithoutChangingScope() {
         var other = data.scenario();
         assertThatThrownBy(() -> coverage.replace(
-                        scenario.workspace(),
+                        WorkspacePortFixtures.queries(workspaces)
+                                .findById(scenario.workspace().getId())
+                                .orElseThrow(),
                         new WorkspaceReviewScope(
                                 ReviewScopeMode.ALL,
                                 ReviewScopeMode.SELECTED,
                                 List.of(),
                                 List.of(other.account().getId()))))
                 .isInstanceOf(InvalidReviewScopeException.class);
-        assertThat(coverage.scope(scenario.workspace()).personMode()).isEqualTo(ReviewScopeMode.ALL);
+        assertThat(coverage.scope(WorkspacePortFixtures.queries(workspaces)
+                                .findById(scenario.workspace().getId())
+                                .orElseThrow())
+                        .personMode())
+                .isEqualTo(ReviewScopeMode.ALL);
     }
 
     @Test
@@ -135,14 +169,20 @@ class PracticeReviewCoverageReplaceIntegrationTest extends BaseIntegrationTest {
                     .orElseThrow();
             assertThat(member.isReviewSelected()).isFalse();
             coverage.replace(
-                    workspace,
+                    WorkspacePortFixtures.reviewWorkspace(workspace),
                     new WorkspaceReviewScope(
                             ReviewScopeMode.ALL, ReviewScopeMode.SELECTED, List.of(), List.of(accountId)));
             assertThat(member.isReviewSelected()).isTrue();
-            assertThat(coverage.scope(workspace).accountIds()).containsExactly(accountId);
-            coverage.replace(workspace, WorkspaceReviewScope.ALL);
+            assertThat(coverage.scope(WorkspacePortFixtures.reviewWorkspace(workspace))
+                            .accountIds())
+                    .containsExactly(accountId);
+            coverage.replace(WorkspacePortFixtures.reviewWorkspace(workspace), WorkspaceReviewScope.ALL);
             assertThat(member.isReviewSelected()).isFalse();
         });
-        assertThat(coverage.scope(scenario.workspace()).accountIds()).isEmpty();
+        assertThat(coverage.scope(WorkspacePortFixtures.queries(workspaces)
+                                .findById(scenario.workspace().getId())
+                                .orElseThrow())
+                        .accountIds())
+                .isEmpty();
     }
 }

@@ -5,8 +5,8 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewContextDTO;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.authorization.WorkspaceAccessService;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import java.net.URI;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +21,7 @@ public class ReviewContextService {
     private final ProductItemQuery items;
     private final ProductReferenceQuery references;
     private final ReviewRequestService requests;
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceQueries workspaces;
     private final WorkspaceAccessService access;
 
     public ReviewContextDTO resolve(long workspaceId, String url) {
@@ -39,7 +39,7 @@ public class ReviewContextService {
         boolean allowed = !activeUserView && requests.mayRequest(workspaceId, items.pin(item, null), account);
         return new ReviewContextDTO(
                 Long.toString(workspaceId),
-                workspaces.findById(workspaceId).orElseThrow().getWorkspaceSlug(),
+                workspaces.findById(workspaceId).orElseThrow().slug(),
                 references.items(workspaceId, List.of(item.itemId())).get(item.itemId()),
                 allowed,
                 !activeUserView && access.isAdmin(),

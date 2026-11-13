@@ -4,7 +4,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 public class ReviewRequestPolicy {
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceQueries workspaces;
     private final ReviewRepository reviews;
     private final PracticeReviewProperties properties;
     private final PracticeReviewCoverageService coverage;
@@ -37,7 +37,7 @@ public class ReviewRequestPolicy {
                 && reviews.countByWorkspaceIdAndRequestedByIdAndOriginAndCreatedAtGreaterThanEqual(
                                 workspaceId, accountId, ReviewOrigin.REQUEST, now.minus(Duration.ofHours(1)))
                         >= quota) return Optional.of(ReviewRequestReason.REQUESTER_QUOTA_EXHAUSTED);
-        int cooldown = workspace.getReviewSettings().resolveCooldownMinutes(properties.cooldownMinutes());
+        int cooldown = workspace.reviewSettings().resolveCooldownMinutes(properties.cooldownMinutes());
         if (cooldown > 0
                 && reviews.existsByWorkspaceIdAndItemIdAndOriginAndCreatedAtGreaterThanEqual(
                         workspaceId, itemId, ReviewOrigin.REQUEST, now.minus(Duration.ofMinutes(cooldown))))

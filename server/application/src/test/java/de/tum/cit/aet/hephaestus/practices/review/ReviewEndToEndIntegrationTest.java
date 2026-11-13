@@ -765,7 +765,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 base.lineNotes(),
                 base.guidance());
         Practice practice = practiceVersions.create(new PracticeVersionService.NewPractice(
-                workspace, "states-its-change", kind, definition, null, 0, null));
+                workspace.getId(), "states-its-change", kind, definition, null, 0, null));
         practice.setFeedbackMode(FeedbackMode.OFF);
         return practices.saveAndFlush(practice);
     }

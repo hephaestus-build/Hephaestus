@@ -4,15 +4,13 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.MonitoredRepositoryQuery;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewScopeRepositoryDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.WorkspaceReviewScopeDTO;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryTarget;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeMode;
-import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepository;
-import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryRepository;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceReviewScope;
 import de.tum.cit.aet.hephaestus.workspace.spi.MembershipReviewSelection;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceCommands;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries.ReviewWorkspace;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -32,28 +30,27 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class PracticeReviewCoverageService {
     static final int ESTIMATE_WINDOW_DAYS = 30;
-    private final RepositoryToMonitorRepository monitorRepository;
-    private final ReviewScopeRepositoryRepository repositoryTargetRepository;
+    private final WorkspaceQueries workspaceQueries;
+    private final WorkspaceCommands workspaceCommands;
     private final ProductItemRepository items;
     private final MonitoredRepositoryQuery monitored;
     private final MembershipReviewSelection selections;
 
-    public Map<String, List<String>> generatedPaths(Workspace workspace) {
-        var indexed = monitored.repositories(workspace.getId()).values().stream()
+    public Map<String, List<String>> generatedPaths(ReviewWorkspace workspace) {
+        var indexed = monitored.repositories(workspace.id()).values().stream()
                 .collect(Collectors.toMap(ref -> ref.monitorId(), ref -> ref.repositoryItemId()));
-        return monitorRepository.findByWorkspaceId(workspace.getId()).stream()
-                .filter(m ->
-                        indexed.containsKey(m.getId()) && !m.getGeneratedPaths().isEmpty())
+        return workspaceQueries.repositorySettings(workspace.id()).stream()
+                .filter(m -> indexed.containsKey(m.id()) && !m.generatedPaths().isEmpty())
                 .collect(Collectors.toUnmodifiableMap(
-                        m -> Long.toString(Objects.requireNonNull(indexed.get(m.getId()))),
-                        m -> List.copyOf(m.getGeneratedPaths())));
+                        m -> Long.toString(Objects.requireNonNull(indexed.get(m.id()))),
+                        m -> List.copyOf(m.generatedPaths())));
     }
 
     @Transactional
-    public void patchGeneratedPaths(Workspace workspace, Map<String, List<String>> requested) {
-        var indexed = monitored.repositories(workspace.getId());
-        var monitors = monitorRepository.findByWorkspaceId(workspace.getId()).stream()
-                .collect(Collectors.toMap(RepositoryToMonitor::getId, Function.identity()));
+    public void patchGeneratedPaths(ReviewWorkspace workspace, Map<String, List<String>> requested) {
+        var indexed = monitored.repositories(workspace.id());
+        var monitors = workspaceQueries.repositorySettings(workspace.id()).stream()
+                .collect(Collectors.toMap(WorkspaceQueries.RepositorySettings::id, Function.identity()));
         var validated = new HashMap<Long, List<String>>();
         requested.forEach((key, patterns) -> {
             long itemId = positiveId(key);
@@ -62,8 +59,7 @@ public class PracticeReviewCoverageService {
                 throw new InvalidReviewScopeException("Select a repository this workspace monitors.");
             validated.put(repository.monitorId(), GeneratedPaths.normalize(patterns));
         });
-        validated.forEach(
-                (id, patterns) -> Objects.requireNonNull(monitors.get(id)).setGeneratedPaths(patterns));
+        workspaceCommands.patchGeneratedPaths(workspace.id(), validated);
     }
 
     public static long positiveId(String value) {
@@ -80,22 +76,21 @@ public class PracticeReviewCoverageService {
         return selections.eligibleAccountIds(workspaceId);
     }
 
-    public WorkspaceReviewScope scope(Workspace workspace) {
-        var indexed = monitored.repositories(workspace.getId()).values().stream()
+    public WorkspaceReviewScope scope(ReviewWorkspace workspace) {
+        var indexed = monitored.repositories(workspace.id()).values().stream()
                 .collect(Collectors.toMap(ref -> ref.monitorId(), ref -> ref.repositoryItemId()));
-        var repositories = repositoryTargetRepository.findByWorkspaceId(workspace.getId()).stream()
-                .filter(t -> indexed.containsKey(t.getRepositoryMonitorId()))
+        var repositories = workspaceQueries.reviewRepositoryTargets(workspace.id()).stream()
+                .filter(t -> indexed.containsKey(t.repositoryMonitorId()))
                 .map(t -> new ReviewRepositoryTarget(
-                        Objects.requireNonNull(indexed.get(t.getRepositoryMonitorId())), t.getBaseBranches()))
+                        Objects.requireNonNull(indexed.get(t.repositoryMonitorId())), t.baseBranches()))
                 .sorted(Comparator.comparingLong(ReviewRepositoryTarget::repositoryItemId))
                 .toList();
-        List<Long> selected = selections.selectedAccountIds(workspace.getId());
-        var s = workspace.getReviewSettings();
-        return new WorkspaceReviewScope(
-                s.getReviewScopeRepositories(), s.getReviewScopePeople(), repositories, selected);
+        List<Long> selected = selections.selectedAccountIds(workspace.id());
+        var s = workspace.reviewSettings();
+        return new WorkspaceReviewScope(s.reviewScopeRepositories(), s.reviewScopePeople(), repositories, selected);
     }
 
-    public WorkspaceReviewScopeDTO wireScope(Workspace workspace) {
+    public WorkspaceReviewScopeDTO wireScope(ReviewWorkspace workspace) {
         var internal = scope(workspace);
         return new WorkspaceReviewScopeDTO(
                 internal.repositoryMode(),
@@ -125,18 +120,18 @@ public class PracticeReviewCoverageService {
                         .toList());
     }
 
-    public boolean admitsRepositoryItem(Workspace workspace, long itemId) {
-        var repository = monitored.repositories(workspace.getId()).get(itemId);
+    public boolean admitsRepositoryItem(ReviewWorkspace workspace, long itemId) {
+        var repository = monitored.repositories(workspace.id()).get(itemId);
         return repository != null && scope(workspace).admitsRepository(itemId, null, false);
     }
 
-    public PracticeReviewScopeSummaryDTO summary(Workspace workspace, int volume) {
+    public PracticeReviewScopeSummaryDTO summary(ReviewWorkspace workspace, int volume) {
         return summary(workspace, scope(workspace), volume);
     }
 
-    private PracticeReviewScopeSummaryDTO summary(Workspace workspace, WorkspaceReviewScope scope, int volume) {
-        int monitored = monitorRepository.findByWorkspaceId(workspace.getId()).size(),
-                eligible = eligibleAccountIds(workspace.getId()).size();
+    private PracticeReviewScopeSummaryDTO summary(ReviewWorkspace workspace, WorkspaceReviewScope scope, int volume) {
+        int monitored = workspaceQueries.repositorySettings(workspace.id()).size(),
+                eligible = eligibleAccountIds(workspace.id()).size();
         return new PracticeReviewScopeSummaryDTO(
                 scope.repositoryMode() == ReviewScopeMode.ALL
                         ? monitored
@@ -150,12 +145,12 @@ public class PracticeReviewCoverageService {
                 ESTIMATE_WINDOW_DAYS);
     }
 
-    public PracticeReviewScopePreviewDTO preview(Workspace workspace, WorkspaceReviewScope proposed, int volume) {
-        validate(workspace.getId(), proposed);
+    public PracticeReviewScopePreviewDTO preview(ReviewWorkspace workspace, WorkspaceReviewScope proposed, int volume) {
+        validate(workspace.id(), proposed);
         var before = scope(workspace);
-        boolean widens = eligibleAccountIds(workspace.getId()).stream()
+        boolean widens = eligibleAccountIds(workspace.id()).stream()
                 .anyMatch(id -> proposed.admitsPerson(id) && !before.admitsPerson(id));
-        for (var repository : monitored.repositories(workspace.getId()).values()) {
+        for (var repository : monitored.repositories(workspace.id()).values()) {
             var old = before.repositories().stream()
                     .filter(t -> t.repositoryItemId() == repository.repositoryItemId())
                     .findFirst()
@@ -186,8 +181,8 @@ public class PracticeReviewCoverageService {
     }
 
     /** The eligible members and the review scope that every practice of one admission is checked against, read once. */
-    public Admission admission(Workspace workspace) {
-        return new Admission(eligibleAccountIds(workspace.getId()), scope(workspace));
+    public Admission admission(ReviewWorkspace workspace) {
+        return new Admission(eligibleAccountIds(workspace.id()), scope(workspace));
     }
 
     public record Admission(Set<Long> eligible, WorkspaceReviewScope scope) {
@@ -206,9 +201,9 @@ public class PracticeReviewCoverageService {
     }
 
     @Transactional
-    public void replace(Workspace workspace, WorkspaceReviewScope requested) {
-        validate(workspace.getId(), requested);
-        var indexed = monitored.repositories(workspace.getId());
+    public ReviewWorkspace replace(ReviewWorkspace workspace, WorkspaceReviewScope requested) {
+        validate(workspace.id(), requested);
+        var indexed = monitored.repositories(workspace.id());
         var desired = new HashMap<Long, List<String>>();
         if (requested.repositoryMode() == ReviewScopeMode.SELECTED)
             requested
@@ -217,16 +212,12 @@ public class PracticeReviewCoverageService {
                             Objects.requireNonNull(indexed.get(t.repositoryItemId()))
                                     .monitorId(),
                             t.baseBranches()));
-        for (var target : repositoryTargetRepository.findByWorkspaceId(workspace.getId())) {
-            var branches = desired.remove(target.getRepositoryMonitorId());
-            if (branches == null) repositoryTargetRepository.delete(target);
-            else target.setBaseBranches(branches);
-        }
-        desired.forEach((id, branches) ->
-                repositoryTargetRepository.save(new ReviewScopeRepository(workspace.getId(), id, branches)));
+        workspaceCommands.replaceReviewScope(
+                workspace.id(), requested.repositoryMode(), requested.personMode(), desired);
         selections.replaceSelection(
-                workspace.getId(),
+                workspace.id(),
                 requested.personMode() == ReviewScopeMode.SELECTED ? requested.accountIds() : List.of());
-        workspace.getReviewSettings().applyRollout(requested.repositoryMode(), requested.personMode(), null);
+        return workspace.withReviewSettings(
+                workspace.reviewSettings().applyRollout(requested.repositoryMode(), requested.personMode(), null));
     }
 }

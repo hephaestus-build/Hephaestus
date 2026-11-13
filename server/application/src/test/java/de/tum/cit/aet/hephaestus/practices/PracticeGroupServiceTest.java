@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -35,7 +36,7 @@ class PracticeGroupServiceTest extends BaseUnitTest {
         var service = new PracticeGroupService(
                 repository,
                 mock(PracticeRepository.class),
-                workspaces,
+                WorkspacePortFixtures.queries(workspaces),
                 mock(ConfigAuditPort.class),
                 JsonMapper.builder().build());
         var saved = service.updateGroup(
@@ -75,7 +76,7 @@ class PracticeGroupServiceTest extends BaseUnitTest {
         var service = new PracticeGroupService(
                 repository,
                 practices,
-                workspaces,
+                WorkspacePortFixtures.queries(workspaces),
                 mock(ConfigAuditPort.class),
                 JsonMapper.builder().build());
         service.restoreCatalogBinding(

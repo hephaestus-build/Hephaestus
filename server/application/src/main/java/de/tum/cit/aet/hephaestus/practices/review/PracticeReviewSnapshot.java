@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
-import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewSettings;
+import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewPolicy;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceReviewScope;
 import java.util.List;
 import java.util.Map;
@@ -32,14 +32,14 @@ record PracticeReviewSnapshot(
     }
 
     static PracticeReviewSnapshot of(
-            PracticeReviewSettings s, WorkspaceReviewScope scope, Map<String, List<String>> generatedPaths) {
+            PracticeReviewPolicy s, WorkspaceReviewScope scope, Map<String, List<String>> generatedPaths) {
         return new PracticeReviewSnapshot(
-                s.getDeliverToMerged(),
-                s.getCooldownMinutes(),
+                s.deliverToMerged(),
+                s.cooldownMinutes(),
                 scope,
-                s.getDeliveryStatus().name(),
-                s.getRolloutRevision(),
-                s.getDefaultFeedbackMode(),
+                s.deliveryStatus().name(),
+                s.rolloutRevision(),
+                s.defaultFeedbackMode(),
                 generatedPaths);
     }
 }

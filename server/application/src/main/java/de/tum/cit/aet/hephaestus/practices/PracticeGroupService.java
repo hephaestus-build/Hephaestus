@@ -8,8 +8,10 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -25,7 +27,11 @@ import tools.jackson.databind.json.JsonMapper;
 public class PracticeGroupService {
     private final PracticeGroupRepository groups;
     private final PracticeRepository practices;
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceQueries workspaces;
+
+    @PersistenceContext
+    private @Nullable EntityManager entityManager;
+
     private final ConfigAuditPort audit;
     private final JsonMapper mapper;
 
@@ -52,13 +58,13 @@ public class PracticeGroupService {
             GroupAttributes attributes,
             boolean shownToDevelopers,
             @Nullable GroupDefinition catalogDefinition) {
-        Workspace workspace = lock(ctx);
+        lock(ctx);
         if (!slug.matches("[a-z0-9]+(?:-[a-z0-9]+)*") || slug.length() > 64)
             throw new IllegalArgumentException("Use a lowercase group slug with single hyphens.");
         if (groups.existsByWorkspaceIdAndSlug(ctx.id(), slug))
             throw new PracticeGroupSlugConflictException("This practice group slug already exists.");
         PracticeGroup group = new PracticeGroup();
-        group.setWorkspace(workspace);
+        group.setWorkspace(Objects.requireNonNull(entityManager).getReference(Workspace.class, ctx.id()));
         group.setSlug(slug);
         group.setShownToDevelopers(shownToDevelopers);
         apply(group, attributes);
@@ -201,10 +207,9 @@ public class PracticeGroupService {
         }
     }
 
-    private Workspace lock(WorkspaceContext ctx) {
-        return workspaces
-                .findByIdForUpdate(ctx.id())
-                .orElseThrow(() -> new EntityNotFoundException("Workspace", ctx.slug()));
+    private void lock(WorkspaceContext ctx) {
+        if (workspaces.findByIdForUpdate(ctx.id()).isEmpty())
+            throw new EntityNotFoundException("Workspace", ctx.slug());
     }
 
     private void record(WorkspaceContext ctx, PracticeGroup group, PracticeGroupSnapshot before) {

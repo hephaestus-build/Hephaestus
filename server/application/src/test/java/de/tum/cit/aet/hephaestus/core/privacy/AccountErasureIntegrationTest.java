@@ -551,7 +551,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                         new ReviewOn(List.of(), Map.of())),
                 false);
         var practice = practiceVersions.create(
-                new PracticeVersionService.NewPractice(workspace, slug, kind, definition, null, 0, accountId));
+                new PracticeVersionService.NewPractice(workspace.getId(), slug, kind, definition, null, 0, accountId));
         return Objects.requireNonNull(practice.getCurrentVersion().getId());
     }
 

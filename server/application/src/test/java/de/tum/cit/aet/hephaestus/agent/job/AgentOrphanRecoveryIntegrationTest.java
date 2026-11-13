@@ -310,7 +310,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         agentBindingRepository.save(binding);
 
         practice = runtimePracticeVersions.create(new PracticeVersionService.NewPractice(
-                workspace,
+                workspace.getId(),
                 "orphan-recovery-practice",
                 new ItemKind("scm.pull_request"),
                 DefinitionTestFixtures.definition(
@@ -777,7 +777,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
 
     private Practice withPrivateRecoverySibling(UUID jobId) {
         Practice sibling = runtimePracticeVersions.create(new PracticeVersionService.NewPractice(
-                workspace,
+                workspace.getId(),
                 "private-recovery-sibling",
                 new ItemKind("scm.pull_request"),
                 DefinitionTestFixtures.definition(

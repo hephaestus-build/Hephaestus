@@ -10,8 +10,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBudget;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import java.time.Clock;
 import java.util.List;
 import java.util.stream.Stream;
@@ -31,7 +30,7 @@ public class ReviewBatchDriver {
     private final ReviewBatchRepository batches;
     private final ReviewBatchScopeQuery scope;
     private final ReviewBatchSubmitter submitter;
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceQueries workspaces;
     private final ReviewBudget budget;
     private final PracticeReviewReadiness readiness;
     private final ReviewBatchProperties properties;
@@ -67,7 +66,7 @@ public class ReviewBatchDriver {
         boolean scan = batch.getKind().equals("scm.repository");
         if (scan
                 && workspace != null
-                && workspace.getStatus() == Workspace.WorkspaceStatus.ACTIVE
+                && workspace.active()
                 && reviews.existsByWorkspaceIdAndKindAndStatusIn(
                         batch.getWorkspaceId(), ReviewKind.SCAN, List.of(ReviewStatus.QUEUED, ReviewStatus.RUNNING))) {
             batch.setUpdatedAt(clock.instant());
@@ -93,7 +92,7 @@ public class ReviewBatchDriver {
             batches.save(batch);
             return;
         }
-        ReviewBatchPauseReason reason = workspace == null || workspace.getStatus() != Workspace.WorkspaceStatus.ACTIVE
+        ReviewBatchPauseReason reason = workspace == null || !workspace.active()
                 ? ReviewBatchPauseReason.WORKSPACE_UNAVAILABLE
                 : !readiness.hasRunnableAgent(batch.getWorkspaceId())
                         ? ReviewBatchPauseReason.REVIEW_MODEL_UNBOUND

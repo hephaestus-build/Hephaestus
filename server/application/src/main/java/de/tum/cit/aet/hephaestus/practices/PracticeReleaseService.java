@@ -14,8 +14,8 @@ import de.tum.cit.aet.hephaestus.practices.dto.PracticeReleaseFieldDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeReleaseProposalDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -37,7 +37,7 @@ public class PracticeReleaseService {
     private final PracticeGroupRepository groupRepository;
     private final PracticeGroupService groups;
     private final PracticeVersionService versions;
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceQueries workspaces;
     private final JsonMapper mapper;
     private final ConfigAuditPort audit;
 

@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceReviewScope;
 import de.tum.cit.aet.hephaestus.workspace.spi.MembershipReviewSelection;
@@ -155,7 +156,9 @@ class AccountMembershipQueryIntegrationTest extends BaseIntegrationTest {
         selections.replaceSelection(member.getWorkspace().getId(), List.of(accountId));
         assertThat(member.isReviewSelected()).isTrue();
         assertThat(foreign.isReviewSelected()).isTrue();
-        assertThat(coverage.scope(member.getWorkspace()).accountIds()).containsExactly(accountId);
+        assertThat(coverage.scope(WorkspacePortFixtures.reviewWorkspace(member.getWorkspace()))
+                        .accountIds())
+                .containsExactly(accountId);
         selections.replaceSelection(member.getWorkspace().getId(), List.of());
         assertThat(member.isReviewSelected()).isFalse();
         var memberId = member.getId();
@@ -337,14 +340,18 @@ class AccountMembershipQueryIntegrationTest extends BaseIntegrationTest {
         var workspace = member.getWorkspace();
         long accountId = Objects.requireNonNull(human.getId());
         coverage.replace(
-                workspace,
+                WorkspacePortFixtures.reviewWorkspace(workspace),
                 new WorkspaceReviewScope(ReviewScopeMode.ALL, ReviewScopeMode.SELECTED, List.of(), List.of(accountId)));
-        assertThat(coverage.scope(workspace).accountIds()).containsExactly(accountId);
+        assertThat(coverage.scope(WorkspacePortFixtures.reviewWorkspace(workspace))
+                        .accountIds())
+                .containsExactly(accountId);
         assertThat(member.isReviewSelected()).isTrue();
         coverage.replace(
-                workspace,
+                WorkspacePortFixtures.reviewWorkspace(workspace),
                 new WorkspaceReviewScope(ReviewScopeMode.ALL, ReviewScopeMode.SELECTED, List.of(), List.of()));
-        assertThat(coverage.scope(workspace).accountIds()).isEmpty();
+        assertThat(coverage.scope(WorkspacePortFixtures.reviewWorkspace(workspace))
+                        .accountIds())
+                .isEmpty();
         assertThat(member.isReviewSelected()).isFalse();
     }
 

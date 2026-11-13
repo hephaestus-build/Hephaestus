@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCadence;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Duration;
@@ -40,7 +41,7 @@ class ReviewScheduleBatchOpenerTest extends BaseUnitTest {
             scope,
             costs,
             new ReviewBatchProperties(2, Duration.ofDays(400), 100, Duration.ofDays(90)),
-            workspaces,
+            WorkspacePortFixtures.queries(workspaces),
             mock(ReviewRepository.class));
     ReviewSchedule schedule;
 

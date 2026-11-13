@@ -422,7 +422,7 @@ class ResearchDisclosureIntegrationTest extends BaseIntegrationTest {
 
     private Scenario forPractice(Account developer) {
         var practice = versions.create(new PracticeVersionService.NewPractice(
-                course.workspace(),
+                course.workspace().getId(),
                 "research-" + UUID.randomUUID(),
                 course.item().getKind(),
                 DefinitionTestFixtures.definition(),
