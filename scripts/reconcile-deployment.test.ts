@@ -1238,27 +1238,25 @@ await test(
 			await writeFile(path.join(fixture.checkout, "tooling-update"), "operator-reviewed update\n");
 			gitIn(fixture.checkout, "add", "tooling-update");
 			gitIn(fixture.checkout, "commit", "--quiet", "-m", "new tooling");
-			const commit = gitIn(fixture.checkout, "rev-parse", "HEAD");
+			const toolingCommit = gitIn(fixture.checkout, "rev-parse", "HEAD");
 			const { tree } = await ensureReleaseTree(
 				fixture.checkout,
 				path.join(directory, "releases"),
-				commit,
-				commit,
+				toolingCommit,
+				toolingCommit,
 			);
 			await adoptTooling(path.join(directory, "tooling"), tree);
 			await writeFile(
 				path.join(directory, "applied.json"),
 				JSON.stringify({ ...fixture.record, commit: fixture.releaseCommit }),
 			);
-			for (let tick = 0; tick < 2; tick++) {
+			for (let tick = 0; tick < 2; tick += 1) {
 				const result = fixture.run();
 				assert.equal(result.status, 0, result.stderr);
 				assert.match(result.stdout, /Keeping reconciler tooling/u);
 				assert.equal(await readlink(path.join(directory, "tooling")), tree);
-				assert.equal(
-					(await readApplied(path.join(directory, "applied.json")))?.commit,
-					fixture.releaseCommit,
-				);
+				const runtimeRecord = await readApplied(path.join(directory, "applied.json"));
+				assert.equal(runtimeRecord?.commit, fixture.releaseCommit);
 			}
 			assert.doesNotMatch(await fixture.calls(), /helm upgrade|systemctl daemon-reload/u);
 		} finally {
@@ -1275,14 +1273,14 @@ await test(
 		try {
 			const fixture = await reconcilerFixture(directory, "v0.95.1");
 			const promote = async (
-				commit: string,
-				images: Record<string, string>,
+				sourceCommit: string,
+				channelImages: Record<string, string>,
 				allowRollback = false,
 			) => {
 				gitIn(fixture.checkout, "checkout", "--quiet", "deploy-state");
 				await writeFile(
 					path.join(fixture.checkout, "channels/chart.json"),
-					JSON.stringify({ commit, images, allowRollback }),
+					JSON.stringify({ commit: sourceCommit, images: channelImages, allowRollback }),
 				);
 				gitIn(fixture.checkout, "add", "channels/chart.json");
 				gitIn(fixture.checkout, "commit", "--quiet", "-m", "promote image contract");
@@ -1308,11 +1306,11 @@ await test(
 			gitIn(fixture.checkout, "commit", "--quiet", "-m", "different image contract");
 			const candidate = gitIn(fixture.checkout, "rev-parse", "HEAD");
 			gitIn(fixture.checkout, "push", "--quiet", "origin", "main");
-			const images = {
+			const candidateImages = {
 				HEPHAESTUS_IMAGE_ENGINE: `ghcr.io/example/custom-service@sha256:${"a".repeat(64)}`,
 				HEPHAESTUS_IMAGE_EXECUTOR: `ghcr.io/another-team/runtime@sha256:${"b".repeat(64)}`,
 			};
-			await promote(candidate, images);
+			await promote(candidate, candidateImages);
 			const next = fixture.run({ channel: "chart" });
 			assert.equal(next.status, 0, next.stderr);
 			const values = asRecord(
@@ -1320,10 +1318,11 @@ await test(
 				"chart values",
 			);
 			assert.deepEqual(values.images, {
-				engine: images.HEPHAESTUS_IMAGE_ENGINE,
-				executor: images.HEPHAESTUS_IMAGE_EXECUTOR,
+				engine: candidateImages.HEPHAESTUS_IMAGE_ENGINE,
+				executor: candidateImages.HEPHAESTUS_IMAGE_EXECUTOR,
 			});
-			assert.equal((await readApplied(path.join(directory, "applied.json")))?.commit, candidate);
+			const candidateRecord = await readApplied(path.join(directory, "applied.json"));
+			assert.equal(candidateRecord?.commit, candidate);
 			const verifier = path.join(directory, "releases", candidate);
 			assert.equal(await readlink(path.join(directory, "tooling")), verifier);
 			await promote(fixture.releaseCommit, chartChannelImages(), true);
@@ -1342,10 +1341,8 @@ await test(
 				asRecord(older.images, "older images")["application-server"],
 				chartChannelImages().HEPHAESTUS_IMAGE_APPLICATION_SERVER,
 			);
-			assert.equal(
-				(await readApplied(path.join(directory, "applied.json")))?.commit,
-				fixture.releaseCommit,
-			);
+			const rollbackRecord = await readApplied(path.join(directory, "applied.json"));
+			assert.equal(rollbackRecord?.commit, fixture.releaseCommit);
 			assert.equal(await readlink(path.join(directory, "tooling")), verifier);
 			const unchanged = fixture.run({ channel: "chart" });
 			assert.equal(unchanged.status, 0, unchanged.stderr);
