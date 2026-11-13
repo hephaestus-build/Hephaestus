@@ -264,7 +264,9 @@ if (asRecord(renovate.constraints, "Renovate constraints").java !== javaVersion)
 }
 // The image runs the JDK line it was built and tested with. The JVM buildpack reads it from the JAR
 // manifest's Build-Jdk-Spec, so project.toml must not restate it, and the JRE pin must belong to it.
-if (/name\s*=\s*"BP_JVM_VERSION"/u.test(readFileSync("server/application/project.toml", "utf8"))) {
+if (
+	/^\s*name\s*=\s*"BP_JVM_VERSION"/mu.test(readFileSync("server/application/project.toml", "utf8"))
+) {
 	throw new Error(
 		"server/application/project.toml must not set BP_JVM_VERSION: the buildpack reads Build-Jdk-Spec",
 	);

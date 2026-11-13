@@ -6,6 +6,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.github.benmanes.caffeine.cache.AsyncCache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -46,6 +48,24 @@ class CacheLoadsTest extends BaseUnitTest {
         assertThat(first.get()).isEqualTo("k-1");
         assertThat(second.get()).isEqualTo("k-1");
         assertThat(loads).hasValue(1);
+    }
+
+    /**
+     * A synchronous Caffeine load holds its map bin's lock while it runs, so a blocking loader would stall every write
+     * to that bin. "Aa" and "BB" share a hash code, so they share a bin.
+     */
+    @Test
+    void shouldLetAnotherKeyOfTheSameBinBeWrittenWhenAKeyLoads() throws Exception {
+        assertThat("Aa".hashCode()).isEqualTo("BB".hashCode());
+        Thread loader = Thread.ofVirtual().start(() -> CacheLoads.get(cache, "Aa", this::slowLoad));
+        assertThat(loading.await(10, TimeUnit.SECONDS)).isTrue();
+        try {
+            assertThat(CompletableFuture.runAsync(() -> cache.synchronous().put("BB", "other")))
+                    .succeedsWithin(Duration.ofSeconds(5));
+        } finally {
+            release.countDown();
+            loader.join();
+        }
     }
 
     @Test

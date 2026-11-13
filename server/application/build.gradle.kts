@@ -460,11 +460,9 @@ for ((taskName, tag) in testTiers.filterKeys { it != "test" }) {
         }
         if (tag == "integration") {
             // A virtual thread that parks in a native frame or a class initializer keeps its
-            // carrier
-            // (since JDK 24 a monitor no longer pins, JEP 491), and a few of them stall every
-            // virtual
-            // thread, a pool's waiters among them. The JDK records each such park of 20 ms or more,
-            // and the tier fails on any, with its call path.
+            // carrier (since JDK 24 a monitor no longer pins, JEP 491). A few of them stall every
+            // virtual thread, a pool's waiters among them. The JDK records each such park of 20 ms
+            // or more, and the tier fails on any, with its call path.
             val pinnedParks =
                 layout.buildDirectory.file("$name-pinned-virtual-threads.jfr").get().asFile
             val pinnedSettings = file("src/test/resources/pinned-virtual-threads.jfc")
