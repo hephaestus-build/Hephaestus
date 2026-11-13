@@ -152,7 +152,7 @@ public class ProxyCallsInFlight {
     private int cap(UsageSourceType sourceType) {
         return switch (sourceType) {
             case MENTOR_TURN -> TURN_CALLS;
-            case PRODUCT_FEEDBACK_DRAFT -> 1;
+            case PRODUCT_FEEDBACK_DRAFT, PROBE -> 1;
             default -> reviewCalls;
         };
     }

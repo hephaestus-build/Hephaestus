@@ -163,7 +163,7 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
         Workspace owner = setupWorkspace("cap-owner");
         var connection = createWorkspaceConnection(owner, "cap-connection", LlmApiProtocol.ANTHROPIC_MESSAGES);
         var model = createWorkspaceModel(owner, connection.id(), "cap-model");
-        when(capabilityProbe.probe(any(), anyString())).thenReturn(new LlmModelCapabilitiesDTO(true));
+        when(capabilityProbe.probe(any(), any(), anyString())).thenReturn(new LlmModelCapabilitiesDTO(true));
         webTestClient
                 .put()
                 .uri("/workspaces/{slug}/llm/models/{id}/capabilities", owner.getWorkspaceSlug(), model.id())

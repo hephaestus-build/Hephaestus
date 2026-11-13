@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 class ProxyRequestPolicy {
     private final ProductFeedbackDraftCalls drafts;
+    private final LlmModelResolver resolver;
     private final EgressPolicy egress;
     private final ReviewJobRepository jobs;
     private final MentorTurnRepository turns;
@@ -41,6 +42,13 @@ class ProxyRequestPolicy {
                     && drafts.waiting(attempt.sourceId(), attempt.number())
                             .filter(call -> Objects.equals(request.modelId(), call.llmModelId()))
                             .isPresent();
+        if (attempt.sourceType() == UsageSourceType.PROBE)
+            return attempt.runId() == null
+                    && attempt.number() == 0
+                    && request.actionId() == null
+                    && resolver.resolveProbeCredential(new LlmModelResolver.ConnectionRef(
+                                    request.connectionScope(), request.connectionId(), request.modelId(), workspaceId))
+                            != null;
         if (workspaceId == null) return false;
         var model = new LlmModelResolver.ConnectionRef(
                 request.connectionScope(), request.connectionId(), request.modelId(), workspaceId);
@@ -49,7 +57,7 @@ class ProxyRequestPolicy {
                 jobs.findByIdAndWorkspaceId(attempt.sourceId(), workspaceId)
                         .filter(job -> reviews.allows(job, model))
                         .isPresent();
-            case PRODUCT_FEEDBACK_DRAFT -> false;
+            case PRODUCT_FEEDBACK_DRAFT, PROBE -> false;
             case MENTOR_TURN ->
                 turns.findAccountIdByIdAndWorkspaceId(attempt.sourceId(), workspaceId)
                         .filter(account -> routing.allows(workspaceId, account, model))

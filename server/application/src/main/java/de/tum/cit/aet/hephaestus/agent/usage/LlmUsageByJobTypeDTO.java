@@ -19,7 +19,7 @@ public record LlmUsageByJobTypeDTO(
         @Schema(
                 description =
                         "Runs of this job type with at least one call whose cost is unavailable because a rate is missing or the measurement is unverified. A "
-                                + "practice script call counts toward the run of its review. Those calls are excluded from both "
+                                + "practice script call counts toward the run of its review. A capability test with unavailable cost counts once. Those calls are excluded from both "
                                 + "totals above.")
         Long unpricedEventCount,
 

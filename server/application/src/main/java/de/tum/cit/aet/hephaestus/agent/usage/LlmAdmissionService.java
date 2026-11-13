@@ -110,6 +110,59 @@ public class LlmAdmissionService {
 
     public record InstanceCharge(String model, LlmPriceSnapshot price) {}
 
+    public record ProbeCharge(String model, LlmPriceSnapshot price) {}
+
+    /** Probe admission freezes the catalog identity and rates even before the administrator enables the model. */
+    @Transactional
+    public ProbeCharge admitProbe(LlmModelResolver.ConnectionRef ref) {
+        Long modelId = ref.modelId();
+        if (modelId == null) throw modelUnavailable();
+        if (ref.scope() == UsageFundingSource.INSTANCE && ref.workspaceId() == null) {
+            var model = modelRepository.findByIdForUpdate(modelId).orElseThrow(LlmAdmissionService::modelUnavailable);
+            if (!model.getConnection().getId().equals(ref.connectionId())) throw modelUnavailable();
+            var price = priceRepository
+                    .findByModelIdAndEffectiveToIsNull(modelId)
+                    .map(value -> new LlmPriceSnapshot(
+                            UsageFundingSource.INSTANCE,
+                            probePricingState(value.getPricingMode()),
+                            value.getId(),
+                            null,
+                            value.getPer1mInputUsd(),
+                            value.getPer1mOutputUsd(),
+                            value.getPer1mCacheReadUsd(),
+                            value.getPer1mCacheWriteUsd()))
+                    .orElseGet(LlmPriceSnapshot::unpricedInstance);
+            return new ProbeCharge(model.getUpstreamModelId(), price);
+        }
+        Long workspaceId = ref.workspaceId();
+        if (ref.scope() == UsageFundingSource.WORKSPACE && workspaceId != null) {
+            var model = workspaceModelRepository
+                    .findByIdAndWorkspaceIdForUpdate(modelId, workspaceId)
+                    .orElseThrow(LlmAdmissionService::modelUnavailable);
+            if (!model.getConnection().getId().equals(ref.connectionId())) throw modelUnavailable();
+            return new ProbeCharge(
+                    model.getUpstreamModelId(),
+                    new LlmPriceSnapshot(
+                            UsageFundingSource.WORKSPACE,
+                            probePricingState(model.getPricingMode()),
+                            null,
+                            modelId,
+                            model.getPer1mInputUsd(),
+                            model.getPer1mOutputUsd(),
+                            model.getPer1mCacheReadUsd(),
+                            model.getPer1mCacheWriteUsd()));
+        }
+        throw modelUnavailable();
+    }
+
+    private static UsagePricingState probePricingState(PricingMode mode) {
+        return switch (mode) {
+            case PRICED -> UsagePricingState.PRICED;
+            case NO_CHARGE -> UsagePricingState.NO_CHARGE;
+            case UNPRICED -> UsagePricingState.UNPRICED;
+        };
+    }
+
     private LlmPriceSnapshot instancePrice(Long modelId) {
         return priceRepository
                 .findByModelIdAndEffectiveToIsNull(modelId)

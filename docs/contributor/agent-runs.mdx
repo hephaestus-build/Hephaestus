@@ -154,7 +154,18 @@ No provider response body is stored.
 
 An open or unpriced row counts at its upper bound. Thus neither settlement nor missing reported usage makes a cap or a review unverifiable.
 
-The check `ck_llm_usage_event_open_call` refuses an open row without its run and its epoch.
+For a run's call, `ck_llm_usage_event_open_call` requires its run and epoch.
+Runless calls use the same ledger with explicit source guards:
+
+- An instance report draft has its outbox action and a settlement deadline.
+- A synthetic model capability probe has a settlement deadline and no run, epoch or action.
+  Instance probes have no workspace; workspace probes keep their real workspace and workspace funding.
+  A probe keeps its exact catalog model ID, including before a price is set.
+  Repricing never substitutes another model with the same provider alias.
+
+The shared recovery pass settles expired probe calls by the database clock.
+It also settles a report draft whose outbox claim no longer holds.
+Late completion uses the same frozen-price rule as a run's call.
 The trigger `llm_usage_event_guards_call_transition` permits only these transitions and keeps `initial_pricing_state` immutable:
 
 ```mermaid

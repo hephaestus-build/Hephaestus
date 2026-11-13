@@ -24,7 +24,8 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
      * attempt, a practice script call included, carries the job or turn id and the attempt number, so it counts toward
      * that run and never as a run of its own.
      */
-    String RUNS = "COUNT(DISTINCT (e.source_id, e.source_attempt)) FILTER (WHERE e.id IS NOT NULL)";
+    String RUNS =
+            "COUNT(DISTINCT (e.source_id, e.source_attempt)) FILTER (WHERE e.id IS NOT NULL AND e.source_type <> 'PROBE')";
 
     /**
      * Whether ledger row {@code e} counts at its upper bound ({@code cost_bound_usd}): its call is still open, or it
@@ -50,8 +51,8 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
     String CONFIRMED = "(CASE WHEN NOT " + BOUNDED + " AND e.pricing_state <> 'UNPRICED' THEN e.cost_usd END)";
 
     /**
-     * The runs among the ledger rows of {@code e} that have at least one row whose cost is {@link #UNKNOWN}. A practice
-     * script row carries the job id and attempt of its run, so it counts toward that run and never as a run of its own.
+     * Uses with at least one call whose cost is {@link #UNKNOWN}: one per run or manual capability test. A practice
+     * script row carries the job id and attempt of its run, so it counts toward that run and never on its own.
      */
     String UNPRICED_RUNS = "COUNT(DISTINCT (e.source_id, e.source_attempt)) FILTER (WHERE " + UNKNOWN + ")";
 
@@ -74,6 +75,16 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
             nativeQuery = true)
     int deleteExpired(@Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
 
+    @WorkspaceAgnostic("Repricing reads the frozen global catalog identity of one instance-funded call")
+    @Query(
+            "SELECT e.appliedInstanceModelId FROM LlmUsageEvent e WHERE e.id=:id AND e.fundingSource=de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource.INSTANCE")
+    Optional<Long> findAppliedInstanceModelId(@Param("id") UUID id);
+
+    /** The clock that owns durable call recovery deadlines. */
+    @WorkspaceAgnostic("The database clock reads no workspace data")
+    @Query(value = "SELECT clock_timestamp()", nativeQuery = true)
+    Instant databaseClock();
+
     /**
      * Writes one call {@code OPEN}, dated by the database clock, which every lease compares with. Its measurement is
      * zero until the call ends; {@code costUsd} is zero for a priced or free model and {@code null} for an unpriced one.
@@ -84,7 +95,7 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
         INSERT INTO llm_usage_event (
             id, workspace_id, run_id, lease_epoch, action_id, settle_after, initial_pricing_state, call_state, job_type, source_type, source_id, source_attempt,
             review_id, model_kind, practice_id, model, cost_usd, pricing_state, funding_source, applied_price_id,
-            applied_workspace_model_id, applied_per_1m_input_usd, applied_per_1m_output_usd,
+            applied_workspace_model_id, applied_instance_model_id, applied_per_1m_input_usd, applied_per_1m_output_usd,
             applied_per_1m_cache_read_usd, applied_per_1m_cache_write_usd, cost_bound_usd, total_calls, started_at,
             occurred_at
         ) VALUES (
@@ -92,7 +103,7 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
             :#{#call.sourceType().name()}, :#{#call.sourceId()}, :#{#call.sourceAttempt()}, :#{#call.reviewId()},
             :#{#call.modelKind().name()}, :#{#call.practiceId()}, :#{#call.model()}, :costUsd,
             :#{#call.price().pricingState().name()}, :#{#call.price().fundingSource().name()},
-            :#{#call.price().appliedPriceId()}, :#{#call.price().appliedWorkspaceModelId()},
+            :#{#call.price().appliedPriceId()}, :#{#call.price().appliedWorkspaceModelId()}, :#{#call.appliedInstanceModelId()},
             :#{#call.price().per1mInputUsd()}, :#{#call.price().per1mOutputUsd()},
             :#{#call.price().per1mCacheReadUsd()}, :#{#call.price().per1mCacheWriteUsd()}, :#{#call.costBoundUsd()},
             1, clock_timestamp(), clock_timestamp()
@@ -113,13 +124,18 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
     @Query(value = SETTLE_INSTANCE + " AND e.action_id=:actionId", nativeQuery = true)
     int settleAction(@Param("actionId") UUID actionId);
 
-    @WorkspaceAgnostic("Recovery settles abandoned instance calls; workspace calls remain run-owned")
+    @WorkspaceAgnostic("Recovery settles runless draft and probe calls by their durable deadline or action")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query(
-            value = SETTLE_INSTANCE + " AND (e.settle_after <= clock_timestamp() OR NOT EXISTS ("
-                    + " SELECT 1 FROM agent_action a WHERE a.id=e.action_id AND a.state='EXECUTING'"
-                    + " AND a.leased_until > clock_timestamp()))",
-            nativeQuery = true)
+    @Query(value = """
+        UPDATE llm_usage_event e SET call_state='SETTLED', measurement_verification='UNVERIFIABLE',
+            pricing_state='UNPRICED', cost_usd=NULL, unreported_calls=1
+        WHERE e.call_state='OPEN' AND e.run_id IS NULL AND (
+            (e.source_type='PROBE' AND e.settle_after <= clock_timestamp()) OR
+            (e.source_type='PRODUCT_FEEDBACK_DRAFT' AND e.workspace_id IS NULL AND (
+                e.settle_after <= clock_timestamp() OR NOT EXISTS (
+                    SELECT 1 FROM agent_action a WHERE a.id=e.action_id AND a.state='EXECUTING'
+                        AND a.leased_until > clock_timestamp()))))
+        """, nativeQuery = true)
     int settleAbandonedInstanceCalls();
 
     /** The call a measurement replaces, held until the measurement commits. */

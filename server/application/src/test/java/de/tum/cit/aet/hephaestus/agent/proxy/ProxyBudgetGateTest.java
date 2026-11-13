@@ -71,6 +71,28 @@ class ProxyBudgetGateTest extends BaseUnitTest {
                 null);
     }
 
+    @ParameterizedTest
+    @CsvSource({"true,true", "false,false"})
+    void shouldRefuseAnUnboundedProbeBeforeItCanPoisonACappedPurse(boolean capped, boolean blocked) {
+        when(budgetService.headroom(WORKSPACE_ID))
+                .thenReturn(
+                        capped
+                                ? new LlmBudgetHeadroom(null, null, false, BigDecimal.ZERO, ONE_DOLLAR, false)
+                                : LlmBudgetHeadroom.UNCAPPED);
+        var probe = new ProxyRouting(
+                "model-capability-probe",
+                "openai-completions",
+                "",
+                UsageFundingSource.WORKSPACE,
+                7L,
+                8L,
+                WORKSPACE_ID,
+                new ProxyRouting.BilledAttempt(UsageSourceType.PROBE, UUID.randomUUID(), 0, null),
+                Instant.now().plusSeconds(15),
+                64L);
+        assertThat(gate.refusesHold(probe, null)).isEqualTo(blocked);
+    }
+
     @Nested
     @DisplayName("the bound: the month's ended calls cannot outspend the cap by more than the calls in flight")
     class TheBound {

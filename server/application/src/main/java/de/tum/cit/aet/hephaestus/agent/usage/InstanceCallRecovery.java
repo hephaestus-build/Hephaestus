@@ -7,11 +7,11 @@ import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** Instance calls have an outbox claim and a deadline instead of a run's settlement trigger. */
+/** Runless calls have a durable deadline or an outbox claim instead of a run's settlement trigger. */
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-@WorkspaceAgnostic("Recovery settles only instance draft calls, which belong to no workspace")
+@WorkspaceAgnostic("Recovery settles only runless draft and synthetic probe calls; it does not claim workspace work")
 class InstanceCallRecovery {
     private static final String INTERVAL = "PT30S";
 

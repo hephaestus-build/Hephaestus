@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -494,7 +495,8 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(duplicate).isFalse();
         assertThat(row(call)).containsEntry("call_state", "ENDED").containsEntry("input_tokens", 1_000_000L);
         assertThat((BigDecimal) row(call).get("cost_usd")).isEqualByComparingTo("2.80");
-        assertThatThrownBy(() -> jdbc.update("UPDATE llm_usage_event SET source_type='REVIEW_JOB' WHERE id=?", call))
+        assertThatThrownBy(() -> jdbc.update(
+                        "UPDATE llm_usage_event SET call_state='ENDED',source_type='REVIEW_JOB' WHERE id=?", call))
                 .hasMessageContaining("ck_llm_usage_event_scope");
     }
 
@@ -565,6 +567,124 @@ class LlmUsageCallsIntegrationTest extends AbstractWorkspaceIntegrationTest {
         transactions.executeWithoutResult(tx -> recorder.settleAction(action));
         assertThat(row(selected)).containsEntry("call_state", "SETTLED");
         assertThat(row(other)).containsEntry("call_state", "OPEN");
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldRecoverOnlyExpiredRunlessProbesAndAcceptTheirLateFrozenMeasurement(boolean workspaceProbe) {
+        Long workspaceId = workspaceProbe ? leasedRun("probe-scope").workspaceId() : null;
+        UUID expired = openProbe(workspaceId, Instant.now().minusSeconds(1));
+        UUID live = openProbe(workspaceId, Instant.now().plusSeconds(60));
+        recorder.recoverInstanceCalls();
+        recorder.recoverInstanceCalls();
+        assertThat(row(expired))
+                .containsEntry("call_state", "SETTLED")
+                .containsEntry("measurement_verification", "UNVERIFIABLE")
+                .containsEntry("pricing_state", "UNPRICED")
+                .containsEntry("cost_usd", null);
+        assertThat(row(live)).containsEntry("call_state", "OPEN");
+        assertThat((BigDecimal) row(expired).get("cost_bound_usd")).isEqualByComparingTo("0.25");
+        var firstFailure = new MentorTurn.FailedCall("upstream_stalled", null);
+        Long wrongWorkspace =
+                workspaceProbe ? null : leasedRun("probe-wrong-scope").workspaceId();
+        Boolean wrongScope = transactions.execute(tx -> recorder.complete(expired, wrongWorkspace, null, firstFailure));
+        assertThat(wrongScope).isFalse();
+        assertThat(jdbc.queryForObject(
+                        "SELECT call_failure::text FROM llm_usage_event WHERE id=?", String.class, expired))
+                .isNull();
+        Boolean unmeasured = transactions.execute(tx -> recorder.complete(expired, workspaceId, null, firstFailure));
+        assertThat(unmeasured).isFalse();
+        Instant firstTime = failedAt(expired);
+        var lateUsage = new LlmUsageRecorder.CallUsage(1_000_000, 100_000, 0, 0, 0, 0);
+        var laterFailure = new MentorTurn.FailedCall("upstream_status", 503);
+        Boolean measured = transactions.execute(tx -> recorder.complete(expired, workspaceId, lateUsage, laterFailure));
+        Boolean duplicate =
+                transactions.execute(tx -> recorder.complete(expired, workspaceId, lateUsage, laterFailure));
+        assertThat(measured).isTrue();
+        assertThat(duplicate).isFalse();
+        assertThat(failure(expired)).isEqualTo(firstFailure);
+        assertThat(failedAt(expired)).isEqualTo(firstTime);
+        assertThat(row(expired)).containsEntry("call_state", "ENDED").containsEntry("pricing_state", "PRICED");
+        assertThat((BigDecimal) row(expired).get("cost_usd")).isEqualByComparingTo("2.80");
+    }
+
+    @Test
+    void shouldRejectFictionalScopeOrMissingRecoveryOwnershipForAProbe() {
+        UUID call = openProbe(null, Instant.now().plusSeconds(60));
+        assertThatThrownBy(() -> jdbc.update(
+                        "UPDATE llm_usage_event SET call_state='ENDED',source_type='REVIEW_JOB' WHERE id=?", call))
+                .hasMessageContaining("ck_llm_usage_event_scope");
+        assertThatThrownBy(() -> jdbc.update("UPDATE llm_usage_event SET funding_source='WORKSPACE' WHERE id=?", call))
+                .hasMessageContaining("ck_llm_usage_event_scope");
+        assertThatThrownBy(() -> jdbc.update("UPDATE llm_usage_event SET action_id=gen_random_uuid() WHERE id=?", call))
+                .hasMessageContaining("ck_llm_usage_event_scope");
+        assertThatThrownBy(() -> jdbc.update("UPDATE llm_usage_event SET lease_epoch=1 WHERE id=?", call))
+                .hasMessageContaining("ck_llm_usage_event_scope");
+        assertThatThrownBy(() -> jdbc.update("UPDATE llm_usage_event SET settle_after=NULL WHERE id=?", call))
+                .hasMessageContaining("ck_llm_usage_event_open_call");
+    }
+
+    @Test
+    void shouldCostVerifiedZeroUnitsWithoutAPriceButKeepMissingUsageUnknown() {
+        UUID zero = openUnpricedProbe();
+        UUID missing = openUnpricedProbe();
+        transactions.executeWithoutResult(tx -> recorder.complete(zero, null, LlmUsageRecorder.CallUsage.NONE));
+        transactions.executeWithoutResult(tx -> recorder.complete(missing, null, null));
+        assertThat(row(zero))
+                .containsEntry("pricing_state", "NO_CHARGE")
+                .containsEntry("measurement_verification", "VERIFIED");
+        assertThat((BigDecimal) row(zero).get("cost_usd")).isZero();
+        assertThat(row(missing))
+                .containsEntry("pricing_state", "UNPRICED")
+                .containsEntry("cost_usd", null)
+                .containsEntry("measurement_verification", "UNVERIFIABLE");
+    }
+
+    private UUID openUnpricedProbe() {
+        return Objects.requireNonNull(transactions.execute(tx -> recorder.open(new LlmUsageRecorder.OpenCall(
+                null,
+                null,
+                null,
+                "MODEL_CAPABILITY_PROBE",
+                UsageSourceType.PROBE,
+                UUID.randomUUID(),
+                0,
+                null,
+                ModelKind.CHAT,
+                null,
+                "synthetic-probe",
+                LlmPriceSnapshot.unpricedInstance(),
+                null,
+                null,
+                Instant.now().plusSeconds(60)))));
+    }
+
+    private UUID openProbe(@Nullable Long workspaceId, Instant deadline) {
+        var price = new LlmPriceSnapshot(
+                workspaceId == null ? UsageFundingSource.INSTANCE : UsageFundingSource.WORKSPACE,
+                PRICED.pricingState(),
+                null,
+                null,
+                PRICED.per1mInputUsd(),
+                PRICED.per1mOutputUsd(),
+                null,
+                null);
+        return Objects.requireNonNull(transactions.execute(tx -> recorder.open(new LlmUsageRecorder.OpenCall(
+                workspaceId,
+                null,
+                null,
+                "MODEL_CAPABILITY_PROBE",
+                UsageSourceType.PROBE,
+                UUID.randomUUID(),
+                0,
+                null,
+                ModelKind.CHAT,
+                null,
+                "synthetic-probe",
+                price,
+                new BigDecimal("0.25"),
+                null,
+                deadline))));
     }
 
     private UUID openInstance(UUID action, Instant deadline) {

@@ -287,6 +287,44 @@ public class LlmModelResolver {
         return null;
     }
 
+    /**
+     * An administrator checks a model before enabling or pricing it. This path accepts only the exact catalog
+     * model and connection in the authorized scope; it does not grant a workspace access to an instance model.
+     */
+    @Transactional(readOnly = true)
+    public @Nullable ProxyCredential resolveProbeCredential(ConnectionRef ref) {
+        Long modelId = ref.modelId();
+        if (modelId == null || ref.connectionId() == null) return null;
+        if (ref.scope() == UsageFundingSource.INSTANCE && ref.workspaceId() == null) {
+            var model = llmModelRepository.findById(modelId).orElse(null);
+            if (model == null || !model.getConnection().getId().equals(ref.connectionId())) return null;
+            var connection = model.getConnection();
+            return new ProxyCredential(
+                    connection.getBaseUrl(),
+                    connection.getApiProtocol().wire(),
+                    connection.getAuthMode(),
+                    model.getUpstreamModelId(),
+                    blankToNull(connection.getApiKey()),
+                    model.getCallPoolId());
+        }
+        Long workspaceId = ref.workspaceId();
+        if (ref.scope() == UsageFundingSource.WORKSPACE && workspaceId != null) {
+            var model = workspaceLlmModelRepository
+                    .findByIdAndWorkspaceId(modelId, workspaceId)
+                    .orElse(null);
+            if (model == null || !model.getConnection().getId().equals(ref.connectionId())) return null;
+            var connection = model.getConnection();
+            return new ProxyCredential(
+                    connection.getBaseUrl(),
+                    connection.getApiProtocol().wire(),
+                    connection.getAuthMode(),
+                    model.getUpstreamModelId(),
+                    blankToNull(connection.getApiKey()),
+                    model.getCallPoolId());
+        }
+        return null;
+    }
+
     private boolean isUsableInstanceModel(ConnectionRef ref) {
         Long modelId = ref.modelId();
         Long workspaceId = ref.workspaceId();

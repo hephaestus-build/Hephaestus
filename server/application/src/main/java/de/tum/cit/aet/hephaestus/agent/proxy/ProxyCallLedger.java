@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelUnavailableException;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.job.FrozenCharge;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
@@ -13,6 +15,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder.CallUsage;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder.OpenCall;
+import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
@@ -118,7 +121,7 @@ class ProxyCallLedger {
      * @throws ClaimLost when the claim no longer holds its run
      * @throws BudgetHeld when the call's bound does not fit under its purse's cap
      */
-    UUID open(ProxyRouting routing, Bound bound) {
+    UUID open(ProxyRouting routing, Bound bound, String upstreamModel) {
         var attempt = routing.attempt();
         if (attempt.sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT) {
             return Objects.requireNonNull(ownTransaction.execute(status -> {
@@ -147,6 +150,7 @@ class ProxyCallLedger {
                         Objects.requireNonNull(routing.workDeadline())));
             }));
         }
+        if (attempt.sourceType() == UsageSourceType.PROBE) return probeCall(routing, bound, upstreamModel);
         long workspaceId = Objects.requireNonNull(routing.workspaceId(), "a billed call has a workspace");
         UUID runId = Objects.requireNonNull(attempt.runId(), "a billed call has a run");
         UUID call;
@@ -164,6 +168,39 @@ class ProxyCallLedger {
             throw new ClaimLost(lost);
         }
         budgetGate.spent(workspaceId);
+        return call;
+    }
+
+    private UUID probeCall(ProxyRouting routing, Bound bound, String upstreamModel) {
+        UUID call = Objects.requireNonNull(ownTransaction.execute(status -> {
+            var attempt = routing.attempt();
+            if (attempt.runId() != null || attempt.number() != 0 || routing.actionId() != null)
+                throw new IllegalArgumentException("A capability probe has no run or action");
+            var charge = admission.admitProbe(new LlmModelResolver.ConnectionRef(
+                    routing.connectionScope(), routing.connectionId(), routing.modelId(), routing.workspaceId()));
+            if (!charge.model().equals(upstreamModel))
+                throw new LlmModelUnavailableException("The probe model changed before the call started");
+            var cost = costBound(charge.price(), bound);
+            if (budgetGate.refusesHold(routing, cost)) throw new BudgetHeld();
+            return recorder.open(new OpenCall(
+                    routing.workspaceId(),
+                    null,
+                    null,
+                    "MODEL_CAPABILITY_PROBE",
+                    UsageSourceType.PROBE,
+                    attempt.sourceId(),
+                    0,
+                    null,
+                    ModelKind.CHAT,
+                    null,
+                    charge.model(),
+                    charge.price(),
+                    cost,
+                    null,
+                    recorder.recoveryDeadline(LlmModelProbeGateway.CALL_TIMEOUT),
+                    routing.connectionScope() == UsageFundingSource.INSTANCE ? routing.modelId() : null));
+        }));
+        if (routing.workspaceId() != null) budgetGate.spent(routing.workspaceId());
         return call;
     }
 

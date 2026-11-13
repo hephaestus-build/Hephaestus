@@ -15,5 +15,7 @@ public enum UsageSourceType {
      * generation in the call's {@code draft_report} action. It belongs to no workspace, and its tokens count on the
      * report.
      */
-    PRODUCT_FEEDBACK_DRAFT;
+    PRODUCT_FEEDBACK_DRAFT,
+    /** Synthetic capability checks; source_id groups the baseline and forced-choice calls, without a run. */
+    PROBE;
 }

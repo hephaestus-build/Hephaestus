@@ -17,6 +17,7 @@ export const JOB_TYPE_LABELS: Record<LlmJobType, string> = {
 	CONVERSATION_REVIEW: "Conversation review",
 	DOCUMENT_REVIEW: "Document review",
 	MENTOR_TURN: "Conversation answer",
+	MODEL_CAPABILITY_PROBE: "Model tool-choice test",
 };
 
 export interface PurseSpend {

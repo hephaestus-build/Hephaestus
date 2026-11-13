@@ -87,8 +87,11 @@ Its `PRICED` option needs separate text: "Price per 1M tokens".
 `priceLabel` renders a priced model as its numbers.
 These numbers cannot label a radio.
 
-The usage tables use "No price set" as the heading of a count, `unpricedEventCount` on the wire.
-It counts runs, not usage rows: a review attempt or a conversation turn with at least one `UNPRICED` row counts one time.
+The usage tables show a count of unavailable cost, `unpricedEventCount` on the wire.
+A review attempt or a conversation turn with at least one unknown-cost row counts one time.
+Synthetic capability probes add calls, tokens and cost, but no runs.
+
+A test with unavailable cost still counts once in `unpricedEventCount`, so the unknown spend is visible.
 A usage row of a model for practice scripts counts toward the run of its review.
 The table by practice counts reviews instead, because its other count is **Reviews**.
 `usage-utils.ts#UNPRICED_RUNS` owns the heading.

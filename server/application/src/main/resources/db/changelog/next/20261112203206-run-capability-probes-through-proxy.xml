@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794504930042-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <columnExists tableName="llm_usage_event" columnName="settle_after"/>
+            <columnExists tableName="llm_usage_event" columnName="action_id"/>
+        </preConditions>
+        <sql splitStatements="false"><![CDATA[
+ALTER TABLE llm_usage_event
+  ADD COLUMN applied_instance_model_id bigint,
+  DROP CONSTRAINT ck_llm_usage_event_source_type,
+  ADD CONSTRAINT ck_llm_usage_event_source_type CHECK (source_type IN ('REVIEW_JOB', 'MENTOR_TURN',
+    'PRACTICE_SCRIPT_DECISION', 'PRACTICE_SCRIPT_EMBEDDING', 'PRACTICE_SCRIPT_RERANKING', 'PRODUCT_FEEDBACK_DRAFT', 'PROBE')) NOT VALID,
+  DROP CONSTRAINT ck_llm_usage_event_scope,
+  ADD CONSTRAINT ck_llm_usage_event_scope CHECK (
+    (source_type = 'PRODUCT_FEEDBACK_DRAFT' AND workspace_id IS NULL AND run_id IS NULL AND lease_epoch IS NULL
+      AND funding_source = 'INSTANCE' AND model_kind = 'CHAT' AND practice_id IS NULL AND review_id IS NULL)
+    OR (source_type = 'PROBE' AND run_id IS NULL AND lease_epoch IS NULL AND action_id IS NULL
+      AND source_attempt = 0 AND model_kind = 'CHAT' AND practice_id IS NULL AND review_id IS NULL
+      AND ((workspace_id IS NULL AND funding_source = 'INSTANCE')
+        OR (workspace_id IS NOT NULL AND funding_source = 'WORKSPACE')))
+    OR (source_type NOT IN ('PRODUCT_FEEDBACK_DRAFT','PROBE') AND workspace_id IS NOT NULL)) NOT VALID,
+  DROP CONSTRAINT ck_llm_usage_event_open_call,
+  ADD CONSTRAINT ck_llm_usage_event_open_call CHECK (call_state <> 'OPEN' OR
+    (source_type = 'PROBE' AND settle_after IS NOT NULL)
+    OR (source_type = 'PRODUCT_FEEDBACK_DRAFT' AND action_id IS NOT NULL AND settle_after IS NOT NULL)
+    OR (run_id IS NOT NULL AND lease_epoch IS NOT NULL)) NOT VALID;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+-- Keep probe accounting: downgrade only after its rows have passed the configured retention period.
+DO $$ BEGIN
+ IF EXISTS (SELECT 1 FROM llm_usage_event WHERE source_type='PROBE') THEN
+   RAISE EXCEPTION 'Probe accounting must expire through retention before rollback';
+ END IF;
+END $$;
+ALTER TABLE llm_usage_event DROP COLUMN applied_instance_model_id;
+ALTER TABLE llm_usage_event
+  DROP CONSTRAINT ck_llm_usage_event_source_type,
+  ADD CONSTRAINT ck_llm_usage_event_source_type CHECK (source_type IN ('REVIEW_JOB', 'MENTOR_TURN',
+    'PRACTICE_SCRIPT_DECISION', 'PRACTICE_SCRIPT_EMBEDDING', 'PRACTICE_SCRIPT_RERANKING', 'PRODUCT_FEEDBACK_DRAFT')),
+  DROP CONSTRAINT ck_llm_usage_event_scope,
+  ADD CONSTRAINT ck_llm_usage_event_scope CHECK (
+    (source_type = 'PRODUCT_FEEDBACK_DRAFT' AND workspace_id IS NULL AND run_id IS NULL AND lease_epoch IS NULL
+      AND funding_source = 'INSTANCE' AND model_kind = 'CHAT' AND practice_id IS NULL AND review_id IS NULL)
+    OR (source_type <> 'PRODUCT_FEEDBACK_DRAFT' AND workspace_id IS NOT NULL)),
+  DROP CONSTRAINT ck_llm_usage_event_open_call,
+  ADD CONSTRAINT ck_llm_usage_event_open_call CHECK (call_state <> 'OPEN' OR
+    ((source_type = 'PRODUCT_FEEDBACK_DRAFT' AND action_id IS NOT NULL AND settle_after IS NOT NULL)
+      OR (run_id IS NOT NULL AND lease_epoch IS NOT NULL)));
+            ]]></sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1794504930042-2" author="hephaestus">
+        <sql>ALTER TABLE llm_usage_event VALIDATE CONSTRAINT ck_llm_usage_event_source_type, VALIDATE CONSTRAINT ck_llm_usage_event_scope, VALIDATE CONSTRAINT ck_llm_usage_event_open_call</sql>
+        <rollback/>
+    </changeSet>
+    <changeSet id="1794504930042-3" author="hephaestus" runInTransaction="false">
+        <sql>CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_llm_usage_runless_open ON llm_usage_event(settle_after) WHERE call_state = 'OPEN' AND run_id IS NULL</sql>
+        <rollback>
+            <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_llm_usage_runless_open</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

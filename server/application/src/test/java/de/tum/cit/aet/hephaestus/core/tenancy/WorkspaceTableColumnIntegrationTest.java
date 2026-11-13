@@ -43,7 +43,7 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
             "product_feedback",
             "workspace_id is NULL only for product feedback sent outside a workspace",
             "llm_usage_event",
-            "workspace_id is NULL only for PRODUCT_FEEDBACK_DRAFT, enforced by ck_llm_usage_event_scope");
+            "workspace_id is NULL only for instance PRODUCT_FEEDBACK_DRAFT or PROBE calls, enforced by ck_llm_usage_event_scope");
 
     /**
      * Global tables that still have a {@code workspace_id}, and why it does not make the row workspace data. SQL tenancy
