@@ -19,6 +19,10 @@ Do not copy it.
 4. Implement `Lifecycle<S>` and put the legal transitions in one table beside the enum. `IntegrationState` shows the form.
 5. Write each transition as a compare-and-set on the expected state, as `AgentActionRepository.claim` does.
 6. Refuse an illegal transition, and record the reason.
+   A database guard that only validates is an AFTER UPDATE row trigger.
+   A BEFORE row trigger makes PostgreSQL lock the row FOR UPDATE whenever the UPDATE names a unique column.
+   That lock blocks every foreign-key write that references the row until the transaction ends.
+   `GuardTriggerTimingDatabaseTest` allows a BEFORE trigger only where it must act before the write, and names why.
 7. Decide what a crash, a replay and a retry do to each state. State the answer in a test.
 
 Use a plain enum. Do not add a state machine framework.

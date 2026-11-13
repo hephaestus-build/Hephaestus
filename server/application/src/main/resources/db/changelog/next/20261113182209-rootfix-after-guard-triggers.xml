@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794594129872-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+        </preConditions>
+        <comment>A trigger that only validates runs AFTER the row write. A BEFORE row trigger makes PostgreSQL lock the row FOR UPDATE whenever the UPDATE names a unique column, which blocks foreign-key writes that reference the row until commit. The AFTER item guard excludes the new row itself, which an AFTER trigger already sees.</comment>
+        <sql splitStatements="false">
+CREATE OR REPLACE FUNCTION guard_item_identity() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF TG_OP='UPDATE' AND (to_jsonb(NEW)-'removed_at') IS DISTINCT FROM (to_jsonb(OLD)-'removed_at') THEN
+  RAISE EXCEPTION 'item identity is immutable' USING ERRCODE='55000'; END IF;
+ IF TG_OP='INSERT' AND NEW.parent_id IS NOT NULL AND NOT EXISTS
+   (SELECT 1 FROM item p WHERE p.id=NEW.parent_id AND p.id != NEW.id AND p.workspace_id=NEW.workspace_id) THEN
+  RAISE EXCEPTION 'item parent must already exist in its workspace' USING ERRCODE='23503'; END IF;
+ RETURN NEW;
+END $$;
+DROP TRIGGER agent_action_lifecycle ON agent_action;
+CREATE TRIGGER agent_action_lifecycle AFTER UPDATE ON agent_action FOR EACH ROW EXECUTE FUNCTION guard_agent_action();
+DROP TRIGGER agent_run_transition ON agent_run;
+CREATE TRIGGER agent_run_transition AFTER UPDATE ON agent_run FOR EACH ROW EXECUTE FUNCTION guard_agent_run();
+DROP TRIGGER agent_sandbox_transition ON agent_sandbox;
+CREATE TRIGGER agent_sandbox_transition AFTER UPDATE ON agent_sandbox FOR EACH ROW EXECUTE FUNCTION guard_agent_sandbox();
+DROP TRIGGER trg_consent_decision_append_only ON consent_decision;
+CREATE TRIGGER trg_consent_decision_append_only AFTER DELETE OR UPDATE ON consent_decision FOR EACH ROW EXECUTE FUNCTION enforce_consent_decision_append_only();
+DROP TRIGGER feedback_copy_fence_monotonic ON feedback_copy;
+CREATE TRIGGER feedback_copy_fence_monotonic AFTER UPDATE ON feedback_copy FOR EACH ROW EXECUTE FUNCTION guard_feedback_copy_fence();
+DROP TRIGGER feedback_decision_append_only ON feedback_decision;
+CREATE TRIGGER feedback_decision_append_only AFTER UPDATE ON feedback_decision FOR EACH ROW EXECUTE FUNCTION guard_feedback_history();
+DROP TRIGGER feedback_response_append_only ON feedback_response;
+CREATE TRIGGER feedback_response_append_only AFTER UPDATE ON feedback_response FOR EACH ROW EXECUTE FUNCTION guard_feedback_history();
+DROP TRIGGER item_identity ON item;
+CREATE TRIGGER item_identity AFTER INSERT OR UPDATE ON item FOR EACH ROW EXECUTE FUNCTION guard_item_identity();
+DROP TRIGGER item_event_facts ON item_event;
+CREATE TRIGGER item_event_facts AFTER UPDATE ON item_event FOR EACH ROW EXECUTE FUNCTION guard_item_event_facts();
+DROP TRIGGER llm_usage_event_guards_call_transition ON llm_usage_event;
+CREATE TRIGGER llm_usage_event_guards_call_transition AFTER UPDATE ON llm_usage_event FOR EACH ROW EXECUTE FUNCTION guard_usage_call_transition();
+DROP TRIGGER practice_identity_immutable ON practice;
+CREATE TRIGGER practice_identity_immutable AFTER UPDATE ON practice FOR EACH ROW EXECUTE FUNCTION guard_practice_identity();
+DROP TRIGGER practice_version_immutable ON practice_version;
+CREATE TRIGGER practice_version_immutable AFTER UPDATE ON practice_version FOR EACH ROW EXECUTE FUNCTION guard_practice_version();
+DROP TRIGGER result_facts ON result;
+CREATE TRIGGER result_facts AFTER UPDATE ON result FOR EACH ROW EXECUTE FUNCTION guard_result_facts();
+DROP TRIGGER result_insert ON result;
+CREATE TRIGGER result_insert AFTER INSERT ON result FOR EACH ROW EXECUTE FUNCTION guard_result_insert();
+DROP TRIGGER review_transition ON review;
+CREATE TRIGGER review_transition AFTER UPDATE OF status ON review FOR EACH ROW EXECUTE FUNCTION guard_review();
+DROP TRIGGER review_item_write ON review_item;
+CREATE TRIGGER review_item_write AFTER INSERT OR UPDATE ON review_item FOR EACH ROW EXECUTE FUNCTION guard_review_item_write();
+DROP TRIGGER workspace_transition ON workspace;
+CREATE TRIGGER workspace_transition AFTER UPDATE OF status ON workspace FOR EACH ROW EXECUTE FUNCTION guard_workspace();
+        </sql>
+        <rollback>
+            <sql splitStatements="false">
+CREATE OR REPLACE FUNCTION guard_item_identity() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF TG_OP='UPDATE' AND (to_jsonb(NEW)-'removed_at') IS DISTINCT FROM (to_jsonb(OLD)-'removed_at') THEN
+  RAISE EXCEPTION 'item identity is immutable' USING ERRCODE='55000'; END IF;
+ IF TG_OP='INSERT' AND NEW.parent_id IS NOT NULL AND NOT EXISTS
+   (SELECT 1 FROM item p WHERE p.id=NEW.parent_id AND p.workspace_id=NEW.workspace_id) THEN
+  RAISE EXCEPTION 'item parent must already exist in its workspace' USING ERRCODE='23503'; END IF;
+ RETURN NEW;
+END $$;
+DROP TRIGGER agent_action_lifecycle ON agent_action;
+CREATE TRIGGER agent_action_lifecycle BEFORE UPDATE ON agent_action FOR EACH ROW EXECUTE FUNCTION guard_agent_action();
+DROP TRIGGER agent_run_transition ON agent_run;
+CREATE TRIGGER agent_run_transition BEFORE UPDATE ON agent_run FOR EACH ROW EXECUTE FUNCTION guard_agent_run();
+DROP TRIGGER agent_sandbox_transition ON agent_sandbox;
+CREATE TRIGGER agent_sandbox_transition BEFORE UPDATE ON agent_sandbox FOR EACH ROW EXECUTE FUNCTION guard_agent_sandbox();
+DROP TRIGGER trg_consent_decision_append_only ON consent_decision;
+CREATE TRIGGER trg_consent_decision_append_only BEFORE DELETE OR UPDATE ON consent_decision FOR EACH ROW EXECUTE FUNCTION enforce_consent_decision_append_only();
+DROP TRIGGER feedback_copy_fence_monotonic ON feedback_copy;
+CREATE TRIGGER feedback_copy_fence_monotonic BEFORE UPDATE ON feedback_copy FOR EACH ROW EXECUTE FUNCTION guard_feedback_copy_fence();
+DROP TRIGGER feedback_decision_append_only ON feedback_decision;
+CREATE TRIGGER feedback_decision_append_only BEFORE UPDATE ON feedback_decision FOR EACH ROW EXECUTE FUNCTION guard_feedback_history();
+DROP TRIGGER feedback_response_append_only ON feedback_response;
+CREATE TRIGGER feedback_response_append_only BEFORE UPDATE ON feedback_response FOR EACH ROW EXECUTE FUNCTION guard_feedback_history();
+DROP TRIGGER item_identity ON item;
+CREATE TRIGGER item_identity BEFORE INSERT OR UPDATE ON item FOR EACH ROW EXECUTE FUNCTION guard_item_identity();
+DROP TRIGGER item_event_facts ON item_event;
+CREATE TRIGGER item_event_facts BEFORE UPDATE ON item_event FOR EACH ROW EXECUTE FUNCTION guard_item_event_facts();
+DROP TRIGGER llm_usage_event_guards_call_transition ON llm_usage_event;
+CREATE TRIGGER llm_usage_event_guards_call_transition BEFORE UPDATE ON llm_usage_event FOR EACH ROW EXECUTE FUNCTION guard_usage_call_transition();
+DROP TRIGGER practice_identity_immutable ON practice;
+CREATE TRIGGER practice_identity_immutable BEFORE UPDATE ON practice FOR EACH ROW EXECUTE FUNCTION guard_practice_identity();
+DROP TRIGGER practice_version_immutable ON practice_version;
+CREATE TRIGGER practice_version_immutable BEFORE UPDATE ON practice_version FOR EACH ROW EXECUTE FUNCTION guard_practice_version();
+DROP TRIGGER result_facts ON result;
+CREATE TRIGGER result_facts BEFORE UPDATE ON result FOR EACH ROW EXECUTE FUNCTION guard_result_facts();
+DROP TRIGGER result_insert ON result;
+CREATE TRIGGER result_insert BEFORE INSERT ON result FOR EACH ROW EXECUTE FUNCTION guard_result_insert();
+DROP TRIGGER review_transition ON review;
+CREATE TRIGGER review_transition BEFORE UPDATE OF status ON review FOR EACH ROW EXECUTE FUNCTION guard_review();
+DROP TRIGGER review_item_write ON review_item;
+CREATE TRIGGER review_item_write BEFORE INSERT OR UPDATE ON review_item FOR EACH ROW EXECUTE FUNCTION guard_review_item_write();
+DROP TRIGGER workspace_transition ON workspace;
+CREATE TRIGGER workspace_transition BEFORE UPDATE OF status ON workspace FOR EACH ROW EXECUTE FUNCTION guard_workspace();
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
