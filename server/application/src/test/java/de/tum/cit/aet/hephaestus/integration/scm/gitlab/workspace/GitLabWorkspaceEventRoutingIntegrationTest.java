@@ -101,7 +101,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.workspace.RepositoryProviderNot
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMonitorService;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
-import de.tum.cit.aet.hephaestus.testconfig.NatsTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.OfflineNetwork;
 import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
@@ -195,8 +194,6 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @DynamicPropertySource
     static void natsProperties(DynamicPropertyRegistry registry) {
-        registry.add("hephaestus.sync.nats.enabled", () -> "true");
-        registry.add("hephaestus.sync.nats.server", NatsTestContainer::getServerUrl);
         registry.add("hephaestus.sync.run-on-startup", () -> "true");
     }
 

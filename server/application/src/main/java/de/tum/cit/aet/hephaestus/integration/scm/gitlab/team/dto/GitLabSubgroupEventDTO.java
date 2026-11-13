@@ -8,7 +8,7 @@ import org.jspecify.annotations.Nullable;
  * DTO for GitLab subgroup webhook events (group structure changes).
  * <p>
  * Subgroup events use {@code event_name} (not {@code object_kind}) as the discriminator.
- * The webhook receiver normalizes all subgroup event names to "subgroup" for NATS routing.
+ * The webhook receiver normalizes all subgroup event names to "subgroup" for provider inbox routing.
  * <p>
  * Supported event_name values:
  * <ul>

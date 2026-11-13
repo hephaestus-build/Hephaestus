@@ -24,7 +24,7 @@ The opt-in `e2e` profile enables these local-only capabilities:
 | Dev review trigger | `hephaestus.dev.trigger-enabled=true` |
 | Agent runtime | `hephaestus.agent.enabled=true`, unless `AGENT_ENABLED=false` |
 
-`vp run dev:server:e2e` starts Postgres and NATS before activating the profile.
+`vp run dev:server:e2e` starts PostgreSQL before activating the profile.
 
 Startup permits `cookie-secure=false` only with `e2e` active and `prod` absent.
 The auth issuer must use HTTP, and the cookie name must not have the `__Host-` prefix.

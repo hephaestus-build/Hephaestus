@@ -115,11 +115,7 @@ Thus, HTTP-level assertions remain necessary.
 
 ## Webhook fixtures and tooling
 
-Reusable webhook JSON lives in `server/application/src/test/resources/github` and `…/gitlab`, named after the event it records. Load one with a `ClassPathResource`, or extract new samples with:
-
-```bash
-vp run schema:nats
-```
+Reusable webhook JSON lives in `server/application/src/test/resources/github` and `…/gitlab`, named after the event it records. Load one with a `ClassPathResource`.
 
 Available examples include `label.created`, `repository.created`, `create`, `push`, and more – consult the folder before recording new payloads.
 
@@ -128,8 +124,7 @@ This includes the name, username, email address, numeric user ID and avatar URL.
 Use one synthetic identity for each person across all fixtures, so that a lookup that the tests exercise still matches.
 The test organization's own accounts (`HephaestusTest` and the maintainer account that recorded the payloads, `FelixTJDietrich`) can stay.
 
-`vp run schema:nats` only sees events an environment already subscribes to. To record any other GitHub event,
-add a temporary repository webhook in the `HephaestusTest` organization that subscribes to that event only.
+To record a GitHub event, add a temporary repository webhook in the `HephaestusTest` organization that subscribes to that event only.
 Its URL does not need to answer. Cause the event, and then save each delivery's `request.payload` from
 `gh api repos/<owner>/<repo>/hooks/<hook_id>/deliveries/<delivery_id>`. Delete the webhook and whatever you
 created when you are done. The `issue_dependencies` fixtures were recorded this way.

@@ -507,10 +507,10 @@ function listenerFindings(
 	return [];
 }
 
-/** The storage of the bundled PostgreSQL and NATS: the named StorageClass, or a default one. */
+/** The storage of the bundled PostgreSQL: the named StorageClass, or a default one. */
 async function storageChecks(inputs: Inputs, cluster: Cluster) {
 	const classes = new Set(
-		["postgresql", "nats"]
+		["postgresql"]
 			.filter((owner) => field(inputs.values, owner, "bundled") === true)
 			.map((owner) => text(field(inputs.values, owner, "persistence", "storageClassName"))),
 	);

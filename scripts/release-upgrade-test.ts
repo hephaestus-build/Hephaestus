@@ -176,8 +176,8 @@ function startApplication(
 		"--env",
 		`SPRING_LIQUIBASE_ENABLED=${String(migratesAtStart)}`,
 		...databaseEnvironment(database),
-		"--env",
-		"HEPHAESTUS_SYNC_NATS_ENABLED=false",
+		// Only the released baseline still has a broker client. The candidate opens no broker connection.
+		...(image === previousImage ? ["--env", "HEPHAESTUS_SYNC_NATS_ENABLED=false"] : []),
 		...workerEnvironment(worker),
 		"--env",
 		"HEPHAESTUS_WORKSPACE_INIT_DEFAULT=false",

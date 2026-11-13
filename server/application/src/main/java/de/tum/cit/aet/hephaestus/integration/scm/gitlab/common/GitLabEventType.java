@@ -11,7 +11,7 @@ import org.jspecify.annotations.Nullable;
  * <p>
  * This is an intentional subset of all GitLab webhook event types, covering only those
  * needed by current or planned handlers. Unknown event types are gracefully acknowledged
- * by {@link de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer} without
+ * by {@link de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventConsumer} without
  * retrying. Additional types (e.g., {@code wiki_page}, {@code deployment}, {@code build},
  * {@code release}) can be added as handlers are implemented.
  *
@@ -44,7 +44,7 @@ public enum GitLabEventType {
     }
 
     /**
-     * Returns the event key string used in NATS subjects.
+     * Returns the event key string used in event subjects.
      */
     public String getValue() {
         return value;

@@ -1,7 +1,6 @@
 ---
-"hephaestus": minor
 ---
 
-The chart now accepts per-provider webhook storage bounds in `webhook.stream.maxBytesByStream`. GitHub keeps its `10GB` default. Other streams use `maxBytes` unless overridden.
+Broker stream storage bounds need no separate release note because the broker is removed; the `remove-sync-broker` changeset owns that change.
 
-**Operators:** Before upgrading, replace `webhook.stream.maxBytesGithub` with `webhook.stream.maxBytesByStream.github`. If you set the old `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB` variable outside the chart, replace it with `HEPHAESTUS_WEBHOOK_STREAM_MAXBYTESBYSTREAM_GITHUB`. The old field and binding are removed.
+**Operators:** Follow the complete removal list in **Remove the retired sync broker values before upgrading**; the previous broker instructions no longer apply.

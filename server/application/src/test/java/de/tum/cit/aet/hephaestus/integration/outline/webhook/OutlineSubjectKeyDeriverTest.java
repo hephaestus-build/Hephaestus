@@ -48,7 +48,7 @@ class OutlineSubjectKeyDeriverTest extends BaseUnitTest {
     @Test
     void deriveDedupKey_differsForConsecutiveEditsOfTheSameDocument() {
         // Two edits of one document are distinct deliveries; a document-keyed dedup would swallow
-        // the second edit inside the JetStream dedup window.
+        // the second edit inside the provider replay window.
         byte[] first =
                 "{\"id\":\"delivery-1\",\"webhookSubscriptionId\":\"s\",\"event\":\"documents.update\",\"payload\":{\"id\":\"a\"}}"
                         .getBytes(StandardCharsets.UTF_8);

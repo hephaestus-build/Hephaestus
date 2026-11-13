@@ -9,13 +9,13 @@ import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Pure subject helpers for NATS consumers. GitHub uses scoped wildcard filters such as
+ * Pure subject helpers for inbox consumers. GitHub uses scoped wildcard filters such as
  * {@code github.owner.repo.>}; GitLab uses per-connection filters {@code gitlab.?connection.<connectionId>.>}; Slack Events API callbacks use per-workspace filters
  * {@code slack.<team>.>} (Slack interactivity/button postbacks stay on the separate signed HTTP
  * endpoint); Outline change notifications use per-subscription filters {@code outline.<subscriptionId>.>}.
  *
- * <p>{@link #kindFromSubjectPrefix(String)} is the single source of truth for NATS-subject routing. It
- * lists the kinds that publish to JetStream (GitHub, GitLab, Slack, Outline) and never calls
+ * <p>{@link #kindFromSubjectPrefix(String)} is the single source of truth for provider inbox-subject routing. It
+ * lists the kinds that publish to provider inbox (GitHub, GitLab, Slack, Outline) and never calls
  * {@link IntegrationKind#valueOf(String)} on subject-derived input.
  *
  * @see de.tum.cit.aet.hephaestus.integration.core.webhook.IntegrationKindRouting the HTTP-path router
@@ -33,7 +33,7 @@ public final class ConsumerSubjectMath {
                 && INSTALLATION_CONTROL_EVENTS.contains(subject.substring(event + 1));
     }
 
-    /** Subject-prefix allow-list — the kinds that publish to JetStream. */
+    /** Subject-prefix allow-list — the kinds that publish to provider inbox. */
     private static final Map<String, IntegrationKind> PREFIX_TO_KIND = Map.of(
             "github",
             IntegrationKind.GITHUB,
@@ -46,7 +46,7 @@ public final class ConsumerSubjectMath {
 
     private ConsumerSubjectMath() {}
 
-    /** NATS '*' matches one token; a final '>' matches one or more tokens. */
+    /** provider inbox '*' matches one token; a final '>' matches one or more tokens. */
     public static boolean matchesFilter(String filter, String subject) {
         String[] pattern = filter.split("\\.", -1);
         String[] tokens = subject.split("\\.", -1);
@@ -61,8 +61,8 @@ public final class ConsumerSubjectMath {
     // Subject prefix construction (publisher-mirror)
 
     /**
-     * Builds the NATS subject prefix for a GitHub repository identifier: {@code owner/repo} → {@code github.owner.repo}
-     * (exactly 2 parts). Dots in either segment are sanitized to {@code ~} so the NATS token grammar holds. GitLab
+     * Builds the event subject prefix for a GitHub repository identifier: {@code owner/repo} → {@code github.owner.repo}
+     * (exactly 2 parts). Dots in either segment are sanitized to {@code ~} so the provider inbox token grammar holds. GitLab
      * subjects carry the connection, not a path: see {@link #connectionFilter}.
      */
     public static String buildSubjectPrefix(String streamName, String nameWithOwner) {
@@ -92,7 +92,7 @@ public final class ConsumerSubjectMath {
     /**
      * Wildcard subject filter that matches every event for a single repository.
      *
-     * @param streamName    the NATS stream name
+     * @param streamName    the provider inbox name
      * @param nameWithOwner repository identifier in {@code owner/repo}
      * @return a subject like {@code github.owner.repo.>}
      */
@@ -104,7 +104,7 @@ public final class ConsumerSubjectMath {
      * Wildcard subject filter that matches every org-level event. Org events use the literal
      * {@code ?} placeholder where a repository would otherwise sit.
      *
-     * @param streamName the NATS stream name
+     * @param streamName the provider inbox name
      * @param owner      the organization login
      * @return a subject like {@code github.owner.?.>}
      */
@@ -144,7 +144,7 @@ public final class ConsumerSubjectMath {
     }
 
     /**
-     * Resolves the NATS stream name for an {@link IntegrationKind}; a null kind returns
+     * Resolves the provider inbox name for an {@link IntegrationKind}; a null kind returns
      * {@link Optional#empty()} so callers can short-circuit on the path.
      */
     public static Optional<String> streamNameFor(@Nullable IntegrationKind kind) {
@@ -180,7 +180,7 @@ public final class ConsumerSubjectMath {
      * publish-side sanitisation of the messaging subject derivers so the filter and the published
      * subject always agree.
      *
-     * @param streamName the NATS stream name (e.g. {@code slack})
+     * @param streamName the provider inbox name (e.g. {@code slack})
      * @param teamId     the vendor team id from the workspace's connection config
      * @return a subject like {@code slack.T0ABC123.>}
      */

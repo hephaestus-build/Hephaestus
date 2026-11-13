@@ -1309,18 +1309,13 @@ To repeat a failure locally, run its class with `--tests`, or run the shard with
 
 The latest-minor `amd64` leg runs the replacement-storage recovery drill nightly and on pull requests that change its inputs.
 The `kubernetes-recovery` path filter owns those inputs: the chart, PostgreSQL image, drill script and qualification workflows.
-Merge groups skip this destructive drill. The JetStream restore test stays in the integration tier.
+Merge groups skip this destructive drill.
 
 The drill backs PostgreSQL up to a disposable S3-compatible server and archives a later WAL-only row.
 It removes the disposable source claim, provisions a fresh claim and volume on a replacement k3d node, and restores through the chart.
 The drill requires removal of the old volume, checks the replacement node and requires both rows after replay.
 It applies clone lockdown before application roles restart.
 It preserves the cluster configuration and Secrets. It does not rehearse recovery of those files or an off-node host failure.
-
-`JetStreamRestoreIntegrationTest` checks consumer checkpoints after a graceful stop and cold copy of the released broker's store.
-Two durable consumers resume from different acknowledged positions on a new broker container.
-The test requires redelivery of unacknowledged work, no repeated application of acknowledged events, and successful publication after restore.
-It does not qualify snapshot replay with PostgreSQL rollback, external delivery, or recovery after an abrupt broker failure.
 
 ## Workflow validation
 

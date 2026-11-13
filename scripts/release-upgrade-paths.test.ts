@@ -211,6 +211,23 @@ mock.module("node:child_process", { exports: {
 					.trim()
 					.split("\n")
 					.map((line) => asArray(JSON.parse(line), "command"));
+				const boots = calls.filter(
+					(call) =>
+						call[0] === "run" && (call.at(-1) === "old-image" || call.at(-1) === "target-image"),
+				);
+				assert.ok(boots.some((call) => call.at(-1) === "old-image"));
+				assert.ok(boots.some((call) => call.at(-1) === "target-image"));
+				for (const call of boots) {
+					for (let index = 0; index < call.length; index += 1) {
+						if (call[index] === "--env") {
+							assert.match(String(call[index + 1]), /^[A-Z_]+=.+/u, JSON.stringify(call));
+						}
+					}
+					assert.equal(
+						call.includes("HEPHAESTUS_SYNC_NATS_ENABLED=false"),
+						call.at(-1) === "old-image",
+					);
+				}
 				assert.equal(
 					calls.some((call) => call[0] === "pull" && call.includes("agent-image")),
 					!stopped,

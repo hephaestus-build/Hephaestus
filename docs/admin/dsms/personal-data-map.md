@@ -85,7 +85,7 @@ The self-service account export is a separate, narrower operation. Self-service 
 | Optional trace export and log collection | Trace timing and outcome. Collected log lines with stacks, account, user and provider ids, and operational correlation | Recipient-specific process | Recipient-specific process. A log store keeps its lines until its retention removes them | Off by default. Configure and document exact recipients, lawful bases and retention before enabling either. The processor checklist owns the approval evidence. |
 | External avatar hosts and browser caches | Image request address and visitor network metadata, including on public pages | Host/browser process | Host/browser process | No Hephaestus export or erasure of a third party's request logs. Record actual hosts and their privacy terms. |
 | Container logs and support bundles | Operational output. Logging policy excludes raw request bodies, model output, sandbox transcripts and secrets. Lines still carry identifiers: Hephaestus account and user ids, and the provider's numeric account ids, which the provider can map to a person. They carry no provider logins and no email addresses, but they can carry library exception text, so operators must assess exported bundles | No selective deletion | No selective deletion | Shipped container logs rotate by size ([Collecting logs](../monitoring.md#collect-logs)). Support-bundle retention is deployment-specific. |
-| PostgreSQL and filesystem backups | A copy of the backed-up personal-data corpus | No selective deletion inside a backup | Expiry of the backup copy | The optional encrypted off-host PostgreSQL backup overlay retains full backup chains by count, not by a legal time limit. Operators must document and enforce destination retention, including copies of `.env` and broker evidence. See [backup and restore](../backup-restore.mdx). |
+| PostgreSQL and filesystem backups | A copy of the backed-up personal-data corpus | No selective deletion inside a backup | Expiry of the backup copy | The optional encrypted off-host PostgreSQL backup overlay retains full backup chains by count, not by a legal time limit. Operators must document and enforce destination retention, including copies of `.env` and inbox evidence. See [backup and restore](../backup-restore.mdx). |
 
 ## Provider resource fence identifiers
 
@@ -495,7 +495,7 @@ instead of a second deletion service or an operator-SQL fallback. A new store ca
 4. Focused tests cover a source-only identity, two workspaces and another person left intact.
    They also cover changed preview, failure/resume and any writer or derived-copy boundary relevant to the new store.
 5. The controller-facing retention and source-governance records and data-subject disclosure match
-   the implementation. Declare broker, backup and provider limits rather than promising their erasure.
+   the implementation. Declare inbox, backup and provider limits rather than promising their erasure.
 
 The existing executable proof includes
 `server/application/src/test/java/de/tum/cit/aet/hephaestus/core/privacy/AccountErasureIntegrationTest.java`,

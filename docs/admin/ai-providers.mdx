@@ -178,7 +178,7 @@ These rules apply:
   List the network that the model server is in.
 - A range stops startup if it is inside a metadata range of the previous table, because it would never connect.
 - A range stops startup if it covers an address of the server itself.
-  Such a range admits the services of this deployment, such as PostgreSQL, NATS, and the server.
+  Such a range admits the services of this deployment, such as PostgreSQL, and the server.
   On Kubernetes, it covers the address of the Pod, but not the whole Pod range or the Service range.
   Thus, never list a range that covers the Pod or Service range of the cluster.
 - List single hosts or narrow ranges.

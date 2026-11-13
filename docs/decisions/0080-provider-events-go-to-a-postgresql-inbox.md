@@ -10,6 +10,8 @@
 
 **Amended by:** [ADR 0100](0100-the-server-serves-the-web-app.md). The server serves the web app, so the nginx web app image of § The runtime that follows goes.
 
+**Amended by:** [ADR 0102](0102-sync-status-hints-use-postgresql-notifications.md). Sync-status hints also use PostgreSQL; no broker remains.
+
 ## Context
 
 The webhook role verifies a provider delivery and publishes it to NATS JetStream.

@@ -54,7 +54,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
 
     private static final String PROJECT_PATH = "gitlab-org/gitlab";
-    private static final String NATS_SUBJECT = "gitlab.?connection.7.merge_request";
+    private static final String EVENT_SUBJECT = "gitlab.?connection.7.merge_request";
 
     @Mock
     private GitLabMergeRequestProcessor mergeRequestProcessor;
@@ -142,7 +142,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldDateTheEventByWhenJetStreamStoredItWhenItArrivesThroughTheStream() throws IOException {
+        void shouldDateTheEventByWhenTheInboxStoredItWhenItArrivesThroughTheStream() throws IOException {
             GitLabMergeRequestEventDTO event = createEvent("update", "opened", false);
             setupRepository();
             ZonedDateTime storedAt = ZonedDateTime.parse("2026-01-31T18:05:00Z");
@@ -545,7 +545,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
 
     private ProviderEvent mockMessage(GitLabMergeRequestEventDTO event) throws IOException {
         ProviderEvent msg = mock(ProviderEvent.class);
-        when(msg.subject()).thenReturn(NATS_SUBJECT);
+        when(msg.subject()).thenReturn(EVENT_SUBJECT);
         when(deserializer.deserialize(msg, GitLabMergeRequestEventDTO.class)).thenReturn(event);
         return msg;
     }

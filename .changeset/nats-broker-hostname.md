@@ -1,7 +1,6 @@
 ---
-"hephaestus": minor
 ---
 
-Hephaestus verifies the broker's hostname when it connects to NATS over TLS.
+Broker certificate checks need no separate release note because the broker is removed; the `remove-sync-broker` changeset owns that change.
 
-**Operators:** For external NATS over `tls://`, confirm that each broker's certificate names its configured or advertised connection address before you upgrade.
+**Operators:** Follow the complete removal list in **Remove the retired sync broker values before upgrading**; the previous broker instructions no longer apply.

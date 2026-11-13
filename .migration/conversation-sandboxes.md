@@ -1,6 +1,6 @@
 #### 🔴 Stop every role before moving conversation turns to sandboxes
 
-Stop the old conversation loop before the database migration. Drain and stop all servers, then stop the webhook role. Remove the old sandbox claims and tools Jobs. Keep PostgreSQL and NATS available until the drain ends.
+Stop the old conversation loop before the database migration. Drain and stop all servers, then stop the webhook role. Remove the old sandbox claims and tools Jobs. Keep PostgreSQL available until the drain ends.
 
 1. Scale `<release>-conversation-loop` to zero and wait for its Pods to stop. Do this before upgrading the chart, which removes that Deployment.
 2. Stop the servers through their normal drain. Wait until every server Pod has stopped, then stop the webhook role.

@@ -67,8 +67,7 @@ An example is a database that does not meet the [database prerequisites](./compa
 A changeset precondition that cannot run, or a failed migration statement, quotes the driver message, so its record names the exception class only.
 
 The application writes an exception's class, not its message, into its own log messages.
-Sync, provider, webhook and NATS failures log the class with the operation, the status where known, and opaque identifiers.
-A failed NATS delivery logs its route and delivery count, and attaches the stack trace on the first delivery only.
+Sync, provider and webhook failures log the class with the operation, the status where known, and opaque identifiers.
 The subject, which names an owner and a repository, stays out of the record.
 Workspaces are identified by `workspace.id`. The workspace slug is not a log field.
 

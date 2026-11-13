@@ -95,7 +95,6 @@ const operator = {
 
 const external = {
 	postgresql: { bundled: false, external: { host: "db.internal", cidr: "10.0.12.0/24" } },
-	nats: { bundled: false, external: { url: "nats://nats.internal:4222", cidr: "10.0.13.0/24" } },
 };
 /** Synthetic sandbox nodes: every optional setting named. */
 const sandboxRuntime = {
@@ -267,7 +266,7 @@ function assertWorkloadReferences(resources: Resource[], resource: Resource, lab
 		`${label} selector`,
 	);
 	const spec = podSpec(resource);
-	// PostgreSQL and NATS run under the namespace default account, without its token.
+	// PostgreSQL run under the namespace default account, without its token.
 	const account = get(spec, "serviceAccountName");
 	assert.ok(
 		account === undefined || named(resources, "ServiceAccount", account),
@@ -340,15 +339,8 @@ function assertReferencesResolve(
 	}
 }
 
-/** The four profiles, and the small one with an operator's external PostgreSQL and NATS. */
+/** The four profiles, and the small one with an operator's external PostgreSQL. */
 const profiles = ["dev", "preview", "small", "cluster", "external"] as const;
-const maxFileBytes = {
-	dev: 4_294_967_296,
-	preview: 2_147_483_648,
-	small: 8_589_934_592,
-	cluster: 17_179_869_184,
-	external: 8_589_934_592,
-};
 const layersFor = (name: (typeof profiles)[number]) => {
 	switch (name) {
 		case "external": {
@@ -379,7 +371,6 @@ const imageOf = {
 	server: "application-server",
 	webapp: "webapp",
 	postgresql: "postgres",
-	nats: "nats",
 } as const;
 
 for (const name of profiles) {
@@ -390,7 +381,7 @@ for (const name of profiles) {
 			.toSorted(byCodePoint);
 		assert.deepEqual(components, [
 			...(name === "cluster" ? ["agent-sandbox-controller"] : []),
-			...(bundled(name) ? ["nats", "postgresql"] : []),
+			...(bundled(name) ? ["postgresql"] : []),
 			"server",
 			"webapp",
 		]);
@@ -505,9 +496,8 @@ for (const name of profiles) {
 		}
 	});
 
-	await test(`${name}: storage is bounded, and one value sizes the broker and its volume`, () => {
+	await test(`${name}: storage and mirror caches are bounded`, () => {
 		const resources = rendered(layersFor(name));
-		const budget = maxFileBytes[name];
 		// The git mirrors are caches on node storage: no role claims a volume of its own.
 		assert.equal(
 			resources.some((resource) => kindOf(resource) === "PersistentVolumeClaim"),
@@ -520,21 +510,6 @@ for (const name of profiles) {
 		if (!bundled(name)) {
 			return;
 		}
-		const config = resources.find(
-			(resource) => kindOf(resource) === "ConfigMap" && componentOf(resource) === "nats",
-		);
-		assert.match(
-			String(get(config, "data", "nats-server.conf")),
-			new RegExp(`^\\s*max_file: ${budget}$`, "mu"),
-		);
-		const nats = workload(resources, "nats");
-		assert.equal(get(nats, "spec", "replicas"), 1);
-		assert.equal(
-			String(
-				get(nats, "spec", "volumeClaimTemplates", 0, "spec", "resources", "requests", "storage"),
-			),
-			String(Math.floor((budget * 5) / 4)),
-		);
 		// ADR 0038: the volume sits at /var/lib/postgresql; the image keeps its own versioned PGDATA.
 		const postgresql = workload(resources, "postgresql");
 		assert.equal(get(postgresql, "spec", "replicas"), 1);
@@ -1133,13 +1108,6 @@ for (const name of ["small", "external"] as const) {
 						get(rule, "ports", 0, "port") === 5432,
 				),
 			);
-			assert.ok(
-				serverEgress.some(
-					(rule) =>
-						get(rule, "to", 0, "ipBlock", "cidr") === "10.0.13.0/24" &&
-						get(rule, "ports", 0, "port") === 4222,
-				),
-			);
 		}
 		// Internet HTTPS never includes private ranges.
 		const internet = serverEgress.filter(
@@ -1212,10 +1180,6 @@ await test("the longest release names render bounded, distinct and consistent ob
 			String(envValue(workload(resources, "server"), "DATABASE_URL")),
 		)?.groups?.service;
 		assert.ok(named(resources, "Service", database), `database host ${String(database)}`);
-		const broker = /^nats:\/\/(?<host>[^:/]+):4222$/u.exec(
-			String(envValue(workload(resources, "server"), "NATS_SERVER")),
-		)?.groups?.host;
-		assert.ok(named(resources, "Service", broker), `broker host ${String(broker)}`);
 		// The sandboxes' gateway policy in the sandbox namespace carries the release's name.
 		assert.ok(
 			resources.some(
@@ -2100,25 +2064,6 @@ await test("review slot admission and quota count the same overridden template r
 	);
 });
 
-await test("the small profile keeps personal content inside the transport-buffer horizon", () => {
-	// The application's 72 hours hold for Slack and Outline: erasure cannot reach inside a broker stream.
-	const receiver = workload(rendered(layersFor("small")), "server");
-	assert.equal(env(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_SLACK"), undefined);
-	assert.equal(env(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_OUTLINE"), undefined);
-});
-
-await test("the broker consumer policy comes from the application defaults, not the chart", () => {
-	for (const name of profiles) {
-		const server = workload(rendered(withSandboxes(name)), "server");
-		for (const variable of [
-			"NATS_DURABLE_CONSUMER_NAME",
-			"HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD",
-		]) {
-			assert.equal(env(server, variable), undefined, `${name} ${variable}`);
-		}
-	}
-});
-
 await test("Slack callbacks use the canonical API origin in either workspace-host mode", () => {
 	for (const enabled of [false, true]) {
 		const resources = rendered([
@@ -2161,7 +2106,7 @@ await test("practice reviews run exactly when the sandboxes run, with the instal
 	}
 	const capacity = (layers: readonly Layer[]) =>
 		envValue(workload(rendered(layers), "server"), "HEPHAESTUS_MENTOR_TURN_CAPACITY");
-	assert.equal(capacity(layersFor("small")), "8");
+	assert.equal(capacity(layersFor("small")), "11");
 	assert.equal(capacity([...layersFor("small"), { sandbox: { conversationTurns: 5 } }]), "5");
 	const exhausted = render([
 		...layersFor("small"),
@@ -2584,7 +2529,7 @@ await test("the single-node profile's requests, one upgrade beside them and its 
 	// The backup's request comes out of the turns too.
 	assert.equal(
 		Number(envValue(workload(resources, "server"), "HEPHAESTUS_MENTOR_TURN_CAPACITY")),
-		4,
+		7,
 	);
 	assert.ok(cpu <= node.cpu, `${cpu.toFixed(2)} CPU requested, ${node.cpu} on the node`);
 	assert.ok(
@@ -2657,61 +2602,6 @@ for (const name of profiles) {
 		});
 	}
 }
-
-/** The bundled broker's soft limit, memory request and memory limit, rendered from these layers. */
-const broker = (layers: Layer[]) => {
-	const nats = workload(rendered(layers), "nats");
-	return {
-		goMemLimit: envValue(nats, "GOMEMLIMIT"),
-		request: String(get(container(nats), "resources", "requests", "memory")),
-		limit: String(get(container(nats), "resources", "limits", "memory")),
-	};
-};
-
-// A catch-up of several streams fills the broker's limit with heap, so the Go runtime gets a soft limit below it.
-await test("the bundled broker requests its whole limit and keeps its heap under 80 % of it", () => {
-	for (const name of profiles.filter((each) => each !== "external")) {
-		assert.deepEqual(
-			broker(layersFor(name)),
-			{ goMemLimit: "819MiB", request: "1Gi", limit: "1Gi" },
-			name,
-		);
-	}
-	// A site's own limit moves the soft limit with it.
-	const sized = (memory: string) =>
-		broker([
-			...layersFor("small"),
-			{ nats: { resources: { requests: { memory }, limits: { memory } } } },
-		]).goMemLimit;
-	assert.equal(sized("3Gi"), "2457MiB");
-	assert.equal(sized("1536Mi"), "1228MiB");
-	const refused = render([
-		...layersFor("small"),
-		{ nats: { resources: { limits: { memory: "3G" } } } },
-	]);
-	assert.equal(refused.ok, false);
-	assert.match(
-		refused.stderr,
-		/nats\.resources\.limits\.memory must be a whole number of Mi or Gi/u,
-	);
-	// A fraction does not convert to whole MiB, so the chart refuses it.
-	const fraction = render([
-		...layersFor("small"),
-		{ nats: { resources: { requests: { memory: "1.5Gi" }, limits: { memory: "1.5Gi" } } } },
-	]);
-	assert.equal(fraction.ok, false);
-	assert.match(fraction.stderr, /must be a whole number of Mi or Gi/u);
-	// A site that raised only the request, as an older default invited, gets a reason instead of a rejected Pod.
-	const requestOnly = render([
-		...layersFor("small"),
-		{ nats: { resources: { requests: { memory: "3Gi" } } } },
-	]);
-	assert.equal(requestOnly.ok, false);
-	assert.match(
-		requestOnly.stderr,
-		/nats\.resources\.requests\.memory \(3072Mi\) must equal nats\.resources\.limits\.memory \(1024Mi\)/u,
-	);
-});
 
 /** The requests that each tier's quota holds, rendered from these layers. */
 const tierHard = (layers: Layer[]) => {
@@ -2907,7 +2797,7 @@ await test("the small profile fits its declared budget at steady state and the d
 		cpu: reviewSlots * sandboxPods.review.cpu + conversations * sandboxPods.conversation.cpu,
 		memory: (reviewSlots * sandboxGib.review + conversations * sandboxGib.conversation) * 2 ** 30,
 	});
-	assert.equal(turns, 4);
+	assert.equal(turns, 7);
 	assert.equal(reviewSlots, 5);
 	assert.ok(steady.cpu <= node.cpu, `steady: ${steady.cpu.toFixed(2)} CPU of ${node.cpu}`);
 	assert.ok(
@@ -3048,12 +2938,12 @@ await test("every role that runs git writes the JGit configuration to an emptyDi
 const podTemplate = (layers: readonly Layer[], component: string) =>
 	get(workload(rendered(layers), component), "spec", "template");
 
-await test("a release that changes neither image restarts neither PostgreSQL nor NATS, in every profile", () => {
+await test("a release that changes neither image restarts PostgreSQL, in every profile", () => {
 	// A Pod template that names the release would roll both on every upgrade. The application roles
 	// report the release they run, so their Pods carry it on purpose.
 	const next = { release: { version: "v1.2.4", commit: "b".repeat(40) } };
 	for (const name of profiles.filter((candidate) => bundled(candidate))) {
-		for (const component of ["postgresql", "nats"]) {
+		for (const component of ["postgresql"]) {
 			assert.deepEqual(
 				podTemplate([...withSandboxes(name), next], component),
 				podTemplate(withSandboxes(name), component),
@@ -3490,7 +3380,7 @@ await test("replica counts stop the server and restore the release", () => {
 		running.map((resource) => `${String(kindOf(resource))}/${nameOf(resource)}`),
 	);
 	assert.equal(get(workload(stopped, "server"), "spec", "strategy", "type"), "RollingUpdate");
-	for (const component of ["postgresql", "nats", "webapp"]) {
+	for (const component of ["postgresql", "webapp"]) {
 		assert.equal(get(workload(stopped, component), "spec", "replicas"), 1, component);
 	}
 
@@ -4070,7 +3960,7 @@ const maxConnections = (layers: readonly Layer[]) => {
 
 await test("without an explicit max_connections the database gets what the role pools need", () => {
 	const base = [prepared, operator, reviews, { sandbox: { enabled: true } }];
-	// Two old servers and two replacements, their four listeners each, migration and reserves.
+	// Two old servers and two replacements, their five listeners each, migration and reserves.
 	assert.equal(maxConnections(base), "max_connections=200");
 	// A larger pool is not limited by a number that the image derives from memory alone.
 	assert.equal(
@@ -4162,7 +4052,7 @@ await test("the small database holds its bounded holders, overlap, reserved slot
 		const backupSessions = 2;
 		const probeAndSetupSessions = 3;
 		const ordinary =
-			peakServers * (pool + 4) +
+			peakServers * (pool + 5) +
 			Number(envValue(migration, "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE")) +
 			Number(monitor) +
 			backupSessions +
@@ -4240,9 +4130,9 @@ await test("every resident small-profile PostgreSQL container reserves its full 
 await test("disruption budgets protect singleton stores and permit one of two servers to stop", () => {
 	const resources = rendered([prepared, operator, sandboxLayer]);
 	const budgets = resources.filter((resource) => kindOf(resource) === "PodDisruptionBudget");
-	assert.equal(budgets.length, 3);
+	assert.equal(budgets.length, 2);
 	// Singleton stores reject eviction; one server may stop while the other stays available.
-	for (const component of ["postgresql", "nats", "server"]) {
+	for (const component of ["postgresql", "server"]) {
 		const budget = budgets.find((resource) => componentOf(resource) === component);
 		assert.ok(budget, component);
 		const spec = get(budget, "spec");
@@ -4769,5 +4659,41 @@ await test("the parallel pressure drill waits for the chart's priorities and exc
 			false,
 			"the pressure node must not admit production role or sandbox Pods",
 		);
+	}
+});
+
+await test("every profile renders without broker objects, images, ports or credentials", () => {
+	for (const name of profiles) {
+		const resources = rendered(layersFor(name));
+		for (const resource of resources) {
+			assert.doesNotMatch(
+				JSON.stringify(resource),
+				/nats|jetstream/iu,
+				`${name}: ${String(kindOf(resource))}`,
+			);
+			const ports = [
+				...list(get(resource, "spec", "ports")),
+				...list(get(resource, "spec", "ingress")).flatMap((rule) => list(get(rule, "ports"))),
+				...list(get(resource, "spec", "egress")).flatMap((rule) => list(get(rule, "ports"))),
+			];
+			for (const port of ports) {
+				assert.ok(![4222, 8222].includes(Number(get(port, "port"))), name);
+			}
+		}
+		for (const resource of workloads(resources)) {
+			for (const entry of containers(resource)) {
+				for (const port of list(get(entry, "ports"))) {
+					assert.ok(![4222, 8222].includes(Number(get(port, "containerPort"))), name);
+				}
+			}
+		}
+	}
+});
+
+await test("retired broker settings are rejected instead of silently ignored", () => {
+	for (const retired of [{ nats: { bundled: true } }, { images: { nats: "retired" } }]) {
+		const result = render([...layersFor("small"), retired]);
+		assert.equal(result.ok, false);
+		assert.match(result.stderr, /additional properties 'nats' not allowed/iu);
 	}
 });

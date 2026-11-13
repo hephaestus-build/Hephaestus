@@ -5,9 +5,6 @@
 {{- if not .Values.postgresql.bundled }}
 {{- $_ := required "postgresql.external.cidr is required for the egress rule when postgresql.bundled is false" .Values.postgresql.external.cidr }}
 {{- end }}
-{{- if not .Values.nats.bundled }}
-{{- $_ := required "nats.external.cidr is required for the egress rule when nats.bundled is false" .Values.nats.external.cidr }}
-{{- end }}
 # Every pod of the release starts with no ingress and no egress. The policies below open only the
 # paths that each role needs.
 apiVersion: networking.k8s.io/v1
@@ -77,7 +74,6 @@ spec:
     {{- include "hephaestus.policy.metricsIngress" (dict "root" . "port" "management") | nindent 4 }}
   egress:
     {{- include "hephaestus.policy.databaseEgress" . | nindent 4 }}
-    {{- include "hephaestus.policy.natsEgress" . | nindent 4 }}
     {{- include "hephaestus.policy.externalEgress" . | nindent 4 }}
     {{- include "hephaestus.policy.traceEgress" . | nindent 4 }}
     {{- include "hephaestus.policy.modelEgress" . | nindent 4 }}
@@ -224,25 +220,5 @@ spec:
   egress:
     {{- include "hephaestus.policy.backupEgress" . | nindent 4 }}
     {{- end }}
-{{- end }}
-{{- if .Values.nats.bundled }}
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: {{ include "hephaestus.name" (dict "root" . "component" "nats") }}
-  labels:
-    {{- include "hephaestus.labels" (dict "root" . "component" "network") | nindent 4 }}
-spec:
-  podSelector:
-    matchLabels:
-      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "nats") | nindent 6 }}
-  policyTypes: ["Ingress"]
-  ingress:
-    - from:
-        {{- include "hephaestus.componentPeer" (dict "root" $root "component" "server") | nindent 8 }}
-      ports:
-        - port: 4222
-          protocol: TCP
 {{- end }}
 {{- /* The policies of the sandbox namespace sit in sandbox.yaml. */}}

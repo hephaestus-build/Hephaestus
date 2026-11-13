@@ -47,7 +47,7 @@ import tools.jackson.databind.ObjectMapper;
  * <em>claims to handle</em>, the real routing pipeline
  * (fixture payload → {@code SubjectKeyDeriver} → {@code SubjectParser} → {@link EventTypeKey} →
  * handler-registry lookup) MUST resolve a registered handler. A key that no handler owns is
- * ACK-dropped silently at DEBUG by {@code IntegrationNatsConsumer} — an invisible data-loss bug. This
+ * ACK-dropped silently at DEBUG by {@code ProviderEventConsumer} — an invisible data-loss bug. This
  * test makes that whole class fail loudly at build time and names the offending fixture.
  *
  * <p>Unlike per-side unit tests (deriver-only, parser-only), and unlike {@link SubjectGrammarRoundTripTest}
@@ -309,7 +309,7 @@ class WebhookFixtureHandlerResolutionTest extends BaseUnitTest {
                 .as(
                         "Every committed %s webhook fixture must resolve a registered handler or be explicitly "
                                 + "allowlisted as an intentional ACK-drop. Offending fixtures below would be dropped "
-                                + "silently by IntegrationNatsConsumer (invisible data loss).",
+                                + "silently by ProviderEventConsumer (invisible data loss).",
                         kindLabel)
                 .isEmpty();
 

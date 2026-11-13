@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Test;
  *   <li>every REST controller in the module is either workspace-scoped or an {@code @Hidden} inbound webhook
  *       receiver (an explicitly allowlisted user-scoped controller aside) — an unscoped Slack endpoint would
  *       bypass tenancy authorization;</li>
- *   <li>every NATS consumer follows one of the two envelope-handler bases — a hand-rolled handler would skip the
+ *   <li>every inbox consumer follows one of the two envelope-handler bases — a hand-rolled handler would skip the
  *       shared deserialization/teamId discipline (and, for the channel path, the transaction boundary);</li>
  *   <li>every Slack repository finder carries the workspace predicate in its signature — the compile-time
  *       complement to the runtime tenancy {@code StatementInspector} (deliberately unscoped fleet-enumeration
@@ -80,7 +80,7 @@ class SlackIntegrationArchitectureTest extends HephaestusArchitectureTest {
     }
 
     @Test
-    @DisplayName("every Slack NATS consumer extends one of the two envelope-handler bases")
+    @DisplayName("every Slack inbox consumer extends one of the two envelope-handler bases")
     void slackMessageHandlersExtendTheSharedBases() {
         // Two bases by design: AbstractSlackEnvelopeHandler for plain envelope routing, and the core
         // AbstractIntegrationMessageHandler for the channel-message path, which additionally needs the shared

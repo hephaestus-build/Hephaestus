@@ -44,9 +44,6 @@ The table names variables inside each application Pod. The chart owns their role
 | `hephaestus.webhook.secret`                     | `WEBHOOK_SECRET`                                |
 | `hephaestus.webhook.routing.secret`             | `WEBHOOK_ROUTING_SECRET`                        |
 | `hephaestus.webhook.routing.previous-secret`    | `WEBHOOK_ROUTING_PREVIOUS_SECRET`               |
-| `hephaestus.sync.nats.server`                   | `NATS_SERVER`                                   |
-| `hephaestus.sync.nats.username`                 | `NATS_USERNAME`                                 |
-| `hephaestus.sync.nats.password`                 | `NATS_PASSWORD`                                 |
 | `hephaestus.auth.state-cookie-key`              | `HEPHAESTUS_AUTH_STATE_COOKIE_KEY`              |
 | `hephaestus.llm.egress.allow-loopback`          | `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK`          |
 | `hephaestus.agent.image.require-digest`         | `HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST`         |
@@ -112,15 +109,6 @@ The REQUIRED fact `webhook.routing-secret` applies to the server on every produc
 
 1. Set `WEBHOOK_ROUTING_SECRET` to at least 32 printable, non-space ASCII characters.
 2. Use a value different from `WEBHOOK_SECRET`.
-
-## NATS
-
-The server requires NATS and an explicit `nats://` or `tls://` URI.
-The URI must have a host and, optionally, a valid port.
-It must have no query, fragment, or non-root path.
-
-The chart requires the NATS username and password in its release Secret.
-Readiness checks syntax and role consistency, not connectivity or JetStream health.
 
 ## Login
 

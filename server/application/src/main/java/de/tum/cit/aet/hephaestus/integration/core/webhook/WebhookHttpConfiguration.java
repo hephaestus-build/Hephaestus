@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 
-/** HTTP guards for the public webhook ingress. Independent of NATS publisher availability. */
+/** HTTP guards for the public webhook ingress. Independent of provider inbox publisher availability. */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnServerRole
 public class WebhookHttpConfiguration {

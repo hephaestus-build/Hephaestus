@@ -61,11 +61,6 @@ hephaestus:
             enabled: false
     workspace:
         init-default: false
-    sync:
-        nats:
-            enabled: false
-            server: "nats://localhost:4222"
-
 springdoc:
     # The one profile whose entire job is to publish the description. Everywhere else it defaults off
     # (see application.yml) because the security carve-out that lets this profile scrape it without a

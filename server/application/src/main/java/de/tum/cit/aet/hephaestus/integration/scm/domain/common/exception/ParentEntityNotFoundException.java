@@ -6,7 +6,7 @@ import java.io.Serial;
  * Exception thrown when a parent entity required for processing is not found.
  * <p>
  * This exception is designed to be retryable - when thrown during message processing,
- * the NATS consumer will NAK the message with exponential backoff, allowing it to be
+ * the inbox consumer requeues the event with exponential backoff, allowing it to be
  * reprocessed later when the parent entity likely exists.
  * <p>
  * Common scenarios:

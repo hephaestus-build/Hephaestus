@@ -35,10 +35,9 @@ class E2eProfileOverlayTest extends BaseUnitTest {
     }
 
     @Test
-    void usesLocalNatsAndUnfilteredSync() throws IOException {
+    void usesUnfilteredSyncForE2e() throws IOException {
         PropertySource<?> overlay = overlay();
 
-        assertThat(overlay.getProperty("hephaestus.sync.nats.server")).isEqualTo("nats://localhost:4222");
         assertThat(overlay.getProperty("hephaestus.sync.filters.allowed-organizations"))
                 .isEqualTo("");
     }

@@ -164,7 +164,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                             + " GitHub issue transport controlled"),
             Map.entry(
                     "gitlab-event-routing",
-                    "real JetStream scope consumer with GitLab discovery, webhook and sync"
+                    "real provider inbox scope consumer with GitLab discovery, webhook and sync"
                             + " held at the API boundary"),
             Map.entry(
                     "gitlab-stopped-project",

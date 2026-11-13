@@ -4,7 +4,7 @@
  * {@link de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier} and
  * {@link de.tum.cit.aet.hephaestus.integration.core.spi.SubjectKeyDeriver} via
  * {@link de.tum.cit.aet.hephaestus.integration.core.webhook.IntegrationKindRouting};
- * verified envelopes are published to NATS JetStream.
+ * verified envelopes are published to provider inbox provider inbox.
  */
 @org.springframework.modulith.NamedInterface("webhook")
 @org.jspecify.annotations.NullMarked

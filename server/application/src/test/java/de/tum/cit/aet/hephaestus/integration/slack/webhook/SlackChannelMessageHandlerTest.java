@@ -40,7 +40,7 @@ import tools.jackson.databind.json.JsonMapper;
  * Consumer-side handler tests. A REAL {@link SlackIngestService} is wired over mocked repositories/gates so the
  * fail-closed consent gates, forward-only watermark, participant firewall, tenant threading, and idempotency are
  * exercised end-to-end THROUGH {@link SlackChannelMessageHandler#onMessage}, over a real JSON deserialization of the
- * NATS body — i.e. the exact durable path the Slack events endpoint publishes onto.
+ * provider inbox body — i.e. the exact durable path the Slack events endpoint publishes onto.
  */
 class SlackChannelMessageHandlerTest extends BaseUnitTest {
 
@@ -132,7 +132,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
         return new SlackChannelMessageHandler(ingestService, deserializer, transactionTemplate);
     }
 
-    private static ProviderEvent natsMessage(String body) {
+    private static ProviderEvent inboxMessage(String body) {
         ProviderEvent m = mock(ProviderEvent.class);
         when(m.subject()).thenReturn("slack.T1.C1.message");
         when(m.payload()).thenReturn(body.getBytes(StandardCharsets.UTF_8));
@@ -160,7 +160,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
         when(messageRepository.insertIfAbsent(eq(WORKSPACE), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(1);
 
-        handler.onMessage(natsMessage(PLAIN_MESSAGE));
+        handler.onMessage(inboxMessage(PLAIN_MESSAGE));
 
         // Tenant isolation: the write carries the resolved workspace id, and the thread projection fires once.
         verify(messageRepository).insertIfAbsent(WORKSPACE, "T1", "C1", "100.1", "100.0", "U1", 7L, "hello");
@@ -175,8 +175,8 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
                 .thenReturn(1)
                 .thenReturn(0);
 
-        handler.onMessage(natsMessage(PLAIN_MESSAGE));
-        handler.onMessage(natsMessage(PLAIN_MESSAGE));
+        handler.onMessage(inboxMessage(PLAIN_MESSAGE));
+        handler.onMessage(inboxMessage(PLAIN_MESSAGE));
 
         // Both deliveries attempt the insert, but the committed effect (thread projection) runs EXACTLY once.
         verify(messageRepository, times(2))
@@ -188,20 +188,20 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
     void transientFailureThenSuccess_appliesExactlyOnce_withNoLoss() {
         stubActiveConsentedChannel();
         // First delivery: a transient DB error on insert. The handler must PROPAGATE it so the consumer NAKs and
-        // JetStream redelivers; a claim recorded before the effect would lose the message here. Second delivery:
+        // provider inbox redelivers; a claim recorded before the effect would lose the message here. Second delivery:
         // success.
         when(messageRepository.insertIfAbsent(eq(WORKSPACE), any(), any(), any(), any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("transient db error"))
                 .thenReturn(1);
 
-        assertThatThrownBy(() -> handler.onMessage(natsMessage(PLAIN_MESSAGE)))
+        assertThatThrownBy(() -> handler.onMessage(inboxMessage(PLAIN_MESSAGE)))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("transient");
         // No projection on the failed attempt.
         verify(threadRepository, never()).upsertOnMessage(anyLong(), any(), any(), any(), any());
 
         // Redelivery succeeds; the effect applies exactly once.
-        handler.onMessage(natsMessage(PLAIN_MESSAGE));
+        handler.onMessage(inboxMessage(PLAIN_MESSAGE));
         verify(threadRepository, times(1)).upsertOnMessage(WORKSPACE, "C1", "100.0", "100.1", 7L);
     }
 
@@ -210,14 +210,14 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
         when(workspaceResolver.resolveWorkspaceId("T1")).thenReturn(Optional.of(WORKSPACE));
         when(consentGate.ingestAllowed(WORKSPACE, "C1")).thenReturn(false); // PENDING/PAUSED/REVOKED
 
-        handler.onMessage(natsMessage(PLAIN_MESSAGE));
+        handler.onMessage(inboxMessage(PLAIN_MESSAGE));
 
         verify(messageRepository, never()).insertIfAbsent(anyLong(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
     void botMessage_isIgnored() {
-        handler.onMessage(natsMessage("""
+        handler.onMessage(inboxMessage("""
             {"type":"event_callback","team_id":"T1","event":{
               "type":"message","channel_type":"channel","channel":"C1","bot_id":"B1","ts":"100.1","text":"beep"}}
             """));
@@ -233,7 +233,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
 
         // A thread reply also broadcast to the channel arrives with subtype "thread_broadcast" but carries a real
         // author + ts + text, so it must ingest — not be dropped by the non-content subtype no-op.
-        handler.onMessage(natsMessage("""
+        handler.onMessage(inboxMessage("""
             {"type":"event_callback","team_id":"T1","event":{
               "type":"message","subtype":"thread_broadcast","channel_type":"channel","channel":"C1",
               "user":"U1","ts":"100.1","thread_ts":"100.0","text":"broadcast reply"}}
@@ -250,7 +250,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
         when(messageRepository.applyEdit(eq(WORKSPACE), eq("C1"), eq("100.1"), eq("edited body"), any(Instant.class)))
                 .thenReturn(1);
 
-        handler.onMessage(natsMessage("""
+        handler.onMessage(inboxMessage("""
             {"type":"event_callback","team_id":"T1","event":{
               "type":"message","subtype":"message_changed","channel":"C1","ts":"200.9",
               "message":{"ts":"100.1","user":"U1","text":"edited body","edited":{"user":"U1","ts":"300.5"}}}}
@@ -265,7 +265,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
     @Test
     void messageChanged_withoutAnEdit_changesNothing() {
         // Slack also sends message_changed when a reply or an unfurl changes the message; its author edited nothing.
-        handler.onMessage(natsMessage("""
+        handler.onMessage(inboxMessage("""
             {"type":"event_callback","team_id":"T1","event":{
               "type":"message","subtype":"message_changed","channel":"C1","ts":"200.9",
               "message":{"ts":"100.1","user":"U1","text":"original body","reply_count":2}}}
@@ -287,7 +287,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
         when(messageRepository.insertIfAbsent(eq(WORKSPACE), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(1);
 
-        handler.onMessage(natsMessage("""
+        handler.onMessage(inboxMessage("""
             {"type":"event_callback","team_id":"T1","event":{
               "type":"message","subtype":"message_changed","channel":"C1","ts":"200.9",
               "message":{"ts":"100.1","user":"U1","thread_ts":"100.0","text":"edited body","edited":{"user":"U1","ts":"300.5"}}}}
@@ -307,7 +307,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
         when(messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(WORKSPACE, "C1", "100.1"))
                 .thenReturn(true);
 
-        handler.onMessage(natsMessage("""
+        handler.onMessage(inboxMessage("""
             {"type":"event_callback","team_id":"T1","event":{
               "type":"message","subtype":"message_changed","channel":"C1","ts":"200.9",
               "message":{"ts":"100.1","user":"U1","text":"edited body","edited":{"user":"U1","ts":"300.5"}}}}
@@ -320,7 +320,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
     void flagOff_editMessage_doesNothing() {
         handler = handlerWithIngestDisabled();
 
-        handler.onMessage(natsMessage("""
+        handler.onMessage(inboxMessage("""
             {"type":"event_callback","team_id":"T1","event":{
               "type":"message","subtype":"message_changed","channel":"C1","ts":"200.9",
               "message":{"ts":"100.1","user":"U1","text":"edited body","edited":{"user":"U1","ts":"300.5"}}}}
@@ -336,7 +336,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
     void flagOff_tombstone_doesNothing() {
         handler = handlerWithIngestDisabled();
 
-        handler.onMessage(natsMessage("""
+        handler.onMessage(inboxMessage("""
             {"type":"event_callback","team_id":"T1","event":{
               "type":"message","subtype":"message_deleted","channel":"C1","ts":"200.9","deleted_ts":"100.1"}}
             """));
@@ -359,7 +359,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
     void messageDeleted_tombstonesOnDeletedTs_notEventTs() {
         stubAnnouncedChannelForTombstone();
 
-        handler.onMessage(natsMessage("""
+        handler.onMessage(inboxMessage("""
             {"type":"event_callback","team_id":"T1","event":{
               "type":"message","subtype":"message_deleted","channel":"C1","ts":"200.9","deleted_ts":"100.1"}}
             """));
@@ -372,7 +372,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
     void messageDeleted_fallsBackToPreviousMessageTs() {
         stubAnnouncedChannelForTombstone();
 
-        handler.onMessage(natsMessage("""
+        handler.onMessage(inboxMessage("""
             {"type":"event_callback","team_id":"T1","event":{
               "type":"message","subtype":"message_deleted","channel":"C1","ts":"200.9","previous_message":{"ts":"150.2"}}}
             """));
@@ -386,7 +386,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
         // so the tombstone deliberately ignores the consent state (the gate mock is never consulted).
         stubAnnouncedChannelForTombstone();
 
-        handler.onMessage(natsMessage("""
+        handler.onMessage(inboxMessage("""
             {"type":"event_callback","team_id":"T1","event":{
               "type":"message","subtype":"message_deleted","channel":"C1","ts":"200.9","deleted_ts":"100.1"}}
             """));
@@ -399,7 +399,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
         when(workspaceResolver.resolveWorkspaceId("T1")).thenReturn(Optional.of(WORKSPACE));
         when(monitoredChannelRepository.findConsentAnnouncedAt(WORKSPACE, "C1")).thenReturn(Optional.empty());
 
-        handler.onMessage(natsMessage("""
+        handler.onMessage(inboxMessage("""
             {"type":"event_callback","team_id":"T1","event":{
               "type":"message","subtype":"message_deleted","channel":"C1","ts":"200.9","deleted_ts":"100.1"}}
             """));
@@ -414,7 +414,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
         // text column exists).
         stubActiveConsentedChannel();
 
-        handler.onMessage(natsMessage("""
+        handler.onMessage(inboxMessage("""
             {"type":"event_callback","team_id":"T1","event":{
               "type":"message","subtype":"file_share","channel_type":"channel","channel":"C1","user":"U1","ts":"100.1",
               "text":"here is the failing trace - race?","files":[{"id":"F1"}]}}
@@ -434,7 +434,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
 
     @Test
     void fileShareWithoutComment_storesNothing() {
-        handler.onMessage(natsMessage("""
+        handler.onMessage(inboxMessage("""
             {"type":"event_callback","team_id":"T1","event":{
               "type":"message","subtype":"file_share","channel_type":"channel","channel":"C1","user":"U1","ts":"100.1",
               "text":"","files":[{"id":"F1"}]}}

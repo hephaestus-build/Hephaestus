@@ -26,7 +26,6 @@ Do not start the upgrade without that proof.
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | PostgreSQL                          | Preserve application state, encrypted provider credentials, JWT signing keys, practice results and delivery history.                                                                                         |
 | Encryption keys and configuration   | Keep the keys and required Secret values outside the cluster as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes. The database alone cannot recover encrypted values. |
-| NATS                                | Nothing to keep. NATS holds no data that a restore needs, as [Restore the broker](./production-operations-runbook#restore-the-broker) describes. |
 | Signed release lock and site values | Restore the release and configuration that match the database. Verify its chart and image digests.                                                                                                           |
 | Platform recovery material          | Keep the k3s token, datastore, manifests, certificates, and storage configuration as [Platform recovery material](#platform-recovery-material) describes.                                                                                           |
 
@@ -114,7 +113,7 @@ A restore replaces the bundled database with a backup.
 It loses every change after the backup or the time that you select.
 The restored database is readable only with the keys that sealed its values.
 Keep them as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes.
-Do not restore NATS data, as [Restore the broker](./production-operations-runbook#restore-the-broker) describes.
+Reconcile external writes, as [Reconcile external writes after restore](./production-operations-runbook#reconcile-external-writes-after-a-database-restore) describes.
 
 Before reducing application replicas, record `SHOW max_connections` and set `postgresql.parameters.max_connections` to that value.
 Keep this override until WAL replay finishes. Include it in the recovery set for a replacement host.
@@ -172,7 +171,7 @@ Use [Recover the live installation](#recover-the-live-installation) for a live r
    ```
 
 6. Read back silent mode, paused feedback and disabled conversation bindings. Keep external egress denied.
-7. Do not restore NATS data. Resolve provider write receipts before the server starts.
+7. Resolve provider write receipts before the server starts.
 8. Set `migration.enabled=true` and start the server alone. Verify migrations, readiness and authenticated reads.
 9. Restore the other replica counts only after the isolated checks pass.
    Follow [Prove silence](./production-operations-runbook#silent-deployment-checklist) before opening any external destination.
@@ -193,7 +192,7 @@ Rehearse a restore on a copy of the instance before you need one.
    Keep provider and model egress denied. Wait for `pg_is_in_recovery()` to return `f`.
 4. Do not apply `restore-clone-lockdown.sql` to the live recovery database.
    Verify silent mode, delivery status, review triggers and conversation bindings against the intended live settings.
-5. Do not restore NATS data. Plan the provider reconciliation, as [Restore the broker](./production-operations-runbook#restore-the-broker) describes.
+5. Plan the provider reconciliation, as [Reconcile external writes after restore](./production-operations-runbook#reconcile-external-writes-after-a-database-restore) describes.
 6. Enable migrations and start the server alone. Verify readiness, authenticated reads and encrypted values.
 7. Before access or delivery resumes, reapply post-backup security and privacy decisions from the restricted incident record.
    [Before restarting services](./backup-restore#before-restarting-services) gives the required suspension, session, consent and deletion checks.
@@ -210,7 +209,7 @@ Rehearse a restore on a copy of the instance before you need one.
 Keep the normal server Deployment stopped while PostgreSQL is restored.
 Keep public access and provider egress closed.
 Before replay or normal processing, the server must pass the `erasure-recovery` startup profile.
-This profile runs the existing person-erasure service before lifecycle workers, scheduled tasks or broker consumers start.
+This profile runs the existing person-erasure service before lifecycle workers, scheduled tasks or inbox consumers start.
 A missing or invalid manifest, an unknown provider instance, or an incomplete erasure stops startup.
 
 1. From the restricted incident record, prepare a JSON manifest of every erasure after the chosen recovery point.
@@ -228,7 +227,7 @@ A missing or invalid manifest, an unknown provider instance, or an incomplete er
    Before reuse, their servers must reconcile their folders against the recovered receipts.
    Keep provider egress denied.
    Follow [A server with evidence is offline](./production-operations-runbook#a-server-with-evidence-is-offline).
-4. Do not restore NATS data.
+4. Reconcile external writes before the server starts.
 5. Start the server with `erasure-recovery` added to its normal active profiles.
    Set `HEPHAESTUS_PRIVACY_RECOVERY_MANIFEST` to the mounted path.
    Set `AGENT_ENABLED=false`.
@@ -356,7 +355,7 @@ Scheduled sync cannot recover all events in the gap.
 
 1. Reapply post-backup security and privacy decisions before access or delivery resumes.
 2. Keep the signing keys. Diagnose missing encryption keys separately from corrupt signing data.
-3. Do not restore NATS data. Recover the provider gap, as [Restore the broker](./production-operations-runbook#restore-the-broker) describes.
+3. Recover the provider gap, as [Reconcile external writes after restore](./production-operations-runbook#reconcile-external-writes-after-a-database-restore) describes.
 4. Restore with the backup's signed release lock. Then upgrade.
 
 Do not restore into an older application version.

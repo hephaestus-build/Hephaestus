@@ -1449,33 +1449,6 @@ tests:
               summary: The PostgreSQL volume has less than 5 % free space
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
-  # JetStream's max_file is 80 % of the volume, so a broker at its budget leaves 20 % free.
-  - name: a JetStream volume below 10 % free fires, one at its storage budget does not
-    interval: 1m
-    input_series:
-      - series: 'kubelet_volume_stats_available_bytes{namespace="hephaestus",persistentvolumeclaim="data-hephaestus-nats-0"}'
-        values: "5x10"
-      - series: 'kubelet_volume_stats_capacity_bytes{namespace="hephaestus",persistentvolumeclaim="data-hephaestus-nats-0"}'
-        values: "100x10"
-      - series: 'kubelet_volume_stats_available_bytes{namespace="hephaestus",persistentvolumeclaim="data-staging-nats-0"}'
-        values: "18x10"
-      - series: 'kubelet_volume_stats_capacity_bytes{namespace="hephaestus",persistentvolumeclaim="data-staging-nats-0"}'
-        values: "100x10"
-    alert_rule_test:
-      - eval_time: 3m
-        alertname: HephaestusJetStreamVolumeFilling
-        exp_alerts: []
-      - eval_time: 6m
-        alertname: HephaestusJetStreamVolumeFilling
-        exp_alerts:
-          - exp_labels:
-              severity: warning
-              namespace: hephaestus
-              persistentvolumeclaim: data-hephaestus-nats-0
-            exp_annotations:
-              summary: The NATS JetStream volume has less than 10 % free space
-              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-
   - name: a full node disk fires, memory, read-only, pod volume and free file systems do not
     interval: 1m
     input_series:
@@ -3135,4 +3108,24 @@ tests:
               kind: EMAIL
             exp_annotations:
               summary: An outbox action ended uncertain, so its write may have reached the provider and nothing confirms it
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  - name: sync notification failures fire but successful routing stays quiet
+    interval: 1m
+    input_series:
+      - series: 'integration_sync_push_messages_total{job="hephaestus",transport="postgres_publish",outcome="failure"}'
+        values: "0 0 1 1 1 1 1 1 1 1 1"
+      - series: 'integration_sync_push_messages_total{job="hephaestus",transport="postgres_receive",outcome="success"}'
+        values: "0+10x10"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HephaestusSyncNotificationsFailing
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: HephaestusSyncNotificationsFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: Sync notification delivery is failing; clients fall back to REST polling
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response

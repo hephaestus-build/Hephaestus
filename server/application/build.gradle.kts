@@ -74,7 +74,6 @@ dependencies {
     testImplementation(libs.assertj.core)
     testImplementation(libs.archunit.junit5)
     implementation(libs.therapi.runtime.javadoc)
-    implementation(libs.jnats)
     implementation(libs.fabric8.kubernetes.client) {
         exclude(group = "io.fabric8", module = "kubernetes-httpclient-vertx-5")
     }

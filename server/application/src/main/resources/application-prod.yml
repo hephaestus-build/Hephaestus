@@ -107,12 +107,6 @@ hephaestus:
             batch-size: ${SYNC_BACKFILL_BATCH_SIZE:50}
             rate-limit-threshold: ${SYNC_BACKFILL_RATE_LIMIT_THRESHOLD:500}
             interval-seconds: ${SYNC_BACKFILL_INTERVAL_SECONDS:60}
-        nats:
-            # The server role consumes provider events.
-            enabled: true
-            server: ${NATS_SERVER:}
-            durable-consumer-name: ${NATS_DURABLE_CONSUMER_NAME:hephaestus}
-
     # ═══════════════════════════════════════════════════════════════════════════
     # AUTH (Production) — Hephaestus-native, see ADR 0017
     # ═══════════════════════════════════════════════════════════════════════════

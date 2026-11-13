@@ -44,7 +44,7 @@ app.kubernetes.io/component: {{ .component }}
 
 {{/*
 The labels of a Pod template: no release version and no chart version, so that an upgrade restarts
-only the Pods whose own specification changed, not PostgreSQL and NATS on every release.
+only the Pods whose own specification changed, not PostgreSQL on every release.
 */}}
 {{- define "hephaestus.podLabels" -}}
 {{ include "hephaestus.selectorLabels" . }}
@@ -151,7 +151,7 @@ another, and the chart creates no certificate, key or CA.
 {{- end -}}
 
 {{/*
-A private CA for Git providers and an external TLS NATS broker. The buildpack's launcher adds this file to the
+A private CA for Git providers. The buildpack's launcher adds this file to the
 JVM truststore at start, so sign-in, API calls and Git fetches all trust it, and the public CAs stay trusted.
 */}}
 {{- define "hephaestus.privateCaFile" -}}
@@ -231,13 +231,7 @@ Pod reads. Without a cluster, as in `helm template`, the kubelet refuses a Pod w
 {{- printf "postgresql://%s:%s/%s?sslmode=verify-full&sslrootcert=%s/ca.crt" (include "hephaestus.databaseHost" .) (include "hephaestus.databasePort" .) .Values.postgresql.database (include "hephaestus.postgresqlCaDirectory" .) -}}
 {{- end -}}
 
-{{- define "hephaestus.natsUrl" -}}
-{{- if .Values.nats.bundled -}}
-{{- printf "nats://%s:4222" (include "hephaestus.name" (dict "root" . "component" "nats")) -}}
-{{- else -}}
-{{- required "nats.external.url is required when nats.bundled is false" .Values.nats.external.url -}}
-{{- end -}}
-{{- end -}}
+
 
 {{/*
 Downward-API pod address. The management listener (9090) binds to it: reachable for probes and the metrics scraper, never through a
@@ -323,10 +317,8 @@ fails every pod, so each role is owed the lock's digest. */}}
   value: {{ .Values.config.credentialKey.rotationEnabled | quote }}
 {{- end -}}
 
-{{/* The server talks to JetStream and verifies webhook deliveries. */}}
+{{/* The server verifies webhook deliveries. */}}
 {{- define "hephaestus.env.ingestion" -}}
-{{ include "hephaestus.secretEnv" (dict "root" . "env" "NATS_USERNAME") }}
-{{ include "hephaestus.secretEnv" (dict "root" . "env" "NATS_PASSWORD") }}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "WEBHOOK_SECRET") }}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "WEBHOOK_ROUTING_SECRET") }}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "WEBHOOK_ROUTING_PREVIOUS_SECRET" "optional" true) }}
@@ -426,22 +418,7 @@ readinessProbe:
 {{- end -}}
 {{- end -}}
 
-{{- define "hephaestus.policy.natsEgress" -}}
-{{- if .Values.nats.bundled -}}
-- to:
-    {{- include "hephaestus.componentPeer" (dict "root" . "component" "nats") | nindent 4 }}
-  ports:
-    - port: 4222
-      protocol: TCP
-{{- else -}}
-- to:
-    - ipBlock:
-        cidr: {{ .Values.nats.external.cidr }}
-  ports:
-    - port: {{ .Values.nats.external.port }}
-      protocol: TCP
-{{- end -}}
-{{- end -}}
+
 
 {{/* OTLP traces to an in-cluster collector, on the port that the endpoint names. */}}
 {{- define "hephaestus.policy.traceEgress" -}}
@@ -701,19 +678,7 @@ PostgreSQL volume.
 {{- mul (include "hephaestus.memoryMi" (dict "value" .gitCache.sizeLimit "name" (printf "%s.gitCache.sizeLimit" .role)) | int64) 1048576 -}}
 {{- end -}}
 
-{{/*
-The Go runtime's soft memory limit for the bundled broker: 80 % of its container limit. Without it, a catch-up of several
-streams grows the heap to the container limit and the kernel kills the broker. With it, the collector works harder and the
-catch-up only slows (docs/admin/helm-chart.md § NATS memory).
-*/}}
-{{- define "hephaestus.natsGoMemLimit" -}}
-{{- $mi := include "hephaestus.memoryMi" (dict "value" .Values.nats.resources.limits.memory "name" "nats.resources.limits.memory") | int -}}
-{{- $request := include "hephaestus.memoryMi" (dict "value" .Values.nats.resources.requests.memory "name" "nats.resources.requests.memory") | int -}}
-{{- if ne $request $mi -}}
-{{- fail (printf "nats.resources.requests.memory (%dMi) must equal nats.resources.limits.memory (%dMi): the broker's heap grows to its soft limit in a catch-up" $request $mi) -}}
-{{- end -}}
-{{- printf "%dMiB" (div (mul $mi 4) 5) -}}
-{{- end -}}
+
 
 {{/* Schema-supported Kubernetes quantities, rounded up to the quota's MiB or millicore unit. */}}
 {{- define "hephaestus.quantityUnits" -}}
@@ -803,7 +768,7 @@ are unchanged. Steady includes one backup; upgrade includes migration/stanza Job
 {{- $_ := set $context "Values" $values -}}
 {{- $totals := dict "steady" (dict "cpu" 0 "memory" 0) "upgrade" (dict "cpu" 0 "memory" 0) -}}
 {{- $backup := false -}}
-{{- range $file := list "server.yaml" "webapp.yaml" "postgresql.yaml" "nats.yaml" "migration.yaml" "postgresql-backup.yaml" "postgresql-metrics.yaml" "observability-stack.yaml" "agent-sandbox-controller.yaml" "sandbox-templates.yaml" -}}
+{{- range $file := list "server.yaml" "webapp.yaml" "postgresql.yaml" "migration.yaml" "postgresql-backup.yaml" "postgresql-metrics.yaml" "observability-stack.yaml" "agent-sandbox-controller.yaml" "sandbox-templates.yaml" -}}
 {{- range $document := splitList "\n---" (include (print $.Template.BasePath "/" $file) $context) -}}
 {{- $object := fromYaml $document | default dict -}}
 {{- $kind := get $object "kind" | default "" -}}
@@ -966,8 +931,8 @@ The full overlap budget also reserves optional monitoring and backup sessions wh
 {{- end -}}
 {{- end -}}
 {{- $pooled := mul $servers $pool -}}
-{{- /* Run wakeups, conversation ledger, evidence erasure and model pools each own one LISTEN connection. */ -}}
-{{- $listeners := mul 4 $servers -}}
+{{- /* Run wakeups, conversation ledger, evidence erasure, model pools and sync hints each own one LISTEN connection. */ -}}
+{{- $listeners := mul 5 $servers -}}
 {{- $migration := int .Values.migration.databasePool.maximumPoolSize -}}
 {{- /* database-monitor.sql bounds the monitor role to two sessions across old and new exporters. */ -}}
 {{- $exporter := 2 -}}

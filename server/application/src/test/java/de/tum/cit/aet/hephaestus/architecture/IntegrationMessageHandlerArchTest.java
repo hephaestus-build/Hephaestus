@@ -52,7 +52,7 @@ class IntegrationMessageHandlerArchTest extends HephaestusArchitectureTest {
 
     @Test
     void everyMessageHandlerExtendsUnifiedBaseOrImplementsSpi() {
-        // Whitelist: classes that look like handlers by name but aren't NATS message
+        // Whitelist: classes that look like handlers by name but aren't inbox event
         // handlers (e.g. ABSTRACT bases, support classes). Add here ONLY if intentional.
         List<String> whitelist = List.of(AbstractIntegrationMessageHandler.class.getName());
 

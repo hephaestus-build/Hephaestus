@@ -17,7 +17,7 @@ import org.jspecify.annotations.Nullable;
  * One row per {@code Connection}: the webhook-liveness ("last event processed") watermark.
  *
  * <p>Deliberately NOT an audit trail — no counters, no history, just the most recent event's
- * timestamp and type. Written by {@link ConnectionActivityRecorder} from the NATS consumer's
+ * timestamp and type. Written by {@link ConnectionActivityRecorder} from the inbox consumer's
  * post-dispatch hook, throttled to at most one write per connection per 15s.
  *
  * <p>{@code connection_id} is the primary key (not a generated surrogate) — this is a 1:1

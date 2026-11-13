@@ -10,7 +10,7 @@ Each one stops the roles that the work affects, and starts them again afterwards
 
 ## Planned node maintenance
 
-PodDisruptionBudgets block voluntary eviction of the bundled PostgreSQL and NATS Pods, and the server.
+PodDisruptionBudgets block voluntary eviction of the bundled PostgreSQL Pods, and the server.
 With two or more servers, at most one server can be unavailable.
 Each budget selects one role in one release. Sandbox Pods have no budget.
 
@@ -19,7 +19,7 @@ Deployment rollouts and direct scaling do not use the eviction API, so the budge
 See Kubernetes' [disruption budget guide](https://kubernetes.io/docs/tasks/run-application/configure-pdb/).
 
 Plan an outage before you drain the only node.
-Keep PostgreSQL and NATS running until the servers have drained:
+Keep PostgreSQL running until the servers have drained:
 
 1. Suspend [pull-based reconciliation](./pull-based-deployment#operating-it) and wait for an active reconciliation to finish.
    Suspend any other automation that restores the release.
@@ -80,7 +80,6 @@ A count of 0 is a desired state.
 Check on the cluster that the pods stopped, that the sandbox Pods and Jobs are gone, and that the migrations completed before the next phase.
 Set `server.replicas=0` to stop the servers.
 `sandbox.enabled=false` removes the sandbox objects.
-A change of NATS itself stops reception: while NATS is down, the server answers deliveries with `503`, and each provider decides whether it retries.
 
 ## Check that it worked
 

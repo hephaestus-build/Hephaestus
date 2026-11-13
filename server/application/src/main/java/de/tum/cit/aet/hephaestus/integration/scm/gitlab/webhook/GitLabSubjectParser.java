@@ -7,7 +7,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
- * Consumer-side parser for GitLab NATS subjects.
+ * Consumer-side parser for GitLab event subjects.
  *
  * <p>Input shape: {@code gitlab.?connection.<connectionId>.<event>} produced by
  * {@link GitLabSubjectKeyDeriver#deriveConnectionSubject}. The connection id is passthrough: route admission resolves

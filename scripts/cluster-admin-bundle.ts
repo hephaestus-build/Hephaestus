@@ -41,7 +41,7 @@ metadata:
 value: 100000
 globalDefault: false
 preemptionPolicy: PreemptLowerPriority
-description: "Hephaestus roles, PostgreSQL and NATS"
+description: "Hephaestus roles, PostgreSQL"
 ---
 apiVersion: scheduling.k8s.io/v1
 kind: PriorityClass

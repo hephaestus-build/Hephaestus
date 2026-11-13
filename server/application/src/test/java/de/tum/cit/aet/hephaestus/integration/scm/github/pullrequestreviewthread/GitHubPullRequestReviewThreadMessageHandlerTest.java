@@ -49,7 +49,7 @@ class GitHubPullRequestReviewThreadMessageHandlerTest extends BaseUnitTest {
     private TransactionTemplate transactionTemplate;
 
     @Test
-    void shouldDateThePullRequestsReviewRequestsByWhenJetStreamStoredTheEvent() throws Exception {
+    void shouldDateThePullRequestsReviewRequestsByWhenTheInboxStoredTheEvent() throws Exception {
         GitHubPullRequestReviewThreadEventDTO event = JsonMapper.builder()
                 .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                 .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)

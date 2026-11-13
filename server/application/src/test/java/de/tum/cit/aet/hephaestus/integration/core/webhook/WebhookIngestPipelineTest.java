@@ -52,7 +52,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Unit tests for {@link WebhookIngestPipeline}. Drives the verify → derive → publish
- * path with mock verifiers + derivers so we can assert what hits JetStream.
+ * path with mock verifiers + derivers so we can assert what hits provider inbox.
  *
  * <p>The tests are deliberately independent of the production GitHub/GitLab verifier
  * implementations — they validate the PIPELINE wiring, not the per-kind crypto.
@@ -126,7 +126,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("verified webhook is published to JetStream with kind-derived subject + dedup-id")
+    @DisplayName("verified webhook is published to the inbox with kind-derived subject + dedup-id")
     void publishesOnVerified() {
         SubjectKeyDeriver deriver = stubDeriver(IntegrationKind.GITHUB, "github.acme.repo.push", "github-DEADBEEF");
         WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
@@ -154,7 +154,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("verified Outline webhook body → outline.<sub>.<event> subject on JetStream")
+    @DisplayName("verified Outline webhook body → outline.<sub>.<event> subject in the inbox")
     void publishesOutlineOnVerified() {
         // Real Outline deriver so the body → subject/dedup derivation is exercised end to end through
         // the pipeline.

@@ -154,7 +154,7 @@ public abstract class AbstractGitHubLiveSyncIntegrationTest extends BaseGitHubLi
 
         // Provider classification + installation id live on the Connection registry,
         // not on the Workspace entity. Persist the matching ACTIVE GitHub Connection
-        // so downstream components (token resolution, NATS routing, …) can find it.
+        // so downstream components (token resolution, provider inbox routing, …) can find it.
         ConnectionConfig.GitHubAppConfig cfg = new ConnectionConfig.GitHubAppConfig(
                 githubInstallationId(), saved.getAccountLogin(), /* serverUrl */ null, Set.of());
         Connection connection =

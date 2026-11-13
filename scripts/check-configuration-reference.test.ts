@@ -213,7 +213,7 @@ await test("the page keeps its anchors, imports every part, and every row reads 
 		}
 	}
 	// A new group changes an index, never the page.
-	const more = renderReference([...rows, row("NATS_SERVER", "nats.server")], sources.values);
+	const more = renderReference([...rows, row("SMTP_HOST", "mail.host")], sources.values);
 	assert.equal(more.get(REFERENCE_PAGE), page);
 	const read = readPage(reference(rows, sources.values)).map((entry) => entry.variable);
 	assert.ok(read.includes("HEPHAESTUS_AUTH_X") && read.includes("SPRING_MAIL_HOST"));

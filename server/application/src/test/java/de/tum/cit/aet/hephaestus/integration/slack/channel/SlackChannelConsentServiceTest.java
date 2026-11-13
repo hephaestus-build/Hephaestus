@@ -432,7 +432,7 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
         verify(monitoredChannelRepository, never()).save(any());
     }
 
-    // Platform-event wrappers run on the NATS consumer with no actor: guard-first and no-op tolerant.
+    // Platform-event wrappers run on the inbox consumer with no actor: guard-first and no-op tolerant.
 
     @ParameterizedTest(name = "pauseForPlatformEvent on {0} is a no-op")
     @EnumSource(

@@ -46,7 +46,6 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultAdmissionPolicy;
 import de.tum.cit.aet.hephaestus.practices.result.ResultMarkService;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
-import de.tum.cit.aet.hephaestus.testconfig.NatsTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
@@ -146,10 +145,6 @@ class RuntimeRoleContextIntegrationTest {
                         "spring.datasource.username=" + database.username(),
                         "spring.datasource.password=" + database.password(),
                         "hephaestus.agent.enabled=" + agents,
-                        "hephaestus.sync.nats.enabled=true",
-                        "hephaestus.sync.nats.server=" + NatsTestContainer.getServerUrl(),
-                        "hephaestus.sync.nats.username=",
-                        "hephaestus.sync.nats.password=",
                         "hephaestus.integration.slack.enabled=true",
                         "hephaestus.integration.outline.enabled=true",
                         RuntimeRole.SERVER_PROPERTY + "=true");

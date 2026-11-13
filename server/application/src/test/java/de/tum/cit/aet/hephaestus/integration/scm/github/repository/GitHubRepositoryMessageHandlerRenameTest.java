@@ -27,7 +27,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.springframework.transaction.support.TransactionTemplate;
 
-// Renames must update monitors and NATS filters as well as mirror rows; stale filters discard subsequent repository
+// Renames must update monitors and provider inbox filters as well as mirror rows; stale filters discard subsequent
+// repository
 // events.
 class GitHubRepositoryMessageHandlerRenameTest extends BaseUnitTest {
 
@@ -139,7 +140,7 @@ class GitHubRepositoryMessageHandlerRenameTest extends BaseUnitTest {
         handler.handleEvent(renamedEvent());
 
         verify(repositoryRepository, never()).save(any());
-        // The monitor is what the NATS filter is built from, so it must be re-keyed regardless.
+        // The monitor is what the provider inbox filter is built from, so it must be re-keyed regardless.
         verify(syncTargetProvider).reconcileSyncTargetsForRepository(PROVIDER_ID, NATIVE_ID, NEW_FULL_NAME);
     }
 

@@ -171,7 +171,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
 
     /**
      * SPI hook: full account rename handling — workspace login update, monitor
-     * retargeting, repo renaming, NATS subject rotation. Bridges
+     * retargeting, repo renaming, event subject rotation. Bridges
      * {@link IntegrationRef#instanceKey()} to {@link #handleAccountRename}.
      */
     @Override
@@ -246,7 +246,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             @Nullable String avatarUrl,
             @Nullable RepositorySelection repositorySelection,
             @Nullable Long adminAccountId) {
-        // Check suspension before any reactivation logic: replayed NATS "created" events
+        // Check suspension before any reactivation logic: replayed provider inbox "created" events
         // must not reactivate a suspended workspace and re-trigger failed repository syncs.
         if (gitHubAppTokenService.isInstallationMarkedSuspended(installationId)) {
             log.info("Skipped workspace reactivation: reason=installationSuspended, installationId={}", installationId);
@@ -532,7 +532,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
     /**
      * Handle a GitHub account rename (installation_target event).
      * Updates the workspace account login, retargets repository monitors,
-     * renames tracked repositories, and rotates the NATS organization consumer.
+     * renames tracked repositories, and rotates the provider inbox organization consumer.
      *
      * @param installationId the GitHub App installation ID
      * @param previousLogin  the previous account login (may be null)

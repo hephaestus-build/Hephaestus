@@ -2,9 +2,6 @@
 
 | Variable | Setting | Application default | Containers | Description |
 | --- | --- | --- | --- | --- |
-| `NATS_PASSWORD` | `hephaestus.sync.nats.password` | `default: (empty)` | `server` | Password that the NATS connection authenticates with. Set it together with the user name, or leave both empty. |
-| `NATS_SERVER` | `hephaestus.sync.nats.server` | `prod: (empty)` | `server` | NATS server URL (e.g., nats://localhost:4222). |
-| `NATS_USERNAME` | `hephaestus.sync.nats.username` | `default: (empty)` | `server` | User name that the NATS connection authenticates with. Set it together with the password, or leave both empty. |
 | `SYNC_COOLDOWN_MINUTES` | `hephaestus.sync.cooldown-minutes` | `prod: 60` | `server` | Minimum minutes between consecutive sync operations. |
 | `SYNC_CRON` | `hephaestus.sync.cron` | `prod: 0 0 * * * *` | `server` | Cron expression for scheduled sync execution. |
 | `SYNC_RUN_ON_STARTUP` | `hephaestus.sync.run-on-startup` | `prod: true` | `server` | Whether to trigger a sync run immediately when the application starts. |

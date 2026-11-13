@@ -17,7 +17,7 @@ import org.jspecify.annotations.Nullable;
  * DTO for GitLab issue webhook events.
  * <p>
  * Maps both {@code event_type: "issue"} and {@code event_type: "confidential_issue"} payloads.
- * Both arrive on the same NATS subject ({@code object_kind: "issue"}).
+ * Both arrive on the same event subject ({@code object_kind: "issue"}).
  *
  * @param objectKind       always "issue"
  * @param eventType        "issue" or "confidential_issue"

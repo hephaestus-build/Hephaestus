@@ -36,7 +36,7 @@ public class OutlineManifest implements IntegrationManifest {
 
     @Override
     public Set<Capability> declaredCapabilities() {
-        // Outline change notifications ride the unified /webhooks/{kind} JetStream lane (ADR 0023 §3):
+        // Outline change notifications ride the unified /webhooks/{kind} provider inbox (ADR 0023 §3):
         // a signature-verified delivery is published to the durable `outline` stream and consumed to
         // trigger a whole-workspace reconcile.
         return Set.of(Capability.WEBHOOK_INGEST);

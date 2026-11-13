@@ -44,7 +44,6 @@ const upstream = [
 	"agent-pi",
 	"alertmanager",
 	"application-server",
-	"nats",
 	"postgres",
 	"postgres-exporter",
 	"victoria-metrics",

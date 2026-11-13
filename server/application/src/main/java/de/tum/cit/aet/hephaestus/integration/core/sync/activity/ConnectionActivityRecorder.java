@@ -25,8 +25,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Records the webhook-liveness ("last event processed") watermark for a connection, from the NATS
- * consumer's hot post-dispatch path ({@code IntegrationNatsConsumer#handleMessage}).
+ * Records the webhook-liveness ("last event processed") watermark for a connection, from the provider inbox
+ * consumer's hot post-dispatch path ({@code ProviderEventConsumer#handleMessage}).
  *
  * <p>Two in-memory caches keep the hot path cheap:
  * <ul>

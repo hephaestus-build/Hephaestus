@@ -73,7 +73,7 @@ public interface BackfillStateProvider {
      * <ul>
      *   <li>If the target has no {@code nativeId} yet (legacy/PAT row), captures {@code resolvedNativeId}.</li>
      *   <li>If {@code resolvedNameWithOwner} differs from the stored name — and the stable id agrees —
-     *       re-keys the monitor's {@code nameWithOwner} and refreshes the workspace's NATS consumer so
+     *       re-keys the monitor's {@code nameWithOwner} and refreshes the workspace's inbox consumer so
      *       the subject filter tracks the new name. Never renames by name alone.</li>
      * </ul>
      * Idempotent and safe to call every sync cycle; a no-op when nothing changed. Implementations must

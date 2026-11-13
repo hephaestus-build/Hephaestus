@@ -25,8 +25,6 @@ const GENERATED = [
 	"HEPHAESTUS_AUTH_STATE_COOKIE_KEY",
 	"HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY",
 	"HEPHAESTUS_SECURITY_ENCRYPTION_KEY",
-	"NATS_PASSWORD",
-	"NATS_USERNAME",
 	"WEBHOOK_ROUTING_SECRET",
 	"WEBHOOK_SECRET",
 ];
@@ -225,15 +223,6 @@ await test(
 		const brokenOpenssl = run({ tools: { openssl: "#!/bin/sh\nexit 1\n" } });
 		assert.notEqual(brokenOpenssl.status, 0);
 		assert.deepEqual(brokenOpenssl.secret, {}, "no key with an empty value");
-
-		// A prefixed value must not become its bare prefix: "heph" would be a guessable NATS login.
-		const { NATS_USERNAME: _user, NATS_PASSWORD: _password, ...withoutNats } = run().secret;
-		const brokenNats = run({
-			cluster: { secret: encoded(withoutNats) },
-			tools: { openssl: "#!/bin/sh\nexit 1\n" },
-		});
-		assert.notEqual(brokenNats.status, 0);
-		assert.deepEqual(brokenNats.secret, withoutNats, "no NATS login was stored");
 	},
 );
 
@@ -339,21 +328,19 @@ await test(
 		const login = {
 			DATABASE_OWNER_PASSWORD: "owner-password",
 			DATABASE_APP_PASSWORD: "database-password",
-			NATS_USERNAME: "broker",
-			NATS_PASSWORD: "broker-password",
 		};
 		const withoutLogin = run({ args: ["--external-database", "--new-keys"] });
 		assert.notEqual(withoutLogin.status, 0);
 		assert.match(withoutLogin.output, /set DATABASE_OWNER_PASSWORD/u);
 		assert.deepEqual(withoutLogin.secret, {});
 
-		const withoutChoice = run({ args: ["--external-database", "--external-nats"], env: login });
+		const withoutChoice = run({ args: ["--external-database"], env: login });
 		assert.notEqual(withoutChoice.status, 0);
 		assert.match(withoutChoice.output, /restore both keys from your backup/u);
 		assert.deepEqual(withoutChoice.secret, {});
 
 		const result = run({
-			args: ["--external-database", "--new-keys", "--external-nats"],
+			args: ["--external-database", "--new-keys"],
 			env: login,
 		});
 		assert.equal(result.status, 0, result.output);
@@ -364,17 +351,16 @@ await test(
 			undefined,
 			"the chart never holds its administrator",
 		);
-		assert.equal(result.secret.NATS_PASSWORD, "broker-password");
 		assert.match(result.secret.HEPHAESTUS_SECURITY_ENCRYPTION_KEY ?? "", /^[0-9a-f]{32}$/u);
 		assert.ok(!result.output.includes("password"));
 
 		// No login contains a CR. It sits mid-value, because Git Bash drops a trailing CRLF from $(...).
 		const carriage = run({
-			args: ["--external-database", "--new-keys", "--external-nats"],
-			env: { ...login, NATS_PASSWORD: "broker\rpassword" },
+			args: ["--external-database", "--new-keys"],
+			env: { ...login, DATABASE_APP_PASSWORD: "database\rpassword" },
 		});
 		assert.notEqual(carriage.status, 0);
-		assert.match(carriage.output, /the value of NATS_PASSWORD holds a line break/u);
+		assert.match(carriage.output, /the value of DATABASE_APP_PASSWORD holds a line break/u);
 		assert.deepEqual(carriage.secret, {});
 	},
 );

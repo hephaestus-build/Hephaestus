@@ -45,14 +45,14 @@ import org.springframework.web.util.UriComponentsBuilder;
 /**
  * Asks GitHub to send again the App's webhook deliveries that the receiver did not accept. GitHub never retries a
  * delivery on its own, and it counts one as failed when the receiver answers an error or takes longer than 10
- * seconds, so a short broker stall would otherwise lose every event it overlaps. A redelivery keeps its
- * {@code X-GitHub-Delivery}, which the stream deduplicates.
+ * seconds, so a short inbox admission stall would otherwise lose every event it overlaps. A redelivery keeps its
+ * {@code X-GitHub-Delivery}, which the inbox deduplicates.
  *
  * <p>This follows GitHub's own procedure: group the recent deliveries by GUID, and redeliver one delivery of each
  * GUID that has no successful delivery. Only a GUID whose original delivery is younger than {@link #WINDOW} is
  * considered, so its attempts all stay in view and {@link #MAX_ATTEMPTS} bounds them. Each redelivery waits for its
  * time in {@link #REDELIVERY_DUE}, counted from the original delivery: the gaps double, so the attempts of one event
- * outlast a long broker stall instead of being spent on the next few runs while it lasts. A GUID whose latest answer
+ * outlast a long inbox admission stall instead of being spent on the next few runs while it lasts. A GUID whose latest answer
  * was a client error is left alone, because the receiver refused it on purpose. The unrecovered gauge counts the
  * GUIDs that failed every attempt; the reconciliation sync is what remains for them.
  *

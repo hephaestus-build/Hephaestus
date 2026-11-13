@@ -362,7 +362,7 @@ public class SlackChannelConsentService {
     // --- platform-event wrappers (Slack channel-lifecycle handlers) ---
     //
     // Unlike transition(), these are guard-first and NEVER throw: a Slack channel-lifecycle event (the bot removed,
-    // a channel archived/deleted/renamed) arrives asynchronously off the NATS consumer with no admin actor and no
+    // a channel archived/deleted/renamed) arrives asynchronously off the inbox consumer with no admin actor and no
     // opportunity to surface a 404/409 to anyone. Each wrapper re-reads the row inside its own short transaction,
     // no-ops on an absent row or an edge that does not apply, and otherwise performs the same side effect + audit
     // write as the corresponding transition() edge would.

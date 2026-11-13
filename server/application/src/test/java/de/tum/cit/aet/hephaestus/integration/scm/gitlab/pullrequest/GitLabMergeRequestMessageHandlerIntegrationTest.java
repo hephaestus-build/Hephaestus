@@ -180,7 +180,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
     private GitLabWebhookContextResolver webhookContextResolver;
 
     @Autowired
-    private EventPayloadDeserializer natsMessageDeserializer;
+    private EventPayloadDeserializer inboxMessageDeserializer;
 
     @Autowired
     private PullRequestReviewThreadRepository threadRepository;
@@ -2082,7 +2082,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                             gitLabProperties,
                             projectAdmission,
                             mock(PullRequestRepository.class)),
-                    natsMessageDeserializer,
+                    inboxMessageDeserializer,
                     transactionTemplate);
         }
 

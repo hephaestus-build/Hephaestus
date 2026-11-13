@@ -43,7 +43,7 @@ public class SlackSubjectKeyDeriver implements SubjectKeyDeriver {
         }
     }
 
-    /** Build a NATS subject from a Slack Events API envelope. */
+    /** Build a event subject from a Slack Events API envelope. */
     public String subjectFor(JsonNode root) {
         JsonNode event = root == null ? null : root.path("event");
         String team = sanitize(teamId(root));
@@ -52,7 +52,7 @@ public class SlackSubjectKeyDeriver implements SubjectKeyDeriver {
         return SUBJECT_PREFIX + team + "." + sanitize(scope) + "." + sanitize(eventType);
     }
 
-    /** Build the JetStream dedup id. Slack's {@code event_id} is stable across retries. */
+    /** Build the provider delivery key. Slack's {@code event_id} is stable across retries. */
     public String dedupIdFor(JsonNode root) {
         String eventId = root == null ? "" : root.path("event_id").asString("");
         if (!eventId.isBlank()) {

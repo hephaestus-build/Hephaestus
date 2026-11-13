@@ -64,7 +64,6 @@ void describe("the release evidence generator", () => {
 			"agent-pi",
 			"alertmanager",
 			"application-server",
-			"nats",
 			"postgres",
 			"postgres-exporter",
 			"victoria-metrics",
@@ -74,7 +73,7 @@ void describe("the release evidence generator", () => {
 		// The upstream half keeps the digest the inventory pins rather than one resolved from a tag:
 		// the release promotes that artefact, and a tag names whatever it points at today.
 		const upstream = images.filter(({ provenance }) => provenance === "upstream");
-		assert.equal(upstream.length, 5);
+		assert.equal(upstream.length, 4);
 		for (const image of upstream) {
 			assert.match(image.indexDigest, /^sha256:[a-f0-9]{64}$/u);
 		}
@@ -98,7 +97,10 @@ void describe("the release evidence generator", () => {
 
 	void test("names each subject's documents the way the verifier reads them back", () => {
 		assert.equal(evidenceStem({ image: "webapp", platform: "linux/amd64" }), "webapp-linux-amd64");
-		assert.equal(evidenceStem({ image: "nats", platform: "linux/arm64" }), "nats-linux-arm64");
+		assert.equal(
+			evidenceStem({ image: "vmalert", platform: "linux/arm64" }),
+			"vmalert-linux-arm64",
+		);
 	});
 });
 

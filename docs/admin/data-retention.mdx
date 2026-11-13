@@ -36,7 +36,7 @@ Person export includes the replay actor's metadata, without subjects or payloads
 Person erasure clears the actor reference through the integration store contributor.
 Account deletion also clears it through the foreign key.
 
-Person erasure does not extend the broker retention period or create another payload copy.
+Person erasure does not extend the inbox retention period or create another payload copy.
 Replay still uses the current adapter admission checks.
 Restrict database and backup access as for other provider data.
 See [Replay a failed webhook event](./webhook-replay.mdx).
@@ -97,7 +97,7 @@ Slack sends an event when a person deletes or edits a message in a monitored cha
 For a deletion, Hephaestus erases the stored text and keeps only an empty marker.
 For an edit, it stores the new text.
 
-The event can fail to arrive: Slack stops after its retries, or the event ages out of NATS during a long outage.
+The event can fail to arrive: Slack stops after its retries, or the provider stops retrying during a long outage.
 The nightly Slack sync then finds the change.
 It reads the history of each active monitored channel and compares it with the stored messages:
 

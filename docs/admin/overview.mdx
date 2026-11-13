@@ -47,7 +47,7 @@ Slack, Outline and email are optional.
 A model provider is required for reviews and conversations. Only Hephaestus holds its key.
 
 One application image runs the server.
-A deployment also has PostgreSQL. It also has a NATS server for sync-status hints until [#4243](https://github.com/hephaestus-build/Hephaestus/pull/4243) removes it.
+A deployment stores provider events and sends sync-status hints through PostgreSQL.
 On [Helm chart reference](./helm-chart#what-the-chart-runs), the Helm chart runs them on a cluster or on one host with k3s, and a Gateway API controller handles TLS.
 
 Sign-in uses a GitHub or GitLab OAuth app that you register during installation.
@@ -90,7 +90,7 @@ A person can be both.
 - [Backup & restore](./backup-restore) covers recovery.
 - [Troubleshooting](./troubleshooting) lists common failures and their fixes.
 - [Sizing and scaling](./sizing) gives the resource budget.
-- The [production operations runbook](./production-operations-runbook) covers incident brakes, silent deployment, PostgreSQL × JetStream restore, and removal of external feedback.
+- The [production operations runbook](./production-operations-runbook) covers incident brakes, silent deployment, PostgreSQL restore, and removal of external feedback.
 - [Practice review operations](./practice-review-operations) and
   [webhook ingestion operations](./webhook-ingestion-operations) cover the two pipelines whose failures are most visible.
 

@@ -4,7 +4,7 @@ import java.util.Optional;
 
 /**
  * Resolves a workspace without exposing workspace entities to integration processors.
- * A bound broker dispatch supplies the authoritative workspace, including the absence of a workspace
+ * A bound inbox dispatch supplies the authoritative workspace, including the absence of a workspace
  * for installation deliveries. Only unbound calls use account-login or repository-monitor lookups.
  */
 public interface ScopeIdResolver {

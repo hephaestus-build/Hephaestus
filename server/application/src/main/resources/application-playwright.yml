@@ -4,9 +4,6 @@ hephaestus:
       enabled: false
   agent:
     enabled: false
-  sync:
-    nats:
-      enabled: false
   integration:
     gitlab:
       enabled: false

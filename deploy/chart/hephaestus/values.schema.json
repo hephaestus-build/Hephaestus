@@ -228,7 +228,6 @@
 				"agent-pi",
 				"alertmanager",
 				"application-server",
-				"nats",
 				"postgres",
 				"postgres-exporter",
 				"victoria-metrics",
@@ -243,9 +242,6 @@
 					"$ref": "#/definitions/image"
 				},
 				"application-server": {
-					"$ref": "#/definitions/image"
-				},
-				"nats": {
 					"$ref": "#/definitions/image"
 				},
 				"postgres": {
@@ -660,77 +656,6 @@
 						},
 						"cidr": {
 							"$ref": "#/definitions/cidr"
-						}
-					}
-				}
-			}
-		},
-		"nats": {
-			"type": "object",
-			"additionalProperties": false,
-			"required": [
-				"bundled",
-				"maxPayloadBytes",
-				"jetstream",
-				"persistence",
-				"resources",
-				"external"
-			],
-			"properties": {
-				"bundled": {
-					"type": "boolean"
-				},
-				"maxPayloadBytes": {
-					"type": "integer",
-					"minimum": 1048576,
-					"maximum": 67108864,
-					"description": "Bytes as a whole number, read by the NATS configuration parser for max_payload."
-				},
-				"jetstream": {
-					"type": "object",
-					"additionalProperties": false,
-					"required": ["maxMemory", "maxFileBytes"],
-					"properties": {
-						"maxMemory": {
-							"type": "string",
-							"pattern": "^[0-9]+[KMGT]?$",
-							"description": "Bytes in the NATS configuration format: a whole number, optionally followed by K, M, G or T. These suffixes use powers of 1000; 1G is 1000000000 bytes."
-						},
-						"maxFileBytes": {
-							"type": "integer",
-							"minimum": 1073741824,
-							"maximum": 1099511627776,
-							"description": "Bytes as a whole number, read by the NATS configuration parser for max_file."
-						}
-					}
-				},
-				"persistence": {
-					"type": "object",
-					"additionalProperties": false,
-					"required": ["storageClassName"],
-					"properties": {
-						"storageClassName": {
-							"$ref": "#/definitions/name"
-						}
-					}
-				},
-				"resources": {
-					"$ref": "#/definitions/resources"
-				},
-				"external": {
-					"type": "object",
-					"additionalProperties": false,
-					"required": ["url", "cidr", "port"],
-					"properties": {
-						"url": {
-							"type": "string",
-							"pattern": "^(?:|(?:nats|tls)://[A-Za-z0-9.-]+(?::[0-9]{1,5})?)$"
-						},
-						"cidr": {
-							"$ref": "#/definitions/cidr"
-						},
-						"port": {
-							"$ref": "#/definitions/port"
 						}
 					}
 				}

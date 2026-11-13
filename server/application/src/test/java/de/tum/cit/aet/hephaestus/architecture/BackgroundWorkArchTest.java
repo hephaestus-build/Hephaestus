@@ -57,6 +57,8 @@ class BackgroundWorkArchTest extends HephaestusArchitectureTest {
      * posts to a provider or starts a sandbox, is background work.
      */
     private static final Map<String, String> REQUEST_WORK = Map.of(
+            "de.tum.cit.aet.hephaestus.integration.core.sync.push.SyncPushService.startListening",
+            "delivers sync hints only to this process's SSE requests; it never claims work or writes to a provider",
             "de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits.start",
             "renews and fences the permits that this process's model calls hold, and wakes the calls that wait for one",
             "de.tum.cit.aet.hephaestus.agent.proxy.ScanCallLeases.<init>",

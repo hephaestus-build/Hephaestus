@@ -25,7 +25,7 @@ import org.slf4j.MDC;
  * <ul>
  *   <li>Background jobs triggered from workspace-scoped endpoints (e.g., bulk sync operations)</li>
  *   <li>Workspace-specific scheduled tasks that process data per-workspace</li>
- *   <li>NATS consumers that need to maintain workspace context across message handling</li>
+ *   <li>inbox consumers that need to maintain workspace context across message handling</li>
  *   <li>Long-running operations offloaded to thread pools (e.g., report generation)</li>
  *   <li>Spring {@code @Async} methods called from workspace-scoped controllers</li>
  * </ul>

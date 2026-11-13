@@ -14,12 +14,12 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Builds NATS subjects + dedup keys for Outline webhook deliveries.
+ * Builds event subjects + dedup keys for Outline webhook deliveries.
  *
  * <p>Subject format: {@code outline.<subscriptionId>.<event>}. The subscription id is a UUID (no
  * dots) and scopes the delivery to a single workspace's registered subscription; the event
  * ({@code documents.update}, …) has its dots replaced by {@code ~} so it never collides with the
- * NATS token boundary ({@code documents~update}). Neither token is case-folded: the subscription id
+ * subject token boundary ({@code documents~update}). Neither token is case-folded: the subscription id
  * is passed through byte-for-byte so the derived subject matches the consumer's subscription filter
  * ({@link de.tum.cit.aet.hephaestus.integration.core.consumer.ConsumerSubjectMath#subscriptionFilter}),
  * mirroring the Slack sibling deriver.
@@ -28,7 +28,7 @@ import tools.jackson.databind.ObjectMapper;
  * envelope, a UUID unique per event that Outline reuses across retries of the same delivery.
  * (Never key on {@code payload.id}: two consecutive edits of one document are distinct events
  * with the same document id, and a document-keyed hash would silently swallow the second one
- * inside the JetStream dedup window.) Fallback when the body is unparsable or carries no id:
+ * inside the provider replay window.) Fallback when the body is unparsable or carries no id:
  * SHA-256 of the raw body (distinct events differ at least in {@code createdAt}). The
  * {@code "outline-"} vendor prefix guarantees cross-vendor uniqueness on the shared window.
  *

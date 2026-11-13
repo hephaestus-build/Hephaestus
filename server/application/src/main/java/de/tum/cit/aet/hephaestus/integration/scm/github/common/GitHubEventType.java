@@ -50,7 +50,7 @@ public enum GitHubEventType {
     }
 
     /**
-     * Returns the event key string used in NATS subjects.
+     * Returns the event key string used in event subjects.
      */
     public String getValue() {
         return value;

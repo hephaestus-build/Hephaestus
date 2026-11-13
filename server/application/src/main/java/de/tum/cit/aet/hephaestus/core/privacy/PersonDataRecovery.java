@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 
-/** Reapplies operator-held decisions before lifecycle workers, scheduled tasks and broker consumers start. */
+/** Reapplies operator-held decisions before lifecycle workers, scheduled tasks and inbox dispatchers start. */
 @Component
 @Profile("erasure-recovery")
 @ConditionalOnServerRole

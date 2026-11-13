@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Structural invariants of the Outline footprint — the module plus its agent-side outposts — that a careless
  * commit would otherwise break silently. Sibling of {@link SlackIntegrationArchitectureTest}, holding Outline to
- * the same bar: controllers are workspace-scoped, NATS consumers extend the core envelope-handler base,
+ * the same bar: controllers are workspace-scoped, inbox consumers extend the core envelope-handler base,
  * repository finders carry the workspace predicate, and a class whose name promises a stereotype actually
  * carries it.
  */
@@ -74,7 +74,7 @@ class OutlineIntegrationArchitectureTest extends HephaestusArchitectureTest {
     }
 
     @Test
-    @DisplayName("every Outline NATS consumer extends the core envelope-handler base (or is allowlisted)")
+    @DisplayName("every Outline inbox consumer extends the core envelope-handler base (or is allowlisted)")
     void outlineMessageHandlersExtendTheSharedBase() {
         classes()
                 .that()

@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Cross-vendor message handler registry, indexed by {@link EventTypeKey}. The unified
- * resolution surface for the integration NATS consumer fleet.
+ * resolution surface for the integration inbox consumer fleet.
  *
  * <p>Constructor-injects every {@link IntegrationMessageHandler} bean and builds an
  * immutable map. Duplicate keys are a fatal {@link IllegalStateException} naming both

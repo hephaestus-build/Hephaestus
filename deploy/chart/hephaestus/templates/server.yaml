@@ -102,7 +102,7 @@ spec:
             {{- include "hephaestus.env.scm" . | nindent 12 }}
             - name: SPRING_PROFILES_ACTIVE
               value: prod
-            # The buildpack's 10M direct-memory default sits below this role's NATS and HTTP footprint.
+            # The buildpack's 10M direct-memory default sits below this role's HTTP footprint.
             {{- if $sandbox.enabled }}
             # A blocked socket call pins its carrier on Java 21, so the scheduler needs a carrier for each
             # gateway connection.
@@ -114,8 +114,6 @@ spec:
             {{- end }}
             - name: GIT_MAX_CACHE_BYTES
               value: {{ include "hephaestus.gitCacheBytes" (dict "gitCache" .Values.server.gitCache "role" "server") | quote }}
-            - name: NATS_SERVER
-              value: {{ include "hephaestus.natsUrl" . | quote }}
             # Practice reviews and conversation turns run only with their sandboxes.
             - name: AGENT_ENABLED
               value: {{ $sandbox.enabled | quote }}

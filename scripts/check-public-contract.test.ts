@@ -176,8 +176,8 @@ for (const [name, head, expected] of [
 	],
 	[
 		"a new required Secret key",
-		after(TEMPLATE, `${RELEASE.get(TEMPLATE) ?? ""}${secretEnv("NATS_WEBHOOK_PASSWORD")}`),
-		/requires the Secret key NATS_WEBHOOK_PASSWORD/u,
+		after(TEMPLATE, `${RELEASE.get(TEMPLATE) ?? ""}${secretEnv("NEW_WEBHOOK_PASSWORD")}`),
+		/requires the Secret key NEW_WEBHOOK_PASSWORD/u,
 	],
 	[
 		"an optional Secret key made required",
@@ -324,8 +324,8 @@ void test("Secret keys come from secretEnv calls and secretKeyRef blocks", () =>
 		[
 			...secretKeys(`{{ include "hephaestus.secretEnv" (dict "root" . "env" "PGPASSWORD" "key" "DATABASE_ADMIN_PASSWORD") }}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "GH_AUTH_TOKEN" "optional" true) }}
-{{ include "hephaestus.secretEnv" (dict "root" . "env" "NATS_PASSWORD" "optional" true) }}
-{{ include "hephaestus.secretEnv" (dict "root" . "env" "NATS_PASSWORD") }}
+{{ include "hephaestus.secretEnv" (dict "root" . "env" "EXAMPLE_PASSWORD" "optional" true) }}
+{{ include "hephaestus.secretEnv" (dict "root" . "env" "EXAMPLE_PASSWORD") }}
 - name: PGBACKREST_PG1_USER
   valueFrom:
     secretKeyRef:
@@ -337,7 +337,7 @@ void test("Secret keys come from secretEnv calls and secretKeyRef blocks", () =>
 		[
 			["DATABASE_ADMIN_PASSWORD", true],
 			["GH_AUTH_TOKEN", false],
-			["NATS_PASSWORD", true],
+			["EXAMPLE_PASSWORD", true],
 			["DATABASE_ADMIN_USERNAME", false],
 		],
 	);

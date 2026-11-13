@@ -22,7 +22,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Consumes a verified Outline event off the JetStream lane and triggers a targeted refresh of the owning
+ * Consumes a verified Outline event off the provider inbox and triggers a targeted refresh of the owning
  * workspace's mirror: {@code documents.*} refreshes one document (falling back to a whole-workspace reconcile when
  * the delivery carries no payload id), {@code collections.*} refreshes the catalog, anything else is acked and
  * ignored.

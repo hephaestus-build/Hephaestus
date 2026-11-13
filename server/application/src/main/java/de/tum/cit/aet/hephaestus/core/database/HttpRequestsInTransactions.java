@@ -15,7 +15,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * a request holds a pooled connection and the transaction's row locks for as long as the other service takes to answer.
  *
  * <p>It sees every client built from a builder that Spring injects, on the thread where the request starts. A retry
- * that a reactive client schedules on another thread is not counted. It does not see the Slack SDK, NATS or the
+ * that a reactive client schedules on another thread is not counted. It does not see the Slack SDK or the
  * Kubernetes client.
  */
 @Component

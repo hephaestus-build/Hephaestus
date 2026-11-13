@@ -85,7 +85,7 @@ A **GitHub App** reads the repositories, receives their webhooks, and posts feed
 ## 5. Connect an AI provider
 
 Practice review needs a running server and a model that the workspace can run on.
-The job queue runs on PostgreSQL, so practice review needs no NATS setup.
+The job queue runs on PostgreSQL.
 
 1. Turn on the server, reviews, and repository checkouts in the [chart values](./helm-chart#integration-values).
    On Kubernetes, the `small.yaml` profile turns on the server.
