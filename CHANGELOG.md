@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.0-rc.7
+
+### Minor Changes
+
+- Connections cannot reuse an app installation, hook, subscription, or Slack bot identity while an earlier removal can still affect it. Reconnecting GitLab or Outline uses a fresh hook or subscription. Pausing Outline now records cleanup before it stops receiving events, and reconciliation repairs a lost wake or failed removal.
+
+  Instance admins can review unresolved removals, including those whose workspace was deleted. They can confirm removal at the provider and release the exact block. Each release records its actor and confirmation. Workspace-only admins can see their connection's pending repairs and cannot release them.
+
+  **Operators:** pending OAuth requests must restart after this upgrade. Credential erasure keeps its existing deadlines. Unresolved removals retain pseudonymous provider identifiers for integrity and security until resolution or an audited admin release. Check **Provider removals** after upgrading or changing provider credentials. A timed-out deletion can require manual confirmation even when the provider no longer lists the resource.
+
+### Patch Changes
+
+- Feedback that a review composes comes only from the review's composer and its model. The server relays a composer's model request only when the request continues that composition's conversation in the order that the composer uses, with no text that the server or the model did not write. It runs a composer tool call only when that model wrote it, and only once. It refuses any other request with the reason `NOT_COMPOSER_REQUEST`, which the model proxy's refusal metric counts.
+- Links from the web app to the documentation of a release open the docs of the latest release. A build that is not a release, such as a local build, opens the docs of the next release.
+- Log records about GitHub organizations, the project's contributor list and development sign-ins name IDs instead of logins.
+
 ## 1.0.0-rc.6
 
 ### Major Changes
