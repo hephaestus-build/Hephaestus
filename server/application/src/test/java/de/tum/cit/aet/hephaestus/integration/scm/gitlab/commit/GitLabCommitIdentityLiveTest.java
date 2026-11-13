@@ -35,6 +35,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LiveGitLabTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Duration;
 import java.time.Instant;
@@ -75,6 +76,9 @@ class GitLabCommitIdentityLiveTest extends BaseIntegrationTest {
 
     @Autowired
     private WorkspaceRepository workspaces;
+
+    @Autowired
+    private WorkspaceLifecycleService lifecycle;
 
     @Autowired
     private ConnectionRepository connections;
@@ -356,7 +360,9 @@ class GitLabCommitIdentityLiveTest extends BaseIntegrationTest {
 
     @AfterEach
     void removeOnlyThisTestsLocalMirror() {
-        for (long id : workspaceIds) workspaces.deleteById(id);
+        for (long id : workspaceIds) {
+            lifecycle.purgeWorkspace(workspaces.findById(id).orElseThrow().getWorkspaceSlug());
+        }
         for (long id : repositoryIds) repositories.deleteById(id);
     }
 }
