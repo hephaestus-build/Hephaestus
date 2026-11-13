@@ -2140,7 +2140,7 @@ function slackRequestId(ts: string): string {
 async function slackSnapshot(ts: string, signal: AbortSignal): Promise<SlackTurnState | null> {
 	return slackTurnState(
 		await psql(
-			`SELECT coalesce(json_agg(json_build_object('requestId', q.request_id, 'status', t.status, 'answer', coalesce((SELECT string_agg(e.text, E'\\n' ORDER BY e.seq) FROM mentor_entry e WHERE e.turn_id = t.id AND e.kind = 'HEPH'), ''), 'replyTs', (SELECT e.slack_ts FROM mentor_entry e WHERE e.turn_id = t.id AND e.kind = 'HEPH' ORDER BY e.seq LIMIT 1), 'post', (SELECT a.state || coalesce(':' || a.stop_reason, '') FROM agent_action a WHERE a.workspace_id = t.workspace_id AND a.kind = 'SLACK_POST' AND a.idempotency_key = 'slack_reply:' || q.id))), '[]'::json) FROM mentor_entry q JOIN mentor_turn t ON t.id = q.turn_id AND t.workspace_id = q.workspace_id WHERE q.workspace_id = 986600 AND q.kind = 'USER' AND q.surface = 'SLACK'`,
+			`SELECT coalesce(json_agg(json_build_object('requestId', q.request_id, 'status', t.status, 'entries', coalesce((SELECT json_agg(json_build_object('text', e.text, 'slackTs', e.slack_ts, 'redacted', e.redacted_at IS NOT NULL) ORDER BY e.seq) FROM mentor_entry e WHERE e.turn_id = t.id AND e.kind = 'HEPH'), '[]'::json), 'post', (SELECT a.state || coalesce(':' || a.stop_reason, '') FROM agent_action a WHERE a.workspace_id = t.workspace_id AND a.kind = 'SLACK_POST' AND a.idempotency_key = 'slack_reply:' || q.id))), '[]'::json) FROM mentor_entry q JOIN mentor_turn t ON t.id = q.turn_id AND t.workspace_id = q.workspace_id WHERE q.workspace_id = 986600 AND q.kind = 'USER' AND q.surface = 'SLACK'`,
 			signal,
 		),
 		slackRequestId(ts),

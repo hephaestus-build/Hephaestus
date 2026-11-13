@@ -101,9 +101,17 @@ export interface SlackTurnState {
 	post: string | null;
 }
 
+function nullable(record: Record<string, unknown>, key: string): string | null {
+	return record[key] === null ? null : asString(record[key], `Slack turn ${key}`);
+}
+
 /**
  * The state of the Slack turn that `requestId` names, from the rows of every Slack turn of the workspace. Null before the
  * server stored that question. Another turn's reply never stands for it.
+ *
+ * A row lists the turn's Hephaestus entries in order. As the delivery chooses them (`MentorSlackMessages.slackTurn`), the
+ * entries that are shown are those that are not redacted and have text. The reply is all of them, and its Slack `ts` is
+ * linked to the last: an entry before it, such as a tool call, never carries the `ts`.
  */
 export function slackTurnState(text: string, requestId: string): SlackTurnState | null {
 	if (text.trim() === "") {
@@ -115,13 +123,14 @@ export function slackTurnState(text: string, requestId: string): SlackTurnState 
 	if (row === undefined) {
 		return null;
 	}
-	const nullable = (key: string) =>
-		row[key] === null ? null : asString(row[key], `Slack turn ${key}`);
+	const shown = asArray(row.entries, "Slack turn entries")
+		.map((entry) => asRecord(entry, "Slack turn entry"))
+		.filter((entry) => entry.redacted !== true && asString(entry.text, "entry text") !== "");
 	return {
 		status: asString(row.status, "Slack turn status"),
-		answer: asString(row.answer, "Slack turn answer"),
-		replyTs: nullable("replyTs"),
-		post: nullable("post"),
+		answer: shown.map((entry) => asString(entry.text, "entry text")).join("\n\n"),
+		replyTs: shown.length === 0 ? null : nullable(shown.at(-1) ?? {}, "slackTs"),
+		post: nullable(row, "post"),
 	};
 }
 
@@ -186,12 +195,18 @@ export async function awaitSlackReply(
 		new Error(
 			`turn roll: the Slack reply did not settle by the deadline; the fake received ${summary(calls)}; the server has ${JSON.stringify(state)}`,
 		);
+	// Aborted when the wait settles, so no call outlives it.
+	const settled = new AbortController();
 	const bounded = async <T>(run: (signal: AbortSignal, left: number) => Promise<T>): Promise<T> => {
 		const left = deadline - watch.now();
 		if (left <= 0) {
 			throw expired();
 		}
-		const signal = AbortSignal.timeout(left);
+		const expiry = new AbortController();
+		const timer = setTimeout(() => {
+			expiry.abort();
+		}, left);
+		const signal = AbortSignal.any([expiry.signal, settled.signal]);
 		const over = (async () => {
 			await once(signal, "abort");
 			throw expired();
@@ -200,32 +215,40 @@ export async function awaitSlackReply(
 			return await Promise.race([run(signal, left), over]);
 		} catch (error) {
 			throw signal.aborted ? expired() : error;
+		} finally {
+			clearTimeout(timer);
 		}
 	};
-	for (;;) {
-		const accepted = calls.some(isPost);
-		const fresh = await bounded(async (signal, left) =>
-			watch.receive(
-				calls.length,
-				Math.min(accepted ? SLACK_SETTLE_MS : SLACK_POLL_MS, left),
-				signal,
-			),
-		);
-		calls.push(...fresh);
-		const posts = calls.filter(isPost);
-		const refused = posts.find((post) => post.error !== null);
-		if (refused !== undefined) {
-			throw new Error(`turn roll: the fake Slack refused the reply with ${String(refused.error)}`);
+	try {
+		for (;;) {
+			const accepted = calls.some(isPost);
+			const fresh = await bounded(async (signal, left) =>
+				watch.receive(
+					calls.length,
+					Math.min(accepted ? SLACK_SETTLE_MS : SLACK_POLL_MS, left),
+					signal,
+				),
+			);
+			calls.push(...fresh);
+			const posts = calls.filter(isPost);
+			const refused = posts.find((post) => post.error !== null);
+			if (refused !== undefined) {
+				throw new Error(
+					`turn roll: the fake Slack refused the reply with ${String(refused.error)}`,
+				);
+			}
+			state = await bounded(async (signal) => watch.snapshot(signal));
+			const failure = slackDeliveryFailure(state);
+			if (failure !== null) {
+				throw new Error(`turn roll: the Slack reply failed: ${failure}`);
+			}
+			const replyTs = state?.status === "DONE" ? state.replyTs : null;
+			const mine = replyTs === null ? undefined : posts.find((post) => post.ts === replyTs);
+			if (state !== null && mine !== undefined) {
+				return { reply: mine, turn: state };
+			}
 		}
-		state = await bounded(async (signal) => watch.snapshot(signal));
-		const failure = slackDeliveryFailure(state);
-		if (failure !== null) {
-			throw new Error(`turn roll: the Slack reply failed: ${failure}`);
-		}
-		const replyTs = state?.status === "DONE" ? state.replyTs : null;
-		const mine = replyTs === null ? undefined : posts.find((post) => post.ts === replyTs);
-		if (state !== null && mine !== undefined) {
-			return { reply: mine, turn: state };
-		}
+	} finally {
+		settled.abort();
 	}
 }

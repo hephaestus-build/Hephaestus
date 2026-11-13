@@ -68,6 +68,10 @@ export interface Spec {
 	values?: readonly string[];
 	/** The schema of an object, or of each item of an array. */
 	of?: string;
+	/** The items of an array are strings, not objects. */
+	each?: "string";
+	/** The field is allowed only while this sibling field is present. */
+	requires?: string;
 	/** The field is allowed only while a sibling field has this value: `[field, value]`. */
 	onlyWhen?: readonly [string, string];
 }
@@ -103,7 +107,9 @@ function kind(value: string): Spec {
 const BLOCK_ID: Spec = { is: "string", max: 255 };
 
 /**
- * The block types that the server sends in a message, with the fields that Slack documents for each
+ * The block types that the server sends in a message, with the fields that Slack documents for each. Where Slack allows more
+ * element types than the server sends (images in `context`, icon buttons in `context_actions`, selects in `actions`), only
+ * the types of the server are here, and any other is refused. The fields
  * (https://docs.slack.dev/reference/block-kit/blocks/ and https://docs.slack.dev/reference/block-kit/block-elements/).
  * The `text-*` schemas are text objects with the limit of the place that uses them.
  */
@@ -163,6 +169,9 @@ export const SCHEMAS: Readonly<Record<string, Schema>> = {
 			style: { is: "string", values: STYLES },
 			confirm: { is: "object", of: "confirm" },
 			accessibility_label: { is: "string", max: 75 },
+			agent_prompt: { is: "string", max: 4000 },
+			agent_prompt_display: { is: "string", requires: "agent_prompt" },
+			visible_to_user_ids: { is: "array", each: "string" },
 		},
 	},
 	feedback_buttons: {
@@ -217,13 +226,15 @@ function conformsTo(value: unknown, spec: Spec): boolean {
 			return spec.of !== undefined && conforms(value, spec.of);
 		}
 		case "array": {
-			const { of } = spec;
+			const { of, each } = spec;
 			return (
-				of !== undefined &&
+				(of !== undefined || each !== undefined) &&
 				Array.isArray(value) &&
 				value.length >= (spec.min ?? 0) &&
 				value.length <= (spec.max ?? Number.POSITIVE_INFINITY) &&
-				value.every((item) => conforms(item, of))
+				value.every((item) =>
+					each === "string" ? typeof item === "string" : conforms(item, of ?? ""),
+				)
 			);
 		}
 		default: {
@@ -234,7 +245,7 @@ function conformsTo(value: unknown, spec: Spec): boolean {
 
 /**
  * Whether `value` has what the schema `name` defines: every field it carries is one of the schema's, of its type, enum
- * and limits; every required field is there. A JSON `null` counts as absent, as the Java SDK's JSON leaves unset fields.
+ * and limits; every required field is there. A JSON `null` in a field that the schema defines counts as absent, as the Java SDK's JSON leaves unset fields; a name that it does not define is refused with any value.
  */
 export function conforms(value: unknown, name: string): boolean {
 	const schema = Object.hasOwn(SCHEMAS, name) ? SCHEMAS[name] : undefined;
@@ -244,11 +255,13 @@ export function conforms(value: unknown, name: string): boolean {
 	const given = (key: string) => value[key] !== undefined && value[key] !== null;
 	const known = Object.keys(value).every((key) => {
 		const spec = Object.hasOwn(schema.fields, key) ? schema.fields[key] : undefined;
+		// A field that Slack does not define is refused whatever its value, `null` included.
 		return (
-			!given(key) ||
-			(spec !== undefined &&
-				conformsTo(value[key], spec) &&
-				(spec.onlyWhen === undefined || value[spec.onlyWhen[0]] === spec.onlyWhen[1]))
+			spec !== undefined &&
+			(!given(key) ||
+				(conformsTo(value[key], spec) &&
+					(spec.onlyWhen === undefined || value[spec.onlyWhen[0]] === spec.onlyWhen[1]) &&
+					(spec.requires === undefined || given(spec.requires))))
 		);
 	});
 	return (

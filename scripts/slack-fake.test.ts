@@ -16,6 +16,7 @@ import {
 	FAKE_TEAM,
 	postRefusal,
 	SCHEMAS,
+	type Schema,
 	type Spec,
 	slackFake,
 } from "./slack-fake.ts";
@@ -331,6 +332,19 @@ const blocksError = (blocks: unknown) =>
 
 await test("the fake accepts the blocks that the server sends", () => {
 	for (const blocks of [
+		[
+			{
+				type: "actions",
+				elements: [
+					{
+						...button,
+						agent_prompt: "Explain this",
+						agent_prompt_display: "Explain",
+						visible_to_user_ids: ["U1", "U2"],
+					},
+				],
+			},
+		],
 		[markdown("an answer")],
 		[
 			markdown("an answer"),
@@ -520,6 +534,22 @@ await test("the fake refuses a block that lacks what Slack requires of its type"
 			[{ type: "section", text: mrkdwn("x"), expand: "wrong" }],
 		],
 		["a field that Slack does not define", [{ type: "section", text: mrkdwn("x"), unknown: true }]],
+		[
+			"a field that Slack does not define, with a null value",
+			[{ type: "section", text: mrkdwn("x"), unknown: null }],
+		],
+		[
+			"a button with an agent_prompt_display and no agent_prompt",
+			[{ type: "actions", elements: [{ ...button, agent_prompt_display: "x" }] }],
+		],
+		[
+			"a button with an agent_prompt of 4001 characters",
+			[{ type: "actions", elements: [{ ...button, agent_prompt: "p".repeat(4001) }] }],
+		],
+		[
+			"a button whose visible_to_user_ids holds a number",
+			[{ type: "actions", elements: [{ ...button, visible_to_user_ids: [42] }] }],
+		],
 		["a block type that the server never sends", [{ type: "divider" }]],
 		["a header block", [{ type: "header", text: plain("Hephaestus") }]],
 	];
@@ -547,7 +577,9 @@ function validValue(spec: Spec): unknown {
 			return minimal(spec.of ?? "");
 		}
 		case "array": {
-			return Array.from({ length: Math.max(spec.min ?? 1, 1) }, () => minimal(spec.of ?? ""));
+			return Array.from({ length: Math.max(spec.min ?? 1, 1) }, () =>
+				spec.each === "string" ? "x" : minimal(spec.of ?? ""),
+			);
 		}
 	}
 }
@@ -565,14 +597,72 @@ function minimal(name: string): Record<string, unknown> {
 	);
 }
 
+type Cases = [string, unknown][];
+
+/** Cases for the length or the count that one field of `base` may have. */
+function sizeCases(base: Record<string, unknown>, key: string, spec: Spec): Cases {
+	const cases: Cases = [];
+	if (spec.is === "string" && spec.max !== undefined) {
+		cases.push([`${key} over ${String(spec.max)}`, { ...base, [key]: "x".repeat(spec.max + 1) }]);
+	}
+	if (spec.is === "string" && (spec.min ?? 0) > 0) {
+		cases.push([`${key} empty`, { ...base, [key]: "" }]);
+	}
+	if (spec.is === "array") {
+		const item = spec.each === "string" ? "x" : minimal(spec.of ?? "");
+		if ((spec.min ?? 0) > 0) {
+			cases.push([`${key} with fewer than ${String(spec.min)} items`, { ...base, [key]: [] }]);
+		}
+		if (spec.max !== undefined) {
+			cases.push([
+				`${key} with more than ${String(spec.max)} items`,
+				{ ...base, [key]: Array.from({ length: spec.max + 1 }, () => item) },
+			]);
+		}
+		cases.push([
+			`${key} with an item of the wrong type`,
+			{ ...base, [key]: [spec.each === "string" ? 42 : "wrong"] },
+		]);
+	}
+	return cases;
+}
+
+/** Cases for the fields that a field depends on: the sibling it needs, or the value of `type` it goes with. */
+function dependencyCases(
+	base: Record<string, unknown>,
+	schema: Schema,
+	key: string,
+	spec: Spec,
+): Cases {
+	const cases: Cases = [];
+	if (spec.requires !== undefined) {
+		cases.push([`${key} without ${spec.requires}`, { ...base, [key]: validValue(spec) }]);
+	}
+	if (spec.onlyWhen !== undefined) {
+		const [sibling, value] = spec.onlyWhen;
+		const other = schema.fields[sibling]?.values?.find((candidate) => candidate !== value);
+		if (other !== undefined) {
+			cases.push([
+				`${key} while ${sibling} is ${other}`,
+				{ ...base, [sibling]: other, [key]: validValue(spec) },
+			]);
+		}
+	}
+	return cases;
+}
+
 /** Objects of the schema `name` that each break one rule of one field, as the table defines it. */
-function broken(name: string): [string, unknown][] {
+function broken(name: string): Cases {
 	const schema = SCHEMAS[name];
 	assert.ok(schema, name);
 	const base = minimal(name);
-	const cases: [string, unknown][] = [
+	const cases: Cases = [
 		["a field that is not defined", { ...base, unknown_field: true }],
+		["a field that is not defined, with a null value", { ...base, unknown_field: null }],
 	];
+	if (schema.anyOf !== undefined) {
+		cases.push(["none of its alternative groups", { ...base, text: undefined, fields: undefined }]);
+	}
 	for (const [key, spec] of Object.entries(schema.fields)) {
 		const wrongType = { string: 42, boolean: "wrong", object: "wrong", array: "wrong" }[spec.is];
 		cases.push([`${key} of the wrong type`, { ...base, [key]: wrongType }]);
@@ -583,38 +673,7 @@ function broken(name: string): [string, unknown][] {
 		if (spec.values !== undefined) {
 			cases.push([`${key} outside its values`, { ...base, [key]: "not-a-value" }]);
 		}
-		if (spec.is === "string" && spec.max !== undefined) {
-			cases.push([`${key} over ${String(spec.max)}`, { ...base, [key]: "x".repeat(spec.max + 1) }]);
-		}
-		if (spec.is === "string" && (spec.min ?? 0) > 0) {
-			cases.push([`${key} empty`, { ...base, [key]: "" }]);
-		}
-		if (spec.is === "array") {
-			const item = minimal(spec.of ?? "");
-			if ((spec.min ?? 0) > 0) {
-				cases.push([`${key} with fewer than ${String(spec.min)} items`, { ...base, [key]: [] }]);
-			}
-			if (spec.max !== undefined) {
-				cases.push([
-					`${key} with more than ${String(spec.max)} items`,
-					{ ...base, [key]: Array.from({ length: spec.max + 1 }, () => item) },
-				]);
-			}
-			cases.push([`${key} with an item of the wrong type`, { ...base, [key]: ["wrong"] }]);
-		}
-		if (spec.onlyWhen !== undefined) {
-			const [sibling, value] = spec.onlyWhen;
-			const other = schema.fields[sibling]?.values?.find((candidate) => candidate !== value);
-			if (other !== undefined) {
-				cases.push([
-					`${key} while ${sibling} is ${other}`,
-					{ ...base, [sibling]: other, [key]: validValue(spec) },
-				]);
-			}
-		}
-	}
-	if (schema.anyOf !== undefined) {
-		cases.push(["none of its alternative groups", { ...base, text: undefined, fields: undefined }]);
+		cases.push(...sizeCases(base, key, spec), ...dependencyCases(base, schema, key, spec));
 	}
 	return cases;
 }
@@ -624,8 +683,9 @@ await test("every schema of the fake accepts its minimal object and each optiona
 		assert.equal(conforms(minimal(name), name), true, name);
 		for (const [key, spec] of Object.entries(schema.fields)) {
 			if (spec.onlyWhen === undefined) {
+				const sibling = spec.requires === undefined ? {} : { [spec.requires]: "x" };
 				assert.equal(
-					conforms({ ...minimal(name), [key]: validValue(spec) }, name),
+					conforms({ ...minimal(name), ...sibling, [key]: validValue(spec) }, name),
 					true,
 					`${name}.${key}`,
 				);
