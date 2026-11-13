@@ -7,6 +7,7 @@
             "core",
             "core::auth-reference",
             "core::auth-spi",
+            "core::logging",
             "core::person-data",
             // Runtime-role gate (@ConditionalOnServerRole) on the connection-OAuth strategy.
             "core::runtime",

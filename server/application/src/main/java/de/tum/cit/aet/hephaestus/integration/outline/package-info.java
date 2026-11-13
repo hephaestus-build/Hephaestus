@@ -13,6 +13,7 @@
             "core::exception",
             // One subscription registration of a workspace at a time, on every server.
             "core::lock",
+            "core::logging",
             "core::person-data",
             // Runtime-role gate on the connect strategy.
             "core::runtime",

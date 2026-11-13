@@ -5,6 +5,7 @@
 @org.springframework.modulith.ApplicationModule(
         displayName = "Observability",
         allowedDependencies = {
+            "core::logging",
             "core::web",
         })
 @org.jspecify.annotations.NullMarked

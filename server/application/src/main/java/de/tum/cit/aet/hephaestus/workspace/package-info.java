@@ -26,6 +26,7 @@
             "core::event",
             "core::exception",
             "core::installed-clients",
+            "core::logging",
             "core::person-data",
             "core::runtime",
             "core::security",

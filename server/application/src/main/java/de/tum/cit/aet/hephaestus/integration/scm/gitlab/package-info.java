@@ -5,6 +5,7 @@
         allowedDependencies = {
             "activity::spi",
             "core",
+            "core::logging",
             "core::person-data",
             // Runtime-role gate (@ConditionalOnServerRole) on the connection-OAuth strategy.
             "core::runtime",

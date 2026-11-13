@@ -24,6 +24,7 @@
             // SlackChannelConsentService throws the shared EntityNotFoundException (→ 404) for an unknown /
             // cross-workspace channel.
             "core::exception",
+            "core::logging",
             "core::person-data",
             // Runtime-role gate (@ConditionalOnServerRole) on the Slack beans that run only in the server role.
             "core::runtime",

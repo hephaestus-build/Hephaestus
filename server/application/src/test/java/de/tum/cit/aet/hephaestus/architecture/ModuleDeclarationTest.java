@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.architecture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.tngtech.archunit.core.domain.JavaClass;
+import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import java.util.Set;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -30,6 +32,15 @@ class ModuleDeclarationTest {
                     .doesNotHaveDuplicates()
                     .allSatisfy(dependency -> assertThat(dependency).doesNotContain("*"));
         }
+    }
+
+    @Test
+    void shouldExposeOnlyTheSharedLoggingPrimitiveThroughCoreLogging() {
+        var core = ModulithVerificationTest.applicationModules()
+                .getModuleByName("core")
+                .orElseThrow();
+        var logging = core.getNamedInterfaces().getByName("logging").orElseThrow();
+        assertThat(logging).extracting(JavaClass::getName).containsExactly(LoggingUtils.class.getName());
     }
 
     @Test

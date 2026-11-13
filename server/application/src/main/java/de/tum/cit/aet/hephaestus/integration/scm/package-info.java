@@ -14,6 +14,7 @@
             "core::current-account",
             "core::event",
             "core::exception",
+            "core::logging",
             "core::person-data",
             "core::runtime",
             "core::security",

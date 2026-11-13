@@ -15,6 +15,7 @@
             "core::auth-types",
             "core::config-audit-spi",
             "core::exception",
+            "core::logging",
             "core::person-data",
             "core::proxy",
             "core::release",
