@@ -219,9 +219,9 @@ const meta = {
 	decorators: [
 		withPageBehind,
 		(Story) => (
-			<ModelLinkHostsContext.Provider value={["example.com", "hephaestus.example"]}>
+			<ModelLinkHostsContext value={["example.com", "hephaestus.example"]}>
 				<Story />
-			</ModelLinkHostsContext.Provider>
+			</ModelLinkHostsContext>
 		),
 	],
 	tags: ["autodocs"],

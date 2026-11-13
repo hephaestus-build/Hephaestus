@@ -53,7 +53,7 @@ export function LandingFaqSection() {
 		<section
 			id="faq"
 			aria-labelledby="landing-faq-heading"
-			className="w-full bg-gradient-to-b from-background to-muted/30 py-12 md:py-20"
+			className="w-full bg-linear-to-b from-background to-muted/30 py-12 md:py-20"
 		>
 			<div className="mx-auto grid w-full max-w-6xl gap-10 px-4 md:px-6 lg:grid-cols-[0.7fr_1.3fr] lg:gap-16">
 				<div>

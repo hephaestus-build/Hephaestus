@@ -442,7 +442,7 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 			<WizardStepIndicator currentStep={state.step} />
 
 			<div className="mt-6" role="region" aria-labelledby="wizard-heading">
-				<WizardContext.Provider value={wizardContextValue}>
+				<WizardContext value={wizardContextValue}>
 					{state.step === 1 && (
 						<ConnectGitLabStep
 							validating={preflight.isPending}
@@ -490,7 +490,7 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 							}
 						/>
 					)}
-				</WizardContext.Provider>
+				</WizardContext>
 			</div>
 
 			{listGroups.isError &&

@@ -15,9 +15,9 @@ export function withWizardState(overrides: Partial<WizardState>) {
 	const state: WizardState = { ...createInitialWizardState("https://gitlab.com"), ...overrides };
 	return function WizardDecorator(Story: React.ComponentType) {
 		return (
-			<WizardContext.Provider value={{ state, dispatch: fn<React.Dispatch<WizardAction>>() }}>
+			<WizardContext value={{ state, dispatch: fn<React.Dispatch<WizardAction>>() }}>
 				<Story />
-			</WizardContext.Provider>
+			</WizardContext>
 		);
 	};
 }
@@ -28,9 +28,9 @@ export function withWizardReducer(overrides: Partial<WizardState>) {
 	return function WizardReducerDecorator(Story: React.ComponentType) {
 		const [state, dispatch] = useReducer(wizardReducer, initial);
 		return (
-			<WizardContext.Provider value={{ state, dispatch }}>
+			<WizardContext value={{ state, dispatch }}>
 				<Story />
-			</WizardContext.Provider>
+			</WizardContext>
 		);
 	};
 }

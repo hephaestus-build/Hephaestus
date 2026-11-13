@@ -6,7 +6,7 @@ export function AboutCallToActionSection() {
 	return (
 		<section
 			aria-labelledby="about-cta-heading"
-			className="mt-20 mb-8 rounded-lg border border-muted/50 bg-gradient-to-br from-background to-muted/30 p-6 text-center sm:p-8"
+			className="mt-20 mb-8 rounded-lg border border-muted/50 bg-linear-to-br from-background to-muted/30 p-6 text-center sm:p-8"
 		>
 			<Badge className="mb-4" variant="outline">
 				Get involved

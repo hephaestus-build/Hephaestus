@@ -160,5 +160,5 @@ export function AuthProvider({ children }: AuthProviderProps) {
 		linkedProviders: viewed ? [] : (userProfile?.linkedProviders ?? []),
 	};
 
-	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+	return <AuthContext value={value}>{children}</AuthContext>;
 }

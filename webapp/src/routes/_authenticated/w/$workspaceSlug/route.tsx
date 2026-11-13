@@ -140,7 +140,7 @@ function WorkspaceLayout() {
 	});
 	return (
 		// Model-written links on every page of the workspace may point only to its own hosts.
-		<ModelLinkHostsContext.Provider value={workspace?.linkHosts ?? NO_HOSTS}>
+		<ModelLinkHostsContext value={workspace?.linkHosts ?? NO_HOSTS}>
 			{workspace !== undefined && notice !== undefined && (
 				<PublicActivityNotice
 					{...notice}
@@ -151,6 +151,6 @@ function WorkspaceLayout() {
 				/>
 			)}
 			<Outlet />
-		</ModelLinkHostsContext.Provider>
+		</ModelLinkHostsContext>
 	);
 }

@@ -81,7 +81,7 @@ export function RepositoryCard({
 							</p>
 						)}
 					</div>
-					<div className="ml-2 flex flex-shrink-0 items-center gap-1">
+					<div className="ml-2 flex shrink-0 items-center gap-1">
 						{onToggleVisibility && (
 							<Button
 								variant="ghost"

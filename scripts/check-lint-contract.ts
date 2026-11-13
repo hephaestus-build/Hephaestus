@@ -208,6 +208,11 @@ const fixtures: Fixture[] = [
 			'export const good = <div className="text-muted-foreground bg-warning/10 data-[state=open]:flex" />;',
 	},
 	{
+		path: "src/lint-contract-context.tsx",
+		code: "hephaestus(no-context-provider)",
+		source: "export const bad = <ThemeContext.Provider value={1} />;",
+	},
+	{
 		path: "src/lint-contract-query.ts",
 		code: "hephaestus(no-manual-query-key)",
 		source: 'const opts = { queryKey: ["manual"] }; void opts;',
