@@ -36,7 +36,7 @@ class RepositoryMonitorNameCollisionIntegrationTest extends AbstractWorkspaceInt
     void shouldRenameOtherMonitorsWhenAGitHubNameIsAlreadyHeld() {
         var workspace =
                 createWorkspace("rename-collision", "Rename collision", "old", AccountType.ORG, persistUser("owner"));
-        workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
+        workspace.resume();
         workspaces.saveAndFlush(workspace);
         long installation = workspace.getId() + 10000;
         var connection = new Connection(

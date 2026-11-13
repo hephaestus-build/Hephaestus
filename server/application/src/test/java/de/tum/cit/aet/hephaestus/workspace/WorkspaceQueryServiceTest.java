@@ -79,7 +79,7 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
         Workspace enabled = workspace(1L, "open", "Open", true);
         Workspace off = workspace(2L, "off", "Off", false);
         Workspace suspended = workspace(3L, "suspended", "Suspended", true);
-        suspended.setStatus(Workspace.WorkspaceStatus.SUSPENDED);
+        suspended.suspend();
 
         assertThat(publishes(enabled, true)).isTrue();
         assertThat(publishes(enabled, false)).isFalse();
@@ -112,7 +112,7 @@ class WorkspaceQueryServiceTest extends BaseUnitTest {
         workspace.setDisplayName(displayName);
         workspace.setAccountLogin(slug);
         workspace.setPublicActivityEnabled(publiclyViewable);
-        workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
+        workspace.resume();
         return workspace;
     }
 }

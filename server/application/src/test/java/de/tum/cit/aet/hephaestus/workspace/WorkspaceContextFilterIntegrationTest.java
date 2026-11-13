@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceEchoControllers;
-import de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus;
 import de.tum.cit.aet.hephaestus.workspace.dto.WorkspaceDTO;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -181,7 +180,7 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
         persistUser("admin");
         User owner = persistUser("suspended-elev-owner");
         Workspace workspace = createWorkspace("suspended-elev", "Suspended", "suspendedelev", AccountType.ORG, owner);
-        workspace.setStatus(WorkspaceStatus.SUSPENDED);
+        workspace.suspend();
         workspaceRepository.save(workspace);
 
         webTestClient
@@ -217,7 +216,7 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
         Workspace workspace = createWorkspace("omega-space", "Omega", "omega", AccountType.ORG, owner);
         ensureAdminMembership(workspace);
 
-        workspace.setStatus(WorkspaceStatus.SUSPENDED);
+        workspace.suspend();
         workspaceRepository.save(workspace);
 
         webTestClient
@@ -237,7 +236,7 @@ class WorkspaceContextFilterIntegrationTest extends AbstractWorkspaceIntegration
         Workspace workspace = createWorkspace("zeta-space", "Zeta", "zeta", AccountType.ORG, owner);
         ensureAdminMembership(workspace);
 
-        workspace.setStatus(WorkspaceStatus.SUSPENDED);
+        workspace.suspend();
         workspaceRepository.save(workspace);
 
         WorkspaceDTO response = webTestClient

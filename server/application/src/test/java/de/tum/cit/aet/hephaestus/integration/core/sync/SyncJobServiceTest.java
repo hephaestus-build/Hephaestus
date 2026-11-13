@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncProgress;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceStatusFixture;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -91,7 +92,7 @@ class SyncJobServiceTest extends BaseUnitTest {
 
         workspace = new Workspace();
         workspace.setId(WORKSPACE_ID);
-        workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
+        workspace.resume();
         lenient().when(workspaceRepository.findByIdForUpdate(WORKSPACE_ID)).thenReturn(Optional.of(workspace));
         connection = mock(Connection.class);
         lenient().when(connection.getId()).thenReturn(CONNECTION_ID);
@@ -221,7 +222,7 @@ class SyncJobServiceTest extends BaseUnitTest {
 
     @Test
     void beginJob_workspaceNotActive_rejectsBeforeLockingConnection() {
-        workspace.setStatus(Workspace.WorkspaceStatus.PURGED);
+        WorkspaceStatusFixture.markPurged(workspace);
 
         assertThatThrownBy(() -> service.beginJob(defaultRequest()))
                 .isInstanceOf(SyncStateConflictException.class)

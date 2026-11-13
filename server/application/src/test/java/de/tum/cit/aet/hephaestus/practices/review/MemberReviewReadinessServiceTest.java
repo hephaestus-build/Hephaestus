@@ -75,7 +75,7 @@ class MemberReviewReadinessServiceTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         workspace.setId(WORKSPACE);
-        workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
+        workspace.resume();
         workspace.getFeatures().setPracticesEnabled(true);
         workspace.getFeatures().setPracticeReviewAutoTriggerEnabled(true);
         workspace.getFeatures().setPracticeReviewManualTriggerEnabled(true);
@@ -95,7 +95,7 @@ class MemberReviewReadinessServiceTest extends BaseUnitTest {
 
     @Test
     void shouldReportTheInactiveWorkspaceFirstWhenEveryRuleRefuses() {
-        workspace.setStatus(Workspace.WorkspaceStatus.SUSPENDED);
+        workspace.suspend();
         workspace.getFeatures().setPracticesEnabled(false);
         refuseEveryMemberRule(AiRefusalReason.NO_AI);
 

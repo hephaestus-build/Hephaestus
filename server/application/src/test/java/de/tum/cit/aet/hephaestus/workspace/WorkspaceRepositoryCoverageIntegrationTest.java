@@ -375,7 +375,7 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
     @Test
     void replayedRepositoryAddCannotRepopulateAPurgedWorkspace() {
         Workspace workspace = persistWorkspace(RepositorySelection.SELECTED);
-        workspace.setStatus(Workspace.WorkspaceStatus.PURGED);
+        WorkspaceStatusFixture.markPurged(workspace);
         workspaceRepository.saveAndFlush(workspace);
 
         workspaceRepositoryMonitorService.ensureRepositoryAndMonitorFromSnapshot(
@@ -392,7 +392,7 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
     void replayedRepositoryRemovalCannotMutateAPurgedWorkspace() {
         Workspace workspace = persistWorkspace(RepositorySelection.SELECTED);
         repositoryToMonitorRepository.saveAndFlush(buildMonitor(workspace, "HephaestusTest/retained"));
-        workspace.setStatus(Workspace.WorkspaceStatus.PURGED);
+        WorkspaceStatusFixture.markPurged(workspace);
         workspaceRepository.saveAndFlush(workspace);
 
         workspaceRepositoryMonitorService.removeRepositoryMonitorForInstallation(

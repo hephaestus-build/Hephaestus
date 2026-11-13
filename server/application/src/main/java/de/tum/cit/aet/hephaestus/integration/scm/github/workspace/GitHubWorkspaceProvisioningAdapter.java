@@ -209,7 +209,7 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
             return;
         }
 
-        githubLifecycleListener.updateWorkspaceStatus(installationId, Workspace.WorkspaceStatus.SUSPENDED);
+        githubLifecycleListener.suspendForInstallation(installationId);
         log.info("Suspended installation: installationId={}", installationId);
     }
 
@@ -221,7 +221,7 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
         }
 
         githubLifecycleListener
-                .updateWorkspaceStatus(installationId, Workspace.WorkspaceStatus.ACTIVE)
+                .resumeForInstallation(installationId)
                 .filter(workspace -> workspace.getStatus() == Workspace.WorkspaceStatus.ACTIVE)
                 .ifPresent(workspace -> {
                     Long workspaceId = workspace.getId();

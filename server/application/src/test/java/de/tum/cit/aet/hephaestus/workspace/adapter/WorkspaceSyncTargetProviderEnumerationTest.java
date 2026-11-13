@@ -222,7 +222,7 @@ class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
     @Test
     void shouldReturnNoSessionWithoutReadingCredentialsWhenScopeIsNotEligible() {
         Workspace suspended = workspace(2);
-        suspended.setStatus(Workspace.WorkspaceStatus.SUSPENDED);
+        suspended.suspend();
         Workspace filtered = workspace(4);
         when(workspaceRepository.findById(1L)).thenReturn(Optional.empty());
         when(workspaceRepository.findById(2L)).thenReturn(Optional.of(suspended));

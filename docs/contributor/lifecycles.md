@@ -25,7 +25,7 @@ Use a plain enum. Do not add a state machine framework.
 
 [`Lifecycle`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/java/de/tum/cit/aet/hephaestus/core/Lifecycle.java)
 is the shared transition contract.
-`AgentRunState`, `ActionState`, `IntegrationState` and `ReviewStatus` implement it.
+`AgentRunState`, `ActionState`, `IntegrationState`, `ReviewStatus` and `WorkspaceStatus` implement it.
 `LifecycleContractTest` discovers every production enum that implements the contract.
 Each enum has explicit initial and terminal states in that test.
 The test checks that a terminal state has no exit and that each state is reachable from an initial state.
@@ -105,3 +105,15 @@ A manual dated-work batch has no fixed run cap.
 It keeps its budget pause until workspace funding permits another review.
 Its API rejects a fixed scan budget.
 The `review_batch` status CHECK includes `BUDGET_EXHAUSTED`.
+
+## Workspace status
+
+`Workspace.WorkspaceStatus` owns the transition table: a workspace is active or suspended, and a purge is final.
+`Workspace` changes its status through `suspend`, `resume` and `markPurged`.
+These methods refuse a change of a purged workspace.
+Only `WorkspaceLifecycleService.purgeWorkspace` calls `markPurged`, after every purge contributor erased the workspace's data.
+
+`Workspace.create` is the one way to build a workspace.
+`WorkspaceCreationArchTest` refuses a call of the constructor outside `Workspace`.
+
+The database trigger `guard_workspace` also refuses a change of a purged workspace's status.

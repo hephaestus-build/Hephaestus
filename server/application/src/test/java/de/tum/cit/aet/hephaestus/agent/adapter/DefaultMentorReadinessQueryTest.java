@@ -33,7 +33,7 @@ class DefaultMentorReadinessQueryTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         Workspace workspace = new Workspace();
-        workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
+        workspace.resume();
         when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
         query = new DefaultMentorReadinessQuery(agentBindingRepository, llmModelResolver, workspaceRepository);
     }
@@ -82,7 +82,7 @@ class DefaultMentorReadinessQueryTest extends BaseUnitTest {
     @Test
     void shouldNotReportReadyWithoutLookingAtBindingsWhenWorkspaceIsSuspended() {
         Workspace workspace = new Workspace();
-        workspace.setStatus(Workspace.WorkspaceStatus.SUSPENDED);
+        workspace.suspend();
         when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
 
         assertThat(query.isReady(1L)).isFalse();

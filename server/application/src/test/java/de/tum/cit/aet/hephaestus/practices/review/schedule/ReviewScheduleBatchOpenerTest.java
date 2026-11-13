@@ -59,7 +59,7 @@ class ReviewScheduleBatchOpenerTest extends BaseUnitTest {
         when(schedules.findById(schedule.getId())).thenReturn(Optional.of(schedule));
         var ws = new Workspace();
         ws.setId(1L);
-        ws.setStatus(Workspace.WorkspaceStatus.ACTIVE);
+        ws.resume();
         lenient().when(workspaces.findById(1L)).thenReturn(Optional.of(ws));
     }
 

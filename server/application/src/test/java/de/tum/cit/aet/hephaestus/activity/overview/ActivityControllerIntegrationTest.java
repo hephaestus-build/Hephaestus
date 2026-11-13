@@ -454,7 +454,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             workspaceRepository.save(workspace);
             assertThat(error(workspace.getWorkspaceSlug())).isEqualTo(unknown);
             workspace.setPublicActivityEnabled(true);
-            workspace.setStatus(Workspace.WorkspaceStatus.SUSPENDED);
+            workspace.suspend();
             workspaceRepository.save(workspace);
             assertThat(error(workspace.getWorkspaceSlug())).isEqualTo(unknown);
         }
@@ -1407,10 +1407,8 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                         "UPDATE instance_settings SET public_activity_allowed=? WHERE id=1",
                         !policy.equals("instance"));
                 workspace.setPublicActivityEnabled(!policy.equals("workspace"));
-                workspace.setStatus(
-                        policy.equals("inactive")
-                                ? Workspace.WorkspaceStatus.SUSPENDED
-                                : Workspace.WorkspaceStatus.ACTIVE);
+                if (policy.equals("inactive")) workspace.suspend();
+                else workspace.resume();
                 workspaceRepository.save(workspace);
                 for (String suffix : List.of("", "/work")) {
                     personRead(ada, suffix, uri -> uri).isNotFound().expectBody(Void.class);

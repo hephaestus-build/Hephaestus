@@ -106,7 +106,7 @@ class GitLabDetachedSyncIntegrationTest extends BaseIntegrationTest {
         workspace.setDisplayName("Detached sync");
         workspace.setAccountLogin("detached");
         workspace.setAccountType(AccountType.ORG);
-        workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
+        workspace.resume();
         workspace = workspaces.saveAndFlush(workspace);
         var provider = providers.saveAndFlush(
                 new IdentityProvider(IdentityProviderType.GITLAB, "https://" + unique + ".example.com"));

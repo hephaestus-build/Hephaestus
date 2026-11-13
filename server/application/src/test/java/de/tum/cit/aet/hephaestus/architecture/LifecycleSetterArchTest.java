@@ -18,7 +18,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.review.schedule.ReviewBatch;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.persistence.Entity;
 import java.util.List;
 import org.junit.jupiter.api.Tag;
@@ -26,7 +25,6 @@ import org.junit.jupiter.api.Test;
 
 class LifecycleSetterArchTest extends HephaestusArchitectureTest {
     private static final List<Debt> REMAINING = List.of(
-            new Debt(Workspace.class, "status", "INBOX", "S-D11: Workspace needs guarded lifecycle transitions"),
             new Debt(ReviewItem.class, "state", "DEBT-STATE", "S-D9: ReviewItem needs guarded lifecycle transitions"),
             new Debt(
                     PersonDataRequest.class,

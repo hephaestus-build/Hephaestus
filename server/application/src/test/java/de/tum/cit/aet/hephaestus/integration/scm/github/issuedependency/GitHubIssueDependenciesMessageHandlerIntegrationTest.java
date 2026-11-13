@@ -94,7 +94,7 @@ class GitHubIssueDependenciesMessageHandlerIntegrationTest extends BaseIntegrati
         Workspace workspace = new Workspace();
         workspace.setWorkspaceSlug("hephaestus-test");
         workspace.setDisplayName("Hephaestus Test");
-        workspace.setStatus(Workspace.WorkspaceStatus.ACTIVE);
+        workspace.resume();
         workspace.setPublicActivityEnabled(true);
         workspace.setOrganizationId(organization.getId());
         workspace.setAccountLogin("HephaestusTest");

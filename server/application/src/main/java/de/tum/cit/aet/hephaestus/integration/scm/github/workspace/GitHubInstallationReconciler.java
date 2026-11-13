@@ -167,8 +167,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
             gitHubAppTokenService.markInstallationSuspended(installation.id());
             workspaceRepository.findByInstallationId(installation.id()).ifPresent(ws -> {
                 if (ws.getStatus() != Workspace.WorkspaceStatus.SUSPENDED) {
-                    githubLifecycleListener.updateWorkspaceStatus(
-                            installation.id(), Workspace.WorkspaceStatus.SUSPENDED);
+                    githubLifecycleListener.suspendForInstallation(installation.id());
                 }
             });
             return;

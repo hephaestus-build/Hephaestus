@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.workspace;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -14,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMo
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceStatusFixture;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -60,7 +60,8 @@ class GitHubWorkspaceProvisioningAdapterDeletionTest extends BaseUnitTest {
 
         verify(githubLifecycleListener).purgeWorkspaceForInstallation(INSTALLATION_ID);
         // A bare status write is exactly the defect: it leaves the contributors unrun.
-        verify(githubLifecycleListener, never()).updateWorkspaceStatus(anyLong(), any());
+        verify(githubLifecycleListener, never()).suspendForInstallation(anyLong());
+        verify(githubLifecycleListener, never()).resumeForInstallation(anyLong());
     }
 
     @Test
@@ -88,7 +89,7 @@ class GitHubWorkspaceProvisioningAdapterDeletionTest extends BaseUnitTest {
     void onInstallationSuspended_stillWritesStatusOnly() {
         adapter.onInstallationSuspended(INSTALLATION_ID);
 
-        verify(githubLifecycleListener).updateWorkspaceStatus(INSTALLATION_ID, Workspace.WorkspaceStatus.SUSPENDED);
+        verify(githubLifecycleListener).suspendForInstallation(INSTALLATION_ID);
         verify(githubLifecycleListener, never()).purgeWorkspaceForInstallation(anyLong());
     }
 
@@ -96,9 +97,8 @@ class GitHubWorkspaceProvisioningAdapterDeletionTest extends BaseUnitTest {
     void staleActivationCannotRestartWorkForAPurgedWorkspace() {
         Workspace workspace = new Workspace();
         workspace.setId(11L);
-        workspace.setStatus(Workspace.WorkspaceStatus.PURGED);
-        when(githubLifecycleListener.updateWorkspaceStatus(INSTALLATION_ID, Workspace.WorkspaceStatus.ACTIVE))
-                .thenReturn(Optional.of(workspace));
+        WorkspaceStatusFixture.markPurged(workspace);
+        when(githubLifecycleListener.resumeForInstallation(INSTALLATION_ID)).thenReturn(Optional.of(workspace));
 
         adapter.onInstallationActivated(INSTALLATION_ID);
 
