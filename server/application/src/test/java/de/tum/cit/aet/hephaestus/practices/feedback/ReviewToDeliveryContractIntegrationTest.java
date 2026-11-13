@@ -72,6 +72,7 @@ import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -3056,7 +3057,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                 null,
                 new ConnectionConfig.GitHubPatConfig("delivery-contract", null, Set.of()));
         connection.setCredentials(new BearerToken("contract-token-" + installation, null), credentials);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connections.saveAndFlush(connection);
         var now = Instant.now();
         var repository = new Repository();

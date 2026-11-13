@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialReader;
 import de.tum.cit.aet.hephaestus.integration.core.connection.api.ProviderResourceRepairAdminService;
@@ -361,7 +362,7 @@ class ProviderResourceRepairDeletionIntegrationTest extends AbstractWorkspaceInt
                     "replacement",
                     new ConnectionConfig.OutlineConfig(
                             "https://outline.example.test", "fresh-" + id, "key/fresh-route", Set.of()));
-            replacement.setState(IntegrationState.ACTIVE);
+            ConnectionFixtures.reachState(replacement, IntegrationState.ACTIVE);
             connections.saveAndFlush(replacement);
         });
         var projected =
@@ -433,7 +434,7 @@ class ProviderResourceRepairDeletionIntegrationTest extends AbstractWorkspaceInt
                     IntegrationKind.OUTLINE,
                     "shared",
                     new ConnectionConfig.OutlineConfig(target.origin(), target.resourceId(), "key/route", Set.of()));
-            owner.setState(IntegrationState.UNINSTALLED);
+            ConnectionFixtures.reachState(owner, IntegrationState.UNINSTALLED);
             owner = connections.saveAndFlush(owner);
             references.save(
                     new ConnectionProviderRepair(owner, rows.findById(id).orElseThrow()));
@@ -504,7 +505,7 @@ class ProviderResourceRepairDeletionIntegrationTest extends AbstractWorkspaceInt
                     IntegrationKind.SLACK,
                     team,
                     new ConnectionConfig.SlackConfig(team, "U-BOT", fingerprint, "Team", null, Set.of()));
-            owner.setState(IntegrationState.UNINSTALLED);
+            ConnectionFixtures.reachState(owner, IntegrationState.UNINSTALLED);
             owner = connections.saveAndFlush(owner);
             var record = rows.save(new ProviderResourceRepair(
                     new Resource(
@@ -547,10 +548,11 @@ class ProviderResourceRepairDeletionIntegrationTest extends AbstractWorkspaceInt
                     "repair",
                     new ConnectionConfig.OutlineConfig("https://outline.example.test", suffix, "key/route", Set.of()));
             provider.upstream.put(suffix, "owned old subscription");
-            owner.setState(earlierCallUntracked ? IntegrationState.SUSPENDED : IntegrationState.ACTIVE);
+            ConnectionFixtures.reachState(
+                    owner, earlierCallUntracked ? IntegrationState.SUSPENDED : IntegrationState.ACTIVE);
             owner = connections.saveAndFlush(owner);
             repairs.requestRemoval(owner, true);
-            owner.setState(IntegrationState.SUSPENDED);
+            ConnectionFixtures.reachState(owner, IntegrationState.SUSPENDED);
             return references
                     .findByWorkspaceIdAndConnection_Id(workspace.getId(), owner.getId())
                     .getFirst()

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
 import de.tum.cit.aet.hephaestus.integration.core.connection.EncryptionContext;
@@ -204,7 +205,7 @@ class ProviderOAuthExchangeRepairIntegrationTest extends AbstractWorkspaceIntegr
         owner.bindInstanceKey("T-EXISTING-" + workspace.getId());
         owner.setConfig(new ConnectionConfig.SlackConfig(
                 owner.getInstanceKey(), "U-EXISTING", null, "Existing", null, Set.of()));
-        owner.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(owner, IntegrationState.ACTIVE);
         owner = connections.saveAndFlush(owner);
         var completed = strategy.finalizeConnect(ref(), Map.of("code", "code"));
         assertThat(completed).isInstanceOf(ConnectFinalization.Completed.class);
@@ -258,7 +259,7 @@ class ProviderOAuthExchangeRepairIntegrationTest extends AbstractWorkspaceIntegr
             holder = owner;
             holder.setConfig(heldConfig);
         }
-        holder.setState(heldState);
+        ConnectionFixtures.reachState(holder, heldState);
         holder.setCredentials(new BearerToken(token, null), converter);
         holder = connections.saveAndFlush(holder);
         if (!otherWorkspace) owner = holder;
@@ -350,7 +351,7 @@ class ProviderOAuthExchangeRepairIntegrationTest extends AbstractWorkspaceIntegr
         UUID attempt = Objects.requireNonNull(completed.exchangeAttemptId());
         new TransactionTemplate(manager).executeWithoutResult(status -> {
             Connection current = connections.findById(owner.getId()).orElseThrow();
-            current.setState(IntegrationState.UNINSTALLED);
+            ConnectionFixtures.reachState(current, IntegrationState.UNINSTALLED);
             connections.saveAndFlush(current);
         });
         assertThatThrownBy(() -> callbacks.completeConnection(owner, completed, actorAccountId))
@@ -413,13 +414,13 @@ class ProviderOAuthExchangeRepairIntegrationTest extends AbstractWorkspaceIntegr
         String fingerprint = ProviderResourceAdapter.slackTokenFingerprint(token);
         UUID repairId = Objects.requireNonNull(new TransactionTemplate(manager).execute(status -> {
             owner.bindInstanceKey(team);
-            owner.setState(IntegrationState.UNINSTALLED);
+            ConnectionFixtures.reachState(owner, IntegrationState.UNINSTALLED);
             owner.setConfig(new ConnectionConfig.SlackConfig(team, "U-BOT", fingerprint, "Team", null, Set.of()));
             owner = connections.saveAndFlush(owner);
             Workspace otherWorkspace =
                     workspaces.save(WorkspaceTestFixtures.activeWorkspace("second-owner-" + UUID.randomUUID()));
             Connection other = new Connection(otherWorkspace, IntegrationKind.SLACK, team, owner.getConfig());
-            other.setState(IntegrationState.UNINSTALLED);
+            ConnectionFixtures.reachState(other, IntegrationState.UNINSTALLED);
             other = connections.saveAndFlush(other);
             var target = new ProviderResourceAdapter.Resource(
                     IntegrationKind.SLACK,

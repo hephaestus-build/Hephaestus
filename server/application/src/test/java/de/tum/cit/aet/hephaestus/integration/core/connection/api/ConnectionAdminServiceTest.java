@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
@@ -124,7 +125,7 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
         when(connectionService.transition(any(Connection.class), any(TransitionRequest.class)))
                 .thenAnswer(inv -> {
                     Connection conn = inv.getArgument(0);
-                    conn.setState(IntegrationState.ACTIVE);
+                    ConnectionFixtures.reachState(conn, IntegrationState.ACTIVE);
                     return conn;
                 });
 

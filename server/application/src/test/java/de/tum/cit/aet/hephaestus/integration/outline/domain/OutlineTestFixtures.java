@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.outline.domain;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -20,7 +21,7 @@ public final class OutlineTestFixtures {
                 IntegrationKind.OUTLINE,
                 UUID.randomUUID().toString(),
                 new ConnectionConfig.OutlineConfig("https://wiki.example.com", null, null, Set.of()));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         return connections.saveAndFlush(connection);
     }
 }

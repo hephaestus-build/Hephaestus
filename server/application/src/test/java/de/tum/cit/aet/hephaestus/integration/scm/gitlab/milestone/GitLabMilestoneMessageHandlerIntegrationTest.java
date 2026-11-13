@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -302,7 +303,7 @@ class GitLabMilestoneMessageHandlerIntegrationTest extends BaseIntegrationTest {
                 IntegrationKind.GITLAB,
                 "milestone-fixture",
                 new ConnectionConfig.GitLabConfig(provider.getServerUrl(), 42L, null, Set.of(), null));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connections.saveAndFlush(connection);
         var monitor = new RepositoryToMonitor();
         monitor.setWorkspace(workspace);

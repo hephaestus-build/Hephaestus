@@ -5,6 +5,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
@@ -48,7 +49,7 @@ class SlackCredentialProviderTest extends BaseUnitTest {
                 "T12345",
                 new ConnectionConfig.SlackConfig("T12345", "Acme", null, Set.of()));
         connection.setCredentials(new BearerToken("xoxb-secret-bot-token", null), converter);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         IntegrationRef ref = new IntegrationRef(IntegrationKind.SLACK, workspaceId, "T12345");
         when(connectionService.findReferenced(ref)).thenReturn(Optional.of(connection));
 

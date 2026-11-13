@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -159,7 +160,7 @@ class ConnectionActivityRecorderTest extends BaseUnitTest {
         Connection connection = new Connection(
                 workspace, kind, "100", new ConnectionConfig.GitHubAppConfig(100L, "acme", null, Set.of()));
         setConnectionId(connection, connectionId);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         when(connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
                         workspaceId, kind, IntegrationState.ACTIVE))
                 .thenReturn(Optional.of(connection));

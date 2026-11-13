@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialReader;
@@ -347,7 +348,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                 DEFAULT_INSTANCE,
                 new ConnectionConfig.GitLabConfig(DEFAULT_INSTANCE, 42L, 99L, Set.of(), null));
         previous.setCredentials(new BearerToken("previous-test-token", null), credentialConverter);
-        previous.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(previous, IntegrationState.ACTIVE);
         long previousId =
                 persistedId(connectionRepository.saveAndFlush(previous).getId());
         // A pending removal cannot lend its hook ID to the reconnect. The provider creates a fresh hook.
@@ -451,7 +452,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                 IntegrationKind.GITLAB,
                 DEFAULT_INSTANCE,
                 new ConnectionConfig.GitLabConfig(DEFAULT_INSTANCE, 99L, null, Set.of(), null));
-        previous.setState(IntegrationState.UNINSTALLED);
+        ConnectionFixtures.reachState(previous, IntegrationState.UNINSTALLED);
         long id = persistedId(connectionRepository.saveAndFlush(previous).getId());
 
         webTestClient
@@ -482,7 +483,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                 IntegrationKind.GITLAB,
                 DEFAULT_INSTANCE,
                 new ConnectionConfig.GitLabConfig(DEFAULT_INSTANCE, 42L, null, Set.of(), null));
-        previous.setState(IntegrationState.UNINSTALLED);
+        ConnectionFixtures.reachState(previous, IntegrationState.UNINSTALLED);
         long id = persistedId(connectionRepository.saveAndFlush(previous).getId());
         doThrow(new ResponseStatusException(
                         HttpStatus.UNPROCESSABLE_CONTENT,
@@ -516,14 +517,14 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                 IntegrationKind.GITLAB,
                 DEFAULT_INSTANCE,
                 new ConnectionConfig.GitLabConfig(DEFAULT_INSTANCE, 42L, null, Set.of(), null));
-        previous.setState(IntegrationState.UNINSTALLED);
+        ConnectionFixtures.reachState(previous, IntegrationState.UNINSTALLED);
         long id = persistedId(connectionRepository.saveAndFlush(previous).getId());
         Connection github = new Connection(
                 workspace,
                 IntegrationKind.GITHUB,
                 "12345",
                 new ConnectionConfig.GitHubAppConfig(12345L, "my-group", null, Set.of()));
-        github.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(github, IntegrationState.ACTIVE);
         long githubId = persistedId(connectionRepository.saveAndFlush(github).getId());
 
         webTestClient
@@ -556,7 +557,7 @@ class GitLabWorkspaceCreationIntegrationTest extends AbstractWorkspaceIntegratio
                 IntegrationKind.GITLAB,
                 DEFAULT_INSTANCE,
                 new ConnectionConfig.GitLabConfig(DEFAULT_INSTANCE, 42L, null, Set.of(), null));
-        previous.setState(IntegrationState.UNINSTALLED);
+        ConnectionFixtures.reachState(previous, IntegrationState.UNINSTALLED);
         long id = persistedId(connectionRepository.saveAndFlush(previous).getId());
 
         webTestClient

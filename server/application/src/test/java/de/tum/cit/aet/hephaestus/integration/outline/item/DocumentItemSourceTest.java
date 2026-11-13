@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
 import de.tum.cit.aet.hephaestus.evidence.capture.CitableText;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyCapability;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -81,7 +82,7 @@ class DocumentItemSourceTest extends BaseUnitTest {
                 "team-a",
                 new ConnectionConfig.OutlineConfig("https://wiki.example.com", null, null, Set.of()));
         ReflectionTestUtils.setField(connection, "id", 21L);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         when(connections.findInWorkspace(7L, 21L)).thenReturn(Optional.of(connection));
         document.setId(19L);
         document.setWorkspaceId(7L);

@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ServerSchedulingConfig;
 import de.tum.cit.aet.hephaestus.core.runtime.ShedLockConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -589,7 +590,7 @@ class ScheduledScmSyncShutdownIntegrationTest extends AbstractWorkspaceIntegrati
                         IntegrationKind.GITLAB,
                         workspace.getAccountLogin(),
                         new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, null, Set.of(), null));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         return connection;
     }
 

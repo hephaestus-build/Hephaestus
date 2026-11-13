@@ -273,7 +273,7 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
                 "https://outline.example.com/suspended",
                 new ConnectionConfig.OutlineConfig(
                         "https://outline.example.com", "sub-suspended", "secret-x", Set.of()));
-        suspended.setState(IntegrationState.SUSPENDED);
+        ConnectionFixtures.reachState(suspended, IntegrationState.SUSPENDED);
         connectionRepository.save(suspended);
         entityManager.flush();
         entityManager.clear();
@@ -300,7 +300,7 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
                 "https://outline.example.com/sub-suspended-route",
                 new ConnectionConfig.OutlineConfig(
                         "https://outline.example.com", "sub-suspended-route", "key/route-suspended", Set.of()));
-        suspended.setState(IntegrationState.SUSPENDED);
+        ConnectionFixtures.reachState(suspended, IntegrationState.SUSPENDED);
         connectionRepository.save(suspended);
         entityManager.flush();
         entityManager.clear();
@@ -323,7 +323,7 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
                 IntegrationKind.OUTLINE,
                 "https://outline.example.com/" + subscriptionId,
                 new ConnectionConfig.OutlineConfig("https://outline.example.com", subscriptionId, route, Set.of()));
-        conn.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(conn, IntegrationState.ACTIVE);
         connectionRepository.save(conn);
     }
 

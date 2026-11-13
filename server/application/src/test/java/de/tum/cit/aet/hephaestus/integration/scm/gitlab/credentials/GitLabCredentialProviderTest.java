@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
@@ -43,7 +44,7 @@ class GitLabCredentialProviderTest extends BaseUnitTest {
         long workspaceId = 17L;
         Connection connection = newGitlabConnection(workspaceId);
         connection.setCredentials(new BearerToken("glpat-secret", null), converter);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         IntegrationRef ref = new IntegrationRef(IntegrationKind.GITLAB, workspaceId, "200");
         when(connectionService.findReferenced(ref)).thenReturn(Optional.of(connection));
 
@@ -56,7 +57,7 @@ class GitLabCredentialProviderTest extends BaseUnitTest {
     void activeConnection_noBlob_returnsEmpty() {
         long workspaceId = 17L;
         Connection connection = newGitlabConnection(workspaceId);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         IntegrationRef ref = new IntegrationRef(IntegrationKind.GITLAB, workspaceId, "200");
         when(connectionService.findReferenced(ref)).thenReturn(Optional.of(connection));
 

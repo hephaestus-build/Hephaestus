@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
@@ -56,7 +57,7 @@ class GitHubCredentialProviderTest extends BaseUnitTest {
                 "pat",
                 new ConnectionConfig.GitHubPatConfig(/* orgLogin */ "acme", null, Set.of()));
         connection.setCredentials(new BearerToken("ghp_secretToken", null), converter);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         when(connectionService.findActive(workspaceId, IntegrationKind.GITHUB)).thenReturn(Optional.of(connection));
 
         Optional<CredentialBundle> resolved =
@@ -71,7 +72,7 @@ class GitHubCredentialProviderTest extends BaseUnitTest {
         Workspace ws = new Workspace();
         Connection connection = new Connection(
                 ws, IntegrationKind.GITHUB, "100", new ConnectionConfig.GitHubAppConfig(100L, "acme", null, Set.of()));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         when(connectionService.findActive(workspaceId, IntegrationKind.GITHUB)).thenReturn(Optional.of(connection));
 
         Optional<CredentialBundle> resolved =
@@ -90,7 +91,7 @@ class GitHubCredentialProviderTest extends BaseUnitTest {
         Workspace ws = new Workspace();
         Connection connection = new Connection(
                 ws, IntegrationKind.GITHUB, "pat", new ConnectionConfig.GitHubPatConfig(null, null, Set.of()));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         when(connectionService.findActive(workspaceId, IntegrationKind.GITHUB)).thenReturn(Optional.of(connection));
 
         assertThat(provider.resolve(new IntegrationRef(IntegrationKind.GITHUB, workspaceId, "pat")))

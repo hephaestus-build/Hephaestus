@@ -40,11 +40,14 @@ class IntegrationStateTest extends BaseUnitTest {
     }
 
     @Test
-    void uninstalledIsTerminalForGenericTransitions() {
-        for (IntegrationState next : IntegrationState.values()) {
-            assertThat(IntegrationState.UNINSTALLED.canTransitionTo(next))
-                    .as("UNINSTALLED should not transition generically to %s", next)
-                    .isFalse();
-        }
+    void shouldNameTheReconnectEdgeAndKeepOtherDisconnectedMovesIllegal() {
+        assertThat(IntegrationState.UNINSTALLED.transitionTo(IntegrationState.ACTIVE))
+                .contains(IntegrationState.Transition.RECONNECT);
+        assertThat(IntegrationState.UNINSTALLED.canTransitionTo(IntegrationState.PENDING))
+                .isFalse();
+        assertThat(IntegrationState.UNINSTALLED.canTransitionTo(IntegrationState.SUSPENDED))
+                .isFalse();
+        assertThat(IntegrationState.UNINSTALLED.canTransitionTo(IntegrationState.UNINSTALLED))
+                .isFalse();
     }
 }

@@ -22,8 +22,8 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>{@code correlation_id} unique within (connection, event_type) gives webhook
  * idempotency: a redelivered SUSPEND with the same {@code X-GitHub-Delivery} does
- * NOT cause a state flap — the conflicting INSERT is caught by the unique index
- * and the caller short-circuits.
+ * NOT cause a state flap. The caller checks this identity under the connection lifecycle lock
+ * before it erases data or changes state. The unique index is the last database fence.
  *
  * <p><b>Uniqueness contract:</b> {@code uq_connection_audit_idempotency} over
  * (connection_id, event_type, correlation_id) is declared in Liquibase as a

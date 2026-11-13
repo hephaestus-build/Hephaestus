@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.core.auth.AuthPropertiesFixture;
 import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialReader;
@@ -247,7 +248,7 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
             Connection current = connections
                     .findByIdAndWorkspaceId(owner.getId(), owner.getWorkspace().getId())
                     .orElseThrow();
-            current.setState(IntegrationState.UNINSTALLED);
+            ConnectionFixtures.reachState(current, IntegrationState.UNINSTALLED);
         });
         Boolean adopted = context.transactions()
                 .execute(status -> context.repairs()
@@ -491,7 +492,7 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
             var workspace = workspaces.save(WorkspaceTestFixtures.activeWorkspace("inline-wake-" + UUID.randomUUID()));
             String instance = kind == IntegrationKind.GITLAB ? "99" : provider.origin();
             var owner = new Connection(workspace, kind, instance, provider.config(false, false));
-            owner.setState(IntegrationState.UNINSTALLED);
+            ConnectionFixtures.reachState(owner, IntegrationState.UNINSTALLED);
             owner.setCredentials(provider.credential(false), converter);
             return connections.saveAndFlush(owner);
         }));
@@ -593,7 +594,7 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
                             credential);
             Connection connection = new Connection(workspace, provider.kind, provider.instanceKey(fresh), config);
             connection.setCredentials(credential, converter);
-            connection.setState(IntegrationState.ACTIVE);
+            ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
             return connections.saveAndFlush(connection);
         }));
     }
@@ -605,7 +606,7 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
             Connection connection = new Connection(
                     workspace, provider.kind, provider.instanceKey(fresh), provider.config(fresh, sameBot));
             connection.setCredentials(provider.credential(fresh), converter);
-            connection.setState(state);
+            ConnectionFixtures.reachState(connection, state);
             return connections.saveAndFlush(connection);
         }));
     }

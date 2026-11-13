@@ -39,6 +39,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -1525,12 +1526,17 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                     .findByWorkspaceIdAndKindAndInstanceKey(
                             workspace.getId(), IntegrationKind.GITHUB, "activity-open-work")
                     .orElseThrow();
+            ConnectionFixtures.reachState(connection, IntegrationState.UNINSTALLED);
+            connections.saveAndFlush(connection);
+            connection = connections.saveAndFlush(
+                    new Connection(workspace, IntegrationKind.GITHUB, "activity-pending-work", connection.getConfig()));
             for (IntegrationState state : List.of(
-                    IntegrationState.SUSPENDED,
                     IntegrationState.PENDING,
+                    IntegrationState.ACTIVE,
+                    IntegrationState.SUSPENDED,
                     IntegrationState.UNINSTALLED,
                     IntegrationState.ACTIVE)) {
-                connection.setState(state);
+                ConnectionFixtures.reachState(connection, state);
                 connection = connections.saveAndFlush(connection);
                 boolean available = state == IntegrationState.ACTIVE || state == IntegrationState.SUSPENDED;
                 assertThat(page().people()).hasSize(available ? 1 : 0);
@@ -3819,7 +3825,7 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .filter(source ->
                         source.getState() == IntegrationState.ACTIVE || source.getState() == IntegrationState.SUSPENDED)
                 .toList();
-        sources.forEach(source -> source.setState(IntegrationState.UNINSTALLED));
+        sources.forEach(source -> ConnectionFixtures.reachState(source, IntegrationState.UNINSTALLED));
         connections.saveAllAndFlush(sources);
     }
 

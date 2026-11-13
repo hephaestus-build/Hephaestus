@@ -269,13 +269,28 @@ public class Connection {
         this.displayName = displayName;
     }
 
-    public void setState(IntegrationState state) {
-        if (this.state != state) lifecycleGeneration++;
-        this.state = state;
+    /**
+     * Checks the transition before the application service performs local erasure or audit writes.
+     * A reconnect reuses the vendor natural key and row. INITIATE means the strategy verified fresh credentials;
+     * OAUTH_COMPLETE proves a team or installation only for Slack and GitHub. Other events cannot revive the row.
+     */
+    void requireTransitionTo(IntegrationState next, String eventType) {
+        if (state == next) return;
+        var transition = state.transitionTo(next);
+        boolean verifiedReconnect = "INITIATE".equals(eventType)
+                || ((kind == IntegrationKind.SLACK || kind == IntegrationKind.GITHUB)
+                        && "OAUTH_COMPLETE".equals(eventType));
+        if (transition.isEmpty() || (transition.get() == IntegrationState.Transition.RECONNECT && !verifiedReconnect))
+            throw new IllegalStateException("Connection " + id + " cannot change from " + state + " to " + next + ".");
     }
 
-    public void setStateReason(@Nullable String stateReason) {
-        this.stateReason = stateReason;
+    /** Applies one legal transition atomically. A repeated state preserves its reason and generation. */
+    void transitionTo(IntegrationState next, String eventType, @Nullable String reason) {
+        requireTransitionTo(next, eventType);
+        if (state == next) return;
+        state = next;
+        stateReason = reason;
+        lifecycleGeneration++;
     }
 
     public void setConfig(ConnectionConfig config) {

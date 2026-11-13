@@ -120,7 +120,7 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
                 Long.toString(installationId),
                 new ConnectionConfig.GitHubAppConfig(installationId, workspace.getAccountLogin(), null, Set.of()));
         github.setCredentials(new InstallationCredential(installationId, "app"), credentialConverter);
-        github.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(github, IntegrationState.ACTIVE);
         connection = connectionRepository.save(github);
         RepositoryToMonitor monitor = new RepositoryToMonitor();
         monitor.setNativeId(1L);

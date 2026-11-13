@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextPaths;
 import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -147,7 +148,7 @@ class MentorWorkContextIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 IntegrationKind.GITLAB,
                 "GITLAB",
                 new ConnectionConfig.GitLabConfig(INSTANCE, 42L, null, Set.of(), null));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connectionRepository.saveAndFlush(connection);
         course = monitored("context/course");
         hidden = monitored("context/hidden");

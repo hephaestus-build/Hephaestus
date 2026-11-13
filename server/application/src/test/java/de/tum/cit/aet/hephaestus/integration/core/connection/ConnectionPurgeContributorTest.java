@@ -90,7 +90,7 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
     @Test
     void purge_recordsRemovalBeforeScrubbingCredentialsWithoutConsultingTheSyncFence() throws Exception {
         Connection connection = activeConnectionWithCredentials();
-        connection.setState(IntegrationState.SUSPENDED);
+        ConnectionFixtures.reachState(connection, IntegrationState.SUSPENDED);
         when(connectionRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(connection));
         AtomicBoolean tornDownWithCredentials = new AtomicBoolean();
         doAnswer(invocation -> {
@@ -139,7 +139,7 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
     @Test
     void purge_skipsAlreadyUninstalledConnections() throws Exception {
         Connection connection = activeConnectionWithCredentials();
-        connection.setState(IntegrationState.UNINSTALLED);
+        ConnectionFixtures.reachState(connection, IntegrationState.UNINSTALLED);
         when(connectionRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(connection));
 
         contributor(List.of(connectionStrategy)).deleteWorkspaceData(WORKSPACE_ID);
@@ -173,7 +173,7 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
         Field id = Connection.class.getDeclaredField("id");
         id.setAccessible(true);
         id.set(connection, 55L);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connection.setCredentials(new BearerToken("ghp-secret", null), credentialConverter);
         lenient()
                 .when(connectionRepository.findByIdAndWorkspaceId(55L, WORKSPACE_ID))

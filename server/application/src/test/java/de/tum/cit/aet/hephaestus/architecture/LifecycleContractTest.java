@@ -1,10 +1,12 @@
 package de.tum.cit.aet.hephaestus.architecture;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.tngtech.archunit.core.domain.JavaClass;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitState;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
+import de.tum.cit.aet.hephaestus.core.ContinuingLifecycle;
 import de.tum.cit.aet.hephaestus.core.Lifecycle;
 import de.tum.cit.aet.hephaestus.core.action.ActionState;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
@@ -36,8 +38,7 @@ class LifecycleContractTest extends HephaestusArchitectureTest {
                         Account.Status.class,
                         Set.of(Account.Status.UNCLAIMED, Account.Status.ACTIVE),
                         Set.of(Account.Status.DELETED)),
-                new Contract<>(
-                        IntegrationState.class, Set.of(IntegrationState.PENDING), Set.of(IntegrationState.UNINSTALLED)),
+                new Contract<>(IntegrationState.class, Set.of(IntegrationState.PENDING), Set.of()),
                 new Contract<>(
                         ReviewStatus.class,
                         Set.of(ReviewStatus.QUEUED),
@@ -82,6 +83,76 @@ class LifecycleContractTest extends HephaestusArchitectureTest {
         contract.checkReachability();
     }
 
+    @Test
+    void shouldRejectANonterminalLifecycleWithoutAnExplicitReason() {
+        assertThatThrownBy(() ->
+                        new Contract<>(UnmarkedLoop.class, Set.of(UnmarkedLoop.START), Set.of()).checkReachability())
+                .isInstanceOf(AssertionError.class);
+        assertThatThrownBy(() -> new Contract<>(UnexplainedLoop.class, Set.of(UnexplainedLoop.START), Set.of())
+                        .checkReachability())
+                .isInstanceOf(AssertionError.class);
+        assertThatThrownBy(
+                        () -> new Contract<>(DeclaredLoop.class, Set.of(DeclaredLoop.START), Set.of(DeclaredLoop.START))
+                                .checkReachability())
+                .isInstanceOf(AssertionError.class);
+    }
+
+    @Test
+    void shouldRejectAContinuingLifecycleWithADeadEndState() {
+        assertThatThrownBy(() -> new Contract<>(DeadEnd.class, Set.of(DeadEnd.START), Set.of()).checkTerminalStates())
+                .isInstanceOf(AssertionError.class);
+    }
+
+    @ContinuingLifecycle("This intentionally broken test fixture claims to continue")
+    private enum DeadEnd implements Lifecycle<DeadEnd> {
+        START,
+        END;
+
+        @Override
+        public boolean canTransitionTo(DeadEnd next) {
+            return this == START && next == END;
+        }
+    }
+
+    @Test
+    void shouldKeepContinuingMarkersOnLifecycleEnumsOnly() {
+        for (var type : classes) {
+            if (type.isAnnotatedWith(ContinuingLifecycle.class)) {
+                assertThat(type.isEnum()).isTrue();
+                assertThat(type.isAssignableTo(Lifecycle.class)).isTrue();
+            }
+        }
+    }
+
+    private enum UnmarkedLoop implements Lifecycle<UnmarkedLoop> {
+        START;
+
+        @Override
+        public boolean canTransitionTo(UnmarkedLoop next) {
+            return true;
+        }
+    }
+
+    @ContinuingLifecycle("")
+    private enum UnexplainedLoop implements Lifecycle<UnexplainedLoop> {
+        START;
+
+        @Override
+        public boolean canTransitionTo(UnexplainedLoop next) {
+            return true;
+        }
+    }
+
+    @ContinuingLifecycle("This test fixture is a continuing lifecycle")
+    private enum DeclaredLoop implements Lifecycle<DeclaredLoop> {
+        START;
+
+        @Override
+        public boolean canTransitionTo(DeclaredLoop next) {
+            return true;
+        }
+    }
+
     private record Contract<S extends Enum<S> & Lifecycle<S>>(Class<S> type, Set<S> initial, Set<S> terminal) {
         void checkTerminalStates() {
             var states = EnumSet.allOf(type);
@@ -95,7 +166,19 @@ class LifecycleContractTest extends HephaestusArchitectureTest {
 
         void checkReachability() {
             assertThat(initial).as("%s initial states", type.getSimpleName()).isNotEmpty();
-            assertThat(terminal).as("%s terminal states", type.getSimpleName()).isNotEmpty();
+            var continuing = type.getAnnotation(ContinuingLifecycle.class);
+            if (continuing == null)
+                assertThat(terminal)
+                        .as("%s terminal states", type.getSimpleName())
+                        .isNotEmpty();
+            else {
+                assertThat(continuing.value())
+                        .as("%s continuing lifecycle reason", type.getSimpleName())
+                        .isNotBlank();
+                assertThat(terminal)
+                        .as("%s declares a continuing lifecycle", type.getSimpleName())
+                        .isEmpty();
+            }
             var states = EnumSet.allOf(type);
             var reached = EnumSet.noneOf(type);
             reached.addAll(initial);

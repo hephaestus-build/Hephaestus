@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadEvents;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -264,7 +265,7 @@ class ThreadItemSourceIntegrationTest extends BaseIntegrationTest {
         var original = connections
                 .findById(Objects.requireNonNull(pinned.integration().connectionId()))
                 .orElseThrow();
-        original.setState(IntegrationState.SUSPENDED);
+        ConnectionFixtures.reachState(original, IntegrationState.SUSPENDED);
         connections.saveAndFlush(original);
         String otherTeam = "other-" + UUID.randomUUID();
         var other = new Connection(
@@ -272,7 +273,7 @@ class ThreadItemSourceIntegrationTest extends BaseIntegrationTest {
                 IntegrationKind.SLACK,
                 otherTeam,
                 new ConnectionConfig.SlackConfig(otherTeam, null, null, Set.of()));
-        other.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(other, IntegrationState.ACTIVE);
         connections.saveAndFlush(other);
 
         assertThat(source.permits(fixture.item(), SourceUsePurpose.CONVERSATIONAL_MENTORING))
@@ -347,7 +348,7 @@ class ThreadItemSourceIntegrationTest extends BaseIntegrationTest {
                 IntegrationKind.SLACK,
                 teamId,
                 new ConnectionConfig.SlackConfig(teamId, null, null, Set.of()));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connections.saveAndFlush(connection);
         var channel = new SlackMonitoredChannel();
         channel.setWorkspaceId(workspaceId);

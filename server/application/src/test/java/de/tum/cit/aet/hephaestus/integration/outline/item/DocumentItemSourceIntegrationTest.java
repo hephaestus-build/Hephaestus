@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -256,7 +257,7 @@ class DocumentItemSourceIntegrationTest extends BaseIntegrationTest {
                 IntegrationKind.OUTLINE,
                 team,
                 new ConnectionConfig.OutlineConfig(serverUrl, null, null, Set.of()));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connection = connections.saveAndFlush(connection);
         var provider = providers
                 .findByTypeAndServerUrl(IdentityProviderType.OUTLINE, serverUrl)
@@ -346,7 +347,7 @@ class DocumentItemSourceIntegrationTest extends BaseIntegrationTest {
                 IntegrationKind.OUTLINE,
                 "approved-" + fixture.teamId(),
                 new ConnectionConfig.OutlineConfig("https://wiki.example.com", null, null, Set.of()));
-        approved.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(approved, IntegrationState.ACTIVE);
         connections.saveAndFlush(approved);
         if (providers
                 .findByTypeAndServerUrl(IdentityProviderType.OUTLINE, "https://wiki.example.com")

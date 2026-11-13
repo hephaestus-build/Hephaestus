@@ -50,6 +50,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -719,7 +720,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 IntegrationKind.GITHUB,
                 "17",
                 new ConnectionConfig.GitHubAppConfig(17L, "private-recovery", null, Set.of()));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         privateConnections.saveAndFlush(connection);
         var repository = new Repository();
         repository.setNativeId(ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));

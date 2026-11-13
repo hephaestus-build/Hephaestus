@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitLabConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
@@ -281,7 +282,7 @@ class GitLabSuspendedWebhookCleanupIntegrationTest extends BaseIntegrationTest {
                 IntegrationKind.GITLAB,
                 "https://gitlab.example",
                 new GitLabConfig("https://gitlab.example", 42L, hookId, Set.of(), null));
-        connection.setState(state);
+        ConnectionFixtures.reachState(connection, state);
         connection.setCredentials(new BearerToken("cleanup-test-token", null), converter);
         Connection saved = connections.save(connection);
         if (hookId != null) upstreamHooks.put(hookId, hookUrl(saved));
@@ -319,7 +320,7 @@ class GitLabSuspendedWebhookCleanupIntegrationTest extends BaseIntegrationTest {
         transactions.executeWithoutResult(status -> {
             connections.acquireLifecycleLock(connection.getId(), workspace(connection));
             Connection current = current(connection);
-            current.setState(next);
+            ConnectionFixtures.reachState(current, next);
             connections.saveAndFlush(current);
         });
     }

@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.activity.adapter.ActivityPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -169,7 +170,7 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
                 IntegrationKind.GITHUB,
                 "GitHub",
                 new ConnectionConfig.GitHubPatConfig("test-org", null, Set.of()));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connections.saveAndFlush(connection);
         jdbc.update(
                 "INSERT INTO repository_to_monitor(workspace_id,name_with_owner,native_id,generated_paths) VALUES (?,?,?,'[]')",

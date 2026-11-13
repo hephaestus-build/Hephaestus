@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
@@ -98,7 +99,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
         when(connectionService.transition(any(Connection.class), any(TransitionRequest.class)))
                 .thenAnswer(inv -> {
                     Connection c = inv.getArgument(0);
-                    c.setState(IntegrationState.ACTIVE);
+                    ConnectionFixtures.reachState(c, IntegrationState.ACTIVE);
                     return c;
                 });
         when(credentialBundleConverter.encrypt(any(), any())).thenReturn(new byte[] {0x02, 1, 2, 3});
@@ -358,7 +359,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
             case OUTLINE -> new ConnectionConfig.OutlineConfig("https://app.getoutline.com", null, null, Set.of());
         };
         Connection c = new Connection(ws, kind, instanceKey, cfg);
-        c.setState(state);
+        ConnectionFixtures.reachState(c, state);
         ReflectionTestUtils.setField(c, "id", id);
         return c;
     }

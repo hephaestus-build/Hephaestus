@@ -1,47 +1,44 @@
 package de.tum.cit.aet.hephaestus.integration.core.spi;
 
+import de.tum.cit.aet.hephaestus.core.ContinuingLifecycle;
 import de.tum.cit.aet.hephaestus.core.Lifecycle;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
+import java.util.Optional;
 
-/**
- * Per-Connection lifecycle state.
- *
- * <p>{@code PENDING} models the OAuth round-trip — we model OUR wait, not vendor's
- * setup work. {@code UNINSTALLED} is terminal for generic transitions: credentials were
- * cleared and the integration is unusable. Kind-specific reconnect flows may opt into a
- * guarded revival in their application service when that preserves the vendor natural key.
- *
- * <p>Idempotent transitions: hitting {@code SUSPENDED} on an already-{@code SUSPENDED}
- * Connection returns the current state with no audit row — protects against webhook
- * redelivery floods.
- */
+/** Per-connection lifecycle. Reconnect reuses the row; the aggregate guards the verified reconnect authority. */
+@ContinuingLifecycle(
+        "A reconnect reuses the connection identity and advances its lifecycle generation; disconnect is not terminal.")
 public enum IntegrationState implements Lifecycle<IntegrationState> {
     /** OAuth in flight, or pending vendor-side accept. */
     PENDING,
-
     /** Credentials valid; the integration is usable. */
     ACTIVE,
-
     /** Vendor revoked / Hephaestus admin paused; credentials retained but unused. */
     SUSPENDED,
-
-    /** Hard disconnected; credentials cleared. Terminal — no legal transition out. */
+    /** Disconnected; a verified reconnect can start a new generation of this connection. */
     UNINSTALLED;
 
-    private static final Map<IntegrationState, Set<IntegrationState>> LEGAL = Map.of(
-            PENDING,
-            Set.of(ACTIVE, UNINSTALLED),
-            ACTIVE,
-            Set.of(SUSPENDED, UNINSTALLED),
-            SUSPENDED,
-            Set.of(ACTIVE, UNINSTALLED),
-            UNINSTALLED,
-            Set.of());
+    public enum Transition {
+        CONNECT,
+        SUSPEND,
+        RESUME,
+        DISCONNECT,
+        RECONNECT
+    }
+
+    private static final Map<IntegrationState, Map<IntegrationState, Transition>> LEGAL = Map.of(
+            PENDING, Map.of(ACTIVE, Transition.CONNECT, UNINSTALLED, Transition.DISCONNECT),
+            ACTIVE, Map.of(SUSPENDED, Transition.SUSPEND, UNINSTALLED, Transition.DISCONNECT),
+            SUSPENDED, Map.of(ACTIVE, Transition.RESUME, UNINSTALLED, Transition.DISCONNECT),
+            UNINSTALLED, Map.of(ACTIVE, Transition.RECONNECT));
+
+    public Optional<Transition> transitionTo(IntegrationState next) {
+        return Optional.ofNullable(Objects.requireNonNull(LEGAL.get(this)).get(Objects.requireNonNull(next)));
+    }
 
     @Override
     public boolean canTransitionTo(IntegrationState next) {
-        return Objects.requireNonNull(LEGAL.get(this)).contains(next);
+        return transitionTo(next).isPresent();
     }
 }

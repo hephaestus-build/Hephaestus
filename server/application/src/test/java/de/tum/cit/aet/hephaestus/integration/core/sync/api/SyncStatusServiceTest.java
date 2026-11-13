@@ -17,6 +17,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.api.ConnectionAdminService;
 import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionSyncDetails;
@@ -110,7 +111,7 @@ class SyncStatusServiceTest extends BaseUnitTest {
                 "100",
                 new ConnectionConfig.GitHubAppConfig(100L, "acme", null, Set.of()));
         setConnectionId(connection, CONNECTION_ID);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
 
         lenient()
                 .when(connectionAdminService.findInWorkspaceOrThrow(WORKSPACE_ID, CONNECTION_ID))
@@ -141,14 +142,18 @@ class SyncStatusServiceTest extends BaseUnitTest {
 
     @Test
     void getStatus_pendingConnection_healthIsPending() {
-        connection.setState(IntegrationState.PENDING);
+        connection = new Connection(
+                connection.getWorkspace(), connection.getKind(), connection.getInstanceKey(), connection.getConfig());
+        setConnectionId(connection, CONNECTION_ID);
+        when(connectionAdminService.findInWorkspaceOrThrow(WORKSPACE_ID, CONNECTION_ID))
+                .thenReturn(connection);
 
         assertThat(service.getStatus(WORKSPACE_ID, CONNECTION_ID).health()).isEqualTo(ConnectionHealth.PENDING);
     }
 
     @Test
     void getStatus_suspendedConnection_healthIsSuspended() {
-        connection.setState(IntegrationState.SUSPENDED);
+        ConnectionFixtures.reachState(connection, IntegrationState.SUSPENDED);
 
         assertThat(service.getStatus(WORKSPACE_ID, CONNECTION_ID).health()).isEqualTo(ConnectionHealth.SUSPENDED);
     }
@@ -402,7 +407,7 @@ class SyncStatusServiceTest extends BaseUnitTest {
 
     @Test
     void triggerSync_notActiveConnection_throwsStateConflict() {
-        connection.setState(IntegrationState.SUSPENDED);
+        ConnectionFixtures.reachState(connection, IntegrationState.SUSPENDED);
 
         assertThatThrownBy(() -> service.triggerSync(WORKSPACE_ID, CONNECTION_ID, SyncJobType.RECONCILIATION, null))
                 .isInstanceOf(SyncStateConflictException.class);

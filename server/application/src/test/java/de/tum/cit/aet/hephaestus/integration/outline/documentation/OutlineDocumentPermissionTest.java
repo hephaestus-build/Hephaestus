@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -67,7 +68,7 @@ class OutlineDocumentPermissionTest extends BaseUnitTest {
                 TEAM,
                 new ConnectionConfig.OutlineConfig(origin, null, null, Set.of()));
         ReflectionTestUtils.setField(connection, "id", CONNECTION_ID);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         return connection;
     }
 
@@ -153,7 +154,7 @@ class OutlineDocumentPermissionTest extends BaseUnitTest {
         assertThat(permission.permits(WORKSPACE_ID, DOCUMENT_ID, human)).isFalse();
 
         var retired = connection(SERVER_URL);
-        retired.setState(IntegrationState.UNINSTALLED);
+        ConnectionFixtures.reachState(retired, IntegrationState.UNINSTALLED);
         when(connections.findInWorkspace(WORKSPACE_ID, CONNECTION_ID)).thenReturn(Optional.of(retired));
         assertThat(permission.permits(WORKSPACE_ID, DOCUMENT_ID, human)).isFalse();
         when(connections.findInWorkspace(WORKSPACE_ID, CONNECTION_ID))
@@ -211,7 +212,7 @@ class OutlineDocumentPermissionTest extends BaseUnitTest {
     @Test
     void preservesIdentityAttributionWhenTheDocumentConnectionIsRetired() {
         var connection = connection(SERVER_URL);
-        connection.setState(IntegrationState.UNINSTALLED);
+        ConnectionFixtures.reachState(connection, IntegrationState.UNINSTALLED);
         readableHeader(connection);
         assertThat(permission.permits(WORKSPACE_ID, DOCUMENT_ID)).isFalse();
         assertThat(permission.identities(WORKSPACE_ID, DOCUMENT_ID)).hasSize(3);

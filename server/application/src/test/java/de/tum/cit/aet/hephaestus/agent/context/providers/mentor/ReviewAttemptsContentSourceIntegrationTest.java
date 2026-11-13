@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -150,7 +151,7 @@ class ReviewAttemptsContentSourceIntegrationTest extends BaseIntegrationTest {
                 IntegrationKind.GITHUB,
                 Long.toString(workspace.getId()),
                 new ConnectionConfig.GitHubAppConfig(workspace.getId(), workspace.getAccountLogin(), null, Set.of()));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connections.saveAndFlush(connection);
         var provider = providers
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")

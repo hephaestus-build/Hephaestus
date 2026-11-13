@@ -159,7 +159,7 @@ class CredentialReaderIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 IntegrationKind.GITLAB,
                 "gitlab-" + System.nanoTime(),
                 new ConnectionConfig.GitLabConfig("https://gitlab.example.com", 42L, null, Set.of(), null));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connection.setCredentials(token, converter);
         connectionRepository.saveAndFlush(connection);
     }

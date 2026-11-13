@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider;
@@ -138,7 +139,7 @@ class OutlineFrameworkRegistrationIntegrationTest extends BaseIntegrationTest {
             case OUTLINE -> "https://outline.example";
         };
         var connection = new Connection(workspace, kind, instanceKey, config);
-        connection.setState(state);
+        ConnectionFixtures.reachState(connection, state);
         connection = connections.saveAndFlush(connection);
         long connectionId = Objects.requireNonNull(connection.getId());
         Long unrelatedConnectionId = null;
@@ -155,7 +156,7 @@ class OutlineFrameworkRegistrationIntegrationTest extends BaseIntegrationTest {
                     Long.toString(workspaceId + 1000000),
                     new ConnectionConfig.GitHubAppConfig(
                             workspaceId + 1000000, workspace.getAccountLogin(), "https://github.com", Set.of()));
-            other.setState(IntegrationState.ACTIVE);
+            ConnectionFixtures.reachState(other, IntegrationState.ACTIVE);
             unrelatedConnectionId = connections.saveAndFlush(other).getId();
         }
         String delivery = UUID.randomUUID().toString();
@@ -272,14 +273,14 @@ class OutlineFrameworkRegistrationIntegrationTest extends BaseIntegrationTest {
                 var other = connections
                         .findByIdAndWorkspaceId(otherConnectionId, workspaceId)
                         .orElseThrow();
-                other.setState(IntegrationState.SUSPENDED);
+                ConnectionFixtures.reachState(other, IntegrationState.SUSPENDED);
                 connections.saveAndFlush(other);
             }
             connections.acquireLifecycleLock(connectionId, workspaceId);
             var resumed = connections
                     .findByIdAndWorkspaceId(connectionId, workspaceId)
                     .orElseThrow();
-            resumed.setState(IntegrationState.ACTIVE);
+            ConnectionFixtures.reachState(resumed, IntegrationState.ACTIVE);
             connections.saveAndFlush(resumed);
         });
         // The same signed delivery must be accepted after resume: rejection created no dedupe or payload row.
@@ -332,7 +333,7 @@ class OutlineFrameworkRegistrationIntegrationTest extends BaseIntegrationTest {
                 "https://outline.example",
                 new ConnectionConfig.OutlineConfig(
                         "https://outline.example", subscription, originalRoute.route(), Set.of()));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         long id = Objects.requireNonNull(connections.saveAndFlush(connection).getId());
         String body = """
                 {"id":"%s","webhookSubscriptionId":"%s","event":"documents.update",
