@@ -73,7 +73,8 @@ class SlackMessageServiceLiveTest {
         SlackMessageService service = new SlackMessageService(
                 credentialProvider,
                 new SlackRateLimitTracker(new SimpleMeterRegistry()),
-                new OutboundEgressGuard(() -> false));
+                new OutboundEgressGuard(() -> false),
+                "https://slack.com");
 
         // The real send: block-kit payload through the app's SlackMessageService to the live channel.
         try {

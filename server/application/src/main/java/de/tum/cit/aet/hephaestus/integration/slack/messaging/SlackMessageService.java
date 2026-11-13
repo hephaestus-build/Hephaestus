@@ -39,6 +39,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
@@ -77,12 +78,17 @@ public class SlackMessageService {
     private final OutboundEgressGuard egressGuard;
     private final ConcurrentMap<Long, BotIdentity> botCache = new ConcurrentHashMap<>();
 
+    /**
+     * @param apiBase the Slack API's origin, which {@code hephaestus.integration.slack.api-base} sets for the OAuth
+     *     client too
+     */
     @Autowired
     public SlackMessageService(
             SlackCredentialProvider credentialProvider,
             SlackRateLimitTracker rateLimitTracker,
-            OutboundEgressGuard egressGuard) {
-        this(Slack.getInstance(nativeConfig()), credentialProvider, rateLimitTracker, egressGuard);
+            OutboundEgressGuard egressGuard,
+            @Value("${hephaestus.integration.slack.api-base:https://slack.com}") String apiBase) {
+        this(Slack.getInstance(nativeConfig(apiBase)), credentialProvider, rateLimitTracker, egressGuard);
     }
 
     /**
@@ -101,11 +107,13 @@ public class SlackMessageService {
 
     /**
      * The configuration of this gateway's own Slack client, with a deadline for each HTTP call
-     * ({@link #NATIVE_CALL_TIMEOUT_MS}). The SDK's shared default client and its configuration stay unchanged.
+     * ({@link #NATIVE_CALL_TIMEOUT_MS}) and the methods under {@code apiBase}. The SDK's shared default client and its
+     * configuration stay unchanged.
      */
-    static SlackConfig nativeConfig() {
+    static SlackConfig nativeConfig(String apiBase) {
         SlackConfig config = new SlackConfig();
         config.setHttpClientCallTimeoutMillis(NATIVE_CALL_TIMEOUT_MS);
+        config.setMethodsEndpointUrlPrefix(apiBase.replaceAll("/+$", "") + "/api/");
         return config;
     }
 

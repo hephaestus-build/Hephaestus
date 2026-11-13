@@ -52,7 +52,8 @@ class SlackMessageServiceTest extends BaseUnitTest {
         service = new SlackMessageService(
                 credentialProvider,
                 new SlackRateLimitTracker(new SimpleMeterRegistry()),
-                new OutboundEgressGuard(() -> silentModeEngaged));
+                new OutboundEgressGuard(() -> silentModeEngaged),
+                "https://slack.com");
     }
 
     @AfterEach
@@ -128,6 +129,14 @@ class SlackMessageServiceTest extends BaseUnitTest {
                 .isInstanceOf(SlackSendException.class)
                 .satisfies(
                         ex -> assertThat(((SlackSendException) ex).slackError()).isEqualTo("silent_mode_engaged"));
+    }
+
+    @Test
+    void shouldCallSlackAtTheConfiguredApiBase() {
+        assertThat(SlackMessageService.nativeConfig("https://slack.com").getMethodsEndpointUrlPrefix())
+                .isEqualTo("https://slack.com/api/");
+        assertThat(SlackMessageService.nativeConfig("http://slack.fake:8080/").getMethodsEndpointUrlPrefix())
+                .isEqualTo("http://slack.fake:8080/api/");
     }
 
     @Test

@@ -13,6 +13,8 @@ const { values } = parseArgs({
 		"tool-mode": { type: "string", default: "mixed-read" },
 		// The namespaces whose Pods may call the provider; the fixture's own when absent.
 		client: { type: "string", multiple: true, default: [] },
+		// Also serve the Slack Web API fake of the turn-roll drill, as the Service `slack`.
+		slack: { type: "boolean", default: false },
 	},
 });
 if (
@@ -33,11 +35,104 @@ if (!clients.every((client) => /^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$/u.test(cl
 }
 const replay = parseReplay(parseJson(await readFile(values.replay, "utf8")));
 const data: Record<string, string> = { "replay.json": JSON.stringify(replay) };
-for (const file of ["capacity-provider.ts", "lib/capacity-replay.ts", "lib/json.ts"]) {
+const sources = ["capacity-provider.ts", "lib/capacity-replay.ts", "lib/json.ts"];
+if (values.slack) {
+	sources.push("slack-fake.ts");
+}
+for (const file of sources) {
 	data[file.replaceAll("/", "__")] = await readFile(new URL(file, import.meta.url), "utf8");
 }
-const labels = { "app.kubernetes.io/name": "capacity-replay" };
-const metadata = { namespace: values.namespace, labels };
+const image =
+	"node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d";
+
+/** One Node program of the ConfigMap, as a Deployment, a Service and the policy that admits the clients. */
+function serve(name: string, command: readonly string[]) {
+	const labels = { "app.kubernetes.io/name": `capacity-${name}` };
+	const metadata = { namespace: values.namespace, labels };
+	return [
+		{
+			apiVersion: "apps/v1",
+			kind: "Deployment",
+			metadata: { ...metadata, name },
+			spec: {
+				replicas: 1,
+				selector: { matchLabels: labels },
+				template: {
+					metadata: { labels },
+					spec: {
+						automountServiceAccountToken: false,
+						securityContext: {
+							runAsNonRoot: true,
+							runAsUser: 1000,
+							seccompProfile: { type: "RuntimeDefault" },
+						},
+						containers: [
+							{
+								name,
+								image,
+								command: ["node", ...command],
+								ports: [{ containerPort: 8080 }],
+								securityContext: {
+									allowPrivilegeEscalation: false,
+									readOnlyRootFilesystem: true,
+									capabilities: { drop: ["ALL"] },
+								},
+								resources: {
+									requests: { cpu: "100m", memory: "64Mi" },
+									limits: { cpu: "1", memory: "256Mi" },
+								},
+								readinessProbe: { httpGet: { path: "/health", port: 8080 } },
+								volumeMounts: [{ name: "source", mountPath: "/app", readOnly: true }],
+							},
+						],
+						volumes: [
+							{
+								name: "source",
+								configMap: {
+									name: "replay",
+									items: [
+										...Object.keys(data)
+											.filter((key) => key !== "replay.json")
+											.map((key) => ({ key, path: key.replaceAll("__", "/") })),
+										{ key: "replay.json", path: "replay.json" },
+									],
+								},
+							},
+						],
+					},
+				},
+			},
+		},
+		{
+			apiVersion: "v1",
+			kind: "Service",
+			metadata: { ...metadata, name },
+			spec: {
+				selector: labels,
+				ports: [{ port: 8080, targetPort: 8080 }],
+			},
+		},
+		{
+			apiVersion: "networking.k8s.io/v1",
+			kind: "NetworkPolicy",
+			metadata: { ...metadata, name },
+			spec: {
+				podSelector: { matchLabels: labels },
+				policyTypes: ["Ingress", "Egress"],
+				egress: [],
+				ingress: [
+					{
+						from: clients.map((client) => ({
+							namespaceSelector: { matchLabels: { "kubernetes.io/metadata.name": client } },
+						})),
+						ports: [{ protocol: "TCP", port: 8080 }],
+					},
+				],
+			},
+		},
+	];
+}
+
 await writeFile(
 	values.out,
 	JSON.stringify(
@@ -56,95 +151,20 @@ await writeFile(
 						},
 					},
 				},
-				{ apiVersion: "v1", kind: "ConfigMap", metadata: { ...metadata, name: "replay" }, data },
-				{
-					apiVersion: "apps/v1",
-					kind: "Deployment",
-					metadata: { ...metadata, name: "replay" },
-					spec: {
-						replicas: 1,
-						selector: { matchLabels: labels },
-						template: {
-							metadata: { labels },
-							spec: {
-								automountServiceAccountToken: false,
-								securityContext: {
-									runAsNonRoot: true,
-									runAsUser: 1000,
-									seccompProfile: { type: "RuntimeDefault" },
-								},
-								containers: [
-									{
-										name: "replay",
-										image:
-											"node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d",
-										command: [
-											"node",
-											"/app/capacity-provider.ts",
-											"--replay",
-											"/app/replay.json",
-											"--tool-mode",
-											values["tool-mode"],
-										],
-										ports: [{ containerPort: 8080 }],
-										securityContext: {
-											allowPrivilegeEscalation: false,
-											readOnlyRootFilesystem: true,
-											capabilities: { drop: ["ALL"] },
-										},
-										resources: {
-											requests: { cpu: "100m", memory: "64Mi" },
-											limits: { cpu: "1", memory: "256Mi" },
-										},
-										readinessProbe: { httpGet: { path: "/health", port: 8080 } },
-										volumeMounts: [{ name: "source", mountPath: "/app", readOnly: true }],
-									},
-								],
-								volumes: [
-									{
-										name: "source",
-										configMap: {
-											name: "replay",
-											items: [
-												...Object.keys(data)
-													.filter((key) => key !== "replay.json")
-													.map((key) => ({ key, path: key.replaceAll("__", "/") })),
-												{ key: "replay.json", path: "replay.json" },
-											],
-										},
-									},
-								],
-							},
-						},
-					},
-				},
 				{
 					apiVersion: "v1",
-					kind: "Service",
-					metadata: { ...metadata, name: "replay" },
-					spec: {
-						selector: labels,
-						ports: [{ port: 8080, targetPort: 8080 }],
-					},
+					kind: "ConfigMap",
+					metadata: { namespace: values.namespace, name: "replay" },
+					data,
 				},
-				{
-					apiVersion: "networking.k8s.io/v1",
-					kind: "NetworkPolicy",
-					metadata: { ...metadata, name: "replay" },
-					spec: {
-						podSelector: { matchLabels: labels },
-						policyTypes: ["Ingress", "Egress"],
-						egress: [],
-						ingress: [
-							{
-								from: clients.map((client) => ({
-									namespaceSelector: { matchLabels: { "kubernetes.io/metadata.name": client } },
-								})),
-								ports: [{ protocol: "TCP", port: 8080 }],
-							},
-						],
-					},
-				},
+				...serve("replay", [
+					"/app/capacity-provider.ts",
+					"--replay",
+					"/app/replay.json",
+					"--tool-mode",
+					values["tool-mode"],
+				]),
+				...(values.slack ? serve("slack", ["/app/slack-fake.ts"]) : []),
 			],
 		},
 		null,

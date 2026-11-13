@@ -35,6 +35,8 @@ import {
 	signInPod,
 	statefulPods,
 	outcomeChecks,
+	receivedCalls,
+	slackTurnState,
 	turnOutcome,
 	turnState,
 	useKubectl,
@@ -675,6 +677,71 @@ await test("the sign-in Pod runs the server template with the e2e sign-in, on lo
 		() => signInPod({ metadata: {}, spec: { template: { spec: { containers: [] } } } }, "x"),
 		/single-container server template/u,
 	);
+});
+
+await test("the sign-in Pod's extra variables replace the template's own", () => {
+	const template = {
+		metadata: {},
+		spec: {
+			containers: [
+				{
+					env: [
+						{ name: "HEPHAESTUS_INTEGRATION_SLACK_API_BASE", value: "https://slack.com" },
+						{ name: "KEEP", value: "1" },
+					],
+				},
+			],
+		},
+	};
+	const pod = signInPod({ metadata: { namespace: "hephaestus" }, spec: { template } }, "p", {
+		HEPHAESTUS_INTEGRATION_SLACK_API_BASE: "http://slack.fake:8080",
+	});
+	const container = asRecord(
+		asArray(asRecord(pod.spec, "Pod spec").containers, "containers")[0],
+		"container",
+	);
+	const env = asArray(container.env, "env").map((variable) => asRecord(variable, "variable"));
+	assert.deepEqual(
+		env.filter((variable) => variable.name === "HEPHAESTUS_INTEGRATION_SLACK_API_BASE"),
+		[{ name: "HEPHAESTUS_INTEGRATION_SLACK_API_BASE", value: "http://slack.fake:8080" }],
+	);
+	assert.ok(env.some((variable) => variable.name === "KEEP"));
+});
+
+await test("the drill reads what the Slack fake received, and the state of the Slack turn", () => {
+	assert.deepEqual(
+		receivedCalls(
+			JSON.stringify([
+				{
+					method: "chat.postMessage",
+					authorized: true,
+					channel: "D1",
+					threadTs: null,
+					text: "an answer",
+					ts: "1760000001.000100",
+				},
+			]),
+		),
+		[
+			{
+				method: "chat.postMessage",
+				authorized: true,
+				channel: "D1",
+				threadTs: null,
+				text: "an answer",
+				ts: "1760000001.000100",
+			},
+		],
+	);
+	assert.throws(() => receivedCalls('[{"method":1}]'), /method/u);
+	assert.equal(slackTurnState(""), null);
+	assert.deepEqual(slackTurnState('{"status":"DONE","answer":"a","replyTs":"1.2"}'), {
+		status: "DONE",
+		answer: "a",
+		replyTs: "1.2",
+	});
+	assert.equal(slackTurnState('{"status":"QUEUED","answer":"","replyTs":null}')?.replyTs, null);
+	assert.throws(() => slackTurnState('{"status":"DONE"}'), /answer/u);
 });
 
 await test("the drill reads the local port that kubectl port-forward reports", () => {

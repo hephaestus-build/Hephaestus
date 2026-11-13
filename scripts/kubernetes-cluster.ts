@@ -14,7 +14,8 @@
  *   request  one HTTPS request to the webapp and the API through that Gateway
  *   backup-drill  pgBackRest to a throwaway S3 server, then a point-in-time restore on a fresh node
  *   turn-roll  a TURN run in its conversation sandbox through a server rollout, with the capacity
- *            bench's fake model provider. --pod-cidr opens the provider to the release
+ *            bench's fake model provider, then a Slack message that gets its answer, with a Slack Web API
+ *            fake. --pod-cidr opens both fakes to the release
  *   gvisor   the pinned gVisor of k3s-containerd.toml.tmpl, unpacked into --work, for k3s nodes to mount
  *   render   the manifests of those values for synthetic images, with backups on and with an external
  *            PostgreSQL, for a schema check without a cluster
@@ -61,8 +62,15 @@ import { claimDevNamespace, DEV_OWNER, ownsDevNamespace } from "./lib/dev-namesp
 import { gvisorPin } from "./lib/gvisor-pin.ts";
 import { asArray, asRecord, asString, isRecord, parseJson } from "./lib/json.ts";
 import { exitStatus, output, run, succeeds } from "./lib/process.ts";
+import {
+	directMessageEvent,
+	installCookie,
+	installState,
+	slackSignature,
+} from "./lib/slack-turn.ts";
 import { parseResolvedImages } from "./resolve-release-images.ts";
 import { isolationGate, type Target } from "./sandbox-isolation.ts";
+import { FAKE_INSTALL_CODE, FAKE_TEAM, type ReceivedCall } from "./slack-fake.ts";
 
 const ROOT = path.join(import.meta.dirname, "..");
 const CHART = path.join(ROOT, "deploy", "chart", "hephaestus");
@@ -1697,9 +1705,14 @@ const DNS_LABEL = /^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$/u;
  * A one-shot Pod from the chart's server template with the e2e sign-in, for the drill's synthetic
  * admin. The production profile refuses that sign-in, so the Pod runs the e2e profile on the
  * release's database and secrets. It listens on loopback, and a readiness gate that nothing sets
- * keeps it out of every Service: only `kubectl port-forward` reaches it.
+ * keeps it out of every Service: only `kubectl port-forward` reaches it. `extraEnv` replaces
+ * variables of the template, so this server and the release's own reach the same fakes.
  */
-export function signInPod(deployment: unknown, name: string): Record<string, unknown> {
+export function signInPod(
+	deployment: unknown,
+	name: string,
+	extraEnv: Readonly<Record<string, string>> = {},
+): Record<string, unknown> {
 	const root = asRecord(deployment, "server Deployment");
 	const metadata = asRecord(root.metadata, "server metadata");
 	const template = asRecord(asRecord(root.spec, "server spec").template, "server template");
@@ -1727,6 +1740,7 @@ export function signInPod(deployment: unknown, name: string): Record<string, unk
 		// The release's issuer and passkey origins are HTTPS, which refuse the e2e profile's insecure cookies. The
 		// drill reads its session token from the response header, so a secure cookie is no obstacle over the port-forward.
 		HEPHAESTUS_AUTH_COOKIE_SECURE: "true",
+		...extraEnv,
 	};
 	const env = asArray(container.env ?? [], "server env")
 		.map((variable) => asRecord(variable, "server env variable"))
@@ -1998,8 +2012,207 @@ async function sandboxClaimIdentity(name: string, sandboxId: string): Promise<st
 	return `${asString(metadata.uid, "claim uid")}/${asString(podMetadata.uid, "sandbox Pod uid")}`;
 }
 
-async function rollRestart(deployment: string): Promise<void> {
-	await kubectl(["-n", NAMESPACE, "rollout", "restart", `deployment/${deployment}`]);
+/**
+ * The Slack Web API that the servers of the drill call, and the member's Slack identity (`scripts/slack-fake.ts`).
+ * The fake is the Service `slack` of the provider's namespace, on the port that `networkPolicy.modelEndpoints` opens.
+ */
+const SLACK_API_BASE = `http://slack.${ROLL_PROVIDER}.svc.cluster.local:8080`;
+const SLACK_USER = "U0TURNROLL";
+const SLACK_DM = "D0TURNROLL";
+const SLACK_API_BASE_ENV = "HEPHAESTUS_INTEGRATION_SLACK_API_BASE";
+/** What the fake model says once the drill released it and no `bash` result is left to repeat. */
+const SLACK_ANSWER = "The commands printed";
+
+/** What the fake received, from its `GET /received`. */
+export function receivedCalls(text: string): ReceivedCall[] {
+	return asArray(parseJson(text), "received calls").map((entry) => {
+		const call = asRecord(entry, "received call");
+		const optional = (key: string) =>
+			call[key] === null ? null : asString(call[key], `received call ${key}`);
+		return {
+			method: asString(call.method, "received call method"),
+			authorized: call.authorized === true,
+			channel: optional("channel"),
+			threadTs: optional("threadTs"),
+			text: optional("text"),
+			ts: optional("ts"),
+		};
+	});
+}
+
+/** The Slack turn of the drill, from the database: its status, and its answer once the reply carries a Slack `ts`. */
+export interface SlackTurnState {
+	status: string;
+	answer: string;
+	/** The `ts` that Slack gave the posted reply, once the server settled it. */
+	replyTs: string | null;
+}
+
+/** The state of the workspace's one Slack turn; null before the server stored the question. */
+export function slackTurnState(text: string): SlackTurnState | null {
+	if (text.trim() === "") {
+		return null;
+	}
+	const row = asRecord(parseJson(text), "Slack turn");
+	return {
+		status: asString(row.status, "Slack turn status"),
+		answer: asString(row.answer, "Slack turn answer"),
+		replyTs: row.replyTs === null ? null : asString(row.replyTs, "Slack turn reply ts"),
+	};
+}
+
+/**
+ * A Slack message from a member's linked Slack identity reaches a turn, and the answer comes back to Slack. The
+ * install runs through the server's own OAuth callback against the fake, and the message is a signed Events API
+ * request, so the server verifies what it verifies for Slack. The turn runs in the member's conversation sandbox.
+ */
+async function slackTurn(base: string, token: string, signingSecret: string): Promise<void> {
+	const received = async () =>
+		receivedCalls(
+			await kubectl([
+				"-n",
+				ROLL_PROVIDER,
+				"exec",
+				"deployment/slack",
+				"--",
+				"node",
+				"-e",
+				"fetch('http://127.0.0.1:8080/received').then((r)=>r.text()).then((t)=>process.stdout.write(t))",
+			]),
+		);
+	const started = asRecord(
+		await syntheticApi(base, token)("POST", `/workspaces/${ROLL_WORKSPACE}/connections`, {
+			kind: "SLACK",
+		}),
+		"install",
+	);
+	const state = installState(asString(started.vendorUrl, "install vendor URL"));
+	const callback = await fetch(
+		`${base}/oauth/callback/slack?${new URLSearchParams({ code: FAKE_INSTALL_CODE, state })}`,
+		{ headers: { cookie: installCookie(state), accept: "application/json" }, redirect: "manual" },
+	);
+	const callbackBody = await callback.text();
+	const connection = await psql(
+		`SELECT state FROM connection WHERE workspace_id = 986600 AND kind = 'SLACK'`,
+	);
+	report([
+		{
+			claim:
+				"the Slack install ended through the server's OAuth callback with an ACTIVE connection",
+			failure:
+				connection.trim() === "ACTIVE"
+					? undefined
+					: `the callback answered ${callback.status} ${callbackBody.slice(0, 200)}; the connection is '${connection.trim()}'`,
+		},
+	]);
+	await psql(
+		`INSERT INTO identity (account_id, provider_id, provider_user_key, team_key, linked_via, linked_at, last_login_at) SELECT a.id, p.id, '${SLACK_USER}', '${FAKE_TEAM.id}', 'MANUAL', now(), now() FROM account a JOIN identity_provider p ON p.type = 'SLACK' AND p.server_url = 'https://slack.com' WHERE a.display_name = '${ROLL_ADMIN}' ON CONFLICT DO NOTHING`,
+	);
+
+	const sent = Math.floor(Date.now() / 1000);
+	const event = directMessageEvent({
+		team: FAKE_TEAM.id,
+		user: SLACK_USER,
+		channel: SLACK_DM,
+		text: "Which commands did you run?",
+		ts: `${sent}.000100`,
+		eventId: `Ev${randomUUID().replaceAll("-", "").slice(0, 16)}`,
+	});
+	const delivery = await fetch(`${base}/webhooks/slack`, {
+		method: "POST",
+		headers: {
+			"content-type": "application/json",
+			"x-slack-request-timestamp": String(sent),
+			"x-slack-signature": slackSignature(signingSecret, sent, event),
+		},
+		body: event,
+	});
+	const deliveryBody = await delivery.text();
+	report([
+		{
+			claim: "the signed Slack event was stored for its workspace",
+			failure:
+				delivery.status === 202
+					? undefined
+					: `the webhook answered ${delivery.status} ${deliveryBody.slice(0, 200)}`,
+		},
+	]);
+
+	const delivered = await until(
+		"the Slack turn did not end with its reply settled",
+		5,
+		async () =>
+			slackTurnState(
+				await psql(
+					`SELECT json_build_object('status', t.status, 'answer', coalesce((SELECT string_agg(e.text, E'\\n' ORDER BY e.seq) FROM mentor_entry e WHERE e.turn_id = t.id AND e.kind = 'HEPH'), ''), 'replyTs', (SELECT e.slack_ts FROM mentor_entry e WHERE e.turn_id = t.id AND e.kind = 'HEPH' LIMIT 1)) FROM mentor_turn t WHERE t.workspace_id = 986600 AND t.surface = 'SLACK'`,
+				),
+			),
+		(observed) =>
+			observed !== null &&
+			(observed.status === "FAILED" ||
+				observed.status === "STOPPED" ||
+				(observed.status === "DONE" && observed.replyTs !== null)),
+	);
+	const posts = (await received()).filter((call) => call.method === "chat.postMessage");
+	const reply = posts.find((call) => call.text?.includes(SLACK_ANSWER) === true);
+	report([
+		{
+			claim: "the Slack turn ended DONE",
+			failure: delivered?.status === "DONE" ? undefined : `it ended ${delivered?.status}`,
+		},
+		{
+			claim: "the answer is the model's, not a refusal",
+			failure:
+				delivered?.answer.includes(SLACK_ANSWER) === true
+					? undefined
+					: `the answer is ${JSON.stringify(delivered?.answer)}`,
+		},
+		{
+			claim: "the fake Slack received the answer as chat.postMessage in the member's DM",
+			failure:
+				reply === undefined
+					? `no chat.postMessage carries the answer; the fake received ${JSON.stringify(
+							(await received()).map(({ method, authorized, channel }) => ({
+								method,
+								authorized,
+								channel,
+							})),
+						)}`
+					: reply.channel === SLACK_DM
+						? undefined
+						: `it went to ${reply.channel}`,
+		},
+		{
+			claim: "the reply carried the bot token that the install stored",
+			failure: reply?.authorized === true ? undefined : "its token is not the install's",
+		},
+		{
+			claim: "the server recorded the reply's Slack ts on the answer",
+			failure:
+				reply !== undefined && reply.ts === delivered?.replyTs
+					? undefined
+					: `the answer's ts is ${delivered?.replyTs}, the fake's ${reply?.ts}`,
+		},
+	]);
+}
+
+async function rollRestart(
+	deployment: string,
+	env: Readonly<Record<string, string>> = {},
+): Promise<void> {
+	// A changed Pod template rolls a Deployment as a restart does, so the roll that the drill needs can carry `env`.
+	await kubectl(
+		Object.keys(env).length === 0
+			? ["-n", NAMESPACE, "rollout", "restart", `deployment/${deployment}`]
+			: [
+					"-n",
+					NAMESPACE,
+					"set",
+					"env",
+					`deployment/${deployment}`,
+					...Object.entries(env).map(([name, value]) => `${name}=${value}`),
+				],
+	);
 	// The sandbox keeps running while server replicas are replaced.
 	await kubectl([
 		"-n",
@@ -2044,6 +2257,7 @@ export async function turnRoll(
 		"roll",
 		"--client",
 		NAMESPACE,
+		"--slack",
 	]);
 	// A provider of an earlier drill holds its release.
 	await kubectl(["delete", "namespace", ROLL_PROVIDER, "--ignore-not-found", "--wait=true"]);
@@ -2052,6 +2266,21 @@ export async function turnRoll(
 	let forward: { port: number; stop: () => void } | undefined;
 	try {
 		await kubectl(["-n", ROLL_PROVIDER, "rollout", "status", "deployment/replay", "--timeout=5m"]);
+		await kubectl(["-n", ROLL_PROVIDER, "rollout", "status", "deployment/slack", "--timeout=5m"]);
+		// New for this run and kept in the release's Secret, which the Pods of the install read.
+		const slackSecrets = {
+			HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET: randomBytes(32).toString("hex"),
+			HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET: randomBytes(32).toString("hex"),
+		};
+		await kubectl(
+			["apply", "--server-side", "--field-manager=hephaestus-turn-roll", "-f", "-"],
+			JSON.stringify({
+				apiVersion: "v1",
+				kind: "Secret",
+				metadata: { name: `${RELEASE}-app`, namespace: NAMESPACE },
+				stringData: slackSecrets,
+			}),
+		);
 		// docs/admin/private-network.md § Admit a model endpoint on a private network, with the Pod network as that network.
 		const host = `replay.${ROLL_PROVIDER}.svc.cluster.local`;
 		await install(
@@ -2059,7 +2288,12 @@ export async function turnRoll(
 			[
 				...extra,
 				...(await layer(work, "turn-roll", {
-					config: { llmPrivateHosts: [host], llmPrivateHostsAllowHttp: true },
+					config: {
+						llmPrivateHosts: [host],
+						llmPrivateHostsAllowHttp: true,
+						slack: { enabled: true, clientId: "turn-roll-slack-client" },
+					},
+					// Both fakes serve on 8080, in the Pod network.
 					networkPolicy: { modelEndpoints: [{ cidr: podCidr, ports: [8080] }] },
 				})),
 			],
@@ -2069,7 +2303,7 @@ export async function turnRoll(
 			await kubectl(["-n", NAMESPACE, "get", "deployment", `${RELEASE}-server`, "-o", "json"]),
 		);
 		await kubectl(["-n", NAMESPACE, "delete", "pod", signIn, "--ignore-not-found", "--wait=true"]);
-		await apply(signInPod(server, signIn));
+		await apply(signInPod(server, signIn, { [SLACK_API_BASE_ENV]: SLACK_API_BASE }));
 		try {
 			await kubectl([
 				"-n",
@@ -2174,7 +2408,8 @@ export async function turnRoll(
 			`turn roll: run ${recorded.runId} epoch ${recorded.epoch} runs in sandbox ${sandboxId} claim ${claim}\n`,
 		);
 
-		await rollRestart(`${RELEASE}-server`);
+		// This roll carries the Slack fake's address to the release's own server, as the sign-in Pod has it from its start.
+		await rollRestart(`${RELEASE}-server`, { [SLACK_API_BASE_ENV]: SLACK_API_BASE });
 		report([
 			...heldChecks("after the server roll", recorded, await state()),
 			{
@@ -2227,6 +2462,7 @@ export async function turnRoll(
 						: "the claim is gone or was replaced",
 			},
 		]);
+		await slackTurn(base, token, slackSecrets.HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET);
 	} finally {
 		forward?.stop();
 		await kubectl(["-n", NAMESPACE, "delete", "pod", signIn, "--ignore-not-found", "--wait=false"]);

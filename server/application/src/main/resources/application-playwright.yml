@@ -1,7 +1,4 @@
 hephaestus:
-  runtime:
-    webhook:
-      enabled: false
   agent:
     enabled: false
   integration:
