@@ -36,4 +36,9 @@ public class IdentityProviderQuery implements IdentityProviderLookup {
     private static Provider view(IdentityProvider provider) {
         return new Provider(Objects.requireNonNull(provider.getId()), provider.getType(), provider.getServerUrl());
     }
+
+    @Override
+    public Optional<Long> findId(IdentityProviderType type, String serverUrl) {
+        return providers.findByTypeAndServerUrl(type, serverUrl).map(IdentityProvider::getId);
+    }
 }

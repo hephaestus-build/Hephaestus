@@ -2,9 +2,8 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import java.util.List;
 import java.util.Objects;
@@ -17,15 +16,15 @@ import org.springframework.stereotype.Component;
 public class WorkspaceActorSelector {
 
     private final ConnectionService connectionService;
-    private final IdentityProviderRepository identityProviderRepository;
+    private final IdentityProviderLookup identityProviders;
     private final GitProviderRegistry providers;
 
     public WorkspaceActorSelector(
             ConnectionService connectionService,
-            IdentityProviderRepository identityProviderRepository,
+            IdentityProviderLookup identityProviders,
             GitProviderRegistry providers) {
         this.connectionService = connectionService;
-        this.identityProviderRepository = identityProviderRepository;
+        this.identityProviders = identityProviders;
         this.providers = providers;
     }
 
@@ -59,9 +58,7 @@ public class WorkspaceActorSelector {
      */
     public Optional<Long> connectedProviderId(long workspaceId) {
         return connectedInstance(workspaceId)
-                .flatMap(instance ->
-                        identityProviderRepository.findByTypeAndServerUrl(instance.type(), instance.serverUrl()))
-                .map(IdentityProvider::getId);
+                .flatMap(instance -> identityProviders.findId(instance.type(), instance.serverUrl()));
     }
 
     private Optional<ConnectedInstance> connectedInstance(long workspaceId) {

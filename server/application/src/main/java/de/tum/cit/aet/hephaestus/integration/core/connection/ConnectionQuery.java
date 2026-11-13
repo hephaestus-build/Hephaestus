@@ -35,4 +35,27 @@ public class ConnectionQuery implements ConnectionQueries {
                         .flatMap(namespace -> ScmOrigin.of(namespace.serverUrl()))
                         .equals(Optional.of(origin)));
     }
+
+    @Override
+    public List<ConnectionView> findByWorkspaceId(long workspaceId) {
+        return connections.findByWorkspaceId(workspaceId).stream()
+                .map(ConnectionQuery::view)
+                .toList();
+    }
+
+    @Override
+    @WorkspaceAgnostic("Enumerates subscribed workspaces; each subscriber check binds its workspace")
+    public List<Long> findWorkspaceIdsByKindAndState(IntegrationKind kind, IntegrationState state) {
+        return connections.findWorkspaceIdsByKindAndState(kind, state);
+    }
+
+    private static ConnectionView view(Connection connection) {
+        return new ConnectionView(
+                connection.getId(),
+                connection.getKind(),
+                connection.getState(),
+                connection.getConfig(),
+                connection.getInstanceKey(),
+                connection.getDisplayName());
+    }
 }

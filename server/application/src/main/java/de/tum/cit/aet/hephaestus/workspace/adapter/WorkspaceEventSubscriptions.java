@@ -1,9 +1,9 @@
 package de.tum.cit.aet.hephaestus.workspace.adapter;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ConsumerSubjectMath;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries.ConnectionView;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderEventSubscriptions;
@@ -16,7 +16,6 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,7 +33,7 @@ public class WorkspaceEventSubscriptions implements ProviderEventSubscriptions {
     private final WorkspaceRepository workspaceRepository;
     private final RepositoryToMonitorRepository monitors;
     private final WorkspaceScopeFilter workspaceScopeFilter;
-    private final ConnectionRepository connections;
+    private final ConnectionQueries connections;
     private final boolean outlineEnabled;
     private final boolean slackEnabled;
     private final boolean gitlabEnabled;
@@ -43,7 +42,7 @@ public class WorkspaceEventSubscriptions implements ProviderEventSubscriptions {
             WorkspaceRepository workspaceRepository,
             RepositoryToMonitorRepository monitors,
             WorkspaceScopeFilter workspaceScopeFilter,
-            ConnectionRepository connections,
+            ConnectionQueries connections,
             @Value("${hephaestus.integration.outline.enabled:false}") boolean outlineEnabled,
             @Value("${hephaestus.integration.slack.enabled:false}") boolean slackEnabled,
             @Value("${hephaestus.integration.gitlab.enabled:false}") boolean gitlabEnabled) {
@@ -70,12 +69,11 @@ public class WorkspaceEventSubscriptions implements ProviderEventSubscriptions {
                         .filter(workspaceScopeFilter::isWorkspaceAllowed)
                         .stream()
                         .flatMap(workspace -> connections.findByWorkspaceId(workspaceId).stream()
-                                .filter(connection -> connection.getKind() == kind.get())
+                                .filter(connection -> connection.kind() == kind.get())
                                 .filter(connection -> filters(workspace, connection).stream()
                                         .anyMatch(filter -> ConsumerSubjectMath.matchesFilter(filter, subject)))
-                                .sorted(Comparator.comparing(connection -> Objects.requireNonNull(connection.getId())))
-                                .map(connection ->
-                                        new Subscription(workspaceId, Objects.requireNonNull(connection.getId())))))
+                                .sorted(Comparator.comparingLong(ConnectionView::id))
+                                .map(connection -> new Subscription(workspaceId, connection.id()))))
                 .toList();
     }
 
@@ -109,9 +107,9 @@ public class WorkspaceEventSubscriptions implements ProviderEventSubscriptions {
     }
 
     /** Route membership and lifecycle admission are separate: the receiver locks and checks the latter. */
-    private Set<String> filters(Workspace workspace, Connection connection) {
+    private Set<String> filters(Workspace workspace, ConnectionView connection) {
         Set<String> subjects = new HashSet<>();
-        switch (connection.getKind()) {
+        switch (connection.kind()) {
             case GITHUB -> {
                 workspace.getRepositoriesToMonitor().stream()
                         .map(RepositoryToMonitor::getNameWithOwner)
@@ -122,18 +120,16 @@ public class WorkspaceEventSubscriptions implements ProviderEventSubscriptions {
                     subjects.add(ConsumerSubjectMath.organizationFilter("github", login));
                 }
             }
-            case GITLAB ->
-                subjects.add(
-                        ConsumerSubjectMath.connectionFilter("gitlab", Objects.requireNonNull(connection.getId())));
+            case GITLAB -> subjects.add(ConsumerSubjectMath.connectionFilter("gitlab", connection.id()));
             case SLACK -> {
-                if (connection.getConfig() instanceof ConnectionConfig.SlackConfig config
+                if (connection.config() instanceof ConnectionConfig.SlackConfig config
                         && config.teamId() != null
                         && !config.teamId().isBlank()) {
                     subjects.add(ConsumerSubjectMath.teamFilter("slack", config.teamId()));
                 }
             }
             case OUTLINE -> {
-                if (connection.getConfig() instanceof ConnectionConfig.OutlineConfig config
+                if (connection.config() instanceof ConnectionConfig.OutlineConfig config
                         && config.webhookSubscriptionId() != null
                         && !config.webhookSubscriptionId().isBlank()) {
                     subjects.add(ConsumerSubjectMath.subscriptionFilter("outline", config.webhookSubscriptionId()));

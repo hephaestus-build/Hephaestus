@@ -294,19 +294,5 @@ final class RepositoryOwnershipRatchet {
                             "integration.scm.gitlab.workspace.GitLabWebhookService",
                             "integration.scm.gitlab.workspace.GitLabWorkspaceDataSyncTrigger",
                             "integration.scm.gitlab.workspace.GitLabWorkspaceInitializationService",
-                            "integration.scm.gitlab.workspace.GitLabWorkspaceLinkService")),
-            new Entry(
-                    "workspace",
-                    "integration.core.connection.ConnectionRepository",
-                    "DDD11 (integration.core)",
-                    "integration.core::spi ConnectionQueries and ConnectionService commands",
-                    Set.of(
-                            "workspace.adapter.WorkspaceEventSubscriptions",
-                            "workspace.onboarding.WorkspaceOnboardingLinks")),
-            new Entry(
-                    "workspace",
-                    "integration.core.connection.IdentityProviderRepository",
-                    "DDD11 (integration.core)",
-                    "integration.core::spi IdentityProviderLookup; SourceProviderNamespaces registration",
-                    Set.of("workspace.WorkspaceActorSelector")));
+                            "integration.scm.gitlab.workspace.GitLabWorkspaceLinkService")));
 }

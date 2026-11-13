@@ -25,6 +25,8 @@ class IdentityProviderLookupIntegrationTest extends BaseIntegrationTest {
         long id = Objects.requireNonNull(provider.getId());
         assertThat(lookup.findById(id))
                 .contains(new IdentityProviderLookup.Provider(id, IdentityProviderType.GITLAB, serverUrl));
+        assertThat(lookup.findId(IdentityProviderType.GITLAB, serverUrl)).contains(id);
+        assertThat(lookup.findId(IdentityProviderType.GITHUB, serverUrl)).isEmpty();
         providers.delete(provider);
         providers.flush();
         assertThat(lookup.findById(id)).isEmpty();
