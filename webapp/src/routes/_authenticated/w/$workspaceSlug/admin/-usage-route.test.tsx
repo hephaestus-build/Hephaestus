@@ -1,15 +1,15 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { WorkspaceLlmUsageReport } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, renderRouteAt, loadRouteCode } from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole admin layout and its lazy modules.
-vi.setConfig({ testTimeout: 15_000 });
+beforeAll(async () => loadRouteCode("/w/acme/admin/usage"), ROUTE_RENDER_WAIT.timeout);
 
 const REPORT: Wire<WorkspaceLlmUsageReport> = {
 	month: "2026-07",

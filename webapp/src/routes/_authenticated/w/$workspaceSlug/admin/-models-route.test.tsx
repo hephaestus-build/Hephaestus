@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type PathParams } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
 	getMemberOnboardingSettingsQueryKey,
 	workspaceListAvailableLlmModelsQueryKey,
@@ -24,11 +24,16 @@ import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { ownMembership } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { ConversationFake } from "@/test/conversation-server";
-import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
+import {
+	ROUTE_RENDER_WAIT,
+	renderRouteAt,
+	renderRouteAtWithRouter,
+	loadRouteCode,
+} from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole admin layout and its lazy modules; the timeout is a
 // deadlock backstop, not a budget these renders were meant to fit inside.
-vi.setConfig({ testTimeout: 15_000 });
+beforeAll(async () => loadRouteCode("/w/acme/admin/models"), ROUTE_RENDER_WAIT.timeout);
 
 const MODELS: Wire<AvailableLlmModel>[] = [
 	{
