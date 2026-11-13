@@ -138,6 +138,22 @@ class JobEvidenceRebuildTest {
     }
 
     @Test
+    void shouldLeaveAnErasureThatCommitsDuringTheRebuildItsOwnReason() {
+        var job = runningJob();
+        when(copies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt()))
+                .thenReturn(true, false);
+        when(inputs.list(job))
+                .thenReturn(List.of(new AttemptInputs.RecordedFile("context/item.json", SHA, "r--------")));
+        when(inputs.content(job, "context/item.json"))
+                .thenThrow(new CheckoutUnverifiedException(
+                        CheckoutUnverifiedException.Reason.UNAVAILABLE, "A recorded file is no longer recorded"));
+
+        files().ensureAttemptFolder(job);
+
+        assertThat(files().readText(job, "context/item.json", SHA)).isEmpty();
+    }
+
+    @Test
     void shouldReportARecordedFileThatDiffersAsACaptureFailure() {
         var job = runningJob();
         when(copies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt()))

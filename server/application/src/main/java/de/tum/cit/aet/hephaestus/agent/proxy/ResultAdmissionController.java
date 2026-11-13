@@ -72,7 +72,8 @@ public class ResultAdmissionController {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, refused.getMessage(), refused);
         } catch (AttemptFolderBusyException busy) {
             // Infrastructure, never a judgement of the results: the sandbox calls again.
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "The evidence folder is busy", busy);
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE, "The evidence folder is not ready on this server", busy);
         } catch (UncheckedIOException unavailable) {
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE, "The evidence folder is unavailable", unavailable);

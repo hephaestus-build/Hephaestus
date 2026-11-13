@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptInputRepository;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
+import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmittedResultProjectionService;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackCompositionService;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeResultStaging;
@@ -61,6 +62,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTransportFixt
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewWriteGuard;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
@@ -96,7 +98,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 import org.eclipse.jgit.api.Git;
 import org.jspecify.annotations.Nullable;
@@ -219,54 +220,76 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldRebuildAMissingFolderBeforeAdmissionOpensItsTransactionOrTakesItsLocks() throws Exception {
+    void shouldBuildAMissingFolderForAdmissionOnlyWithNoTransactionOrLockHeld() throws Exception {
         var job = runningJob("evidence-admission-rebuild");
         var a = new Server(temporary.resolve("a"), job);
         try (var captured = a.capture(job)) {
             var recorded = record(job, captured, null);
             var identity = new AdmissionIdentity(
                     recorded.getId(), recorded.getWorkspaceId(), recorded.getAttempt(), recorded.getRunId());
-            // Another review id: once the folder is built, admission refuses the request inside its transaction.
-            UUID otherReview = UUID.randomUUID();
-            Map<String, Consumer<ResultAdmissionService>> operations = Map.of(
-                    "stage",
-                    admission -> admission.stage(
+
+            // Staging always reads the folder, so it builds it first. Another review id then refuses the request.
+            var staging = new Replica("stage", recorded);
+            assertThatThrownBy(() -> staging.admission.stage(
                             identity,
                             new AdmissionRequestDTO(
                                     SandboxLayout.PRACTICE_CONTRACT_VERSION,
-                                    otherReview,
+                                    UUID.randomUUID(),
                                     recorded.getId(),
                                     recorded.getAttempt(),
                                     List.of(),
-                                    List.of())),
-                    "admit",
-                    admission -> admission.admit(
+                                    List.of())))
+                    .isInstanceOf(StaleAttemptException.class);
+            assertThat(staging.builds).containsExactly(BUILT_WITHOUT_LOCKS);
+            assertThat(staging.server.folder(recorded)).isDirectory();
+
+            // A seal that reads no folder builds none: the open practice refuses it first.
+            var admitting = new Replica("admit", recorded);
+            assertThatThrownBy(() -> admitting.admission.admit(
                             identity,
                             new SealResultsRequestDTO(
                                     SandboxLayout.PRACTICE_CONTRACT_VERSION,
-                                    otherReview,
+                                    recorded.getReviewId(),
                                     recorded.getId(),
-                                    recorded.getAttempt())));
-            for (var operation : operations.entrySet()) {
-                var observed = new ArrayList<String>();
-                var b = new Server(
-                        temporary.resolve("b-" + operation.getKey()),
-                        job,
-                        checkouts -> (workspaceId, key, target, verified) -> {
-                            observed.add("transaction=" + TransactionSynchronizationManager.isActualTransactionActive()
-                                    + ", locks free=" + locksFree(recorded));
-                            checkouts.copy(workspaceId, key, target, verified);
-                        });
-
-                assertThatThrownBy(() -> operation.getValue().accept(admission(b.files)))
-                        .isInstanceOf(StaleAttemptException.class);
-                assertThat(observed)
-                        .as(
-                                "%s builds the checkout with no transaction, review lock, job lock or copy admission held",
-                                operation.getKey())
-                        .containsExactly("transaction=false, locks free=true");
-                assertThat(b.folder(recorded)).isDirectory();
+                                    recorded.getAttempt())))
+                    .isInstanceOf(AdmissionConflictException.class);
+            var completing = new Replica("seal-if-complete", recorded);
+            assertThat(completing.admission.sealIfComplete(identity)).isFalse();
+            for (var replica : List.of(admitting, completing)) {
+                assertThat(replica.builds).isEmpty();
+                assertThat(replica.server.folder(recorded)).doesNotExist();
             }
+
+            // This seal keeps the attempt's composition inputs from the folder: it rolls back, builds the folder and
+            // seals once more.
+            var interrupting = new Replica("finish-interrupted", recorded);
+            interrupting.admission.finishInterrupted(identity, ReviewStopReason.EXECUTION_INCOMPLETE);
+            assertThat(interrupting.builds).containsExactly(BUILT_WITHOUT_LOCKS);
+            assertThat(interrupting.server.folder(recorded)).isDirectory();
+            assertThat(jdbc.queryForObject(
+                            "SELECT admission_digest IS NOT NULL FROM review_job WHERE id=?",
+                            Boolean.class,
+                            job.getId()))
+                    .isTrue();
+        }
+    }
+
+    private static final String BUILT_WITHOUT_LOCKS = "transaction=false, locks free=true";
+
+    /** A server without the attempt's folder: its admission, and how each checkout build it ran found the locks. */
+    private final class Replica {
+        final List<String> builds = new ArrayList<>();
+        final Server server;
+        final ResultAdmissionService admission;
+
+        Replica(String name, ReviewJob job) {
+            server = new Server(
+                    temporary.resolve("replica-" + name), job, checkouts -> (workspaceId, key, target, verified) -> {
+                        builds.add("transaction=" + TransactionSynchronizationManager.isActualTransactionActive()
+                                + ", locks free=" + locksFree(job));
+                        checkouts.copy(workspaceId, key, target, verified);
+                    });
+            admission = admission(server.files);
         }
     }
 

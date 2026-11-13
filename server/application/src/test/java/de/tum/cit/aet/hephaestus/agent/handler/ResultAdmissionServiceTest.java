@@ -28,6 +28,8 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedException;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
@@ -58,6 +60,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewWriteGuard;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -291,6 +294,37 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         verify(bases).save(saved.capture());
         assertThat(saved.getValue().getExpiresAt())
                 .isBetween(before.plus(ReviewCompositionBasis.RETENTION), after.plus(ReviewCompositionBasis.RETENTION));
+    }
+
+    @Test
+    void shouldAdmitWithAKeptBasisOnAServerThatCannotBuildTheMissingFolder() {
+        var request = admissionWithRetainedInputs(null);
+        var basis = new ReviewCompositionBasis();
+        basis.setCopyId(UUID.randomUUID());
+        basis.setExpiresAt(Instant.now().plusSeconds(3600));
+        var snapshot = EvidenceSnapshotFixtures.snapshot(mapper);
+        var source = EvidenceSnapshotFixtures.availableSource(snapshot, "docs.document.core", null);
+        EvidenceSnapshotFixtures.file(snapshot, source, "context/body.txt", "a".repeat(64));
+        var payload = mapper.createObjectNode();
+        payload.putObject("files")
+                .put(
+                        SandboxLayout.MANIFEST_PATH,
+                        Base64.getEncoder().encodeToString(mapper.writeValueAsBytes(snapshot.path("manifest"))));
+        basis.setPayload(payload);
+        when(bases.findByWorkspaceIdAndJobId(1L, job.getId())).thenReturn(Optional.of(basis));
+        when(files.vouchesForOriginalCopy(basis.getCopyId(), job.getId(), 1L, 0))
+                .thenReturn(true);
+        // This server lacks the folder, and the provider no longer serves the checkout to build it.
+        lenient()
+                .doThrow(new CheckoutUnverifiedException(
+                        CheckoutUnverifiedException.Reason.FETCH_FAILED, "The captured checkout could not be built"))
+                .when(files)
+                .ensureAttemptFolder(identity());
+
+        service.admit(identity(), request);
+
+        assertThat(ResultAdmissionService.isAdmitted(job)).isTrue();
+        assertThat(basis.getAdmissionDigest()).isEqualTo(job.getAdmissionDigest());
     }
 
     private SealResultsRequestDTO admissionWithRetainedInputs(@Nullable Instant deadline) {

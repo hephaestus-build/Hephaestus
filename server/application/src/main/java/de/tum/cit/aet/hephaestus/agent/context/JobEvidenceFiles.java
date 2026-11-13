@@ -345,11 +345,13 @@ public class JobEvidenceFiles implements SandboxResultListener {
 
     /**
      * {@link #ensureAttemptFolder(ReviewJob)} for the attempt that {@code identity} names, when it is still its job's
-     * attempt and not yet admitted. Admission calls it before it takes its locks and opens its transaction. An admitted
-     * attempt reads no folder there: admission removes it once it commits.
+     * attempt and not yet admitted. Admission calls it with no transaction or lock held. An admitted attempt reads no
+     * folder there: admission removes it once it commits.
      */
     public void ensureAttemptFolder(ResultAdmissionService.AdmissionIdentity identity) {
+        requireNoTransaction();
         Path root = directory(identity.workspaceId(), identity.jobId(), identity.attempt(), identity.runId());
+        if (Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return;
         jobs.findByIdAndWorkspaceId(identity.jobId(), identity.workspaceId())
                 .filter(job -> directory(job).equals(root) && !ResultAdmissionService.isAdmitted(job))
                 .ifPresent(this::ensureAttemptFolder);
@@ -360,7 +362,8 @@ public class JobEvidenceFiles implements SandboxResultListener {
      * attempt's recorded files ({@link AttemptInputs}) and its checkouts, which this server builds from the recorded
      * commit and tree and checks against the recorded checkout digest. A folder that exists stays as it is. One rebuild
      * runs for each folder in this JVM; the others wait for it. An attempt whose copy is erased, or that ended, gets
-     * no folder. The readers of the folder never rebuild it: they run in admission's transaction.
+     * no folder, also when an erasure commits while the folder is rebuilt. The readers of the folder never rebuild it:
+     * they run in admission's transaction.
      *
      * @throws IllegalStateException when a transaction is active: a checkout build can fetch from the provider for as
      *     long as the provider takes
@@ -369,8 +372,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
      * @throws AttemptFolderBusyException when another process holds the folder longer than a rebuild waits: retryable
      */
     public void ensureAttemptFolder(ReviewJob job) {
-        if (TransactionSynchronizationManager.isActualTransactionActive())
-            throw new IllegalStateException("An evidence folder is rebuilt before any transaction starts");
+        requireNoTransaction();
         Path root = directory(job);
         if (Files.exists(root, LinkOption.NOFOLLOW_LINKS)) return;
         JsonNode capture = job.getCapture();
@@ -391,6 +393,10 @@ public class JobEvidenceFiles implements SandboxResultListener {
             try (lease) {
                 rebuild(job, root, capture, files);
             }
+        } catch (CheckoutUnverifiedException failure) {
+            // An erasure that committed during the rebuild keeps its own reason. The reconcile removes a folder that
+            // was published after it.
+            if (live(job)) throw failure;
         } finally {
             rebuild.unlock();
             if (!rebuild.hasQueuedThreads()) rebuilds.remove(root, rebuild);
@@ -398,15 +404,20 @@ public class JobEvidenceFiles implements SandboxResultListener {
     }
 
     /**
-     * The folder that {@link #ensureAttemptFolder(ReviewJob)} built for the job's running attempt before its caller's
-     * transaction.
+     * Requires the folder of the job's running attempt, which {@link #ensureAttemptFolder(ReviewJob)} builds with no
+     * transaction held.
      *
-     * @throws AttemptFolderBusyException when the folder is gone again, as after a sweep: retryable, since the next
-     *     call rebuilds it before its transaction
+     * @throws AttemptFolderBusyException when the folder is not on this server: retryable, since the caller builds it
+     *     after its transaction ends
      */
     private void requireAttemptFolder(ReviewJob job) {
         if (Files.exists(directory(job), LinkOption.NOFOLLOW_LINKS) || job.getCapture() == null || !live(job)) return;
         throw new AttemptFolderBusyException("The evidence folder is not on this server");
+    }
+
+    private static void requireNoTransaction() {
+        if (TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("An evidence folder is rebuilt before any transaction starts");
     }
 
     private boolean live(ReviewJob job) {
