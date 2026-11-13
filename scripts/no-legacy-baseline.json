@@ -43,9 +43,9 @@
 		"rule": "path-alias",
 		"file": "server/application/src/main/java/de/tum/cit/aet/hephaestus/workspace/context/WorkspaceContextFilter.java",
 		"text": "response.setStatus(HttpStatus.PERMANENT_REDIRECT.value());",
-		"digest": "2037412d8307144f9ab540b8ccbf3d9861177521042973a27147a6ce1ce8ae6f",
+		"digest": "0c6b0d226979ff9fc689be3e1825bc50e1e35fb44d1e30190e995da45a8e20dd",
 		"count": 1,
-		"owner": "LEGACY after #4179/#4249"
+		"owner": "LEGACY after #4179"
 	},
 	{
 		"rule": "path-alias",
