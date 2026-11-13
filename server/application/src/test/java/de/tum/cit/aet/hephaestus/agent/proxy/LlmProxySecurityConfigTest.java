@@ -558,7 +558,8 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         UUID job = UUID.randomUUID();
         String token = reason + "-job-token";
         when(jwtVerifier.verify(token)).thenThrow(new AttemptTokenInvalidException("job token " + reason, reason));
-        try (var review = sessions.register(job, Files.createFile(directory.resolve("input.tar")))) {
+        var review = sessions.register(job, Files.createFile(directory.resolve("input.tar")));
+        try (review) {
             assertThat(sessions.jobIds()).containsExactly(job);
             for (String suffix : List.of("", "/workspace")) {
                 String path = "/internal/llm/runtime/" + job + suffix;
