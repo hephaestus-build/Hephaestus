@@ -224,10 +224,6 @@ public class ReviewComposeSandboxKind implements SandboxRunKind {
         private final Instant claimedAt;
         private boolean withheld;
 
-        /**
-         * A lock, not a monitor: withholding closes the open sessions in the database, and on Java 21 a virtual thread
-         * that blocks under a monitor pins its carrier.
-         */
         private final ReentrantLock withholding = new ReentrantLock();
 
         Decision(@Nullable CompositionStop withholdOnly, Instant claimedAt) {

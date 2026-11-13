@@ -824,7 +824,7 @@ class LlmProxyService {
             if (bounds != null) nativeRequest.responseTimeout(bounds.firstByte());
         });
         AtomicBoolean cancelled = new AtomicBoolean();
-        Mono<Void> stop = exchange.cancelled().doOnSuccess(unused -> cancelled.set(true));
+        Mono<Void> stop = exchange.cancelled().doOnSuccess(_ -> cancelled.set(true));
         UnaryOperator<Flux<DataBuffer>> body = bounds == null
                 ? stream -> stream.takeUntilOther(stop)
                 // Each data buffer is a read, so a keep-alive comment counts as a sign of life.

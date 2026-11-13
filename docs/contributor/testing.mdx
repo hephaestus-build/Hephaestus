@@ -34,11 +34,13 @@ A bean that starts background work carries `@ConditionalOnBackgroundWork`.
 `BackgroundWorkArchTest` finds each such start and fails without the condition.
 
 The integration tier fails when a virtual thread is pinned to its carrier for 20 ms or more.
-On Java 21, a virtual thread that blocks under a monitor keeps its carrier.
+Since JDK 24, a monitor no longer pins a virtual thread ([JEP 491](https://openjdk.org/jeps/491)).
+A virtual thread that blocks in a native frame or a class initializer still keeps its carrier.
 A few such threads can stall every virtual thread, the waiters of a connection pool among them.
 The JDK records each such park, and the failure prints its call path.
 
-A common cause is a Caffeine `get(key, loader)` whose loader blocks, since Caffeine runs the loader under a lock.
+Caffeine runs a `get(key, loader)` loader under the lock of a map bin.
+A loader that blocks stalls every write to that bin and every caller of the same key.
 Load such an entry with `CacheLoads.get`.
 `PinnedParks.during` asserts in a unit test that a call pins no virtual thread.
 

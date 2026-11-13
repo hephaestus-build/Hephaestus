@@ -859,8 +859,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
             var permit = mock(LlmCallPermits.Permit.class);
             when(permit.revoked()).thenReturn(Mono.never());
             AtomicBoolean revoked = new AtomicBoolean();
-            when(permit.isRevoked()).thenAnswer(unused -> revoked.get());
-            doAnswer(unused -> {
+            when(permit.isRevoked()).thenAnswer(_ -> revoked.get());
+            doAnswer(_ -> {
                         revoked.set(true);
                         return null;
                     })
@@ -1058,8 +1058,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             .filter(tick -> response.isCommitted())
                             .next()
                             .then()
-                            .doOnSuccess(unused -> revoked.set(true)));
-            when(permit.isRevoked()).thenAnswer(unused -> revoked.get());
+                            .doOnSuccess(_ -> revoked.set(true)));
+            when(permit.isRevoked()).thenAnswer(_ -> revoked.get());
 
             Answer answer = proxyPooledStream(upstream.url("/v1").toString(), permit, response);
 

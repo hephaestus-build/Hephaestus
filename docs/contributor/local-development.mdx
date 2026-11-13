@@ -11,7 +11,7 @@ Hephaestus supports full-stack development across Java and TypeScript. This guid
 
 Install and configure the following tools before you attempt a local build:
 
-1. **Java JDK 21** – Required for the Spring Boot application server. Gradle reads the target JDK
+1. **Java JDK 25** – Required for the Spring Boot application server. Gradle reads the target JDK
    from `.java-version` and uses its Java toolchain support. The checked-in wrapper downloads the
    pinned Gradle distribution and verifies `server/gradle/wrapper/gradle-wrapper.properties`' checksum.
    CI also validates the wrapper JAR. No global Gradle installation is needed.
@@ -706,5 +706,7 @@ It does not report an unused artifact inside a component that the build still do
 
 For a Gradle wrapper update, also run the build with `--warning-mode all` and review plugin
 compatibility before accepting a new major. Do not suppress upstream deprecations to make the
-upgrade appear clean. A JDK-line change updates `.java-version` and Renovate's matching
-`constraints.java`. `gate:toolchain` rejects drift between them.
+upgrade appear clean. A JDK-line change updates `.java-version`, Renovate's matching
+`constraints.java`, the image's `BP_JVM_VERSION` in `server/application/project.toml` and the JRE pin in
+`.github/ci-tools/buildpack-liberica-jre.json`, whose checksums come from the pinned builder's Liberica buildpack.
+`gate:toolchain` rejects drift between them.

@@ -262,6 +262,22 @@ if (asRecord(renovate.constraints, "Renovate constraints").java !== javaVersion)
 		"Renovate constraints.java must restate .java-version for Gradle artifact updates",
 	);
 }
+// The image runs the JDK line it was built and tested with: the buildpack's JVM and the JRE it maps.
+const buildpackJvm = /name = "BP_JVM_VERSION"\nvalue = "(\d+)"/u.exec(
+	readFileSync("server/application/project.toml", "utf8"),
+)?.[1];
+if (buildpackJvm !== javaVersion) {
+	throw new Error("server/application/project.toml BP_JVM_VERSION must restate .java-version");
+}
+const jrePin = asRecord(
+	readJsonFileSync(".github/ci-tools/buildpack-liberica-jre.json"),
+	"buildpack-liberica-jre",
+);
+if (typeof jrePin.version !== "string" || jrePin.version.split(".")[0] !== javaVersion) {
+	throw new Error(
+		".github/ci-tools/buildpack-liberica-jre.json must pin a JRE of the .java-version line",
+	);
+}
 for (const file of execFileSync("git", ["ls-files", ".github"], { encoding: "utf8" }).split("\n")) {
 	if (!/\.ya?ml$/u.test(file)) {
 		continue;

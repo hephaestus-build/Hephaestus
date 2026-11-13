@@ -54,7 +54,7 @@ class TurnContextLoadCopyFenceIntegrationTest extends AbstractWorkspaceIntegrati
         var source = new AtomicReference<Path>();
         var capturePid = new AtomicInteger();
         var observed = mock(PersonDataCopyFence.class);
-        when(observed.capture()).thenAnswer(unused -> {
+        when(observed.capture()).thenAnswer(_ -> {
             var capture = copies.capture();
             capturePid.set(
                     Objects.requireNonNull(capture.jdbc().queryForObject("SELECT pg_backend_pid()", Integer.class)));
