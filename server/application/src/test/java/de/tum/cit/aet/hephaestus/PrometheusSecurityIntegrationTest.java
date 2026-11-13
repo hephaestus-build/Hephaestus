@@ -77,7 +77,6 @@ class PrometheusSecurityIntegrationTest {
             var environment = context.getEnvironment();
             int managementPort = environment.getRequiredProperty("local.management.port", Integer.class);
             int applicationPort = environment.getRequiredProperty("local.server.port", Integer.class);
-            assertThat(managementPort).isNotEqualTo(applicationPort);
             assertThat(environment.getRequiredProperty("management.server.address"))
                     .isEqualTo("::1");
             var registry = context.getBean(MeterRegistry.class);
@@ -114,6 +113,8 @@ class PrometheusSecurityIntegrationTest {
             assertThat(send(client, applicationPort, "/actuator/prometheus", "GET", true)
                             .statusCode())
                     .isEqualTo(403);
+            // A refusal alone could hide metrics served behind security: the application listener must not carry them.
+            assertNoListenerProbe(client, "127.0.0.1", applicationPort, listenerId);
             assertThat(send(client, "::1", managementPort, "/actuator/prometheus", "POST", false)
                             .statusCode())
                     .isEqualTo(403);

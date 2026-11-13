@@ -80,7 +80,6 @@ import reactor.util.retry.Retry;
  *
  * @see de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestSyncService
  */
-@SuppressWarnings("deprecation")
 @Service
 public class GitHubPullRequestReviewCommentSyncService {
 
@@ -614,27 +613,13 @@ public class GitHubPullRequestReviewCommentSyncService {
                 });
     }
 
-    /**
-     * Extracts the database ID from a GraphQL comment.
-     * Uses fullDatabaseId if available, otherwise falls back to deprecated databaseId.
-     */
+    /** The documents select only {@code fullDatabaseId}; GitHub deprecated the 32-bit {@code databaseId}. */
     private @Nullable Long extractDatabaseId(@Nullable GHPullRequestReviewComment graphQlComment) {
         if (graphQlComment == null) {
             return null;
         }
-
-        // Prefer fullDatabaseId (BigInteger) over deprecated databaseId (Integer)
         BigInteger fullDbId = graphQlComment.getFullDatabaseId();
-        if (fullDbId != null) {
-            return fullDbId.longValue();
-        }
-
-        Integer dbId = graphQlComment.getDatabaseId();
-        if (dbId != null) {
-            return dbId.longValue();
-        }
-
-        return null;
+        return fullDbId != null ? fullDbId.longValue() : null;
     }
 
     /**
@@ -662,33 +647,13 @@ public class GitHubPullRequestReviewCommentSyncService {
         // Convert author association
         String authorAssociation = convertAuthorAssociation(graphQlComment.getAuthorAssociation());
 
-        // Get review ID if present - prefer fullDatabaseId over deprecated databaseId
         Long reviewId = null;
         if (graphQlComment.getPullRequestReview() != null) {
             BigInteger reviewFullDbId = graphQlComment.getPullRequestReview().getFullDatabaseId();
-            if (reviewFullDbId != null) {
-                reviewId = reviewFullDbId.longValue();
-            } else {
-                Integer reviewDbId = graphQlComment.getPullRequestReview().getDatabaseId();
-                if (reviewDbId != null) {
-                    reviewId = reviewDbId.longValue();
-                }
-            }
+            reviewId = reviewFullDbId != null ? reviewFullDbId.longValue() : null;
         }
 
-        // Get reply-to ID if present - prefer fullDatabaseId over deprecated databaseId
-        Long inReplyToId = null;
-        if (graphQlComment.getReplyTo() != null) {
-            BigInteger replyToFullDbId = graphQlComment.getReplyTo().getFullDatabaseId();
-            if (replyToFullDbId != null) {
-                inReplyToId = replyToFullDbId.longValue();
-            } else {
-                Integer replyToDbId = graphQlComment.getReplyTo().getDatabaseId();
-                if (replyToDbId != null) {
-                    inReplyToId = replyToDbId.longValue();
-                }
-            }
-        }
+        Long inReplyToId = extractDatabaseId(graphQlComment.getReplyTo());
 
         // GraphQL comment doesn't have direct side field, use thread's side
         String side =

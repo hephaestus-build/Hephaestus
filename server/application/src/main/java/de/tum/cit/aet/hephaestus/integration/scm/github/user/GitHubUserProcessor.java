@@ -9,8 +9,7 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.CannotAcquireLockException;
-import org.springframework.dao.DeadlockLoserDataAccessException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
@@ -152,12 +151,11 @@ public class GitHubUserProcessor {
     /**
      * Executes the upsert operation in a REQUIRES_NEW transaction with deadlock retry.
      * <p>
-     * On deadlock (PostgreSQL error 40P01), the inner transaction is rolled back by
-     * Spring and we retry with exponential backoff and jitter. The caller's transaction
+     * On a pessimistic locking failure (a deadlock, PostgreSQL error 40P01, or a lock or
+     * serialization failure), the inner transaction is rolled back by Spring and we retry with
+     * exponential backoff and jitter. The caller's transaction
      * is not affected because we use REQUIRES_NEW propagation.
      */
-    // Spring's SQL error-code translator still emits this legacy subtype for configured deadlock codes.
-    @SuppressWarnings("deprecation")
     private void executeUpsertWithDeadlockRetry(
             Long userId,
             Long providerId,
@@ -198,13 +196,13 @@ public class GitHubUserProcessor {
                 });
                 // Success — exit the retry loop
                 return;
-            } catch (DeadlockLoserDataAccessException | CannotAcquireLockException e) {
+            } catch (PessimisticLockingFailureException e) {
                 if (attempt < MAX_DEADLOCK_RETRIES) {
                     // Exponential backoff with jitter: base * 2^attempt + random [0, base)
                     long delay =
                             DEADLOCK_RETRY_BASE_MS * (1L << attempt) + (long) (Math.random() * DEADLOCK_RETRY_BASE_MS);
                     log.warn(
-                            "Deadlock detected during user upsert, retrying: nativeId={}, attempt={}/{}, delayMs={}",
+                            "Locking failure during user upsert, retrying: nativeId={}, attempt={}/{}, delayMs={}",
                             userId,
                             attempt + 1,
                             MAX_DEADLOCK_RETRIES,
@@ -218,7 +216,7 @@ public class GitHubUserProcessor {
                     }
                 } else {
                     log.error(
-                            "Deadlock persisted after {} retries during user upsert: nativeId={}",
+                            "Locking failure persisted after {} retries during user upsert: nativeId={}",
                             MAX_DEADLOCK_RETRIES,
                             userId);
                     throw e; // Exhausted retries, propagate to caller

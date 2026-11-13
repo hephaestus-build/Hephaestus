@@ -18,6 +18,8 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -28,6 +30,8 @@ import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.actuate.autoconfigure.web.server.ManagementPortType;
+import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.security.autoconfigure.actuate.web.servlet.EndpointRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -165,11 +169,7 @@ public class SecurityConfig {
     @Bean
     @Order(Ordered.HIGHEST_PRECEDENCE + 2)
     SecurityFilterChain prometheusSecurityFilterChain(HttpSecurity http, Environment environment) throws Exception {
-        RequestMatcher managementListener = request -> {
-            int managementPort = environment.getProperty("local.management.port", Integer.class, -1);
-            int applicationPort = environment.getProperty("local.server.port", Integer.class, -1);
-            return managementPort != applicationPort && request.getLocalPort() == managementPort;
-        };
+        RequestMatcher managementListener = managementListener(environment);
         http.securityMatcher("/actuator/prometheus", "/actuator/prometheus/**")
                 .sessionManagement(sessions -> sessions.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(csrf -> csrf.disable())
@@ -180,6 +180,30 @@ public class SecurityConfig {
                         .anyRequest()
                         .denyAll());
         return http.build();
+    }
+
+    /**
+     * Matches a request that arrived on the separate management listener. A listener is its address and its port: two
+     * listeners on different addresses can hold the same port number, as ephemeral ports in tests do, so the port alone
+     * does not name one. The address binds once, so a host name in the setting is not resolved per request.
+     */
+    static RequestMatcher managementListener(Environment environment) {
+        @Nullable
+        InetAddress address = Binder.get(environment)
+                .bind("management.server.address", InetAddress.class)
+                .orElse(null);
+        return request -> ManagementPortType.get(environment) == ManagementPortType.DIFFERENT
+                && request.getLocalPort() == environment.getProperty("local.management.port", Integer.class, -1)
+                && (address == null || address.equals(localAddress(request)));
+    }
+
+    /** The address the request arrived on: always a literal, so parsing it does no name lookup. */
+    private static @Nullable InetAddress localAddress(HttpServletRequest request) {
+        try {
+            return InetAddress.getByName(request.getLocalAddr());
+        } catch (UnknownHostException e) {
+            return null;
+        }
     }
 
     /**
