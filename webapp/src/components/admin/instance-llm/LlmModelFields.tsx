@@ -262,6 +262,58 @@ function limitHint(
 	}
 }
 
+interface TokenLimitFieldProps {
+	id: string;
+	label: string;
+	value: string;
+	onChange: (value: string) => void;
+	error?: string;
+	/** The value the model runs with. */
+	limit?: number;
+	/** Its source; `null` while the model is created, when there is nothing to describe yet. */
+	source: LlmModelLimits["contextWindowSource"] | null;
+}
+
+/** One token limit: the admin's override, with the value the model runs with and where it comes from. */
+function TokenLimitField({
+	id,
+	label,
+	value,
+	onChange,
+	error,
+	limit,
+	source,
+}: TokenLimitFieldProps) {
+	const errorId = useId();
+	const hintId = `${id}-hint`;
+	const described = source !== null;
+	const describedBy = [described ? hintId : "", hasText(error) ? errorId : ""]
+		.filter(Boolean)
+		.join(" ");
+	return (
+		<Field data-invalid={Boolean(error)}>
+			<FieldLabel htmlFor={id}>
+				{label} <span className="font-normal text-muted-foreground">(optional)</span>
+			</FieldLabel>
+			<Input
+				id={id}
+				type="number"
+				min={0}
+				step={1}
+				value={value}
+				placeholder={
+					source && source !== "ADMIN" && limit !== undefined ? String(limit) : undefined
+				}
+				onChange={(e) => onChange(e.target.value)}
+				aria-invalid={Boolean(error)}
+				aria-describedby={describedBy || undefined}
+			/>
+			{described && <FieldDescription id={hintId}>{limitHint(limit, source)}</FieldDescription>}
+			{hasText(error) && <FieldError id={errorId}>{error}</FieldError>}
+		</Field>
+	);
+}
+
 export interface LlmModelFieldsProps {
 	audience: LlmAudience;
 	idPrefix: string;
@@ -294,8 +346,6 @@ export function LlmModelFields({
 
 	const displayNameErrorId = useId();
 	const upstreamModelIdErrorId = useId();
-	const contextWindowErrorId = useId();
-	const maxOutputTokensErrorId = useId();
 	const dataHandlingNoteErrorId = useId();
 	const suggestionsId = `${idPrefix}-upstream-id-options`;
 
@@ -314,8 +364,6 @@ export function LlmModelFields({
 		errors.contextWindow !== undefined || errors.maxOutputTokens !== undefined;
 	// A model that cannot run shows why, and the two fields that fix it.
 	const unbounded = limits !== undefined && !limits.bounded;
-	const contextWindowHintId = `${idPrefix}-context-window-hint`;
-	const maxOutputHintId = `${idPrefix}-max-output-hint`;
 
 	return (
 		<>
@@ -554,78 +602,24 @@ export function LlmModelFields({
 				<CollapsibleContent>
 					<FieldGroup className="pt-4">
 						<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-							<Field data-invalid={Boolean(errors.contextWindow)}>
-								<FieldLabel htmlFor={`${idPrefix}-context-window`}>
-									Context window{" "}
-									<span className="font-normal text-muted-foreground">(optional)</span>
-								</FieldLabel>
-								<Input
-									id={`${idPrefix}-context-window`}
-									type="number"
-									min={0}
-									step={1}
-									value={value.contextWindow}
-									placeholder={
-										limits?.contextWindowSource && limits.contextWindowSource !== "ADMIN"
-											? String(limits.contextWindow)
-											: undefined
-									}
-									onChange={(e) => update({ contextWindow: e.target.value })}
-									aria-invalid={Boolean(errors.contextWindow)}
-									aria-describedby={
-										[
-											limits ? contextWindowHintId : "",
-											hasText(errors.contextWindow) ? contextWindowErrorId : "",
-										]
-											.filter(Boolean)
-											.join(" ") || undefined
-									}
-								/>
-								{limits && (
-									<FieldDescription id={contextWindowHintId}>
-										{limitHint(limits.contextWindow, limits.contextWindowSource)}
-									</FieldDescription>
-								)}
-								{hasText(errors.contextWindow) && (
-									<FieldError id={contextWindowErrorId}>{errors.contextWindow}</FieldError>
-								)}
-							</Field>
-							<Field data-invalid={Boolean(errors.maxOutputTokens)}>
-								<FieldLabel htmlFor={`${idPrefix}-max-output`}>
-									Max output tokens{" "}
-									<span className="font-normal text-muted-foreground">(optional)</span>
-								</FieldLabel>
-								<Input
-									id={`${idPrefix}-max-output`}
-									type="number"
-									min={0}
-									step={1}
-									value={value.maxOutputTokens}
-									placeholder={
-										limits?.maxOutputTokensSource && limits.maxOutputTokensSource !== "ADMIN"
-											? String(limits.maxOutputTokens)
-											: undefined
-									}
-									onChange={(e) => update({ maxOutputTokens: e.target.value })}
-									aria-invalid={Boolean(errors.maxOutputTokens)}
-									aria-describedby={
-										[
-											limits ? maxOutputHintId : "",
-											hasText(errors.maxOutputTokens) ? maxOutputTokensErrorId : "",
-										]
-											.filter(Boolean)
-											.join(" ") || undefined
-									}
-								/>
-								{limits && (
-									<FieldDescription id={maxOutputHintId}>
-										{limitHint(limits.maxOutputTokens, limits.maxOutputTokensSource)}
-									</FieldDescription>
-								)}
-								{hasText(errors.maxOutputTokens) && (
-									<FieldError id={maxOutputTokensErrorId}>{errors.maxOutputTokens}</FieldError>
-								)}
-							</Field>
+							<TokenLimitField
+								id={`${idPrefix}-context-window`}
+								label="Context window"
+								value={value.contextWindow}
+								onChange={(contextWindow) => update({ contextWindow })}
+								error={errors.contextWindow}
+								limit={limits?.contextWindow}
+								source={limits === undefined ? null : limits.contextWindowSource}
+							/>
+							<TokenLimitField
+								id={`${idPrefix}-max-output`}
+								label="Max output tokens"
+								value={value.maxOutputTokens}
+								onChange={(maxOutputTokens) => update({ maxOutputTokens })}
+								error={errors.maxOutputTokens}
+								limit={limits?.maxOutputTokens}
+								source={limits === undefined ? null : limits.maxOutputTokensSource}
+							/>
 						</div>
 
 						<Field>

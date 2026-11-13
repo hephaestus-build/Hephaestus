@@ -113,13 +113,13 @@ export const ModelOff: Story = {
 export const LimitsMissing: Story = {
 	args: {
 		models: mockModels.map((model, index) =>
-			index === 0 ? { ...model, limits: { bounded: false } } : model,
+			index === 1 ? { ...model, limits: { bounded: false } } : model,
 		),
 	},
 	play: async ({ canvas }) => {
 		const rows = canvas.getAllByRole("row").slice(1);
 		const status = rows.map((row) => within(row).getAllByRole("cell")[3]?.textContent);
-		await expect(status).toStrictEqual(["Limits missing", "Ready", "Ready"]);
+		await expect(status).toStrictEqual(["Off", "Limits missing", "Ready"]);
 	},
 };
 
