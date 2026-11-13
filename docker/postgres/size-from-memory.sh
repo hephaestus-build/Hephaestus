@@ -6,7 +6,7 @@
 #
 # A streamed answer inserts many small index entries; the first change to a page after a checkpoint
 # writes the whole page to the WAL. lz4 halves those images for a little CPU per image
-# (docs/admin/kubernetes.mdx, External PostgreSQL and NATS).
+# (docs/admin/kubernetes.mdx, External PostgreSQL).
 #
 # shared_buffers is 25 % of the limit, the starting value that the PostgreSQL manual (Resource
 # consumption) gives; the manual also says that a larger shared_buffers needs a larger max_wal_size.

@@ -284,7 +284,7 @@ class SlackConversationProjectorIntegrationTest extends BaseIntegrationTest {
         long ws = newWorkspace();
         seedChannel(ws, "C1", "ACTIVE");
 
-        // JetStream reorder: the message_deleted for ts 100.9 is processed BEFORE its base insert (e.g. the insert
+        // provider inbox reorder: the message_deleted for ts 100.9 is processed BEFORE its base insert (e.g. the insert
         // was NAK'd and redelivered later). The durable upsert writes a contentless tombstone for that ts.
         assertThat(messageRepository.tombstone(ws, "T" + ws, "C1", "100.9", Instant.now()))
                 .isEqualTo(1);
@@ -312,7 +312,8 @@ class SlackConversationProjectorIntegrationTest extends BaseIntegrationTest {
         seedChannel(ws, "C1", "ACTIVE");
         seedThread(ws, "C1", "100.0", "100.9", "{100}");
 
-        // JetStream reorder: message_changed for ts 100.9 is processed BEFORE its base insert. The scoped UPDATE finds
+        // provider inbox reorder: message_changed for ts 100.9 is processed BEFORE its base insert. The scoped UPDATE
+        // finds
         // no row (returns 0) and the row is genuinely absent — the durability primitive the service branches on.
         assertThat(messageRepository.applyEdit(ws, "C1", "100.9", "EDITED body", Instant.now()))
                 .isZero();

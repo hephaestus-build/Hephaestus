@@ -87,9 +87,9 @@ class SubjectGrammarRoundTripTest extends BaseUnitTest {
     }
 
     /**
-     * NATS subject/filter token match: {@code *} matches exactly one token, {@code >} matches one or more
+     * event subject/filter token match: {@code *} matches exactly one token, {@code >} matches one or more
      * trailing tokens, every other token must match literally (the {@code ?} org-scope placeholder is a
-     * literal token here, not a wildcard). This is the delivery predicate a JetStream consumer applies, so
+     * literal token here, not a wildcard). This is the delivery predicate a provider inbox consumer applies, so
      * matching through it — rather than a prefix string compare — is what genuinely proves the derived
      * subject would be routed by the filter.
      */
@@ -130,7 +130,7 @@ class SubjectGrammarRoundTripTest extends BaseUnitTest {
         // reason as group-tier events: the repo-name token is unstable across a
         // rename/transfer, so the subject carries the '?' placeholder in the repo slot and must route
         // via the workspace's organizationFilter (github.<owner>.?.>), not the repo prefix. Bind that
-        // through a real NATS token match so a drift in EITHER organizationFilter/buildSubjectPrefix or
+        // through a real provider inbox token match so a drift in EITHER organizationFilter/buildSubjectPrefix or
         // the deriver's org-scoping fails here — the freeze-after-rename regression this guards.
         String[] subjectParts = publisherSubject.split("\\.", -1);
         if (subjectParts.length >= 3 && "?".equals(subjectParts[2])) {

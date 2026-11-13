@@ -226,7 +226,7 @@ Each `503` has a log record with `event.name=webhook.publish.failed`.
 
 ## A volume or a node disk is full
 
-**Cause:** PostgreSQL data and WAL, JetStream, repository caches, or the container runtime use the space.
+**Cause:** PostgreSQL data and WAL, repository caches, or the container runtime use the space.
 
 **Fix:**
 
@@ -235,8 +235,7 @@ Each `503` has a log record with `event.name=webhook.publish.failed`.
    The kubelet owns image garbage collection.
 3. If the PostgreSQL volume is full, read the log of the latest backup Job.
    A failed WAL archive keeps the WAL on the volume.
-4. After you restore space, a broker that could not write its metadata can need a restart.
-5. If data or a volume is lost, use [Backup and restore](./backup-restore).
+4. If data or a volume is lost, use [Backup and restore](./backup-restore).
 
 **Check:** Each Pod of the release is ready:
 

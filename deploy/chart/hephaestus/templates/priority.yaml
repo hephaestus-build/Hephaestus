@@ -5,7 +5,7 @@ A conversation sandbox serves a person waiting for an answer. A review is an att
 preempts. The values stay below the system classes (2000000000 and above).
 */}}
 {{- if .Values.priorityClasses.create }}
-{{- $tiers := list (dict "tier" "roles" "value" 100000 "preemption" "PreemptLowerPriority" "description" "Hephaestus roles, PostgreSQL and NATS") }}
+{{- $tiers := list (dict "tier" "roles" "value" 100000 "preemption" "PreemptLowerPriority" "description" "Hephaestus roles, PostgreSQL") }}
 {{- if .Values.sandbox.enabled }}
 {{- $tiers = append $tiers (dict "tier" "conversations" "value" 10000 "preemption" "PreemptLowerPriority" "description" "Hephaestus conversation sandboxes") }}
 {{- $tiers = append $tiers (dict "tier" "reviews" "value" 1000 "preemption" "Never" "description" "Hephaestus review sandboxes") }}

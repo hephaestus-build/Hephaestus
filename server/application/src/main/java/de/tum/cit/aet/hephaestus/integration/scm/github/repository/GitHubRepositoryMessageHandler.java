@@ -29,7 +29,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * Handles GitHub repository webhook events: deletion, archive state, visibility, and
  * rename/transfer. Renamed/transferred repositories are re-keyed — the mirrored repository AND
- * every workspace's monitor — by the provider-stable {@code repository.id}, then the NATS
+ * every workspace's monitor — by the provider-stable {@code repository.id}, then the provider inbox
  * consumer filters are rebuilt.
  *
  * <p><b>Subject tier.</b> Registered on the {@code organization.} tier: {@code GitHubSubjectKeyDeriver}
@@ -194,7 +194,7 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
      *   <li>every {@code RepositoryToMonitor} tracking this repository — across <em>all</em> workspaces,
      *       since a repository can be monitored by several tenants — via
      *       {@code reconcileSyncTargetsForRepository}, which also rebuilds each affected workspace's
-     *       NATS consumer filters. Without step 2 the repo-scoped filter stays pinned to the old name
+     *       inbox consumer filters. Without step 2 the repo-scoped filter stays pinned to the old name
      *       and every subsequent issue/PR/review/push event for the repository is silently ACK-dropped
      *       until the next reconcile cycle.
      * </ol>
@@ -256,7 +256,7 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
                                 nativeId));
 
         // Always attempt the monitor re-key, even when no domain row is mirrored yet: the monitor
-        // is what the NATS filter is built from, so leaving it stale is the actual data-loss path.
+        // is what the provider inbox filter is built from, so leaving it stale is the actual data-loss path.
         syncTargetProvider.reconcileSyncTargetsForRepository(providerId, nativeId, newFullName);
     }
 

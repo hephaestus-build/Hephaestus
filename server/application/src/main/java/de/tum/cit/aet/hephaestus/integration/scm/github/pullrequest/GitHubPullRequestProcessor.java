@@ -98,7 +98,7 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
      * Publishes appropriate domain events based on what changed.
      * <p>
      * Uses atomic upsert to prevent race conditions when concurrent threads
-     * (e.g., multiple NATS consumers or webhook handlers) process the same PR.
+     * (e.g., multiple inbox consumers or webhook handlers) process the same PR.
      * <p>
      * Uses (repository_id, issue_type, number) as the canonical uniqueness constraint.
      * Lookup is by (repository_id, number) via the PullRequest typed query.

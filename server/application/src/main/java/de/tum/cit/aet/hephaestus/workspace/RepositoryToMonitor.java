@@ -55,7 +55,7 @@ public class RepositoryToMonitor {
     /**
      * The provider's stable numeric repository id (GitHub {@code repository.id}, GitLab
      * {@code project.id}). Unlike {@link #nameWithOwner} — which the provider rewrites on a
-     * rename/transfer and which, once stale, silently severs the per-workspace NATS filter and the
+     * rename/transfer and which, once stale, silently severs the per-workspace provider inbox filter and the
      * name-keyed reconciliation lookup — the native id never changes for the life of the repository.
      * It is the identity of record used to re-key {@code nameWithOwner} after an upstream rename.
      *

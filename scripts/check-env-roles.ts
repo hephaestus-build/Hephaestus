@@ -64,7 +64,7 @@ const ROLE_SCOPES: readonly RoleScope[] = [
 	{
 		path: "hephaestus.integration.consumer",
 		role: "server",
-		why: "IntegrationNatsConsumer and IntegrationConsumerHealthIndicator are gated on hephaestus.runtime.server.enabled",
+		why: "ProviderEventConsumer and InboxBacklogSampler are gated on hephaestus.runtime.server.enabled",
 	},
 	{
 		path: "spring.mail",
@@ -118,7 +118,7 @@ const PER_CONTAINER = new Map<string, string>([
 		"SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE",
 		"each process reserves its own idle database connections",
 	],
-	["THC_PATH", "the receiver reports NATS through readiness; the others answer liveness"],
+	["THC_PATH", "the server reports PostgreSQL through readiness"],
 	["BPL_JVM_THREAD_COUNT", "the buildpack sizes each role's heap from the threads that role runs"],
 	[
 		"BPL_JVM_LOADED_CLASS_COUNT",

@@ -14,12 +14,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * Pure-function dispatcher: NATS subject → {@link IntegrationMessageHandler}.
+ * Pure-function dispatcher: event subject → {@link IntegrationMessageHandler}.
  *
  * <p>Splits the routing problem into three independent steps:
  * <ol>
  *   <li>Map subject prefix → {@link IntegrationKind} via {@link
- *       ConsumerSubjectMath#kindFromSubjectPrefix(String)} (the single NATS-routing
+ *       ConsumerSubjectMath#kindFromSubjectPrefix(String)} (the single provider-routing
  *       allow-list; never calls {@link IntegrationKind#valueOf(String)} on subject
  *       input).</li>
  *   <li>Hand the full subject to that kind's registered {@link SubjectParser} to obtain

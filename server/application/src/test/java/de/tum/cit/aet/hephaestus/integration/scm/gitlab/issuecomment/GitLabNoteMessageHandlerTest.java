@@ -51,7 +51,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class GitLabNoteMessageHandlerTest extends BaseUnitTest {
 
     private static final String PROJECT_PATH = "hephaestustest/demo-repository";
-    private static final String NATS_SUBJECT = "gitlab.?connection.7.note";
+    private static final String EVENT_SUBJECT = "gitlab.?connection.7.note";
 
     @Mock
     private GitLabIssueCommentProcessor issueCommentProcessor;
@@ -423,7 +423,7 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
 
     private ProviderEvent mockMessage(GitLabNoteEventDTO event) throws IOException {
         ProviderEvent msg = mock(ProviderEvent.class);
-        when(msg.subject()).thenReturn(NATS_SUBJECT);
+        when(msg.subject()).thenReturn(EVENT_SUBJECT);
         when(deserializer.deserialize(msg, GitLabNoteEventDTO.class)).thenReturn(event);
         return msg;
     }

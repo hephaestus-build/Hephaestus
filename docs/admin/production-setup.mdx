@@ -357,8 +357,8 @@ Two deployment-topology facts belong here.
 `AGENT_ENABLED` on the server role activates Kubernetes sandbox work. The chart sets it from `sandbox.enabled`.
 Only a server with it creates sandbox claims for reviews and conversation turns.
 
-The server uses NATS.
-Production startup refuses a server without NATS, as [Runtime roles](./runtime-roles#boot-log) describes.
+Sync-status hints use PostgreSQL notifications. Each replica delivers the hint to its local SSE subscribers.
+Clients refetch through REST and keep polling if a notification is missed.
 
 Each conversation runs its turns in one conversation sandbox.
 [Runtime Roles](./runtime-roles.mdx#conversation-sandboxes) gives its lifecycle, and [Helm chart reference § Conversation capacity](./helm-chart#conversation-capacity) gives its values.

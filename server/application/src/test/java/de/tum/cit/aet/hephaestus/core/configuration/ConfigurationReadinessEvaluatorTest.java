@@ -141,32 +141,12 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         assertStatus(facts, "external.api-origin", ConfigurationStatus.SATISFIED);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"NATS://broker:4222", "TLS://broker:4222"})
-    void shouldAcceptANatsSchemeInAnyCaseBecauseTheClientLowercasesIt(String server) {
-        Map<String, Object> properties = validProperties();
-        properties.put("hephaestus.sync.nats.server", server);
-
-        assertStatus(evaluateReadiness(properties, true), "nats.server", ConfigurationStatus.SATISFIED);
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"", "nats", "//broker:4222", "broker:4222"})
-    void shouldReportANatsServerWithoutANatsSchemeInsteadOfFailingToEvaluate(String server) {
-        Map<String, Object> properties = validProperties();
-        properties.put("hephaestus.sync.nats.server", server);
-
-        assertStatus(evaluateReadiness(properties, true), "nats.server", ConfigurationStatus.ACTION_REQUIRED);
-    }
-
     @Test
     void shouldRejectRoleSpecificNegativeCases() {
         Map<String, Object> agents = role(true);
-        agents.put("hephaestus.sync.nats.enabled", false);
         agents.put("hephaestus.llm.egress.allow-loopback", true);
         agents.put("hephaestus.agent.image.reference", "moving-tag");
         List<ConfigurationFactDTO> facts = evaluateReadiness(agents, true);
-        assertStatus(facts, "nats.role-contract", ConfigurationStatus.ACTION_REQUIRED);
         assertStatus(facts, "llm.proxy-egress", ConfigurationStatus.ACTION_REQUIRED);
         assertStatus(facts, "agent.image-contract", ConfigurationStatus.ACTION_REQUIRED);
 
@@ -180,12 +160,10 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
     void shouldRejectMalformedSecurityBooleans() {
         Map<String, Object> properties = validProperties();
         properties.put("hephaestus.llm.egress.allow-loopback", "not-a-boolean");
-        properties.put("hephaestus.sync.nats.enabled", "not-a-boolean");
 
         List<ConfigurationFactDTO> facts = evaluateReadiness(properties, true);
 
         assertStatus(facts, "llm.proxy-egress", ConfigurationStatus.ACTION_REQUIRED);
-        assertStatus(facts, "nats.role-contract", ConfigurationStatus.ACTION_REQUIRED);
     }
 
     @Test
@@ -255,13 +233,11 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
     void shouldRejectSecurityBooleansItCannotRead() {
         Map<String, Object> properties = validProperties();
         properties.put("hephaestus.llm.egress.allow-loopback", "${MISSING_EGRESS_FLAG}");
-        properties.put("hephaestus.sync.nats.enabled", "${MISSING_NATS_FLAG}");
 
         List<ConfigurationFactDTO> facts = evaluateReadiness(properties, true);
 
         // A value that cannot be read must not be answered with its permissive default.
         assertStatus(facts, "llm.proxy-egress", ConfigurationStatus.ACTION_REQUIRED);
-        assertStatus(facts, "nats.role-contract", ConfigurationStatus.ACTION_REQUIRED);
     }
 
     @Test
@@ -333,8 +309,6 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         properties.put("hephaestus.auth.issuer", "https://hephaestus.example.com");
         properties.put("hephaestus.webhook.secret", "0123456789abcdef0123456789abcdef");
         properties.put("hephaestus.webhook.routing.secret", "fedcba9876543210fedcba9876543210");
-        properties.put("hephaestus.sync.nats.enabled", true);
-        properties.put("hephaestus.sync.nats.server", "nats://nats:4222");
         properties.put("hephaestus.auth.state-cookie-key", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
         properties.put("hephaestus.llm.egress.allow-loopback", false);
         properties.put("hephaestus.agent.image.require-digest", true);

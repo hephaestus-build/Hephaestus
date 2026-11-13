@@ -349,7 +349,7 @@ It sends the records to a log store that you operate, such as Loki or VictoriaLo
 The [OpenTelemetry Collector Helm chart](https://github.com/open-telemetry/opentelemetry-helm-charts/tree/main/charts/opentelemetry-collector) runs one as a DaemonSet.
 Hephaestus ships no collector and names no destination.
 
-Read only the server and migration Pods, and NATS.
+Read only the server and migration Pods.
 Their records hold no content.
 
 Do not read the webapp, PostgreSQL or any Pod of the sandbox namespace:
@@ -377,7 +377,6 @@ config:
       include:
         - /var/log/pods/hephaestus_hephaestus-server-*/*/*.log
         - /var/log/pods/hephaestus_hephaestus-migration-*/*/*.log
-        - /var/log/pods/hephaestus_hephaestus-nats-*/*/*.log
       exclude: []
       operators:
         - type: container
@@ -482,7 +481,7 @@ Sandbox proxy requests propagate the execution trace's sampling decision. A `gen
 the HTTP outcome and the token usage that the provider reported, as `gen_ai.usage.input_tokens` and
 `gen_ai.usage.output_tokens`.
 
-A provider event crosses the message broker between the server's receiver and its consumer.
+A provider event is stored in the PostgreSQL inbox between the server's receiver and its consumer.
 The receiver writes the trace context of its request into the message, as the W3C `traceparent` header.
 The server continues that trace in a consumer span, `process <stream>`, around the handler.
 The handler's provider calls are child spans of it.

@@ -17,10 +17,10 @@ Set a memory floor that leaves at least 1 GiB plus the eviction reserve.
 Stop new load before available memory crosses that floor.
 
 The test-only fixture uses namespace `capacity-bench-20261030` and a separate sandbox namespace.
-It must have its own PostgreSQL, NATS and generated credentials.
+It must have its own PostgreSQL and generated credentials.
 Do not copy sessions, provider keys or application data from another release.
 Block public routes and external delivery.
-Retain the private paths that the application needs: DNS, database, broker, sandbox gateway and Kubernetes API.
+Retain the private paths that the application needs: DNS, database, sandbox gateway and Kubernetes API.
 
 ## 2. Prepare the replay
 
@@ -181,7 +181,7 @@ Each sample is also written to JSONL so an interruption does not lose the trace.
 Process RSS can count shared pages more than once.
 Use cgroup charged memory for the budget and keep RSS as a separate observation.
 An absent kernel lifetime peak remains missing; sampled peaks can miss short events.
-Capture PostgreSQL connections/lock waits and NATS lag alongside these samples.
+Capture PostgreSQL connections/lock waits and inbox backlog alongside these samples.
 
 Correlate request send, queue/claim, first provider call, provider token/end and turn end.
 Use matching tool logs to attribute tool spans.
@@ -214,15 +214,13 @@ These observations cover normal activity across several releases, not a controll
 | Container | Peak working set | Peak total memory charge | Retained request / limit |
 | --- | --- | --- | --- |
 | PostgreSQL | 1,202.44 MiB | 2,047.67 MiB | 2 GiB / 2 GiB |
-| NATS | 409.13 MiB | 811.95 MiB | 1 GiB / 1 GiB |
 
 The [sizing guide](/admin/sizing#measure-stateful-memory) owns the query method and the qualification criteria.
 
 The separate conversation benchmark on `2026-10-30` had synthetic chat load and zero reviews.
 Its PostgreSQL maximum was 1,544.31 MiB RSS and 291.25 MiB charged, across the three admission cases.
-Its NATS maximum was 15.55 MiB RSS and 5.09 MiB charged.
 
 The sampler sums process RSS, which can count shared pages more than once, as [Collect and interpret](#5-collect-and-interpret) explains.
 Do not substitute RSS for cgroup charge or working set, or add these independent maxima.
 Neither observation qualifies the lower PostgreSQL target.
-Keep the current ceilings until the reference workload includes reviews, vacuum, backups and broker catch-up.
+Keep the current ceilings until the reference workload includes reviews, vacuum, backups and inbox catch-up.

@@ -47,7 +47,6 @@ const resolved = ["webapp", "application-server", "agent-pi", "postgres"].map((i
 	indexDigest: digest(String(index)),
 }));
 const upstream = [
-	{ name: "nats", repository: "docker.io/synadia/nats-server", digest: digest("e") },
 	{
 		name: "victoria-metrics",
 		repository: "docker.io/victoriametrics/victoria-metrics",
@@ -69,7 +68,6 @@ await test("the chart's images come from the resolved first-party images and the
 		"agent-pi": `ghcr.io/hephaestus-build/agent-pi@${digest("2")}`,
 		alertmanager: `docker.io/prom/alertmanager@${digest("8")}`,
 		"application-server": `ghcr.io/hephaestus-build/application-server@${digest("1")}`,
-		nats: `docker.io/synadia/nats-server@${digest("e")}`,
 		postgres: `ghcr.io/hephaestus-build/postgres@${digest("3")}`,
 		"postgres-exporter": `docker.io/prometheuscommunity/postgres-exporter@${digest("7")}`,
 		"victoria-metrics": `docker.io/victoriametrics/victoria-metrics@${digest("f")}`,
@@ -94,8 +92,6 @@ await test("the generated Secret holds every key that the chart reads", () => {
 		"DATABASE_ADMIN_PASSWORD",
 		"DATABASE_OWNER_PASSWORD",
 		"DATABASE_APP_PASSWORD",
-		"NATS_USERNAME",
-		"NATS_PASSWORD",
 		"HEPHAESTUS_SECURITY_ENCRYPTION_KEY",
 		"HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY",
 		"HEPHAESTUS_AUTH_STATE_COOKIE_KEY",
@@ -391,29 +387,19 @@ const statefulPod = (name: string, component: string, uid: string, deleting = fa
 	},
 });
 
-await test("an upgrade check names each PostgreSQL or NATS Pod that it replaced or lost", () => {
+await test("an upgrade check names each PostgreSQL Pod that it replaced or lost", () => {
 	const before = statefulPods({
 		items: [
 			statefulPod("heph-postgresql-0", "postgresql", "a"),
-			statefulPod("heph-nats-0", "nats", "b"),
 			statefulPod("heph-server-1", "server", "c"),
 		],
 	});
-	assert.deepEqual(
-		[...before],
-		[
-			["heph-postgresql-0", "a"],
-			["heph-nats-0", "b"],
-		],
-	);
+	assert.deepEqual([...before], [["heph-postgresql-0", "a"]]);
 	assert.deepEqual(restartedPods(before, before), []);
 	const after = statefulPods({
-		items: [
-			statefulPod("heph-postgresql-0", "postgresql", "d"),
-			statefulPod("heph-nats-0", "nats", "b", true),
-		],
+		items: [statefulPod("heph-postgresql-0", "postgresql", "d")],
 	});
-	assert.deepEqual(restartedPods(before, after), ["heph-postgresql-0", "heph-nats-0"]);
+	assert.deepEqual(restartedPods(before, after), ["heph-postgresql-0"]);
 });
 
 await test("the retired live qualifier invokes no cluster or build tool", () => {

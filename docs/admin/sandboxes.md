@@ -44,7 +44,7 @@ Thus, priority alone does not protect a stateful Pod that exceeds its request.
 The scheduler can also preempt Pods of a lower priority to place one of a higher priority.
 The chart gives every Pod one of three priorities, highest first:
 
-1. The roles, PostgreSQL, NATS, and the migration and backup Jobs. They serve everyone.
+1. The roles, PostgreSQL, and the migration and backup Jobs. They serve everyone.
 2. The conversation sandboxes. A person waits for the answer.
 3. The review sandboxes. A review is an attempt that runs again. It never preempts another Pod.
 

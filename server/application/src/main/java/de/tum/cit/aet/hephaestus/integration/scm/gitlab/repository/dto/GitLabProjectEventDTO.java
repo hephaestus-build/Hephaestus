@@ -8,7 +8,7 @@ import org.jspecify.annotations.Nullable;
  * DTO for GitLab project webhook events (project lifecycle changes).
  * <p>
  * Project events use {@code event_name} (not {@code object_kind}) as the discriminator.
- * The webhook receiver normalizes all project event names to "project" for NATS routing.
+ * The webhook receiver normalizes all project event names to "project" for provider inbox routing.
  * <p>
  * Group webhooks send create and destroy events. System hooks also send updates, renames and transfers.
  * <p>

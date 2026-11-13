@@ -49,7 +49,7 @@ class SlackManifestTemplateTest extends BaseUnitTest {
     }
 
     /**
-     * The manifest's {@code bot_events} list and the registered NATS handlers must describe the same event set:
+     * The manifest's {@code bot_events} list and the registered inbox handlers must describe the same event set:
      * a subscribed event with no handler is silently dropped traffic; a handler for an unsubscribed event is dead
      * code that "works" in tests and never fires in production. The handled set is derived from the REAL handler
      * classes (their {@code EventTypeKey}), so adding either side without the other fails here.

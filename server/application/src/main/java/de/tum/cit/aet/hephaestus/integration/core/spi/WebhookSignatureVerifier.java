@@ -33,7 +33,7 @@ public interface WebhookSignatureVerifier {
 
         /**
          * Pipeline must respond directly with the given payload — request must NOT be
-         * published to NATS. Used for Slack {@code url_verification} and Asana's
+         * published to provider inbox. Used for Slack {@code url_verification} and Asana's
          * X-Hook-Secret echo.
          */
         @SuppressWarnings("ArrayRecordComponent") // response bytes written verbatim; never compared, hashed or printed

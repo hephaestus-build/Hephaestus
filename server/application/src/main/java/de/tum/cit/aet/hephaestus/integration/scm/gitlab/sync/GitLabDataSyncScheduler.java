@@ -78,7 +78,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
  *
  * <h2>Purpose</h2>
  * Provides eventual consistency for GitLab data by running scheduled re-sync jobs.
- * This closes the critical gap where missed webhooks (restarts, NATS outages,
+ * This closes the critical gap where missed webhooks (restarts, provider inbox outages,
  * GitLab's 40-failure auto-disable) cause permanent data drift.
  *
  * <h2>Architecture</h2>
@@ -535,7 +535,7 @@ public class GitLabDataSyncScheduler {
         var commitMrLinker = services.getCommitMergeRequestLinker();
 
         // Re-key any monitor whose name_with_owner went stale after an upstream rename/transfer BEFORE
-        // the name-keyed join below, so a renamed project re-enters the sync set and its NATS filter is
+        // the name-keyed join below, so a renamed project re-enters the sync set and its provider inbox filter is
         // rebuilt in the same cycle instead of silently dropping out. The domain Repository row was
         // already healed to the new path by the group-project sync (keyed on the stable native id).
         reconcileMonitorIdentities(session);

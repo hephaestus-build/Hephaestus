@@ -243,7 +243,7 @@ provider cleanup. A workspace purge erases it too. Reconnecting does not restore
 For each integration, the disconnect also erases the practice results and the feedback that Hephaestus derived from that work.
 
 The upstream repositories, messages, and documents remain.
-Materialized diagnostic output, attempt-input copies, and broker messages expire within their documented bounded retention windows.
+Materialized diagnostic output, attempt-input copies, and inbox events expire within their documented bounded retention windows.
 If local erasure fails, the connection remains unchanged, and you can retry the disconnect.
 
 After the disconnect commits, Hephaestus removes what it created at the provider:

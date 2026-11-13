@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Dispatch activation asynchronously so readiness listeners do not wait for provider calls.
- * {@link Order#value()} must let the NATS consumer initialize before {@link WorkspacesInitializedEvent} is published.
+ * {@link Order#value()} must let the inbox consumer initialize before {@link WorkspacesInitializedEvent} is published.
  */
 @Component
 @ConditionalOnBackgroundWork

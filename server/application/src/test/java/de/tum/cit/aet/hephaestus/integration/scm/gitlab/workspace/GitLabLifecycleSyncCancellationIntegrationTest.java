@@ -291,7 +291,7 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
     }
 
     @Test
-    void shouldKeepCleanSuccessWhenDiscoveryCompletesAndNatsIsDeliberatelyDisabled() {
+    void shouldKeepCleanSuccessWhenDiscoveryCompletesWithTheProviderInbox() {
         trigger = triggerWith(
                 providerFor(new GitLabSyncServiceHolder(
                         groups,

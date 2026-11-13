@@ -184,7 +184,7 @@ Deletion must traverse every content-bearing copy and derived record. A deleted 
 - Feedback record.
 - Export.
 - Backup.
-- Broker.
+- Provider inbox.
 - Externally posted comment.
 
 Before enabling a source or increasing retention, tests must prove:
@@ -194,7 +194,7 @@ Before enabling a source or increasing retention, tests must prove:
   and retained cases.
 - Shared upstream objects remain only while another authorized workspace reference exists.
 - Disposable attempt folders and repository mirrors follow the server cleanup and erasure contract.
-- Broker and backup expiry are documented when selective deletion is impossible.
+- Inbox and backup expiry are documented when selective deletion is impossible.
 - Externally delivered content has a documented deletion or manual-remediation path.
 - Completed request receipts contain no erased content or subject keys. Minimal exact native identity
   keys remain separately as permanent processing-suppression controls. They are personal data with a
@@ -224,7 +224,7 @@ If renewal is denied or incomplete, expiry fails the use closed without any oper
 4. [ ] Record the DPIA determination and all required approvals.
 5. [ ] Approve processor, region, transfer, training, and provider-retention terms.
 6. [ ] Define operator, developer, and evaluation audiences and propagation rules.
-7. [ ] Define product, evaluation, log, cache, broker, and backup retention separately.
+7. [ ] Define product, evaluation, log, cache, inbox, and backup retention separately.
 8. [ ] Implement disconnect, purge, person erasure, expiry, export, and external-delivery handling.
 9. [ ] Inventory all files, mounts, caches, tools, and derivations.
       Reject undeclared transformed views.

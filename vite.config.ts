@@ -504,7 +504,6 @@ export default defineConfig({
 			"schema:github": run("node scripts/update-github-schema.ts"),
 			"schema:gitlab": run("node scripts/update-gitlab-schema.ts"),
 			"schema:outline": run("node scripts/update-outline-spec.ts"),
-			"schema:nats": run("node scripts/nats-extract-examples.ts"),
 			"report:ci-latency": run("node scripts/report-ci-latency.ts"),
 			"report:delivery": run("node scripts/report-delivery-metrics.ts"),
 			"report:ci-timings": run("node scripts/report-ci-timings.ts"),
@@ -523,10 +522,9 @@ export default defineConfig({
 			"dev:compose": run("node ../scripts/dev-env.ts && docker compose up -d --wait", {
 				cwd: "server",
 			}),
-			"dev:compose:e2e": run(
-				"node ../scripts/dev-env.ts && docker compose up -d --wait postgres nats",
-				{ cwd: "server" },
-			),
+			"dev:compose:e2e": run("node ../scripts/dev-env.ts && docker compose up -d --wait postgres", {
+				cwd: "server",
+			}),
 			"dev:compose:down": run("node ../scripts/dev-env.ts && docker compose down", {
 				cwd: "server",
 			}),

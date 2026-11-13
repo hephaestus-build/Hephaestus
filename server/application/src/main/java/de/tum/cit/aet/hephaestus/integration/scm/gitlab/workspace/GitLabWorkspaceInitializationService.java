@@ -59,7 +59,7 @@ import org.springframework.stereotype.Service;
  *   <li>Webhook registration (idempotent)</li>
  * </ol>
  *
- * <p>The webhook comes last because JetStream skips an event published before a consumer's filter
+ * <p>The webhook comes last because provider inbox skips an event published before a consumer's filter
  * covers its repository, and a handler skips an event whose repository has no row yet. Neither is
  * redelivered, so GitLab may only start delivering once both exist.
  *

@@ -250,12 +250,6 @@ importers:
       '@hylimo/fonts':
         specifier: 3.0.0-alpha.2
         version: 3.0.0-alpha.2
-      '@nats-io/jetstream':
-        specifier: 3.4.0
-        version: 3.4.0
-      '@nats-io/transport-node':
-        specifier: 3.4.0
-        version: 3.4.0
       '@types/k6':
         specifier: 2.3.1
         version: 2.3.1
@@ -2949,24 +2943,6 @@ packages:
     peerDependencies:
       '@emnapi/core': ^1.7.1 || 2.0.0-beta.2
       '@emnapi/runtime': ^1.7.1 || 2.0.0-beta.2
-
-  '@nats-io/jetstream@3.4.0':
-    resolution: {integrity: sha512-GzHQodNJ942+R5LRb8PuZ5ugVWVWMRiufxUYLLVWkXKfwDXYN+Owo0d7L/b9O7BPyrbYD7jQWAC6+ZVuXa9Gyw==}
-
-  '@nats-io/nats-core@3.4.0':
-    resolution: {integrity: sha512-QMDM86EUNm+wudlKC67HLar/KHHQUvJGLfb4jbahje3pUk3K9afeck9fwsxBZF0eUFox6T/TA6m/t+lQqf+QsQ==}
-
-  '@nats-io/nkeys@2.0.3':
-    resolution: {integrity: sha512-JVt56GuE6Z89KUkI4TXUbSI9fmIfAmk6PMPknijmuL72GcD+UgIomTcRWiNvvJKxA01sBbmIPStqJs5cMRBC3A==}
-    engines: {node: '>=18.0.0'}
-
-  '@nats-io/nuid@3.0.0':
-    resolution: {integrity: sha512-QbXZDrxmYlrn5AD06gYcUTmEHwxn96HBQMIk7XTjDlEcx6FPzVBBPjp4AMRh1lEv6B4iJ6Xb/Uz61JugPXFRQg==}
-    engines: {node: '>= 22.x'}
-
-  '@nats-io/transport-node@3.4.0':
-    resolution: {integrity: sha512-hH7u7ejIBTFEJIZ8rIcMrHJI6wl+HhpO5sVFs1+ppmXa8RuB2+Lh1+UwTzZ5xTNNm1TKcRkYy+2qCV56qp8RxA==}
-    engines: {node: '>= 18.0.0'}
 
   '@neoconfetti/react@1.0.0':
     resolution: {integrity: sha512-klcSooChXXOzIm+SE5IISIAn3bYzYfPjbX7D7HoqZL84oAfgREeSg5vSIaSFH+DaGzzvImTyWe1OyrJ67vik4A==}
@@ -11035,9 +11011,6 @@ packages:
   tw-animate-css@1.4.0:
     resolution: {integrity: sha512-7bziOlRqH0hJx80h/3mbicLW7o8qLsH5+RaLR2t+OHM3D0JlWGODQKQ4cxbK7WlvmUxpcj6Kgu6EKqjrGFe3QQ==}
 
-  tweetnacl@1.0.3:
-    resolution: {integrity: sha512-6rt+RN7aOi1nGMyC4Xa5DdYiukl2UWCbcJft7YhxReBGQD7OAM8Pbxw6YMo4r2diNEA8FEmu32YOn9rhaiE5yw==}
-
   type-check@0.4.0:
     resolution: {integrity: sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew==}
     engines: {node: '>= 0.8.0'}
@@ -15150,27 +15123,6 @@ snapshots:
       '@emnapi/runtime': 1.9.2
       '@tybys/wasm-util': 0.10.4
     optional: true
-
-  '@nats-io/jetstream@3.4.0':
-    dependencies:
-      '@nats-io/nats-core': 3.4.0
-
-  '@nats-io/nats-core@3.4.0':
-    dependencies:
-      '@nats-io/nkeys': 2.0.3
-      '@nats-io/nuid': 3.0.0
-
-  '@nats-io/nkeys@2.0.3':
-    dependencies:
-      tweetnacl: 1.0.3
-
-  '@nats-io/nuid@3.0.0': {}
-
-  '@nats-io/transport-node@3.4.0':
-    dependencies:
-      '@nats-io/nats-core': 3.4.0
-      '@nats-io/nkeys': 2.0.3
-      '@nats-io/nuid': 3.0.0
 
   '@neoconfetti/react@1.0.0': {}
 
@@ -23583,8 +23535,6 @@ snapshots:
       tslib: 1.14.1
 
   tw-animate-css@1.4.0: {}
-
-  tweetnacl@1.0.3: {}
 
   type-check@0.4.0:
     dependencies:

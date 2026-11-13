@@ -83,7 +83,7 @@ public class GitHubLabelProcessor {
         // Always check by unique key (repository_id + name) FIRST - this is the constraint we
         // enforce.
         // This handles the case where GraphQL sync created a label with a deterministic nativeId,
-        // then NATS replay sends a webhook with the actual GitHub databaseId.
+        // then provider inbox replay sends a webhook with the actual GitHub databaseId.
         Optional<Label> existingOpt = labelRepository.findByRepositoryIdAndName(repository.getId(), dto.name());
 
         // Fall back to nativeId lookup if name lookup didn't find it (handles label renames)

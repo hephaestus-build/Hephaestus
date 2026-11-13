@@ -338,7 +338,7 @@ public class WorkspaceRepositoryMonitorService {
     @Transactional
     public void ensureAllInstallationRepositoriesCovered(
             long installationId, @Nullable Collection<String> protectedRepositories, boolean deferSync) {
-        // Suspended workspaces must not restart syncs when NATS replays creation events.
+        // Suspended workspaces must not restart syncs when provider inbox replays creation events.
         if (isInstallationSuspended(installationId)) {
             log.info(
                     "Skipped repository enumeration: reason=installationSuspended," + " installationId={}",

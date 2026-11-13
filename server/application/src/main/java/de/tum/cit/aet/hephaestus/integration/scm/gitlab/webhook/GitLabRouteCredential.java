@@ -56,7 +56,7 @@ public class GitLabRouteCredential {
     private static final int ROUTE_ID_LENGTH = 22;
 
     /**
-     * NATS headers the receiver writes from a verified route. The server reads them only on connection-scoped
+     * Inbox routing headers the receiver writes from a verified route. The server reads them only on connection-scoped
      * subjects, which only the receiver's connection endpoint publishes.
      */
     public static final String HEADER_WORKSPACE = "Hephaestus-Route-Workspace";

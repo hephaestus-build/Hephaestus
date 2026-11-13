@@ -422,7 +422,7 @@ Compare a slow boundary with `hikaricp_connections_pending` and `hikaricp_connec
 `database_transaction_http_requests_total` (Counter, label `boundary`) counts the outbound HTTP requests that started while a transaction was open.
 Such a request holds the connection and the row locks of its transaction until the other service answers.
 It counts the requests to GitHub, GitLab, Outline, model providers and other HTTP services.
-It does not count Slack, NATS or Kubernetes requests.
+It does not count Slack or Kubernetes requests.
 
 The boundaries that make such requests, over 1 day:
 
@@ -635,3 +635,10 @@ A failed sample keeps the last values.
 | `action_backlog` | Gauge | `kind`, `state` | Actions that have not ended: `PROPOSED`, `ADMITTED` or `EXECUTING` |
 | `action_oldest_due_seconds` | Gauge | `kind` | How long the oldest due action of the kind has waited. An admitted action is due from its next attempt time, and an action in its retry backoff is not due yet. An action whose lease expired, and that no replica took again, is due from the end of that lease. 0 when none is due |
 | `action_backlog_sampler_failures_total` | Counter | none | Backlog samples that failed |
+
+## Sync-status notifications
+
+`integration_sync_push_messages_total` counts `postgres_publish` and `postgres_receive` by `outcome` (`success` or `failure`).
+A receive failure includes a listener disconnect or a refused malformed routing hint. It carries no content label.
+The sync SSE counters record subscriptions and local delivery separately.
+`HephaestusSyncNotificationsFailing` reports failures that persist for five minutes. REST polling continues while hints are lost.

@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.event;
 
 /**
- * Signals that workspace entities exist in the database and installation-level NATS
+ * Signals that workspace entities exist in the database and installation-level provider inbox
  * consumers (in {@code integration.scm.sync}) may start processing webhook events.
  *
  * <p>Lives in {@code core.event} as a deliberate dependency-inversion: workspace publishes,

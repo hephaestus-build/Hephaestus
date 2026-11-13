@@ -132,7 +132,7 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
     }
 
     /**
-     * Uses atomic upsert to prevent race conditions when concurrent threads (e.g., multiple NATS
+     * Uses atomic upsert to prevent race conditions when concurrent threads (e.g., multiple provider inbox
      * consumers or webhook handlers) process the same issue.
      *
      * @param dto           the issue DTO

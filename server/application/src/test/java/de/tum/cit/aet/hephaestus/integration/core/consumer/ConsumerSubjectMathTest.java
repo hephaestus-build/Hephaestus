@@ -14,8 +14,8 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 /**
  * Pure-function tests for {@link ConsumerSubjectMath}. Mirrors the publisher-side coverage
- * in {@code NatsSubjectBuilderTest} and pins the consumer-side wildcard shapes that drive
- * JetStream filter creation.
+ * in {@code SubjectGrammarRoundTripTest} and pins the consumer-side wildcard shapes that drive
+ * provider inbox filter creation.
  */
 class ConsumerSubjectMathTest extends BaseUnitTest {
     @ParameterizedTest
@@ -208,7 +208,7 @@ class ConsumerSubjectMathTest extends BaseUnitTest {
 
         @Test
         void blankBaseNameIsRejected() {
-            // Catching the misconfiguration here is cheaper than letting NATS reject a
+            // Catching the misconfiguration here is cheaper than letting provider inbox reject a
             // consumer create with a partially-built name like "-scope-42".
             assertThatThrownBy(() -> ConsumerSubjectMath.scopeConsumerName(null, 1L, "github"))
                     .isInstanceOf(IllegalArgumentException.class);

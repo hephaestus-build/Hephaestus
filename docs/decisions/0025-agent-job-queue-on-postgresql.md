@@ -6,6 +6,8 @@
 **Builds on:** [ADR 0005](0005-two-role-runtime-via-conditional-on-property.md) (two-role runtime, original agent NATS consumer), [ADR 0006](0006-llm-proxy-on-coordinator-trust-model.md) (in-app LLM proxy as the sole credential path), [ADR 0013](0013-no-jetstream-dlq-stream.md) (no JetStream DLQ stream)
 **Amended by:** [ADR 0079](0079-one-agent-system.md)
 
+**Amended by:** [ADR 0102](0102-sync-status-hints-use-postgresql-notifications.md). Sync-status hints also use PostgreSQL; no broker remains.
+
 ## Context
 
 The practice-review agent job queue ran on a NATS JetStream stream

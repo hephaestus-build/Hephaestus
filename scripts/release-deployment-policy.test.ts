@@ -50,8 +50,6 @@ await test("release upgrade runs the server topology without optional infrastruc
 	assert.match(upgradeDrill, /"HEPHAESTUS_RUNTIME_WORKER_ENABLED=false"/u);
 	assert.match(upgradeDrill, /"AGENT_ENABLED=false"/u);
 	assert.doesNotMatch(upgradeDrill, /HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED/u);
-	assert.match(upgradeDrill, /"HEPHAESTUS_SYNC_NATS_ENABLED=false"/u);
-	assert.doesNotMatch(upgradeDrill, /"NATS_ENABLED=false"/u);
 });
 
 await test("verification identity is the release's own: run context now, the map for history", () => {

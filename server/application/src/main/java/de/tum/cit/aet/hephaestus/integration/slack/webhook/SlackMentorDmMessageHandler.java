@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Routes the developer's DMs with the app from the unified Slack NATS stream: new messages (top level or in a
+ * Routes the developer's DMs with the app from the unified Slack provider inbox: new messages (top level or in a
  * thread), edits and deletions. Messages of bots, the app's own included, are never routed.
  */
 @Component

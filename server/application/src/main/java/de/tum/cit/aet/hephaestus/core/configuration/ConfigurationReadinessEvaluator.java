@@ -114,26 +114,6 @@ public final class ConfigurationReadinessEvaluator {
                 "webhooks");
         add(
                 facts,
-                "nats.role-contract",
-                "hephaestus.sync.nats.enabled",
-                allRoles(),
-                ConfigurationRequirement.REQUIRED,
-                true,
-                validNatsRoleContract(server),
-                "NATS must be enabled for ingestion in the server role.",
-                "nats");
-        add(
-                facts,
-                "nats.server",
-                "hephaestus.sync.nats.server",
-                roles(RuntimeRole.SERVER),
-                ConfigurationRequirement.REQUIRED,
-                server,
-                this::validNatsUri,
-                "An explicit nats:// or tls:// server URI is required.",
-                "nats");
-        add(
-                facts,
                 "auth.state-cookie-key",
                 "hephaestus.auth.state-cookie-key",
                 roles(RuntimeRole.SERVER),
@@ -339,11 +319,6 @@ public final class ConfigurationReadinessEvaluator {
         return setting.valid() && !setting.value();
     }
 
-    private boolean validNatsRoleContract(boolean server) {
-        BooleanSetting nats = booleanSetting("hephaestus.sync.nats.enabled", false);
-        return nats.valid() && nats.value() == server;
-    }
-
     private boolean validEncryptionKey(@Nullable String value) {
         return value != null && value.length() == 32 && value.chars().allMatch(c -> c >= 0x21 && c <= 0x7e);
     }
@@ -380,23 +355,6 @@ public final class ConfigurationReadinessEvaluator {
         return value != null
                 && value.length() >= 32
                 && value.chars().allMatch(character -> character >= 0x21 && character <= 0x7e);
-    }
-
-    private boolean validNatsUri(@Nullable String value) {
-        if (value == null) return false;
-        try {
-            URI uri = URI.create(value);
-            int port = uri.getPort();
-            String scheme = uri.getScheme();
-            return ("nats".equalsIgnoreCase(scheme) || "tls".equalsIgnoreCase(scheme))
-                    && uri.getHost() != null
-                    && (port == -1 || (port > 0 && port <= 65535))
-                    && (uri.getPath().isEmpty() || "/".equals(uri.getPath()))
-                    && uri.getQuery() == null
-                    && uri.getFragment() == null;
-        } catch (IllegalArgumentException ignored) {
-            return false;
-        }
     }
 
     private boolean validAgentImage(@Nullable String value) {

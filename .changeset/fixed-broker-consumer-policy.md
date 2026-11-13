@@ -2,6 +2,6 @@
 "hephaestus": minor
 ---
 
-The chart no longer sets the broker consumer prefix or how long inactive consumers stay. The server uses the `hephaestus` prefix and keeps inactive consumers for 30 days.
+The chart no longer accepts a broker consumer prefix or an inactivity timeout. Provider events and replay use the PostgreSQL inbox and its scope leases.
 
-**Operators:** Remove `config.durableConsumerName` and `config.consumerInactiveThreshold` from chart values before upgrading. If you used a different consumer prefix, stop publishers and drain its consumers before changing it. Follow the migration instructions; the chart refuses the retired keys.
+**Operators:** Remove `config.durableConsumerName` and `config.consumerInactiveThreshold` from every values file before upgrading. Complete the provider inbox cutover in the migration instructions. The chart refuses the retired keys.

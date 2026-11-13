@@ -155,8 +155,6 @@ The silent deployment checklist above owns startup.
 
 ## Backup and restore
 
-<a id="backup-restore-and-postgresql--jetstream"></a>
-
 [Backup & restore](./backup-restore) owns the data inventory and the backup and restore procedures. A dump restores
 one snapshot, not an arbitrary point in time. Use **pgBackRest** for scheduled backups and WAL archiving
 ([backup tooling decision](https://github.com/hephaestus-build/Hephaestus/issues/1370)).
@@ -192,7 +190,6 @@ For backup and recovery:
 9. Disable rotation during recovery.
 
 Provider events wait in the PostgreSQL inbox, so the database backup holds them.
-NATS holds no data that a restore needs. Do not back it up for recovery.
 
 ### Pre-boot isolation — mandatory for every restore
 
@@ -204,10 +201,10 @@ A disabled Hephaestus row alone is never an isolation boundary.
 1. Stop ingress, all server replicas, and active sandboxes.
 2. Suspend automatic restarts/reconcilers.
 3. Use a separate host for the supported self-host clone.
-4. Give it a separate database, NATS store, domain, and credentials.
-5. Do not connect it to production volumes, NATS, or provider webhooks.
+4. Give it a separate database, domain, and credentials.
+5. Do not connect it to production volumes or provider webhooks.
 6. Before any application starts, deny external traffic from application **and sandbox** networks.
-7. Allow only required isolated database/broker/admin access.
+7. Allow only required isolated database/admin access.
 8. Set `AGENT_ENABLED=false` on the server.
 9. Set `HEPHAESTUS_INTEGRATION_SLACK_ENABLED=false` on Slack-capable roles.
 10. Withhold SCM write credentials, including app signing keys, PATs, and credentials encrypted **inside the restored database**.
@@ -238,15 +235,7 @@ A disabled Hephaestus row alone is never an isolation boundary.
 22. Before such a run, upgrade.
 23. Before such a silent review run, validate the egress brake.
 
-### Restore the broker
-
-<a id="choose-the-broker-recovery-strategy-before-starting-consumers"></a>
-
-NATS carries only sync status hints between server replicas.
-The server keeps no state in NATS, and it reads no message that a restore could replay.
-
-- Do not restore a NATS snapshot or volume into the restored instance.
-- Start NATS with its current store, or with an empty store on a new host.
+### Reconcile external writes after a database restore
 
 A restore to time T loses the provider deliveries that arrived after T, because they were in the PostgreSQL inbox.
 A provider comment that Hephaestus wrote after T can still exist with no restored record.
@@ -662,7 +651,7 @@ The signal names the alerts of the shipped rules that it answers.
 | Backup stale / restore failed (`HephaestusBackupStale`) | Preserve the last good backup, check destination credentials, disk, WAL coverage and encryption-key recovery. On Kubernetes, read the log of the latest backup Job ([Troubleshooting](./kubernetes.mdx#troubleshooting)). A failed WAL archive also stops the backups. Escalate at the agreed RPO, not after the next deploy. | A new off-host backup and isolated restore succeed within measured objectives.                                                                                                                  |
 | Person erasure retry pending (`person_data.erasure.retry_pending`) | Check database availability. The request retains completed receipts and has one automatic retry. | The request reaches `COMPLETE` or reports a failure for an instance admin to resume. |
 | Person erasure stopped (`person_data.erasure.failed`) | Check the request's failure code. Temporary database failures retry once. Repeated or permanent failures require an instance admin to correct the store and resume the request. See [An erasure store fails](#an-erasure-store-fails). | The request reaches `COMPLETE`, and its identifying scope is cleared. |
-| Erasure recovery blocked startup (`person_data.recovery.failed`, then `HephaestusMetricsUnavailable`) | Keep the server stopped. Check the private manifest and the existing erasure receipts. Do not log the manifest or bypass the recovery profile. | Complete [erasure reapplication](./backup-restore#reapply-erasure-decisions-before-processing-resumes), then recover the provider gap, as [Restore the broker](#restore-the-broker) describes, before access resumes. |
+| Erasure recovery blocked startup (`person_data.recovery.failed`, then `HephaestusMetricsUnavailable`) | Keep the server stopped. Check the private manifest and the existing erasure receipts. Do not log the manifest or bypass the recovery profile. | Complete [erasure reapplication](./backup-restore#reapply-erasure-decisions-before-processing-resumes), then recover the provider gap, as [Reconcile external writes after restore](#reconcile-external-writes-after-a-database-restore) describes, before access resumes. |
 | Provider events stay behind (`HephaestusEventsDelayed`, `HephaestusProviderEventsWaiting`) | The `kind` or `provider` label names the provider. Compare `integration_message_process_duration_seconds` with the event rate. Slow handling points to the database or the provider's API. A due event that waits while handling is fast means that no server claims. Check that the servers run and are ready. Check that `hephaestus.integration.consumer.claimers` is above 0. A long `LEASED` backlog with a handler timeout points to a handler that holds its resource's order. A suspended workspace's events also wait until it is active again. | Under 10 % of `integration_message_lag_seconds` is over 5 minutes, and `integration_consumer_oldest_due_seconds` falls. |
 | Webhook publish failures / unrecovered GitHub events (`HephaestusWebhookPublishFailing`, `HephaestusWebhookEventsUnrecovered`) | Check PostgreSQL first: the receiver fails a delivery that it cannot store in the inbox. The log names `webhook.publish.reason=store-failed`. GitHub deliveries are redelivered for up to 80 minutes after their first failure. Do not restart the receiver to clear the alert. | `webhook.publish` failures stop and `github.webhook.unrecovered` returns to zero. Redeliver older GitHub deliveries in the App settings within three days, or let reconciliation recover the rest. |
 | Webhook connection admission refuses a delivery (`webhook.rejected`, reason `connection-not-active`) | Check the connection's state. `PENDING`, `SUSPENDED` and `UNINSTALLED` connections admit no work payload. The admission log names the provider and refusal reason. An inactive source App also prevents delivery to matching PAT workspaces. `work-event-without-source` means the GitHub work event has no source repository or signed installation ID. Check the App's configured webhook. `connection-route-mismatch` means the source server, signed installation or route no longer matches. | Restore the connection deliberately or complete its upstream cleanup. A new delivery after activation can enter the inbox. No rejected payload is available for replay. |
@@ -671,7 +660,6 @@ The signal names the alerts of the shipped rules that it answers.
 | Many GitHub redeliveries requested (`HephaestusWebhookRedeliveriesRequested`) | GitHub recorded no successful delivery for these events, so the cause can be before the receiver: the Gateway, its timeout, or an unready receiver. Read the App's **Advanced** → **Recent Deliveries** for the status of the failed deliveries. Then check the receiver's readiness and `webhook.publish` failures. | `github.webhook.redelivery` with `outcome=requested` stops increasing. |
 | No available server (`HephaestusServerDown`) | The API is down and every provider delivery fails now. Check the server Deployment's events, and its pods' readiness probe and log. A pod that waits for the schema needs the migration Job. GitHub deliveries are redelivered for up to 80 minutes after their first failure. Other providers need reconciliation. | The server Deployment has an available replica, and `webhook.publish` counts successes. |
 | Unavailable server replica (`HephaestusServerUnready`) | The other server replicas serve. Read the unavailable pod's events and log, and delete it if it does not recover. | The server Deployment has no unavailable replica. |
-| Broker storage exhaustion (`HephaestusJetStreamVolumeFilling`) | The server stores nothing in JetStream, and provider deliveries in PostgreSQL are not affected. To clear the volume, stop NATS, delete its confirmed PersistentVolumeClaim `data-<release>-nats-0`, and run the install command again.                                                                                                                                                                                                           | The NATS volume has more than 10 % free space.                                                                                |
 | Provider event backlog gauges fail (`HephaestusProviderEventBacklogUnsampled`) | Read the server log for `provider_event.backlog.sampler_failed` and its `error.type`. Check the database connection. The backlog gauges show their last values meanwhile. | `integration_consumer_backlog_sampler_failures_total` stops increasing. |
 | Metrics target down (`HephaestusMetricsUnavailable`) | Check that the pod or container runs and is ready, and that the network policy admits the scraper. The other application alerts of that target cannot fire meanwhile. | The target's `up` is 1. |
 | Dead-man check (`HephaestusWatchdog`) | This alert always fires while the monitoring works. Route it to an outside dead-man check, not to a person. When the outside check reports that it stopped, find the broken link. Check the Alertmanager and its receiver first, then vmalert and its rule file. Then check VictoriaMetrics, its scrape, and the roles' `up` series. | The outside check receives the alert again. |
@@ -682,7 +670,7 @@ The signal names the alerts of the shipped rules that it answers.
 | Node disk filling (`HephaestusNodeDiskFilling`) | Find what fills the node: Git mirrors (`server.gitCache.sizeLimit`, `server.gitCache.sizeLimit`), review sandboxes, which have no disk limit, or images. Drain the node to move the server when a sandbox fills it. | Free space stays above the threshold, and no pod on the node is evicted for disk pressure. |
 | Certificate expiring (`HephaestusCertificateExpiring`) | Read the status and events of the Certificate and its latest CertificateRequest. Fix the issuer or the challenge. PostgreSQL reads a renewed certificate when it restarts ([Database maintenance](./maintenance.md#database-maintenance)). | cert-manager issued a new certificate, its expiry moved ahead, and the roles connect. |
 | Host does not follow its channel (`HephaestusDeployReconcileFailing`, `HephaestusDeployReconcileStale`, `HephaestusDeployMetricsMissing`, `HephaestusDeployToolingPending`) | Read `journalctl -u hephaestus-reconcile.service` for the failed run. A chart that refuses the host's values names the value. Change the site values, or wait for the fix of the release. For a stale run, check `systemctl status hephaestus-reconcile.timer`. Do not apply a release by hand around the reconciler ([Pull-based deployment](./pull-based-deployment)). | A run ends with `hephaestus_deploy_reconcile_success` 1, and `hephaestus_deploy_info` names the channel's release. |
-| API error budget burning (`HephaestusApiErrorBudgetBurnFast`, `HephaestusApiErrorBudgetBurnSlow`, `HephaestusApiErrorBudgetBurnTicket`) | Find the routes: `sum by (uri, status) (rate(http_server_requests_seconds_count{runtime_role="server",status=~"5.."}[30m]))`. Search the server log for `ERROR` records with those routes and follow their trace ids ([Correlating a request](./monitoring.md#find-the-records-of-one-request)). Check the database and the broker before the code. A deploy that started the burn is the first candidate for a rollback. | The 5xx ratio of the last 5 minutes is below 0.5 %, and the alert resolves. The ticket alert resolves only when the ratio of the last six hours is below 0.5 %. |
+| API error budget burning (`HephaestusApiErrorBudgetBurnFast`, `HephaestusApiErrorBudgetBurnSlow`, `HephaestusApiErrorBudgetBurnTicket`) | Find the routes: `sum by (uri, status) (rate(http_server_requests_seconds_count{runtime_role="server",status=~"5.."}[30m]))`. Search the server log for `ERROR` records with those routes and follow their trace ids ([Correlating a request](./monitoring.md#find-the-records-of-one-request)). Check the database before the code. A deploy that started the burn is the first candidate for a rollback. | The 5xx ratio of the last 5 minutes is below 0.5 %, and the alert resolves. The ticket alert resolves only when the ratio of the last six hours is below 0.5 %. |
 | API reads slow (`HephaestusApiLatencyBudgetBurnFast`, `HephaestusApiLatencyBudgetBurnSlow`, `HephaestusApiLatencyBudgetBurnTicket`) | Find the slow routes with the same query on `http_server_requests_seconds_bucket{le="2.0"}` against the count. Check database statement statistics, connection pool waits and the node's CPU. A slow route on its own is usually a query. All routes slow at once is usually the node or the database. | The share of reads over 2 seconds in the last 5 minutes is below 0.5 %, and the alert resolves. The ticket alert resolves only when that share over the last six hours is below 0.5 %. |
 | Slow Activity reads (`HephaestusActivityLatencyBudgetBurnFast`, `HephaestusActivityLatencyBudgetBurnSlow`) | Find the slow route with `histogram_quantile(0.95, sum by (uri, le) (rate(http_server_requests_seconds_bucket{uri=~"(/public)?/workspaces/[^/]+/activity(/.*)?"}[1h])))`. Then compare it with the database pool wait (`hikaricp_connections_pending`) and the top statements by total time in `pg_stat_statements`. | 95 % of Activity reads finish within 1 second. |
 | Slow conversation answers (`HephaestusConversationFirstTokenBudgetBurnFast`, `HephaestusConversationFirstTokenBudgetBurnSlow`) | Compare the model's own first chunk (`gen_ai_client_operation_time_to_first_chunk_seconds{band="interactive"}`) with the wait for its pool (`llm_pool_permit_wait_seconds{band="interactive"}`). A slow first chunk points to the provider. A long wait points to the pool's limit. | 95 % of turns start their answer within 10 seconds. |
@@ -773,7 +761,7 @@ A broken email path cannot reliably report its own failure by email.
 Sustained `unavailable`, `rate_limited`, `rejected`, `unconfirmed` or `expired` outcomes require investigation.
 
 1. Use **Instance settings → Email → Send test email** to distinguish missing configuration, silent mode, exhausted capacity, and relay failures.
-2. For application, database, NATS, scheduler, or SMTP outages, page the operator through an **external** monitoring channel.
+2. For application, database, scheduler, or SMTP outages, page the operator through an **external** monitoring channel.
 3. Monitor the `notification.email.delivery` counter by bounded `kind` and `outcome`.
    Monitor `action.ended` by `kind`, `state` and `reason` for every outbox action, email included.
    An email that expires or loses its lease appears only in `action.ended`.

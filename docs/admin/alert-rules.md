@@ -44,7 +44,7 @@ Each rule needs its exporter, scraped by the same Prometheus:
 | Exporter | Metrics | Alerts |
 | --- | --- | --- |
 | [kube-state-metrics](https://github.com/kubernetes/kube-state-metrics/blob/main/docs/metrics/workload/cronjob-metrics.md) | `kube_cronjob_status_last_successful_time`, `kube_cronjob_created`, `kube_cronjob_labels`, `kube_deployment_status_replicas_available`, `kube_deployment_status_replicas_unavailable`, `kube_deployment_spec_replicas`, `kube_deployment_labels` | `HephaestusBackupStale`, `HephaestusServerDown`, `HephaestusServerUnready` |
-| The kubelet's `/metrics` endpoint, with a storage driver that reports volume statistics | `kubelet_volume_stats_available_bytes`, `kubelet_volume_stats_capacity_bytes` | `HephaestusPostgresVolumeFilling`, `HephaestusJetStreamVolumeFilling` |
+| The kubelet's `/metrics` endpoint, with a storage driver that reports volume statistics | `kubelet_volume_stats_available_bytes`, `kubelet_volume_stats_capacity_bytes` | `HephaestusPostgresVolumeFilling` |
 | [node-exporter](https://github.com/prometheus/node_exporter) on each node | `node_filesystem_avail_bytes`, `node_filesystem_size_bytes`, `node_filesystem_readonly` | `HephaestusNodeDiskFilling` |
 | [cert-manager](https://cert-manager.io/docs/devops-tips/prometheus-metrics/) | `certmanager_certificate_expiration_timestamp_seconds` | `HephaestusCertificateExpiring` |
 
@@ -64,7 +64,7 @@ kube-state-metrics exports these labels only when you allow them:
 
 Without these labels, the two server rules find no Deployment and never fire.
 
-The other rules find the release's objects by the names that the chart gives them: `data-<release>-postgresql-0`, `data-<release>-nats-0`, and the CronJobs `<release>-postgresql-backup-full` and `<release>-postgresql-backup-diff`.
+The other rules find the release's objects by the names that the chart gives them: `data-<release>-postgresql-0`, and the CronJobs `<release>-postgresql-backup-full` and `<release>-postgresql-backup-diff`.
 Another application in the cluster can use the same names, for example another PostgreSQL chart.
 To limit these rules to the release, add a matcher for its namespace, for example `namespace="hephaestus"`.
 Do the same for `HephaestusCertificateExpiring`, which covers every certificate that cert-manager manages in the cluster.
@@ -76,7 +76,6 @@ Thus, the limit depends on the component:
 | --- | --- |
 | The backup CronJobs (`postgresql-backup`) | 34 characters |
 | The PostgreSQL volume (`postgresql`) | 41 characters |
-| The NATS volume (`nats`) | 47 characters |
 
 `HephaestusBackupStale` then finds the backup CronJobs by their labels, which the `cronjobs` part of the allowlist above exports.
 For the volume rules, change their name patterns.
@@ -143,7 +142,6 @@ For the volume rules, change their name patterns.
 | `HephaestusServerUnready` | `kube_deployment_status_replicas_unavailable` of the server Deployment, while another replica is available | The other replicas serve, so this is a warning. The wait is longer than the 10 minutes that a new pod waits for the schema |
 | `HephaestusBackupStale` | The newest successful full or differential backup of a release, or the creation time of CronJobs with no successful backup | A differential backup runs each day. The hours above one day let a full backup run |
 | `HephaestusPostgresVolumeFilling` | Free space of the PostgreSQL volume | A failed WAL archive fills the volume. The warning gives time to repair the archive. The critical level comes shortly before PostgreSQL stops. The warning covers only the band above the critical level, so the two never fire together |
-| `HephaestusJetStreamVolumeFilling` | Free space of the JetStream volume | The volume is `max_file` plus 25 %, so a broker at its storage budget leaves 20 % free. Below the threshold, something outside the budget fills the volume. A full file system wedges the broker |
 | `HephaestusNodeDiskFilling` | Free space of a writable node file system, not the volumes that the kubelet mounts for pods | The kubelet's image garbage collection starts at 85 % use and frees space to 80 %. When the space stays low, eviction comes next. The volume rules cover pod volumes |
 | `HephaestusDeployReconcileFailing` | `hephaestus_deploy_reconcile_success` | The timer runs the reconciler each minute. A run that fails for 15 minutes does not clear itself. For example, a chart that refuses the host's values fails each run in the same way. The host then keeps its old release |
 | `HephaestusDeployReconcileStale` | `hephaestus_deploy_reconcile_timestamp_seconds` | The reconciler writes the timestamp when a run ends, and one apply may take up to the unit's 30-minute start timeout. No finished run for 40 minutes means that the timer or the unit stopped |

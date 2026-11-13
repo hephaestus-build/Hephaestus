@@ -1,5 +1,5 @@
 # One small cluster: a single k3s node of 4 vCPU, at least 16 GiB of memory (32 GiB gives more
-# headroom) and 150 GiB of disk. Bundled PostgreSQL and NATS, one server that runs five reviews at a
+# headroom) and 150 GiB of disk. Bundled PostgreSQL, one server that runs five reviews at a
 # time, and bounded caches; the chart derives the sandbox quotas.
 # docs/admin/helm-chart.md § Profiles gives the arithmetic; a chart test checks that the requests,
 # one upgrade beside them, and the quota fit.
@@ -26,10 +26,6 @@ postgresql:
     effective_cache_size: 1GB
     max_parallel_workers_per_gather: 0
     max_wal_size: 1GB
-nats:
-  bundled: true
-  jetstream:
-    maxFileBytes: 8589934592
 server:
   databasePool: { maximumPoolSize: auto, minimumIdle: 2 }
   # Reserve a replacement beside the draining server within the single node budget.

@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQueries, useQuery } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
@@ -81,6 +81,58 @@ describe("useSyncEvents", () => {
 		expect(FakeEventSource.instances).toHaveLength(1);
 		expect(latestSource().url).toBe(`http://localhost:8080/workspaces/${WORKSPACE}/sync/events`);
 		expect(latestSource().withCredentials).toBe(true);
+	});
+
+	it("refreshes idle integration reads after a missed hint while SSE stays healthy", async () => {
+		const client = new QueryClient({
+			defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+		});
+		const path = { workspaceSlug: WORKSPACE };
+		const connectionPath = { ...path, connectionId: CONNECTION_ID };
+		const keys = [
+			getIntegrationCatalogQueryKey({ path }),
+			getWorkspaceQueryKey({ path }),
+			getConnectionSyncStatusQueryKey({ path: connectionPath }),
+			listConnectionSyncJobsQueryKey({ path: connectionPath }),
+			listConnectionSyncResourcesQueryKey({ path: connectionPath }),
+			listSlackChannelsQueryKey({ path }),
+			listOutlineCollectionsQueryKey({ path }),
+		];
+		let revision = 1;
+		const { result, unmount } = renderHook(
+			() => {
+				const unavailable = useSyncEvents(WORKSPACE);
+				const reads = useQueries({
+					queries: keys.map((queryKey) => ({ queryKey, queryFn: async () => revision })),
+				});
+				const other = useQuery({
+					queryKey: getIntegrationCatalogQueryKey({ path: { workspaceSlug: "another-workspace" } }),
+					queryFn: async () => revision,
+				});
+				return { unavailable, reads, other };
+			},
+			{ wrapper: wrapper(client) },
+		);
+		try {
+			act(() => latestSource().open());
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(1);
+			});
+			expect(result.current.reads.map((read) => read.data)).toStrictEqual(keys.map(() => 1));
+			expect(result.current.other.data).toBe(1);
+			// PostgreSQL lost the notification, but the HTTP stream never errors or reopens.
+			revision = 2;
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(60_000);
+			});
+			expect(result.current.unavailable).toBe(false);
+			expect(FakeEventSource.instances).toHaveLength(1);
+			expect(result.current.reads.map((read) => read.data)).toStrictEqual(keys.map(() => 2));
+			expect(result.current.other.data).toBe(1);
+		} finally {
+			unmount();
+			client.clear();
+		}
 	});
 
 	it("does not resync on the first open, because that would cancel the page's own mount fetches", () => {

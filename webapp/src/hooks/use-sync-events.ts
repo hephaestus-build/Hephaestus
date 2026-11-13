@@ -17,6 +17,7 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import type { ConnectionSummary, IntegrationCatalogEntry } from "@/api/types.gen";
 import environment from "@/environment";
+import { usePageVisible } from "@/hooks/use-page-visible";
 import { openEventStream } from "@/lib/event-stream";
 import { isRecord } from "@/lib/is-record";
 import { hasText } from "@/lib/text";
@@ -40,11 +41,7 @@ function isSyncEventScope(value: unknown): value is SyncEventScope {
 	return typeof value === "string" && Object.hasOwn(SYNC_EVENT_SCOPES, value);
 }
 
-/**
- * Drops a hint whose shape does not match. Dropping is not free: `syncPollInterval` turns polling
- * off entirely while the stream is healthy and no job is running, so nothing refetches the queries
- * that hint would have refreshed until the next hint, or a navigation.
- */
+/** Drops malformed hints; the section's REST backstop repairs a missed invalidation. */
 function parseHint(payload: string): SyncEventHint | undefined {
 	let decoded: unknown;
 	try {
@@ -67,6 +64,9 @@ const RESYNC_THROTTLE_MS = 30_000;
 
 /** Trailing window used to coalesce hint bursts from a chatty job. */
 const HINT_DEBOUNCE_MS = 300;
+
+/** Bounds missed notifications even when the browser SSE connection stays open. */
+const REST_BACKSTOP_MS = 60_000;
 
 /**
  * The query families this section owns, identified by the generated `_id` rather than a hand-typed
@@ -116,6 +116,7 @@ function connectionKindOf(
 /** Invalidates integration queries from workspace-scoped SSE hints. REST remains authoritative. */
 export function useSyncEvents(workspaceSlug: string | undefined): boolean {
 	const queryClient = useQueryClient();
+	const pageVisible = usePageVisible();
 	const [livePushUnavailable, setLivePushUnavailable] = useState(false);
 
 	// Each workspace gets its own stream, so the previous one's failures say nothing about this one.
@@ -126,6 +127,22 @@ export function useSyncEvents(workspaceSlug: string | undefined): boolean {
 		setStreamedSlug(workspaceSlug);
 		setLivePushUnavailable(false);
 	}
+
+	// A database-listener gap does not close SSE. Refresh all integration query families so idle
+	// jobs and connection changes cannot depend on another hint or a window-focus event.
+	useEffect(() => {
+		if (!hasText(workspaceSlug) || !pageVisible) {
+			return;
+		}
+		const timer = setInterval(() => {
+			void invalidateWorkspaceReads(
+				queryClient,
+				workspaceSlug,
+				integrationQueryFamilyIds(workspaceSlug),
+			);
+		}, REST_BACKSTOP_MS);
+		return () => clearInterval(timer);
+	}, [workspaceSlug, queryClient, pageVisible]);
 
 	useEffect(() => {
 		if (!hasText(workspaceSlug)) {

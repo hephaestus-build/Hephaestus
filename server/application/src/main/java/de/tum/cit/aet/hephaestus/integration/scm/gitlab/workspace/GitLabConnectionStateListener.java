@@ -23,7 +23,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * Connection is resolvable and ACTIVE by the time the sync body runs, so the sync is always recorded as an
  * {@code INITIAL}/{@code LIFECYCLE} {@code SyncJob} (via {@code GitLabWorkspaceDataSyncTrigger} inside
  * {@link GitLabWorkspaceInitializationService#initializeAsync}) instead of racing the activation and
- * falling to an unrecorded body. {@code initializeAsync} confirms the NATS scope consumer for the discovered
+ * falling to an unrecorded body. {@code initializeAsync} confirms the provider inbox scope consumer for the discovered
  * repositories before it registers the webhook, and runs the full sync after both.
  *
  * <p>Deactivation is durable. Suspended connections lose their upstream group hook under the lifecycle lock;
@@ -56,7 +56,7 @@ public class GitLabConnectionStateListener {
         }
         // initializeAsync already dispatches to the monitoring executor and wraps every phase — call it
         // directly so the commit thread returns immediately. It records the INITIAL/LIFECYCLE SyncJob and
-        // starts the NATS consumer.
+        // starts the inbox consumer.
         try {
             initService.initializeAsync(event.workspaceId());
         } catch (RuntimeException e) {

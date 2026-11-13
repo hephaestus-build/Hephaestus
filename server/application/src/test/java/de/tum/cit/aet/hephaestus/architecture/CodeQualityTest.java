@@ -436,8 +436,6 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     // @ConditionalOnProperty(hephaestus.integration.outline.enabled));
                     // the always-on purge contributor resolves it lazily so it still
                     // drops leftover documents when Outline is disabled
-                    "SyncPushService", // Qualified NATS connection is optional when sync push is disabled or under
-                    // specs
                     "GitLabConnectionSyncStateProvider", // Rate-limit tracker is conditional with the GitLab runtime
                     // beans
                     "OutlineConnectionSyncStateProvider", // Rate-limit tracker (OutlineRateLimitTracker) is

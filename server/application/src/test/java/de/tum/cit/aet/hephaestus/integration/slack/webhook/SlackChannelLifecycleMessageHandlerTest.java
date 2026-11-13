@@ -61,7 +61,7 @@ class SlackChannelLifecycleMessageHandlerTest {
         AbstractSlackEnvelopeHandler handler = build.apply(lifecycleService, deserializer);
 
         assertThat(handler.key().eventType()).isEqualTo(eventType);
-        handler.onMessage(nats("{\"team_id\":\"T1\",\"event\":{\"type\":\"" + eventType + "\",\"channel\":\"C1\"}}"));
+        handler.onMessage(inbox("{\"team_id\":\"T1\",\"event\":{\"type\":\"" + eventType + "\",\"channel\":\"C1\"}}"));
 
         verifier.check(lifecycleService);
     }
@@ -73,7 +73,7 @@ class SlackChannelLifecycleMessageHandlerTest {
         void check(SlackChannelLifecycleService service);
     }
 
-    private static ProviderEvent nats(String body) {
+    private static ProviderEvent inbox(String body) {
         ProviderEvent message = mock(ProviderEvent.class);
         when(message.payload()).thenReturn(body.getBytes(StandardCharsets.UTF_8));
         return message;

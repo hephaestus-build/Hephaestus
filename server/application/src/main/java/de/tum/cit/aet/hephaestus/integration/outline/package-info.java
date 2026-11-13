@@ -11,7 +11,7 @@
             "integration.core::framework",
             "integration.core::spi",
             "integration.core::items",
-            // OutlineWebhookMessageHandler rides the JetStream consumer lane (ADR 0023 §3).
+            // OutlineWebhookMessageHandler rides the provider inbox (ADR 0023 §3).
             "integration.core::handler",
             // The route endpoint publishes through the receiver; its secret derives from the routing key (ADR 0066).
             "integration.core::webhook",

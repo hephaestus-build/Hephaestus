@@ -34,7 +34,7 @@ missing evidence means the host remains **unqualified**, even if every threshold
 - Operator, commit, release-lock digest and signature verification, rendered Compose digest, all
   application and sandbox image digests; Linux, Docker and Compose versions.
 - Host provider, region, CPU model, vCPUs, RAM and storage; load-generator host and utilization.
-- Snapshot identity, row counts and JetStream state; deterministic provider identity, model and
+- Snapshot identity, row counts and inbox state; deterministic provider identity, model and
   latency distribution. Any gateway limit recorded above must match the deployed configuration, not
   an assumed default.
 - Raw container and host samples, busiest rolling 60-second CPU window, minimum available memory,

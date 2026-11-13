@@ -1,11 +1,11 @@
 ---
-title: Use an external PostgreSQL and NATS
-description: Set up the database roles on your own PostgreSQL, and connect the release to it and to your own NATS JetStream broker.
+title: Use an external PostgreSQL
+description: Set up the database roles on your own PostgreSQL, and connect the release to it.
 page_type: how-to
 ---
 
-By default, the chart runs its own PostgreSQL and NATS.
-Use this procedure to run the release against a PostgreSQL server or a NATS broker that you operate.
+By default, the chart runs its own PostgreSQL.
+Use this procedure to run the release against a PostgreSQL server that you operate.
 [Database roles](./helm-chart#database-roles) describes each role that the release uses.
 
 ## Set up the database roles
@@ -77,19 +77,6 @@ The chart connects to `postgresql.external.host` and `postgresql.external.port` 
 The server certificate must name that host.
 The Secret in `postgresql.tls.existingSecret` needs only `ca.crt`, the CA that signed the server certificate.
 The chart has no setting for a connection without certificate verification or without TLS.
-
-Set `nats.bundled=false` to use your NATS JetStream broker.
-The broker must run NATS Server 2.11 or later: a replay pauses a consumer.
-On an older broker, the server starts and delivers events, but it logs `integration.broker.unsupported` at start, and the `natsBroker` health component is `DOWN`.
-Put the broker on a private network that only this release can reach.
-
-For a `tls://` broker, Hephaestus verifies the certificate chain and the broker's hostname.
-The certificate must name the host in `nats.external.url`.
-For each advertised address, the destination broker's certificate must name that address.
-
-The bundled broker stays inside the release namespace, and network policy admits only the server.
-The application has no setting for the stream replica count.
-A three-server JetStream cluster therefore keeps one replica of each stream.
 
 ## Check that it worked
 

@@ -12,9 +12,9 @@ import { asDate } from "@/lib/dates";
  * - **Healthy stream, job running →** 30s backstop. Hint delivery is at-most-once, so a dropped
  *   terminal hint would otherwise strand a "Running" job on screen forever. 30s bounds that
  *   staleness without competing with the sub-second freshness the hints already provide.
- * - **Healthy stream, idle →** no interval at all. Idle changes arrive via mutation invalidation
- *   (user-initiated) or a hint (scheduled jobs); a dropped idle hint is healed by the next window
- *   focus, which `staleTime: 30_000` keeps cheap.
+ * - **Healthy stream, idle →** no per-query interval. `useSyncEvents` refreshes the section every
+ *   60s while visible, including catalogs that a connection change updates. That backstop also
+ *   repairs a hint missed while the browser stream stays healthy.
  * - **`livePushUnavailable` →** polling *is* the freshness channel, so pay the full 5s/60s.
  */
 export function syncPollInterval(

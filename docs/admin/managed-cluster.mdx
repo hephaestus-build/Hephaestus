@@ -32,7 +32,7 @@ The preflight in [Install](#install) checks each item that your access can read.
    It serves the public host name of the release with TLS.
 4. Sandbox nodes that meet the [sandbox prerequisites](./sandboxes#sandbox-prerequisites).
    They need user namespace support (Linux 6.3 or later, containerd 2.0 or later) and encrypted node storage.
-5. A StorageClass for ReadWriteOnce volumes, as the default class or by name, with about 50 GiB for PostgreSQL and NATS.
+5. A StorageClass for ReadWriteOnce volumes, as the default class or by name, with about 50 GiB for PostgreSQL.
    An [external PostgreSQL](./external-database) replaces the PostgreSQL volume.
 6. Egress on port 443 from the release namespace to the Git providers and the model APIs that the workspaces use.
 7. Image pulls from `ghcr.io`, `docker.io` and `registry.k8s.io` on every node.

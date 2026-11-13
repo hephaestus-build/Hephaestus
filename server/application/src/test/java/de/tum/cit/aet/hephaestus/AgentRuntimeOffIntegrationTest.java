@@ -24,7 +24,6 @@ import org.springframework.test.context.DynamicPropertySource;
             "hephaestus.sandbox.kubernetes.namespace=",
             "hephaestus.sandbox.kubernetes.pod-name=",
             "hephaestus.sandbox.kubernetes.pod-ip=",
-            "hephaestus.sync.nats.enabled=false"
         })
 @ActiveProfiles({"test", "e2e"})
 @Import({TestSecurityConfig.class, TestAsyncConfiguration.class})

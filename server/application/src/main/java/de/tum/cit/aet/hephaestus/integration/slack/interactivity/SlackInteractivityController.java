@@ -28,7 +28,7 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>Server role only: the consent and vote handling it commits synchronously lives there. The edge routes this one
  * path to the server, while every other {@code /webhooks/**} delivery, Slack Events included, stays on the webhook
- * role and its durable NATS publication.
+ * role and its durable provider inbox publication.
  */
 @Hidden // inbound Slack webhook receiver — not part of the webapp API surface; excluded from the OpenAPI client
 @RestController

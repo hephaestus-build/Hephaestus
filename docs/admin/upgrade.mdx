@@ -135,7 +135,7 @@ Each phase is a separate `helm upgrade` with that phase's chart, profile and sit
 | 2. Migrate | New release | `true` | 0 | The migration Job of this revision completed successfully. |
 | 3. Start the new roles | New release | `true` | Recorded count | Readiness, authenticated reads, a practice review and a conversation pass. |
 
-Keep PostgreSQL and NATS running throughout these phases.
+Keep PostgreSQL running throughout these phases.
 Use `server.replicas=0`, not `sandbox.enabled=false`, to stop the server.
 
 Before the cutover to conversation sandboxes, stop the source release's conversation loop too.
@@ -165,20 +165,19 @@ On one host, keep it paused through the final installer run in [Upgrade the host
 ## Change a volume size
 
 A StatefulSet does not allow a change of its `volumeClaimTemplates`.
-Two StatefulSets of the chart have a volume claim template:
+The PostgreSQL StatefulSet has a volume claim template:
 
 - `<release>-postgresql`, sized by `postgresql.persistence.size`.
-- `<release>-nats`, sized from `nats.jetstream.maxFileBytes`, plus 25 %.
 
-If an upgrade changes either size, for example through a new profile, `helm upgrade` fails.
+If an upgrade changes its size, for example through a new profile, `helm upgrade` fails.
 The error says `StatefulSet ... is invalid: spec: Forbidden: updates to statefulset spec for fields other than ...`.
 With `--rollback-on-failure`, Helm then returns to the previous revision, and nothing changes.
 
 Kubernetes cannot shrink a volume.
 If the new size is smaller, keep the current size in your own values file, as [Storage and retention](./helm-chart#storage-and-retention) says.
 
-If the new size is larger, follow these steps for each StatefulSet whose size changes.
-The volume of PostgreSQL is `data-<release>-postgresql-0`, and the volume of NATS is `data-<release>-nats-0`.
+If the new size is larger, follow these steps for the PostgreSQL StatefulSet.
+The volume of PostgreSQL is `data-<release>-postgresql-0`.
 
 1. Check that the storage class allows expansion:
 
@@ -192,7 +191,7 @@ The volume of PostgreSQL is `data-<release>-postgresql-0`, and the volume of NAT
 2. Make the volume larger. Use the new size from the chart in place of `<new size>`:
 
    ```bash
-   kubectl --namespace hephaestus patch pvc data-hephaestus-nats-0 \
+   kubectl --namespace hephaestus patch pvc data-hephaestus-postgresql-0 \
      --patch '{"spec":{"resources":{"requests":{"storage":"<new size>"}}}}'
    ```
 
@@ -200,16 +199,16 @@ The volume of PostgreSQL is `data-<release>-postgresql-0`, and the volume of NAT
    If the capacity stays at the old size, check the conditions of the volume:
 
    ```bash
-   kubectl --namespace hephaestus get pvc data-hephaestus-nats-0 -o jsonpath='{.status.conditions[*].type}'
+   kubectl --namespace hephaestus get pvc data-hephaestus-postgresql-0 -o jsonpath='{.status.conditions[*].type}'
    ```
 
    `FileSystemResizePending` means that the storage driver resizes the file system only when the Pod starts again.
-   Then continue with steps 4 and 5, and after step 5 delete the Pod: `kubectl --namespace hephaestus delete pod hephaestus-nats-0`.
+   Then continue with steps 4 and 5, and after step 5 delete the Pod: `kubectl --namespace hephaestus delete pod hephaestus-postgresql-0`.
    The StatefulSet starts it again with the larger volume.
 4. Delete the StatefulSet and keep its Pods and volumes:
 
    ```bash
-   kubectl --namespace hephaestus delete statefulset hephaestus-nats --cascade=orphan
+   kubectl --namespace hephaestus delete statefulset hephaestus-postgresql --cascade=orphan
    ```
 
 5. Run the same `helm upgrade` again.
@@ -246,7 +245,7 @@ Removal of a stale lock does not repair a failed migration.
 5. If feasible, preserve a forensic snapshot.
 6. Follow [Backup & restore](./backup-restore) to restore the pre-upgrade backup into a fresh database.
 7. Use matching PostgreSQL version/extensions, encryption keys, and the **previous signed release lock**.
-8. Do not restore NATS data, as [Restore the broker](./production-operations-runbook#restore-the-broker) describes.
+8. Reconcile external writes, as [Reconcile external writes after restore](./production-operations-runbook#reconcile-external-writes-after-a-database-restore) describes.
 9. Boot only under pre-boot isolation.
 10. Read back silent mode, and turn it on if it is off.
 11. Verify the restored schema, representative data, and readiness.
@@ -322,6 +321,16 @@ The history names no person.
 Each server reports its own identity in `/actuator/info` only.
 
 ## Release-specific procedures
+
+### Remove the retired sync broker values before upgrading
+
+Remove `nats` and `images.nats` from every values file before rendering the target chart, including site and profile overrides.
+The chart refuses those keys. Regenerate image values from the target release lock.
+
+Remove `hephaestus.sync.nats.*` properties and broker environment settings and credentials as the migration entry of the same name lists.
+After the upgraded server delivers sync hints through PostgreSQL, stop any external broker used only by this release.
+
+The old bundled PersistentVolumeClaim can remain after Helm removes the workload. Remove only its confirmed release-owned claim when its data is no longer needed.
 
 Some releases need a procedure of their own before the new runtime roles start.
 The [database migration instructions](./compatibility-policy#database-migrations) say when one applies.

@@ -51,9 +51,6 @@ The server adds this CA at start, and the public CAs stay trusted.
 After you replace the CA, restart the server.
 This option does not change what GitLab trusts. If Hephaestus uses a private certificate, add its CA to the trusted certificates of your GitLab, so that GitLab can deliver webhooks.
 
-The server also uses this trust bundle for an external broker whose `nats.external.url` uses `tls://`.
-Include the broker's CA in the bundle if it uses a private CA.
-
 ## Admit a Git provider on a private network
 
 Hephaestus refuses a Git provider on a private address by default.

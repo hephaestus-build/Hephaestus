@@ -337,7 +337,6 @@ const chartChannelImages = (omit?: string): Record<string, string> =>
 					"HEPHAESTUS_IMAGE_APPLICATION_SERVER",
 					`ghcr.io/hephaestus-build/application-server@sha256:${"2".repeat(64)}`,
 				],
-				["HEPHAESTUS_IMAGE_NATS", `docker.io/synadia/nats-server@sha256:${"3".repeat(64)}`],
 				[
 					"HEPHAESTUS_IMAGE_VICTORIA_METRICS",
 					`docker.io/victoriametrics/victoria-metrics@sha256:${"6".repeat(64)}`,
@@ -979,11 +978,6 @@ async function reconcilerFixture(directory: string, targetRelease = "v1.0.0") {
 		JSON.stringify({
 			images: ["webapp", "application-server", "agent-pi", "postgres"],
 			upstream: [
-				{
-					name: "nats",
-					repository: "docker.io/synadia/nats-server",
-					digest: `sha256:${"3".repeat(64)}`,
-				},
 				{
 					name: "victoria-metrics",
 					repository: "docker.io/victoriametrics/victoria-metrics",

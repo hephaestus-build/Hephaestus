@@ -199,7 +199,7 @@ public interface RepositoryRepository extends JpaRepository<Repository, Long> {
      * path names one repository per provider, so neither row is reassigned to the other.
      * <p>
      * A concurrent first insert of the same repository is absorbed by {@code ON CONFLICT DO NOTHING} and
-     * the read that follows it, so NATS event processing and GraphQL sync cannot fail with an optimistic
+     * the read that follows it, so provider inbox event processing and GraphQL sync cannot fail with an optimistic
      * locking error.
      *
      * @param nativeId       the provider's original numeric ID for the repository

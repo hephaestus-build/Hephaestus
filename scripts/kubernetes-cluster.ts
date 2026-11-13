@@ -8,7 +8,7 @@
  *   gateway  Traefik's Gateway provider and the Gateway `cluster`, on a k3d cluster that publishes 443
  *   install  `helm upgrade --install` with the dev profile, or each --profile in order, and the
  *            prepared values, until ready
- *   upgrade  install, and check that PostgreSQL and NATS kept their Pods
+ *   upgrade  install, and check that PostgreSQL kept its Pods
  *   verify   every workload ready, and a sandbox of each SandboxTemplate passed the isolation
  *            gate (scripts/sandbox-isolation.ts)
  *   request  one HTTPS request to the webapp and the API through that Gateway
@@ -117,7 +117,6 @@ export function mapImages(reference: (name: ChartImage) => string): ChartImages 
 		"agent-pi": reference("agent-pi"),
 		alertmanager: reference("alertmanager"),
 		"application-server": reference("application-server"),
-		nats: reference("nats"),
 		postgres: reference("postgres"),
 		"postgres-exporter": reference("postgres-exporter"),
 		"victoria-metrics": reference("victoria-metrics"),
@@ -224,8 +223,6 @@ export function applicationSecret(): Record<string, string> {
 		DATABASE_ADMIN_PASSWORD: secretValue(16),
 		DATABASE_OWNER_PASSWORD: secretValue(16),
 		DATABASE_APP_PASSWORD: secretValue(16),
-		NATS_USERNAME: `heph${secretValue(16)}`,
-		NATS_PASSWORD: `heph${secretValue(16)}`,
 		HEPHAESTUS_SECURITY_ENCRYPTION_KEY: key,
 		HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY: key,
 		HEPHAESTUS_AUTH_STATE_COOKIE_KEY: randomBytes(32).toString("base64"),
@@ -820,9 +817,9 @@ export async function install(
 	]);
 }
 
-const STATEFUL = new Set(["postgresql", "nats"]);
+const STATEFUL = new Set(["postgresql"]);
 
-/** The UID of each running PostgreSQL and NATS Pod, by Pod name, from `kubectl get pods -o json`. */
+/** The UID of each running PostgreSQL Pod, by Pod name, from `kubectl get pods -o json`. */
 export function statefulPods(listed: unknown): Map<string, string> {
 	const pods = asArray(asRecord(listed, "Pod list").items, "Pods")
 		.map((pod) => asRecord(asRecord(pod, "Pod").metadata, "Pod metadata"))
@@ -853,13 +850,13 @@ async function listStatefulPods(): Promise<Map<string, string>> {
 }
 
 /**
- * Runs an upgrade and fails if it restarted PostgreSQL or NATS. A Pod template that changes on every
- * release, such as a version label, would cut the database and the broker on each upgrade.
+ * Runs an upgrade and fails if it restarted PostgreSQL. A Pod template that changes on every
+ * release, such as a version label, would cut the database on each upgrade.
  */
 export async function keepsStatefulPods(upgrade: () => Promise<void>): Promise<void> {
 	const before = await listStatefulPods();
 	if (before.size === 0) {
-		throw new Error("no PostgreSQL or NATS Pod runs before the upgrade");
+		throw new Error("no PostgreSQL Pod runs before the upgrade");
 	}
 	await upgrade();
 	const restarted = restartedPods(before, await listStatefulPods());
@@ -1658,10 +1655,9 @@ export function signInPod(deployment: unknown, name: string): Record<string, unk
 		SPRING_DATASOURCE_URL: "jdbc:$(DATABASE_URL)",
 		SPRING_DATASOURCE_USERNAME: "$(DATABASE_USERNAME)",
 		SPRING_DATASOURCE_PASSWORD: "$(DATABASE_PASSWORD)",
-		// The migration Job owns the schema, and the release's server consumes the broker.
+		// The migration Job owns the schema; the release's server dispatches the inbox.
 		SPRING_LIQUIBASE_ENABLED: "false",
 		SPRING_DOCKER_COMPOSE_ENABLED: "false",
-		HEPHAESTUS_SYNC_NATS_ENABLED: "false",
 		HEPHAESTUS_SYNC_RUN_ON_STARTUP: "false",
 		// The e2e profile turns GitLab on; keep the release's choice.
 		HEPHAESTUS_INTEGRATION_GITLAB_ENABLED: "$(GITLAB_ENABLED)",
@@ -2503,7 +2499,7 @@ async function reviewsOn(): Promise<void> {
  * The one-host install as docs/admin/k3s.md runs it: the
  * release's k3s-install.sh from its unpacked bundle, with a local CA in place of Let's Encrypt, and without the DNS and
  * clock checks that a runner cannot pass. A runner of 16 GiB installs with the small profile. Then the checks around it, a second run that must change
- * nothing, and an upgrade that rolls every role except PostgreSQL and NATS.
+ * nothing, and an upgrade that rolls every role except PostgreSQL.
  */
 export async function releaseSmoke(options: SmokeOptions): Promise<void> {
 	const lock = asRecord(parseJson(await readFile(options.lock, "utf8")), "release lock");
@@ -2589,7 +2585,7 @@ export async function releaseSmoke(options: SmokeOptions): Promise<void> {
 	await verify();
 	process.stdout.write("a second run of k3s-install.sh kept the Secret and every workload\n");
 
-	// An upgrade that rolls every role but PostgreSQL and NATS, with a new migration Job: the new server
+	// An upgrade that rolls every role but PostgreSQL, with a new migration Job: the new server
 	// proves the cluster with the sandbox isolation gate.
 	await keepsStatefulPods(async () =>
 		run("helm", [

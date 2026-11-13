@@ -24,7 +24,6 @@ liquibase = "5.0.4"
 liquibase-hibernate7 = "5.0.4"
 springdoc = "3.2.0"
 slack-bolt = "1.53.0"
-jnats = "2.26.4"
 jgit = "7.8.0.202609011348-r"
 java-jwt = "4.6.2"
 therapi = "0.16.0"
@@ -110,7 +109,6 @@ testcontainers = { module = "org.testcontainers:testcontainers" }
 assertj-core = { module = "org.assertj:assertj-core" }
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
 therapi-runtime-javadoc = { module = "com.github.therapi:therapi-runtime-javadoc", version.ref = "therapi" }
-jnats = { module = "io.nats:jnats", version.ref = "jnats" }
 fabric8-kubernetes-client = { module = "io.fabric8:kubernetes-client", version.ref = "fabric8" }
 fabric8-httpclient-okhttp = { module = "io.fabric8:kubernetes-httpclient-okhttp", version.ref = "fabric8" }
 vertx-core = { module = "io.vertx:vertx-core", version.ref = "vertx" }

@@ -33,7 +33,6 @@ const values: ChartValues = {
 		"agent-pi": image("agent-pi", "1"),
 		alertmanager: image("alertmanager", "6"),
 		"application-server": image("application-server", "2"),
-		nats: image("nats", "3"),
 		postgres: image("postgres", "4"),
 		"postgres-exporter": image("postgres-exporter", "9"),
 		"victoria-metrics": image("victoria-metrics", "7"),

@@ -9,10 +9,6 @@
       "description": "GitHub-specific sync tuning (GraphQL timeouts, incremental buffer, backfill page size)"
     },
     {
-      "name": "hephaestus.sync.nats",
-      "description": "NATS JetStream integration for real-time event processing"
-    },
-    {
       "name": "hephaestus.integration.github",
       "description": "GitHub API authentication and App configuration"
     },
@@ -49,21 +45,6 @@
       "name": "hephaestus.sync.cooldown-minutes",
       "type": "java.lang.Integer",
       "description": "Minimum minutes between consecutive sync operations"
-    },
-    {
-      "name": "hephaestus.sync.nats.enabled",
-      "type": "java.lang.Boolean",
-      "description": "Whether NATS JetStream integration is enabled"
-    },
-    {
-      "name": "hephaestus.sync.nats.server",
-      "type": "java.lang.String",
-      "description": "NATS server URL (e.g., nats://localhost:4222)"
-    },
-    {
-      "name": "hephaestus.sync.nats.durable-consumer-name",
-      "type": "java.lang.String",
-      "description": "Durable consumer name for JetStream subscriptions (empty for ephemeral)"
     },
     {
       "name": "hephaestus.webapp.url",

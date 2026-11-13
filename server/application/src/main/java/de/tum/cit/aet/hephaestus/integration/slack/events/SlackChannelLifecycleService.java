@@ -18,7 +18,7 @@ import tools.jackson.databind.JsonNode;
  * <p>Every method is workspace-resolution-first and best-effort: an unresolved {@code team_id} (no ACTIVE Slack
  * connection) or a missing/blank channel id is a silent no-op, matching the guard-first
  * {@code *ForPlatformEvent} wrappers on {@link SlackChannelConsentService}. Nothing here ever throws back into
- * the NATS consumer.
+ * the inbox consumer.
  */
 @Service
 @ConditionalOnServerRole

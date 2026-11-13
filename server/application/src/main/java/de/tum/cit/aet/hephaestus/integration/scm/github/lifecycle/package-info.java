@@ -2,7 +2,7 @@
  * GitHub lifecycle entry points for the workspace module: {@code WorkspaceProvisioningService} and
  * {@code WorkspaceProvisioningAdapter} call {@code GitHubLifecycleListener} for installation and
  * repository-selection changes, because the workspace owns the Workspace aggregate while GitHub owns the
- * installation state and its NATS consumer. The rest of the closed {@code integration.scm.github} module stays
+ * installation state and its inbox consumer. The rest of the closed {@code integration.scm.github} module stays
  * unreachable from outside.
  */
 @org.springframework.modulith.NamedInterface("lifecycle")

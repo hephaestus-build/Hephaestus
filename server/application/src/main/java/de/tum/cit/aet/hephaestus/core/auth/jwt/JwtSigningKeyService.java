@@ -40,7 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <h2>Key lifecycle</h2>
  * A single active key signs all tokens; re-keying today means deploying with a fresh key
  * (the old row is left {@code active=true} and still verifies until manually retired). Zero-downtime,
- * NATS-coordinated rotation across pods is not yet implemented — see ADR 0017 for the planned design.
+ * Cross-replica rotation across pods is not yet implemented — see ADR 0017 for the planned design.
  *
  * <h2>Hot-path</h2>
  * {@link #get(JWKSelector, SecurityContext)} is called on every JWT

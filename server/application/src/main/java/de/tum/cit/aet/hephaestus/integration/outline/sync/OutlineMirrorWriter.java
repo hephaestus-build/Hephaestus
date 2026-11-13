@@ -27,7 +27,7 @@ import org.springframework.stereotype.Component;
  * never commit and would quietly lose the write. Re-running re-reads the row at its current version and re-applies
  * the mutation; the mutations are pure functions of already-fetched payload, so a replay costs no extra API call.
  *
- * <p>A broker delivery retries after a second conflict so its unfinished step cannot be marked complete.
+ * <p>An inbox delivery retries after a second conflict so its unfinished step cannot be marked complete.
  * A sync pass logs and skips that row; the next reconcile re-diffs and converges.
  */
 @Component
@@ -113,7 +113,7 @@ public class OutlineMirrorWriter {
 
     /**
      * Runs {@code write} — one whole {@code REQUIRES_NEW} transaction — retrying it exactly once in a new
-     * transaction when a concurrent writer won the optimistic-lock race. Broker deliveries propagate a
+     * transaction when a concurrent writer won the optimistic-lock race. Inbox deliveries propagate a
      * second conflict; sync passes skip that row and continue with their remaining rows.
      */
     private <T> @Nullable T retryOnce(Supplier<T> write, String kind, String identifier) {

@@ -20,10 +20,6 @@ hephaestus:
     filters:
       allowed-organizations: []
       allowed-repositories: []
-    nats:
-      enabled: true
-      server: nats://localhost:4222
-      durable-consumer-name: hephaestus-e2e
   integration:
     gitlab:
       enabled: true

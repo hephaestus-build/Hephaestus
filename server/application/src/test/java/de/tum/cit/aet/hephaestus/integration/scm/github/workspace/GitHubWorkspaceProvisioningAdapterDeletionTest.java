@@ -65,7 +65,7 @@ class GitHubWorkspaceProvisioningAdapterDeletionTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("the bespoke NATS-stop and monitor sweep are dropped — the purge chain does both")
+    @DisplayName("the bespoke consumer-stop and monitor sweep are dropped — the purge chain does both")
     void onInstallationDeleted_doesNotDuplicateWorkAlreadyDoneByThePurgeChain() {
         adapter.onInstallationDeleted(INSTALLATION_ID);
 

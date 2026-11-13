@@ -30,7 +30,7 @@ Do not size nodes for 1.0 from this page.
 3. Read every migration entry between the installed release and the target release.
    Each release candidate has its own `### v1.0.0-rc.N` section in the migration guide.
 4. Preserve the current signed release lock, chart package, site values, and required keys.
-5. Verify a restorable database backup with its matching keys and broker recovery material before you upgrade.
+5. Verify a restorable database backup with its matching keys before you upgrade.
 
 [Backup policy for 1.0](./backup-restore#backup-policy-for-10) states the release scope.
 Each upgrade still requires a verified recovery point.
@@ -69,14 +69,6 @@ Thus, the controller must exist before the chart.
    Run it from a checkout of the release tag.
    It starts two sandboxes from a template, and it fails when a sandbox reaches more than the gateway.
    Thus, it fails on a network plugin that does not enforce NetworkPolicy.
-4. **NATS 2.11 or later.**
-   An external broker (`nats.bundled=false`) must run NATS Server 2.11 or later.
-   The bundled broker already does.
-   Check the version with `nats server info`.
-   See the migration entry *External NATS broker: NATS Server 2.11 or later*.
-5. **Broker certificate names.**
-   A TLS broker address needs a matching subject alternative name.
-   See the migration entry *NATS broker certificate names*.
 
 A one-host installation that another tool deploys, such as [pull-based deployment](./pull-based-deployment), updates its platform with the installer's `--platform-only` mode.
 [Install only the platform](./k3s#install-only-the-platform) gives what it installs, its checks and the procedure.
@@ -169,7 +161,7 @@ Each step names the page that owns it.
    Do phase 1 of [Stopped schema upgrades](./upgrade#stopped-schema-upgrades) with the source release: `server.replicas`, `worker.replicas` and `webhook.replicas` are 0.
    Wait until every role Pod, sandbox Pod and Job is gone.
    Foreground-delete the old claims and legacy Jobs, as *Stop every role before moving conversation turns to sandboxes* describes.
-5. Back up the database and the JetStream data.
+5. Back up the database.
    Verify that the backup restores, as [Backup and restore](./backup-restore#back-up-the-database) describes.
    Export the keys and keep them with the backup and the current signed release lock.
    You need this recovery point to roll back.
@@ -182,7 +174,7 @@ Each step names the page that owns it.
    kubectl -n agent-sandbox-system rollout status deployment/agent-sandbox-controller
    ```
 
-   If this step restarts k3s, wait until PostgreSQL and NATS are ready before the next step.
+   If this step restarts k3s, wait until PostgreSQL are ready before the next step.
    On a one-host installation, the platform files also renew the internal PostgreSQL certificate: do *Refresh the internal PostgreSQL certificate* before you go on.
 7. Change the Secret.
    First move the database logins, as step 3 of *Give each database purpose its own login* describes.
@@ -265,4 +257,4 @@ A successful upgrade does not qualify throughput or recovery time.
 ## Drain the webhook streams before the upgrade
 
 Follow the [provider event inbox cutover](./webhook-ingestion-operations.mdx) before you start 1.0.
-Drain the provider event streams and resolve their dead letters before you remove JetStream.
+Use the provider inbox cutover procedure before starting the new server.

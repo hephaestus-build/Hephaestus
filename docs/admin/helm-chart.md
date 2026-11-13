@@ -27,7 +27,7 @@ Hephaestus supports the chart on a cluster with these items:
 - A network plugin that enforces NetworkPolicy for egress and for ingress, also on traffic to a Service address.
   Run the platform isolation gate before enabling work ([Sandbox prerequisites](./sandboxes#sandbox-prerequisites)).
 - A Gateway API controller for `HTTPRoute` `v1` with the two features in [Gateway routes](#gateway-routes).
-- A storage class for `ReadWriteOnce` volumes, for the bundled PostgreSQL and NATS.
+- A storage class for `ReadWriteOnce` volumes, for the bundled PostgreSQL.
 - With the server enabled, the [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) controller with its extensions, at the version that the release pins ([Sandbox templates](./sandboxes#sandbox-templates)).
 
 CI installs and upgrades the chart on Kubernetes 1.35 and on the latest minor version, 1.37, on `amd64`.
@@ -41,7 +41,7 @@ The merge queue and the nightly run include it.
 Each run starts two servers with the `dev.yaml` profile and runs the platform isolation gate on that cluster.
 In the merge queue, the 1.35 run on `amd64` uses `small.yaml` instead, with one server, on a runner of 16 GiB.
 
-Each upgrade must keep the PostgreSQL and NATS Pods: only a change to their own image or settings restarts them.
+Each upgrade must keep the PostgreSQL Pods: only a change to their own image or settings restarts them.
 On the latest minor version, the `amd64` run also backs up to an S3 server and restores to a point in time.
 [Backup and restore](./backup-restore#back-up-the-database) describes these steps.
 [Install on one host (k3s)](./k3s) states what the release workflow tests before it publishes a release.
@@ -63,7 +63,6 @@ Slack posts that lose their receipt are found by message metadata.
 | `webapp` | Deployment | The SPA, from the non-root webapp image. |
 | `postgresql` | StatefulSet, optional | The release PostgreSQL image, with `pg_partman` and pgBackRest. |
 | `postgresql-backup` | CronJobs, optional | Full and differential pgBackRest backups ([Backup and restore](./backup-restore#back-up-the-database)). |
-| `nats` | StatefulSet, optional | One NATS JetStream server. |
 | `route` | HTTPRoute | `/`, `/api` and `/webhooks`. |
 | `priority` | PriorityClasses, cluster-wide | The priorities of the role Pods and of the sandboxes ([Server § Priorities](./sandboxes#priorities)). |
 
@@ -138,7 +137,7 @@ These facts complete the view:
 
 The view shows two decided changes that the chart does not have yet.
 The server serves the SPA ([ADR 0100](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0100-the-server-serves-the-web-app.md)). Until that change lands, the `webapp` Deployment serves it with nginx.
-No NATS server runs. Until [#4243](https://github.com/hephaestus-build/Hephaestus/pull/4243) lands, the optional `nats` StatefulSet carries the sync-status hints.
+Sync-status hints use PostgreSQL notifications.
 
 The sandbox namespace enforces the restricted Pod Security Standard. The runtime class decides the rest of the isolation ([Sandbox prerequisites](./sandboxes#sandbox-prerequisites)):
 
@@ -158,7 +157,7 @@ Each release chart contains them in `chart-$VERSION/hephaestus/profiles/` after 
 Give the profile as the first `-f` file, before your own values, as [Install](./kubernetes#install) shows.
 If a change of profile changes a volume size, read [Change a volume size](./upgrade#change-a-volume-size) before you upgrade.
 
-| Profile | Use | PostgreSQL and NATS |
+| Profile | Use | PostgreSQL |
 | --- | --- | --- |
 | `dev.yaml` | One workstation cluster | Bundled, small volumes |
 | `preview.yaml` | One pull request preview | Bundled, small volumes |
@@ -166,7 +165,7 @@ If a change of profile changes a volume size, read [Change a volume size](./upgr
 | `cluster.yaml` | A managed cluster of several nodes, without cluster-admin: [Install on a managed cluster without cluster-admin](./managed-cluster) | Bundled, or external |
 
 `small.yaml` supports a node of 4 vCPU, at least 16GiB of memory, and 150GiB of disk.
-It runs one server with bundled PostgreSQL and NATS. Its sandbox quotas follow the template requests, RuntimeClass overhead, review memory budget and admitted conversation turns.
+It runs one server with bundled PostgreSQL. Its sandbox quotas follow the template requests, RuntimeClass overhead, review memory budget and admitted conversation turns.
 Check the complete request totals against the node's allocatable resources before installation.
 [Sizing and scaling](./sizing) owns the resource planning rules and the limits of the available measurements.
 
@@ -218,7 +217,7 @@ upgrade slots = floor((budget - resident requests - draining servers and rollout
 auto turns    = min(steady CPU slots, steady memory slots, upgrade CPU slots, upgrade memory slots)
 ```
 
-Resident requests include the server, webapp, bundled PostgreSQL and its backup sidecar, bundled NATS, and enabled controllers or monitoring workloads.
+Resident requests include the server, webapp, bundled PostgreSQL and its backup sidecar, and enabled controllers or monitoring workloads.
 The chart reads the rendered workload requests, including the largest init container.
 
 One image-hold Pod is included. The operator reserves the other nodes' image-hold Pods in the assigned budget.
@@ -239,31 +238,9 @@ Kubernetes does not count terminating Pods against `maxSurge` ([Deployment termi
 It reads the workload templates directly, so adding a sidecar or changing a request also changes admission.
 The old loop's 50m estimate, fixed turn ceiling and JSON budget table no longer size sandbox turns.
 
-With the current templates, `small` admits eight turns without backups and four with backups, while retaining five review slots.
+With the current templates, `small` admits eleven turns without backups and seven with backups, while retaining five review slots.
 These are request totals. Review and conversation workload peaks have not been measured.
 Qualification must measure their memory and CPU before proposing smaller requests.
-
-### NATS memory
-
-The bundled broker requests 1 GiB and is limited to 1 GiB.
-The chart sets `GOMEMLIMIT` to 80 % of `nats.resources.limits.memory`: 819 MiB by default.
-If you change the limit, `GOMEMLIMIT` follows it.
-Set `nats.resources.requests.memory` to the same size. The chart refuses a request that differs from the limit.
-
-At rest, the broker's heap is about 100 MiB.
-Page cache over the stream files can fill the rest of the limit, and the kernel reclaims it under pressure.
-A catch-up is different: the Go heap grows with it.
-
-A test on NATS 2.14.8 caught up two streams of 4.6 GB each, one uncompressed and one S2.
-The messages were 16 KB on average, with some deliveries of 25 MiB.
-Four consumers read at the same time, while new deliveries arrived:
-
-| Memory limit | `GOMEMLIMIT` | Peak heap | Result |
-| --- | --- | --- | --- |
-| 1 GiB | Not set | 993 MiB | The kernel stopped the broker |
-| 3 GiB | Not set | 2,835 MiB | The broker continued, at its limit |
-| 1 GiB | 820 MiB | 813 MiB | All four caught up, at about 150 MB/s each |
-| 512 MiB | 410 MiB | 402 MiB | All four caught up, at about 165 MB/s each |
 
 ## Values
 
@@ -383,7 +360,6 @@ The chart then opens only these paths:
 | --- | --- | --- |
 | `networkPolicy.gateway` pods | `server`, `webapp` | 8080 |
 | `server` | PostgreSQL | 5432, or the external port |
-| `server` | NATS | 4222, or the external port |
 | `server` | `networkPolicy.externalEgress` | 443 |
 | `server`, if `config.email.host` is set | `networkPolicy.externalEgress` | `config.email.port` |
 | `server` | The Kubernetes API, `networkPolicy.kubernetesApi` | Its port |
@@ -411,7 +387,7 @@ The kubelet probes it, and the metrics scraper can read it.
 No Service and no route expose it.
 
 The external egress rule excludes private, link-local, and shared address ranges by default.
-An external database or broker in a private range needs `postgresql.external.cidr` or `nats.external.cidr`.
+An external database in a private range needs `postgresql.external.cidr`.
 
 A rendered policy does not show enforcement.
 Each network plugin needs its own positive and negative traffic tests before the chart is supported.
@@ -420,7 +396,6 @@ Network policy controls which pods can connect. It does not encrypt traffic.
 The connections to PostgreSQL use TLS ([PostgreSQL TLS Secret](./kubernetes#postgresql-tls-secret)).
 These internal channels send plain text:
 
-- The connections from the server to the bundled NATS.
 - The connection from the server to the server.
 - The connections from sandboxes to the server gateway.
 
@@ -435,8 +410,6 @@ Use a network plugin that encrypts traffic between nodes, for example WireGuard 
 | Data | Bound | Setting |
 | --- | --- | --- |
 | PostgreSQL | Volume size | `postgresql.persistence.size` |
-| JetStream | Broker `max_file` | `nats.jetstream.maxFileBytes` |
-| JetStream volume | `max_file` plus 25 % | Derived from `nats.jetstream.maxFileBytes` |
 | Provider event inbox | 3 days for handled events, 30 days for dead letters | `hephaestus.integration.consumer.replay-window`, `dead-retention` |
 | Server Git mirrors and review clones | `emptyDir` size limit on the node, per server | `server.gitCache.sizeLimit` |
 | AI spend ledger | Retention | `config.llmUsageRetention` |
@@ -445,12 +418,6 @@ Use a network plugin that encrypts traffic between nodes, for example WireGuard 
 
 The provider event inbox is in PostgreSQL, so `postgresql.persistence.size` also holds the webhook deliveries of its retention.
 [Webhook ingestion operations](./webhook-ingestion-operations) gives the durability guarantee.
-
-The broker file budget of the `small.yaml` profile is 8 GiB. A fresh bundled broker claims 10 GiB, including the 25 % storage allowance.
-
-For an existing installation, keep its current `nats.jetstream.maxFileBytes` in your site values before you apply this profile.
-Do not shrink an existing PVC or change the StatefulSet claim template to adopt the smaller broker budget.
-Do not lower the broker budget below its stored data.
 
 The Git mirrors are caches.
 A restarted server or server clones them again, so they use node storage and no volume claim.
@@ -462,12 +429,6 @@ It keeps a mirror that a capture used in the last 10 minutes.
 Each one costs a full fetch at its next capture.
 Thus, repositories that outgrow the volume slow captures before the kubelet evicts the Pod.
 Mirrors are all it can delete: review checkouts that fill the volume alone still evict the Pod, and `HephaestusGitCacheNearlyFull` warns first.
-
-The bundled NATS is one JetStream server, and every stream has one replica.
-The application has no setting for more replicas.
-A lost NATS volume loses each provider delivery that the broker accepted and the server had not yet processed.
-That window is usually seconds, and it grows while the server is stopped or behind.
-Use a storage class whose volumes survive the loss of a node, and back up the volume as [Backup and restore](./backup-restore) describes.
 
 ## Pod security
 
@@ -575,7 +536,6 @@ The conversation template owns its resources. the quota counts those requests an
 
 ## Known limits
 
-- NATS JetStream runs as one server with one replica of each stream. A lost NATS volume loses the provider deliveries that the server had not processed ([Storage and retention](#storage-and-retention)).
 - PostgreSQL runs as one instance. A lost node stops the release until PostgreSQL runs again. A lost volume needs a [restore](./backup-restore#restore).
 - A server update requires space for its draining Pods and their replacements. See [Sandbox capacity budget](#sandbox-capacity-budget).
 - The server records the isolation tier in its log and metrics, not with each review. A record for each review needs a schema change.
@@ -590,3 +550,6 @@ A successful install in CI does not show that your cluster isolates sandboxes.
 Run the platform isolation gate on your cluster before enabling sandbox work.
 CI does not qualify your Gateway controller.
 Check its two `HTTPRoute` features, its body limit and its idle timeout yourself, and rehearse a [restore](./backup-restore#restore) on your own cluster.
+
+The database connection budget includes five dedicated notification listeners per server during rolling overlap.
+[Database connections](./sizing#database-connections) gives the derived pools, client counts, reserved slots and connection limit.

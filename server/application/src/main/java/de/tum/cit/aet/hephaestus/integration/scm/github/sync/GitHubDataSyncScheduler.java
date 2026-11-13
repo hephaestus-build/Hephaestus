@@ -67,7 +67,7 @@ import org.springframework.stereotype.Component;
  *
  * <h2>Lifecycle</h2>
  * <ol>
- *   <li>Spring creates this component at startup (after {@code IntegrationNatsConsumer}
+ *   <li>Spring creates this component at startup (after {@code ProviderEventConsumer}
  *       due to {@code @Order(2)})</li>
  *   <li>{@code @Scheduled} method runs at cron interval from {@code hephaestus.sync.cron}</li>
  *   <li>Each run processes all ACTIVE scopes, respecting monitoring filters</li>

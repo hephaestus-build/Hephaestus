@@ -7,7 +7,7 @@ description: Runtime roles, module boundaries, and the paths from connected work
 
 import SystemDiagram from "@site/src/components/SystemDiagram";
 
-The container view also shows two decided changes that `main` does not have yet. The text below it names them.
+The container view also shows one decided change that `main` does not have yet. The text below it names it.
 [Runtime roles](/admin/runtime-roles) describes what runs today.
 
 ## Containers and trust boundaries
@@ -40,9 +40,9 @@ The server and the agent-sandbox controller never connect to each other. Both us
 
 </SystemDiagram>
 
-The view shows two decided changes that `main` does not have yet. The rest of the view is on `main`.
+The view shows one decided change that `main` does not have yet. The rest of the view is on `main`.
 The server serves the SPA ([ADR 0100](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0100-the-server-serves-the-web-app.md)). Until that change lands, a webapp container with nginx serves it.
-PostgreSQL notifications carry the sync-status hints to the open browsers. Until [#4243](https://github.com/hephaestus-build/Hephaestus/pull/4243) lands, a NATS server carries them.
+PostgreSQL notifications carry the sync-status hints to the open browsers.
 
 | Container | What it is | Code |
 | --- | --- | --- |
@@ -339,3 +339,12 @@ Every structural view uses one legend. [Documentation guide § Structural maps i
 | How does one answer reach the app or Slack? | Turn sequence | [Conversation](#conversation) |
 | How does a run move between states? | `agent_run` lifecycle | [Agent runs](./agent-runs.mdx#states) |
 | How do the review records relate? | Core data model | [Practice review glossary](./practice-review-glossary.mdx#the-core-data-model) |
+
+## Sync-status hints across replicas
+
+A committed sync change sends only its workspace ID, connection ID and scope token through PostgreSQL `NOTIFY`.
+Each server listens on `sync_status` and delivers received hints to its local SSE subscribers, including on the origin server.
+The client reads the state through REST. It also polls, so a notification lost during reconnect does not hide the state.
+
+The listener owns a dedicated connection and reconnect loop, as the ledger, run, evidence and permit listeners do.
+It cannot hold up their dispatch. The chart connection budget includes all five listeners for every server in rolling overlap.

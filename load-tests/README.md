@@ -21,7 +21,7 @@ both service objectives and saturation, following Google's SLO guidance
 - Bind practice review and mentor to a deterministic OpenAI-compatible test provider. Record its
   response latency separately: provider time is not host capacity.
 - Use a short-lived workspace-admin token. Never commit it or the webhook secret.
-- Disable background sync and unrelated traffic. Restore PostgreSQL and JetStream from the same
+- Disable background sync and unrelated traffic. Restore PostgreSQL from the same
   snapshot before every repetition at each candidate host and load step. Run three times; publish
   the median and retain every raw result.
 
@@ -114,7 +114,7 @@ A Pod peak alone cannot qualify a host.
 
 Keep collectors running until the review queue drains or the five-minute drain deadline expires.
 Capture volume free space before and after the run.
-Retain the signed joint lock, chart and site values without secrets, Pod specifications, provider latency, PostgreSQL size, JetStream state and application metrics/logs.
+Retain the signed joint lock, chart and site values without secrets, Pod specifications, provider latency, PostgreSQL size, inbox state and application metrics/logs.
 Copy these into the matching k6 run directory without overwriting another repetition.
 The increase in `webhook.publish{outcome="success"}` must equal accepted webhook iterations while the failure counter stays unchanged.
 Reject a run with a reconciliation mismatch, dropped iterations, provider throttling, a restart or OOM, or swap activity.
@@ -131,7 +131,7 @@ the data filesystem has at least 20% free before and after, no swap/OOM/restart 
 queue drains within five minutes after load stops. Publish the first failing step as the ceiling.
 
 Generate a baseline for every repetition and link its raw artifacts. Publish measured minimum and
-recommended sizing and the JetStream durability throughput delta with the recorded baseline under
+recommended sizing and provider inbox throughput with the recorded baseline under
 the [release capacity gate](https://github.com/hephaestus-build/Hephaestus/issues/1377).
 Qualification must measure the release candidate, including its job-folder implementation.
 

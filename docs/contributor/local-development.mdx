@@ -15,7 +15,7 @@ Install and configure the following tools before you attempt a local build:
    from `.java-version` and uses its Java toolchain support. The checked-in wrapper downloads the
    pinned Gradle distribution and verifies `server/gradle/wrapper/gradle-wrapper.properties`' checksum.
    CI also validates the wrapper JAR. No global Gradle installation is needed.
-2. **Docker and Docker Compose** – Required for PostgreSQL and NATS. Verify both with `docker info`
+2. **Docker and Docker Compose** – Required for PostgreSQL. Verify both with `docker info`
    and `docker compose version`.
 3. **Vite+ (`vp`)** – The command surface for every repository task, and how you get the pinned
    Node.js. Install the launcher:
@@ -41,7 +41,6 @@ Install and configure the following tools before you attempt a local build:
    pins. That file is the one home of the version and its checksums. CI installs the same version.
    Verify it with `helm version`.
 5. **Kubernetes dev tools** – The host server runs its sandboxes in k3d. Install the tools in [Kubernetes](#kubernetes) before you start `vp run dev`.
-6. **NATS CLI (optional)** – Helpful when inspecting the webhook/sync event stream (NATS is disabled by default locally). The agent job queue runs on PostgreSQL and needs no NATS.
 
 If you push branches to the repository instead of a fork, also configure commit signing.
 [CONTRIBUTING.md § Signed Commits](https://github.com/hephaestus-build/Hephaestus/blob/main/CONTRIBUTING.md#signed-commits) has the setup.
@@ -194,8 +193,7 @@ Every host-side port is configurable so multiple Hephaestus instances (or other 
 | Webapp (Vite dev)  | 4200    | `WEBAPP_PORT`       | Shell env only  |
 
 :::tip[Pre-flight check]
-Run `vp run check:ports` before starting the stack. It checks the six ports above. A NATS
-container binds 4222 as well, and a conflict there shows up only at boot.
+Run `vp run check:ports` before starting the stack. It checks the ports above.
 :::
 
 ### Email

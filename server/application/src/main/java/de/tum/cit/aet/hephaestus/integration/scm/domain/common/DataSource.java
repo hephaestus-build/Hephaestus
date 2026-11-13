@@ -5,6 +5,6 @@ public enum DataSource {
     GRAPHQL_SYNC,
     /** Data from scheduled REST API synchronization. */
     REST_SYNC,
-    /** Data from a webhook event via NATS. */
+    /** Data from a webhook event through the inbox. */
     WEBHOOK,
 }

@@ -70,7 +70,7 @@ await test("the test overlay retains role resources and database settings while 
 	assert.equal(asRecord(spring.datasource, "datasource").url, `jdbc:\${DATABASE_URL}`);
 });
 
-await test("the server keeps the production NATS consumer on, and another role keeps the chart's settings", () => {
+await test("the server keeps the production database wiring, and another role keeps the chart's settings", () => {
 	const webhook = structuredClone(deployment);
 	webhook.metadata.name = "bench-webhook";
 	webhook.spec.template.metadata.labels["app.kubernetes.io/component"] = "webhook";
@@ -88,8 +88,7 @@ await test("the server keeps the production NATS consumer on, and another role k
 			.find((row) => row.name === "SPRING_APPLICATION_JSON")?.value;
 	};
 	const explicit = asRecord(parseJson(String(applicationJson(0))), "properties");
-	const sync = asRecord(asRecord(explicit.hephaestus, "hephaestus").sync, "sync");
-	assert.equal(asRecord(sync.nats, "nats").enabled, true);
+	assert.ok(!("nats" in asRecord(asRecord(explicit.hephaestus, "hephaestus").sync ?? {}, "sync")));
 	assert.equal(applicationJson(1), undefined);
 });
 

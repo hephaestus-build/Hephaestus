@@ -13,6 +13,8 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public interface SyncJobRepository extends JpaRepository<SyncJob, Long> {
@@ -137,4 +139,9 @@ public interface SyncJobRepository extends JpaRepository<SyncJob, Long> {
                             + "(SELECT id FROM sync_job WHERE connection_id = :connectionId ORDER BY created_at DESC LIMIT :limit)",
             nativeQuery = true)
     int pruneOldJobs(@Param("connectionId") long connectionId, @Param("limit") int limit);
+    /** The state transaction has committed; this short transaction sends only an invalidation hint. */
+    @WorkspaceAgnostic("Sends a notification and reads no table; the payload names its workspace")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Query(value = "SELECT 1 FROM (SELECT pg_notify(:channel, :payload)) sent", nativeQuery = true)
+    int notifySyncStatus(@Param("channel") String channel, @Param("payload") String payload);
 }

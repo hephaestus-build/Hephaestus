@@ -50,22 +50,9 @@ class IntegrationConsumerBoundaryTest extends HephaestusArchitectureTest {
                 .should()
                 .dependOnClassesThat()
                 .resideInAPackage("de.tum.cit.aet.hephaestus.integration.core.consumer..")
-                .because("the agent job queue is Postgres-backed, not NATS-backed; depending on "
+                .because("the agent run queue is PostgreSQL-backed; depending on "
                         + "integration.consumer would mix bean clusters across roles and break the "
                         + "runtime-role isolation locked by RuntimeRoleBoundaryTest")
-                .check(classes);
-    }
-
-    @Test
-    void agentDoesNotLinkAgainstJnatsAtAll() {
-        noClasses()
-                .that()
-                .resideInAPackage("de.tum.cit.aet.hephaestus.agent..")
-                .should()
-                .dependOnClassesThat()
-                .resideInAPackage("io.nats..")
-                .because("agent runs are PostgreSQL-backed (agent_run, claimed by sandboxes) — the agent"
-                        + " package must have zero io.nats dependency")
                 .check(classes);
     }
 }

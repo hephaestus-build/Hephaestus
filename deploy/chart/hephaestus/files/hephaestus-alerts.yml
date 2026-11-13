@@ -6,6 +6,14 @@ groups:
   # The application's own metrics, from the management listener of each runtime role.
   - name: hephaestus
     rules:
+      - alert: HephaestusSyncNotificationsFailing
+        expr: sum(increase(integration_sync_push_messages_total{job="hephaestus",outcome="failure"}[15m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Sync notification delivery is failing; clients fall back to REST polling
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusMetricsUnavailable
         expr: up{job="hephaestus"} == 0
         for: 2m
@@ -958,17 +966,6 @@ groups:
           severity: critical
         annotations:
           summary: The PostgreSQL volume has less than 5 % free space
-          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      - alert: HephaestusJetStreamVolumeFilling
-        expr: >-
-          kubelet_volume_stats_available_bytes{persistentvolumeclaim=~"data-.+-nats-0"}
-          / kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=~"data-.+-nats-0"}
-          < 0.10
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: The NATS JetStream volume has less than 10 % free space
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusNodeDiskFilling
         expr: >-

@@ -20,7 +20,6 @@ export const chartImages = [
 	"agent-pi",
 	"alertmanager",
 	"application-server",
-	"nats",
 	"postgres",
 	"postgres-exporter",
 	"victoria-metrics",

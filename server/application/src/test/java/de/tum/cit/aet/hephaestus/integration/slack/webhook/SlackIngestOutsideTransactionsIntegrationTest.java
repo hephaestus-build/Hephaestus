@@ -124,7 +124,7 @@ class SlackIngestOutsideTransactionsIntegrationTest extends BaseIntegrationTest 
         });
     }
 
-    /** The NATS handler over the real ingest, consent gates and identity resolver; only Slack itself is scripted. */
+    /** The inbox handler over the real ingest, consent gates and identity resolver; only Slack itself is scripted. */
     private SlackChannelMessageHandler handler() {
         SlackWorkspaceResolver workspaceResolver = mock(SlackWorkspaceResolver.class);
         when(workspaceResolver.resolveWorkspaceId(team)).thenReturn(Optional.of(workspaceId));

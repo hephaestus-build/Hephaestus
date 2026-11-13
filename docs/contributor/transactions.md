@@ -29,7 +29,7 @@ Spring: "self-invocation (in effect, a method within the target object calling a
 ## 2. Use programmatic transactions only around a network call
 
 - Use `TransactionTemplate` only in a method that runs short database units with a network call between them.
-  Examples are a sync page, the review runner (claim, then execute, then settle) and the NATS handler (commit, then acknowledge).
+  Examples are a sync page, the review runner (claim, then execute, then settle) and the inbox handler (claim, then handle, then settle).
 - Use `REQUIRES_NEW` only for a row that must stay after the caller rolls back, such as a failure record or an audit row.
   That row must not be a row that the caller has locked.
   Write the reason in one comment line.
@@ -38,7 +38,7 @@ Spring: "self-invocation (in effect, a method within the target object calling a
 
 ## 3. Do not call a network service inside a transaction
 
-- Call a model, GitHub, GitLab, Slack, Outline, NATS, Kubernetes or SMTP only when no transaction is active.
+- Call a model, GitHub, GitLab, Slack, Outline, Kubernetes or SMTP only when no transaction is active.
 - Use this sequence: read in a short transaction, call with no transaction, then write in a short transaction.
   The write checks the state again with a row lock or a compare-and-set.
 - If a row lock must stay across a call, record the reason in an ADR.
@@ -85,12 +85,10 @@ This is the [transactional outbox](https://microservices.io/patterns/data/transa
 
 ## 5. A consumer that gets a message more than once is idempotent
 
-- The registry and NATS JetStream deliver at least once.
+- The registry and provider inbox deliver at least once.
   A crash after the effect and before completion sends the event again.
-- A listener or a NATS handler writes by natural key (`INSERT … ON CONFLICT`), by compare-and-set on a state or a timestamp, or records the IDs that it processed ([Idempotent consumer](https://microservices.io/patterns/communication-style/idempotent-consumer.html)).
-- Publish to JetStream with a `Nats-Msg-Id` header.
-  JetStream keeps only one message for each ID in its duplicate window ([Publishing](https://docs.nats.io/learn/jetstream/publishing)).
-- Acknowledge a NATS message after the handler commits.
+- A listener or an inbox handler writes by natural key (`INSERT … ON CONFLICT`), by compare-and-set on a state or a timestamp, or records the IDs that it processed ([Idempotent consumer](https://microservices.io/patterns/communication-style/idempotent-consumer.html)).
+- Settle a provider inbox event after its handler commits.
   [Webhook delivery and retry order](./ingest-durability.md) has the consumer contract.
 
 ## 6. Concurrent writers

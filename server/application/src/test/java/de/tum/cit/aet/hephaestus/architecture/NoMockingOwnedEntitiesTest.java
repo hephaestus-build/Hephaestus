@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
  * setters (every guarded entity is {@code @NoArgsConstructor + @Setter}).
  *
  * <p>NOT covered (legitimate boundary mocks): {@code *Repository} interfaces, {@code Clock},
- * {@code ApplicationEventPublisher}, SPI interfaces, WebClient/NATS/Docker SDKs. Only the concrete owned
+ * {@code ApplicationEventPublisher}, SPI interfaces, WebClient/Docker SDKs. Only the concrete owned
  * {@code @Entity} classes in {@link #GUARDED_ENTITIES} are targeted.
  *
  * <p>Source scan (not ArchUnit bytecode) because {@code mock(X.class)} is a {@code Class<T>} literal that

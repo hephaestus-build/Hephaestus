@@ -40,7 +40,7 @@ The following effects still need measurement with the same workload:
 
 | Condition                   | Required comparison                                                                                               | Current result |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------- |
-| PostgreSQL and NATS backups | Throughput, first text, completion latency and resource pressure during a backup versus an idle control           | Unmeasured     |
+| PostgreSQL backups | Throughput, first text, completion latency and resource pressure during a backup versus an idle control           | Unmeasured     |
 | Cold starts and image pulls | Startup delay, first text and memory peak with an empty image cache versus a warm cache                           | Unmeasured     |
 | Server deployments          | Failed or slow authenticated reads, user-visible outage and error-budget use during server updates                      | Unmeasured     |
 | Provider throttles          | First text, call-grant waits and review throughput with deterministic 429 responses versus an unthrottled control | Unmeasured     |
@@ -116,7 +116,7 @@ Thus, working set alone does not justify a lower limit.
 For example, query the working set with this PromQL expression:
 
 ```promql
-max by (container) (max_over_time(container_memory_working_set_bytes{namespace="hephaestus",container=~"postgresql|nats"}[14d]))
+max by (container) (max_over_time(container_memory_working_set_bytes{namespace="hephaestus",container=~"postgresql"}[14d]))
 ```
 
 Use `container_memory_usage_bytes` for total charge and `tfirst_over_time` to check the actual sample window in VictoriaMetrics.
@@ -194,17 +194,17 @@ The same helper derives the PostgreSQL budget for one rolling update:
 | --- | --- |
 | Servers at overlap | 2 |
 | Server pools | 2 × 36 = 72 |
-| Four dedicated LISTEN sessions per server | 2 × 4 = 8 |
+| Five dedicated LISTEN sessions per server | 2 × 5 = 10 |
 | New revision's migration Job | 2 |
 | PostgreSQL metrics exporter | 2, the monitor role's cluster-wide connection limit |
 | Backup sessions | 2 |
 | PostgreSQL probes and role/monitor setup | 3 |
-| Ordinary client total | 89 |
+| Ordinary client total | 91 |
 | `superuser_reserved_connections` | 3 |
 | Operator margin outside the reserved slots | 4 |
-| Required slots, including reserves | 96 |
+| Required slots, including reserves | 98 |
 | Derived `max_connections` | 120 |
-| Extra slots after all clients and reserves | 24 |
+| Extra slots after all clients and reserves | 22 |
 
 The owning helper is `hephaestus.databaseConnectionCapacity` in the chart. It reserves optional monitoring and backup clients even when they are off.
 The chart rounds the derived limit up to twenty slots, with a floor of 120. An explicit limit must hold the complete budget.

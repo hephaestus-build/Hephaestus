@@ -1,4 +1,4 @@
-# A disposable cluster on one workstation. Bundled PostgreSQL and NATS, small volumes, no sandboxes.
+# A disposable cluster on one workstation. Bundled PostgreSQL, small volumes, no sandboxes.
 deploymentEnvironment: dev
 config:
   releaseCheckEnabled: false
@@ -8,10 +8,6 @@ postgresql:
   resources:
     requests: { cpu: 100m, memory: 1Gi, ephemeral-storage: 128Mi }
     limits: { cpu: "1", memory: 1Gi, ephemeral-storage: 512Mi }
-nats:
-  jetstream:
-    maxMemory: 256M
-    maxFileBytes: 4294967296
 server:
   gitCache:
     sizeLimit: 5Gi

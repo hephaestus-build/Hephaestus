@@ -26,7 +26,7 @@ import org.springframework.context.ApplicationEventPublisher;
 /**
  * Unit tests for {@link WorkspaceSyncTargetProvider#reconcileSyncTargetIdentity}, the correctness
  * backstop that re-keys a monitor's {@code nameWithOwner} by its stable native id after an upstream
- * rename/transfer and refreshes the workspace's NATS consumer so events under the new name are
+ * rename/transfer and refreshes the workspace's inbox consumer so events under the new name are
  * delivered instead of silently ACK-dropped.
  */
 class WorkspaceSyncTargetProviderReconcileTest extends BaseUnitTest {

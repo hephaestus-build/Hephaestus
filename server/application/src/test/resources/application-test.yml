@@ -129,10 +129,6 @@ hephaestus:
     # Sync configuration for tests
     sync:
         run-on-startup: false
-        nats:
-            enabled: false
-            server: nats://localhost:4222
-            durable-consumer-name: test-consumer
     fabric:
         root: /tmp/hephaestus-test-git-repos
     git:

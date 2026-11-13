@@ -31,22 +31,6 @@ services:
       retries: 10
       start_period: 10s
 
-  # For webhook and sync pipeline work: set hephaestus.sync.nats.enabled=true in
-  # application-local.yml. Otherwise the server opens no connection to it.
-  nats:
-    image: synadia/nats-server:2.14.9-alpine3.22@sha256:b7d1beaf165653db85ebf4aeefa51298c9634fe88f1af66a3148a8b4f830dbcd
-    command: ['-js', '-m', '8222']
-    ports:
-      - '${NATS_PORT:-4222}:4222'
-    networks:
-      - app-network
-    healthcheck:
-      test: ['CMD', 'wget', '--spider', '--quiet', 'http://localhost:8222/healthz']
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 5s
-
   # Catches every email the local server sends; nothing leaves the machine. UI on MAILPIT_UI_PORT.
   mailpit:
     image: axllent/mailpit:v1.31.1@sha256:98b916bd3c8d61f7633a52d3ea2f58d00620cb01ca57ab59edde68c347a95365

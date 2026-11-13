@@ -21,7 +21,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * Activates workspaces on application startup: metadata population, sync orchestration,
- * and NATS consumer initialization.
+ * and inbox consumer initialization.
  */
 @Service
 public class WorkspaceActivationService {
@@ -171,7 +171,7 @@ public class WorkspaceActivationService {
     }
 
     /**
-     * Activate a single workspace: start its NATS consumer scope from the persisted routing, then run the
+     * Activate a single workspace: start its inbox consumer scope from the persisted routing, then run the
      * startup sync. Webhook events are processed while the sync runs, and a sync that discovers
      * repositories reconciles the scope's filter. The startup sync always runs; the startup full-sync
      * setting decides only whether it includes the full data sync.

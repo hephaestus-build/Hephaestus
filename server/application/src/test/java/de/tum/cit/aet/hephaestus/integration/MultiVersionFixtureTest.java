@@ -149,7 +149,7 @@ class MultiVersionFixtureTest {
     }
 
     /**
-     * Drives the real production deserialization path: wrap the fixture bytes in a NATS
+     * Drives the real production deserialization path: wrap the fixture bytes in a provider inbox
      * {@link Message} and call {@link EventPayloadDeserializer#deserialize}, exactly as the live
      * message handlers do.
      */

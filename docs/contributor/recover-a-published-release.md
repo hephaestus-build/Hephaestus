@@ -105,7 +105,7 @@ Then arrange the Production recovery window with its operator and required appro
 
 Do not wait for that check before the operator resumes the timer.
 The check waits up to 15 minutes for the public webapp to report the expected version.
-It does not verify other runtime roles, the database, or NATS.
+It does not verify other runtime roles, the database.
 The operator's separate recovery checks establish their state.
 
 The operator restores normal feedback and network access only after the recovery checks pass.

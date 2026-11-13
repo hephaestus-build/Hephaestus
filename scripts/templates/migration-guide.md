@@ -131,7 +131,7 @@ downgrade. Keep writers stopped if the release requires it. Choose one of these 
 1. **Apply a forward fix** qualified for the observed migration state. Do not restart an older image
    against a partially migrated database without an explicit supported procedure.
 2. **Restore a verified backup** with its matching signed release lock and configuration. Follow
-   [Backup & restore](https://docs.hephaestus.build/admin/backup-restore), including its key, broker,
+   [Backup & restore](https://docs.hephaestus.build/admin/backup-restore), including its key,
    privacy and restart checks. The matching lock prevents a failed target release from immediately
    migrating the restored database again.
 

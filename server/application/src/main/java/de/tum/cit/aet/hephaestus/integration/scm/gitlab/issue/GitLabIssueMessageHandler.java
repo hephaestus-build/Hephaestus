@@ -21,7 +21,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Handles GitLab issue webhook events.
  * <p>
  * Processes both {@code event_type: "issue"} and {@code event_type: "confidential_issue"} payloads.
- * Both arrive on the same NATS subject ({@code object_kind: "issue"}).
+ * Both arrive on the same event subject ({@code object_kind: "issue"}).
  * <p>
  * Confidential issue events are not ingested — an event whose current {@code confidential} flag is set is
  * not (re)stored. In addition, a public → confidential flip purges any snapshot mirrored while the issue

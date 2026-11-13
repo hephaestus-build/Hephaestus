@@ -127,8 +127,8 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
             return;
         }
 
-        // Delegates to the full purge chain rather than a narrower stop-NATS/remove-monitors pair:
-        // purgeWorkspace first stops the NATS consumer, then ScmWorkspacePurgeAdapter (order -200)
+        // Delegates to the full purge chain rather than a narrower stop-provider inbox/remove-monitors pair:
+        // purgeWorkspace first stops the inbox consumer, then ScmWorkspacePurgeAdapter (order -200)
         // drops
         // the monitors through an orphan-guarded cascade — unlike removeAllRepositoriesFromMonitor,
         // it

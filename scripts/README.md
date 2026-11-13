@@ -35,33 +35,6 @@ The database commands require Docker with the Compose plugin.
 | `POSTGRES_USER`     | `root`       | PostgreSQL user     |
 | `POSTGRES_PASSWORD` | none         | PostgreSQL password |
 
-### NATS Webhook Example Extraction
-
-Extract webhook payloads from NATS JetStream for test fixtures:
-
-```bash
-vp run schema:nats
-# With options:
-vp run schema:nats --event push --event pull_request:opened
-```
-
-**Environment variables:**
-
-| Variable   | Default                 | Description     |
-| ---------- | ----------------------- | --------------- |
-| `NATS_URL` | `nats://localhost:4222` | NATS server URL |
-
-**Common options:**
-
-| Option                    | Description                         |
-| ------------------------- | ----------------------------------- |
-| `--nats-server <url>`     | NATS server URL                     |
-| `--examples-dir <path>`   | Output directory                    |
-| `--event <type[:action]>` | Filter by event type (repeatable)   |
-| `--since <iso>`           | Only messages after this timestamp  |
-| `--until <iso>`           | Only messages before this timestamp |
-| `--dry-run`               | Validate config without extracting  |
-
 ## Retained shell boundaries
 
 The retained shell files run where shell is already part of the runtime:

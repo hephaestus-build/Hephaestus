@@ -3,12 +3,6 @@
 	"images": ["webapp", "application-server", "agent-pi", "postgres"],
 	"upstream": [
 		{
-			"name": "nats",
-			"repository": "docker.io/synadia/nats-server",
-			"tag": "2.14.9-alpine3.22",
-			"digest": "sha256:b7d1beaf165653db85ebf4aeefa51298c9634fe88f1af66a3148a8b4f830dbcd"
-		},
-		{
 			"name": "victoria-metrics",
 			"repository": "docker.io/victoriametrics/victoria-metrics",
 			"tag": "v1.155.0",

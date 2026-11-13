@@ -59,7 +59,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     @Test
     void dmMessageRoutesToMentorService() {
         dmHandler.onMessage(
-                nats(
+                inbox(
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel_type\":\"im\",\"channel\":\"D1\",\"user\":\"U1\",\"text\":\"help\",\"ts\":\"100.2\",\"thread_ts\":\"100.1\"}}"));
 
         verify(mentorService).handleDm("T1", "D1", "U1", "help", "100.2", "100.1");
@@ -68,7 +68,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     @Test
     void dmMessageWithoutThreadTsFallsBackToMessageTs() {
         dmHandler.onMessage(
-                nats(
+                inbox(
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel_type\":\"im\",\"channel\":\"D1\",\"user\":\"U1\",\"text\":\"help\",\"ts\":\"100.2\"}}"));
 
         verify(mentorService).handleDm("T1", "D1", "U1", "help", "100.2", "100.2");
@@ -77,7 +77,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     @Test
     void dmMessageFallsBackToAuthorizationTeamId() {
         dmHandler.onMessage(
-                nats(
+                inbox(
                         "{\"authorizations\":[{\"team_id\":\"T1\"}],\"event\":{\"type\":\"message\",\"channel_type\":\"im\",\"channel\":\"D1\",\"user\":\"U1\",\"text\":\"help\",\"ts\":\"100.2\"}}"));
 
         verify(mentorService).handleDm("T1", "D1", "U1", "help", "100.2", "100.2");
@@ -86,7 +86,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     @Test
     void botDmIsIgnored() {
         dmHandler.onMessage(
-                nats(
+                inbox(
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel_type\":\"im\",\"channel\":\"D1\",\"user\":\"U1\",\"bot_id\":\"B1\",\"text\":\"help\",\"ts\":\"100.1\"}}"));
 
         verify(mentorService, never()).handleDm(any(), any(), any(), any(), any(), any());
@@ -95,7 +95,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     @Test
     void channelMessagesNeverRouteToMentorDm() {
         dmHandler.onMessage(
-                nats(
+                inbox(
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel_type\":\"channel\",\"channel\":\"C1\",\"user\":\"U1\",\"text\":\"hello\",\"ts\":\"100.1\"}}"));
 
         verify(mentorService, never()).handleDm(any(), any(), any(), any(), any(), any());
@@ -103,8 +103,8 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
 
     @Test
     void appHomeOpenedRendersHomeOnlyForHomeTab() {
-        appHomeHandler.onMessage(
-                nats("{\"team_id\":\"T1\",\"event\":{\"type\":\"app_home_opened\",\"tab\":\"home\",\"user\":\"U1\"}}"));
+        appHomeHandler.onMessage(inbox(
+                "{\"team_id\":\"T1\",\"event\":{\"type\":\"app_home_opened\",\"tab\":\"home\",\"user\":\"U1\"}}"));
 
         verify(appHomeService).onHomeOpened("T1", "U1");
     }
@@ -112,7 +112,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     @Test
     void shouldIgnoreTheMessagesTabWhenTheDeveloperOpensIt() {
         appHomeHandler.onMessage(
-                nats(
+                inbox(
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"app_home_opened\",\"tab\":\"messages\",\"user\":\"U1\",\"channel\":\"D1\"}}"));
 
         verify(appHomeService, never()).onHomeOpened(anyString(), anyString());
@@ -121,7 +121,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     @Test
     void shouldRouteAnEditOfTheDevelopersDmWhenSlackReportsMessageChanged() {
         dmHandler.onMessage(
-                nats(
+                inbox(
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"subtype\":\"message_changed\",\"channel_type\":\"im\",\"channel\":\"D1\",\"message\":{\"user\":\"U1\",\"text\":\"new words\",\"ts\":\"100.2\",\"edited\":{\"user\":\"U1\",\"ts\":\"100.9\"}}}}"));
 
         verify(mentorService).handleEdit("T1", "D1", "U1", "100.2", "new words");
@@ -130,7 +130,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     @Test
     void shouldIgnoreMessageChangedWhenOnlyTheThreadSummaryChanged() {
         dmHandler.onMessage(
-                nats(
+                inbox(
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"subtype\":\"message_changed\",\"channel_type\":\"im\",\"channel\":\"D1\",\"message\":{\"user\":\"U1\",\"text\":\"same\",\"ts\":\"100.2\",\"reply_count\":1}}}"));
 
         verify(mentorService, never()).handleEdit(any(), any(), any(), any(), any());
@@ -139,7 +139,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     @Test
     void shouldIgnoreMessageChangedWhenTheAppChangedItsOwnMessage() {
         dmHandler.onMessage(
-                nats(
+                inbox(
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"subtype\":\"message_changed\",\"channel_type\":\"im\",\"channel\":\"D1\",\"message\":{\"bot_id\":\"B1\",\"text\":\"streamed\",\"ts\":\"100.3\",\"edited\":{\"user\":\"B1\",\"ts\":\"100.9\"}}}}"));
 
         verify(mentorService, never()).handleEdit(any(), any(), any(), any(), any());
@@ -148,7 +148,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     @Test
     void shouldRouteADeletionOfTheDevelopersDmWhenSlackReportsMessageDeleted() {
         dmHandler.onMessage(
-                nats(
+                inbox(
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"subtype\":\"message_deleted\",\"channel_type\":\"im\",\"channel\":\"D1\",\"deleted_ts\":\"100.2\",\"previous_message\":{\"user\":\"U1\",\"text\":\"old\",\"ts\":\"100.2\"}}}"));
 
         verify(mentorService).handleDelete("T1", "D1", "U1", "100.2");
@@ -157,7 +157,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     @Test
     void shouldIgnoreBotMessageSubtypesWhenTheyArriveAsDms() {
         dmHandler.onMessage(
-                nats(
+                inbox(
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"subtype\":\"bot_message\",\"channel_type\":\"im\",\"channel\":\"D1\",\"bot_id\":\"B1\",\"text\":\"hi\",\"ts\":\"100.4\"}}"));
 
         verify(mentorService, never()).handleDm(any(), any(), any(), any(), any(), any());
@@ -166,7 +166,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     @Test
     void memberJoinedRoutesToJustInTimeNotice() {
         joinHandler.onMessage(
-                nats(
+                inbox(
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"member_joined_channel\",\"channel\":\"C1\",\"user\":\"U1\"}}"));
 
         verify(joinNoticeHandler).onMemberJoined(eq("T1"), any(JsonNode.class), eq(true));
@@ -175,7 +175,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     @Test
     void staleMemberJoinedReplaySuppressesTheNoticeButStillRegisters() {
         joinHandler.onMessage(
-                nats(
+                inbox(
                         "{\"team_id\":\"T1\",\"event_time\":1,\"event\":{\"type\":\"member_joined_channel\",\"channel\":\"C1\",\"user\":\"U1\"}}"));
 
         // The durable bot-self-join registration must survive a stale redelivery; only the
@@ -186,9 +186,9 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     @Test
     void uninstallEventsRouteToTeardown() {
         appUninstalledHandler.onMessage(
-                nats("{\"team_id\":\"T1\",\"event_id\":\"Ev1\",\"event\":{\"type\":\"app_uninstalled\"}}"));
+                inbox("{\"team_id\":\"T1\",\"event_id\":\"Ev1\",\"event\":{\"type\":\"app_uninstalled\"}}"));
         tokensRevokedHandler.onMessage(
-                nats(
+                inbox(
                         "{\"team_id\":\"T1\",\"event_id\":\"Ev2\",\"event\":{\"type\":\"tokens_revoked\",\"tokens\":{\"bot\":[\"U9\"]}}}"));
 
         verify(uninstallService).onUninstall("T1", "app_uninstalled", "Ev1");
@@ -200,13 +200,13 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
         // A member revoking their personal Sign-in-with-Slack authorization fires tokens_revoked with only
         // oauth entries; the app is still installed and the bot token is valid, so nothing may be purged.
         tokensRevokedHandler.onMessage(
-                nats(
+                inbox(
                         "{\"team_id\":\"T1\",\"event_id\":\"Ev3\",\"event\":{\"type\":\"tokens_revoked\",\"tokens\":{\"oauth\":[\"U1\"],\"bot\":[]}}}"));
 
         verify(uninstallService, never()).onUninstall(anyString(), anyString(), anyString());
     }
 
-    private static ProviderEvent nats(String body) {
+    private static ProviderEvent inbox(String body) {
         ProviderEvent message = mock(ProviderEvent.class);
         when(message.payload()).thenReturn(body.getBytes(StandardCharsets.UTF_8));
         return message;

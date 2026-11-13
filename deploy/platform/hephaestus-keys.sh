@@ -2,7 +2,7 @@
 # Keep the release Secret of Hephaestus: docs/admin/kubernetes.mdx § Create the Secret.
 #
 #   sh hephaestus-keys.sh [--namespace hephaestus] [--secret hephaestus-app] [--backups] [--metrics]
-#                         [--external-database [--new-keys]] [--external-nats]
+#                         [--external-database [--new-keys]]
 #   sh hephaestus-keys.sh [--namespace …] [--secret …] --export-keys FILE
 #   sh hephaestus-keys.sh [--namespace …] [--secret …] --check-keys FILE
 #   sh hephaestus-keys.sh [--namespace …] [--secret …] --rotate KEY
@@ -25,7 +25,6 @@
 #                                       the passwords of hephaestus_owner and hephaestus_app on your
 #                                       PostgreSQL, with --external-database. New encryption keys for
 #                                       that database need --new-keys.
-#   NATS_USERNAME, NATS_PASSWORD        the login of your NATS broker, with --external-nats.
 set -eu
 
 NAMESPACE=hephaestus
@@ -33,7 +32,6 @@ SECRET=hephaestus-app
 BACKUPS=false
 METRICS=false
 EXTERNAL_DATABASE=false
-EXTERNAL_NATS=false
 NEW_KEYS=false
 EXPORT=
 CHECK=
@@ -52,7 +50,6 @@ while [ $# -gt 0 ]; do
 	--backups) BACKUPS=true; shift ;;
 	--metrics) METRICS=true; shift ;;
 	--external-database) EXTERNAL_DATABASE=true; shift ;;
-	--external-nats) EXTERNAL_NATS=true; shift ;;
 	--new-keys) NEW_KEYS=true; shift ;;
 	--export-keys) [ $# -ge 2 ] && [ -n "$2" ] || die "--export-keys needs a file"; EXPORT=$2; shift 2 ;;
 	--check-keys) [ $# -ge 2 ] && [ -n "$2" ] || die "--check-keys needs a file"; CHECK=$2; shift 2 ;;
@@ -62,7 +59,7 @@ while [ $# -gt 0 ]; do
 done
 modes=0
 for mode in "$EXPORT" "$CHECK" "$ROTATE"; do [ -z "$mode" ] || modes=$((modes + 1)); done
-if [ "$modes" -gt 0 ] && { [ "$modes" -gt 1 ] || [ "$BACKUPS$METRICS$EXTERNAL_DATABASE$EXTERNAL_NATS$NEW_KEYS" != falsefalsefalsefalsefalse ]; }; then
+if [ "$modes" -gt 0 ] && { [ "$modes" -gt 1 ] || [ "$BACKUPS$METRICS$EXTERNAL_DATABASE$NEW_KEYS" != falsefalsefalsefalse ]; }; then
 	die "--export-keys, --check-keys and --rotate each run alone, with at most --namespace and --secret"
 fi
 [ "$NEW_KEYS" = false ] || [ "$EXTERNAL_DATABASE" = true ] || die "--new-keys needs --external-database: for the bundled PostgreSQL, the script decides from its volume"
@@ -243,13 +240,6 @@ else
 fi
 # "heph" and random hex, or nothing when openssl fails: a bare "heph" would pass the check in add.
 heph_random() { suffix=$(random -hex 16) && [ -n "$suffix" ] && printf 'heph%s' "$suffix"; }
-if [ "$EXTERNAL_NATS" = false ]; then
-	has NATS_USERNAME || add NATS_USERNAME "$(heph_random)"
-	has NATS_PASSWORD || add NATS_PASSWORD "$(heph_random)"
-else
-	has NATS_USERNAME || supply NATS_USERNAME "--external-nats: set NATS_USERNAME to the login of your NATS broker"
-	has NATS_PASSWORD || supply NATS_PASSWORD "--external-nats: set NATS_PASSWORD to the password of that login"
-fi
 # Each key gets its own value (docs/admin/secret-custody.mdx § Generation and rotation).
 has HEPHAESTUS_SECURITY_ENCRYPTION_KEY || add HEPHAESTUS_SECURITY_ENCRYPTION_KEY "$(random -hex 16)"
 has HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY || add HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY "$(random -hex 16)"

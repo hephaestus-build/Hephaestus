@@ -25,7 +25,7 @@ On startup, the JVM logs the role:
 INFO  RuntimeRoleStartupLogger : Runtime roles enabled: [SERVER]
 ```
 
-Under `prod`, a disabled server role prevents startup. Disabling NATS for the server also prevents startup.
+Under `prod`, a disabled server role prevents startup.
 The warning for a JVM without the server role is a non-production diagnostic, not a production recovery mode.
 The startup event also records `event.name=runtime.roles.configured` and the `runtime.server.enabled` boolean.
 
@@ -191,7 +191,6 @@ Each cell shows the value the server uses when the operator sets **no** environm
 | `hephaestus.runtime.server.enabled`                     | true    | env default                                            |
 | `hephaestus.workspace.init-default`                     | false   | `prod` profile                                         |
 | `hephaestus.git.enabled`                                | false   | env default                                            |
-| `hephaestus.sync.nats.enabled`                          | true    | `prod` profile                                         |
 | `hephaestus.agent.enabled`                              | false   | env default                                            |
 | `hephaestus.integration.outline.allowed-origins`        | empty   | env default                                            |
 | `hephaestus.sandbox.gateway.port`                       | 8081    | env default (`SANDBOX_API_PORT`)                       |
@@ -756,4 +755,4 @@ repository rather than on this site:
 - [**ADR 0005**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0005-two-role-runtime-via-conditional-on-property.md) — original two-role design.
 - [**ADR 0008**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0008-webhook-runtime-role.md) — the former webhook role. The server now receives provider webhooks.
 - [**ADR 0009**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0009-worker-runtime-substrate-wss-control-channel.md) — server substrate. Its WSS control channel is superseded by ADR 0068.
-- [**ADR 0025**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0025-agent-job-queue-on-postgresql.md) — agent job queue moved off NATS onto PostgreSQL.
+- [**ADR 0025**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0025-agent-job-queue-on-postgresql.md) — PostgreSQL agent job queue.

@@ -8,7 +8,7 @@ This procedure installs Hephaestus on one Linux host with [k3s](https://docs.k3s
 One command, `k3s-install.sh`, does the install.
 It checks the host, installs the pinned k3s and the platform, and keeps the release Secret.
 Then it verifies the release chart and installs it.
-It uses the `small.yaml` profile, the bundled PostgreSQL and NATS, and one worker that runs reviews.
+It uses the `small.yaml` profile, the bundled PostgreSQL, and one worker that runs reviews.
 
 A second run of the same release changes nothing that the first run made.
 A run with the files of a newer release upgrades the host.
@@ -341,7 +341,7 @@ The kubelet never removes an image that a Pod uses.
 
 :::caution[CAUTION: Host data loss]
 The k3s uninstall script deletes the local cluster datastore and local persistent volume data.
-This includes PostgreSQL and NATS data on a default one-host installation.
+This includes PostgreSQL data on a default one-host installation.
 Verify a recovery set first if you must keep the data.
 :::
 
@@ -459,7 +459,7 @@ After a restart, verification allows 31 checks with two-second pauses for the No
 
 Soft eviction is disabled until stateful-service requests and admission protection are qualified.
 For memory eviction, usage above requests ranks before Pod priority.
-Thus, a higher priority cannot protect PostgreSQL or NATS above their requests from a review below its request.
+Thus, a higher priority cannot protect PostgreSQL above their requests from a review below its request.
 The existing hard thresholds remain emergency recovery boundaries.
 The kubelet targets an additional 256 MiB of reclaim and holds a pressure condition for five minutes.
 Application admission must stop new background work before those boundaries.
@@ -489,15 +489,15 @@ Run the installer, then repeat it and verify stateful Pod identity and service c
 The second run must preserve unchanged configuration and avoid unnecessary k3s or journald restarts.
 Verify disabled swap and its boot activation settings.
 
-Apply pressure with PostgreSQL and NATS above their requests and review/turn Pods below theirs.
-Require application backoff and recovery before hard eviction, with no database/broker loss or OOM.
+Apply pressure with PostgreSQL above their requests and review/turn Pods below theirs.
+Require application backoff and recovery before hard eviction, with no database loss or OOM.
 Observe container and journal rollover, image GC at 75/65, and image pull/start latency.
 Retain the command logs, effective configuration, pressure/OOM counters, and synchronized footprint samples as release evidence.
 
 ## What the release workflow tests
 
 Before it publishes a release, the release workflow runs `k3s-install.sh` on Ubuntu 24.04 on `amd64` and on `arm64`.
-It runs the command twice, then an upgrade that restarts every role except PostgreSQL and NATS, whose Pods must stay.
+It runs the command twice, then an upgrade that restarts every role except PostgreSQL, whose Pods must stay.
 That run differs from your install in these points:
 
 - A local CA issues the Gateway certificate, because `Let's Encrypt` cannot reach a CI runner. CI does not test the HTTP-01 challenge of the `Let's Encrypt` issuer.

@@ -31,9 +31,6 @@ hephaestus:
     # Artifact generation has no database to work on (ConditionalOnBackgroundWork).
     background-work:
         enabled: false
-    sync:
-        nats:
-            enabled: false
     workspace:
         init-default: false
         init-gitlab-default: false

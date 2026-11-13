@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Builds the NATS subject and dedup key of a delivery that {@link GitLabConnectionWebhookController} authenticated for
+ * Builds the event subject and dedup key of a delivery that {@link GitLabConnectionWebhookController} authenticated for
  * one connection.
  *
  * <p>Subject format: {@code gitlab.?connection.<connectionId>.<event>}. The {@code event} token is the payload's
@@ -74,7 +74,7 @@ public class GitLabSubjectKeyDeriver {
 
     private static String sanitizeEvent(String value) {
         if (value == null || value.isEmpty()) return "";
-        // Lowercase + replace dots so the event component never collides with NATS
+        // Lowercase + replace dots so the event component never collides with provider inbox
         // token boundaries.
         return value.toLowerCase(Locale.ROOT).replace('.', '~');
     }

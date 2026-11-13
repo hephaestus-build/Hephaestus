@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * Serializes work by name across every server process, for work that calls a provider or the broker and so must not
+ * Serializes work by name across every server process, for work that calls a provider and so must not
  * hold a transaction (docs/contributor/transactions.md). An in-memory lock serializes only one process.
  *
  * <p>The lock is a PostgreSQL session lock on a connection of its own, without a transaction. PostgreSQL drops it with

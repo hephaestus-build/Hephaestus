@@ -7,7 +7,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
- * Consumer-side parser for Outline NATS subjects.
+ * Consumer-side parser for Outline event subjects.
  *
  * <p>Input shape: {@code outline.<subscriptionId>.<event>} produced by
  * {@link OutlineSubjectKeyDeriver}. The subscription id is passthrough (handlers resolve the

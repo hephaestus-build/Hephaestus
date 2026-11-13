@@ -8,7 +8,7 @@ The admin guide's Kubernetes and Observability pages are now split into focused 
 - Install on one host
 - Helm chart reference
 - Sandboxes
-- Use an external PostgreSQL and NATS
+- Use an external PostgreSQL
 - Connect to services on a private network
 - Maintain nodes and the database
 

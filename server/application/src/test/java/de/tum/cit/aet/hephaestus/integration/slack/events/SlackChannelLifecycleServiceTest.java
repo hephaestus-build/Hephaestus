@@ -18,7 +18,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The lifecycle decision table: which Slack-side channel event maps onto which consent side effect, and that an
- * unresolved workspace or a blank channel id is always a silent no-op (the handlers run on the NATS consumer and
+ * unresolved workspace or a blank channel id is always a silent no-op (the handlers run on the inbox consumer and
  * must never throw).
  */
 @Tag("unit")

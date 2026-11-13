@@ -1087,7 +1087,6 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             "spring.datasource.hikari.maximum-pool-size=4",
                             "hephaestus.runtime.server.enabled=true",
                             "hephaestus.agent.enabled=true",
-                            "hephaestus.sync.nats.enabled=false",
                             "hephaestus.sandbox.kubernetes.namespace=lost-server-sandboxes",
                             "server.port=0",
                             "management.server.port=0")
