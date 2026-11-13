@@ -162,13 +162,13 @@ await it("scans untracked source and refuses a baseline added beside the violati
 		assert.deepEqual(check(root, "origin/main"), []);
 		const source = "/** @deprecated */\nexport const previous = true;";
 		writeFileSync(path.join(root, "scripts/previous.ts"), source);
-		assert.ok(check(root).some((error) => error.includes("source-deprecation")));
+		assert.ok(check(root, "origin/main").some((error) => error.includes("source-deprecation")));
 		const current = findings("scripts/previous.ts", source);
 		writeFileSync(
 			path.join(root, "scripts/no-legacy-baseline.json"),
 			JSON.stringify(current.map((finding) => ({ ...finding, count: 1, owner: "new exemption" }))),
 		);
-		assert.ok(check(root).some((error) => error.includes("cannot grow")));
+		assert.ok(check(root, "origin/main").some((error) => error.includes("cannot grow")));
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
