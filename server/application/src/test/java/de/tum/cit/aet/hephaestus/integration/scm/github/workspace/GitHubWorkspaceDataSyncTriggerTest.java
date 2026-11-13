@@ -109,6 +109,8 @@ class GitHubWorkspaceDataSyncTriggerTest extends BaseUnitTest {
     @Test
     void shouldReconcileAppRepositoriesWithoutFullSyncWhenFullStartupSyncIsDisabled() {
         activeConnection(new ConnectionConfig.GitHubAppConfig(INSTALLATION_ID, null, null, Set.of()));
+        when(monitorService.ensureAllInstallationRepositoriesCovered(INSTALLATION_ID, null, true))
+                .thenReturn(true);
         runJobBodies();
 
         startupTrigger(optionalProvider(syncJobService)).syncOnStartup(WORKSPACE_ID, false);
@@ -121,6 +123,8 @@ class GitHubWorkspaceDataSyncTriggerTest extends BaseUnitTest {
     @Test
     void shouldReconcileAppRepositoriesBeforeFullSyncInOneLifecycleJobWhenFullStartupSyncIsEnabled() {
         activeConnection(new ConnectionConfig.GitHubAppConfig(INSTALLATION_ID, null, null, Set.of()));
+        when(monitorService.ensureAllInstallationRepositoriesCovered(INSTALLATION_ID, null, true))
+                .thenReturn(true);
         runJobBodies();
 
         startupTrigger(optionalProvider(syncJobService)).syncOnStartup(WORKSPACE_ID, true);

@@ -26,11 +26,15 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationRepositoryEnum
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncProgress;
+import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRepository;
+import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobStatus;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.GitHubGraphQlFragments;
+import de.tum.cit.aet.hephaestus.integration.scm.github.workspace.GitHubWorkspaceDataSyncTrigger;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.RepositoryAlreadyMonitoredException;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.RepositoryManagementNotAllowedException;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.RepositoryProviderNotConnectedException;
@@ -79,6 +83,15 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
+    @Autowired
+    private GitHubWorkspaceDataSyncTrigger githubTrigger;
+
+    @Autowired
+    private SyncJobRepository syncJobs;
+
+    @Autowired
+    private WorkspaceLifecycleService lifecycle;
+
     @Autowired
     private JdbcTemplate jdbc;
 
@@ -187,13 +200,9 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
         assertThat(captured.workspaceId()).isEqualTo(workspace.getId());
         assertThat(captured.lifecycleGeneration()).isEqualTo(connection.getLifecycleGeneration());
         assertThat(captured.version()).isEqualTo(connection.getVersion());
-        assertThat(
-                        new QueryPlans(environment)
-                                .fullScans(
-                                        List.of(
-                                                ConnectionRepository.ACTIVE_INSTALLATION_SNAPSHOT_SQL.replace(
-                                                        ":instanceKey", "?"),
-                                                "SELECT id,native_id,name_with_owner FROM repository_to_monitor WHERE workspace_id=? ORDER BY id")))
+        assertThat(new QueryPlans(environment)
+                        .fullScans(List.of(
+                                ConnectionRepository.ACTIVE_INSTALLATION_SNAPSHOT_SQL.replace(":instanceKey", "?"))))
                 .isEmpty();
     }
 
@@ -229,7 +238,7 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
                             .findById(connection.getId())
                             .orElseThrow()
                             .getVersion())
-                    .isEqualTo(version);
+                    .isGreaterThan(version);
             return List.of(
                     snapshot(95L, removed.getNameWithOwner(), removed.getName(), true),
                     snapshot(96L, "HephaestusTest/stale-add", "stale-add", false));
@@ -242,6 +251,100 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
         assertThat(repositoryRepository.findByNameWithOwner(removed.getNameWithOwner()))
                 .isEmpty();
         assertThat(repositoryRepository.findByNameWithOwner("HephaestusTest/stale-add"))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldFenceARemovalOfARepositoryThatHasNoMonitorYet() {
+        Workspace workspace = persistWorkspace(RepositorySelection.ALL);
+        Repository retained = persistGitHubRepository(97L, "HephaestusTest/already-present");
+        monitorWithScope(workspace, retained.getNameWithOwner(), retained.getNativeId());
+        repositoryEnumerator.answers(id -> {
+            workspaceRepositoryMonitorService.removeRepositoryMonitorForInstallation(
+                    INSTALLATION_ID, "HephaestusTest/revoked-before-discovery", 98L);
+            return List.of(
+                    snapshot(97L, retained.getNameWithOwner(), retained.getName(), true),
+                    snapshot(98L, "HephaestusTest/revoked-before-discovery", "revoked-before-discovery", true));
+        });
+        assertThat(workspaceRepositoryMonitorService.ensureAllInstallationRepositoriesCovered(
+                        INSTALLATION_ID, null, true))
+                .isFalse();
+        assertThat(repositoryToMonitorRepository.findByWorkspaceId(workspace.getId()))
+                .extracting(RepositoryToMonitor::getNativeId)
+                .containsExactly(97L);
+        assertThat(repositoryRepository.findByNameWithOwner("HephaestusTest/revoked-before-discovery"))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldNotRemoveARepositoryAddedByAProviderEventDuringEnumeration() {
+        Workspace workspace = persistWorkspace(RepositorySelection.ALL);
+        Repository retained = persistGitHubRepository(99L, "HephaestusTest/existing-before-event");
+        monitorWithScope(workspace, retained.getNameWithOwner(), retained.getNativeId());
+        repositoryEnumerator.answers(id -> {
+            workspaceRepositoryMonitorService.ensureRepositoryAndMonitorFromSnapshot(
+                    INSTALLATION_ID,
+                    new ProvisioningListener.RepositorySnapshot(
+                            100L, "HephaestusTest/added-during-read", "added-during-read", true));
+            return List.of(snapshot(99L, retained.getNameWithOwner(), retained.getName(), true));
+        });
+        assertThat(workspaceRepositoryMonitorService.ensureAllInstallationRepositoriesCovered(
+                        INSTALLATION_ID, null, true))
+                .isFalse();
+        assertThat(repositoryToMonitorRepository.findByWorkspaceId(workspace.getId()))
+                .extracting(RepositoryToMonitor::getNativeId)
+                .containsExactlyInAnyOrder(99L, 100L);
+    }
+
+    @Test
+    void shouldDiscardEnumerationWhenTheWorkspaceIsPausedDuringTheCall() {
+        Workspace workspace = persistWorkspace(RepositorySelection.ALL);
+        repositoryEnumerator.answers(id -> {
+            lifecycle.suspendWorkspace(workspace.getWorkspaceSlug());
+            return List.of(snapshot(101L, "HephaestusTest/after-workspace-pause", "after-workspace-pause", true));
+        });
+        assertThat(workspaceRepositoryMonitorService.ensureAllInstallationRepositoriesCovered(
+                        INSTALLATION_ID, null, true))
+                .isFalse();
+        assertThat(repositoryToMonitorRepository.findByWorkspaceId(workspace.getId()))
+                .isEmpty();
+        assertThat(repositoryRepository.findByNameWithOwner("HephaestusTest/after-workspace-pause"))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldDiscardEnumerationWhenErasureDeletesItsConnection() {
+        Workspace workspace = persistWorkspace(RepositorySelection.ALL);
+        Connection connection = connectionRepository
+                .findActive(workspace.getId(), IntegrationKind.GITHUB)
+                .orElseThrow();
+        repositoryEnumerator.answers(id -> {
+            connectionRepository.deleteById(connection.getId());
+            return List.of(snapshot(102L, "HephaestusTest/after-connection-erasure", "after-connection-erasure", true));
+        });
+        assertThat(workspaceRepositoryMonitorService.ensureAllInstallationRepositoriesCovered(
+                        INSTALLATION_ID, null, true))
+                .isFalse();
+        assertThat(repositoryToMonitorRepository.findByWorkspaceId(workspace.getId()))
+                .isEmpty();
+        assertThat(repositoryRepository.findByNameWithOwner("HephaestusTest/after-connection-erasure"))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldRecordIncompleteDiscoveryAsAWarningOnItsActualSyncJob() {
+        Workspace workspace = persistWorkspace(RepositorySelection.ALL);
+        Connection connection = connectionRepository
+                .findActive(workspace.getId(), IntegrationKind.GITHUB)
+                .orElseThrow();
+        repositoryEnumerator.returns(List.of());
+        githubTrigger.syncOnStartup(workspace.getId(), true);
+        var job = syncJobs.findFirstByConnection_IdAndStatusInOrderByCreatedAtDesc(
+                        connection.getId(), Set.of(SyncJobStatus.SUCCEEDED_WITH_WARNINGS))
+                .orElseThrow();
+        assertThat(job.getProgress())
+                .containsEntry(SyncProgress.KEY_CURRENT_STEP, "Repository discovery did not finish.");
+        assertThat(repositoryToMonitorRepository.findByWorkspaceId(workspace.getId()))
                 .isEmpty();
     }
 

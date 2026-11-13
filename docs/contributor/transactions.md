@@ -44,7 +44,8 @@ Spring: "self-invocation (in effect, a method within the target object calling a
   GitHub installation enumeration captures the owning connection and its generation first.
   After the provider answers, it locks the workspace and connection in that order and rejects an earlier generation.
   A pause followed by resume still invalidates the earlier answer.
-  It also compares the captured monitor list, so a provider removal that committed during the call cannot be undone by that answer.
+  Every repository add or removal event advances the connection version, even if no monitor row changes.
+  The earlier answer cannot restore a repository whose removal committed during the call.
 - If a row lock must stay across a call, record the reason in an ADR.
   `GitLabTokenLifecycleService` holds such a lock.
   Provider removal uses the separate capture, dispatch and settle transactions in [ADR 0101](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0101-a-connection-cannot-adopt-an-upstream-resource-whose-removal-is-unresolved.md).

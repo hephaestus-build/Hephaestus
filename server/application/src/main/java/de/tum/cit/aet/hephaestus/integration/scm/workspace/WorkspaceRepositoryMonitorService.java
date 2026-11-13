@@ -266,6 +266,8 @@ public class WorkspaceRepositoryMonitorService {
                     workspaceId);
             return Optional.empty();
         }
+        connectionRepository.findActiveInstallationForUpdateAndIncrementVersion(
+                workspaceId, Long.toString(installationId));
         var monitorOpt = repositoryToMonitorRepository.findOneByWorkspaceIdAndNativeId(workspaceId, expectedNativeId);
         if (monitorOpt.isEmpty()) {
             log.debug("Skipped repository removal: reason=notMonitored, workspaceId={}", workspaceId);
@@ -315,6 +317,9 @@ public class WorkspaceRepositoryMonitorService {
 
         Workspace workspace = workspaceOpt.get();
 
+        connectionRepository.findActiveInstallationForUpdateAndIncrementVersion(
+                workspace.getId(), Long.toString(installationId));
+
         IdentityProvider provider = gitProviderRepository
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
                 .orElseThrow(() -> new IllegalStateException(
@@ -336,44 +341,46 @@ public class WorkspaceRepositoryMonitorService {
      *     sync in bulk)
      */
     @Transactional(propagation = Propagation.NEVER)
-    public void ensureAllInstallationRepositoriesCovered(
+    public boolean ensureAllInstallationRepositoriesCovered(
             long installationId, @Nullable Collection<String> protectedRepositories, boolean deferSync) {
+        // Suspended workspaces must not restart syncs when provider inbox replays creation events.
         if (isInstallationSuspended(installationId)) {
             log.info("Skipped repository enumeration: reason=installationSuspended, installationId={}", installationId);
-            return;
+            return false;
         }
         InstallationRepositoryEnumerator enumerator = installationEnumerators.get(IntegrationKind.GITHUB);
-        if (enumerator == null) return;
-        var captured = readTransactionTemplate.execute(status -> connectionRepository
-                .findActiveInstallationSnapshot(Long.toString(installationId))
-                .map(connection -> new EnumerationSnapshot(
-                        connection,
-                        List.copyOf(
-                                repositoryToMonitorRepository.findSnapshotsByWorkspaceId(connection.workspaceId())))));
-        if (captured == null || captured.isEmpty()) return;
-        var snapshot = captured.orElseThrow();
-        var authority = snapshot.connection();
+        if (enumerator == null) {
+            log.debug(
+                    "Skipped repository enumeration: reason=noEnumeratorForKind, installationId={}, kind={}",
+                    installationId,
+                    IntegrationKind.GITHUB);
+            return false;
+        }
+        var captured = readTransactionTemplate.execute(
+                status -> connectionRepository.findActiveInstallationSnapshot(Long.toString(installationId)));
+        if (captured == null || captured.isEmpty()) return false;
+        var authority = captured.orElseThrow();
         var snapshots = enumerator.enumerate(installationId);
         if (snapshots.isEmpty()) {
             log.warn(
                     "Skipped repository enumeration: reason=noDataReturned, installationId={}, workspaceId={}",
                     installationId,
                     authority.workspaceId());
-            return;
+            return false;
         }
-        transactionTemplate.executeWithoutResult(status -> {
+        return Boolean.TRUE.equals(transactionTemplate.execute(status -> {
             var workspace = workspaceRepository
                     .findByIdForUpdate(authority.workspaceId())
                     .orElse(null);
             if (workspace == null || workspace.getStatus() != Workspace.WorkspaceStatus.ACTIVE) {
                 discardedEnumeration(installationId, authority, "workspaceChanged");
-                return;
+                return false;
             }
             if (connectionRepository
                     .findAndLockLifecycleConnection(authority.connectionId(), authority.workspaceId())
                     .isEmpty()) {
                 discardedEnumeration(installationId, authority, "connectionMissing");
-                return;
+                return false;
             }
             var connection = connectionRepository
                     .findByIdAndWorkspaceId(authority.connectionId(), authority.workspaceId())
@@ -385,21 +392,12 @@ public class WorkspaceRepositoryMonitorService {
                     || !Objects.equals(config.installationId(), installationId)
                     || isInstallationSuspended(installationId)) {
                 discardedEnumeration(installationId, authority, "connectionChanged");
-                return;
-            }
-            if (!repositoryToMonitorRepository
-                    .findSnapshotsByWorkspaceId(authority.workspaceId())
-                    .equals(snapshot.monitors())) {
-                discardedEnumeration(installationId, authority, "monitorsChanged");
-                return;
+                return false;
             }
             reconcileInstallationRepositories(workspace, installationId, snapshots, protectedRepositories, deferSync);
-        });
+            return true;
+        }));
     }
-
-    private record EnumerationSnapshot(
-            ConnectionRepository.InstallationSnapshot connection,
-            List<RepositoryToMonitorRepository.MonitorSnapshot> monitors) {}
 
     private void discardedEnumeration(
             long installationId, ConnectionRepository.InstallationSnapshot authority, String reason) {
