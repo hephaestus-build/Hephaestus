@@ -369,6 +369,9 @@ It does not enable background scheduling in the test profile.
 The cases rename a user, change an email and remove the old address, and transfer a project between subgroups.
 The transfer case fetches the project by its stable ID, persists its reported path, then reconciles the monitor, as the scheduler does.
 Each case checks the queue result, changed commit link, correction receipt and matching Activity actor.
+The fixture waits for an ID read to confirm the new namespace.
+
+A successful transfer response describes the project before its asynchronous transfer.
 GitLab retains scheduled group deletions for its configured retention period ([Groups API](https://docs.gitlab.com/api/groups/#schedule-a-group-for-deletion)).
 The provider mutations use GitLab's [Users API](https://docs.gitlab.com/api/users/), [Commits API](https://docs.gitlab.com/api/commits/) and [project transfer API](https://docs.gitlab.com/api/projects/#transfer-a-project-to-a-new-namespace).
 

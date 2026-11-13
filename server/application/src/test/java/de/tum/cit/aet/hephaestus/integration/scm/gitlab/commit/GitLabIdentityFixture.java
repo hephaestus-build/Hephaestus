@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import java.io.IOException;
 import java.net.URI;
@@ -158,7 +159,15 @@ final class GitLabIdentityFixture implements AutoCloseable {
     void transfer() throws IOException, InterruptedException {
         var project = request("PUT", "/projects/" + projectId + "/transfer", Map.of("namespace", targetId), 200);
         assertThat(project.path("id").asLong()).isEqualTo(projectId);
-        projectPath = project.path("path_with_namespace").asString();
+        // GitLab returns the pre-transfer project while its asynchronous transfer runs.
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            var moved = request("GET", "/projects/" + projectId, null, 200);
+            assertThat(moved.path("id").asLong()).isEqualTo(projectId);
+            assertThat(moved.path("namespace").path("id").asLong()).isEqualTo(targetId);
+            String movedPath = moved.path("path_with_namespace").asString();
+            assertThat(movedPath).isNotEqualTo(projectPath);
+            projectPath = movedPath;
+        });
     }
 
     String version() throws IOException, InterruptedException {
