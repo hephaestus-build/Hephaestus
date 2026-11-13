@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { cn } from "cn";
 import { BrainCircuit, CircleHelpIcon } from "lucide-react";
 import { type ReactElement, type ReactNode, useId, useState } from "react";
+import { DocLink } from "@/components/common/DocLink";
 import { definitionFor, type StatusDef } from "@/components/common/status-def";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
@@ -164,7 +165,15 @@ export function AgentBindingsPage({
 			<PageHeader
 				icon={<BrainCircuit />}
 				title="AI models"
-				description="Choose the models that run practice reviews and conversations."
+				description={
+					<>
+						Choose the models that run practice reviews and conversations.{" "}
+						<DocLink doc="membersAiChoices">
+							How a member’s AI choice limits which model serves them
+						</DocLink>
+						.
+					</>
+				}
 			/>
 
 			<div className="space-y-8">

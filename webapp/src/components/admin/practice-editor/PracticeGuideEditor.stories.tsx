@@ -55,6 +55,13 @@ export const Empty: Story = {
 		await expect(canvas.getByRole("textbox", { name: "Guide text" })).toHaveValue("");
 		await expect(canvas.queryByRole("button", { name: "Remove guide" })).toBeNull();
 		await expect(canvas.queryByRole("list", { name: "Figures" })).toBeNull();
+		// The rules for figures and the guide templates live in the admin guide.
+		await expect(
+			canvas.getByRole("link", { name: "Write a guide and its figures (opens in a new tab)" }),
+		).toHaveAttribute(
+			"href",
+			expect.stringMatching(/\/admin\/writing-practices#add-a-visual-and-a-guide$/u),
+		);
 	},
 };
 

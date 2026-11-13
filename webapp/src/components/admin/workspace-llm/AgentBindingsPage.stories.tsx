@@ -120,7 +120,19 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
+/** The page explains, through the admin guide, how a member's AI choice limits the models below. */
+export const Default: Story = {
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByRole("link", {
+				name: "How a member’s AI choice limits which model serves them (opens in a new tab)",
+			}),
+		).toHaveAttribute(
+			"href",
+			expect.stringMatching(/\/admin\/ai-providers#data-handling-and-members-ai-choices$/u),
+		);
+	},
+};
 
 export const Loading: Story = {
 	args: { state: { status: "loading" } },

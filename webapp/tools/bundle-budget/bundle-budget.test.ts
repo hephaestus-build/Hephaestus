@@ -157,15 +157,25 @@ describe("acceptGrowth", () => {
 			entry: 5000 + TOLERANCE_BYTES,
 			lazy: { "a.tsx": 5001 + TOLERANCE_BYTES, "b.tsx": 5003, "new.tsx": 2 * TOLERANCE_BYTES },
 		};
-		const accepted = acceptGrowth(head, base, "#3");
+		const accepted = acceptGrowth(head, base, "#3", "a shared chunk");
 		expect(accepted).toStrictEqual([
-			{ load: "a.tsx", gzipBytes: 5001 + TOLERANCE_BYTES, acceptedBy: "#3" },
-			{ load: "new.tsx", gzipBytes: 2 * TOLERANCE_BYTES, acceptedBy: "#3" },
+			{
+				load: "a.tsx",
+				gzipBytes: 5001 + TOLERANCE_BYTES,
+				acceptedBy: "#3",
+				reason: "a shared chunk",
+			},
+			{
+				load: "new.tsx",
+				gzipBytes: 2 * TOLERANCE_BYTES,
+				acceptedBy: "#3",
+				reason: "a shared chunk",
+			},
 		]);
 		expect(growthViolations(head, base, accepted)).toStrictEqual([]);
 	});
 
 	it("accepts nothing when no load grew past the tolerance", () => {
-		expect(acceptGrowth(base, base, "#3")).toStrictEqual([]);
+		expect(acceptGrowth(base, base, "#3", "a shared chunk")).toStrictEqual([]);
 	});
 });

@@ -119,6 +119,8 @@ const acceptance = z.object({
 	gzipBytes: z.number().int().nonnegative(),
 	/** The pull request, or the branch before it has one. */
 	acceptedBy: z.string().min(1),
+	/** Why the growth is worth it. Update mode requires it; acceptances recorded before it have none. */
+	reason: z.string().min(1).optional(),
 });
 
 /** `accepted-growth.json`: the acceptances of the change that commits it. */
@@ -200,6 +202,12 @@ export function acceptGrowth(
 	head: BundleSizes,
 	base: BundleSizes,
 	acceptedBy: string,
+	reason: string,
 ): Acceptance[] {
-	return grownLoads(head, base).map(([load, gzipBytes]) => ({ load, gzipBytes, acceptedBy }));
+	return grownLoads(head, base).map(([load, gzipBytes]) => ({
+		load,
+		gzipBytes,
+		acceptedBy,
+		reason,
+	}));
 }

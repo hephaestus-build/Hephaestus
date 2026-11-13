@@ -20,7 +20,8 @@ import {
 
 const ACCEPTED = new URL("accepted-growth.json", import.meta.url);
 
-const UPDATE_COMMAND = "BUNDLE_BUDGET=update vp run verification:webapp-build";
+const UPDATE_COMMAND =
+	'BUNDLE_BUDGET=update BUNDLE_ACCEPTED_REASON="<why the growth is worth it>" vp run verification:webapp-build';
 
 /** The acceptances in `file`; a base from before this file has none. */
 function acceptancesIn(file: string | URL): Acceptance[] {
@@ -68,7 +69,11 @@ if (import.meta.main) {
 	process.stdout.write(`${summary(head, base, baseName).join("\n")}\n`);
 	const acceptedBy = process.env.BUNDLE_ACCEPTED_BY;
 	if (process.env.BUNDLE_BUDGET === "update" && acceptedBy !== undefined && acceptedBy !== "") {
-		const accepted = acceptGrowth(head, base, acceptedBy);
+		const reason = process.env.BUNDLE_ACCEPTED_REASON?.trim() ?? "";
+		if (reason === "") {
+			throw new Error(`Say why the growth is worth it: ${UPDATE_COMMAND}`);
+		}
+		const accepted = acceptGrowth(head, base, acceptedBy, reason);
 		writeFileSync(ACCEPTED, `${JSON.stringify({ accepted }, null, "\t")}\n`);
 		process.stdout.write(
 			`Recorded ${accepted.length} accepted growth for ${acceptedBy} in ${ACCEPTED.pathname}\n`,

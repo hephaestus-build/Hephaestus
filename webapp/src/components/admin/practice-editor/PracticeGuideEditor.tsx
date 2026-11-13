@@ -2,6 +2,7 @@ import { ImagePlusIcon, Trash2Icon } from "lucide-react";
 import { useRef, useState } from "react";
 
 import type { PracticeGuide } from "@/api/types.gen";
+import { DocLink } from "@/components/common/DocLink";
 import { PracticeGuideMarkdown } from "@/components/practice-guidance/PracticeGuideMarkdown";
 import { PracticeVisual } from "@/components/practice-guidance/PracticeVisual";
 import { Button } from "@/components/ui/button";
@@ -96,7 +97,8 @@ export function PracticeGuideEditor({
 			<FieldLegend>Guide</FieldLegend>
 			<FieldDescription>
 				Optional. A longer explanation that developers read in the practice’s Guide tab. Write it in
-				Markdown, with up to {MAX_GUIDE_FIGURES} SVG figures.
+				Markdown, with up to {MAX_GUIDE_FIGURES} SVG figures.{" "}
+				<DocLink doc="practiceGuideWriting">Write a guide and its figures</DocLink>.
 			</FieldDescription>
 
 			<Field data-invalid={hasText(error) ? "true" : undefined}>
