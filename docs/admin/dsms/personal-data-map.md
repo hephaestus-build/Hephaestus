@@ -87,6 +87,21 @@ The self-service account export is a separate, narrower operation. Self-service 
 | Container logs and support bundles | Operational output. Logging policy excludes raw request bodies, model output, sandbox transcripts and secrets. Lines still carry identifiers: Hephaestus account and user ids, and the provider's numeric account ids, which the provider can map to a person. They carry no provider logins and no email addresses, but they can carry library exception text, so operators must assess exported bundles | No selective deletion | No selective deletion | Shipped container logs rotate by size ([Collecting logs](../monitoring.md#collect-logs)). Support-bundle retention is deployment-specific. |
 | PostgreSQL and filesystem backups | A copy of the backed-up personal-data corpus | No selective deletion inside a backup | Expiry of the backup copy | The optional encrypted off-host PostgreSQL backup overlay retains full backup chains by count, not by a legal time limit. Operators must document and enforce destination retention, including copies of `.env` and broker evidence. See [backup and restore](../backup-restore.mdx). |
 
+## Provider resource fence identifiers
+
+[ADR 0101](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0101-a-connection-cannot-adopt-an-upstream-resource-whose-removal-is-unresolved.md) requires this retention policy. The follow-up implementation must add its store, catalog ownership and executable tests before it stores these identifiers.
+
+| Property | Required treatment |
+| --- | --- |
+| Data classification | Pseudonymous personal identifiers: provider origin, App/group/team/bot/resource IDs, token fingerprint and minimal repair state. A GitHub installation on a user account can identify that person. Removing local pointers does not make the identifiers anonymous. |
+| Purpose | Integrity and security: prevent a delayed removal or retry from destroying an active replacement or another owner's resource. No use for practice feedback, tracking people or restoring erased work. |
+| Legal basis | GDPR Article 6(1)(f), legitimate interests in integrity and security, with the operator's documented necessity and balancing assessment. Recital 49 addresses information security. For official public tasks, the operator must document the applicable Article 6 basis instead. Article 6(1)(f) does not apply to that processing. |
+| Erasure independence | Erase credentials, payloads and scoped references on their existing deadlines. A retained fence has no workspace or person pointers, raw token or signed callback URL. It remains pseudonymous personal data. |
+| Deletion trigger | Delete the retained identity when the fence resolves or an instance admin releases it after out-of-band confirmation that the old resource is gone. A deadline alone does not release it. |
+| Indefinite case and access | An unresolved fence can remain indefinitely. Keep it visible to instance admins even after its connection/workspace is gone, so it can be reviewed and released. Release is audited. A bound connection's administration console shows the result. Workspace-only roles cannot release it. |
+
+The legal-basis record follows [GDPR Article 6 and Recital 49](https://eur-lex.europa.eu/eli/reg/2016/679/oj/eng). Its pseudonymous classification follows Recital 26. The identifier is not treated as anonymous merely because the local person link is absent.
+
 ## Operator verification
 
 Each erasure, export and retention job publishes a bounded success/failure counter and an
