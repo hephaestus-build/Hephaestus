@@ -160,6 +160,41 @@ public class Canary {
 				violations: ["NoPersonalLogArgument"],
 				errors: 0,
 			},
+			// Each class that a class-wide exemption once covered: its own name and package, with the call it used to make.
+			{
+				name: "a login in the public contributor list",
+				source: `package de.tum.cit.aet.hephaestus.contributors;
+public class ContributorService {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ContributorService.class);
+    public void skip(String login) { log.debug("Skipping excluded contributor: {}", login); }
+}`,
+				violations: ["NoPersonalLogArgument"],
+				errors: 0,
+			},
+			{
+				name: "an organization login",
+				source: `package de.tum.cit.aet.hephaestus.integration.scm.github.organization;
+public class GitHubOrganizationProcessor {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(GitHubOrganizationProcessor.class);
+    public void created(de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization saved) {
+        log.debug("Created organization: orgId={}, orgLogin={}", saved.getNativeId(), saved.getLogin());
+    }
+}`,
+				violations: ["NoPersonalLogArgument"],
+				errors: 0,
+			},
+			{
+				name: "a dev fixture login",
+				source: `package de.tum.cit.aet.hephaestus.core.auth.dev;
+public class DevLoginService {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DevLoginService.class);
+    public void signedIn(long id, String username, boolean admin) {
+        log.info("auth.dev-login: signed in dev account id={} login={} admin={}", id, username, admin);
+    }
+}`,
+				violations: ["NoPersonalLogArgument"],
+				errors: 0,
+			},
 			{
 				name: "analysis error",
 				source: "public class Canary { this is not valid Java }",

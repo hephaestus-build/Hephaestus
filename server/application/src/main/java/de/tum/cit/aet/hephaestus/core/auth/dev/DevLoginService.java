@@ -143,7 +143,7 @@ public class DevLoginService {
             account.setAppRole(Account.AppRole.APP_ADMIN);
             account = accountRepository.save(account);
         }
-        log.info("auth.dev-login: signed in dev account id={} login={} admin={}", account.getId(), username, admin);
+        log.info("auth.dev-login: signed in dev account id={} admin={}", account.getId(), admin);
         return account;
     }
 }

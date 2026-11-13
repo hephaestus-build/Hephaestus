@@ -1,7 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.organization;
 
-import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
-
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
@@ -80,7 +78,7 @@ public class GitHubOrganizationProcessor {
         } else if (organization.getHtmlUrl() == null && dto.login() != null) {
             // Construct htmlUrl from login as fallback
             organization.setHtmlUrl("https://github.com/" + dto.login());
-            log.debug("Constructed htmlUrl from login for organization: orgLogin={}", dto.login());
+            log.debug("Constructed htmlUrl from login for organization: orgId={}", organizationId);
         }
         if (dto.createdAt() != null) {
             organization.setCreatedAt(dto.createdAt());
@@ -91,9 +89,9 @@ public class GitHubOrganizationProcessor {
 
         Organization saved = organizationRepository.save(organization);
         if (isNew) {
-            log.debug("Created organization: orgId={}, orgLogin={}", saved.getNativeId(), saved.getLogin());
+            log.debug("Created organization: orgId={}", saved.getNativeId());
         } else {
-            log.debug("Updated organization: orgId={}, orgLogin={}", saved.getNativeId(), saved.getLogin());
+            log.debug("Updated organization: orgId={}", saved.getNativeId());
         }
         return saved;
     }
@@ -116,14 +114,9 @@ public class GitHubOrganizationProcessor {
         return organizationRepository
                 .findByNativeIdAndProviderId(nativeId, providerId)
                 .map(org -> {
-                    String oldLogin = org.getLogin();
                     org.setLogin(newLogin);
                     Organization saved = organizationRepository.save(org);
-                    log.info(
-                            "Renamed organization: nativeId={}, oldLogin={}, newLogin={}",
-                            nativeId,
-                            oldLogin,
-                            newLogin);
+                    log.info("Renamed organization: nativeId={}", nativeId);
                     return saved;
                 })
                 .orElse(null);
@@ -143,10 +136,8 @@ public class GitHubOrganizationProcessor {
         }
 
         organizationRepository.findByNativeIdAndProviderId(nativeId, providerId).ifPresent(org -> {
-            String orgLogin = org.getLogin();
-
             organizationRepository.delete(org);
-            log.info("Deleted organization: nativeId={}, orgLogin={}", nativeId, sanitizeForLog(orgLogin));
+            log.info("Deleted organization: nativeId={}", nativeId);
         });
     }
 }

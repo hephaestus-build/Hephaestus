@@ -42,8 +42,6 @@
         <description>Inspect known personal-data getters and argument names on typed SLF4J logger and builder calls.</description>
         <priority>2</priority>
         <properties>
-            <!-- These sources describe public project contributors, an organization, or dev fixture accounts. -->
-            <property name="violationSuppressXPath" value="ancestor::ClassDeclaration[@CanonicalName = ('de.tum.cit.aet.hephaestus.contributors.ContributorService', 'de.tum.cit.aet.hephaestus.integration.scm.github.organization.GitHubOrganizationProcessor', 'de.tum.cit.aet.hephaestus.core.auth.dev.DevLoginService')]"/>
             <property name="xpath">
                 <value><![CDATA[
                     //MethodCall[@MethodName = ('trace', 'debug', 'info', 'warn', 'error', 'log', 'setMessage', 'addArgument', 'addKeyValue')]

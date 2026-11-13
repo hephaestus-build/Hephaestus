@@ -114,12 +114,12 @@ public class ContributorService {
         try {
             String login = contributor.login();
             if (login != null && EXCLUDED_LOGINS.contains(login.toLowerCase(Locale.ROOT))) {
-                log.debug("Skipping excluded contributor: {}", login);
+                log.debug("Skipping an excluded bot contributor: githubUserId={}", contributor.id());
                 return;
             }
 
             // Fetch full user details to get the name
-            String fullName = fetchUserFullName(login);
+            String fullName = fetchUserFullName(login, contributor.id());
             ContributorDTO dto = contributor.toContributorDTO(fullName);
             accumulator.putIfAbsent(dto.id(), dto);
         } catch (IllegalArgumentException e) {
@@ -127,7 +127,7 @@ public class ContributorService {
         }
     }
 
-    private @Nullable String fetchUserFullName(@Nullable String login) {
+    private @Nullable String fetchUserFullName(@Nullable String login, @Nullable Long githubUserId) {
         if (login == null) {
             return null;
         }
@@ -142,8 +142,8 @@ public class ContributorService {
             return user != null ? user.name() : null;
         } catch (WebClientResponseException e) {
             log.debug(
-                    "HTTP error fetching full name for user {}: status={}, errorType={}",
-                    login,
+                    "HTTP error fetching full name: githubUserId={}, status={}, errorType={}",
+                    githubUserId,
                     e.getStatusCode().value(),
                     e.getClass().getName());
             return null;
