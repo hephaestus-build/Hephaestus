@@ -68,7 +68,7 @@ public class ActionBacklogSampler {
         try {
             Map<ActionKind, Map<ActionState, Long>> counts = new EnumMap<>(ActionKind.class);
             Map<ActionKind, Long> ages = new EnumMap<>(ActionKind.class);
-            for (var row : actions.backlog()) {
+            for (var row : actions.backlog(ActionKind.names())) {
                 ActionKind kind = ActionKind.valueOf(row.getKind());
                 counts.computeIfAbsent(kind, ignored -> new EnumMap<>(ActionState.class))
                         .put(ActionState.valueOf(row.getState()), row.getActions());

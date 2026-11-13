@@ -1,8 +1,12 @@
 package de.tum.cit.aet.hephaestus.core.action;
 
+import java.util.Arrays;
+import java.util.List;
+
 /**
  * What an action does in the outside world. The database CHECK lists the same names, and each kind has exactly one
- * {@link ActionAdapter}.
+ * {@link ActionAdapter}. The executor, the reaper, the gauges and the retention sweep select only the kinds that a build
+ * declares ({@link #names()}): a row that a newer build wrote under another kind stays as it is, and still holds its lane.
  */
 public enum ActionKind {
     /**
@@ -60,12 +64,20 @@ public enum ActionKind {
      */
     DRAFT_REPORT(false, true);
 
+    private static final List<String> NAMES =
+            Arrays.stream(values()).map(ActionKind::name).toList();
+
     private final boolean atMostOnce;
     private final boolean instanceLevel;
 
     ActionKind(boolean atMostOnce, boolean instanceLevel) {
         this.atMostOnce = atMostOnce;
         this.instanceLevel = instanceLevel;
+    }
+
+    /** The names of every kind of this build: the kinds that the executor, the reaper, the gauges and the retention sweep take. */
+    static List<String> names() {
+        return NAMES;
     }
 
     /**

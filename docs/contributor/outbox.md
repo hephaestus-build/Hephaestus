@@ -54,6 +54,7 @@ The executor claims due lane heads with `FOR UPDATE SKIP LOCKED`.
 A lane head is an action with no executing action in its lane.
 An admitted action also waits for an earlier action of its lane that has not started.
 A reclaim does not wait, so a lane whose holder crashed does not stall.
+This holds for a kind that the replica knows (see [Kinds from a newer build](#kinds-from-a-newer-build)).
 The unique index `ux_agent_action_lane_executing` allows one executing action per lane, also when two replicas claim at the same moment.
 Every time is the database clock, so replicas with different clocks agree on a lease.
 There is no leader.
@@ -177,6 +178,15 @@ The executor's metrics (`action.attempts`, `action.ended`) and the backlog gauge
 A new kind gets its series and alerts without a change there: each is labelled by `kind`.
 The executor's log events, such as `action.ended.uncertain`, are in the [Log records](/admin/log-records#agent-run-and-outbox-events).
 Each names `action.id` and `action.kind`, never the payload.
+
+## Kinds from a newer build
+
+During a rolling update, a newer replica can write an action of a kind that an older replica does not declare.
+The older replica does not claim, reclaim, reap, count or delete such an action.
+Its statements take `ActionKind.names()` as the kinds that they select.
+The unknown action still holds its lane: a supported action behind it waits until a replica that knows the kind ends it.
+A read of one lane or of named keys does not filter, because a skipped row would let the caller enqueue under its generation.
+It fails on the unknown kind instead.
 
 ## Add a kind
 

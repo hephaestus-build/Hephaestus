@@ -30,10 +30,10 @@ class ActionBacklogSamplerTest extends BaseUnitTest {
 
     @Test
     void shouldKeepTheLastValuesAndCountTheFailureWhenAPassFails() {
-        when(repository.backlog()).thenReturn(List.of(row("EMAIL", "ADMITTED", 4, 900)));
+        when(repository.backlog(ActionKind.names())).thenReturn(List.of(row("EMAIL", "ADMITTED", 4, 900)));
         sampler.sample();
 
-        when(repository.backlog()).thenThrow(new QueryTimeoutException("slow"));
+        when(repository.backlog(ActionKind.names())).thenThrow(new QueryTimeoutException("slow"));
         sampler.sample();
 
         assertThat(backlog(ActionKind.EMAIL, "ADMITTED")).isEqualTo(4);
@@ -46,9 +46,9 @@ class ActionBacklogSamplerTest extends BaseUnitTest {
 
     @Test
     void shouldReadAKindWithNoOpenActionAsAnEmptyBacklogAgain() {
-        when(repository.backlog()).thenReturn(List.of(row("EMAIL", "EXECUTING", 2, 0)));
+        when(repository.backlog(ActionKind.names())).thenReturn(List.of(row("EMAIL", "EXECUTING", 2, 0)));
         sampler.sample();
-        when(repository.backlog()).thenReturn(List.of());
+        when(repository.backlog(ActionKind.names())).thenReturn(List.of());
         sampler.sample();
 
         assertThat(backlog(ActionKind.EMAIL, "EXECUTING")).isZero();
