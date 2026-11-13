@@ -19,7 +19,7 @@ The site serves two versions, each built from its own Git ref:
 
 | Path | Ref | Banner |
 | --- | --- | --- |
-| `/` | The latest release tag | None |
+| `/` | The latest release tag | The pre-1.0 notice, until the first stable release |
 | `/next/` | `main` | "Unreleased: these docs describe the next release" |
 
 `scripts/docs-release.ts` picks the release tag.
@@ -28,8 +28,8 @@ From 1.0.0 on, it picks the newest stable release.
 The version switcher in the navbar links the two sites.
 Search engines index only the site root.
 
-`cd-docs.yml` builds both refs on a push to `main` and after each run of the release workflow.
-A release republishes the site root with its own docs.
+`cd-docs.yml` builds both refs on a push to `main` that changes `docs/**`.
+It also builds them after a run of the release workflow that published a release, so a release republishes the site root with its own docs.
 The repository holds one copy of the docs: the release docs come from the tag, not from a copied tree.
 
 `DOCS_CHANNEL` (`latest` or `next`) and `DOCS_RELEASE` (the tag) set the banner and the switcher.

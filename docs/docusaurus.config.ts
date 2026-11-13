@@ -23,7 +23,8 @@ const SITE_URL = "https://docs.hephaestus.build";
  * DOCS_RELEASE names the release in the version switcher.
  */
 const channel = process.env.DOCS_CHANNEL === "latest" ? "latest" : "next";
-const release = process.env.DOCS_RELEASE?.trim() || undefined;
+const envRelease = process.env.DOCS_RELEASE?.trim() ?? "";
+const release = envRelease === "" ? undefined : envRelease;
 const latestLabel = release === undefined ? "Latest release" : `Latest release (${release})`;
 const nextLabel = "Next (unreleased)";
 

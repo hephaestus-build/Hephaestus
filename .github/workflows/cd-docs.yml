@@ -22,6 +22,7 @@ on:
   workflow_run: # zizmor: ignore[dangerous-triggers] Nothing from the run is checked out or executed.
     workflows: ["Release / Publish"]
     types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions: {}
@@ -96,22 +97,35 @@ jobs:
       contents: read
     outputs:
       tag: ${{ steps.release.outputs.tag }}
+      publish: ${{ steps.release.outputs.publish }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          fetch-tags: true
           persist-credentials: false
       - uses: ./.github/actions/setup-toolchain
         with:
           install: "none"
+      # The release workflow runs after every push to main, and most runs publish nothing. A run republishes the site
+      # only when a release tag points at its commit.
       - id: release
-        run: echo "tag=$(node scripts/docs-release.ts)" >> "$GITHUB_OUTPUT"
+        env:
+          EVENT: ${{ github.event_name }}
+          RELEASED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          tag=$(node scripts/docs-release.ts)
+          publish=true
+          if [ "$EVENT" = workflow_run ] && [ -z "$(git tag --points-at "$RELEASED_SHA" --list 'v*')" ]; then
+            publish=false
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
 
   # The site root: the docs of the latest release, built from its tag with that tag's own toolchain.
   build-release:
     name: Build (latest release)
     needs: release-ref
+    if: needs.release-ref.outputs.publish == 'true'
     concurrency:
       group: docs-build-release-${{ github.ref }}
       cancel-in-progress: true
@@ -151,8 +165,9 @@ jobs:
   build-production:
     name: Build (next)
     needs: release-ref
+    if: needs.release-ref.outputs.publish == 'true'
     concurrency:
-      group: docs-build-production-${{ github.ref }}
+      group: docs-build-next-${{ github.ref }}
       cancel-in-progress: true
     timeout-minutes: 15
     runs-on: ubuntu-latest

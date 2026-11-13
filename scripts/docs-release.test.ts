@@ -10,6 +10,10 @@ await test("before the first stable 1.0.0, the site root serves the newest relea
 	);
 });
 
+await test("release candidates compare by number, so rc.10 is newer than rc.9", () => {
+	assert.equal(docsRelease(["v1.0.0-rc.9", "v1.0.0-rc.10"]), "v1.0.0-rc.10");
+});
+
 await test("from 1.0.0 on, the site root serves the newest stable release, not a newer candidate", () => {
 	assert.equal(docsRelease(["v1.0.0-rc.5", "v1.0.0", "v1.0.1", "v1.1.0-rc.1"]), "v1.0.1");
 });
