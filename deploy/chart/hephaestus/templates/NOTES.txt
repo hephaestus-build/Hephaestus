@@ -1,6 +1,6 @@
 Hephaestus {{ .Values.release.version }} ({{ .Values.release.commit }}) is installed as "{{ .Release.Name }}" in "{{ .Release.Namespace }}".
 
-The migration Job of this revision applies the database migrations, and every role waits for them.
+The migration Job of this revision applies the database migrations, and the server waits for them.
 Follow it with:
 
   kubectl --namespace {{ .Release.Namespace }} logs --follow job/{{ include "hephaestus.name" (dict "root" . "component" "migration") }}-{{ .Release.Revision }}

@@ -1,6 +1,6 @@
 ---
 title: Server runtime
-description: What the one server role runs, the migrate run mode, agent jobs, the sandbox gateway, conversation turn settings, and the graceful drain.
+description: What the server runs, the migrate run mode, reviews and conversation turns, the sandbox gateway, conversation turn limits, and the graceful drain.
 page_type: reference
 ---
 
@@ -11,20 +11,16 @@ The [configuration reference](./configuration-reference) lists every setting. Th
 ## Server role
 
 The server serves the API, receives provider webhooks, syncs provider work, and delivers feedback.
-With agent jobs on, it also runs the practice reviews and conversation turns in sandboxes, their gateway, and the LLM proxy.
+With `sandbox.enabled`, it also runs the practice reviews and conversation turns in sandboxes, their gateway, and the LLM proxy.
 
 | Port | Listener | Who reaches it |
 | --- | --- | --- |
 | 8080 | The API and `/webhooks/**`, plain HTTP | The Gateway data plane |
-| 8081 | The sandbox gateway, with agent jobs on | The sandboxes of the release |
+| 8081 | The sandbox gateway, with `sandbox.enabled` | The sandboxes of the release |
 | 9090 | The management listener: health probes and metrics | The kubelet and the metrics scraper |
 
-`hephaestus.runtime.server.enabled` is `true` by default. Under the `prod` profile, `false` prevents startup.
-At startup, the server logs its role, with `event.name=runtime.roles.configured`:
-
-```text
-INFO  RuntimeRoleStartupLogger : Runtime roles enabled: [SERVER]
-```
+At startup, the server logs one record with `event.name=runtime.roles.configured`.
+Use it to find the start of each server in a log store.
 
 ## Reception during a restart
 
@@ -37,45 +33,43 @@ After reception resumes:
 - Slack retries a failed event.
 - The routine sync repairs the lifecycle facts of GitLab and Outline.
 
-## Agent jobs
+## Reviews and conversation turns
 
-`AGENT_ENABLED` (`hephaestus.agent.enabled`) turns on the agent runtime. It is `false` until you set it.
-The chart's `sandbox.enabled` sets it.
+`sandbox.enabled` turns on practice reviews and conversation turns. It is `false` by default, and the `small` and `cluster` profiles turn it on.
 Without it, the server submits and claims no practice reviews, runs no conversation turn, and starts no sandbox.
 It still takes back expired review leases, closes finished reviews, and records the spend of attempts that already ran.
 
 The server needs no LLM environment variable.
 Register providers under **Instance administration → AI models**, or on the AI models page of a workspace ([AI providers](./ai-providers)).
 
-The chart derives two capacity settings. Set them through the chart, not as environment variables:
+Two chart values set the capacity:
 
-| Setting | Chart value | Effect |
-| --- | --- | --- |
-| `SANDBOX_MAX_CONCURRENT` | `sandbox.reviewMemory` | The review sandboxes that the installation runs at once. |
-| `HEPHAESTUS_MENTOR_TURN_CAPACITY` | `sandbox.conversationTurns` | The conversation turns that the installation runs at once ([Conversation turn capacity](#conversation-turn-capacity)). |
+| Chart value | Effect |
+| --- | --- |
+| `sandbox.reviewMemory` | The review sandboxes that the installation runs at once ([Sizing and scaling](./sizing#raise-capacity)). |
+| `sandbox.conversationTurns` | The conversation turns that the installation runs at once ([Conversation turn capacity](#conversation-turn-capacity)). |
 
 A review's sandbox holds a lease of 5 minutes on the database clock and renews it every 25 seconds.
-When a lease expires, any server queues the review again, or fails it after `AGENT_MAX_RETRIES` lost leases (default `5`).
+When a lease expires, any server queues the review again, or fails it after 5 lost leases.
 A cancel ends a review at once. Its sandbox stops at the next lease renewal.
 
-The server runs sandboxes only on Kubernetes. The chart sets each `HEPHAESTUS_SANDBOX_KUBERNETES_*` variable, including the server Pod metadata.
-Missing metadata prevents startup.
+The server runs sandboxes only on Kubernetes, with the settings that the chart gives it.
 The server removes orphaned sandbox resources at startup and then at a fixed interval.
 Each server generates the key that signs its sandbox tokens at start. The key needs no configuration.
 
 ## Sandbox gateway
 
-With agent jobs on, the server opens the sandbox gateway on port 8081 (`SANDBOX_API_PORT`).
+With `sandbox.enabled`, the server opens the sandbox gateway on port 8081.
 The API port serves no gateway path, and the gateway port serves no API path. Other paths return an empty `404`.
 The Service `<release>-sandbox-gateway` selects every server, so any server can serve a sandbox's call.
 No route of the Gateway reaches this port.
 
-| Setting | Default | Response past the limit |
+| Limit | Value | Response past the limit |
 | --- | --- | --- |
-| `SANDBOX_API_MAX_REQUEST_BYTES` | `4194304` | `413`. A request without a declared body length gets `411`. |
-| `SANDBOX_API_SOURCE_REQUESTS_PER_MINUTE` | `12000` from one connection address | `429` with `Retry-After`, before the gateway reads a credential |
-| `SANDBOX_API_REQUESTS_PER_MINUTE` | `680` | `429` with `Retry-After` |
-| `SANDBOX_API_MAX_CONNECTIONS` (chart: `sandbox.gateway.maxConnections`) | `4096` | Up to 100 more connections wait in the operating system's queue. The rest fail. |
+| Request body | 4 MiB | `413`. A request without a declared body length gets `411`. |
+| Requests from one connection address | 12,000 per minute | `429` with `Retry-After`, before the gateway reads a credential |
+| Requests of one sandbox | 680 per minute | `429` with `Retry-After` |
+| Open connections, `sandbox.gateway.maxConnections` | 4096 by default | Up to 100 more connections wait in the operating system's queue. The rest fail. |
 
 The gateway also answers `429` when the request bodies in flight would pass a quarter of the server's heap.
 If the gateway cannot read its rate-limit counts, it serves the call without a limit and counts `sandbox.gateway.limiter.errors`.
@@ -94,8 +88,8 @@ The server uses the login of `hephaestus_app` ([Database roles](./helm-chart#dat
 Under the `prod` profile, the server does not migrate at start.
 It waits until the database holds every change set of its release, and writes nothing.
 A schema that is ahead of the server is correct: during a rollout, the previous release runs against the new schema.
-After `HEPHAESTUS_DATABASE_MIGRATION_WAIT` (default `10m`), the server stops. Its error names the first change set that has not run.
-Size this wait against the migration time that you measured on a restored backup.
+After 10 minutes, the server stops. Its error names the first change set that has not run.
+A migration that takes longer needs the [database maintenance](./maintenance#database-maintenance) procedure.
 
 ### One migration at a time
 
@@ -103,7 +97,7 @@ Every migration holds a PostgreSQL advisory lock while it runs.
 The lock lives in the database session, so the migration needs a direct or session-pooled connection.
 A proxy that pools by transaction can leave the lock on a server connection.
 A second migration waits until the first ends, and logs `database.migration.lock_awaited`.
-After `HEPHAESTUS_DATABASE_MIGRATION_WAIT`, the waiting process stops.
+After 10 minutes, the waiting process stops.
 
 PostgreSQL releases the lock when the process stops, also when the process is killed.
 The run mode also releases the Liquibase lock that a killed run left, and logs `database.migration.lock_released` with the holder and the time of that lock.
@@ -152,22 +146,23 @@ When a server stops, it ends its live streams first. The browser connects to ano
 
 Slack receives one completed answer after the turn ends, and no live text.
 
-### Tunables
+### Turn limits
 
-| Setting | Default | Effect |
-| --- | --- | --- |
-| `hephaestus.agent.capacity.turn-lease-ttl` | `60s` | The lease of a running turn. The sandbox renews it every 25 seconds. A turn that loses its lease runs once more, then fails. |
-| `hephaestus.mentor.turn.model-first-byte-timeout` | `PT5M` | How long one model call of a turn, or one streamed model call of a review, waits for the provider's response headers. |
-| `hephaestus.mentor.turn.model-idle-timeout` | `PT2M` | How long the stream of one model call can send nothing. |
-| `hephaestus.mentor.turn.max-follow-ups` | `3` | The questions that can wait in one conversation or thread. |
-| `hephaestus.mentor.agent.max-prompt-chars` | `100000` | The longest question in the web app, in characters. |
-| `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_CAPACITY` and `_PERIOD` | `20` per `10m` | The questions that one account can ask. A load test that asks more as one account must raise it. |
+The chart has no setting for these limits:
+
+| Limit | Value |
+| --- | --- |
+| The lease of a running turn | 60 seconds. The sandbox renews it every 25 seconds. A turn that loses its lease runs once more, then fails. |
+| The wait of one model call of a turn, or one streamed model call of a review, for the provider's response headers | 5 minutes |
+| The time that the stream of one model call can send nothing | 2 minutes |
+| The questions that can wait in one conversation or thread | 3 |
+| The longest question in the web app | 100,000 characters |
+| The questions that one account can ask | 20 in 10 minutes |
 
 The timeout of the workspace's conversation model binding is the time limit of each turn, at most 900 seconds.
 Set it above the time of a few of your model's slowest calls, because one answer takes a few calls.
 A turn also stops after 40 model calls.
 A gateway in front of the model that buffers whole answers looks like a silent provider ([Gateways that buffer answers](./ai-providers#gateways-that-buffer-answers)).
-Give every server the same values.
 
 ## Model calls
 
@@ -203,10 +198,9 @@ It keeps the sandbox gateway and the database open while leased runs finish.
 The gateway Service still includes the stopping server, so its sandboxes can renew their leases.
 A model stream that loses its server connection is tried again by the sandbox runtime, within the run's time limit.
 
-`HEPHAESTUS_AGENT_DRAIN_TIMEOUT` bounds the wait, 30 minutes by default.
-The chart sets it from `server.drainTimeoutSeconds`: 1800 by default, 600 in the `small` profile.
+`server.drainTimeoutSeconds` bounds the wait: 1800 seconds by default, 600 in the `small` profile.
 The chart gives the Pod that interval plus two minutes for the other shutdown phases.
-Every other shutdown phase has `SHUTDOWN_TIMEOUT`, 20 seconds.
+Every other shutdown phase has 20 seconds.
 
 If the drain time ends, the server logs `agent.review.drain.expired` with the count of runs that remain, and closes.
 Any server takes back those runs when their leases expire ([Review drain deadline](./log-records#review-drain-deadline)).

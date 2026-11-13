@@ -32,7 +32,6 @@ When a Kubernetes minor version reaches its end of life upstream, the next Hepha
 
 Keep the clock of every host that runs the server or PostgreSQL synchronized by NTP.
 Conversation turn leases and person erasure compare times that different hosts write.
-[Conversation runtime § Slack replies](/contributor/unified-pi-runtime#slack-replies) has the rule.
 
 ## What the chart runs
 
@@ -226,7 +225,7 @@ The chart joins the items in their order. An item cannot contain a comma.
 config:
   auth:
     bootstrapAdmins:
-      - "github:@your-github-username"
+      - "github:1234567"
     browserExtensionIds: []
     passkeys:
       allowedOrigins: []

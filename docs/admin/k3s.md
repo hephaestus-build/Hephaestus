@@ -11,7 +11,7 @@ Then it verifies the release chart and installs it.
 It uses the `small.yaml` profile, the bundled PostgreSQL, and gVisor sandboxes for practice reviews.
 
 A second run of the same release changes nothing that the first run made.
-A run with the files of a newer release upgrades the host.
+To upgrade, follow [Upgrade the host](#upgrade-the-host).
 
 ## Before you start
 
@@ -21,7 +21,7 @@ A run with the files of a newer release upgrades the host.
 - Ports 80 and 443 open from the internet, for `Let's Encrypt`, OAuth callbacks, and provider webhooks. Keep port 6443, the Kubernetes API, and port 10250, the kubelet, closed to the internet.
 - If `ufw` is active, rules that let in ports 80 and 443 and the k3s networks: `sudo ufw allow 80,443/tcp`, `sudo ufw allow from 10.42.0.0/16`, and `sudo ufw allow from 10.43.0.0/16`.
 - Outbound HTTPS to the destinations in [Network egress](./network-egress#one-host-on-k3s).
-- `curl`, `jq`, `openssl`, `python3`, Cosign, and the Helm CLI, as [Verify the release chart](./kubernetes#verify-the-release-chart) describes. Ubuntu includes `python3`.
+- `curl`, `jq`, `openssl`, `python3`, [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) 3.1 or later, and Helm 4. Ubuntu includes `python3`.
 - A clock that NTP keeps synchronized, as [Clocks](./helm-chart#clocks) describes.
 - A GitHub OAuth app for sign-in, as [First steps § 1](./first-steps#1-configure-a-login-provider) describes. Its callback URL is `https://<host>/api/login/oauth2/code/github`.
 
@@ -104,11 +104,17 @@ If your network cannot reach its own public address, the DNS check fails. Then r
 
    Without a terminal, the installer asks nothing. It stops and names the missing flag or variable.
    The value never appears in a command line, so other users of the host do not see it.
-
-   For a first try, add `--staging`: the `Let's Encrypt` staging service has higher rate limits, and no browser trusts its certificate.
-   Later, run the installer again without `--staging`, with the explicit certificate choice described below.
-   Delete the Secret `traefik/hephaestus-tls` to get a trusted certificate.
    [First steps § 2](./first-steps#2-name-the-first-admin) explains the admin list.
+
+   For a first try, you can use the `Let's Encrypt` staging service. It has higher rate limits, and no browser trusts its certificate:
+
+   1. Add `--staging` to the installer command.
+   2. When the install works, run the installer again without `--staging`, and with `--standard-certificates`.
+   3. Delete the staging certificate. cert-manager then gets a trusted certificate:
+
+      ```bash
+      KUBECONFIG=~/hephaestus/kubeconfig kubectl --namespace traefik delete secret hephaestus-tls
+      ```
 
 3. Back up the encryption keys before you continue.
    Hephaestus cannot make them again: without them, the data that they protect is lost.
@@ -168,9 +174,20 @@ Use [Login provider secrets](./secret-custody#login-provider-secrets) to rotate 
 1. Open `https://<host>`.
    The browser trusts the certificate, unless you used `--staging`.
    The login page shows **Continue with GitHub**.
-2. Run the [sandbox isolation gate](./sandboxes#sandbox-isolation-gate) for each sandbox template, with `KUBECONFIG=~/hephaestus/kubeconfig`.
+2. Run the [sandbox isolation gate](./sandboxes#sandbox-isolation-gate) for each sandbox template.
    Connect no repository until the gate passes for each template.
-   The installer does not run the gate. It runs from a checkout of the release tag with Node.js, because no release asset contains it.
+   The installer does not run the gate.
+   Run it on the host, because port 6443 of the Kubernetes API stays closed to the internet:
+
+   1. Get the checkout of the release tag:
+
+      ```bash
+      git clone --depth 1 --branch "v$VERSION" https://github.com/hephaestus-build/Hephaestus.git ~/hephaestus-src
+      ```
+
+   2. Install Node.js at the version that `jq -r .engines.node ~/hephaestus-src/package.json` prints, for example from [nodejs.org](https://nodejs.org/en/download).
+   3. Select the kubeconfig of the installer: `export KUBECONFIG=~/hephaestus/kubeconfig`.
+   4. Run the gate from `~/hephaestus-src`, as [Run the gate](./sandboxes#run-the-gate) describes.
 
 Then continue with [First steps § 3. Sign in](./first-steps#3-sign-in).
 The installer asked for the values of First steps § 1 and § 2.
@@ -346,7 +363,7 @@ The [k3s uninstall reference](https://docs.k3s.io/installation/uninstall) owns t
 
 Each release publishes the files of the one-host install as one signed bundle, `hephaestus-k3s-<version>.tar.gz`, with its signature `hephaestus-k3s-<version>.tar.gz.sigstore.json`.
 [Get the release files](#1-get-the-release-files) verifies and unpacks it.
-The bundle holds these files:
+k3s applies each file in `/var/lib/rancher/k3s/server/manifests/`, and it applies a file again every 15 seconds until the apply succeeds.
 
 | File | What it is |
 | --- | --- |
@@ -354,44 +371,22 @@ The bundle holds these files:
 | `hephaestus-keys.sh` | Creates or completes the release Secret. The installer runs it. [Create the Secret](./kubernetes#create-the-secret) uses it on another cluster. |
 | `hephaestus-cluster-admin.yaml` | The admin bundle of a [managed cluster](./managed-cluster). The one-host install does not use it. |
 | `k3s-wait-condition.sh` | Waits until a cert-manager resource reports a condition as true, also while the resource has no status yet. The installer runs it. |
-| `k3s-platform.yaml` | The pins and the platform add-ons. It goes to the k3s manifests directory. The installer adds a listener for each [extra host name](#extra-host-names). |
-| `k3s-agent-sandbox.yaml` | The agent-sandbox controller and its resource definitions, with its pin. It goes to the k3s manifests directory. |
-| `k3s-containerd.toml.tmpl` | The containerd configuration of k3s with gVisor as the `runsc` runtime, and the pin of the gVisor release. |
-| `k3s-runtimeclass.yaml` | The RuntimeClass `gvisor` of the sandbox templates. It goes to the k3s manifests directory. |
+| `k3s-platform.yaml` | It goes to the manifests directory. Its `pin: k3s` line sets the k3s release. Two `HelmChart` objects pin Traefik and cert-manager by version, and each image by digest. Traefik is the Gateway controller on ports 80 and 443. It creates the Gateway `traefik/traefik-gateway` and the redirect from HTTP to HTTPS. cert-manager has Gateway API support. The installer adds a listener for each [extra host name](#extra-host-names). The Gateway API resource definitions come from the `gateway-api-crd` chart of k3s. cert-manager and the Gateway start some minutes after k3s. |
+| `k3s-agent-sandbox.yaml` | It goes to the manifests directory. The [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) controller, its extensions and its resource definitions, in the namespace `agent-sandbox-system` at the priority `system-cluster-critical`. Its `pin: agent-sandbox` line sets the release, and the file pins the image by digest. The installer waits until the controller is ready. |
+| `k3s-containerd.toml.tmpl` | The containerd configuration of k3s, with [gVisor](https://gvisor.dev) as the `runsc` runtime. Its `pin: gvisor` line sets the gVisor release and the SHA-512 of its archive for each architecture. The installer downloads that archive from `storage.googleapis.com`, checks it, and installs `runsc`, its containerd shim and the `gvisor-bin` directory in `/usr/local/bin`. It restarts k3s when this file changes. |
+| `k3s-runtimeclass.yaml` | It goes to the manifests directory. The RuntimeClass `gvisor`, which gives each sandbox its own kernel ([Sandbox templates](./sandboxes#sandbox-templates)). |
 | `k3s-certificates.yaml` | The `Let's Encrypt` issuer, the Gateway certificate, and the PostgreSQL CA and server certificate. The installer writes your host name and address into it. |
-| `k3s-config.yaml` | The k3s configuration: the kubelet configuration file, no bundled Traefik, no ServiceLB, and no metrics server. |
-| `k3s-kubelet.yaml` | A limit of 4096 processes for each Pod, and the shutdown grace period. Also the memory and CPU reserved for k3s and the host, the eviction thresholds, log rotation, and image garbage collection. |
-| `k3s-logind.conf` | How long logind lets the kubelet hold a shutdown. |
+| `k3s-config.yaml` | Becomes `/etc/rancher/k3s/config.yaml`: the kubelet configuration file, no bundled Traefik, no ServiceLB, and no metrics server. |
+| `k3s-kubelet.yaml` | At most 4096 processes for each Pod. 5 minutes for the Pods to stop at a host shutdown, of which Traefik and CoreDNS get the last minute. A review that a shutdown stops runs again after the start. 1 GiB of memory and 250m CPU reserved for k3s, and 512 MiB and 250m CPU for the host services. Eviction when less than 256 MiB of memory is available. Container logs rotate at 10 MiB, with at most five files. Image garbage collection from 75 % to 65 % disk use, never of the image of a running container. The installer restarts k3s when this file changes, then stops if the effective kubelet configuration or the Node allocatable differs. `sh k3s-install.sh --verify-kubelet` repeats that check. |
+| `k3s-logind.conf` | Raises the logind limit of Ubuntu for a held shutdown from 30 seconds to 5 minutes, for the kubelet. |
 | `k3s-journald.conf` | Host journal limits: 512 MiB on disk, 128 MiB in memory, and seven days. |
-| `k3s-values.yaml` | The chart values of every one-host install. They name the Gateway, the Traefik Pods, the Secrets, the sandbox namespace, and the gVisor runtime. |
+| `k3s-values.yaml` | The chart values of every one-host install. They name the Gateway, the Traefik Pods, the Secrets, the sandbox namespace, and the gVisor runtime (`sandbox.templates.runtimeClassName: gvisor`). |
 
-`k3s-platform.yaml` contains these add-ons:
+Host swap must stay off, also at boot. The installer refuses active swap, and the kubelet refuses to start with swap.
 
-- Traefik as the Gateway controller on the host's ports 80 and 443. Its chart creates the Gateway `traefik/traefik-gateway` and a redirect from HTTP to HTTPS.
-- cert-manager, with Gateway API support.
+### Node address and name
 
-The `pin: k3s` line of `k3s-platform.yaml` sets the k3s release, and its two `HelmChart` objects set the versions of Traefik and cert-manager.
-The file pins each chart by version and each image by digest.
-
-The Gateway API resource definitions come from the `gateway-api-crd` chart that k3s includes.
-k3s deploys each file in `/var/lib/rancher/k3s/server/manifests/`, and it applies a file again every 15 seconds until the apply succeeds.
-cert-manager and the Gateway start some minutes after k3s.
-
-`k3s-agent-sandbox.yaml` contains the [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) controller, with its extensions.
-The controller creates sandbox Pods from `SandboxTemplate` and `SandboxClaim` objects.
-It runs in the namespace `agent-sandbox-system`, at the priority `system-cluster-critical`, as Traefik and cert-manager do.
-Its `pin: agent-sandbox` line sets the release, and the file pins the controller image by digest.
-The installer waits until the controller is ready.
-
-The sandbox templates of the one-host platform use [gVisor](https://gvisor.dev), which gives each sandbox its own kernel ([Sandbox templates](./sandboxes#sandbox-templates)).
-The `pin: gvisor` line of `k3s-containerd.toml.tmpl` sets the gVisor release and the SHA-512 of its archive for each architecture.
-The installer downloads that archive from `storage.googleapis.com` and checks it, so the host must reach that address.
-It installs `runsc`, its containerd shim and the `gvisor-bin` directory in `/usr/local/bin`.
-It restarts k3s when `k3s-containerd.toml.tmpl` changes: at the first install with gVisor, and at each new gVisor pin.
-`k3s-values.yaml` sets `sandbox.templates.runtimeClassName: gvisor`.
-
-`k3s-config.yaml` becomes `/etc/rancher/k3s/config.yaml`.
-k3s then reads each `*.yaml` and `*.yml` file in `/etc/rancher/k3s/config.yaml.d/`, and such a file overrides `config.yaml`.
+k3s reads each `*.yaml` and `*.yml` file in `/etc/rancher/k3s/config.yaml.d/`, and such a file overrides `config.yaml`.
 For the node address and the node name of k3s, give `--node-ip ADDRESS` and `--node-name NAME`.
 The installer writes these options only to `config.yaml.d/50-node.yaml`, and it restarts k3s when that file changes.
 Give them on each run. A run without them keeps the file.
@@ -402,34 +397,36 @@ The installer stops when a run would change the name of the running node.
 It also stops when `--node-ip` names an address that the host does not have.
 
 A new node address also moves the Kubernetes API endpoint.
-After you change `--node-ip`, set `networkPolicy.kubernetesApi.cidr` in `site.yaml` or in your chart values to the new address.
+After you change `--node-ip`, set `networkPolicy.kubernetesApi.cidr` in `site.yaml` to the new address.
 To remove `50-node.yaml`, do these steps:
 
 1. Delete the file.
 2. Run the installer again. It stops if the file named a node other than the host name, because the node name would change.
 3. Restart k3s with `sudo systemctl restart k3s`. k3s keeps the old node address until it restarts.
 
-`k3s-kubelet.yaml` sets these limits:
-
-- Each Pod can run at most 4096 processes.
-- At a host shutdown, the kubelet has 5 minutes to stop the Pods. Traefik and CoreDNS stop in the last minute. `k3s-logind.conf` raises the logind limit of Ubuntu, 30 seconds, to 5 minutes. A review that a shutdown stops runs again after the start.
-- The kubelet reserves 1 GiB of memory and 250m CPU for k3s. It reserves 512 MiB and 250m CPU for the host services. It evicts Pods when less than 256 MiB of memory is available.
-- Container logs rotate at 10 MiB, with at most five files for each container.
-- Image garbage collection starts at 75 % disk use and stops at 65 %. It never removes the image of a running container.
-
-The installer restarts k3s when this file changes.
-Then it compares the effective kubelet configuration and the Node allocatable with the file, and it stops if they differ.
-To repeat this read-only check, run `sh k3s-install.sh --verify-kubelet`.
-
-Host swap must stay off, also at boot. The installer refuses active swap, and the kubelet refuses to start with swap.
-
 ## Known limits of the one-host platform
 
-- Traefik has no request body limit on this platform. Its default idle timeout is 180 seconds.
+- Traefik sets no request body limit on this platform. The server refuses a webhook body over 25 MiB itself. The default idle timeout of Traefik is 180 seconds.
 - The k3s default Pod network is `10.42.0.0/16`. `trustedProxies` in `k3s-values.yaml` matches it. If you change the network of k3s, change `trustedProxies` too.
 - The platform issues a separate backup client certificate, `hephaestus-postgresql-backup-tls`. Enable backups after you configure the off-host repository ([Backup and restore](./backup-restore#back-up-the-database)).
 - If the model endpoint resolves to this host's own Gateway, set `networkPolicy.modelGatewayPorts: [8443, 8000]` in `site.yaml`, as [Network policy](./helm-chart#network-policy) describes.
 
 ## Troubleshooting
 
-If the installer stops during a first install, follow [A first install fails](./kubernetes#a-first-install-fails).
+### A first install fails
+
+The installer does not use automatic rollback on a first install.
+When the install fails, the installer stops and links to [A first install fails](./kubernetes#a-first-install-fails).
+
+1. Select the kubeconfig in the release directory of the installer. For the default directory:
+
+   ```bash
+   export KUBECONFIG="$HOME/hephaestus/kubeconfig"
+   ```
+
+   The installer exports this path only inside its own process.
+   If the file does not exist, read the saved installer output and the state of k3s on the host.
+   Do not run the cluster checks with another kubeconfig.
+
+2. Do the checks of [A first install fails](./kubernetes#a-first-install-fails).
+3. Run the installer again with the same release. It tries the failed install again.

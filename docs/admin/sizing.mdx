@@ -14,17 +14,21 @@ They are scheduling requests, not measured peaks. Keep room for the operating sy
 | --- | --- | --- | --- | --- | --- | --- |
 | `dev.yaml`, `preview.yaml` | One workstation node | 2 | 250m CPU, 3 GiB memory, 5 GiB Git cache | 100m CPU, 1 GiB memory, 5 GiB volume | 0: sandboxes are off | 0 |
 | `small.yaml` | One node of 4 vCPU, at least 16 GiB of memory and 150 GiB of disk | 1 | 500m CPU, 3 GiB memory, 20 GiB Git cache | 250m CPU, 2 GiB memory, 20 GiB volume | 5 | 11, or 7 with backups on (`auto`) |
+| [One host](./k3s): `small.yaml` with `k3s-values.yaml` | The node of `small.yaml` | 1 | As `small.yaml` | As `small.yaml` | 4 | 9, or 6 with backups on (`auto`) |
 | `cluster.yaml` | Several nodes, with sandbox nodes that hold the review and conversation quotas | 2 | 500m CPU, 3 GiB memory, 70 GiB Git cache | 250m CPU, 2 GiB memory, 20 GiB volume | 12 | 8 |
 
 Each server's memory request equals its limit, because the JVM sizes its heap from the limit.
 The server's CPU limit is 4 cores, and 2 with `dev.yaml` and `preview.yaml`.
 The Git cache is node storage of each server ([Storage and retention](./helm-chart#storage-and-retention)).
 
-The sandbox quotas hold these requests at full load, before RuntimeClass overhead:
+The one host has fewer reviews and turns than `small.yaml` alone, because each gVisor sandbox Pod also takes 48 MiB and 10m CPU of RuntimeClass overhead.
+
+The sandbox quotas hold these requests at full load, with any RuntimeClass overhead:
 
 | Profile | Review quota | Conversation quota |
 | --- | --- | --- |
 | `small.yaml` | 5 Pods: 500m CPU, 2560 MiB memory | 11 Pods: 1100m CPU, 4224 MiB memory |
+| One host | 4 Pods: 440m CPU, 2240 MiB memory | 9 Pods: 990m CPU, 3888 MiB memory |
 | `cluster.yaml` | 12 Pods: 1200m CPU, 6144 MiB memory | 8 Pods: 800m CPU, 3072 MiB memory |
 
 Add the webapp (50m CPU, 64 MiB) and the agent image DaemonSet (1m CPU and 16 MiB on each sandbox node).
@@ -101,7 +105,7 @@ pool = inbox handlers + 2 × reviews at once + 2 × long-load preparations
 | Sync reserve | 8, for four syncs | Fixed |
 | HTTP and control reserve | 4 | Fixed |
 
-The result is 20 for `dev.yaml` and `preview.yaml`, 36 for `small.yaml`, and 50 for `cluster.yaml`.
+The result is 20 for `dev.yaml` and `preview.yaml`, 36 for `small.yaml`, 34 on one host, and 50 for `cluster.yaml`.
 An explicit `server.databasePool.maximumPoolSize` must hold the derived count. The chart refuses a smaller one.
 A model stream and a sandbox hold no pooled connection. Sandboxes reach the server through the gateway and have no database pool.
 

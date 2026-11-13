@@ -46,8 +46,16 @@ On your workstation, you need these tools:
 
 - `kubectl` with a context for the cluster.
 - Helm 4, on the `PATH`. The install uses `--wait=watcher`, and the preflight renders the chart with `helm`.
-- Node.js at the version that `package.json` of the checkout names.
-- The dependencies of the checkout, for the preflight: run `vp install` in the checkout. [Local development](/contributor/local-development) tells how to install `vp`.
+- Node.js at the version that `package.json` of the checkout names. Node.js includes Corepack, which installs the pinned pnpm.
+
+In the directory of your values file, get the checkout and the packages of the preflight:
+
+```bash
+git clone --depth 1 --branch "v$VERSION" https://github.com/hephaestus-build/Hephaestus.git hephaestus-src
+(cd hephaestus-src && corepack pnpm install --frozen-lockfile --ignore-scripts)
+```
+
+`--ignore-scripts` runs no install script of a package. The preflight does not need one.
 
 ## Admin handoff
 
@@ -60,16 +68,6 @@ The admins repeat step 3 for each release.
    kubectl create namespace hephaestus
    kubectl create namespace hephaestus-sandboxes
    kubectl label namespace hephaestus hephaestus-sandboxes pod-security.kubernetes.io/enforce=restricted
-   ```
-
-   The admin bundle grants the controller of the release `hephaestus` in the namespace `hephaestus`.
-   For another namespace, do not edit the signed bundle.
-   Apply it, delete its ClusterRoleBinding, and bind the ClusterRole to the ServiceAccount `hephaestus-agent-sandbox-controller` of that namespace:
-
-   ```bash
-   kubectl delete clusterrolebinding hephaestus-agent-sandbox-read
-   kubectl create clusterrolebinding hephaestus-agent-sandbox-read \
-     --clusterrole hephaestus-agent-sandbox-read --serviceaccount <namespace>:hephaestus-agent-sandbox-controller
    ```
 
 2. Grant the operator the built-in `admin` ClusterRole in both namespaces with a RoleBinding.
@@ -120,6 +118,33 @@ The admins repeat step 3 for each release.
 
    With `observability.stack.enabled` or alert rules, the operator also needs the Prometheus Operator kinds that they use. The preflight names them.
 
+   The [sandbox isolation gate](./sandboxes#sandbox-isolation-gate) also reads the `kubernetes` Service and its EndpointSlices in `default`, and the cluster DNS Service.
+   Grant these two Roles to the operator with RoleBindings too.
+   Change the name and the namespace of the DNS Service to those of the cluster:
+
+   ```yaml
+   apiVersion: rbac.authorization.k8s.io/v1
+   kind: Role
+   metadata: { name: hephaestus-isolation-gate, namespace: default }
+   rules:
+     - apiGroups: [""]
+       resources: [services]
+       resourceNames: [kubernetes]
+       verbs: [get]
+     - apiGroups: [discovery.k8s.io]
+       resources: [endpointslices]
+       verbs: [list]
+   ---
+   apiVersion: rbac.authorization.k8s.io/v1
+   kind: Role
+   metadata: { name: hephaestus-isolation-gate, namespace: kube-system }
+   rules:
+     - apiGroups: [""]
+       resources: [services]
+       resourceNames: [rke2-coredns-rke2-coredns]
+       verbs: [get]
+   ```
+
 3. Apply the admin bundle:
 
    ```bash
@@ -129,18 +154,38 @@ The admins repeat step 3 for each release.
    It holds the four agent-sandbox CRDs, the three PriorityClasses of the release, and the read-only ClusterRole `hephaestus-agent-sandbox-read` with its ClusterRoleBinding.
    It holds nothing else.
 
+   The ClusterRoleBinding names the controller's ServiceAccount in the namespace `hephaestus`.
+   For another release namespace, do not edit the signed bundle.
+   Bind the ClusterRole to the ServiceAccount `hephaestus-agent-sandbox-controller` of that namespace instead.
+   At each apply, run these commands instead of the command above:
+
+   ```bash
+   kubectl delete clusterrolebinding hephaestus-agent-sandbox-read --ignore-not-found
+   kubectl apply --server-side -f hephaestus-cluster-admin.yaml
+   kubectl delete clusterrolebinding hephaestus-agent-sandbox-read
+   kubectl create clusterrolebinding hephaestus-agent-sandbox-read \
+     --clusterrole hephaestus-agent-sandbox-read --serviceaccount <namespace>:hephaestus-agent-sandbox-controller
+   ```
+
+   The first command removes your earlier binding, so that the apply does not conflict with it.
+
 4. Tell the operator these facts:
    - The name, namespace and listener of the Gateway, and the Pod labels of its data plane.
    - The address and port of the Kubernetes API as the network plugin sees it, from `kubectl get endpointslices --namespace default --selector kubernetes.io/service-name=kubernetes`.
    - The name of the cluster DNS Service. On RKE2 it is `kube-system/rke2-coredns-rke2-coredns`.
    - The StorageClass, if it is not the default class.
+   - If sandboxes must run on dedicated nodes: the node selector and the tolerations of those nodes.
 
 ## Install
 
-1. Write your values file, `site.yaml`, as [Install](./kubernetes#install) describes for `host`, `trustedProxies`, the Secrets and the login provider.
+1. Create the release Secret and the PostgreSQL TLS Secret in the release namespace.
+   Follow [Create the Secret](./kubernetes#create-the-secret) and [Create the PostgreSQL TLS Secret](./kubernetes#postgresql-tls-secret).
+   You have `hephaestus-keys.sh` from the k3s bundle.
+
+2. Write your values file, `site.yaml`, as [Write the values file](./kubernetes#write-the-values-file) describes for `host`, `trustedProxies`, the Secrets and the login provider.
    Add the facts from the admins:
 
-   ```yaml title="values.yaml"
+   ```yaml title="site.yaml"
    route:
      parentRefs:
        - name: cluster-gateway
@@ -161,13 +206,20 @@ The admins repeat step 3 for each release.
    `kubernetesApi` is an address from the EndpointSlice, not the address of the `kubernetes` Service ([Network policy](./helm-chart#network-policy)).
    A cluster with three server nodes has three addresses: set a CIDR that holds all of them. Use `/128` for one IPv6 address.
 
-2. Run the preflight from the checkout of the release tag:
+   If the admins gave a node selector and tolerations for the sandbox nodes, set them as `sandbox.runtime.nodeSelector` and `sandbox.runtime.tolerations`.
+
+3. Run the preflight in the directory of your values file:
 
    ```bash
-   node scripts/cluster-preflight.ts --namespace hephaestus --values site.yaml
+   node hephaestus-src/scripts/cluster-preflight.ts --namespace hephaestus \
+     --values "chart-$VERSION/hephaestus/values.yaml" \
+     --values "chart-$VERSION/hephaestus/profiles/cluster.yaml" \
+     --values site.yaml
    ```
 
-   It renders the chart with `profiles/cluster.yaml` and your values, and checks the cluster with your own access.
+   The chart of the checkout names no release images, so the first file gives them from the verified chart.
+   The second file applies the cluster profile again after it.
+   The preflight renders the chart with these files, and checks the cluster with your own access.
    It does not change the cluster.
 
    Each `missing:` line names one item that the install needs. Forward it to the admins as it is.
@@ -177,7 +229,7 @@ The admins repeat step 3 for each release.
    The preflight checks the controller's read-only ClusterRole as the controller's ServiceAccount, with `kubectl auth can-i --as`.
    Without the right to impersonate that account, it compares the ClusterRole and its binding with the admin bundle instead.
 
-3. Install the verified chart with the cluster profile and your values:
+4. Install the verified chart with the cluster profile and your values:
 
    ```bash
    helm upgrade --install hephaestus "chart-$VERSION/hephaestus" -n hephaestus \
@@ -194,7 +246,10 @@ The admins repeat step 3 for each release.
 1. Run the preflight again after the install, with `--installed`:
 
    ```bash
-   node scripts/cluster-preflight.ts --namespace hephaestus --values site.yaml --installed
+   node hephaestus-src/scripts/cluster-preflight.ts --namespace hephaestus \
+     --values "chart-$VERSION/hephaestus/values.yaml" \
+     --values "chart-$VERSION/hephaestus/profiles/cluster.yaml" \
+     --values site.yaml --installed
    ```
 
    It also waits up to 10 minutes for the server rollout.
@@ -202,8 +257,7 @@ The admins repeat step 3 for each release.
    If the server is not ready, a `missing:` line gives the command that shows its log.
 
 2. Run the [sandbox isolation gate](./sandboxes#sandbox-isolation-gate) for each template. Add the cluster's DNS Service, for example `--dns kube-system/rke2-coredns-rke2-coredns` on RKE2.
-   Besides the rights of step 2 of the admin handoff, the gate needs `create` on `pods/exec` in the sandbox namespace.
-   It also reads the `kubernetes` Service and its EndpointSlices in `default`, and the DNS Service.
+   The rights of step 2 of the admin handoff cover the gate.
    Each run must end with `The sandbox isolation gate passed`.
 
 3. Open the public host name, sign in, and request a review of one pull request.
@@ -239,6 +293,8 @@ The admins repeat step 3 for each release.
    ```bash
    kubectl delete namespace hephaestus hephaestus-sandboxes
    ```
+
+   Also ask them to delete the Roles `hephaestus-isolation-gate` and their RoleBindings in `default` and in the namespace of the DNS Service.
 
 5. Ask the admins to remove the admin bundle of the release:
 

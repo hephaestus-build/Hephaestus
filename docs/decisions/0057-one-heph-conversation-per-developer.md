@@ -524,7 +524,7 @@ The outbox owns the lease, metadata readback, retries and terminal outcome. Entr
 - Operators reinstall the Slack app for `reactions:write`.
 - Operators add the `agent_session_stopped` event subscription to the Slack app. It needs no other OAuth scope.
 - The Traefik sticky cookie, the interactive sandbox, its configuration keys, and its metrics are removed.
-- `hephaestus.worker.capacity.mentor-max` gets a new meaning ([Runtime roles](../admin/runtime-roles.mdx#tunables)).
+- `hephaestus.worker.capacity.mentor-max` gets a new meaning ([Runtime roles](../admin/runtime-roles.mdx#turn-limits)).
 - The worker control protocol carries no mentor frames.
 - The agent image runtime contract is 8. The image provides Node and the Pi SDK. The worker stages `heph-host.ts`, its modules, and the system prompt from its own JAR (`HephHostSpec`).
 - A Heph turn that a worker loses runs again on another worker. A read-only tool call can then run twice.

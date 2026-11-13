@@ -8,6 +8,20 @@ By default, the chart runs its own PostgreSQL.
 Use this procedure to run the release against a PostgreSQL server that you operate.
 [Database roles](./helm-chart#database-roles) describes each role that the release uses.
 
+## Before you start
+
+- PostgreSQL 18, the version of the bundled PostgreSQL.
+- The extensions `pg_partman`, `citext` and `btree_gist` on the server. The migrations create them in the database.
+  `citext` and `btree_gist` come with PostgreSQL. `pg_partman` is a separate package. On a managed service, check its list of extensions.
+- `wal_compression = lz4`, or `zstd`, on the server, as the bundled PostgreSQL sets it.
+  Without it, a streamed answer writes about 1.5 times more write-ahead log. Most of that log is full-page images of index pages.
+- `psql` 15 or later, and Perl with the module `Digest::SHA`, on the computer that runs the script below ([Database roles](./helm-chart#database-roles)).
+- An empty database for Hephaestus, `hephaestus` by default (`postgresql.database`). Create it as the administrator of your PostgreSQL:
+
+  ```sql
+  CREATE DATABASE hephaestus;
+  ```
+
 ## Set up the database roles
 
 The chart never gets the administrator login of your PostgreSQL, so you set up the roles yourself.
@@ -63,10 +77,6 @@ Do not give either role more privileges.
 The migrations need no superuser: `citext` and `btree_gist` are trusted extensions, and `pg_partman` needs only the owner of the database.
 
 ## Connect the release
-
-Your PostgreSQL server needs the `pg_partman` extension.
-Set `wal_compression = lz4`, or `zstd`, on it, as the bundled PostgreSQL does.
-Without it, a streamed answer writes about 1.5 times more write-ahead log, because most of that log is full-page images of index pages.
 
 1. Create the [PostgreSQL TLS Secret](./kubernetes#postgresql-tls-secret) with only `ca.crt`, the CA that signed the server certificate.
 2. Add these values to your values file:

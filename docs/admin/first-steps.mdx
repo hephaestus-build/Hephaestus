@@ -6,14 +6,14 @@ page_type: tutorial
 
 At the end of this tutorial, your instance has a first admin, a workspace with GitHub data, and a first practice review that you approved.
 Do stages 1 and 2 before you install: the install pages tell you when.
-After the install, both install paths continue at stage 3.
+After the install, all three install paths continue at stage 3.
 
 ## Before you start
 
 - The host name of the instance.
 - A GitHub organization in which you can create and install apps.
 - An account at an AI provider, with an API key.
-- For stage 3 and later, an instance that you installed [on one host](./k3s) or [on a Kubernetes cluster](./kubernetes).
+- For stage 3 and later, an installed instance: [on one host](./k3s), [on a Kubernetes cluster](./kubernetes), or [on a managed cluster](./managed-cluster).
 
 This tutorial uses GitHub for sign-in and for repository data.
 
@@ -63,11 +63,18 @@ For the break-glass bootstrap token, see [Instance administration](./instance-ad
 Sign-in alone syncs nothing.
 A **GitHub App** reads the repositories, receives their webhooks, and posts feedback with its own identity.
 
-1. Create the GitHub App, as [GitHub App mode](./github-integration#github-app-mode) describes.
-   Its webhook URL is `https://<your hostname>/webhooks/github`, with your `WEBHOOK_SECRET`.
-2. Install the App on your organization, and set its chart values and Secret keys, as [Install and configure](./github-integration#install-and-configure) describes.
-3. Open **Instance administration → GitHub installations**.
-4. Select **Adopt** for the installation.
+1. Read the webhook secret of the instance from the release Secret.
+   On one host, run `export KUBECONFIG=~/hephaestus/kubeconfig` first:
+
+   ```bash
+   kubectl --namespace hephaestus get secret hephaestus-app -o jsonpath='{.data.WEBHOOK_SECRET}' | base64 -d
+   ```
+
+2. Create the GitHub App, as [GitHub App mode](./github-integration#github-app-mode) describes.
+   Its webhook URL is `https://<your hostname>/webhooks/github`, and its webhook secret is the value from step 1.
+3. Install the App on your organization, and set its chart values and Secret keys, as [Install and configure](./github-integration#install-and-configure) describes.
+4. Open **Instance administration → GitHub installations**.
+5. Select **Adopt** for the installation.
    Hephaestus creates the workspace with you as its owner and starts the first sync.
 
 ## 5. Check the instance

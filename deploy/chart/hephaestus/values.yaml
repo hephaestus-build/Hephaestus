@@ -1,4 +1,4 @@
-# Hephaestus chart values. docs/admin/helm-chart.md describes each group.
+# Hephaestus chart values. docs/admin/configuration-reference.mdx lists each key, from values.schema.json.
 # values.schema.json owns the shape of every key. The templates own the cross-field rules.
 
 # The release writes its version, commit and image digests here, in the chart package that it
@@ -166,7 +166,7 @@ postgresql:
 #
 # The JVM Pods request all of their memory limit: the buildpack sizes the
 # heap from the limit, so a node that has only the request cannot hold what the JVM grows to. Each
-# size is a measured resident set plus headroom (docs/admin/helm-chart.md § Profiles).
+# size is a measured resident set plus headroom (docs/contributor/capacity-benchmark.md).
 server:
   # The API, sync, delivery, and with sandbox.enabled the sandboxes' reviews and their gateway. Preparing code
   # evidence can hold two connections per review.

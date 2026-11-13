@@ -19,25 +19,24 @@ The requirement is `REQUIRED`, `RECOMMENDED`, or `OPTIONAL`.
 | `SATISFIED` | The check passed. |
 | `ACTION_REQUIRED` | The check failed. A required deployment fact with this status prevents startup. |
 | `NOT_CONFIGURED` | An optional setting is absent. |
-| `NOT_APPLICABLE` | The check does not apply to this server, for example an agent check with agent jobs off. |
+| `NOT_APPLICABLE` | The check does not apply to this server, for example an agent check without `sandbox.enabled`. |
 
 | Fact `id` | Requirement | Section |
 | --- | --- | --- |
-| `runtime.roles` | Required | [Server role](#runtime-roles) |
+| `runtime.roles` | Required | [Server role](./configuration-readiness.mdx#runtime-roles) |
 | `database.url`, `database.username`, `database.password` | Required | [Database](#database) |
 | `security.credential-encryption`, `security.value-encryption` | Required | [Credential encryption](#credential-encryption) |
 | `external.base-url`, `external.api-origin` | Required | [External URL](#external-url) |
 | `webhook.shared-secret`, `webhook.routing-secret` | Required | [Webhooks](#webhooks) |
 | `auth.state-cookie-key`, `auth.login-provider` | Required | [Login](#login) |
-| `llm.proxy-egress` | Required with agent jobs on | [LLM proxy](#llm-proxy) |
-| `agent.image-contract` | Required with agent jobs on | [Agent image](#agent-image) |
+| `llm.proxy-egress` | Required with `sandbox.enabled` | [LLM proxy](#llm-proxy) |
+| `agent.image-contract` | Required with `sandbox.enabled` | [Agent image](#agent-image) |
 | `notification.email` | Optional | [Email](#email) |
 
-## Server role {/* #runtime-roles */}
+## Server role {/*#runtime-roles*/}
 
-`runtime.roles` checks `hephaestus.runtime.server.enabled`.
-It must be `true`, which is its default. Only `true` or `false` is valid.
-`hephaestus.agent.enabled` (`AGENT_ENABLED`) turns on agent jobs and their sandboxes ([Agent jobs](./runtime-roles#agent-jobs)).
+`runtime.roles` checks that the server role is on. The chart always turns it on.
+`sandbox.enabled` turns on reviews, conversation turns and their sandboxes ([Reviews and conversation turns](./runtime-roles#reviews-and-conversation-turns)).
 
 ## Database
 
@@ -45,9 +44,8 @@ It must be `true`, which is its default. Only `true` or `false` is valid.
 `database.username` and `database.password` check that both values are not empty.
 Spring Boot and Liquibase check the connection and the migration separately.
 
-A remote database requires TLS.
-`sslmode=verify-full` encrypts the connection and verifies the server identity. `sslmode=require` only encrypts.
-Production startup refuses a plaintext remote connection, unless `HEPHAESTUS_DATABASE_ALLOW_INSECURE_REMOTE=true` permits it.
+A remote database requires TLS, and production startup refuses a plaintext remote connection.
+The chart always connects with `sslmode=verify-full`, which encrypts the connection and verifies the server identity.
 
 ## Credential encryption
 
@@ -96,32 +94,31 @@ These actions require a sign-in from the last few minutes:
 - Register an LLM connection.
 - Link an identity.
 
-`hephaestus.auth.step-up-max-age` sets that window, `5m` by default.
-It must be a positive duration shorter than the session lifetime.
+That window is 5 minutes.
 The confirmation uses a provider that is already connected to the account. It is not multi-factor authentication: enforce MFA at the provider.
 The server does not replay a refused action, so the user submits it again after the confirmation.
 
 ### Session deadlines
 
-The access cookie lasts `24h` by default (`hephaestus.auth.access-ttl`).
+The access cookie lasts 24 hours.
 While a tab is active, the browser renews it about every hour. After the cookie expires, the user must sign in.
-A session ends at `hephaestus.auth.session-max-lifetime`, `7d` by default, whatever the activity.
+A session ends after 7 days, whatever the activity.
 Renewal never moves a session past that deadline. Revocation and account suspension deny access before either deadline.
 
 Tokens stay in HttpOnly, Secure, host-only, SameSite=Lax cookies, never in local storage.
 An account can hold parallel sessions, one for each browser or installed client.
 An instance admin can end every session of one account with **Force sign out**, or block the account.
 To end every session on the instance, see [End every session on the instance](./production-operations-runbook#end-every-session-on-the-instance).
-For shared computers or sensitive deployments, shorten both lifetimes and require MFA at the identity provider.
+For shared computers or sensitive deployments, require MFA at the identity provider.
 
 ## LLM proxy
 
-`llm.proxy-egress` checks that `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK` is `false` on a server with agent jobs on.
+`llm.proxy-egress` checks that `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK` is `false` on a server with `sandbox.enabled`.
 Provider credentials and models are runtime settings in the database, not deployment settings ([AI providers](./ai-providers)).
 
 ## Agent image
 
-`agent.image-contract` checks, on a server with agent jobs on, that `HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST` is on and that `HEPHAESTUS_AGENT_IMAGE_REFERENCE` is pinned by its SHA-256 digest.
+`agent.image-contract` checks, on a server with `sandbox.enabled`, that `HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST` is on and that `HEPHAESTUS_AGENT_IMAGE_REFERENCE` is pinned by its SHA-256 digest.
 The chart sets both from the release ([Release image lock](./release-image-lock)).
 
 ## Email
