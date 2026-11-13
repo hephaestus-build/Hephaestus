@@ -144,14 +144,18 @@ public class ReviewBatchService {
                 }
             }
         }
-        batch.setStatus(next);
-        batch.setPauseReason(next == ReviewBatchStatus.PAUSED ? ReviewBatchPauseReason.PAUSED_BY_ADMIN : null);
-        batch.setUpdatedAt(clock.instant());
-        if (next == ReviewBatchStatus.RUNNING) {
-            if (batch.getStartedAt() == null) batch.setStartedAt(clock.instant());
-            batch.setConfirmedByAccountId(SecurityUtils.getCurrentAccountId().orElseThrow());
+        switch (next) {
+            case RUNNING -> {
+                batch.resume();
+                if (batch.getStartedAt() == null) batch.setStartedAt(clock.instant());
+                batch.setConfirmedByAccountId(
+                        SecurityUtils.getCurrentAccountId().orElseThrow());
+            }
+            case PAUSED -> batch.pause(ReviewBatchPauseReason.PAUSED_BY_ADMIN);
+            case CANCELLED -> batch.cancel(clock.instant());
+            default -> throw new IllegalArgumentException("Choose running, paused or cancelled.");
         }
-        if (next == ReviewBatchStatus.CANCELLED) batch.setFinishedAt(clock.instant());
+        batch.setUpdatedAt(clock.instant());
         batches.saveAndFlush(batch);
         audit.record(ConfigAuditEntry.updated(
                 ConfigAuditEntityType.REVIEW_BATCH, id, context.id(), before, ReviewBatchSnapshot.of(batch)));

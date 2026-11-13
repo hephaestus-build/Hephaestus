@@ -34,13 +34,7 @@ An unmarked lifecycle must have a terminal state.
 The test checks that terminal states have no exit and that each state is reachable from an initial state.
 
 `LifecycleSetterArchTest` refuses an entity method named `set*` that takes a `Lifecycle` value.
-Its remaining exceptions name one owner per field.
-The list includes lifecycle fields that do not yet use the contract.
-Remove an entry when its field uses the contract and its entity has no lifecycle setter.
-[ADR 0099 § Confirmation](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md#confirmation)
-owns the release gate for this list.
-[Promote the qualified candidate](./release-management.mdx#promote-the-qualified-candidate)
-gives the preflight command.
+It has no exceptions.
 
 ## Choose the rigor
 
@@ -93,6 +87,31 @@ A terminal batch cannot resume.
 Its transition table is beside the enum in
 [`ReviewBatchStatus`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/java/de/tum/cit/aet/hephaestus/practices/spi/ReviewBatchStatus.java).
 A scheduled batch with no selected targets left completes before the driver checks its budget.
+`ReviewBatch` changes its status only through `resume`, `pause`, `complete`, `exhaustBudget` and `cancel`.
+These methods refuse an illegal move.
+A nonterminal state can repeat: each driver tick runs or pauses a batch again.
+
+```mermaid
+stateDiagram-v2
+    accTitle: Lifecycle of a review batch
+    accDescr: A manual batch waits for confirmation, and a schedule opens a batch running. An admin confirms or resumes a batch to RUNNING, pauses it, or cancels it. The driver pauses a running batch when something is in the way, resumes an automatically paused one, completes it when no target is left, and ends a scheduled batch at its spent cap. COMPLETED, CANCELLED and BUDGET_EXHAUSTED have no exit.
+    [*] --> AWAITING_CONFIRMATION: manual batch
+    [*] --> RUNNING: schedule
+    AWAITING_CONFIRMATION --> RUNNING: resume
+    AWAITING_CONFIRMATION --> PAUSED: pause
+    RUNNING --> PAUSED: pause
+    PAUSED --> RUNNING: resume
+    RUNNING --> COMPLETED: complete
+    PAUSED --> COMPLETED: complete
+    RUNNING --> BUDGET_EXHAUSTED: exhaustBudget
+    PAUSED --> BUDGET_EXHAUSTED: exhaustBudget
+    AWAITING_CONFIRMATION --> CANCELLED: cancel
+    RUNNING --> CANCELLED: cancel
+    PAUSED --> CANCELLED: cancel
+    COMPLETED --> [*]
+    BUDGET_EXHAUSTED --> [*]
+    CANCELLED --> [*]
+```
 
 `BUDGET_EXHAUSTED` records a normal end at the run limit.
 It has a completion time and no pause reason.
