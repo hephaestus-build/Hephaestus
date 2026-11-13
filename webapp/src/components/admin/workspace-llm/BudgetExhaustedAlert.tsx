@@ -3,6 +3,7 @@ import { TriangleAlert } from "lucide-react";
 
 import type { WorkspaceLlmUsageReport } from "@/api";
 import { budgetResetDayLabel, currentMonthUtc } from "@/components/admin/usage/usage-utils";
+import { DocLink } from "@/components/common/DocLink";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 
@@ -74,9 +75,13 @@ export function BudgetExhaustedAlert({
 			<AlertTitle>{copy.title}</AlertTitle>
 			<AlertDescription>
 				<p>
-					{copy.body({
-						resetDay: budgetResetDayLabel(month),
-					})}
+					<span>{copy.body({ resetDay: budgetResetDayLabel(month) })}</span>
+					{unverifiable && (
+						<>
+							{" "}
+							<DocLink doc="unconfirmedUsageCost">Why usage has no confirmed cost</DocLink>.
+						</>
+					)}
 				</p>
 				<PauseAction
 					scope={scope}
