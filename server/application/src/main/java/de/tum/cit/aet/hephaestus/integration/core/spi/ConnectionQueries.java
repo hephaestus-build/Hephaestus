@@ -7,5 +7,7 @@ import org.jspecify.annotations.Nullable;
 public interface ConnectionQueries {
     List<WebhookRoute> findActiveOutlineRoutes();
 
+    boolean hasActiveSourceInstance(long workspaceId, IntegrationKind kind, String origin);
+
     record WebhookRoute(long workspaceId, @Nullable String route) {}
 }

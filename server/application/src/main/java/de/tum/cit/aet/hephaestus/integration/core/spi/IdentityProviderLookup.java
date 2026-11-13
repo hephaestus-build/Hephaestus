@@ -7,6 +7,8 @@ import java.util.Optional;
 public interface IdentityProviderLookup {
     Optional<Provider> findById(long providerId);
 
+    Optional<Provider> findByOrigin(IdentityProviderType type, String origin);
+
     record Provider(long id, IdentityProviderType type, String serverUrl) {
         public IntegrationKind kind() {
             return type.kind();

@@ -7,37 +7,37 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
-import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
 
 @Tag("unit")
 class RegistrationToGitProviderResolverTest {
 
-    private IdentityProviderRepository gitProviderRepository;
+    private IdentityProviderLookup providers;
     private UserRepository userRepository;
     private RegistrationToGitProviderResolver resolver;
+    private SourceProviderNamespaces namespaces;
 
     @BeforeEach
     void setup() {
-        gitProviderRepository = mock(IdentityProviderRepository.class);
+        providers = mock(IdentityProviderLookup.class);
         userRepository = mock(UserRepository.class);
+        namespaces = mock(SourceProviderNamespaces.class);
         resolver = new RegistrationToGitProviderResolver(
-                gitProviderRepository, userRepository, mock(ConnectionRepository.class));
+                providers, userRepository, mock(ConnectionQueries.class), namespaces);
     }
 
     @Test
     void shouldReadOnlyExistingEquivalentProviderOriginsWithoutRegisteringOne() {
-        when(gitProviderRepository.findAllByType(IdentityProviderType.OUTLINE))
-                .thenReturn(List.of(stamped(IdentityProviderType.OUTLINE, "HTTPS://Outline.Example.test:443/", 4)));
+        when(providers.findByOrigin(IdentityProviderType.OUTLINE, "https://outline.example.test"))
+                .thenReturn(Optional.of(stamped(IdentityProviderType.OUTLINE, "HTTPS://Outline.Example.test:443/", 4)));
         assertThat(resolver.findProviderId("OUTLINE", "https://outline.example.test/path"))
                 .contains(4L);
         assertThat(resolver.findProviderId("OUTLINE", "https://another.example.test"))
@@ -45,13 +45,11 @@ class RegistrationToGitProviderResolverTest {
         assertThat(resolver.findProviderId("OUTLINE", "not a URL")).isEmpty();
         assertThat(resolver.findProviderId("GITLAB", "https://outline.example.test"))
                 .isEmpty();
-        verify(gitProviderRepository, never()).save(any(IdentityProvider.class));
+        verify(namespaces, never()).registerIdentityProvider(any(), any());
     }
 
     private void stubRegistration(IdentityProviderType type, String origin, long id) {
-        when(gitProviderRepository.findByTypeAndServerUrl(type, origin))
-                .thenReturn(Optional.empty())
-                .thenReturn(Optional.of(stamped(type, origin, id)));
+        when(namespaces.registerIdentityProvider(type, origin)).thenReturn(id);
     }
 
     @Test
@@ -81,7 +79,7 @@ class RegistrationToGitProviderResolverTest {
 
     @Test
     void reusesExistingProviderRow() {
-        when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITLAB, "https://gitlab.lrz.de"))
+        when(providers.findByOrigin(IdentityProviderType.GITLAB, "https://gitlab.lrz.de"))
                 .thenReturn(Optional.of(stamped(IdentityProviderType.GITLAB, "https://gitlab.lrz.de", 3L)));
 
         assertThat(resolver.resolveProviderId("GITLAB", "https://gitlab.lrz.de"))
@@ -90,7 +88,7 @@ class RegistrationToGitProviderResolverTest {
 
     @Test
     void shouldFindTheRowByTheCanonicalOrigin() {
-        when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITLAB, "https://gitlab.example.test"))
+        when(providers.findByOrigin(IdentityProviderType.GITLAB, "https://gitlab.example.test"))
                 .thenReturn(Optional.of(stamped(IdentityProviderType.GITLAB, "https://gitlab.example.test", 10L)));
 
         assertThat(resolver.resolveProviderId("GITLAB", "HTTPS://GitLab.Example.test:443"))
@@ -99,8 +97,8 @@ class RegistrationToGitProviderResolverTest {
 
     @Test
     void shouldReuseARowThatSpellsTheSameOriginDifferently() {
-        when(gitProviderRepository.findAllByType(IdentityProviderType.GITLAB))
-                .thenReturn(List.of(stamped(IdentityProviderType.GITLAB, "HTTPS://GitLab.lrz.de:443", 4L)));
+        when(providers.findByOrigin(IdentityProviderType.GITLAB, "https://gitlab.lrz.de"))
+                .thenReturn(Optional.of(stamped(IdentityProviderType.GITLAB, "HTTPS://GitLab.lrz.de:443", 4L)));
 
         assertThat(resolver.resolveProviderId("GITLAB", "https://gitlab.lrz.de"))
                 .isEqualTo(4L);
@@ -108,7 +106,7 @@ class RegistrationToGitProviderResolverTest {
 
     @Test
     void shouldReportTheServerUrlAsItsCanonicalOrigin() {
-        when(gitProviderRepository.findById(4L))
+        when(providers.findById(4L))
                 .thenReturn(Optional.of(stamped(IdentityProviderType.GITLAB, "HTTPS://GitLab.lrz.de:443", 4L)));
 
         assertThat(resolver.providerServerUrl(4L)).isEqualTo("https://gitlab.lrz.de");
@@ -119,13 +117,7 @@ class RegistrationToGitProviderResolverTest {
         assertThat(resolver.providerTypeName(null)).isEqualTo("UNKNOWN");
     }
 
-    private static IdentityProvider stamped(IdentityProviderType type, String serverUrl, long id) {
-        IdentityProvider p = new IdentityProvider(type, serverUrl);
-        setId(p, id);
-        return p;
-    }
-
-    private static void setId(Object entity, Long id) {
-        ReflectionTestUtils.setField(entity, "id", id);
+    private static IdentityProviderLookup.Provider stamped(IdentityProviderType type, String serverUrl, long id) {
+        return new IdentityProviderLookup.Provider(id, type, serverUrl);
     }
 }

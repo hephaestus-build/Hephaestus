@@ -1,14 +1,11 @@
 package de.tum.cit.aet.hephaestus.integration.identity.connect;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import java.util.Collection;
@@ -28,17 +25,20 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
 
     private static final String UNKNOWN = "UNKNOWN";
 
-    private final IdentityProviderRepository gitProviderRepository;
+    private final IdentityProviderLookup providers;
     private final UserRepository userRepository;
-    private final ConnectionRepository connections;
+    private final ConnectionQueries connections;
+    private final SourceProviderNamespaces namespaces;
 
     public RegistrationToGitProviderResolver(
-            IdentityProviderRepository gitProviderRepository,
+            IdentityProviderLookup providers,
             UserRepository userRepository,
-            ConnectionRepository connections) {
-        this.gitProviderRepository = gitProviderRepository;
+            ConnectionQueries connections,
+            SourceProviderNamespaces namespaces) {
+        this.providers = providers;
         this.userRepository = userRepository;
         this.connections = connections;
+        this.namespaces = namespaces;
     }
 
     /**
@@ -59,14 +59,10 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
         IdentityProviderType type = IdentityProviderType.valueOf(providerTypeName);
         String origin = ScmOrigin.of(baseUrl)
                 .orElseThrow(() -> new IllegalStateException("login provider baseUrl has no origin: " + baseUrl));
-        return Objects.requireNonNull(existingProvider(type, origin)
-                .orElseGet(() -> {
-                    gitProviderRepository.registerSourceInstance(type.name(), origin);
-                    return gitProviderRepository
-                            .findByTypeAndServerUrl(type, origin)
-                            .orElseThrow();
-                })
-                .getId());
+        return providers
+                .findByOrigin(type, origin)
+                .map(IdentityProviderLookup.Provider::id)
+                .orElseGet(() -> namespaces.registerIdentityProvider(type, origin));
     }
 
     @Override
@@ -74,18 +70,8 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
     public Optional<Long> findProviderId(String providerTypeName, String baseUrl) {
         var type = IdentityProviderType.valueOf(providerTypeName);
         return ScmOrigin.of(baseUrl)
-                .flatMap(origin -> existingProvider(type, origin))
-                .map(provider -> Objects.requireNonNull(provider.getId()));
-    }
-
-    private Optional<IdentityProvider> existingProvider(IdentityProviderType type, String origin) {
-        // Retained provider namespaces may spell the same exact origin differently.
-        return gitProviderRepository
-                .findByTypeAndServerUrl(type, origin)
-                .or(() -> gitProviderRepository.findAllByType(type).stream()
-                        .filter(provider ->
-                                ScmOrigin.of(provider.getServerUrl()).equals(Optional.of(origin)))
-                        .findFirst());
+                .flatMap(origin -> providers.findByOrigin(type, origin))
+                .map(IdentityProviderLookup.Provider::id);
     }
 
     @Override
@@ -94,10 +80,7 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
         if (gitProviderId == null) {
             return UNKNOWN;
         }
-        return gitProviderRepository
-                .findById(gitProviderId)
-                .map(p -> p.getType().name())
-                .orElse(UNKNOWN);
+        return providers.findById(gitProviderId).map(p -> p.type().name()).orElse(UNKNOWN);
     }
 
     @Override
@@ -106,9 +89,9 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
         if (gitProviderId == null) {
             return null;
         }
-        return gitProviderRepository
+        return providers
                 .findById(gitProviderId)
-                .map(provider -> ScmOrigin.of(provider.getServerUrl()).orElse(provider.getServerUrl()))
+                .map(provider -> ScmOrigin.of(provider.serverUrl()).orElse(provider.serverUrl()))
                 .orElse(null);
     }
 
@@ -152,20 +135,11 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
     @Override
     @Transactional(readOnly = true)
     public boolean visibleInWorkspace(long providerId, long workspaceId) {
-        var provider = gitProviderRepository.findById(providerId).orElse(null);
+        var provider = providers.findById(providerId).orElse(null);
         if (provider == null) return false;
-        var origin = ScmOrigin.of(provider.getServerUrl());
+        var origin = ScmOrigin.of(provider.serverUrl());
         if (origin.isEmpty()) return false;
-        return connections.findByWorkspaceIdAndState(workspaceId, IntegrationState.ACTIVE).stream()
-                .filter(connection ->
-                        connection.getKind().name().equals(provider.getType().name()))
-                .anyMatch(connection -> {
-                    var namespace = PersonSourceNamespace.from(
-                            connection.getKind().name(),
-                            SourceProviderNamespaces.configuredUrl(connection.getConfig()));
-                    return namespace.isPresent()
-                            && ScmOrigin.of(namespace.get().serverUrl()).equals(origin);
-                });
+        return connections.hasActiveSourceInstance(workspaceId, provider.kind(), origin.get());
     }
 
     @Override

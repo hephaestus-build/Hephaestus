@@ -37,6 +37,14 @@ public class SourceProviderNamespaces {
         events.publishEvent(new PersonProviderInstanceRegistered(Objects.requireNonNull(provider.getId())));
     }
 
+    /** Registers login reference data in the caller's provisioning transaction. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public long registerIdentityProvider(IdentityProviderType type, String serverUrl) {
+        providers.registerSourceInstance(type.name(), serverUrl);
+        return Objects.requireNonNull(
+                providers.findByTypeAndServerUrl(type, serverUrl).orElseThrow().getId());
+    }
+
     public static @Nullable String configuredUrl(ConnectionConfig config) {
         return switch (config) {
             case ConnectionConfig.GitHubAppConfig c -> c.serverUrl();

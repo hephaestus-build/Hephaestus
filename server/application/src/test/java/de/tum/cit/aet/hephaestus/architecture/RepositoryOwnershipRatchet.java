@@ -103,18 +103,6 @@ final class RepositoryOwnershipRatchet {
                     Set.of("agent.adapter.EvidenceDeliveryAuthorization")),
             new Entry(
                     "integration",
-                    "integration.core.connection.ConnectionRepository",
-                    "DDD11 (integration.core)",
-                    "integration.core::spi ConnectionQueries and ConnectionService commands",
-                    Set.of("integration.identity.connect.RegistrationToGitProviderResolver")),
-            new Entry(
-                    "integration",
-                    "integration.core.connection.IdentityProviderRepository",
-                    "DDD11 (integration.core)",
-                    "integration.core::spi IdentityProviderLookup; SourceProviderNamespaces registration",
-                    Set.of("integration.identity.connect.RegistrationToGitProviderResolver")),
-            new Entry(
-                    "integration",
                     "integration.scm.domain.user.UserRepository",
                     "DDD14 (identity/SCM)",
                     "integration.scm::spi ScmIdentityLookup",
