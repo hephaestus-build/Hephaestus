@@ -292,6 +292,7 @@ The rule group `hephaestus-postgresql` alerts on these metrics:
 | `HephaestusDatabaseTransactionOpenLong` | A transaction has been open for more than 5 minutes, for 5 minutes |
 | `HephaestusDatabaseDeadRowsHigh` | A table has more than 10,000 dead rows and more than 20 % of its live rows, for an hour |
 | `HephaestusDatabaseTransactionIdAgeHigh` | The oldest unfrozen transaction ID of a database is more than 1 billion old, for 15 minutes. It is critical. |
+| `HephaestusPostgresConnectionsHigh` | The sessions of one PostgreSQL instance are more than 90 % of the connections that ordinary roles can use, for 15 minutes. These are `max_connections` minus `superuser_reserved_connections` and, from PostgreSQL 16, `reserved_connections`. The chart's connection budget at the peak of a rolling update stays below this level ([Sizing](./sizing#database-connections)). |
 
 Without the exporter, these rules have no series and stay silent.
 The [runbook](./production-operations-runbook#alert-response) gives the response to each.
