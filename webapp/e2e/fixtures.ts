@@ -1,13 +1,13 @@
 import { test as base, type BrowserContext, expect, type Page } from "@playwright/test";
 
-import { E2E_BASE_URL, E2E_SERVER_URL } from "./urls.ts";
+import { E2E_API_URL, E2E_BASE_URL } from "./urls.ts";
 
 async function serveEnvConfig(context: BrowserContext): Promise<void> {
 	await context.route("**/env-config.js", async (route) =>
 		route.fulfill({
 			contentType: "application/javascript",
 			body: `window.__ENV__ = ${JSON.stringify({
-				APPLICATION_SERVER_URL: E2E_SERVER_URL,
+				APPLICATION_SERVER_URL: E2E_API_URL,
 				APPLICATION_CLIENT_URL: E2E_BASE_URL,
 				XSRF_COOKIE_NAME: "XSRF-TOKEN",
 				TANSTACK_DEVTOOLS_ENABLED: "false",

@@ -79,7 +79,9 @@ describe("useSyncEvents", () => {
 		renderHook(() => useSyncEvents(WORKSPACE), { wrapper: wrapper(new QueryClient()) });
 
 		expect(FakeEventSource.instances).toHaveLength(1);
-		expect(latestSource().url).toBe(`http://localhost:8080/workspaces/${WORKSPACE}/sync/events`);
+		expect(latestSource().url).toBe(
+			`http://localhost:3000/api/workspaces/${WORKSPACE}/sync/events`,
+		);
 		expect(latestSource().withCredentials).toBe(true);
 	});
 

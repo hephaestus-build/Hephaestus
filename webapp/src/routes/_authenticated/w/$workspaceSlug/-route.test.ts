@@ -1,7 +1,7 @@
 import { noop, QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { listWorkspacesQueryKey } from "@/api/@tanstack/react-query.gen";
 import { ROUTER_SEARCH } from "@/lib/router-search";
@@ -9,10 +9,24 @@ import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
+import { apiPathOf } from "@/test/api-path";
 import { deferred } from "@/test/async";
+import { loadRouteCode, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
-// `router.load()` lazily imports each matched route's module, so a case pays its transform cost.
-vi.setConfig({ testTimeout: 15_000 });
+beforeAll(
+	async () =>
+		loadRouteCode(
+			"/w/acme",
+			"/w/acme/activity",
+			"/w/acme/conversation",
+			"/w/acme/practice-profile",
+			"/w/acme/onboarding",
+			"/w/acme/teams",
+			"/workspaces/new",
+			"/login",
+		),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 const DEEP_LINK = "/w/foreign/conversation?thread=65ee0cb0-99dd-4b0f-86cb-bc8bfb5bbbed";
 // The fixture workspace does not review practices, so its home is Activity.
@@ -153,7 +167,7 @@ describe("workspace route gate", () => {
 		);
 		const started: string[] = [];
 		const record = ({ request }: { request: Request }) => {
-			started.push(new URL(request.url).pathname);
+			started.push(apiPathOf(request.url));
 		};
 		server.events.on("request:start", record);
 		const landing = land(WORKSPACE_HOME);
@@ -185,11 +199,11 @@ describe("workspace route gate", () => {
 		const scoped: string[] = [];
 		server.use(
 			http.get("*/workspaces/foreign/*", ({ request }) => {
-				scoped.push(new URL(request.url).pathname);
+				scoped.push(apiPathOf(request.url));
 				return new HttpResponse(null, { status: 401 });
 			}),
 			http.get("*/workspaces/foreign/*/*", ({ request }) => {
-				scoped.push(new URL(request.url).pathname);
+				scoped.push(apiPathOf(request.url));
 				return new HttpResponse(null, { status: 401 });
 			}),
 		);

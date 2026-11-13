@@ -2,7 +2,7 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type JsonBodyType, type PathParams } from "msw";
-import { assert, beforeEach, describe, expect, it, vi } from "vitest";
+import { assert, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
 	getPublicActivityHiddenCountQueryKey,
@@ -24,8 +24,10 @@ import type { Wire } from "@/lib/dates";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import { apiPathOf } from "@/test/api-path";
 import { deferred } from "@/test/async";
 import {
+	loadRouteCode,
 	ROUTE_RENDER_WAIT,
 	renderRouteAt,
 	renderRouteAtWithRouter,
@@ -33,9 +35,16 @@ import {
 } from "@/test/router-harness";
 import { switchWorkspace } from "@/test/workspace-switcher";
 
-// Mounting the real route pulls in the whole admin layout and its lazy modules; the timeout is a
-// deadlock backstop, not a budget these renders were meant to fit inside.
-vi.setConfig({ testTimeout: 15_000 });
+beforeAll(
+	async () =>
+		loadRouteCode(
+			"/w/acme/admin/settings",
+			"/w/acme/admin/practices/review",
+			"/w/acme/admin/practices",
+			"/admin/workspaces",
+		),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 /** The settings page for an admin of acme, with the integrations the catalog lists. */
 function renderSettingsRoute(
@@ -134,7 +143,7 @@ describe("workspace settings route", () => {
 function serveSetupReads(workspaceSlug: string) {
 	const reads: string[] = [];
 	const record = (request: Request) => {
-		reads.push(new URL(request.url).pathname);
+		reads.push(apiPathOf(request.url));
 	};
 	server.use(
 		http.get(`*/workspaces/${workspaceSlug}/connections/catalog`, ({ request }) => {
@@ -934,7 +943,7 @@ describe("workspace settings lifetime", () => {
 				HttpResponse.json([]),
 			),
 			http.patch("*/workspaces/acme/public-activity", async ({ request }) => {
-				requests.push(new URL(request.url).pathname);
+				requests.push(apiPathOf(request.url));
 				return response.promise;
 			}),
 		);
@@ -1085,7 +1094,7 @@ describe("workspace settings lifetime", () => {
 				http.patch(
 					"*/workspaces/:workspaceSlug/activity/people/11/public-visibility",
 					async ({ request }) => {
-						shown.push(new URL(request.url).pathname);
+						shown.push(apiPathOf(request.url));
 						return response.promise;
 					},
 				),
@@ -1157,7 +1166,7 @@ describe("workspace settings lifetime", () => {
 				HttpResponse.json([]),
 			),
 			http.patch("*/workspaces/:workspaceSlug/public-activity", ({ request }) => {
-				changes.push(new URL(request.url).pathname);
+				changes.push(apiPathOf(request.url));
 				return HttpResponse.json({
 					enabled: true,
 					allowSearchEngines: false,
@@ -1307,7 +1316,7 @@ describe("instance administrator workspace settings", () => {
 			http.get("*/workspaces", () => HttpResponse.json({ status: 503 }, { status: 503 })),
 			http.get("*/workspaces/tutors", () => HttpResponse.json({ status: 403 }, { status: 403 })),
 			http.all("*/workspaces/acme/*", ({ request }) => {
-				otherRequests.push(new URL(request.url).pathname);
+				otherRequests.push(apiPathOf(request.url));
 				return HttpResponse.json({ status: 503 }, { status: 503 });
 			}),
 		);

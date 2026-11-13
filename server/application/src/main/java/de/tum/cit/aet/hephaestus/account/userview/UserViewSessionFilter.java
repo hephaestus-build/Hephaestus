@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.core.web.RequestReference;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -100,7 +101,9 @@ public class UserViewSessionFilter extends OncePerRequestFilter {
                         HttpStatus.BAD_REQUEST, "The request does not include the full user view context.");
             }
             String path = request.getRequestURI();
-            Map<String, String> pathVariables = readPathVariables(PathContainer.parsePath(path));
+            String apiPath = ApiPath.relative(request);
+            Map<String, String> pathVariables =
+                    apiPath == null ? null : readPathVariables(PathContainer.parsePath(apiPath));
             if (pathVariables == null) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This page is not available in user view.");
             }

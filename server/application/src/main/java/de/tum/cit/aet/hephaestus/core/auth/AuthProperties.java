@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.auth;
 
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
@@ -14,9 +15,6 @@ import org.springframework.web.util.UriComponentsBuilder;
  *
  * @param issuer canonical {@code iss} claim. Its origin is also the public origin of the API and of the webhook
  *     receivers that GitLab and Outline registrations name.
- * @param apiBasePath public prefix stripped by the reverse proxy, prepended to public API
- *                   URLs. Tomcat's native forwarded-header support does not restore
- *                   {@code X-Forwarded-Prefix}; see {@code ProxyTrustGuard} before changing that strategy.
  * @param audience expected {@code aud} claim
  * @param accessTtl access-token lifetime, bounded by the absolute session deadline
  * @param cookieName Name of the access-token cookie. A name that starts with {@code __Host-} requires Secure, Path=/
@@ -45,7 +43,6 @@ import org.springframework.web.util.UriComponentsBuilder;
 @ConfigurationProperties(prefix = "hephaestus.auth")
 public record AuthProperties(
         @DefaultValue("http://localhost:8080") URI issuer,
-        @DefaultValue("") String apiBasePath,
         @DefaultValue("hephaestus-spa") String audience,
         @DefaultValue("24h") Duration accessTtl,
         @DefaultValue(DEFAULT_COOKIE_NAME) String cookieName,
@@ -82,30 +79,16 @@ public record AuthProperties(
                         .map(String::trim)
                         .filter(id -> !id.isEmpty())
                         .toList();
-        apiBasePath = normalizeApiBasePath(apiBasePath);
     }
 
     /** Public API URLs use the configured API origin, never a request Host or forwarded host. */
     public String apiBaseUrl() {
         return UriComponentsBuilder.fromUri(issuer)
-                .replacePath(apiBasePath)
+                .replacePath(ApiPath.PREFIX)
                 .replaceQuery(null)
                 .fragment(null)
                 .build()
                 .toUriString();
-    }
-
-    /** Normalizes a proxy prefix to a leading slash without trailing slashes; blank means root. */
-    private static String normalizeApiBasePath(String value) {
-        if (value == null) {
-            return "";
-        }
-        String trimmed = value.trim().replaceAll("/+$", "");
-        if (trimmed.isEmpty()) {
-            return "";
-        }
-        trimmed = trimmed.replaceAll("^/+", "/");
-        return trimmed.startsWith("/") ? trimmed : "/" + trimmed;
     }
 
     public static final String DEFAULT_COOKIE_NAME = "__Host-HEPHAESTUS_AT";

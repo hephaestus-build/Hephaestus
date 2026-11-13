@@ -1006,23 +1006,11 @@ await test("the route attaches to the platform Gateway and strips only /api", ()
 	]);
 	assert.deepEqual(backends(rule("PathPrefix", "/api")), [{ name: "heph-server", port: 8080 }]);
 	assert.deepEqual(backends(rule("PathPrefix", "/")), [{ name: "heph-webapp", port: 8080 }]);
-	assert.deepEqual(
-		filters(rule("PathPrefix", "/api")).filter((filter) => get(filter, "type") === "URLRewrite"),
-		[
-			{
-				type: "URLRewrite",
-				urlRewrite: { path: { type: "ReplacePrefixMatch", replacePrefixMatch: "/" } },
-			},
-		],
-	);
 	for (const candidate of rules) {
 		const types = new Set(filters(candidate).map((filter) => get(filter, "type")));
 		assert.ok(types.has("ResponseHeaderModifier"), "HSTS on every rule");
-		assert.equal(
-			types.has("URLRewrite"),
-			candidate === rule("PathPrefix", "/api"),
-			"only /api is rewritten",
-		);
+		// The server serves the paths it receives, so no rule rewrites one.
+		assert.ok(!types.has("URLRewrite"), "no rule rewrites a path");
 		// Only /api asks the controller to disable both deadlines, for the Heph live stream.
 		assert.deepEqual(
 			get(candidate, "timeouts"),

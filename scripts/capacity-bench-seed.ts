@@ -4,7 +4,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { bindReplayModel, syntheticApi, syntheticSession } from "./lib/capacity-seed.ts";
 import { asStringArray, parseJson } from "./lib/json.ts";
 
-const base = "http://127.0.0.1:8080";
+const base = "http://127.0.0.1:8080/api";
 const workspace = "capacity-bench-course";
 const sessions: string[] = [];
 let admin = "";

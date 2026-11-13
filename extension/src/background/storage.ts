@@ -17,7 +17,7 @@ import {
  */
 export const instanceSchema = z.object({
 	origin: z.string(),
-	/** Where the API answers: `<origin>/api` behind the production proxy, the bare origin locally. */
+	/** Where the API answers: `<origin>/api`. */
 	apiBase: z.string(),
 	/** Where the web app answers, for every link out. Never the API server. */
 	webAppOrigin: z.string(),

@@ -24,7 +24,7 @@ Hephaestus supports the chart on a cluster with these items:
   [ADR 0060](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0060-the-kubernetes-floor-follows-upstream-support.md) gives the reason.
 - A network plugin that enforces NetworkPolicy for egress and for ingress, also on traffic to a Service address.
   Run the platform isolation gate before enabling work ([Sandbox prerequisites](./sandboxes#sandbox-prerequisites)).
-- A Gateway API controller for `HTTPRoute` `v1` with the two features in [Gateway routes](#gateway-routes).
+- A Gateway API controller for `HTTPRoute` `v1` with the extended feature in [Gateway routes](#gateway-routes).
 - A storage class for `ReadWriteOnce` volumes, for the bundled PostgreSQL and NATS.
 - With the server enabled, the [agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox) controller with its extensions, at the version that the release pins ([Sandbox templates](./sandboxes#sandbox-templates)).
 
@@ -280,19 +280,17 @@ Each integration takes its settings from `site.yaml` and its secrets from the [S
 | Request path | Backend | Path change |
 | --- | --- | --- |
 | `/webhooks` and below | `server` | None |
-| `/api` and below | `server` | `/api` is removed |
+| `/api` and below | `server` | None |
 | All other paths | `webapp` | None. The webapp serves the SPA for an unknown path. |
 
-The server serves the API without the `/api` prefix.
-A standard `Ingress` cannot remove a path prefix, so the chart does not use one.
+The server serves each path as it receives it, so no rule changes a path.
 
-The Gateway controller must support the core `HTTPRoute` features and these two extended features:
+The Gateway controller must support the core `HTTPRoute` features and this extended feature:
 
-- `URLRewrite` with `ReplacePrefixMatch`, for `/api`.
 - `ResponseHeaderModifier`, for `Strict-Transport-Security` on each rule.
 
-If the controller does not support one of them, the route does not work as described.
-The chart cannot detect this. Confirm both features for the controller that you select.
+If the controller does not support this feature, the route does not work as described.
+The chart cannot detect this. Confirm the feature for the controller that you select.
 
 The live streams of Hephaestus stay open for much longer than one request.
 They do not need a route timeout. Instead, the server sends a heartbeat on each live stream about every 20 seconds.
@@ -529,4 +527,4 @@ The conversation template owns its resources. the quota counts those requests an
 A successful install in CI does not show that your cluster isolates sandboxes.
 Run the platform isolation gate on your cluster before enabling sandbox work.
 CI does not qualify your Gateway controller.
-Check its two `HTTPRoute` features, its body limit and its idle timeout yourself, and rehearse a [restore](./backup-restore#restore) on your own cluster.
+Check its extended `HTTPRoute` feature, its body limit and its idle timeout yourself, and rehearse a [restore](./backup-restore#restore) on your own cluster.

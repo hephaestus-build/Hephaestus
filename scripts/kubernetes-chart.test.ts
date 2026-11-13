@@ -448,16 +448,8 @@ await test("the route strips only /api and keeps every webhook path whole", () =
 	assert.deepEqual(backendOf(rule("PathPrefix", "/webhooks")), ["server", "8080"]);
 	assert.deepEqual(backendOf(rule("PathPrefix", "/api")), ["server", "8080"]);
 	assert.deepEqual(backendOf(rule("PathPrefix", "/")), ["webapp", "8080"]);
-	assert.match(
-		rule("PathPrefix", "/api"),
-		/type: URLRewrite\n\s*urlRewrite:\n\s*path:\n\s*type: ReplacePrefixMatch\n\s*replacePrefixMatch: \/\n/u,
-	);
-	for (const [type, value] of [
-		["PathPrefix", "/webhooks"],
-		["PathPrefix", "/"],
-	] as const) {
-		assert.doesNotMatch(rule(type, value), /URLRewrite/u, value);
-	}
+	// The server serves the paths it receives, so no rule rewrites one.
+	assert.doesNotMatch(rules.join("\n"), /URLRewrite/u);
 	// HSTS has nowhere else to come from, so every rule carries it.
 	assert.equal(rules.filter((text) => text.includes("{{ toJson $hsts }}")).length, rules.length);
 });

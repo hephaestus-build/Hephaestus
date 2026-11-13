@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus;
 
 import de.tum.cit.aet.hephaestus.core.UserViewRead;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.core.web.RequestReference;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.workspace.validation.WorkspaceSlugValidator;
@@ -16,6 +17,7 @@ import io.swagger.v3.oas.annotations.servers.Server;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
+import io.swagger.v3.oas.models.Paths;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.parameters.HeaderParameter;
@@ -74,7 +76,7 @@ import tools.jackson.databind.JsonNode;
                             "Why each practice did or did not run on one piece of work. Any workspace member can read"
                                     + " it."),
         },
-        servers = {@Server(url = "/api", description = "Public API")},
+        servers = {@Server(url = ApiPath.PREFIX, description = "Public API")},
         security = {@SecurityRequirement(name = "bearerAuth")})
 @SecurityScheme(
         name = "bearerAuth",
@@ -151,6 +153,7 @@ public class OpenAPIConfiguration {
             @Value("${spring.application.version:0.0.0-development}") String appVersion) {
         return openApi -> {
             openApi.getInfo().setVersion(appVersion);
+            relativeToServer(openApi);
             Map<String, String> schemaNames = processApplicationServerSchemas(openApi);
             processAllPaths(openApi, schemaNames);
             normalizeDiscriminatedUnions(openApi);
@@ -158,6 +161,23 @@ public class OpenAPIConfiguration {
             declareProviderIdentityKinds(openApi);
             declareProblemShape(openApi);
         };
+    }
+
+    /**
+     * The server serves the API under {@link ApiPath#PREFIX}, and the description's one server names that prefix. OpenAPI
+     * paths are relative to the server, so the prefix leaves each path here and the clients keep {@code /api} as their
+     * base URL.
+     */
+    private static void relativeToServer(OpenAPI openApi) {
+        if (openApi.getPaths() == null) {
+            return;
+        }
+        Paths relative = new Paths();
+        openApi.getPaths()
+                .forEach((path, item) -> relative.addPathItem(
+                        path.startsWith(ApiPath.PREFIX + "/") ? path.substring(ApiPath.PREFIX.length()) : path, item));
+        relative.setExtensions(openApi.getPaths().getExtensions());
+        openApi.setPaths(relative);
     }
 
     /**

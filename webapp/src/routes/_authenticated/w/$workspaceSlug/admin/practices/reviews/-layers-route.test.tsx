@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 import { resultSummary } from "@/components/admin/practice-reviews/result-words";
 
 import {
@@ -30,13 +30,21 @@ import {
 	reviewHandlers,
 	feedbackCountHandlers,
 } from "@/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-reviews-server";
+import { apiPathOf } from "@/test/api-path";
 import { deferred, sleep } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-// Mounting the real route pulls in the whole admin layout and its lazy modules; the timeout is a
-// deadlock backstop, not a budget these renders were meant to fit inside.
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(
+	async () =>
+		loadRouteCode(
+			"/w/acme/admin/practices/reviews",
+			"/w/acme/admin/practices/reviews/results",
+			"/w/acme/admin/practices/reviews/feedback",
+			"/w/acme/admin/practices/reviews/overview",
+		),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 function readsOldReview(url: URL) {
 	return (
@@ -82,7 +90,7 @@ const record = ({ request }: { request: Request }) => {
 };
 
 function requestsTo(pathname: string): URL[] {
-	return requested.filter((url) => url.pathname === `/workspaces/acme${pathname}`);
+	return requested.filter((url) => apiPathOf(url) === `/workspaces/acme${pathname}`);
 }
 
 beforeEach(() => {
@@ -548,11 +556,11 @@ describe("the trace and a record over it", () => {
 			await act(async () =>
 				router.history.push(`/w/other/admin/practices/reviews?detail=${TRACE}&developerId=7`),
 			);
-			const otherReads = () => requested.filter((url) => url.pathname.startsWith(`${OTHER}/`));
+			const otherReads = () => requested.filter((url) => apiPathOf(url).startsWith(`${OTHER}/`));
 			await waitFor(() => {
 				expect(otherReads().some((url) => url.pathname.endsWith("/lineage"))).toBe(true);
 				expect(
-					otherReads().filter((url) => url.pathname === `${OTHER}/practices/reviews`),
+					otherReads().filter((url) => apiPathOf(url) === `${OTHER}/practices/reviews`),
 				).not.toHaveLength(0);
 			}, ROUTE_RENDER_WAIT);
 			const tabs = document.querySelector('nav[aria-label="Practice review sections"]');

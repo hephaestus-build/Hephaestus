@@ -2,7 +2,7 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type JsonBodyType } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { toast } from "@/lib/toast";
 
 import {
@@ -32,15 +32,26 @@ import { zGitLabRepositorySelection } from "@/api/zod.gen";
 import type { Wire } from "@/lib/dates";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import { apiPathOf } from "@/test/api-path";
 import { type Deferred, deferred } from "@/test/async";
 import {
+	loadRouteCode,
 	ROUTE_RENDER_WAIT,
 	renderRouteAt,
 	renderRouteAtWithRouter,
 	testQueryClient,
 } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(
+	async () =>
+		loadRouteCode(
+			"/w/acme/admin/integrations",
+			"/w/acme/admin/integrations/scm",
+			"/w/acme/admin/integrations/slack",
+			"/w/acme/admin/integrations/outline",
+		),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 // This route test owns credential HTTP requests; the SSE transport has its own hook suite.
 vi.mock("@/hooks/use-sync-events", () => ({ useSyncEvents: () => false }));
@@ -419,7 +430,7 @@ function serveMonitored(initial: string[]) {
 	const command = (request: Request) => {
 		const url = new URL(request.url);
 		const name = url.searchParams.get("nameWithOwner") ?? "";
-		commands.push(`${request.method} ${url.pathname} ${name}`);
+		commands.push(`${request.method} ${apiPathOf(url)} ${name}`);
 		return name;
 	};
 	server.use(
@@ -1104,7 +1115,7 @@ function recordWrites() {
 	const writes: string[] = [];
 	const record = ({ request }: { request: Request }) => {
 		if (request.method !== "GET") {
-			writes.push(`${request.method} ${new URL(request.url).pathname}`);
+			writes.push(`${request.method} ${apiPathOf(request.url)}`);
 		}
 	};
 	server.events.on("request:start", record);
@@ -1516,7 +1527,7 @@ describe("Slack credential recovery", () => {
 			expect(
 				requests
 					.filter((request) => request.method !== "GET")
-					.map((request) => `${request.method} ${new URL(request.url).pathname}`),
+					.map((request) => `${request.method} ${apiPathOf(request.url)}`),
 			).toStrictEqual(["POST /workspaces/acme/connections"]);
 		} finally {
 			server.events.removeListener("request:start", record);

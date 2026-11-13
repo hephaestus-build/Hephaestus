@@ -104,7 +104,7 @@ jobs:
           SERVER_PID=$!
           # Liveness precedes ApplicationRunner completion; readiness includes signing-key initialization.
           timeout 5m bash -c 'until curl --fail --silent http://localhost:8080/readyz >/dev/null; do kill -0 '"${SERVER_PID}"' || exit 1; sleep 2; done'
-          curl --fail --silent --show-error -X POST http://localhost:8080/auth/dev-login \
+          curl --fail --silent --show-error -X POST http://localhost:8080/api/auth/dev-login \
             -H 'content-type: application/json' -d '{"username":"e2e","admin":true}' >/dev/null
           docker compose -f server/compose.yaml exec -T postgres \
             psql -v ON_ERROR_STOP=1 -U root -d hephaestus < webapp/e2e/seed.sql
@@ -211,9 +211,9 @@ jobs:
           SERVER_PID=$!
           # Liveness precedes ApplicationRunner completion; readiness includes signing-key initialization.
           timeout 5m bash -c 'until curl --fail --silent http://localhost:8080/readyz >/dev/null; do kill -0 '"${SERVER_PID}"' || exit 1; sleep 2; done'
-          curl --fail --silent --show-error -X POST http://localhost:8080/auth/dev-login \
+          curl --fail --silent --show-error -X POST http://localhost:8080/api/auth/dev-login \
             -H 'content-type: application/json' -d '{"username":"e2e","admin":true}' >/dev/null
-          curl --fail --silent --show-error -X POST http://localhost:8080/auth/dev-login \
+          curl --fail --silent --show-error -X POST http://localhost:8080/api/auth/dev-login \
             -H 'content-type: application/json' -d '{"username":"e2e-dev","admin":false}' >/dev/null
           # The extension's seed builds on the web app's: it adds a GitLab workspace for the e2e developer.
           docker compose -f server/compose.yaml exec -T postgres \

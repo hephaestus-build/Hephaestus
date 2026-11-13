@@ -15,7 +15,7 @@ node scripts/run-gradlew.ts :application:bootRun -Pprofiles=e2e,playwright
 Create the test account and seed its workspace:
 
 ```bash
-curl -fsS -X POST http://localhost:8080/auth/dev-login \
+curl -fsS -X POST http://localhost:8080/api/auth/dev-login \
   -H 'content-type: application/json' \
   -d '{"username":"e2e","admin":true}' >/dev/null
 docker compose -f server/compose.yaml exec -T postgres \

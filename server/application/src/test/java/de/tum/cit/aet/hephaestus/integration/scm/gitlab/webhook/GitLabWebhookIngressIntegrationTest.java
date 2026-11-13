@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.webhook.ProviderEventReceiver;
+import de.tum.cit.aet.hephaestus.testconfig.ApiWebTestClient;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -34,6 +36,9 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  * GitLab sent are stored, and a rejected delivery is never stored. GitLab has no shared endpoint.
  */
 class GitLabWebhookIngressIntegrationTest extends BaseIntegrationTest {
+
+    @Autowired
+    private ApplicationContext context;
 
     @Autowired
     private WebTestClient webTestClient;
@@ -196,8 +201,10 @@ class GitLabWebhookIngressIntegrationTest extends BaseIntegrationTest {
             long connectionId, GitLabRouteCredential.Issued route, byte[] body, Consumer<HttpHeaders> headers) {
         return webTestClient
                 .post()
-                .uri(GitLabConnectionWebhookController.PATH_PREFIX + connectionId + "/" + route.keyId() + "/"
-                        + route.routeId())
+                .uri(ApiWebTestClient.root(
+                        context,
+                        GitLabConnectionWebhookController.PATH_PREFIX + connectionId + "/" + route.keyId() + "/"
+                                + route.routeId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .headers(headers)
                 .bodyValue(body)
@@ -211,7 +218,7 @@ class GitLabWebhookIngressIntegrationTest extends BaseIntegrationTest {
     private WebTestClient.ResponseSpec postResponse(byte[] body, Consumer<HttpHeaders> headers) {
         return webTestClient
                 .post()
-                .uri("/webhooks/gitlab")
+                .uri(ApiWebTestClient.root(context, "/webhooks/gitlab"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .headers(headers)
                 .bodyValue(body)

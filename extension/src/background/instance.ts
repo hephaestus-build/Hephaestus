@@ -21,10 +21,9 @@ async function answersAsApi(apiBase: string): Promise<boolean> {
 }
 
 /**
- * Finds where an instance's API answers. A deployed instance serves the web app at its origin and
- * the API under `/api`; a local development server is the API alone at a loopback origin, with the
- * web app somewhere else — which is why the web app origin is its own fact, typed by the developer,
- * and every link out goes there, never to the API server.
+ * Finds an instance's API, which every server serves under `/api` of its origin. A development build on a
+ * loopback origin may name a separate web app origin, for a web app served by its own development server; every
+ * link out goes there, never to the API server. Otherwise the web app is the instance origin.
  */
 export async function discoverInstance(
 	input: { origin: string; webAppOrigin?: string },
@@ -35,27 +34,25 @@ export async function discoverInstance(
 		throw new WorkerError("invalid", INSTANCE_ORIGIN_MESSAGES[parsed.reason]);
 	}
 	const { origin } = parsed;
-	if (await answersAsApi(`${origin}/api`)) {
-		return { origin, apiBase: `${origin}/api`, webAppOrigin: origin };
+	if (!(await answersAsApi(`${origin}/api`))) {
+		throw new WorkerError(
+			"invalid",
+			"No Hephaestus instance answered at that address. Check the address and that you allowed access in Chrome.",
+		);
 	}
-	const loopback = isLoopbackHost(new URL(origin).hostname);
-	if (developmentBuild && loopback && (await answersAsApi(origin))) {
-		const webApp =
-			input.webAppOrigin === undefined
-				? undefined
-				: parseInstanceOrigin(input.webAppOrigin, { allowLoopbackHttp: true });
-		if (webApp?.ok !== true) {
-			throw new WorkerError(
-				"invalid",
-				"This is a local API server. Also enter the address of the web app.",
-			);
-		}
-		return { origin, apiBase: origin, webAppOrigin: webApp.origin };
+	const apiBase = `${origin}/api`;
+	if (
+		!developmentBuild ||
+		!isLoopbackHost(new URL(origin).hostname) ||
+		input.webAppOrigin === undefined
+	) {
+		return { origin, apiBase, webAppOrigin: origin };
 	}
-	throw new WorkerError(
-		"invalid",
-		"No Hephaestus instance answered at that address. Check the address and that you allowed access in Chrome.",
-	);
+	const webApp = parseInstanceOrigin(input.webAppOrigin, { allowLoopbackHttp: true });
+	if (!webApp.ok) {
+		throw new WorkerError("invalid", INSTANCE_ORIGIN_MESSAGES[webApp.reason]);
+	}
+	return { origin, apiBase, webAppOrigin: webApp.origin };
 }
 
 const addressConfigSchema = z.object({

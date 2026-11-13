@@ -11,8 +11,6 @@ hephaestus:
   workspace:
     init-default: false
     creation-policy: SELF_SERVICE
-  dev:
-    trigger-enabled: true
   agent:
     enabled: ${AGENT_ENABLED:true}
   sync:

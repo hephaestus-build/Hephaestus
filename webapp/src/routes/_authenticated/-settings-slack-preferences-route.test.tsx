@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { afterEach, assert, describe, expect, it, vi } from "vitest";
+import { beforeAll, afterEach, assert, describe, expect, it } from "vitest";
 
 import type {
 	IdentityProviderView,
@@ -14,9 +14,9 @@ import { identityProviders, linkedIdentities } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 import { type Deferred, deferred } from "@/test/async";
 import { captureNavigation, restoreNavigation } from "@/test/navigation";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(async () => loadRouteCode("/settings"), ROUTE_RENDER_WAIT.timeout);
 
 afterEach(restoreNavigation);
 
@@ -227,7 +227,7 @@ describe("Slack channel-message choices on the settings page", () => {
 			assert(target !== undefined);
 			const authorization = new URL(target);
 			expect(authorization.origin + authorization.pathname).toBe(
-				"http://localhost:8080/auth/login",
+				"http://localhost:3000/api/auth/login",
 			);
 			expect(authorization.searchParams.get("provider")).toBe("slack");
 			expect(authorization.searchParams.get("mode")).toBe("link");

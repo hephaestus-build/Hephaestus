@@ -1,17 +1,20 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { adminListAuthEventsInfiniteQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { AuthEventView, ConfigAuditEntryView } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { apiPathOf } from "@/test/api-path";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-// The real routes mount the shared admin chrome and lazily imported route modules.
-vi.setConfig({ testTimeout: 40_000 });
+beforeAll(
+	async () => loadRouteCode("/admin/audit", "/w/acme/admin/audit"),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 function auditPage<T>(content: T[]) {
 	return { content };
@@ -95,11 +98,11 @@ describe("audit detail follows the read it was opened from", () => {
 		const paths: string[] = [];
 		server.use(
 			http.get("*/workspaces/acme/config-audit", ({ request }) => {
-				paths.push(new URL(request.url).pathname);
+				paths.push(apiPathOf(request.url));
 				return HttpResponse.json(auditPage([settingsChange(1, "Acme operator", "SUSPENDED")]));
 			}),
 			http.get("*/workspaces/other/config-audit", ({ request }) => {
-				paths.push(new URL(request.url).pathname);
+				paths.push(apiPathOf(request.url));
 				return HttpResponse.json(auditPage([settingsChange(2, "Other operator", "ARCHIVED")]));
 			}),
 		);

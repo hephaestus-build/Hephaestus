@@ -610,11 +610,6 @@ hephaestus:
     # The erasure is irreversible. docs/admin/data-retention.mdx.
     feedback-retention: ${HEPHAESTUS_FEEDBACK_RETENTION:P400D}
 
-    # Dev-only actuator for manually triggering PR reviews (never enable in production).
-    # Layered safety: (1) this flag, (2) not in endpoint exposure list, (3) Spring Security auth.
-    dev:
-        trigger-enabled: ${HEPHAESTUS_DEV_TRIGGER_ENABLED:false}
-
     # ═══════════════════════════════════════════════════════════════════════════
     # REVIEW JOB QUEUE (PostgreSQL-backed)
     # ═══════════════════════════════════════════════════════════════════════════

@@ -41,6 +41,78 @@ tab, never from a URL in the message. It rechecks the canonical work after async
 rejects results if navigation changed the work. There is no generic
 fetch-this-path message, no `externally_connectable`, no `cookies` permission.
 
+### Worker lifecycles
+
+The worker represents each lifecycle with a TypeScript discriminated union.
+`transitionSession` and `transitionIntent` define the legal transitions in their respective owner modules.
+Each owner applies the transition and writes storage under one lock.
+A rejected event changes no record.
+The stored JSON shape stays the same.
+The worker derives the state tag from the validated record when it processes an event.
+
+#### Session
+
+`SessionState` has two states: `signed-out` and `signed-in`.
+Only `signed-in` carries credentials.
+The epoch identifies the credential family.
+The generation identifies the data that views may show.
+An accepted adoption or end advances both counters.
+An accepted rotation preserves both counters and the issuer.
+
+```mermaid
+stateDiagram-v2
+    accTitle: Extension session lifecycle
+    accDescr: Sign-in adopts a family. Rotation preserves its counters. Sign-out ends it. View invalidation advances only the generation.
+    [*] --> SignedOut
+    SignedOut --> SignedIn: adopt current epoch
+    SignedIn --> SignedIn: adopt current epoch
+    SignedIn --> SignedIn: rotate current refresh secret
+    SignedIn --> SignedOut: detach or end current refresh secret
+    SignedOut --> SignedOut: detach
+    SignedOut --> SignedOut: invalidate views
+    SignedIn --> SignedIn: invalidate views
+```
+
+A view invalidation advances only the generation.
+A stale adoption cannot replace a newer family.
+A stale refresh cannot rotate or end a newer family.
+The worker revokes late credentials at their own issuer.
+After another sign-in replaces a family, the worker revokes the previous family at its issuer.
+
+The single-flight refresh promise coordinates callers within one worker lifetime.
+It is not a stored session state.
+
+#### Confirmation intent
+
+`IntentState` has three states: `absent`, `unbound`, and `bound`.
+Only `bound` carries a confirmation tab ID.
+Every event with an intent ID must match the stored ID.
+An old window cannot change a replacement intent.
+Consumption also checks the bound tab, current generation, and expiry time inside the storage lock.
+
+```mermaid
+stateDiagram-v2
+    accTitle: Extension confirmation intent lifecycle
+    accDescr: The worker binds an unbound intent to one confirmation tab. Confirmation consumes the intent before a request leaves.
+    [*] --> Absent
+    Absent --> Unbound: open
+    Unbound --> Unbound: replace
+    Bound --> Unbound: replace
+    Unbound --> Bound: bind created confirmation tab
+    Unbound --> Absent: forget matching ID
+    Bound --> Absent: forget, discard, or window closes
+    Bound --> Absent: consume current unexpired confirmation
+```
+
+Consumption removes the record before the final source-tab check and the network request.
+A lost response leaves no intent that the worker can replay.
+The server response is an operation outcome, not another intent state.
+The worker stores no separate sent or unknown record.
+
+[TypeScript discriminated unions](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions) express these variants without a state-machine framework.
+[Chrome session storage](https://developer.chrome.com/docs/extensions/reference/api/storage#property-session) preserves the authoritative records across worker stops.
+[Chrome service-worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle) explains why global variables cannot own those records.
+
 ### What the provider page can and cannot see
 
 The provider's scripts can read anything written into its DOM.
@@ -185,20 +257,18 @@ in both trees. There is no second copy of a label.
 ### Two origins locally, one in production
 
 In production, the web app and API share one origin.
-The reverse proxy serves the API under `/api` and removes the prefix before the server sees it (`hephaestus.auth.api-base-path`).
+The server serves the API under `/api` of that origin.
 The user enters that origin in the extension.
 
 Locally they are two origins. The Spring server
-listens on `http://localhost:<SERVER_PORT>` and serves the API at its root, with no `/api` prefix. The
+listens on `http://localhost:<SERVER_PORT>` and serves the API under `/api`, as in production. The
 web app runs on `http://localhost:<WEBAPP_PORT>`, which `APPLICATION_HOST_URL` names and the server
 uses for every link back into the web app. Read both ports from `server/.env`.
 
 The worker resolves what you enter on the options page (`extension/src/background/instance.ts`). It
-first tries the API under `<address>/api`. If that answers, the address is a deployed instance and
-also the web app's address. Only a development build, and only for a loopback address, then tries
-the address itself as a bare API server.
+asks for the API under `<address>/api`. The address is also the web app's address, unless a
+development build names a separate web app address for a loopback server.
 
-That case needs the web app's address separately.
 Every extension link goes to the web app, never the API server, where it would return a Spring `404`.
 These links include **Open in Hephaestus**, the consent step, review pages, and practice pages. So a
 development build's setup form shows a second field, **Web app address (local server only)**.
@@ -424,9 +494,9 @@ JAR. Read `SERVER_PORT` and `WEBAPP_PORT` from `server/.env`. The defaults are `
    The extension's workspace belongs to the developer created by the web app's seed:
 
    ```bash
-   curl --fail -X POST http://localhost:<SERVER_PORT>/auth/dev-login \
+   curl --fail -X POST http://localhost:<SERVER_PORT>/api/auth/dev-login \
      -H 'content-type: application/json' -d '{"username":"e2e","admin":true}'
-   curl --fail -X POST http://localhost:<SERVER_PORT>/auth/dev-login \
+   curl --fail -X POST http://localhost:<SERVER_PORT>/api/auth/dev-login \
      -H 'content-type: application/json' -d '{"username":"e2e-dev","admin":false}'
    docker compose -f server/compose.yaml exec -T postgres \
      psql -v ON_ERROR_STOP=1 -U root -d hephaestus < webapp/e2e/seed.sql

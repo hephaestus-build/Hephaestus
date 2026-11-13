@@ -90,7 +90,7 @@ class WorkspaceRegistryControllerTest {
     private WorkspaceRegistryController controller(WorkspaceProperties.CreationPolicy policy) {
         return new WorkspaceRegistryController(
                 mock(AdminPasskeyAccess.class),
-                new PublicApiUrls(AuthPropertiesFixture.withApiBasePath("/api")),
+                new PublicApiUrls(AuthPropertiesFixture.defaults()),
                 workspaceService,
                 workspaceQueryService,
                 new WorkspaceProperties(false, null, false, null, policy));

@@ -8,16 +8,16 @@ import {
 	within,
 } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { afterEach, assert, describe, expect, it, vi } from "vitest";
+import { beforeAll, afterEach, assert, describe, expect, it } from "vitest";
 
 import type { IdentityProviderView, IdentityView, LinkedProvider } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 import { captureNavigation, restoreNavigation } from "@/test/navigation";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(async () => loadRouteCode("/settings", "/login"), ROUTE_RENDER_WAIT.timeout);
 
 afterEach(restoreNavigation);
 
@@ -147,7 +147,7 @@ describe("connected accounts on the settings page", () => {
 			assert(target !== undefined);
 			const authorization = new URL(target);
 			expect(authorization.origin + authorization.pathname).toBe(
-				"http://localhost:8080/auth/login",
+				"http://localhost:3000/api/auth/login",
 			);
 			expect(authorization.searchParams.get("provider")).toBe("gitlab-lrz");
 			expect(authorization.searchParams.get("mode")).toBe("link");

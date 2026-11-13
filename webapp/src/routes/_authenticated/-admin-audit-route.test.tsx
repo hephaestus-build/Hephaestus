@@ -1,7 +1,7 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { assert, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { adminListAuthEventsInfiniteQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { AuthEventView, ConfigAuditEntryView } from "@/api/types.gen";
@@ -9,11 +9,14 @@ import type { Wire } from "@/lib/dates";
 import * as download from "@/lib/download";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import { apiPathOf } from "@/test/api-path";
 import { deferred } from "@/test/async";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-// The real routes mount the shared admin chrome and lazily imported route modules.
-vi.setConfig({ testTimeout: 40_000 });
+beforeAll(
+	async () => loadRouteCode("/admin/audit", "/w/acme/admin/audit"),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 const authEvent = {
 	id: 31,
@@ -62,7 +65,7 @@ function serveAuthEvents(answers: readonly (Wire<AuthEventView>[] | { status: nu
 			assert(answer, "Auth audit read exceeded the prepared responses");
 			const url = new URL(request.url);
 			const status = "status" in answer ? answer.status : 200;
-			served.push({ path: url.pathname, accountId: url.searchParams.get("accountId"), status });
+			served.push({ path: apiPathOf(url), accountId: url.searchParams.get("accountId"), status });
 			return "status" in answer
 				? HttpResponse.json({ status, detail: "Audit read refused or unavailable." }, { status })
 				: HttpResponse.json(auditPage(answer));
@@ -93,11 +96,11 @@ describe("audit read lifecycle", () => {
 		const paths: string[] = [];
 		server.use(
 			http.get("*/workspaces/acme/config-audit", ({ request }) => {
-				paths.push(new URL(request.url).pathname);
+				paths.push(apiPathOf(request.url));
 				return HttpResponse.json(auditPage([configEntry]));
 			}),
 			http.get("*/workspaces/other/config-audit", async ({ request }) => {
-				paths.push(new URL(request.url).pathname);
+				paths.push(apiPathOf(request.url));
 				return nextWorkspace.promise;
 			}),
 		);

@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { ROUTER_SEARCH } from "@/lib/router-search";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
@@ -9,9 +9,13 @@ import { consentOutstanding, unauthenticatedUser } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 import { consentIsPending } from "@/runtime/auth/guard";
+import { apiPathOf } from "@/test/api-path";
+import { loadRouteCode, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
-// `router.load()` lazily imports each matched route's module, so a case pays its transform cost.
-vi.setConfig({ testTimeout: 15_000 });
+beforeAll(
+	async () => loadRouteCode("/w/acme/conversation", "/consent", "/login", "/workspaces/new"),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 const DEEP_LINK = "/w/acme/conversation?thread=65ee0cb0-99dd-4b0f-86cb-bc8bfb5bbbed#reply";
 
@@ -44,7 +48,7 @@ describe("consent gate", () => {
 	it("decides from the identity, so no read leaves before the answer is known", async () => {
 		const requested: string[] = [];
 		const record = ({ request }: { request: Request }) => {
-			requested.push(new URL(request.url).pathname);
+			requested.push(apiPathOf(request.url));
 		};
 		server.use(...consentOutstanding);
 		server.events.on("request:start", record);

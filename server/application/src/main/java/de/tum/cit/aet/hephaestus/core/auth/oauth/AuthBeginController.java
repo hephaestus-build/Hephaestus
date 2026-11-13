@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.oauth;
 
-import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
+import de.tum.cit.aet.hephaestus.core.auth.OAuthLoginPaths;
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSignInParameters;
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSignInRedirect;
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSignInStart;
@@ -34,27 +34,22 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class AuthBeginController {
 
     private static final Logger log = LoggerFactory.getLogger(AuthBeginController.class);
-    private static final String OAUTH_INIT_PATH = "/oauth2/authorization/";
+    private static final String OAUTH_INIT_PATH = OAuthLoginPaths.AUTHORIZATION + "/";
 
     private final LoginProviderService loginProviderService;
     private final AuthIntentCookie authIntentCookie;
     private final IdentityAuthentication identityLinkAuthentication;
     private final InstalledClientRegistry installedClients;
 
-    // Restore the API prefix stripped by the reverse proxy before redirecting to OAuth initiation.
-    private final String apiBasePath;
-
     public AuthBeginController(
             LoginProviderService loginProviderService,
             AuthIntentCookie authIntentCookie,
             IdentityAuthentication identityLinkAuthentication,
-            InstalledClientRegistry installedClients,
-            AuthProperties authProperties) {
+            InstalledClientRegistry installedClients) {
         this.loginProviderService = loginProviderService;
         this.authIntentCookie = authIntentCookie;
         this.identityLinkAuthentication = identityLinkAuthentication;
         this.installedClients = installedClients;
-        this.apiBasePath = authProperties.apiBasePath();
     }
 
     @GetMapping("/login")
@@ -119,12 +114,9 @@ public class AuthBeginController {
         // OAuth2AuthorizationRequestRedirectFilter
         // takes over from here, building the upstream redirect with state + PKCE (see
         // AuthSecurityConfig).
-        // apiBasePath re-adds the proxy-stripped prefix so the browser lands on the proxied init
-        // endpoint,
-        // not the SPA. (The /auth/error targets above are SPA routes at the origin root, so they
-        // keep none.)
+        // The /auth/error targets above are SPA routes at the origin root, so they keep no API prefix.
         String urlEncodedRegistration = URLEncoder.encode(registrationId, StandardCharsets.UTF_8);
-        return new RedirectView(apiBasePath + OAUTH_INIT_PATH + urlEncodedRegistration, false);
+        return new RedirectView(OAUTH_INIT_PATH + urlEncodedRegistration, false);
     }
 
     /**
@@ -163,7 +155,7 @@ public class AuthBeginController {
                         AuthIntentCookie.Intent.client(new AuthIntentCookie.Intent.ClientRequest(
                                 accepted.client().clientId(), callback, accepted.codeChallenge(), accepted.state())));
                 String urlEncodedRegistration = URLEncoder.encode(registrationId, StandardCharsets.UTF_8);
-                yield new RedirectView(apiBasePath + OAUTH_INIT_PATH + urlEncodedRegistration, false);
+                yield new RedirectView(OAUTH_INIT_PATH + urlEncodedRegistration, false);
             }
         };
     }

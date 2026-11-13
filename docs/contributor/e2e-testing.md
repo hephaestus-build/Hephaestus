@@ -21,10 +21,9 @@ The opt-in `e2e` profile enables these local-only capabilities:
 | Plain-http cookies (drops `Secure` + `__Host-`) | `hephaestus.auth.cookie-secure=false` |
 | Self-service GitLab/GitHub workspace creation | `hephaestus.workspace.creation-policy=SELF_SERVICE` |
 | Persistable Connection credentials (PATs) | `hephaestus.security.encryption-key` (a fixed local dev key) |
-| Dev review trigger | `hephaestus.dev.trigger-enabled=true` |
 | Agent runtime | `hephaestus.agent.enabled=true`, unless `AGENT_ENABLED=false` |
 
-`vp run dev:server:e2e` starts Postgres and NATS before activating the profile.
+`vp run dev:server:e2e` starts PostgreSQL before activating the profile.
 
 Startup permits `cookie-secure=false` only with `e2e` active and `prod` absent.
 The auth issuer must use HTTP, and the cookie name must not have the `__Host-` prefix.
@@ -89,16 +88,17 @@ The script reuses existing resources only when their immutable SCM and model-rou
 ## Running the review
 
 The setup output identifies the workspace and, when one has synced, the selected artifact. Use those
-IDs with the dev trigger:
+workspace slug and item ID to ask for a review of that item:
 
 ```bash
-JWT="$(curl -fsS -i -X POST http://localhost:8080/auth/dev-login \
+JWT="$(curl -fsS -i -X POST http://localhost:8080/api/auth/dev-login \
   -H 'content-type: application/json' \
   -d '{"username":"e2e","admin":true}' \
   | sed -nE 's/.*(__Host-)?HEPHAESTUS_AT=([^;]+).*/\2/p' | tr -d '\r')"
 test -n "$JWT"
-curl -fsS -X POST -H "Authorization: Bearer $JWT" \
-  "http://localhost:8080/api/dev/trigger-review?prId=<id>&workspaceId=<id>"
+curl -fsS -X POST -H "Authorization: Bearer $JWT" -H 'content-type: application/json' \
+  -d '{"itemId":"<id>"}' \
+  "http://localhost:8080/api/workspaces/<slug>/practices/review-requests"
 ```
 
 To test webhook ingestion too, set the canonical API issuer origin to the trusted tunnel address.

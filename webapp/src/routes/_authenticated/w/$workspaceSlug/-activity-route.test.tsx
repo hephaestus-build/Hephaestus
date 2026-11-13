@@ -1,7 +1,7 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { assert, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
 	getActivityFacetsQueryKey,
@@ -25,14 +25,29 @@ import { currentUser } from "@/mocks/fixtures/auth";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { QUERY_STALE_TIME_MS } from "@/runtime/tanstack-query/query-defaults";
+import { apiPathOf } from "@/test/api-path";
 import { deferred } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter, testQueryClient } from "@/test/router-harness";
+import {
+	loadRouteCode,
+	ROUTE_RENDER_WAIT,
+	renderRouteAtWithRouter,
+	testQueryClient,
+} from "@/test/router-harness";
 import { storeUserView } from "@/test/user-view";
 import { switchWorkspace } from "@/test/workspace-switcher";
 
-// A case mounts the whole app chrome, whose route modules are imported lazily.
-vi.setConfig({ testTimeout: 40_000 });
+beforeAll(
+	async () =>
+		loadRouteCode(
+			"/w/acme/activity",
+			"/w/acme/workspace-activity",
+			"/w/acme/practice-profile",
+			"/w/acme/admin/settings",
+			"/settings",
+		),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 // The end of a list asks for the next page as it scrolls into view, which jsdom cannot report.
 beforeEach(() => {
@@ -86,7 +101,7 @@ function servePeople(answers: readonly (Wire<ActivityPeople> | { status: number 
 			const answer = answers[served.length];
 			assert(answer, "People read exceeded the prepared responses");
 			const status = "status" in answer ? answer.status : 200;
-			served.push({ path: new URL(request.url).pathname, status });
+			served.push({ path: apiPathOf(request.url), status });
 			return HttpResponse.json(answer, { status });
 		}),
 	);
@@ -249,7 +264,7 @@ describe("Activity", () => {
 		);
 	});
 
-	const readsOf = (path: string) => reads.filter((url) => url.pathname.endsWith(path));
+	const readsOf = (path: string) => reads.filter((url) => apiPathOf(url).endsWith(path));
 
 	it("reads your Activity for the workspace identity", async () => {
 		renderRouteAtWithRouter("/w/acme/activity");
@@ -258,9 +273,9 @@ describe("Activity", () => {
 		await waitFor(() => expect(readsOf("/activity/me").length).toBeGreaterThan(0));
 		expect(readsOf("/activity/me").every((url) => !url.searchParams.has("login"))).toBe(true);
 		expect(readsOf("/activity/people")).toStrictEqual([]);
-		expect(reads.filter((url) => url.pathname.includes("/activity/people/"))).toStrictEqual([]);
+		expect(reads.filter((url) => apiPathOf(url).includes("/activity/people/"))).toStrictEqual([]);
 		expect(readsOf("/activity/me").every((url) => !url.searchParams.has("membersOnly"))).toBe(true);
-		expect(readsOf("/open-work").map((url) => url.pathname)).toContain(
+		expect(readsOf("/open-work").map((url) => apiPathOf(url))).toContain(
 			"/workspaces/acme/activity/members/ada-lrz/open-work",
 		);
 		expect(reads.some((url) => url.searchParams.get("login") === "ada")).toBe(false);
@@ -416,7 +431,7 @@ describe("Activity", () => {
 			undefined,
 			ROUTE_RENDER_WAIT,
 		);
-		expect(reads.filter((url) => url.pathname.includes("/activity/"))).toStrictEqual([]);
+		expect(reads.filter((url) => apiPathOf(url).includes("/activity/"))).toStrictEqual([]);
 	});
 
 	it("opens one category level per owner, stopping at a second", async () => {
@@ -533,14 +548,14 @@ describe("Activity", () => {
 				),
 				http.get("*/workspaces/:workspaceSlug/practices/review-context", async ({ request }) => {
 					const url = new URL(request.url).searchParams.get("url");
-					requests.push(`GET ${new URL(request.url).pathname}`);
+					requests.push(`GET ${apiPathOf(request.url)}`);
 					contexts.push(url);
 					await heldContext;
 					return context(String(url));
 				}),
 				http.post("*/workspaces/:workspaceSlug/practices/review-requests", async ({ request }) => {
 					const body: unknown = await request.json();
-					requests.push(`POST ${new URL(request.url).pathname}`);
+					requests.push(`POST ${apiPathOf(request.url)}`);
 					asks.push(body);
 					await heldAsk;
 					const answer = answers[asks.length - 1];
@@ -704,12 +719,12 @@ describe("Activity", () => {
 					} satisfies Wire<OpenWork>),
 				),
 				http.get("*/workspaces/beta/practices/review-context", ({ request }) => {
-					requests.push(`GET ${new URL(request.url).pathname}`);
+					requests.push(`GET ${apiPathOf(request.url)}`);
 					return HttpResponse.json(betaContext);
 				}),
 				http.post("*/workspaces/beta/practices/review-requests", async ({ request }) => {
 					const body: unknown = await request.json();
-					requests.push(`POST ${new URL(request.url).pathname}`);
+					requests.push(`POST ${apiPathOf(request.url)}`);
 					betaAsks.push(body);
 					await betaAnswer.promise;
 					return HttpResponse.json({
@@ -1060,7 +1075,7 @@ describe("Workspace activity", () => {
 	const record = (request: Request) => {
 		reads.push(new URL(request.url));
 	};
-	const readsOf = (path: string) => reads.filter((url) => url.pathname.endsWith(path));
+	const readsOf = (path: string) => reads.filter((url) => apiPathOf(url).endsWith(path));
 	beforeEach(() => {
 		reads = [];
 		automation = [];
@@ -1374,7 +1389,7 @@ describe("Workspace activity", () => {
 			search: { view: "timeline" },
 		});
 		await waitFor(() =>
-			expect(readsOf("/activity/facets").map(({ pathname }) => pathname)).toContain(
+			expect(readsOf("/activity/facets").map((url) => apiPathOf(url))).toContain(
 				"/workspaces/other/activity/facets",
 			),
 		);
@@ -1848,7 +1863,7 @@ describe("Workspace activity", () => {
 
 		const level = await screen.findByRole("dialog", undefined, ROUTE_RENDER_WAIT);
 		await within(level).findByText("No activity in this range");
-		expect(reads.filter((url) => /\/people\/\d+/u.test(url.pathname))).toStrictEqual([]);
+		expect(reads.filter((url) => /\/people\/\d+/u.test(apiPathOf(url)))).toStrictEqual([]);
 	});
 
 	it("says a category of a person who did nothing has nothing, rather than loading", async () => {
@@ -1879,7 +1894,7 @@ describe("Workspace activity", () => {
 		await user.click(action);
 
 		await waitFor(() =>
-			expect(automation.map((url) => `${url.pathname}${url.search}`)).toStrictEqual([
+			expect(automation.map((url) => `${apiPathOf(url)}${url.search}`)).toStrictEqual([
 				"/workspaces/acme/activity/people/8/automation?treatAsAutomation=true",
 			]),
 		);
@@ -1951,7 +1966,7 @@ describe("Workspace activity", () => {
 			within(screen.getByRole("dialog", { name: "Bob" })).getByRole("button", {
 				name: "Treat as automation",
 			});
-			expect(automation.map((url) => `${url.pathname}${url.search}`)).toStrictEqual([
+			expect(automation.map((url) => `${apiPathOf(url)}${url.search}`)).toStrictEqual([
 				"/workspaces/acme/activity/people/8/automation?treatAsAutomation=true",
 			]);
 		} finally {
@@ -2006,7 +2021,7 @@ describe("Workspace activity", () => {
 			});
 			await screen.findByText("Bob is treated as automation");
 			await within(bob).findByRole("button", { name: "Count as a person" });
-			expect(automation.map((url) => `${url.pathname}${url.search}`)).toStrictEqual([
+			expect(automation.map((url) => `${apiPathOf(url)}${url.search}`)).toStrictEqual([
 				"/workspaces/acme/activity/people/8/automation?treatAsAutomation=true",
 				"/workspaces/acme/activity/people/7/automation?treatAsAutomation=true",
 			]);
@@ -2056,7 +2071,7 @@ describe("Workspace activity", () => {
 				await screen.findByRole("button", { name: "Treat as automation" }, ROUTE_RENDER_WAIT),
 			);
 			await waitFor(() =>
-				expect(automation.map((url) => `${url.pathname}${url.search}`)).toStrictEqual([
+				expect(automation.map((url) => `${apiPathOf(url)}${url.search}`)).toStrictEqual([
 					"/workspaces/acme/activity/people/8/automation?treatAsAutomation=true",
 				]),
 			);
@@ -2087,7 +2102,7 @@ describe("Workspace activity", () => {
 			expect(router.state.location.search.detail).toBe("person:ada-lrz");
 			const ownership = JSON.stringify({
 				acmeInvalidatedBeforeReturn: queryClient.getQueryState(acmeKey)?.isInvalidated,
-				peopleReads: readsOf("/activity/people").map((url) => url.pathname),
+				peopleReads: readsOf("/activity/people").map((url) => apiPathOf(url)),
 				productionStaleTime: QUERY_STALE_TIME_MS,
 			});
 			await user.keyboard("{Escape}");
@@ -2123,7 +2138,7 @@ describe("Workspace activity", () => {
 		await user.click(within(confirm).getByRole("button", { name: "Hide" }));
 
 		await waitFor(() =>
-			expect(visibility.map((url) => `${url.pathname}${url.search}`)).toStrictEqual([
+			expect(visibility.map((url) => `${apiPathOf(url)}${url.search}`)).toStrictEqual([
 				"/workspaces/acme/activity/people/8/public-visibility?hidden=true",
 			]),
 		);
@@ -2191,7 +2206,7 @@ describe("Workspace activity", () => {
 			await screen.findByText("Bob is hidden from activity");
 			await user.click(screen.getByRole("button", { name: "Undo" }));
 			await waitFor(() =>
-				expect(visibility.map((url) => `${url.pathname}${url.search}`)).toStrictEqual([
+				expect(visibility.map((url) => `${apiPathOf(url)}${url.search}`)).toStrictEqual([
 					"/workspaces/acme/activity/people/8/public-visibility?hidden=true",
 					"/workspaces/acme/activity/people/8/public-visibility?hidden=false",
 				]),
@@ -2284,7 +2299,7 @@ describe("Workspace activity", () => {
 			expect(router.state.location.search.detail).toBe("person:bob");
 			await user.click(screen.getByRole("button", { name: "Undo" }));
 			await waitFor(() =>
-				expect(visibility.map((url) => `${url.pathname}${url.search}`)).toStrictEqual([
+				expect(visibility.map((url) => `${apiPathOf(url)}${url.search}`)).toStrictEqual([
 					"/workspaces/acme/activity/people/8/public-visibility?hidden=true",
 					"/workspaces/acme/activity/people/8/public-visibility?hidden=false",
 				]),
@@ -2481,7 +2496,7 @@ describe("Workspace activity", () => {
 		);
 
 		await waitFor(() =>
-			expect(automation.map((url) => `${url.pathname}${url.search}`)).toStrictEqual([
+			expect(automation.map((url) => `${apiPathOf(url)}${url.search}`)).toStrictEqual([
 				"/workspaces/acme/activity/people/8/automation?treatAsAutomation=false",
 			]),
 		);

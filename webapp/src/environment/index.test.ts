@@ -103,11 +103,11 @@ describe("runtime configuration defaults", () => {
 		expect(environment.deployment.environment).toBe("staging");
 	});
 
-	it("keeps separate development origins for the local webapp and server", async () => {
+	it("reaches the API through the development server's own origin", async () => {
 		vi.stubEnv("DEV", true);
 		const environment = await environmentFor(undefined);
 		expect(environment.clientUrl).toBe("http://localhost:4200");
-		expect(environment.serverUrl).toBe("http://localhost:8080");
+		expect(environment.serverUrl).toBe(`${window.location.origin}/api`);
 		expect(environment.devtools.tanstack).toBe(true);
 	});
 });
