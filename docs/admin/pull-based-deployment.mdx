@@ -137,6 +137,8 @@ It applies the signed package for a release channel.
 A commit channel applies the source chart with the image pins from its signed channel.
 
 One exception applies. On a host [with tooling from before 1.0.0-rc.4](./upgrade#hosts-with-reconciler-tooling-from-before-100-rc4), you authenticate the release lock by hand.
+A release can add, remove or rename a chart image.
+For such a release, a host with older tooling follows [Hosts with reconciler tooling of 1.0.0-rc.4](./upgrade#hosts-with-reconciler-tooling-of-100-rc4) first.
 
 A commit chart has no release version.
 To switch it to a release channel, pause reconciliation and apply the verified target through Database maintenance first.

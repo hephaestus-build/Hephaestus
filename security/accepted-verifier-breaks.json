@@ -1,1 +1,7 @@
-[]
+[
+	{
+		"release": "v1.0.0-rc.8",
+		"verifier": "v1.0.0-rc.4",
+		"reason": "Removes the nats image with the sync broker. The 1.0.0-rc.4 verifier compares a fixed chart image list and refuses any removed image; verifiers from 1.0.0-rc.5 on read the images from the signed lock and accept it. Hosts on 1.0.0-rc.4 tooling apply v1.0.0-rc.5 first: docs/admin/upgrade.mdx § Hosts with reconciler tooling of 1.0.0-rc.4."
+	}
+]
