@@ -14,6 +14,7 @@ import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
+import de.tum.cit.aet.hephaestus.architecture.conditions.WorkspaceQueryParameters;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
@@ -27,7 +28,6 @@ import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.data.jpa.repository.NativeQuery;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -246,15 +246,9 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                 Query query = AnnotatedElementUtils.getMergedAnnotation(method, Query.class);
                 if (query == null) continue;
                 if (method.isAnnotationPresent(WorkspaceAgnostic.class)) continue;
-                assertThat(method.getParameters())
+                assertThat(WorkspaceQueryParameters.bindsWorkspaceParameter(method))
                         .as("%s must bind workspaceId", method.getName())
-                        .anyMatch(parameter -> {
-                            Param param = parameter.getAnnotation(Param.class);
-                            return param != null
-                                    ? param.value().equals("workspaceId")
-                                    : parameter.isNamePresent()
-                                            && parameter.getName().equals("workspaceId");
-                        });
+                        .isTrue();
             }
         }
 

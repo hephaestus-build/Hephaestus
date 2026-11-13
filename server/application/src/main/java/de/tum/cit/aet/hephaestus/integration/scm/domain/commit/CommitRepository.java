@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code @WorkspaceAgnostic}.
  */
 @Repository
+@WorkspaceAgnostic("SCM mirror rows are shared across workspaces; callers validate the provider or monitored scope")
 public interface CommitRepository extends JpaRepository<Commit, Long> {
     Optional<Commit> findByShaAndRepositoryId(String sha, Long repositoryId);
 

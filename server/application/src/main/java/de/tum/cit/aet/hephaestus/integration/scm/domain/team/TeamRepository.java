@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.team;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Repository;
  * {@code provider_id}: an organization string alone matches same-named organizations on other providers.
  */
 @Repository
+@WorkspaceAgnostic("SCM mirror rows are shared across workspaces; callers validate the provider or monitored scope")
 public interface TeamRepository extends JpaRepository<Team, Long> {
     Optional<Team> findByNativeIdAndProviderId(Long nativeId, Long providerId);
 

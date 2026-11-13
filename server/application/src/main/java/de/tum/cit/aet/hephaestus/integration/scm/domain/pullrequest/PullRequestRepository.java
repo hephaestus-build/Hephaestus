@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Consumer-specific queries belong in the consuming packages (activity, practices, ...).
  */
 @Repository
+@WorkspaceAgnostic("SCM mirror rows are shared across workspaces; callers validate the provider or monitored scope")
 public interface PullRequestRepository extends JpaRepository<PullRequest, Long> {
     /** Every workspace's pull requests. Only tests call it, to check what sync stored; production code reads by scope. */
     @Override

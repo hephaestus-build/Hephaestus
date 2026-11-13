@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Organization memberships are shared mirror rows with no {@code workspace_id} (ADR 0077). Each read is keyed by
  * the id of an organization that the caller resolved through its workspace or the sync.
  */
+@WorkspaceAgnostic("SCM mirror rows are shared across workspaces; callers validate the provider or monitored scope")
 public interface OrganizationMembershipRepository
         extends JpaRepository<OrganizationMembership, OrganizationMembershipId> {
     @Query("SELECT m.userId FROM OrganizationMembership m WHERE m.organizationId = :orgId")

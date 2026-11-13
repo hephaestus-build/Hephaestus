@@ -14,6 +14,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+@WorkspaceAgnostic("SCM mirror rows are shared across workspaces; callers validate the provider or monitored scope")
 public interface PullRequestReviewCommentRepository extends JpaRepository<PullRequestReviewComment, Long> {
     @Query(
             "SELECT c.id AS id, c.nativeId AS nativeId FROM PullRequestReviewComment c WHERE c.pullRequest.id = :parentId")

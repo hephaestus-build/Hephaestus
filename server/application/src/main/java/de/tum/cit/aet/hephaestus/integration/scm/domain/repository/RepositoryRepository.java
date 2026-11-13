@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
  * PK-only DML carve-out in {@code WorkspaceStatementInspector}.
  */
 @org.springframework.stereotype.Repository
+@WorkspaceAgnostic("SCM mirror rows are shared across workspaces; callers validate the provider or monitored scope")
 public interface RepositoryRepository extends JpaRepository<Repository, Long> {
     /** Every workspace's repositories. Only tests call it, to check what sync stored; production code reads by scope. */
     @Override

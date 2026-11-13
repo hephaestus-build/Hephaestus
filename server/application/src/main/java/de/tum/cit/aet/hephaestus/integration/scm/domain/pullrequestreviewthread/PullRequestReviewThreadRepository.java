@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /** Review threads are shared mirror rows: a workspace reaches them through its monitored scope (ADR 0077). */
+@WorkspaceAgnostic("SCM mirror rows are shared across workspaces; callers validate the provider or monitored scope")
 public interface PullRequestReviewThreadRepository extends JpaRepository<PullRequestReviewThread, Long> {
     @WorkspaceAgnostic(
             "GitLab note reconciliation clears or deletes what the provider no longer lists, under one shared parent it syncs")
