@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0-rc.8
+
+### Patch Changes
+
+- An account whose deletion has started can no longer be unblocked, claimed or reactivated by any path. The database refuses it too.
+- New local databases get a random password and a Compose project name for their checkout. If your checkout already has database files, set its actual `POSTGRES_PASSWORD` and `COMPOSE_PROJECT_NAME` before you run local database commands. Commands no longer assume the password `root` or the shared project name `server`. To discard local data, set both values explicitly, then run `vp run dev:reset`. Kubernetes installations are not affected.
+- Provider-event failure logs identify the operation and inbox event, and retain the application call site when framework frames fill the trace limit. When the driver supplies a valid SQLSTATE, it appears without exception messages or payloads.
+
 ## 1.0.0-rc.7
 
 ### Minor Changes
