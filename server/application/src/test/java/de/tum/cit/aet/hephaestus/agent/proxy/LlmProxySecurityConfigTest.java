@@ -338,6 +338,25 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldAuthenticateAsyncGatewayCompletionAndRefuseARevokedSandbox() throws Exception {
+        var token = new SandboxJwt(
+                UUID.randomUUID(), 7L, "conversation:42", "jti", Instant.now().plusSeconds(60));
+        var live = new AgentSandboxes.LiveSandbox(
+                token.sandboxId(), 7L, token.subjectKey(), AgentSandboxKind.CONVERSATION);
+        when(jwtVerifier.verifySandbox("sandbox-token")).thenReturn(token);
+        when(agentSandboxes.authenticate(token)).thenReturn(Optional.of(live));
+        var completion = withToken(
+                request("POST", "/internal/agent/runs/" + UUID.randomUUID() + "/turn/sandbox/load", GATEWAY_PORT),
+                "sandbox-token");
+        completion.setDispatcherType(DispatcherType.ASYNC);
+        assertThat(answerTo(completion)).isEqualTo(200);
+        assertThat(servedAs.get()).extracting(Authentication::getPrincipal).isEqualTo(live);
+        when(agentSandboxes.authenticate(token)).thenReturn(Optional.empty());
+        assertThat(answerTo(completion)).isEqualTo(401);
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+    }
+
+    @Test
     void shouldRefuseAnAttemptTokenAndAMissingTokenOnTheAgentRoutes() throws Exception {
         when(jwtVerifier.verifySandbox("turn-token"))
                 .thenThrow(new AttemptTokenInvalidException("token type not allowed", "typ"));

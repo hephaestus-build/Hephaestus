@@ -17,7 +17,7 @@ import org.springframework.validation.annotation.Validated;
  *     and the reaper requeues it. Allow for the database connection timeout: a false expiry stops a live holder.
  * @param turnLeaseTtl the same for a conversation turn. A person waits for the answer, so a lost turn is taken back
  *     sooner; its holder renews every 5 s.
- * @param turns how many conversation turns run at once in the installation; unset runs as many as are asked. The claim
+ * @param turns how many conversation turns run at once in the installation; zero stops new turns, and unset runs as many as are asked. The claim
  *     leases no turn beyond it, so a question waits for a free Heph instead.
  * @param leaseRenewal how often a holder renews each lease it holds, and how often each server replica reaps the
  *     expired ones. At most half the lease, so a holder survives one missed renewal.
@@ -41,7 +41,7 @@ import org.springframework.validation.annotation.Validated;
 public record AgentCapacityProperties(
         @DefaultValue("5m") @NotNull Duration leaseTtl,
         @DefaultValue("60s") @NotNull Duration turnLeaseTtl,
-        @Nullable @Min(1) Integer turns,
+        @Nullable @Min(0) Integer turns,
         @DefaultValue("25s") @NotNull Duration leaseRenewal,
         @DefaultValue("5") @Min(0) int reviewRetries,
         @DefaultValue("10m") @NotNull Duration bandAging,

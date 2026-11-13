@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -43,6 +44,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
@@ -573,6 +575,22 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         // A field the worker does not bind would be dropped without an error, and the search would ignore it.
         assertThat(mapper.readValue(query, HephTurnController.SearchRequest.class))
                 .hasNoNullFieldsOrProperties();
+    }
+
+    @Test
+    void shouldRetryTheEndAfterAnErasureFenceWithoutLosingTheLeaseOrAnswer() throws Exception {
+        var erasure = beans.getBean(PersonDataCopyFence.class).erase();
+        try (erasure) {
+            call("POST", "end", turn.getAttempt(), contract("end.request.json"))
+                    .andExpect(status().isServiceUnavailable())
+                    .andExpect(header().string("Retry-After", "1"));
+            assertThat(reloaded().getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
+            assertThat(MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), turn.getId()))
+                    .hasSize(1);
+        }
+        call("POST", "end", turn.getAttempt(), contract("end.request.json")).andExpect(status().isNoContent());
+        assertThat(reloaded().getStatus()).isEqualTo(MentorTurn.Status.DONE);
+        assertThat(stored("a0a1b2c3").getText()).isEqualTo("Pin it by digest.");
     }
 
     @Test

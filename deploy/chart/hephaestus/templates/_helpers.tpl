@@ -969,7 +969,7 @@ drain. docs/admin/kubernetes.mdx § Sandbox prerequisites.
 - name: SANDBOX_API_MAX_CONNECTIONS
   value: {{ $sandbox.gateway.maxConnections | quote }}
 {{- $capacity := int (include "hephaestus.conversationTurns" .) }}
-{{- if gt $capacity 0 }}
+{{- if .Values.sandbox.enabled }}
 # The installation's conversation turns. Each server's claim checks this cap across all servers.
 - name: HEPHAESTUS_MENTOR_TURN_CAPACITY
   value: {{ $capacity | quote }}

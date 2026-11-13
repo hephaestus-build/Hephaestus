@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -78,7 +79,7 @@ class SandboxDispatcherIntegrationTest extends BaseIntegrationTest {
         return new SandboxDispatcher(
                 sandboxes,
                 runs,
-                List.of(new Review()),
+                List.of(new Driven(AgentRunKind.REVIEW, AgentSandboxKind.REVIEW)),
                 Map.of(AgentSandboxKind.REVIEW, reviewSandboxes),
                 new ReviewAttemptCustody(runs),
                 meters);
@@ -160,18 +161,82 @@ class SandboxDispatcherIntegrationTest extends BaseIntegrationTest {
         assertThat(sandboxesOf(subject)).isOne();
     }
 
+    @Test
+    void shouldRequestNoConversationSandboxWhenTheTurnCapacityIsZero() {
+        String subject = queueTurn();
+        turnDispatcher(0).dispatch();
+        assertThat(sandboxesOf(subject)).isZero();
+        assertThat(claims.creates).isEmpty();
+    }
+
+    private SandboxDispatcher turnDispatcher(int limit) {
+        return new SandboxDispatcher(
+                sandboxes,
+                runs,
+                List.of(new Driven(AgentRunKind.TURN, AgentSandboxKind.CONVERSATION)),
+                Map.of(AgentSandboxKind.CONVERSATION, limit),
+                new ReviewAttemptCustody(runs),
+                meters);
+    }
+
+    private AgentSandboxes.LiveSandbox warm(String subject) {
+        var sandbox = sandboxes.ensure(workspace, subject, AgentSandboxKind.CONVERSATION);
+        jdbc.update(
+                "UPDATE agent_sandbox SET state = 'READY', last_used_at = clock_timestamp() WHERE id = ?",
+                sandbox.id());
+        return sandbox;
+    }
+
+    private String queueTurn() {
+        String subject = "conversation:" + UUID.randomUUID();
+        transactions.executeWithoutResult(
+                status -> runs.enqueue(workspace, AgentRunKind.TURN, AgentRunBand.INTERACTIVE, subject, null));
+        return subject;
+    }
+
+    @Test
+    void shouldReplaceTheOldestIdleWarmSandboxAndStartANewConversationAtThePhysicalCap() {
+        var oldest = warm("conversation:" + UUID.randomUUID());
+        var newer = warm("conversation:" + UUID.randomUUID());
+        String subject = queueTurn();
+
+        turnDispatcher(2).dispatch();
+
+        assertThat(repository.existsById(oldest.id())).isFalse();
+        assertThat(claims.created).doesNotContainKey(oldest.claimName());
+        assertThat(repository.existsById(newer.id())).isTrue();
+        assertThat(sandboxes.live(AgentSandboxKind.CONVERSATION)).isEqualTo(2);
+        assertThat(sandboxes.lease(
+                        sandboxes.ensure(workspace, subject, AgentSandboxKind.CONVERSATION),
+                        Set.of(AgentRunKind.TURN),
+                        ignored -> true))
+                .isPresent();
+    }
+
+    @Test
+    void shouldKeepARunningConversationAndWaitForPhysicalDeletionBeforeReplacingAnIdleOne() {
+        String running = queueTurn();
+        var active = warm(running);
+        assertThat(sandboxes.lease(active, Set.of(AgentRunKind.TURN), ignored -> true))
+                .isPresent();
+        var idle = warm("conversation:" + UUID.randomUUID());
+        String next = queueTurn();
+        claims.failDeletes = true;
+
+        turnDispatcher(2).dispatch();
+
+        assertThat(repository.existsById(active.id())).isTrue();
+        assertThat(claims.created).containsKey(active.claimName());
+        assertThat(claims.created).containsKey(idle.claimName());
+        assertThat(sandboxesOf(next)).isZero();
+        turnDispatcher(2).dispatch();
+        assertThat(sandboxesOf(next))
+                .as("a deletion that failed still occupies its physical slot")
+                .isZero();
+    }
+
     /** A run kind that review sandboxes drive; the dispatch reads only its kind and its sandbox. */
-    private static final class Review implements SandboxRunKind {
-        @Override
-        public AgentRunKind kind() {
-            return AgentRunKind.REVIEW;
-        }
-
-        @Override
-        public AgentSandboxKind sandbox() {
-            return AgentSandboxKind.REVIEW;
-        }
-
+    private record Driven(AgentRunKind kind, AgentSandboxKind sandbox) implements SandboxRunKind {
         @Override
         public boolean claimed(SandboxRun run) {
             return true;

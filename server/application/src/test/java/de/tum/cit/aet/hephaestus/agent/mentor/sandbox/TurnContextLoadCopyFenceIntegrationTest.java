@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.mentor.sandbox;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
@@ -24,6 +25,7 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.Tag;
@@ -50,6 +52,14 @@ class TurnContextLoadCopyFenceIntegrationTest extends AbstractWorkspaceIntegrati
     void shouldBlockErasureUntilTheLoadedSourceHasBeenStreamedAndDeleted() throws Exception {
         var layout = new FabricLayout(temp.toString());
         var source = new AtomicReference<Path>();
+        var capturePid = new AtomicInteger();
+        var observed = mock(PersonDataCopyFence.class);
+        when(observed.capture()).thenAnswer(unused -> {
+            var capture = copies.capture();
+            capturePid.set(
+                    Objects.requireNonNull(capture.jdbc().queryForObject("SELECT pg_backend_pid()", Integer.class)));
+            return capture;
+        });
         var reading = new CountDownLatch(1);
         var release = new CountDownLatch(1);
         var beans = new DefaultListableBeanFactory();
@@ -61,12 +71,9 @@ class TurnContextLoadCopyFenceIntegrationTest extends AbstractWorkspaceIntegrati
                         mock(MentorTurnRepository.class),
                         beans.getBeanProvider(ContextLoader.class),
                         Clock.fixed(now, ZoneOffset.UTC),
-                        copies,
+                        observed,
                         layout)) {
-            var capture = folder.capture();
-            int capturePid =
-                    Objects.requireNonNull(capture.jdbc().queryForObject("SELECT pg_backend_pid()", Integer.class));
-            var loaded = preparations.submit(() -> folder.prepare(turn, now.plusSeconds(30), "repos/fixture", capture));
+            var loaded = preparations.submit(() -> folder.prepare(turn, now.plusSeconds(30), "repos/fixture"));
             try {
                 assertThat(reading.await(5, TimeUnit.SECONDS)).isTrue();
                 var erasure = preparations.submit(() -> {
@@ -91,7 +98,7 @@ class TurnContextLoadCopyFenceIntegrationTest extends AbstractWorkspaceIntegrati
                             SELECT 1 FROM pg_locks WHERE locktype = 'advisory'
                               AND classid = 2165 AND objid = 1 AND NOT granted
                               AND ? = ANY(pg_blocking_pids(pid)))
-                        """, Boolean.class, capturePid)));
+                        """, Boolean.class, capturePid.get())));
                 assertThat(erasure.isDone())
                         .as("erasure waits while the source is being read")
                         .isFalse();

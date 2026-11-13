@@ -83,11 +83,6 @@ public class TurnContextLoads implements AutoCloseable {
         this.layout = layout;
     }
 
-    /** Acquired outside the turn write, before any source read or person, sandbox, run, or turn row lock. */
-    public PersonDataCopyFence.Lease capture() {
-        return copies.capture();
-    }
-
     @Override
     public void close() {
         preparations.shutdownNow();
@@ -143,41 +138,30 @@ public class TurnContextLoads implements AutoCloseable {
      * {@code load_context}: prepares one item through the loader that owns its path. The answer is the item as an
      * archive, with what the model reads about it and the command whose output follows that, or a refusal.
      */
-    public Load prepare(TurnAttempt turn, Instant deadline, String path, PersonDataCopyFence.Lease capture) {
+    public Load prepare(TurnAttempt turn, Instant deadline, String path) {
         String requested = path.strip();
-        Optional<ContextLoader> owner;
-        try {
-            owner = loaders.orderedStream()
-                    .filter(loader -> requested.startsWith(loader.prefix()))
-                    .findFirst();
-        } catch (RuntimeException failed) {
-            capture.close();
-            throw failed;
-        }
+        Optional<ContextLoader> owner = loaders.orderedStream()
+                .filter(loader -> requested.startsWith(loader.prefix()))
+                .findFirst();
         if (owner.isEmpty()) {
-            capture.close();
             return new Refused(
                     refusal("INVALID_PATH", "Nothing can be loaded at " + requested + ". INDEX.md lists what can."));
         }
         try {
-            return prepare(turn, deadline, owner.get(), requested, capture);
+            return prepare(turn, deadline, owner.get(), requested);
         } catch (Abandoned | CancellationException ended) {
             return new Refused(refusal("TIMEOUT", "The answer ended before " + requested + " could load."));
         }
     }
 
-    private Load archive(
-            TurnAttempt turn,
-            Instant deadline,
-            ContextLoader owner,
-            String requested,
-            PersonDataCopyFence.Lease capture) {
+    private Load archive(TurnAttempt turn, Instant deadline, ContextLoader owner, String requested) {
         BooleanSupplier abandoned = abandoned(turn, deadline);
         long started = System.nanoTime();
         ContextLoader.Loaded loaded = null;
         boolean transferred = false;
-        var admission = layout.spool().capture(turn.workspaceId(), () -> capture);
+        var admission = layout.spool().capture(turn.workspaceId(), copies::capture);
         try (admission) {
+            if (abandoned.getAsBoolean()) throw new CancellationException();
             loaded = owner.load(turn.workspaceId(), turn.accountId(), requested, abandoned);
             if (abandoned.getAsBoolean()) throw new CancellationException();
             Optional<String> relative =
@@ -270,25 +254,20 @@ public class TurnContextLoads implements AutoCloseable {
         }
     }
 
-    private Load prepare(
-            TurnAttempt turn, Instant deadline, ContextLoader loader, String path, PersonDataCopyFence.Lease capture) {
+    private Load prepare(TurnAttempt turn, Instant deadline, ContextLoader loader, String path) {
         try {
             if (!loading.tryAcquire(Math.max(0, left(deadline).toMillis()), TimeUnit.MILLISECONDS)) {
-                capture.close();
                 throw new Abandoned(new TimeoutException("No load permit before the deadline"));
             }
         } catch (InterruptedException interrupted) {
-            capture.close();
             Thread.currentThread().interrupt();
             throw new Abandoned(interrupted);
         }
         CompletableFuture<Load> prepared;
         try {
-            prepared =
-                    CompletableFuture.supplyAsync(() -> archive(turn, deadline, loader, path, capture), preparations);
+            prepared = CompletableFuture.supplyAsync(() -> archive(turn, deadline, loader, path), preparations);
         } catch (RuntimeException rejected) {
             loading.release();
-            capture.close();
             throw rejected;
         }
         var permit = prepared.whenComplete((loaded, failure) -> loading.release());

@@ -169,7 +169,7 @@ public class AgentSandboxes {
                 Instant.now().plus(tokens.longestSandboxToken()).minus(SHUTDOWN_MARGIN));
     }
 
-    /** How many sandboxes of this kind are live, in every workspace. */
+    /** Physical slots of this kind in every workspace, including sandboxes awaiting deletion. */
     public int live(AgentSandboxKind kind) {
         return sandboxes.countLive(kind.name());
     }
@@ -262,6 +262,18 @@ public class AgentSandboxes {
                 else MDC.setContextMap(previous);
             }
         }));
+    }
+
+    /** Frees one physical conversation slot for queued work, oldest idle first; failed deletion stays owned. */
+    public boolean releaseIdleConversation() {
+        var row = Objects.requireNonNull(transactions.execute(status -> sandboxes.retireIdleConversation()));
+        if (row.isEmpty()) return false;
+        meters.counter(AgentMetrics.AGENT_SANDBOX_REAPED, "reason", "idle").increment();
+        SandboxEvents.event(log.atInfo(), "agent.sandbox.taken_back", row.get())
+                .addKeyValue("sandbox.reason", "idle")
+                .log("Idle conversation sandbox retired to make room for queued work");
+        deleteClaim(row.get());
+        return true;
     }
 
     /**

@@ -67,6 +67,8 @@ public class AgentNextController {
                             return Objects.requireNonNull(kinds.get(lease.kind()))
                                     .claimed(new SandboxRun(sandbox, lease.fence(), lease.kind(), lease.attempt()));
                         }))
+                // A TURN binds its work deadline in claimed(), after this immutable lease snapshot was read.
+                // Its gateway writes and renewals enforce the stored deadline even when this field is null.
                 .map(lease -> ResponseEntity.ok(new Assignment(
                         lease.runId(), lease.epoch(), lease.kind(), lease.leasedUntil(), lease.deadline())))
                 .orElseGet(() -> ResponseEntity.noContent().build());

@@ -59,12 +59,29 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
             @Param("claimName") String claimName,
             @Param("shutdownAt") Instant shutdownAt);
 
-    /** The live sandboxes of a kind, of every workspace: what the dispatch counts against the kind's limit. */
+    /** Physical capacity of a kind, including copies whose deletion must finish before their slot is free. */
     @WorkspaceAgnostic("The dispatch counts the live sandboxes of every workspace against one limit")
     @Query(value = """
-            SELECT count(*) FROM agent_sandbox WHERE kind = :kind AND state IN ('REQUESTED', 'READY')
+            SELECT count(*) FROM agent_sandbox WHERE kind = :kind AND state IN ('REQUESTED', 'READY', 'DELETING')
             """, nativeQuery = true)
     int countLive(@Param("kind") String kind);
+
+    /** Retires the oldest warm conversation copy under pressure, never a subject with queued or leased work. */
+    @WorkspaceAgnostic("Dispatch reclaims idle conversation capacity across workspaces; each row carries its workspace")
+    @Query(value = """
+            WITH picked AS (
+              SELECT s.id FROM agent_sandbox s
+               WHERE s.kind = 'CONVERSATION' AND s.state = 'READY'
+                 AND NOT EXISTS (SELECT 1 FROM agent_run r
+                                  WHERE r.workspace_id = s.workspace_id AND r.concurrency_key = s.subject_key
+                                    AND r.state <> 'ENDED')
+               ORDER BY s.last_used_at, s.created_at, s.id
+               LIMIT 1 FOR UPDATE OF s SKIP LOCKED)
+            UPDATE agent_sandbox s SET state = 'DELETING' FROM picked WHERE s.id = picked.id
+            RETURNING s.id, s.workspace_id AS "workspaceId", s.subject_key AS "subjectKey", s.kind,
+                      s.claim_name AS "claimName", s.state, s.shutdown_at AS "shutdownAt"
+            """, nativeQuery = true)
+    Optional<SandboxRow> retireIdleConversation();
 
     @Query(value = "SELECT" + COLUMNS + """
              FROM agent_sandbox WHERE workspace_id = :workspaceId AND subject_key = :subjectKey

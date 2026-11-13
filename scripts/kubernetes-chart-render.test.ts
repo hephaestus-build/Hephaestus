@@ -2169,7 +2169,7 @@ await test("practice reviews run exactly when the sandboxes run, with the instal
 	]);
 	assert.equal(exhausted.ok, false);
 	assert.match(exhausted.stderr, /sandbox.budget|no room/u);
-	assert.equal(capacity([...layersFor("small"), { sandbox: { conversationTurns: 0 } }]), undefined);
+	assert.equal(capacity([...layersFor("small"), { sandbox: { conversationTurns: 0 } }]), "0");
 	assert.equal(
 		env(workload(rendered(layersFor("dev")), "server"), "HEPHAESTUS_MENTOR_TURN_CAPACITY"),
 		undefined,

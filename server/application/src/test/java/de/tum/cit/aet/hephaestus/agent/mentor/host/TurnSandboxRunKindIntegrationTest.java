@@ -75,7 +75,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.ErrorResponseException;
 import tools.jackson.databind.ObjectMapper;
 
 /** A conversation sandbox claims only its subject's turn, and the server fences every proposal on that claim. */
@@ -377,9 +377,9 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                         return held.turnId();
                     }))
                     .isInstanceOfSatisfying(
-                            ResponseStatusException.class,
+                            ErrorResponseException.class,
                             failure ->
-                                    assertThat(failure.getStatusCode().value()).isEqualTo(409));
+                                    assertThat(failure.getStatusCode().value()).isEqualTo(503));
         }
         verifyNoInteractions(personFence);
         assertThat(captured).isFalse();

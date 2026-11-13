@@ -25,7 +25,7 @@ import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.ErrorResponseException;
 
 /** Reads the turn held by a sandbox's current run. No turn state lives in the gateway replica. */
 @RequiredArgsConstructor
@@ -67,8 +67,12 @@ public class HephTurns {
 
     /** An erasure holds this fence exclusively while it changes the account and revokes the sandbox. */
     public void beforeWrite(AgentSandboxes.LiveSandbox sandbox) {
-        if (!copyFence.tryHoldForCapture())
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Conversation context is being erased");
+        if (!copyFence.tryHoldForCapture()) {
+            var busy = new ErrorResponseException(HttpStatus.SERVICE_UNAVAILABLE);
+            busy.setDetail("Conversation context is being erased");
+            busy.getHeaders().set("Retry-After", "1");
+            throw busy;
+        }
         if (sandbox.kind() != AgentSandboxKind.CONVERSATION
                 || !sandbox.subjectKey().startsWith("conversation:"))
             throw new IllegalArgumentException("A turn belongs to a conversation sandbox");

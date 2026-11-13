@@ -138,7 +138,8 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
         HephTurns served = HephTurnFixtures.turns(beans, sandboxes);
         HephTurnContexts contexts = HephTurnFixtures.contexts(beans);
         var controller = new HephTurnController(contexts, completion, served, usage);
-        var sandboxController = new TurnContextController(contexts, served, HephTurnFixtures.folder(beans));
+        var sandboxController =
+                new TurnContextController(contexts, served, HephTurnFixtures.folder(beans), beans.getBean(Clock.class));
         var transactions = beans.getBean(TransactionTemplate.class);
         sandbox = sandboxes.ensure(
                 workspace.getId(), TurnRunsAdapter.subject(conversation.getId()), AgentSandboxKind.CONVERSATION);

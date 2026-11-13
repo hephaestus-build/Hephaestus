@@ -146,7 +146,6 @@ public class TurnSandboxRunKind implements SandboxRunKind {
      */
     @Override
     public boolean end(SandboxRun run, Outcome outcome) {
-        beforeWrite(run.sandbox());
         AgentRunFence claim = run.fence();
         Optional<MentorTurn> held = turnService
                 .lockByRun(claim.workspaceId(), claim.runId())

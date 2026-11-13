@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import jakarta.validation.Validator;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
@@ -54,13 +55,19 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
         workspace = workspaces
                 .save(TestEntities.activeWorkspace("turn-cap-" + UUID.randomUUID()))
                 .getId();
+        capped = withTurnCap(rows.countLeased(AgentRunKind.TURN.name()) + 1);
+        sandboxes = SandboxOwnerFixtures.owner(
+                beans, new AttemptTokenIssuer(AttemptKeyFixtures.keyring(AttemptSigningKey.generate())), capped);
+    }
+
+    private AgentRuns withTurnCap(int cap) {
         AgentCapacityProperties capacity = runs.capacity();
-        capped = new AgentRuns(
+        return new AgentRuns(
                 rows,
                 new AgentCapacityProperties(
                         capacity.leaseTtl(),
                         capacity.turnLeaseTtl(),
-                        rows.countLeased(AgentRunKind.TURN.name()) + 1,
+                        cap,
                         capacity.leaseRenewal(),
                         capacity.reviewRetries(),
                         capacity.bandAging(),
@@ -69,8 +76,19 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
                         capacity.sandboxIdle(),
                         capacity.conversationSandboxIdle()),
                 new SimpleMeterRegistry());
-        sandboxes = SandboxOwnerFixtures.owner(
-                beans, new AttemptTokenIssuer(AttemptKeyFixtures.keyring(AttemptSigningKey.generate())), capped);
+    }
+
+    @Test
+    void shouldLeaveTurnWorkQueuedWhenTheConfiguredCapacityIsZero() {
+        String subject = "conversation:" + UUID.randomUUID();
+        AgentRunRef queued = queue(subject);
+        AgentRuns stopped = withTurnCap(0);
+        assertThat(beans.getBean(Validator.class).validate(stopped.capacity())).isEmpty();
+        var claimed =
+                transactions.execute(status -> stopped.claimSubject(workspace, subject, Set.of(AgentRunKind.TURN)));
+        assertThat(claimed).isEmpty();
+        assertThat(rows.findByRef(queued.id(), workspace).orElseThrow().getState())
+                .isEqualTo(AgentRunState.QUEUED);
     }
 
     private AgentRunRef queue(String subject) {

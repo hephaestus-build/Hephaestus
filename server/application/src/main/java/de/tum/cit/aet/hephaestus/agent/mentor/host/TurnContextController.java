@@ -10,6 +10,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Base64;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.annotation.Profile;
@@ -21,6 +24,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.request.async.WebAsyncTask;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -48,11 +52,13 @@ public class TurnContextController {
     private final HephTurns turns;
     private final HephTurnContexts contexts;
     private final TurnContextLoads folder;
+    private final Clock clock;
 
-    public TurnContextController(HephTurnContexts contexts, HephTurns turns, TurnContextLoads folder) {
+    public TurnContextController(HephTurnContexts contexts, HephTurns turns, TurnContextLoads folder, Clock clock) {
         this.turns = turns;
         this.contexts = contexts;
         this.folder = folder;
+        this.clock = clock;
     }
 
     public record LoadRequest(@NotBlank @Size(max = 512) String path) {}
@@ -72,32 +78,32 @@ public class TurnContextController {
      * refusal as JSON.
      */
     @PostMapping("/load")
-    public @Nullable ResponseEntity<?> load(
-            SandboxRun run, @Valid @RequestBody LoadRequest request, HttpServletResponse response) throws IOException {
-        var capture = folder.capture();
-        boolean transferred = false;
-        TurnContextLoads.Load load;
-        try {
-            var turn = turns.write(run, false, held -> held);
-            var refused = turns.write(run, false, ignored -> folder.admit(turn));
-            if (refused.isPresent())
-                return ResponseEntity.ok()
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(refused.get().answer());
-            var deadline = turns.workDeadline(run);
-            transferred = true;
-            load = HephToolCalls.logged(
-                    turn,
-                    "load",
-                    () -> folder.prepare(turn, deadline, request.path(), capture),
-                    answered -> outcome(
-                            switch (answered) {
-                                case TurnContextLoads.Refused rejection -> rejection.answer();
-                                case TurnContextLoads.Prepared prepared -> prepared.answer();
-                            }));
-        } finally {
-            if (!transferred) capture.close();
-        }
+    public WebAsyncTask<@Nullable ResponseEntity<?>> load(
+            SandboxRun run, @Valid @RequestBody LoadRequest request, HttpServletResponse response) {
+        Instant deadline = turns.workDeadline(run);
+        // Spring cancels the response task at the work deadline, also when a client trickles archive reads.
+        return new WebAsyncTask<>(
+                Math.max(1, Duration.between(clock.instant(), deadline).toMillis()),
+                () -> load(run, request, response, deadline));
+    }
+
+    private @Nullable ResponseEntity<?> load(
+            SandboxRun run, LoadRequest request, HttpServletResponse response, Instant deadline) throws IOException {
+        var turn = turns.write(run, false, held -> held);
+        var admission = turns.write(run, false, ignored -> folder.admit(turn));
+        if (admission.isPresent())
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(admission.get().answer());
+        var load = HephToolCalls.logged(
+                turn,
+                "load",
+                () -> folder.prepare(turn, deadline, request.path()),
+                answered -> outcome(
+                        switch (answered) {
+                            case TurnContextLoads.Refused rejection -> rejection.answer();
+                            case TurnContextLoads.Prepared prepared -> prepared.answer();
+                        }));
         if (load instanceof TurnContextLoads.Refused refused)
             return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(refused.answer());
         try (TurnContextLoads.Prepared prepared = (TurnContextLoads.Prepared) load) {
@@ -107,7 +113,7 @@ public class TurnContextController {
         }
     }
 
-    /** Synchronous ownership also cleans up when a response cannot start; no async task owns the capture lease. */
+    /** The response task owns source cleanup, including cancellation before streaming or during a blocked write. */
     private static void archive(TurnContextLoads.Prepared prepared, HttpServletResponse response) throws IOException {
         String about = Base64.getUrlEncoder()
                 .withoutPadding()

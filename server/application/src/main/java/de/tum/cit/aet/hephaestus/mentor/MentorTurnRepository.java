@@ -156,7 +156,7 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
     }
 
     /**
-     * The attempt that the run's claim holds, running or stopped, on the database clock.
+     * The attempt whose run lease is current on the database clock, with its stored work deadline.
      *
      * @return empty when the claim lost the run or its turn ended
      */

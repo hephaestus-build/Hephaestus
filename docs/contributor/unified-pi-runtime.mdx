@@ -405,6 +405,9 @@ A stale run gets `409`.
 A token for another sandbox or workspace gets `401`.
 The server takes the account's person-data write fence before it locks sandbox, run or turn rows.
 Proposal writes recheck the run in that transaction.
+
+A busy erasure fence returns `503` with `Retry-After`. It does not mean that the run lost its lease.
+
 The sandbox's end is the source of the last partial snapshot. The receiving replica need not have seen earlier deltas.
 
 An end larger than the gateway's request bound gets `413`.
@@ -450,6 +453,8 @@ A [context loader](/contributor/practice-review-glossary#runtime-terms) (`integr
 - `load(workspaceId, accountId, path, abandoned)` prepares the item and returns its directory and resolved version.
 
 Core routes a path to a loader by its prefix only.
+The preparation worker takes a load permit before it acquires a capture session.
+The response task keeps the captured source until streaming ends and is cancelled at the turn's work deadline.
 A loader applies the same visibility rules as the context documents of its integration.
 An integration without heavy items contributes documents only.
 

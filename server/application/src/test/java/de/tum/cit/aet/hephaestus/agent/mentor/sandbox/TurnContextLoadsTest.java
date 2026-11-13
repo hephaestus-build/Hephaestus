@@ -8,6 +8,8 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
@@ -36,6 +38,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
@@ -114,7 +118,7 @@ class TurnContextLoadsTest extends BaseUnitTest {
 
     private TurnContextLoads.Load load(TurnAttempt turn, Instant deadline, String path) {
         var refused = folder.admit(turn);
-        return refused.isPresent() ? refused.get() : folder.prepare(turn, deadline, path, folder.capture());
+        return refused.isPresent() ? refused.get() : folder.prepare(turn, deadline, path);
     }
 
     @Test
@@ -227,6 +231,38 @@ class TurnContextLoadsTest extends BaseUnitTest {
         }
 
         assertThat(refusal(load(turn, DEADLINE, "repos/github.com/acme/api"))).isEqualTo("BUDGET_EXHAUSTED");
+    }
+
+    @Test
+    void shouldAcquireNoCaptureSessionWhileAContextLoadWaitsForAPermit() throws Exception {
+        var entered = new CountDownLatch(TurnContextLoads.LOADS_AT_ONCE);
+        var release = new CountDownLatch(1);
+        beans.registerSingleton("loader", new Loader(temp) {
+            @Override
+            public Loaded load(long workspaceId, long accountId, String path, BooleanSupplier abandoned) {
+                entered.countDown();
+                waitFor(release);
+                throw new ContextLoadException(ContextLoadException.Code.UNAVAILABLE, "fixture released");
+            }
+        });
+        try (var workers = Executors.newVirtualThreadPerTaskExecutor()) {
+            var first = workers.submit(() -> load(turn(), DEADLINE, "repos/github.com/acme/api"));
+            var second = workers.submit(() -> load(turn(), DEADLINE, "repos/github.com/acme/api"));
+            try {
+                assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+                assertThat(refusal(load(turn(), NOW.plusMillis(100), "repos/github.com/acme/api")))
+                        .isEqualTo("TIMEOUT");
+                assertThat(captures)
+                        .as("only the two active readers own database sessions")
+                        .hasValue(2);
+                verify(copies, times(2)).capture();
+            } finally {
+                release.countDown();
+            }
+            assertThat(refusal(first.get(5, TimeUnit.SECONDS))).isEqualTo("UNAVAILABLE");
+            assertThat(refusal(second.get(5, TimeUnit.SECONDS))).isEqualTo("UNAVAILABLE");
+        }
+        assertThat(captures).hasValue(0);
     }
 
     @Test
