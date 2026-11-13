@@ -1,0 +1,3 @@
+# #4299: each enum is one named schema. A nullable enum moves from an inline enum with null to anyOf of
+# the named enum and null, which admits the same values; oasdiff reads it as a change.
+in API DELETE /workspaces/{workspaceSlug}/mentor/entries/{entryId}/vote response property `digest/changes/items/direction` list-of-types was widened by adding types `null` to media type `application/json` of response `200`

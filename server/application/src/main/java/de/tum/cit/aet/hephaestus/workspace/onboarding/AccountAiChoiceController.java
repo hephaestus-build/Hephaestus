@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @ConditionalOnServerRole
 @RequestMapping("/user/ai-choice")
-@Tag(name = "Account", description = "User preferences")
+@Tag(name = "Account")
 @PreAuthorize("isAuthenticated()")
 @RequiredArgsConstructor
 public class AccountAiChoiceController {

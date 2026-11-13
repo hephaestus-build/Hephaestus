@@ -325,7 +325,7 @@ public class WorkspaceContextFilter implements Filter {
                 "errors",
                 Map.of(
                         "workspaceSlug",
-                        "The workspace path must contain a lowercase slug with at most 64" + " characters."));
+                        List.of("The workspace path must contain a lowercase slug with at most 64 characters.")));
         response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.getWriter().write(objectMapper.writeValueAsString(RequestReference.name(problem, response)));

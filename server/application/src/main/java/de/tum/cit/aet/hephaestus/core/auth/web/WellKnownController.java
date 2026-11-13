@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @ConditionalOnServerRole
 @RestController
-@Tag(name = "Auth discovery", description = "Public JWK set for verifying Hephaestus session JWTs")
+@Tag(name = "Auth discovery")
 public class WellKnownController {
 
     private final JwtSigningKeyService keyService;

@@ -16,6 +16,9 @@ import io.swagger.v3.oas.annotations.servers.Server;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
+import io.swagger.v3.oas.models.media.ArraySchema;
+import io.swagger.v3.oas.models.media.IntegerSchema;
+import io.swagger.v3.oas.models.media.MapSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.parameters.HeaderParameter;
@@ -23,11 +26,13 @@ import io.swagger.v3.oas.models.parameters.Parameter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
@@ -50,8 +55,8 @@ import tools.jackson.databind.JsonNode;
         info =
                 @Info(
                         title = "Hephaestus API",
-                        description = "API documentation for Hephaestus. Practice review bigint ids and "
-                                + "monetary amounts are decimal strings. Monetary fields are USD; clients read "
+                        description = "API documentation for Hephaestus. Practice review bigint ids are decimal "
+                                + "strings. Monetary fields are exact decimals in USD; clients read "
                                 + "server-computed totals and budget decisions. Provider mirror ids retain "
                                 + "their numeric contract. Required nullable response fields are present with null.",
                         version = "0.0.0-development",
@@ -65,6 +70,14 @@ import tools.jackson.databind.JsonNode;
                                         name = "MIT License",
                                         url = "https://github.com/hephaestus-build/Hephaestus/blob/main/LICENSE")),
         tags = {
+            @Tag(
+                    name = "Account",
+                    description = "The signed-in account: identity, linked accounts, sessions, preferences, export and"
+                            + " deletion"),
+            @Tag(name = "Admin", description = "Instance administration"),
+            @Tag(
+                    name = "Auth discovery",
+                    description = "Public sign-in discovery: identity providers and signing keys"),
             @Tag(
                     name = "Practice reviews",
                     description = "Workspace-admin access to reviews, results, and feedback delivery history"),
@@ -153,6 +166,7 @@ public class OpenAPIConfiguration {
             openApi.getInfo().setVersion(appVersion);
             Map<String, String> schemaNames = processApplicationServerSchemas(openApi);
             processAllPaths(openApi, schemaNames);
+            normalizeTags(openApi);
             normalizeDiscriminatedUnions(openApi);
             declareExactDecimals(openApi);
             declareProviderIdentityKinds(openApi);
@@ -176,13 +190,88 @@ public class OpenAPIConfiguration {
                     if (member != null) member.setFormat("uri-reference");
                 }
             }
-            problem.setAdditionalProperties(true);
             problem.addProperty(
                     RequestReference.PROPERTY,
                     new StringSchema()
                             .pattern("^[0-9a-f]{32}$")
                             .description("The request's trace id, the same as the X-Request-Id header"));
+            declareProblemExtensions(problem);
         }
+    }
+
+    /**
+     * The extension members that a problem type can carry (RFC 9457 §3.2). Each is optional, and a client ignores a
+     * member that it does not know. They are listed rather than left to {@code additionalProperties: true}, which
+     * OpenAPI Generator's Kotlin client cannot compile.
+     */
+    private static void declareProblemExtensions(Schema<?> problem) {
+        Map<String, Schema<?>> members = new LinkedHashMap<>();
+        members.put(
+                "errors",
+                new MapSchema()
+                        .additionalProperties(new ArraySchema().items(new StringSchema()))
+                        .description("Validation messages for each field that needs a change"));
+        for (String number : List.of(
+                "maxAgeSeconds",
+                "retryAfterSeconds",
+                "connectionId",
+                "jobId",
+                "workspaceBytes",
+                "workspaceByteBudget")) {
+            members.put(number, new IntegerSchema().format("int64"));
+        }
+        for (String id : List.of("scanId", "activeScanId")) {
+            members.put(id, new StringSchema().format("uuid"));
+        }
+        for (String text : List.of(
+                "callbackError",
+                "currentVersion",
+                "currentVersionId",
+                "declaredTier",
+                "slackError",
+                "state",
+                "stop",
+                "supportedRef",
+                "withholdingReason")) {
+            members.put(text, new StringSchema());
+        }
+        members.forEach(problem::addProperty);
+    }
+
+    /**
+     * OpenAPI requires unique tag names. springdoc writes one tag for each distinct description and names an untagged
+     * controller after its class, so the list is rebuilt from the operations: one entry for each name that an operation
+     * uses, with the one description that the annotations give it.
+     */
+    static void normalizeTags(OpenAPI openApi) {
+        Map<String, String> descriptions = new HashMap<>();
+        if (openApi.getTags() != null) {
+            for (var tag : openApi.getTags()) {
+                String name = withoutControllerSuffix(tag.getName());
+                String description = tag.getDescription();
+                if (description == null || description.isBlank()) continue;
+                String earlier = descriptions.putIfAbsent(name, description);
+                if (earlier != null && !earlier.equals(description)) {
+                    throw new IllegalStateException("Tag \"" + name + "\" has two descriptions: \"" + earlier
+                            + "\" and \"" + description + "\". Describe it once in OpenAPIConfiguration.");
+                }
+            }
+        }
+        Set<String> used = new TreeSet<>();
+        if (openApi.getPaths() != null) {
+            openApi.getPaths()
+                    .values()
+                    .forEach(item -> item.readOperations().forEach(operation -> {
+                        if (operation.getTags() != null) used.addAll(operation.getTags());
+                    }));
+        }
+        openApi.setTags(used.stream()
+                .map(name -> new io.swagger.v3.oas.models.tags.Tag().name(name).description(descriptions.get(name)))
+                .toList());
+    }
+
+    private static String withoutControllerSuffix(String tag) {
+        return tag.endsWith("-controller") ? tag.substring(0, tag.length() - "-controller".length()) : tag;
     }
 
     /*
@@ -201,6 +290,11 @@ public class OpenAPIConfiguration {
         Map<String, String> schemaNames = new HashMap<>();
         components.getSchemas().keySet().forEach(original -> {
             String candidate = original.endsWith("DTO") ? original.substring(0, original.length() - 3) : original;
+            Schema<?> taken = components.getSchemas().get(candidate);
+            if (!candidate.equals(original) && taken != null && taken.getEnum() != null) {
+                throw new IllegalStateException("The enum " + candidate + " takes the name of " + original
+                        + ". Give the enum @Schema(name = ...).");
+            }
             schemaNames.put(
                     original,
                     !candidate.equals(original) && components.getSchemas().containsKey(candidate)
@@ -221,6 +315,8 @@ public class OpenAPIConfiguration {
                 .forEach(e -> filteredSchemas.put(e.getKey(), e.getValue()));
 
         var remaining = new ArrayList<>(filteredSchemas.values());
+        // Operations reference schemas too, such as an enum that only a query parameter uses.
+        remaining.addAll(operationSchemas(openApi));
         Set<Schema> seen = new HashSet<>();
         for (int index = 0; index < remaining.size(); index++) {
             retainReferencedSchemas(
@@ -229,6 +325,39 @@ public class OpenAPIConfiguration {
         filteredSchemas.values().forEach(schema -> normalizeSchemaReferences(schema, schemaNames));
         components.setSchemas(filteredSchemas);
         return schemaNames;
+    }
+
+    @SuppressWarnings("rawtypes")
+    private static List<Schema> operationSchemas(OpenAPI openApi) {
+        List<Schema> schemas = new ArrayList<>();
+        if (openApi.getPaths() == null) return schemas;
+        openApi.getPaths()
+                .values()
+                .forEach(item -> item.readOperations().forEach(operation -> {
+                    if (operation.getParameters() != null) {
+                        operation.getParameters().stream()
+                                .filter(parameter -> !isWorkspaceContextParam(parameter))
+                                .map(Parameter::getSchema)
+                                .filter(Objects::nonNull)
+                                .forEach(schemas::add);
+                    }
+                    if (operation.getRequestBody() != null
+                            && operation.getRequestBody().getContent() != null) {
+                        operation.getRequestBody().getContent().values().stream()
+                                .map(media -> media.getSchema())
+                                .filter(Objects::nonNull)
+                                .forEach(schemas::add);
+                    }
+                    if (operation.getResponses() != null) {
+                        operation.getResponses().values().stream()
+                                .filter(response -> response.getContent() != null)
+                                .flatMap(response -> response.getContent().values().stream())
+                                .map(media -> media.getSchema())
+                                .filter(Objects::nonNull)
+                                .forEach(schemas::add);
+                    }
+                }));
+        return schemas;
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -295,7 +424,7 @@ public class OpenAPIConfiguration {
 
                 if (operation.getTags() != null) {
                     operation.setTags(operation.getTags().stream()
-                            .map(tag -> tag.endsWith("-controller") ? tag.substring(0, tag.length() - 11) : tag)
+                            .map(OpenAPIConfiguration::withoutControllerSuffix)
                             .collect(Collectors.toList()));
                 }
 
@@ -371,7 +500,7 @@ public class OpenAPIConfiguration {
                         && types.stream().allMatch(type -> NUMBER_TYPE.equals(type) || "null".equals(type)));
     }
 
-    private boolean isWorkspaceContextParam(Parameter param) {
+    private static boolean isWorkspaceContextParam(Parameter param) {
         if (param == null) return false;
         if ("workspaceContext".equals(param.getName())) return true;
         if (param.getSchema() != null && param.getSchema().get$ref() != null) {
