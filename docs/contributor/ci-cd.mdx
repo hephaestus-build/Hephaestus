@@ -1388,7 +1388,11 @@ Manual runs and pull request runs do not enter the shared reporter.
 The full-verification target is a six-minute median and a seven-minute p90, measured from workflow
 creation to completion of **CI Status Gate**. A merge group always runs both
 [verification tiers](#two-verification-tiers), so the sample is merge groups.
-On the default branch, `CI / Profile` lists every completed merge-group run created in the last 28 days.
+On the default branch, `CI / Profile` lists merge-group runs created in the last 28 days.
+It reads the first attempt, including when a later attempt is still running.
+Both outcome shares below use that first attempt, so a successful rerun cannot hide a failure.
+Run listings use UTC days and fail at the API limit rather than report an incomplete window.
+
 It selects the ten most recent successful first-attempt runs with full server and browser verification.
 Lightweight changes and release-candidate groups, which also generate release evidence, cannot
 satisfy this cohort.
@@ -1402,6 +1406,33 @@ It counts the merge groups of the last 14 days in which a queue-tier job failed,
 for the [revert criterion](#two-verification-tiers).
 A failed worker still counts when fail-fast cancellation gives the workflow a cancelled conclusion.
 A cancelled group with no failed worker, or only a failed gate, its reporter or a cancellation helper, does not count as a failure.
+
+The same weekly report shows all cancellations over seven days, split by cause:
+
+- Native worker failure, including fail-fast cancellation after that failure.
+- Predecessor drop, matched through the queue branch's predecessor SHA and queue removal events.
+- Manual removal, matched to the exact merge-group SHA.
+- Timeout, from a native job timeout.
+- Unknown, when the available evidence cannot identify the cause.
+
+A successful intermediate group does not break the predecessor chain.
+Traversal stops when a predecessor merged before the cancelled run began.
+A native worker failure takes priority if a predecessor also drops.
+The guard separates groups with a native worker failure from cancellations without one.
+
+The report retains the matching removal event or failed job names with each cancelled run.
+These records identify the cause, not the identity of the caller that cancelled a run.
+The observer needs read access to pull requests for queue removal events.
+
+**Target: at most 10 % of completed merge-group first attempts in seven days are cancelled
+for a cause other than a native worker failure.**
+The denominator includes successful and failed groups as well as cancelled groups.
+Unknown causes count against the target and make the classification incomplete.
+This includes a cancelled first attempt with no native job records.
+The guard applies without a minimum sample and always shows the denominator.
+
+A breach or an unknown cause produces a warning in this report.
+The observer adds no alert channel and changes no queue, tier or required check.
 
 Budget misses produce warnings and a job summary, not workflow failures. Fewer than ten
 qualifying runs produces an insufficient-data notice, not a pass or a regression.

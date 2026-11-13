@@ -1,0 +1,1003 @@
+{
+	"successfulRunIds": [
+		43418552902, 43414478579, 43391051565, 43390356045, 43379017909, 43365789613, 43358670356,
+		43348187301, 43341947553, 43334069304, 43334010389, 43332736412, 43332028403, 43329268433,
+		43329266009, 43318002201, 43317999376, 43317138157, 43309926106, 43306434614, 43303161738,
+		43299077067, 43298175386, 43293926260, 43288793389, 43286065299, 43286062595, 43282343318,
+		43270598056, 43268132072, 43267565478, 43266442541, 43265755311, 43259394018, 43259390625,
+		43257375687, 43244093304, 43239342460, 43225534063, 43210781105, 43202036966, 43199006282,
+		43194725494, 43194146807, 43193276515, 43192392001, 43179952666, 43179877547, 43177436802,
+		43175501144, 43167739724, 43166646067, 43162726040, 43158199434, 43152814309, 43152782147,
+		43146167610, 43144951294, 43143376938, 43142799846, 43140960547, 43138062643, 43134670208,
+		43132430536, 43131887221, 43128085469, 43127600293, 43123687935, 43122350064, 43122347476,
+		43119775257, 43119730367, 43116512240, 43113717163, 43113338351, 43111904563, 43111121441,
+		43110340612, 43106812193, 43103155045, 43101279480, 43101276112, 43101227554, 43090263591,
+		43090261152, 43086248510, 43086244869, 43086239872, 43083993795, 43083937556, 43081397022,
+		43075716717, 43075395569, 43075393349, 43075390330, 43075386478, 43057519032, 43057439641,
+		43057436942, 43052834241, 43052371020, 43044780327, 43042584528, 43030069184, 43028724596,
+		43027963969, 43027684235, 43024846845, 43020378651, 43019271650, 43019152883, 43019148223,
+		43019145187
+	],
+	"runs": [
+		{
+			"id": 43414480839,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Server tests / Integration (6 of 8)",
+					"conclusion": "failure",
+					"completed_at": "2026-11-13T11:21:25Z"
+				}
+			]
+		},
+		{
+			"id": 43366908587,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Server tests / Integration (4 of 8)",
+					"conclusion": "failure",
+					"completed_at": "2026-11-13T04:52:42Z"
+				}
+			]
+		},
+		{
+			"id": 43351225720,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Server tests / Integration (6 of 8)",
+					"conclusion": "failure",
+					"completed_at": "2026-11-13T02:30:46Z"
+				}
+			]
+		},
+		{
+			"id": 43285897371,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and docs",
+					"conclusion": "failure",
+					"completed_at": "2026-11-12T19:04:55Z"
+				}
+			]
+		},
+		{
+			"id": 43283219631,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and docs",
+					"conclusion": "failure",
+					"completed_at": "2026-11-12T18:48:57Z"
+				}
+			]
+		},
+		{
+			"id": 43283161209,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and docs",
+					"conclusion": "failure",
+					"completed_at": "2026-11-12T18:48:35Z"
+				}
+			]
+		},
+		{
+			"id": 43264010637,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Server tests / Integration (3 of 8)",
+					"conclusion": "failure",
+					"completed_at": "2026-11-12T17:08:41Z"
+				}
+			]
+		},
+		{
+			"id": 43259398010,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Server tests / Integration (3 of 8)",
+					"conclusion": "failure",
+					"completed_at": "2026-11-12T16:45:57Z"
+				}
+			]
+		},
+		{
+			"id": 43257462457,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Server tests / Integration (3 of 8)",
+					"conclusion": "failure",
+					"completed_at": "2026-11-12T16:34:35Z"
+				}
+			]
+		},
+		{
+			"id": 43256403162,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Seeded upgrade from the last release / Migrate a seeded database",
+					"conclusion": "failure",
+					"completed_at": "2026-11-12T16:29:29Z"
+				}
+			]
+		},
+		{
+			"id": 43249288159,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Server tests / Integration (8 of 8)",
+					"conclusion": "failure",
+					"completed_at": "2026-11-12T15:49:55Z"
+				}
+			]
+		},
+		{
+			"id": 43239414392,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Server tests / Integration (2 of 8)",
+					"conclusion": "failure",
+					"completed_at": "2026-11-12T14:53:41Z"
+				}
+			]
+		},
+		{
+			"id": 43222741375,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Server tests / Integration (3 of 8)",
+					"conclusion": "failure",
+					"completed_at": "2026-11-12T13:12:35Z"
+				}
+			]
+		},
+		{
+			"id": 43191621296,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Build / Generated API",
+					"conclusion": "failure",
+					"completed_at": "2026-11-12T09:37:46Z"
+				}
+			]
+		},
+		{
+			"id": 43170659825,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Server tests / Integration (7 of 8)",
+					"conclusion": "failure",
+					"completed_at": "2026-11-12T07:02:31Z"
+				}
+			]
+		},
+		{
+			"id": 43129887106,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Server tests / Unit",
+					"conclusion": "failure",
+					"completed_at": "2026-11-12T01:01:15Z"
+				}
+			]
+		},
+		{
+			"id": 43126072026,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Server tests / Integration (2 of 8)",
+					"conclusion": "failure",
+					"completed_at": "2026-11-12T00:23:53Z"
+				}
+			]
+		},
+		{
+			"id": 43081663209,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Test (4) / App Server: Integration (4)",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T19:01:22Z"
+				}
+			]
+		},
+		{
+			"id": 43070076018,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Windows / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T18:13:36Z"
+				}
+			]
+		},
+		{
+			"id": 43070009403,
+			"head_branch": "gh-readonly-queue/main/pr-4168-95182fb6c4a4cd01ee6ac37abaa333e253127fe8",
+			"head_sha": "a88c0740237ed7de281ec8f0093d438fa66a23fd",
+			"created_at": "2026-11-11T17:37:48Z",
+			"updated_at": "2026-11-11T18:28:53Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Test (2) / App Server: Integration (2)",
+					"conclusion": "cancelled",
+					"completed_at": "2026-11-11T18:27:31Z"
+				}
+			]
+		},
+		{
+			"id": 43070004428,
+			"head_branch": "gh-readonly-queue/main/pr-4161-0da18de608e6969c5d454585a20b7987acbdc1a9",
+			"head_sha": "95182fb6c4a4cd01ee6ac37abaa333e253127fe8",
+			"created_at": "2026-11-11T17:37:46Z",
+			"updated_at": "2026-11-11T18:30:34Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Test (unit) / App Server: Unit and architecture",
+					"conclusion": "cancelled",
+					"completed_at": "2026-11-11T18:27:46Z"
+				}
+			]
+		},
+		{
+			"id": 43065076557,
+			"head_branch": "gh-readonly-queue/main/pr-4164-decc0bba0eb6d8781bfd7bd87a5b2fde1aac036d",
+			"head_sha": "0da18de608e6969c5d454585a20b7987acbdc1a9",
+			"created_at": "2026-11-11T17:07:38Z",
+			"updated_at": "2026-11-11T18:28:25Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Test (4) / App Server: Integration (4)",
+					"conclusion": "cancelled",
+					"completed_at": "2026-11-11T18:27:50Z"
+				}
+			]
+		},
+		{
+			"id": 43063522306,
+			"head_branch": "gh-readonly-queue/main/pr-4169-c9c92aba200a03131b36b95d2702cd5a49cedecd",
+			"head_sha": "decc0bba0eb6d8781bfd7bd87a5b2fde1aac036d",
+			"created_at": "2026-11-11T16:58:16Z",
+			"updated_at": "2026-11-11T18:16:56Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Test (4) / App Server: Integration (4)",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T18:09:50Z"
+				}
+			]
+		},
+		{
+			"id": 43057565632,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Test (4) / App Server: Integration (4)",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T16:47:05Z"
+				}
+			]
+		},
+		{
+			"id": 43052190142,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{ "name": "Zizmor", "conclusion": "failure", "completed_at": "2026-11-11T15:51:29Z" }
+			]
+		},
+		{
+			"id": 43050904188,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T15:49:22Z"
+				}
+			]
+		},
+		{
+			"id": 43048667392,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs (tests 2/2) / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T15:35:36Z"
+				}
+			]
+		},
+		{
+			"id": 43046956443,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T15:26:00Z"
+				}
+			]
+		},
+		{
+			"id": 43046219195,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Test (4) / App Server: Integration (4)",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T15:27:19Z"
+				}
+			]
+		},
+		{
+			"id": 43044776184,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs (tests 2/2) / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T15:12:40Z"
+				}
+			]
+		},
+		{
+			"id": 43042581566,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs (tests 1/2) / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:59:07Z"
+				}
+			]
+		},
+		{
+			"id": 43042574433,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs (tests 1/2) / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:59:22Z"
+				}
+			]
+		},
+		{
+			"id": 43041190173,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Test (4) / App Server: Integration (4)",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T15:00:45Z"
+				}
+			]
+		},
+		{
+			"id": 43041186910,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs (tests 1/2) / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:50:41Z"
+				}
+			]
+		},
+		{
+			"id": 43041183031,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs (tests 1/2) / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:50:35Z"
+				}
+			]
+		},
+		{
+			"id": 43041177135,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:50:32Z"
+				}
+			]
+		},
+		{
+			"id": 43039927663,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Test (4) / App Server: Integration (4)",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:50:50Z"
+				}
+			]
+		},
+		{
+			"id": 43039774309,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs (tests 1/2) / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:42:01Z"
+				}
+			]
+		},
+		{
+			"id": 43039769743,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:41:48Z"
+				}
+			]
+		},
+		{
+			"id": 43039765637,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs (tests 1/2) / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:41:37Z"
+				}
+			]
+		},
+		{
+			"id": 43039761698,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs (tests 2/2) / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:42:06Z"
+				}
+			]
+		},
+		{
+			"id": 43039198558,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs (tests 1/2) / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:39:03Z"
+				}
+			]
+		},
+		{
+			"id": 43038437239,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs (tests 2/2) / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:33:48Z"
+				}
+			]
+		},
+		{
+			"id": 43038433313,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs (tests 1/2) / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:33:24Z"
+				}
+			]
+		},
+		{
+			"id": 43038427929,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs (tests 1/2) / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:33:43Z"
+				}
+			]
+		},
+		{
+			"id": 43038423774,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs (tests 2/2) / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:33:44Z"
+				}
+			]
+		},
+		{
+			"id": 43037515116,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:28:11Z"
+				}
+			]
+		},
+		{
+			"id": 43036850103,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:23:59Z"
+				}
+			]
+		},
+		{
+			"id": 43036846728,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs (tests 1/2) / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:25:17Z"
+				}
+			]
+		},
+		{
+			"id": 43036839568,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:24:34Z"
+				}
+			]
+		},
+		{
+			"id": 43036840634,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:24:38Z"
+				}
+			]
+		},
+		{
+			"id": 43036773806,
+			"head_branch": "gh-readonly-queue/main/pr-4160-653ebc32383571eb0c6c175077ac2c355a4a3209",
+			"head_sha": "03d4edf65831b4b8982cf15b73742f3a15bbdec8",
+			"created_at": "2026-11-11T14:15:44Z",
+			"updated_at": "2026-11-11T14:18:31Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Detect changes",
+					"conclusion": "cancelled",
+					"completed_at": "2026-11-11T14:17:10Z"
+				}
+			]
+		},
+		{
+			"id": 43035918382,
+			"head_branch": "gh-readonly-queue/main/pr-4068-03c9afb12dc00fe2671587f97547a91abd2f47a0",
+			"head_sha": "653ebc32383571eb0c6c175077ac2c355a4a3209",
+			"created_at": "2026-11-11T14:10:25Z",
+			"updated_at": "2026-11-11T14:19:39Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Windows / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:16:46Z"
+				}
+			]
+		},
+		{
+			"id": 43035914156,
+			"head_branch": "gh-readonly-queue/main/pr-4184-5698610e78d3cff3f5b6ab6e3ad4789da7a156ec",
+			"head_sha": "03c9afb12dc00fe2671587f97547a91abd2f47a0",
+			"created_at": "2026-11-11T14:10:24Z",
+			"updated_at": "2026-11-11T14:17:44Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Test (1) / App Server: Integration (1)",
+					"conclusion": "cancelled",
+					"completed_at": "2026-11-11T14:17:14Z"
+				}
+			]
+		},
+		{
+			"id": 43035909962,
+			"head_branch": "gh-readonly-queue/main/pr-4045-2326df7da85b6343d133406021195a66bdf6423f",
+			"head_sha": "5698610e78d3cff3f5b6ab6e3ad4789da7a156ec",
+			"created_at": "2026-11-11T14:10:22Z",
+			"updated_at": "2026-11-11T14:19:28Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Windows / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:15:08Z"
+				}
+			]
+		},
+		{
+			"id": 43035905707,
+			"head_branch": "gh-readonly-queue/main/pr-4158-dc8394d942753fc9bc416eb956a603f050386543",
+			"head_sha": "2326df7da85b6343d133406021195a66bdf6423f",
+			"created_at": "2026-11-11T14:10:21Z",
+			"updated_at": "2026-11-11T14:17:06Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Windows / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:14:46Z"
+				}
+			]
+		},
+		{
+			"id": 43035326177,
+			"head_branch": "gh-readonly-queue/main/pr-4068-e7e5d85609d94c96934403b032c3b55f4d7f028f",
+			"head_sha": "ba7dfb930f5b8877b9e201205ec73d2ac2b64981",
+			"created_at": "2026-11-11T14:06:44Z",
+			"updated_at": "2026-11-11T14:11:41Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Windows / Gates",
+					"conclusion": "cancelled",
+					"completed_at": "2026-11-11T14:11:25Z"
+				}
+			]
+		},
+		{
+			"id": 43034355433,
+			"head_branch": "gh-readonly-queue/main/pr-4184-e7f1d4fd3497c8dd48ee737643c94e3a2a2f7d78",
+			"head_sha": "e7e5d85609d94c96934403b032c3b55f4d7f028f",
+			"created_at": "2026-11-11T14:00:41Z",
+			"updated_at": "2026-11-11T14:08:44Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Windows / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:05:23Z"
+				}
+			]
+		},
+		{
+			"id": 43034351366,
+			"head_branch": "gh-readonly-queue/main/pr-4045-7bd5e73276c794cd50c9d3538a6f19e06e5e2818",
+			"head_sha": "e7f1d4fd3497c8dd48ee737643c94e3a2a2f7d78",
+			"created_at": "2026-11-11T14:00:40Z",
+			"updated_at": "2026-11-11T14:10:24Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Windows / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:06:29Z"
+				}
+			]
+		},
+		{
+			"id": 43034347826,
+			"head_branch": "gh-readonly-queue/main/pr-4158-8943f90f7c0777da255dbc97862e99dc1535a2f5",
+			"head_sha": "7bd5e73276c794cd50c9d3538a6f19e06e5e2818",
+			"created_at": "2026-11-11T14:00:39Z",
+			"updated_at": "2026-11-11T14:08:37Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Windows / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:05:24Z"
+				}
+			]
+		},
+		{
+			"id": 43034346409,
+			"head_branch": "gh-readonly-queue/main/pr-4160-dc8394d942753fc9bc416eb956a603f050386543",
+			"head_sha": "8943f90f7c0777da255dbc97862e99dc1535a2f5",
+			"created_at": "2026-11-11T14:00:38Z",
+			"updated_at": "2026-11-11T14:10:30Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Tooling and Docs / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T14:08:12Z"
+				}
+			]
+		},
+		{
+			"id": 43034057045,
+			"head_branch": "gh-readonly-queue/main/pr-4184-0f28cbcbedd13ec0f6a3d693d6be92dbbd738796",
+			"head_sha": "b44b0266f60d53a0e7df84897d31a21331ffff32",
+			"created_at": "2026-11-11T13:58:48Z",
+			"updated_at": "2026-11-11T14:02:38Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Windows / Gates",
+					"conclusion": "cancelled",
+					"completed_at": "2026-11-11T14:02:18Z"
+				}
+			]
+		},
+		{
+			"id": 43032232579,
+			"head_branch": "gh-readonly-queue/main/pr-4045-67c7c11e2d7a09cb55b27d4f9715321959117fd7",
+			"head_sha": "0f28cbcbedd13ec0f6a3d693d6be92dbbd738796",
+			"created_at": "2026-11-11T13:46:55Z",
+			"updated_at": "2026-11-11T13:59:06Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Windows / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T13:56:16Z"
+				}
+			]
+		},
+		{
+			"id": 43031540678,
+			"head_branch": "gh-readonly-queue/main/pr-4158-0752e61b4bbb4a5089a836407ce2f1202ae82b8f",
+			"head_sha": "67c7c11e2d7a09cb55b27d4f9715321959117fd7",
+			"created_at": "2026-11-11T13:42:21Z",
+			"updated_at": "2026-11-11T13:53:54Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Quality / Windows / Gates",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T13:47:34Z"
+				}
+			]
+		},
+		{
+			"id": 43031147894,
+			"head_branch": "gh-readonly-queue/main/pr-4160-4376b86bbf476f9aab61b521304b2d4a591eee9d",
+			"head_sha": "0752e61b4bbb4a5089a836407ce2f1202ae82b8f",
+			"created_at": "2026-11-11T13:39:47Z",
+			"updated_at": "2026-11-11T13:57:08Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Build / Webapp: E2E",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T13:52:56Z"
+				}
+			]
+		},
+		{
+			"id": 43030637929,
+			"head_branch": "gh-readonly-queue/main/pr-4068-dc8394d942753fc9bc416eb956a603f050386543",
+			"head_sha": "4376b86bbf476f9aab61b521304b2d4a591eee9d",
+			"created_at": "2026-11-11T13:36:22Z",
+			"updated_at": "2026-11-11T13:58:15Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Build / Webapp: E2E",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T13:52:22Z"
+				}
+			]
+		},
+		{
+			"id": 43024168225,
+			"head_branch": "gh-readonly-queue/main/pr-4108-eef10ca7229102cf4135de10fe8415a91b42feed",
+			"head_sha": "c4eede8666106e31fc5455e55e15212c6b8b0c17",
+			"created_at": "2026-11-11T12:52:55Z",
+			"updated_at": "2026-11-11T12:55:20Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Security / Dependencies, secrets, and policy",
+					"conclusion": "cancelled",
+					"completed_at": "2026-11-11T12:55:06Z"
+				}
+			]
+		},
+		{
+			"id": 43022943508,
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Security / Dependencies, secrets, and policy",
+					"conclusion": "failure",
+					"completed_at": "2026-11-11T12:46:11Z"
+				}
+			]
+		},
+		{
+			"id": 43018554661,
+			"head_branch": "gh-readonly-queue/main/pr-4137-2aeafb0a3c3ac31e4316a8b1f5043b262acd3f57",
+			"head_sha": "e3cbe0b29b2c7fd17235cb99227b9ac9d41d555e",
+			"created_at": "2026-11-11T12:14:01Z",
+			"updated_at": "2026-11-11T12:19:05Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "App Server: Package",
+					"conclusion": "cancelled",
+					"completed_at": "2026-11-11T12:18:55Z"
+				}
+			]
+		},
+		{
+			"id": 43017228103,
+			"head_branch": "gh-readonly-queue/main/pr-4149-90951a992ab10d3dccf5aef16c8f7a83d9fd447f",
+			"head_sha": "2aeafb0a3c3ac31e4316a8b1f5043b262acd3f57",
+			"created_at": "2026-11-11T12:04:46Z",
+			"updated_at": "2026-11-11T12:19:11Z",
+			"conclusion": "cancelled",
+			"counted": true,
+			"jobs": [
+				{
+					"name": "Docker / Images / Create manifests",
+					"conclusion": "cancelled",
+					"completed_at": "2026-11-11T12:18:52Z"
+				}
+			]
+		},
+		{
+			"id": 43015530065,
+			"head_branch": "gh-readonly-queue/main/pr-4178-b6b7b392674675c8109d8fc227075c3d6f7cf6f0",
+			"head_sha": "90951a992ab10d3dccf5aef16c8f7a83d9fd447f",
+			"created_at": "2026-11-11T11:52:28Z",
+			"updated_at": "2026-11-11T12:18:13Z",
+			"conclusion": "success",
+			"counted": false
+		},
+		{
+			"id": 43015484328,
+			"head_branch": "gh-readonly-queue/main/pr-4175-8612f9c3dd04f50781ba32774ef9e8bca755bd2e",
+			"head_sha": "b6b7b392674675c8109d8fc227075c3d6f7cf6f0",
+			"created_at": "2026-11-11T11:52:08Z",
+			"updated_at": "2026-11-11T12:06:32Z",
+			"conclusion": "cancelled",
+			"counted": false
+		}
+	],
+	"removals": [
+		{
+			"head": "2326df7da85b6343d133406021195a66bdf6423f",
+			"reason": "failed_checks",
+			"at": "2026-11-11T14:16:02Z",
+			"pullRequest": 4158
+		},
+		{
+			"head": "b6b7b392674675c8109d8fc227075c3d6f7cf6f0",
+			"reason": "failed_checks",
+			"at": "2026-11-11T12:18:03Z",
+			"pullRequest": 4175
+		},
+		{
+			"head": "c4eede8666106e31fc5455e55e15212c6b8b0c17",
+			"reason": "manual",
+			"at": "2026-11-11T12:53:21Z",
+			"pullRequest": 4108
+		},
+		{
+			"head": "decc0bba0eb6d8781bfd7bd87a5b2fde1aac036d",
+			"reason": "failed_checks",
+			"at": "2026-11-11T18:11:29Z",
+			"pullRequest": 4169
+		},
+		{
+			"head": "8943f90f7c0777da255dbc97862e99dc1535a2f5",
+			"reason": "failed_checks",
+			"at": "2026-11-11T14:10:16Z",
+			"pullRequest": 4160
+		},
+		{
+			"head": "4376b86bbf476f9aab61b521304b2d4a591eee9d",
+			"reason": "failed_checks",
+			"at": "2026-11-11T14:00:33Z",
+			"pullRequest": 4068
+		}
+	]
+}
