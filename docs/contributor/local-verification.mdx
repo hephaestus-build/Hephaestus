@@ -303,6 +303,26 @@ The gate rejects new entries, larger counts, changed fingerprints and stale entr
 The first baseline can record only files unchanged from the Git base.
 Stable 1.0 and later releases require an empty baseline.
 
+## Debt guards
+
+`vp run gate:adr-confirmation` checks every Accepted ADR.
+Its Confirmation section must name an existing test class, gate, test task or script in code spans.
+Every named executable reference must resolve.
+A test method suffix such as `BoundaryTest#checksBoundary` resolves its class.
+The gate checks existence, not test coverage or method behavior.
+
+Existing gaps live in `scripts/baselines/adr-confirmation.json`.
+Each entry names its owner, reason and removal condition.
+New debt fails even when the total count stays the same.
+The gate also compares the baseline with the base branch and refuses new entries.
+When a check exists, delete its stale baseline entry.
+The first PR for a baseline establishes its ceiling.
+
+The gate runs offline and includes its own tests.
+The affected selections run it for docs, server, webapp, extension and agent changes.
+Their CI quality legs also run it.
+Only the reference forms above count as checks. A workflow name alone does not count.
+
 ## Repository tooling
 
 Use these conventions when changing tasks or lint configuration.

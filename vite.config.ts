@@ -138,6 +138,7 @@ const docsGates = [
 	"gate:system-diagrams",
 	"gate:docs-tokens",
 	"gate:docs-pages",
+	"gate:adr-confirmation",
 ];
 const loadGates = ["gate:load-format"];
 const checkTasks = [
@@ -395,6 +396,9 @@ export default defineConfig({
 			"test:load:syntax": run("node scripts/load-test.ts syntax"),
 
 			// Docs
+			"gate:adr-confirmation": run(
+				"node --test scripts/check-adr-confirmation.test.ts scripts/lib/debt-ratchet.test.ts && node scripts/check-adr-confirmation.ts",
+			),
 			"gate:docs-format": cached(`vp fmt --check ${docsSources}`),
 			"gate:docs-lint": cachedOn(
 				"vp -C docs lint --type-aware --type-check . && vp -C docs exec markdownlint-cli2",
@@ -427,6 +431,7 @@ export default defineConfig({
 			// The package job compiles the tests without the analysis; this leg runs it.
 			"ci:server": group([
 				...serverGates,
+				"gate:adr-confirmation",
 				"gate:owned-code",
 				"gate:server-test-analysis",
 				"gate:contracts",
@@ -451,6 +456,7 @@ export default defineConfig({
 			"ci:tooling-tests": group(["gate:tooling-tests", "gate:agent-tests"]),
 			"ci:webapp:static": group([
 				...webappGates,
+				"gate:adr-confirmation",
 				"gate:owned-code",
 				"gate:docs-tokens",
 				"verification:webapp-tests",
@@ -460,6 +466,7 @@ export default defineConfig({
 			"ci:webapp": run(["vp run ci:webapp:static", "vp run verification:webapp-build"]),
 			"ci:extension:static": group([
 				...extensionGates,
+				"gate:adr-confirmation",
 				"gate:owned-code",
 				"verification:extension-tests",
 			]),
@@ -467,12 +474,12 @@ export default defineConfig({
 			"ci:windows": group(checkTasks.filter((gate) => !linuxOnly.has(gate))),
 
 			// Scoped selections for check:affected
-			"affected:agents": group(agentGates),
+			"affected:agents": group([...agentGates, "gate:adr-confirmation"]),
 			"affected:changesets": group(changesetGates),
 			"affected:docs": group([...docsGates, "gate:instructions", "gate:prose"]),
-			"affected:server": group(serverGates),
-			"affected:webapp": group([...webappGates, "gate:prose"]),
-			"affected:extension": group(extensionGates),
+			"affected:server": group([...serverGates, "gate:adr-confirmation"]),
+			"affected:webapp": group([...webappGates, "gate:prose", "gate:adr-confirmation"]),
+			"affected:extension": group([...extensionGates, "gate:adr-confirmation"]),
 
 			// The credential-free builds and suites that verification adds to quality
 			"verification:storybook-tests": group(["test:webapp:stories"]),
