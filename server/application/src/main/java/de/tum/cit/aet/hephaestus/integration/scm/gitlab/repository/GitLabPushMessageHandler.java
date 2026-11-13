@@ -206,6 +206,7 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
             commitMergeRequestLinker.linkCommits(
                     scopeId, repository, OffsetDateTime.now(ZoneOffset.UTC).minusHours(1), read);
         } catch (Exception e) {
+            DeliveryInbox.rethrowRejectedWrite();
             log.debug(
                     "Push-time commit→MR link failed: repoId={}, error={}",
                     repository.getId(),
@@ -230,6 +231,7 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
                     sanitizeForLog(event.ref()),
                     sanitizeForLog(repository.getNameWithOwner()));
         } catch (Exception e) {
+            DeliveryInbox.rethrowRejectedWrite();
             log.warn(
                     "Non-default branch fetch failed: repo={}, error={}",
                     sanitizeForLog(repository.getNameWithOwner()),
@@ -277,6 +279,7 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
 
             log.info("Processed push commits via local git: repoName={}, failed={}", repoName, failed[0]);
         } catch (Exception e) {
+            DeliveryInbox.rethrowRejectedWrite();
             log.error(
                     "Failed to process commits via local git, falling back to webhook: repoName={}, error={}",
                     repoName,
@@ -317,6 +320,7 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
                 });
                 if (Boolean.TRUE.equals(written)) created++;
             } catch (RuntimeException e) {
+                DeliveryInbox.rethrowRejectedWrite();
                 if (failure == null) failure = e;
                 log.warn(
                         "Failed to upsert commit: sha={}, repoId={}, error={}",

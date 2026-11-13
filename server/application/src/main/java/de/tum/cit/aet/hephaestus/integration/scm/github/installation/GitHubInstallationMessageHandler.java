@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.installation;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -105,6 +106,7 @@ public class GitHubInstallationMessageHandler extends AbstractIntegrationMessage
         } catch (InstallationNotFoundException e) {
             return ProviderStatus.GONE;
         } catch (RuntimeException e) {
+            DeliveryInbox.rethrowRejectedWrite();
             // Network errors, credentials not configured, or other transient issues.
             if (action == GitHubEventAction.Installation.CREATED) {
                 // Proceed with activation: if the installation is truly suspended, token minting fails fast.

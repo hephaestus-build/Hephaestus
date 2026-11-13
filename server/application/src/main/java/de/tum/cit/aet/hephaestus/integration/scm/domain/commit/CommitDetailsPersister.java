@@ -72,6 +72,7 @@ public class CommitDetailsPersister {
         try {
             return Objects.requireNonNull(transactions.execute(status -> capture(details, repository, origin)));
         } catch (RuntimeException e) {
+            DeliveryInbox.rethrowRejectedWrite();
             log.warn(
                     "Commit capture failed: sha={}, repoId={}, cause={}",
                     details.sha(),

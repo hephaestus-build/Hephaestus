@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
-import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
@@ -180,7 +179,9 @@ public class ProviderEventStore {
     @WorkspaceAgnostic("The event id identifies the claimed row")
     public boolean claimStep(long eventId, int leaseEpoch, String step) {
         holdCopyFence();
-        events.lockWorkspace(eventId);
+        if (!events.lockWorkspace(eventId)) {
+            throw new ProviderEventBusyException(ProviderEventBusyException.Reason.WORKSPACE_ROW);
+        }
         checkLease(events.readLease(eventId), leaseEpoch);
         return events.claimStep(eventId, step) == 1;
     }
@@ -197,7 +198,7 @@ public class ProviderEventStore {
         // A caller can already hold a domain lock. Never wait on erasure while holding that lock: roll back,
         // then the consumer checks the lease in a fresh transaction after erasure releases its copy fence.
         if (!copyFence.tryHoldForCapture()) {
-            throw new TransientDataAccessResourceException("Person erasure is in progress");
+            throw new ProviderEventBusyException(ProviderEventBusyException.Reason.ERASURE);
         }
     }
 
@@ -208,11 +209,14 @@ public class ProviderEventStore {
         checkLease(events.awaitLease(eventId), leaseEpoch);
     }
 
-    private static void checkLease(Optional<ProviderEventRepository.LeaseRow> candidate, int leaseEpoch) {
+    private static void checkLease(Optional<? extends ProviderEventRepository.LeaseRow> candidate, int leaseEpoch) {
         var row = candidate.orElseThrow(
                 () -> new ProviderEventFenceException(ProviderEventFenceException.Reason.ERASED_DURING_PROCESSING));
         if (!"LEASED".equals(row.getState()) || row.getLeaseEpoch() != leaseEpoch) {
             throw new ProviderEventFenceException(ProviderEventFenceException.Reason.LEASE_LOST);
+        }
+        if (row instanceof ProviderEventRepository.LeaseAttemptRow attempted && !attempted.getAcquired()) {
+            throw new ProviderEventBusyException(ProviderEventBusyException.Reason.LEASE_ROW);
         }
     }
 

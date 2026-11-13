@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -12,8 +13,11 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
+import de.tum.cit.aet.hephaestus.integration.core.consumer.RejectedInboxWrite;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
@@ -33,6 +37,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabAdmissio
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteTestFixtures;
+import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.PassThroughTransactionTemplate;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
@@ -48,6 +53,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.TransientDataAccessResourceException;
 
 @Tag("unit")
 class GitLabPushMessageHandlerTest extends BaseUnitTest {
@@ -307,6 +313,47 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
         handler.onMessage(msg);
 
         verify(deserializer, never()).deserialize(any(), any());
+    }
+
+    @Test
+    void shouldPropagateARejectedLocalCaptureWithoutLoggingOrFallingBack() throws IOException {
+        var project = createProjectInfo(42L, "org/proj");
+        Repository repo = activeLocalGitRepository(project);
+        when(tokenService.resolveServerUrl(7L)).thenReturn(DEFAULT_SERVER_URL);
+        when(tokenService.getAccessToken(7L)).thenReturn("fixture-token");
+        doAnswer(call -> {
+                    Consumer<CommitDetails> capture = call.getArgument(4);
+                    capture.accept(capturedCommit("blocked"));
+                    return null;
+                })
+                .when(gitRepositoryManager)
+                .forEachCommitInRange(any(), any(), any(), any(), any());
+        when(persister.persist(any(), eq(repo), any())).thenAnswer(call -> {
+            DeliveryInbox.claim("capture");
+            return Outcome.CAPTURED;
+        });
+        var message = mockMessage("gitlab.?connection.1.push", createPushEvent(project));
+        var rejected = new TransientDataAccessResourceException("fixture write rejected");
+        try (var logs = new LogCapture(GitLabPushMessageHandler.class)) {
+            assertThatThrownBy(() -> RejectedInboxWrite.during(rejected, () -> onRoute(message)))
+                    .isSameAs(rejected);
+            assertThat(logs.messagesAtLeast(Level.WARN)).isEmpty();
+        }
+    }
+
+    @Test
+    void shouldPropagateARejectedWebhookWriteWithoutAnAdapterWarning() throws IOException {
+        var project = createProjectInfo(42L, "org/proj");
+        activeLocalGitRepository(project);
+        var event = new GitLabPushEventDTO(
+                "push", "refs/heads/main", "before", null, null, 42L, project, 1, List.of(webhookCommit("blocked")));
+        var message = mockMessage("gitlab.?connection.1.push", event);
+        var rejected = new TransientDataAccessResourceException("fixture write rejected");
+        try (var logs = new LogCapture(GitLabPushMessageHandler.class)) {
+            assertThatThrownBy(() -> RejectedInboxWrite.during(rejected, () -> onRoute(message)))
+                    .isSameAs(rejected);
+            assertThat(logs.messagesAtLeast(Level.WARN)).isEmpty();
+        }
     }
 
     // Helpers

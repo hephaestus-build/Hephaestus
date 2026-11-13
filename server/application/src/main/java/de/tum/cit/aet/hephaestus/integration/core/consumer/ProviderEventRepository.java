@@ -211,17 +211,34 @@ interface ProviderEventRepository extends Repository<ProviderEventRow, Long> {
             """;
     String LEASE_LOCK = LEASE_READ + " FOR SHARE";
 
+    interface LeaseAttemptRow extends LeaseRow {
+        boolean getAcquired();
+    }
+
+    String LEASE_ATTEMPT_START = "WITH held AS MATERIALIZED (" + LEASE_READ;
+    // A skipped row is busy, not erased. The fallback snapshot never permits a write.
+    String LEASE_ATTEMPT_END = """
+            )
+            SELECT state, "leaseEpoch", true AS acquired FROM held
+            UNION ALL
+            SELECT state, lease_epoch AS "leaseEpoch", false AS acquired FROM provider_event
+            WHERE id = :id AND NOT EXISTS (SELECT 1 FROM held)
+            """;
+
     @WorkspaceAgnostic("The workspace is read only through the trusted event id; no caller supplies another tenant")
     @Query(value = """
-            SELECT w.id FROM workspace w
-            WHERE w.id = (SELECT workspace_id FROM provider_event WHERE id = :id)
-            FOR KEY SHARE NOWAIT
+            WITH target AS MATERIALIZED (SELECT workspace_id FROM provider_event WHERE id = :id),
+                 held AS MATERIALIZED (
+                   SELECT w.id FROM workspace w
+                   WHERE w.id = (SELECT workspace_id FROM target)
+                   FOR KEY SHARE SKIP LOCKED)
+            SELECT (SELECT workspace_id FROM target) IS NULL OR EXISTS (SELECT 1 FROM held)
             """, nativeQuery = true)
-    Optional<Long> lockWorkspace(@Param("id") long id);
+    boolean lockWorkspace(@Param("id") long id);
 
     @WorkspaceAgnostic("The event id and epoch come from the trusted claim, never from a request")
-    @Query(value = LEASE_READ + " FOR KEY SHARE NOWAIT", nativeQuery = true)
-    Optional<LeaseRow> readLease(@Param("id") long id);
+    @Query(value = LEASE_ATTEMPT_START + " FOR KEY SHARE SKIP LOCKED" + LEASE_ATTEMPT_END, nativeQuery = true)
+    Optional<LeaseAttemptRow> readLease(@Param("id") long id);
 
     interface ErasedRow extends LeaseRow {
         long getId();
@@ -229,8 +246,8 @@ interface ProviderEventRepository extends Repository<ProviderEventRow, Long> {
 
     /** SHARE permits independent nested writers, but blocks erasure and lease replacement until commit. */
     @WorkspaceAgnostic("The event id and epoch come from the trusted claim, never from a request")
-    @Query(value = LEASE_LOCK + " NOWAIT", nativeQuery = true)
-    Optional<LeaseRow> lockLease(@Param("id") long id);
+    @Query(value = LEASE_ATTEMPT_START + " FOR SHARE SKIP LOCKED" + LEASE_ATTEMPT_END, nativeQuery = true)
+    Optional<LeaseAttemptRow> lockLease(@Param("id") long id);
 
     /** Outcome recording holds no domain locks and can wait for a concurrent erasure to commit. */
     @WorkspaceAgnostic("The event id and epoch come from the trusted claim, never from a request")

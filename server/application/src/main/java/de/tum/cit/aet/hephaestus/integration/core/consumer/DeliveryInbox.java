@@ -58,6 +58,15 @@ public class DeliveryInbox {
         return claimed;
     }
 
+    /** A provider fallback must not log or continue after the inbox has rejected its write. */
+    public static void rethrowRejectedWrite() {
+        Context context = CURRENT.get();
+        if (context != null) {
+            var rejected = context.status().rejectedWrite;
+            if (rejected != null) throw rejected;
+        }
+    }
+
     // Installed for every write transaction on the dispatch thread, including REQUIRES_NEW natural-key upserts.
     // A named step prevents deletion early while allowing renewal. Every writer checks the epoch again at commit.
     static void fenceTransaction() {

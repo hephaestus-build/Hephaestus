@@ -494,7 +494,7 @@ A message that a release before this one stored has no trace context, so its han
 | Prometheus name | Type | Labels | Meaning |
 | --- | --- | --- | --- |
 | `integration_message_lag_seconds` | Histogram | `kind` | How long an event waited in its stream before its first handling. A retry has no sample |
-| `integration_message_process_duration_seconds` | Histogram | `kind`, `outcome` | How long the handling of one delivery took. `outcome` is `completed` or `failed` |
+| `integration_message_process_duration_seconds` | Histogram | `kind`, `outcome` | How long the handling of one delivery took. `outcome` is `completed`, `failed`, `dropped`, `timed_out`, or `retried`. `retried` is expected inbox fence contention |
 
 Framework HTTP spans describe the transport. Prompts, tool results, request bodies,
 headers and tokens used for authentication are not span attributes.
