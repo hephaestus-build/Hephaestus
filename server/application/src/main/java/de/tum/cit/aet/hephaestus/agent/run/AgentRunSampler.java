@@ -85,6 +85,8 @@ public class AgentRunSampler {
                 .tag("band", AgentRuns.tag(slot.band()))
                 .tag("state", AgentRuns.tag(slot.state()))
                 .tag("hold_reason", slot.hold() == null ? "none" : AgentRuns.tag(slot.hold()))
+                // Micrometer holds a gauge's value weakly; the registry must own it or the series reads NaN after a GC.
+                .strongReference(true)
                 .register(meters);
     }
 
@@ -94,6 +96,7 @@ public class AgentRunSampler {
                 .description(description)
                 .tag("kind", AgentRuns.tag(subject.kind()))
                 .tag("band", AgentRuns.tag(subject.band()))
+                .strongReference(true)
                 .register(meters);
         return value;
     }
