@@ -13,7 +13,7 @@ export interface FiledIssueProps {
 export function FiledIssue({ title, text }: FiledIssueProps) {
 	return (
 		<Collapsible>
-			<CollapsibleTrigger render={<Button variant="ghost" size="sm" className="group -ml-2" />}>
+			<CollapsibleTrigger render={<Button variant="ghost" size="sm" className="group" />}>
 				The issue as filed
 				<ChevronDown
 					data-icon="inline-end"

@@ -110,7 +110,7 @@ export const filedPrivateFeedback = {
 	state: "FILED",
 	route: "PRIVATE",
 	canTriage: false,
-	reason: "it may describe a security problem",
+	reason: "security",
 	issueUrl: "https://github.com/acme/hephaestus-private/issues/18",
 	issueNumber: 18,
 	issueTitle: "Report about session handling",

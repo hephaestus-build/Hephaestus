@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { TablePagination } from "@/components/common/TablePagination";
 import { FiledIssue } from "@/components/product-feedback/FiledIssue";
 import { REPORT_STATE_DEFS } from "@/components/product-feedback/report-state-defs";
+import { closedAs, reasonSentence } from "@/components/product-feedback/sharing-copy";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -217,12 +218,15 @@ function FeedbackCard({ item, pending, filing, onTriage, onFile }: FeedbackCardP
 							{item.route === "PUBLIC" ? "Public" : "Private"} issue #{item.issueNumber}
 						</InlineLink>
 						{hasText(item.issueClosedAs) && (
-							<span className="text-muted-foreground"> · Closed: {item.issueClosedAs}</span>
+							<span className="text-muted-foreground">
+								{" "}
+								· Closed as {closedAs(item.issueClosedAs)}
+							</span>
 						)}
 					</p>
 				)}
 				{hasText(item.reason) && (
-					<p className="text-muted-foreground">Private because {item.reason}.</p>
+					<p className="text-muted-foreground">{reasonSentence(item.reason)}</p>
 				)}
 				{hasText(item.issueTitle) && hasText(item.issueText) && (
 					<FiledIssue title={item.issueTitle} text={item.issueText} />

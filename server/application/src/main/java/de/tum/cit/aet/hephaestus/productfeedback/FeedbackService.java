@@ -125,8 +125,7 @@ class FeedbackService {
     public FeedbackItemDTO triage(UUID id, boolean resolved, Long accountId) {
         ProductFeedback item =
                 feedback.findById(id).orElseThrow(() -> new EntityNotFoundException("Product feedback", id.toString()));
-        // The console lists only reports that GitHub will not get; one that is filed, or on its way, is worked on
-        // there.
+        // Reports that are filed, or on their way, are worked on in GitHub.
         boolean onGitHub = filings.lock(id)
                 .map(filing -> !FilingLifecycle.waitsForAdmin(filing.getState()))
                 .orElse(false);
@@ -161,15 +160,13 @@ class FeedbackService {
                 .toList();
     }
 
-    private static FeedbackItemDTO item(
+    private FeedbackItemDTO item(
             ProductFeedback f,
             @Nullable ProductFeedbackFiling filing,
             FeedbackRefs.Resolved resolved,
             Set<UUID> fileable,
             Set<UUID> undrafted) {
-        FilingRoute route = filing == null ? FilingRoute.ADMINS : filing.getRoute();
-        ProductFeedbackFiling filed = filing != null && filing.getState() == FilingState.FILED ? filing : null;
-        FilingReason reason = filing == null ? null : filing.getReason();
+        var shown = reports.dto(f, filing, true);
         return new FeedbackItemDTO(
                 f.getId(),
                 resolved.account(f.getAccountId()),
@@ -184,16 +181,14 @@ class FeedbackService {
                 resolved.account(f.getResolvedByAccountId()),
                 !f.isResolved() && fileable.contains(f.getId()),
                 undrafted.contains(f.getId()),
-                filing == null
-                        ? FilingDTOs.ReportState.SAVED_FOR_ADMINS
-                        : FilingLifecycle.reporterState(filing.getState(), route),
-                route == null ? FilingDTOs.ReportRoute.PRIVATE : FilingDTOs.ReportRoute.valueOf(route.name()),
-                reason == null || reason == FilingReason.NONE ? null : reason.words(),
-                filed == null ? null : filed.getIssueUrl(),
-                filed == null ? null : filed.getIssueNumber(),
-                filed != null && Boolean.FALSE.equals(filed.getIssueOpen()) ? filed.getIssueStateReason() : null,
-                filed == null ? null : filed.getIssueTitle(),
-                filed == null ? null : filed.getIssueText(),
+                shown.state(),
+                shown.route(),
+                shown.reason(),
+                shown.issueUrl(),
+                shown.issueNumber(),
+                shown.issueClosedAs(),
+                shown.issueTitle(),
+                shown.issueText(),
                 filing == null || FilingLifecycle.waitsForAdmin(filing.getState()));
     }
 }

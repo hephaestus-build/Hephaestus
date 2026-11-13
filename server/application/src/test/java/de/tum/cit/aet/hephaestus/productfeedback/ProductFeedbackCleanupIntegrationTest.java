@@ -247,6 +247,7 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldKeepThePrivateRepositoryWhenAFiledPublicIssueCanStillBeMadePrivate() {
+        long existingPublic = filings.countByStateAndRoute(FilingState.FILED, FilingRoute.PUBLIC);
         Account reporter = account(Account.AppRole.USER);
         UUID report = filedPublicReport(reporter);
         var other = new ProductFeedbackIssues.Repository(42, "", "acme/feedback-private-2", 7, true);
@@ -264,7 +265,9 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
                     .isInstanceOfSatisfying(
                             ResponseStatusException.class,
                             refused -> assertThat(refused.getReason())
-                                    .contains("1 public issue can still be made private"));
+                                    .contains((existingPublic + 1)
+                                            + (existingPublic == 0 ? " public issue" : " public issues")
+                                            + " can still be made private"));
 
             // Replacing it is allowed: Make private moves the issue into whichever private repository is set.
             destinationService.update(
@@ -576,7 +579,10 @@ class ProductFeedbackCleanupIntegrationTest extends BaseIntegrationTest {
         ReflectionTestUtils.setField(filing, "state", FilingState.STOPPED);
         filings.save(filing);
 
-        retry(receipt.id(), account(Account.AppRole.USER)).expectStatus().isForbidden().expectBody(Void.class);
+        retry(receipt.id(), account(Account.AppRole.USER))
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
         retry(UUID.randomUUID(), admin).expectStatus().isNotFound().expectBody(Void.class);
         retry(receipt.id(), admin).expectStatus().isNoContent().expectBody().isEmpty();
 

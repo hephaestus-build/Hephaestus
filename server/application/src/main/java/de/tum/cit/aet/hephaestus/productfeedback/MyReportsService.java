@@ -312,8 +312,7 @@ class MyReportsService {
     }
 
     /** @param instanceAdmin the reader administers the instance, so a private issue's address tells them nothing new */
-    private MyProductFeedbackDTO dto(
-            ProductFeedback report, @Nullable ProductFeedbackFiling filing, boolean instanceAdmin) {
+    MyProductFeedbackDTO dto(ProductFeedback report, @Nullable ProductFeedbackFiling filing, boolean instanceAdmin) {
         String message = report.getMessage().strip();
         if (filing == null)
             return new MyProductFeedbackDTO(

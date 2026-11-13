@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent } from "storybook/test";
 
+import { expectSettledVisible } from "@/stories/overlay";
+
 import { FiledIssue } from "./FiledIssue";
 
 const meta = {
@@ -20,7 +22,7 @@ export const Default: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByText("Expected result")).not.toBeInTheDocument();
 		await userEvent.click(canvas.getByRole("button", { name: "The issue as filed" }));
-		await expect(await canvas.findByText("Expected result")).toBeVisible();
+		await expectSettledVisible(await canvas.findByText("Expected result"));
 	},
 };
 
@@ -40,6 +42,6 @@ export const LongText: Story = {
 	],
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "The issue as filed" }));
-		await expect(await canvas.findByText(/Seen on/u)).toBeVisible();
+		await expectSettledVisible(await canvas.findByText(/Seen on/u));
 	},
 };

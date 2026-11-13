@@ -3,6 +3,7 @@ import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import type { FeedbackItem } from "@/api/types.gen";
 import { withStandardPage } from "@/stories/decorators";
+import { expectSettledVisible } from "@/stories/overlay";
 
 import { AdminFeedbackList } from "./AdminFeedbackList";
 import {
@@ -76,7 +77,7 @@ export const OnGitHub: Story = {
 		await expect(canvas.getByRole("link", { name: /Public issue #412/u })).toBeVisible();
 		await expect(canvas.getByRole("link", { name: /Private issue #18/u })).toBeVisible();
 		await expect(
-			canvas.getByText(/Private because it may describe a security problem/u),
+			canvas.getByText("It may be about a security problem, so it stays private."),
 		).toBeVisible();
 		await expect(canvas.getAllByRole("button", { name: "The issue as filed" })).toHaveLength(2);
 	},
@@ -107,7 +108,7 @@ export const SavedBeforeDisclosure: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "File on GitHub" }));
 		const confirm = within(await screen.findByRole("alertdialog"));
-		await expect(confirm.getByText(/No AI model reads it/u)).toBeVisible();
+		await expectSettledVisible(confirm.getByText(/No AI model reads it/u));
 	},
 };
 
@@ -161,4 +162,10 @@ export const Loading: Story = {
 
 export const Error: Story = {
 	args: { state: { status: "error", error: new TypeError("Failed to fetch"), onRetry: fn() } },
+};
+
+/** Full report text and the issue copy wrap on a narrow screen. */
+export const Reflow: Story = {
+	args: { state: ready([filedPrivateFeedback], "ON_GITHUB") },
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 };

@@ -36,7 +36,7 @@ interface ProductFeedbackRepository extends JpaRepository<ProductFeedback, UUID>
                        OR (p.resolved_at IS NULL AND (
                            (:status = 'OPEN' AND (f.feedback_id IS NULL OR f.state IN ('SAVED', 'STOPPED')))
                            OR (:status = 'IN_FLIGHT' AND f.state IN
-                               ('DRAFT_QUEUED', 'DRAFTING', 'ANSWERED', 'HELD', 'QUEUED', 'FILING'))
+                               ('DRAFT_QUEUED', 'DRAFTING', 'DRAFT_WAITING', 'ANSWERED', 'HELD', 'QUEUED', 'FILING'))
                            OR (:status = 'ON_GITHUB' AND f.state = 'FILED' AND f.issue_open IS DISTINCT FROM false)))
                     ORDER BY CASE WHEN :status = 'RESOLVED' THEN COALESCE(p.resolved_at, p.created_at)
                              ELSE p.created_at END DESC
@@ -48,7 +48,7 @@ interface ProductFeedbackRepository extends JpaRepository<ProductFeedback, UUID>
                        OR (p.resolved_at IS NULL AND (
                            (:status = 'OPEN' AND (f.feedback_id IS NULL OR f.state IN ('SAVED', 'STOPPED')))
                            OR (:status = 'IN_FLIGHT' AND f.state IN
-                               ('DRAFT_QUEUED', 'DRAFTING', 'ANSWERED', 'HELD', 'QUEUED', 'FILING'))
+                               ('DRAFT_QUEUED', 'DRAFTING', 'DRAFT_WAITING', 'ANSWERED', 'HELD', 'QUEUED', 'FILING'))
                            OR (:status = 'ON_GITHUB' AND f.state = 'FILED' AND f.issue_open IS DISTINCT FROM false)))
                     """, nativeQuery = true)
     Page<ProductFeedback> findForAdmin(@Param("status") String status, Pageable pageable);
