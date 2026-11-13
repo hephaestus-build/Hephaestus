@@ -45,8 +45,8 @@ public class ActionExecutor {
     static final Duration WRITE_MARGIN = Duration.ofSeconds(60);
 
     /**
-     * How long an ended action stays. Longer than any notice's own expiry, so a late redelivery of the event that
-     * asked for it still finds its idempotency key.
+     * How long an ended action stays, except Slack outcomes kept with their conversation. Longer than any notice's
+     * own expiry, so a late redelivery still finds its idempotency key.
      */
     static final Duration RETENTION = Duration.ofDays(30);
 
@@ -128,21 +128,16 @@ public class ActionExecutor {
         return store.start(request, LEASE).map(this::run);
     }
 
-    /**
-     * Carries out one admitted action on the caller's thread now, whatever its due time, when it heads its lane. The
-     * caller that created it ({@link AgentActions#enqueueNew}) carries out the effect with {@code adapter}, which holds
-     * what only that caller knows, such as a stream it opened. If the caller does not, the executor takes the action
-     * later, with the kind's own adapter. Empty when the action is not admitted or waits for its lane.
-     */
-    public Optional<ActionResult> runNow(UUID id, ActionAdapter adapter) {
-        return store.claim(id, LEASE).map(claim -> run(claim, adapter));
+    /** Carries out an admitted lane head now with its registered adapter. */
+    public Optional<ActionResult> runNow(UUID id) {
+        return store.claim(id, LEASE).map(this::run);
     }
 
     ActionResult run(ActionStore.Claim claim) {
         return run(claim, Objects.requireNonNull(adapters.get(claim.kind())));
     }
 
-    /** Carries out a claim with the given adapter: the kind's own, or the one of the caller that owns the effect. */
+    /** Carries out a claim with the given adapter. */
     ActionResult run(ActionStore.Claim claim, ActionAdapter adapter) {
         var fenced = new AtomicBoolean();
         var attempt = new ActionAttempt(

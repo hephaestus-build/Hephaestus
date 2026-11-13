@@ -146,15 +146,24 @@ The `ended` hook moves the filing to `ANSWERED`, with the kept answer only when 
 
 ## Carry out an effect at once
 
-A caller that holds what only it knows, such as the stream of a Slack reply, can own an effect.
-It creates the action with `AgentActions.enqueueNew` and a delay, and carries it out with `ActionExecutor.runNow` and its own adapter.
-If the caller dies first, the executor of any server takes the action when the delay ends, with the kind's own adapter.
-That adapter does not have what the caller held, so it reads the provider back first.
-The Slack reply works like this ([Slack replies](./unified-pi-runtime.mdx)).
+`ActionExecutor.runNow` can carry out an admitted lane head with its registered adapter.
+It claims and fences the action in the same way as the scheduled executor.
+A lost notification leaves the committed action due for the executor of any replica.
+
+Slack enqueues one `SLACK_POST` when the turn ends, in the transaction that stores its admitted entries.
+The adapter reads those entries and posts one complete message.
+[Slack metadata](https://docs.slack.dev/messaging/message-metadata/) carries the question id, or the digest id.
+An attempt after an unknown write only reads the history with `include_all_metadata=true`.
+Unreadable or incomplete history stays uncertain. It does not authorize a second post.
 
 ## Retention and erasure
 
-The executor deletes an ended action 30 days after it ended.
+The executor deletes an ended action 30 days after it ended, except `SLACK_POST`.
+Slack actions retain their outcome and idempotency key while their question or digest entry remains unredacted.
+The durable ledger change event removes the terminal action after source redaction commits.
+If an action is still live then, its settlement removes it after recording any feedback receipts.
+A turn notification never enqueues an action, so a late notification cannot repeat a removed post.
+The entry stores only the Slack message reference needed to open a thread. Delivery state has one home in the outbox.
 That is longer than any notice's expiry, so a late redelivery of the event still finds the idempotency key.
 
 `ActionPersonDataCatalog` deletes the actions whose `subject_account_id` is the erased account.

@@ -727,6 +727,11 @@ The [Conversation runtime](/contributor/unified-pi-runtime#context-folder) gives
 
 ### Live answers
 
+Slack receives one completed answer through the outbox after the turn ends and the answer passes admission.
+Slack receives no live answer text or progress reaction.
+Use **Stop answer** in the app to stop an unfinished turn.
+[Conversation runtime § Slack replies](/contributor/unified-pi-runtime#slack-replies) owns the delivery and readback rules.
+
 The server role serves the live answer stream at `GET /api/workspaces/{slug}/mentor/events`.
 It sends a `ping` comment every 20 seconds.
 The reverse proxy must keep an idle connection open for longer than 20 seconds.

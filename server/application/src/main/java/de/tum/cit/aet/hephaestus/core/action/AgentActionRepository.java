@@ -103,19 +103,9 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
             @Param("expiresAt") @Nullable Instant expiresAt,
             @Param("delay") long delaySeconds);
 
-    /** Makes an admitted action due within {@code delay}; an action that is due sooner keeps its time. */
-    @Modifying
-    @Query(value = """
-            UPDATE agent_action
-               SET next_attempt_at = LEAST(next_attempt_at, clock_timestamp() + make_interval(secs => :delay)),
-                   updated_at = clock_timestamp()
-             WHERE workspace_id = :workspaceId AND idempotency_key = :key AND state = 'ADMITTED'
-            """, nativeQuery = true)
-    int advance(@Param("workspaceId") long workspaceId, @Param("key") String key, @Param("delay") long delaySeconds);
-
     /**
-     * Takes one admitted action under a new lease now, whatever its due time, when it heads its lane: the caller that
-     * owns the effect carries it out at once ({@link ActionExecutor#runNow(UUID, ActionAdapter)}).
+     * Takes one admitted action under a new lease when it is due and heads its lane: the caller that
+     * owns the effect carries it out at once ({@link ActionExecutor#runNow(UUID)}).
      */
     @WorkspaceAgnostic("Claims one action by its id")
     @Query(value = """
@@ -123,7 +113,7 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
               UPDATE agent_action c
                  SET state = 'EXECUTING', lease_epoch = c.lease_epoch + 1, attempts = c.attempts + 1,
                      leased_until = clock_timestamp() + make_interval(secs => :lease), updated_at = clock_timestamp()
-               WHERE c.id = :id AND c.state = 'ADMITTED'
+               WHERE c.id = :id AND c.state = 'ADMITTED' AND c.next_attempt_at <= clock_timestamp()
                  AND (c.expires_at IS NULL OR c.expires_at > clock_timestamp())
                  AND NOT EXISTS (
                    SELECT 1 FROM agent_action b
@@ -177,13 +167,6 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
              ORDER BY created_at DESC, id DESC LIMIT 1
             """, nativeQuery = true)
     Optional<LaneRow> newestInLane(@Param("workspaceId") long workspaceId, @Param("lane") String laneKey);
-
-    /** An admitted action's payload, under its key. */
-    @Query(value = """
-            SELECT payload::text FROM agent_action
-             WHERE workspace_id = :workspaceId AND idempotency_key = :key AND state = 'ADMITTED'
-            """, nativeQuery = true)
-    Optional<String> findAdmittedPayload(@Param("workspaceId") long workspaceId, @Param("key") String key);
 
     /** The actions of a workspace under these keys. */
     @Query(value = LANE + """
@@ -426,11 +409,26 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
             """, nativeQuery = true)
     List<UUID> findStale(@Param("atMostOnce") Collection<String> atMostOnceKinds, @Param("limit") int limit);
 
-    /** Deletes what ended before the cutoff: the ledger of a sent effect is kept only as long as a replay can come. */
+    /** Waits for an in-flight settlement before checking which scoped outcomes can be forgotten. */
+    @Query(
+            value =
+                    "SELECT id FROM agent_action WHERE workspace_id=:workspaceId AND idempotency_key IN (:keys) ORDER BY id FOR UPDATE",
+            nativeQuery = true)
+    List<UUID> lockByKeys(@Param("workspaceId") long workspaceId, @Param("keys") Collection<String> keys);
+
+    /** Drops only terminal outcomes of the scoped source keys; live actions still settle their receipts. */
+    @Modifying
+    @Query(
+            value =
+                    "DELETE FROM agent_action WHERE workspace_id=:workspaceId AND idempotency_key IN (:keys) AND ended_at IS NOT NULL",
+            nativeQuery = true)
+    int deleteEndedByKeys(@Param("workspaceId") long workspaceId, @Param("keys") Collection<String> keys);
+
+    /** Deletes ended actions after retention, except Slack outcomes needed by their conversation and replay key. */
     @WorkspaceAgnostic("The retention sweep deletes ended actions of every workspace")
     @Modifying
     @Query(value = """
-            DELETE FROM agent_action WHERE ended_at < clock_timestamp() - make_interval(days => :days)
+            DELETE FROM agent_action WHERE ended_at < clock_timestamp() - make_interval(days => :days) AND kind <> 'SLACK_POST'
             """, nativeQuery = true)
     int deleteEndedBefore(@Param("days") int retentionDays);
 }

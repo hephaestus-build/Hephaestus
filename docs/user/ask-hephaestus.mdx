@@ -40,8 +40,6 @@ You have one conversation with Hephaestus in each workspace.
 The **Ask Hephaestus** page and the Ask Hephaestus panel on other pages show all of it.
 Your Slack direct message with Hephaestus shows only the messages that you wrote in Slack and Hephaestus's answers to them.
 It also shows the notes of your weekly digest.
-If Hephaestus has not started on a question after 10 seconds, a short note says so, and it goes away when Hephaestus starts.
-If Hephaestus is answering other questions, the note says that yours starts when one finishes.
 
 There is no list of earlier conversations, and you do not start new ones.
 Hephaestus can look back through the conversation, so you can return to an earlier topic at any time.
@@ -228,30 +226,19 @@ Its first answer in your direct message says "Hephaestus answers with an AI mode
 So does its first answer in each thread.
 The Hephaestus Home tab says so too.
 
-While it works, Hephaestus adds 👀 to your message.
+Hephaestus posts its complete answer in Slack.
+This applies to direct messages and Slack threads.
+The reply quotes the observations, problems, and practice feedback that Hephaestus showed you.
+Thread replies include **Helpful** and **Not helpful** buttons.
 
-- **In the direct message itself**, Hephaestus then posts one reply with everything it wrote.
-  The reply quotes the observations, problems, and feedback that Hephaestus showed you.
-  During a longer answer, a short note says what Hephaestus does, such as "Reading your pull requests…".
-  The note goes away when the reply arrives.
-- **In a Slack thread**, Hephaestus writes its answer as it goes.
-  The answer ends with **Helpful** and **Not helpful** buttons.
-
-You can stop any answer in the app ([Stop an answer](#stop-an-answer)), also an answer that Hephaestus writes in Slack.
-In a Slack thread, Slack also shows that Hephaestus works, with a **Stop** control.
-Select it to stop the answer, also before Hephaestus writes its first words or while it reads your work.
-Hephaestus then stops, but not always at once: it can take a moment before Slack shows that it no longer works.
-
-If your workspace's Slack app does not show **Stop**, use **Stop answer** in the app.
+Use **Stop answer** in the app to stop an answer before it finishes ([Stop an answer](#stop-an-answer)).
 Questions you sent after it keep their place.
-The reply in Slack keeps what Hephaestus wrote before the stop.
+The app keeps what Hephaestus wrote before the stop.
 
-Feedback that Hephaestus shows in Slack counts as delivered only when its text appears in Slack.
-A reply longer than Slack shows ends with a note, and the full answer is in Hephaestus.
-The same note ends a Slack thread answer that Hephaestus could not finish writing in Slack.
-If Hephaestus has to start an answer again, the first try ends with a note, and the new answer follows below it.
+Practice feedback counts as delivered only when its text appears in Slack.
+A reply longer than Slack can show ends with a note, and the full answer is in Hephaestus.
 
-If Hephaestus cannot tell whether an answer reached Slack, it checks Slack once and never posts the answer again.
+If Hephaestus cannot tell whether an answer reached Slack, it reads Slack to find the message before it records the outcome. It does not post that answer again.
 If an answer does not fully reach Slack, the app shows *Not fully delivered to Slack. The full answer is here.* under it.
 Slack can show part of that answer or none of it.
 

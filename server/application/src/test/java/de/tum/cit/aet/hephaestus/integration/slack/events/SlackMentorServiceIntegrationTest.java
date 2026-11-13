@@ -16,18 +16,14 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationMessageDispatcher;
-import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorPosts;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackOnboardingService;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceContentEraser;
-import de.tum.cit.aet.hephaestus.integration.slack.webhook.SlackSubjectKeyDeriver;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
@@ -36,7 +32,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
 import de.tum.cit.aet.hephaestus.mentor.MentorRejectedException;
-import de.tum.cit.aet.hephaestus.mentor.MentorSlackDelivery;
+import de.tum.cit.aet.hephaestus.mentor.MentorSlackMessages;
 import de.tum.cit.aet.hephaestus.mentor.MentorTimeline;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnClaims;
@@ -47,11 +43,6 @@ import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import io.nats.client.Message;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -62,13 +53,11 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
-import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /** What the developer does in their Slack DM with Hephaestus, and the ledger rows it writes. */
@@ -81,14 +70,6 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
     private static final String OTHER_TEAM = "T2";
     private static final String CHANNEL = "D9";
     private static final String SLACK_USER = "U1";
-    private static final Duration LEASE = Duration.ofMinutes(5);
-    private static final JsonMapper JSON = JsonMapper.builder().build();
-
-    @Autowired
-    private IntegrationMessageDispatcher dispatcher;
-
-    @Autowired
-    private SlackSubjectKeyDeriver subjectDeriver;
 
     @Autowired
     private MentorConversationService conversations;
@@ -103,13 +84,13 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
     private MentorEntryService entries;
 
     @Autowired
+    private MentorSlackMessages messages;
+
+    @Autowired
     private MentorTurnService turns;
 
     @Autowired
     private MentorTimeline timeline;
-
-    @Autowired
-    private MentorSlackDelivery delivery;
 
     @Autowired
     private MentorEntryRepository entryRepository;
@@ -213,89 +194,8 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
                 new MentorTurnService.Ending(MentorTurn.Status.DONE, List.of(pi), null, null));
         UUID answerId = Objects.requireNonNull(
                 turns.answer(workspace.getId(), running.getId()).answerEntryId());
-        delivery.delivered(workspace.getId(), answerId, ts);
+        messages.link(workspace.getId(), answerId, ts);
         return entryRepository.findById(answerId).orElseThrow();
-    }
-
-    /** A message of the Slack stream on {@code subject}, as the consumer hands it to a handler. */
-    private static Message natsMessage(String subject, String body) {
-        Message message = mock(Message.class);
-        when(message.getSubject()).thenReturn(subject);
-        when(message.getData()).thenReturn(body.getBytes(StandardCharsets.UTF_8));
-        return message;
-    }
-
-    /**
-     * The Hephaestus thread on the question {@code 100.1}, whose turn ended with an answer at {@code 100.2}: the reply
-     * {@code 100.5} runs on a lease of {@code lease}, and the follow-up {@code 100.6} waits behind it.
-     *
-     * @return the running turn as the ledger stores it
-     */
-    private MentorTurn runningThreadTurnWithFollowUp(Duration lease) {
-        service.handleDm(TEAM, CHANNEL, SLACK_USER, "How is my review practice?", "100.1", "100.1");
-        answerPostedAt("100.2");
-        service.handleDm(TEAM, CHANNEL, SLACK_USER, "Tell me more", "100.5", "100.1");
-        service.handleDm(TEAM, CHANNEL, SLACK_USER, "And the tests?", "100.6", "100.1");
-        MentorTurn claimed = claims.claimNext().orElseThrow();
-        if (lease.isNegative()) claims.expireLease(claimed);
-        assertThat(claimed.getId()).isEqualTo(question("100.5").getTurnId());
-        MentorTurn running = turnOf(question("100.5"));
-        assertThat(running.getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
-        assertThat(turnOf(question("100.6")).getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
-        return running;
-    }
-
-    /** The database clock now, as a Slack {@code ts}, checked to be after the start of {@code running}. */
-    private String afterStartOf(MentorTurn running) {
-        Instant now = turnRepository.databaseClock();
-        assertThat(now).isAfter(Objects.requireNonNull(running.getStartedAt()));
-        return SlackTs.ofInstant(now);
-    }
-
-    /** A signed Slack envelope of {@code team} that carries an {@code agent_session_stopped} event with {@code fields}. */
-    private static String sessionStopped(String team, String fields) {
-        return """
-                {"type":"event_callback","team_id":"%s","event_id":"Ev0SESSIONSTOP","event":{
-                  "type":"agent_session_stopped",%s}}
-                """.formatted(team, fields);
-    }
-
-    private static String stopFields(String user, String channel, String threadTs, String eventTs, String streams) {
-        return """
-                "user":"%s","channel":"%s","thread_ts":"%s","event_ts":"%s","streaming_message_ts":%s""".formatted(user, channel, threadTs, eventTs, streams);
-    }
-
-    /** The developer stops the session of the Slack thread on {@code 100.1} in their own DM. */
-    private static String ownThreadStopped(String eventTs, String streams) {
-        return sessionStopped(TEAM, stopFields(SLACK_USER, CHANNEL, "100.1", eventTs, streams));
-    }
-
-    /** Hands {@code envelope} to the handler that the real dispatcher finds for its subject. */
-    private void deliver(String envelope) {
-        String subject = subjectDeriver.subjectFor(JSON.readTree(envelope));
-        Optional<IntegrationMessageHandler> handler = dispatcher.dispatch(subject);
-        assertThat(handler)
-                .as("a handler for the subscribed agent_session_stopped event")
-                .isPresent();
-        handler.orElseThrow().onMessage(natsMessage(subject, envelope));
-    }
-
-    private MentorTurn.Status statusOf(String questionTs) {
-        return turnOf(question(questionTs)).getStatus();
-    }
-
-    /** The thread's reply still runs, its follow-up waits, and the answered main turn stays done. */
-    private void assertNothingStopped() {
-        assertThat(statusOf("100.5")).isEqualTo(MentorTurn.Status.RUNNING);
-        assertThat(statusOf("100.6")).isEqualTo(MentorTurn.Status.QUEUED);
-        assertThat(statusOf("100.1")).isEqualTo(MentorTurn.Status.DONE);
-    }
-
-    /** Only the thread's running reply stopped: its follow-up waits, and the answered main turn stays done. */
-    private void assertOnlyTheRunningReplyStopped() {
-        assertThat(statusOf("100.5")).isEqualTo(MentorTurn.Status.STOPPED);
-        assertThat(statusOf("100.6")).isEqualTo(MentorTurn.Status.QUEUED);
-        assertThat(statusOf("100.1")).isEqualTo(MentorTurn.Status.DONE);
     }
 
     @Test
@@ -406,272 +306,6 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
         assertThat(deleted.isRedacted()).isTrue();
         assertThat(deleted.getText()).isEmpty();
         assertThat(turnOf(deleted).getStatus()).isEqualTo(MentorTurn.Status.STOPPED);
-    }
-
-    @Test
-    void shouldStopOnlyTheRunningThreadTurnWhenTheDeveloperStopsItsSlackSession() {
-        service.handleDm(TEAM, CHANNEL, SLACK_USER, "How is my review practice?", "100.1", "100.1");
-        MentorTurn answered = turnOf(question("100.1"));
-        answerPostedAt("100.2");
-        service.handleDm(TEAM, CHANNEL, SLACK_USER, "Tell me more", "100.5", "100.1");
-        service.handleDm(TEAM, CHANNEL, SLACK_USER, "And the tests?", "100.6", "100.1");
-        MentorTurn claimed = claims.claimNext().orElseThrow();
-        MentorTurn running = turnOf(question("100.5"));
-        MentorTurn followUp = turnOf(question("100.6"));
-        assertThat(claimed.getId()).isEqualTo(running.getId());
-        assertThat(running.getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
-        assertThat(followUp.getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
-        assertThat(followUp.getConversationId()).isEqualTo(running.getConversationId());
-        String stoppedAt =
-                SlackTs.ofInstant(Objects.requireNonNull(running.getStartedAt()).plusSeconds(1));
-        String stop = """
-                {"type":"event_callback","team_id":"%s","event_id":"Ev0SESSIONSTOP","event":{
-                  "type":"agent_session_stopped","user":"%s","channel":"%s","thread_ts":"100.1",
-                  "event_ts":"%s","streaming_message_ts":[]}}
-                """.formatted(TEAM, SLACK_USER, CHANNEL, stoppedAt);
-        String dm = """
-                {"type":"event_callback","team_id":"%s","event_id":"Ev0DM","event":{
-                  "type":"message","channel_type":"im","user":"%s","channel":"%s","ts":"100.7","text":"Hi"}}
-                """.formatted(TEAM, SLACK_USER, CHANNEL);
-        // The Slack routing itself is wired: the same dispatcher finds the DM handler of this DM.
-        assertThat(dispatcher.dispatch(subjectDeriver.subjectFor(JSON.readTree(dm))))
-                .isPresent();
-
-        String subject = subjectDeriver.subjectFor(JSON.readTree(stop));
-        Optional<IntegrationMessageHandler> handler = dispatcher.dispatch(subject);
-
-        assertThat(handler)
-                .as("a handler for the subscribed agent_session_stopped event")
-                .isPresent();
-        handler.orElseThrow().onMessage(natsMessage(subject, stop));
-        assertThat(turnOf(question("100.5")).getStatus()).isEqualTo(MentorTurn.Status.STOPPED);
-        assertThat(turnOf(question("100.6")).getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
-        assertThat(turnRepository.findById(answered.getId()).orElseThrow().getStatus())
-                .isEqualTo(MentorTurn.Status.DONE);
-    }
-
-    @Test
-    void shouldStopTheTurnWhenTheSessionStopNamesTheStreamOfItsReply() {
-        MentorTurn running = runningThreadTurnWithFollowUp(LEASE);
-        delivery.streaming(workspace.getId(), question("100.5").getId(), "300.1");
-
-        deliver(ownThreadStopped(afterStartOf(running), "[\"300.1\"]"));
-
-        assertOnlyTheRunningReplyStopped();
-    }
-
-    @Test
-    void shouldKeepTheTurnRunningWhenTheSessionStopNamesOnlyOtherStreams() {
-        MentorTurn running = runningThreadTurnWithFollowUp(LEASE);
-        delivery.streaming(workspace.getId(), question("100.5").getId(), "300.1");
-
-        deliver(ownThreadStopped(afterStartOf(running), "[\"300.0\",\"300.2\"]"));
-
-        assertNothingStopped();
-    }
-
-    @Test
-    void shouldStopTheTurnWhenTheSessionStopIsOneMicrosecondAfterItsStart() {
-        MentorTurn running = runningThreadTurnWithFollowUp(LEASE);
-        Instant startedAt = Objects.requireNonNull(running.getStartedAt());
-
-        deliver(ownThreadStopped(SlackTs.ofInstant(startedAt.plus(1, ChronoUnit.MICROS)), "[]"));
-
-        assertOnlyTheRunningReplyStopped();
-    }
-
-    @ParameterizedTest
-    @ValueSource(longs = {-1, 0})
-    void shouldKeepTheTurnRunningWhenTheSessionStopIsNotAfterItsStart(long micros) {
-        MentorTurn running = runningThreadTurnWithFollowUp(LEASE);
-        Instant startedAt = Objects.requireNonNull(running.getStartedAt());
-
-        deliver(ownThreadStopped(SlackTs.ofInstant(startedAt.plus(micros, ChronoUnit.MICROS)), "[]"));
-
-        assertNothingStopped();
-    }
-
-    @ParameterizedTest
-    @CsvSource({
-        "T2, U1, D9, 100.1",
-        "T9, U1, D9, 100.1",
-        "T1, U2, D9, 100.1",
-        "T1, U1, D8, 100.1",
-        "T1, U1, D9, 100.2",
-        "T1, U1, D9, 999.9"
-    })
-    void shouldKeepTheTurnRunningWhenTheSessionStopIsNotOfItsOwnDmThread(
-            String team, String user, String channel, String threadTs) {
-        MentorTurn running = runningThreadTurnWithFollowUp(LEASE);
-        // The other workspace has the same DM and a question at the same ts, but no Hephaestus thread on it.
-        service.handleDm(OTHER_TEAM, CHANNEL, SLACK_USER, "Asked in the other workspace", "100.1", "100.1");
-
-        deliver(sessionStopped(team, stopFields(user, channel, threadTs, afterStartOf(running), "[]")));
-
-        assertNothingStopped();
-        assertThat(turnRepository.findByWorkspaceIdAndRequestId(otherWorkspace.getId(), "slack:T2:D9:100.1"))
-                .hasValueSatisfying(turn -> assertThat(turn.getStatus()).isEqualTo(MentorTurn.Status.QUEUED));
-    }
-
-    @Test
-    void shouldKeepTheTurnRunningWhenTheSessionStopArrivesAfterSlackWasDisconnected() {
-        MentorTurn running = runningThreadTurnWithFollowUp(LEASE);
-        String eventTs = afterStartOf(running);
-        Connection connection = connectionRepository
-                .findActive(workspace.getId(), IntegrationKind.SLACK)
-                .orElseThrow();
-        jdbc.update("UPDATE connection SET state = 'UNINSTALLED' WHERE id = ?", connection.getId());
-
-        deliver(ownThreadStopped(eventTs, "[]"));
-
-        assertNothingStopped();
-    }
-
-    @Test
-    void shouldKeepTheMainTurnRunningWhenTheSessionStopNamesItsTopLevelQuestion() {
-        service.handleDm(TEAM, CHANNEL, SLACK_USER, "How is my review practice?", "100.1", "100.1");
-        MentorTurn running = claims.claimNext().orElseThrow();
-        assertThat(running.getId()).isEqualTo(question("100.1").getTurnId());
-
-        deliver(ownThreadStopped(afterStartOf(turnOf(question("100.1"))), "[]"));
-
-        assertThat(statusOf("100.1")).isEqualTo(MentorTurn.Status.RUNNING);
-        assertThat(conversations.findThread(workspace.getId(), question("100.1").getId()))
-                .isEmpty();
-    }
-
-    @Test
-    void shouldKeepAWaitingReplyQueuedWhenNoTurnOfTheThreadRuns() {
-        service.handleDm(TEAM, CHANNEL, SLACK_USER, "How is my review practice?", "100.1", "100.1");
-        answerPostedAt("100.2");
-        service.handleDm(TEAM, CHANNEL, SLACK_USER, "Tell me more", "100.5", "100.1");
-
-        deliver(ownThreadStopped(SlackTs.ofInstant(turnRepository.databaseClock()), "[]"));
-
-        assertThat(statusOf("100.5")).isEqualTo(MentorTurn.Status.QUEUED);
-        assertThat(statusOf("100.1")).isEqualTo(MentorTurn.Status.DONE);
-    }
-
-    /**
-     * Each event lacks a required string, carries one that is not a string or not a ts, or carries a stream list that
-     * is missing, not an array, or holds an entry that is not a non-blank string. The reply's stream is
-     * {@code 300.1} and every ts is after its start, so a lax reading would stop the turn.
-     */
-    @ParameterizedTest
-    @ValueSource(
-            strings = {
-                "\"channel\":\"%2$s\",\"thread_ts\":\"%3$s\",\"event_ts\":\"%4$s\",\"streaming_message_ts\":[]",
-                "\"user\":\"%1$s\",\"thread_ts\":\"%3$s\",\"event_ts\":\"%4$s\",\"streaming_message_ts\":[]",
-                "\"user\":\"%1$s\",\"channel\":\"%2$s\",\"event_ts\":\"%4$s\",\"streaming_message_ts\":[]",
-                "\"user\":\"%1$s\",\"channel\":\"%2$s\",\"thread_ts\":\"%3$s\",\"streaming_message_ts\":[]",
-                "\"user\":\"\",\"channel\":\"%2$s\",\"thread_ts\":\"%3$s\",\"event_ts\":\"%4$s\",\"streaming_message_ts\":[]",
-                "\"user\":\"%1$s\",\"channel\":\"%2$s\",\"thread_ts\":%3$s,\"event_ts\":\"%4$s\",\"streaming_message_ts\":[]",
-                "\"user\":\"%1$s\",\"channel\":\"%2$s\",\"thread_ts\":\"%3$s\",\"event_ts\":\"later\",\"streaming_message_ts\":[]",
-                "\"user\":\"%1$s\",\"channel\":\"%2$s\",\"thread_ts\":\"%3$s\",\"event_ts\":\"%4$s\"",
-                "\"user\":\"%1$s\",\"channel\":\"%2$s\",\"thread_ts\":\"%3$s\",\"event_ts\":\"%4$s\",\"streaming_message_ts\":\"300.1\"",
-                "\"user\":\"%1$s\",\"channel\":\"%2$s\",\"thread_ts\":\"%3$s\",\"event_ts\":\"%4$s\",\"streaming_message_ts\":{\"ts\":\"300.1\"}",
-                "\"user\":\"%1$s\",\"channel\":\"%2$s\",\"thread_ts\":\"%3$s\",\"event_ts\":\"%4$s\",\"streaming_message_ts\":[300.1]",
-                "\"user\":\"%1$s\",\"channel\":\"%2$s\",\"thread_ts\":\"%3$s\",\"event_ts\":\"%4$s\",\"streaming_message_ts\":[\"300.1\",\"\"]",
-                "\"user\":\"%1$s\",\"channel\":\"%2$s\",\"thread_ts\":\"%3$s\",\"event_ts\":\"%4$s\",\"streaming_message_ts\":[\"300.1\",null]"
-            })
-    void shouldIgnoreAMalformedSessionStop(String fields) {
-        MentorTurn running = runningThreadTurnWithFollowUp(LEASE);
-        delivery.streaming(workspace.getId(), question("100.5").getId(), "300.1");
-
-        deliver(sessionStopped(TEAM, fields.formatted(SLACK_USER, CHANNEL, "100.1", afterStartOf(running))));
-
-        assertNothingStopped();
-    }
-
-    @Test
-    void shouldKeepTheNextReplyRunningWhenSlackDeliversTheStopOfTheEarlierReplyAgain() {
-        MentorTurn first = runningThreadTurnWithFollowUp(LEASE);
-        service.handleDm(TEAM, CHANNEL, SLACK_USER, "And the docs?", "100.8", "100.1");
-        Instant clicked = turnRepository.databaseClock();
-        assertThat(clicked).isAfter(Objects.requireNonNull(first.getStartedAt()));
-        String stopFirst = ownThreadStopped(SlackTs.ofInstant(clicked), "[]");
-        deliver(stopFirst);
-        assertOnlyTheRunningReplyStopped();
-        assertThat(statusOf("100.8")).isEqualTo(MentorTurn.Status.QUEUED);
-        turns.end(
-                first.getWorkspaceId(),
-                first.getId(),
-                first.getAttempt(),
-                Objects.requireNonNull(first.getRunId()),
-                new MentorTurnService.Ending(MentorTurn.Status.STOPPED, List.of(), null, null));
-        MentorTurn next = claims.claimNext().orElseThrow();
-        assertThat(next.getId()).isEqualTo(question("100.6").getTurnId());
-        assertThat(Objects.requireNonNull(turnOf(question("100.6")).getStartedAt()))
-                .isAfter(clicked);
-
-        deliver(stopFirst);
-
-        assertThat(statusOf("100.5")).isEqualTo(MentorTurn.Status.STOPPED);
-        assertThat(statusOf("100.6")).isEqualTo(MentorTurn.Status.RUNNING);
-        assertThat(statusOf("100.8")).isEqualTo(MentorTurn.Status.QUEUED);
-        assertThat(statusOf("100.1")).isEqualTo(MentorTurn.Status.DONE);
-    }
-
-    @Test
-    void shouldCallNoSlackApiWhenASessionStopChangesNothingOrStopsTheTurn() {
-        MentorTurn running = runningThreadTurnWithFollowUp(LEASE);
-        String atStart = SlackTs.ofInstant(Objects.requireNonNull(running.getStartedAt()));
-
-        service.handleSessionStop(TEAM, CHANNEL, SLACK_USER, "100.1", atStart, List.of());
-        assertNothingStopped();
-        service.handleSessionStop(TEAM, CHANNEL, SLACK_USER, "100.1", afterStartOf(running), List.of());
-
-        assertOnlyTheRunningReplyStopped();
-        verifyNoInteractions(slack);
-    }
-
-    /**
-     * Attempt 1 of the reply {@code 100.5} streams at {@code 300.1} and loses its lease, and attempt 2 is claimed. The
-     * question still names the lost attempt's stream: only the projector's restart of the answer clears it, later.
-     *
-     * @return a database time during attempt 1, before attempt 2 started
-     */
-    private Instant retriedWhileTheLostStreamIsRecorded() {
-        MentorTurn first = runningThreadTurnWithFollowUp(Duration.ofSeconds(-1));
-        delivery.streaming(workspace.getId(), question("100.5").getId(), "300.1");
-        Instant duringFirst = turnRepository.databaseClock();
-        assertThat(duringFirst).isAfter(Objects.requireNonNull(first.getStartedAt()));
-        claims.takeBack(first);
-        MentorTurn retried = claims.claimNext().orElseThrow();
-        assertThat(retried.getId()).isEqualTo(first.getId());
-        assertThat(retried.getAttempt()).isEqualTo(2);
-        assertThat(question("100.5").getSlackStreamTs()).isEqualTo("300.1");
-        assertThat(duringFirst)
-                .isBefore(Objects.requireNonNull(turnOf(question("100.5")).getStartedAt()));
-        return duringFirst;
-    }
-
-    @Test
-    void shouldKeepTheRetriedAttemptRunningWhenTheSessionStopIsOfTheLostAttempt() {
-        Instant duringFirst = retriedWhileTheLostStreamIsRecorded();
-
-        deliver(ownThreadStopped(SlackTs.ofInstant(duringFirst), "[\"300.1\"]"));
-        deliver(ownThreadStopped(SlackTs.ofInstant(duringFirst), "[]"));
-
-        MentorTurn after = turnOf(question("100.5"));
-        assertThat(after.getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
-        assertThat(after.getAttempt()).isEqualTo(2);
-        assertThat(statusOf("100.6")).isEqualTo(MentorTurn.Status.QUEUED);
-        assertThat(statusOf("100.1")).isEqualTo(MentorTurn.Status.DONE);
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"[]", "[\"300.1\"]"})
-    void shouldStopTheRetriedAttemptWhenTheDeveloperStopsItDuringTheRetry(String streams) {
-        retriedWhileTheLostStreamIsRecorded();
-
-        deliver(ownThreadStopped(afterStartOf(turnOf(question("100.5"))), streams));
-
-        MentorTurn after = turnOf(question("100.5"));
-        assertThat(after.getStatus()).isEqualTo(MentorTurn.Status.STOPPED);
-        assertThat(after.getAttempt()).isEqualTo(2);
-        assertThat(statusOf("100.6")).isEqualTo(MentorTurn.Status.QUEUED);
-        assertThat(statusOf("100.1")).isEqualTo(MentorTurn.Status.DONE);
     }
 
     @Test

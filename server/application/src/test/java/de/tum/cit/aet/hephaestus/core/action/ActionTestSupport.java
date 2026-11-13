@@ -1,7 +1,10 @@
 package de.tum.cit.aet.hephaestus.core.action;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.util.AopTestUtils;
@@ -10,6 +13,25 @@ import tools.jackson.databind.ObjectMapper;
 /** Runs the outbox in a test. */
 public final class ActionTestSupport {
     private ActionTestSupport() {}
+
+    /** Uses the real executor and store with one test-owned provider adapter, including its end callback. */
+    public static ActionExecutor withAdapter(ApplicationContext context, ActionAdapter replacement) {
+        var adapters = Stream.concat(
+                        context.getBeansOfType(ActionAdapter.class).values().stream()
+                                .filter(adapter -> adapter.kind() != replacement.kind()),
+                        Stream.of(replacement))
+                .toList();
+        return new ActionExecutor(
+                context.getBean(ActionStore.class),
+                context.getBean(ObjectMapper.class),
+                adapters,
+                new SimpleMeterRegistry());
+    }
+
+    /** Applies the real terminal-outcome retention policy. */
+    public static void pruneEnded(ApplicationContext context, Duration age) {
+        context.getBean(ActionStore.class).deleteEnded(age);
+    }
 
     /**
      * Joins a scheduled batch, then runs due actions while holding the same test-only barrier. An EXECUTING row can
@@ -42,6 +64,11 @@ public final class ActionTestSupport {
                 "UPDATE agent_action SET leased_until = now() - interval '1 second'"
                         + " WHERE lane_key = ? AND state = 'EXECUTING' AND next_attempt_at > updated_at",
                 laneKey);
+    }
+
+    /** Runs a due lane head, including lease recovery, with the executor's registered adapter. */
+    public static Optional<ActionResult> runLane(ActionExecutor executor, JdbcTemplate jdbc, String laneKey) {
+        return claim(jdbc, laneKey).map(executor::run);
     }
 
     /**

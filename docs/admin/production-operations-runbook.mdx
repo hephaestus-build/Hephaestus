@@ -596,14 +596,17 @@ Deleting in-app data does not delete a provider comment. If external copies must
 
    One Slack message shows all Hephaestus messages of a turn.
    The question of the turn is the `mentor_entry` row with the same `turn_id` and the kind `USER`.
-   Read its `slack_delivery` and `slack_stream_ts`.
-   A reply that has not ended has no `slack_delivery`: read its action in `agent_action`, where `idempotency_key` is `slack_reply:<question id>`.
-   Then read `slack_ts` of the last `HEPH` row of the turn.
+   Read its action in `agent_action`, where `idempotency_key` is `slack_reply:<question id>`.
 
-   If `slack_delivery` is `DELIVERED`, that `slack_ts` is the `ts` of the Slack reply.
-   A reply in a Slack thread is a stream, and its `ts` is also in `slack_stream_ts`.
+   The action owns its pending and terminal delivery state. An unknown write is read back by metadata and never posted again.
+   The answer entry's `slack_ts` is the confirmed Slack message reference. The entry has no separate stream or delivery state.
+
+   A digest receipt also records its posting-time Slack team and user.
+   If that identity changes before settlement, the server logs `reason=recipient_changed` and leaves the DM reference unbound.
+   The action remains `DONE` because Slack accepted the post. Do not post it again.
+
    A reply that has not ended, or ended `UNCERTAIN`, can have a Slack copy without a recorded `slack_ts`.
-   A `FAILED` reply in a Slack thread can show part of a stream.
+   A reply from before this upgrade can have an unconfirmed stream left in Slack.
    Thus, the ledger query alone cannot establish complete Slack removal.
 
 9. Use the provider's paginated [conversation replies](https://docs.slack.dev/reference/methods/conversations.replies/) API to find each exact bot-authored reply and its `ts`.

@@ -15,13 +15,10 @@ import de.tum.cit.aet.hephaestus.mentor.MentorLinkDTO;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 
@@ -35,14 +32,8 @@ public final class SlackMentorPosts {
 
     static final String ENTRY_ID = "entry_id";
 
-    /** The payload key of the turn a progress notice belongs to. */
-    private static final String TURN_ID = "turn_id";
-
     /** The {@code action_id} of the feedback buttons under an answer in a Slack thread. */
     public static final String FEEDBACK_ACTION = "heph_feedback";
-
-    /** Hephaestus reacts with 👀 to a top-level question while it works on it. */
-    static final String WORKING_EMOJI = "eyes";
 
     static final String FAILED_REPLY = "Hephaestus could not finish this reply. Try again.";
 
@@ -52,9 +43,6 @@ public final class SlackMentorPosts {
     /** Ends a reply that Slack shows only in part. */
     static final String CUT_NOTE = "\n\n… The full answer is in Hephaestus.";
 
-    /** Ends the stream of an attempt that was lost; the retry streams its answer below. */
-    static final String RESTART_NOTE = "\n\n… The answer had to start again. It follows below.";
-
     /** Notifications show the start of the message text. */
     private static final int NOTIFICATION_CHARS = 280;
 
@@ -62,7 +50,7 @@ public final class SlackMentorPosts {
 
     private SlackMentorPosts() {}
 
-    /** Tags a post with the ledger entry it carries, so the reconciler can find it in the Slack history. */
+    /** Tags a post with the ledger entry it carries, so the outbox can find it in the Slack history. */
     public static Message.Metadata metadata(UUID entryId) {
         return Message.Metadata.builder()
                 .eventType(EVENT_TYPE)
@@ -71,35 +59,13 @@ public final class SlackMentorPosts {
     }
 
     /**
-     * Tags a Hephaestus notice in the DM, such as a refusal. Every Hephaestus message then carries metadata except a stream that
-     * no one ended, so a history search never takes a notice for a stream.
+     * Tags a Hephaestus notice in the DM, such as a refusal, so reply readback never takes a notice for an answer.
      */
     public static Message.Metadata noticeMetadata() {
         return Message.Metadata.builder()
                 .eventType(NOTICE_EVENT_TYPE)
                 .eventPayload(Map.of("kind", "notice"))
                 .build();
-    }
-
-    /**
-     * Tags the progress notice of one turn, so that a server that lost its receipt, for example after a restart, finds
-     * and deletes it once the reply posts ({@link #isProgressOf}).
-     */
-    public static Message.Metadata progressMetadata(UUID turnId) {
-        return Message.Metadata.builder()
-                .eventType(NOTICE_EVENT_TYPE)
-                .eventPayload(Map.of("kind", "progress", TURN_ID, turnId.toString()))
-                .build();
-    }
-
-    /** Whether a Slack message is the progress notice of this turn, by its metadata. */
-    static boolean isProgressOf(Message message, UUID turnId) {
-        Message.Metadata metadata = message.getMetadata();
-        if (metadata == null || !NOTICE_EVENT_TYPE.equals(metadata.getEventType())) {
-            return false;
-        }
-        Map<String, Object> payload = metadata.getEventPayload();
-        return payload != null && turnId.toString().equals(String.valueOf(payload.get(TURN_ID)));
     }
 
     /** Whether a Slack message is the post of this entry, by its metadata. */
@@ -212,33 +178,6 @@ public final class SlackMentorPosts {
         return new Reply(text, shown);
     }
 
-    /**
-     * The part of a partial answer that a stream may show. Finished paragraphs go out under the link rule. A link never
-     * spans paragraphs, so they read as the start of the finished reply. The paragraph still being written goes out up
-     * to the first place where a link could start ({@code [}, {@code <}, a web address, or a last word that may grow
-     * into one), so the stream never shows a link that the finished reply would not.
-     */
-    static String streamable(String partial, Set<String> linkHosts) {
-        int paragraph = partial.lastIndexOf("\n\n");
-        String done = paragraph < 0 ? "" : ModelLinks.neutralize(partial.substring(0, paragraph), linkHosts) + "\n\n";
-        String writing = paragraph < 0 ? partial : partial.substring(paragraph + 2);
-        int cut = writing.length();
-        Matcher risky = LINK_START.matcher(writing);
-        if (risky.find()) cut = risky.start();
-        int word = lastWordStart(writing);
-        String last = writing.substring(word).toLowerCase(Locale.ROOT);
-        if (!last.isEmpty() && ("https://".startsWith(last) || "http://".startsWith(last) || "www.".startsWith(last)))
-            cut = Math.min(cut, word);
-        return done + writing.substring(0, cut);
-    }
-
-    private static int lastWordStart(String text) {
-        int at = text.length();
-        while (at > 0 && (Character.isLetterOrDigit(text.charAt(at - 1)) || ":/.".indexOf(text.charAt(at - 1)) >= 0))
-            at--;
-        return at;
-    }
-
     private static void paragraph(StringBuilder text, String part) {
         if (part.isBlank()) {
             return;
@@ -250,10 +189,6 @@ public final class SlackMentorPosts {
     }
 
     private static final String QUOTE_MARKER = "> ";
-
-    // Where a link may begin in text that is still being written.
-    private static final Pattern LINK_START =
-            Pattern.compile("[\\[<]|!(?:\\[|$)|(?<![\\p{L}\\p{N}])(?i:https?:|www\\.)");
 
     private static String quote(MentorLinkDTO link) {
         return QUOTE_MARKER + link.text().strip().replace("\n", "\n" + QUOTE_MARKER);

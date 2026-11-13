@@ -49,8 +49,7 @@ When a Kubernetes minor version reaches its end of life upstream, the next Hepha
 
 Keep the clock of every host that runs a Hephaestus role or PostgreSQL synchronized by NTP.
 Conversation turn leases and person erasure compare times that different hosts write.
-If Slack does not answer when Hephaestus starts a streamed reply, the server looks for that reply in the thread by time.
-Hephaestus assumes that Slack's clock and the server's clock differ by less than 2 seconds.
+Slack posts that lose their receipt are found by message metadata.
 [Conversation runtime § Slack replies](/contributor/unified-pi-runtime#slack-replies) has the rule.
 
 ## What the chart runs

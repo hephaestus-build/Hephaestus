@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.slack.api.model.block.LayoutBlock;
+import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestNotes;
 import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestPointer;
 import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestSubscriptions;
@@ -24,6 +25,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ModelLinkHosts;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackHephaestusUiLinks;
@@ -34,7 +36,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryDraft;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
-import de.tum.cit.aet.hephaestus.mentor.MentorSlackDelivery;
+import de.tum.cit.aet.hephaestus.mentor.MentorSlackMessages;
 import de.tum.cit.aet.hephaestus.mentor.MentorSlackReplies;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestPayload;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestWindow;
@@ -46,16 +48,18 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
+import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.ObjectMapper;
 
@@ -78,13 +82,21 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
     private MentorEntryRepository entryRepository;
 
     @Autowired
-    private MentorSlackDelivery delivery;
+    private MentorSlackMessages messages;
 
     @Autowired
     private MentorSlackReplies replies;
 
-    @Autowired
     private ActionExecutor executor;
+
+    @Autowired
+    private ApplicationContext context;
+
+    @Autowired
+    private MentorTurnCompletion completion;
+
+    @Autowired
+    private ModelLinkHosts linkHosts;
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -123,11 +135,23 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
                         new ConnectionConfig.SlackConfig(TEAM, "not-a-key", null, Set.of()))));
         when(identities.resolveSlackUserId(accountId, TEAM)).thenReturn(Optional.of(SLACK_USER));
         when(subscriptions.enabledSince(accountId)).thenReturn(Optional.of(Instant.parse("2026-01-01T00:00:00Z")));
+        var beans = new StaticListableBeanFactory();
+        beans.addBean("slack", slack);
+        var adapter = new SlackPostAdapter(
+                beans.getBeanProvider(SlackMessageService.class),
+                beans.getBeanProvider(SlackWeeklyDigestPointer.class),
+                replies,
+                messages,
+                completion,
+                linkHosts,
+                objectMapper);
+        beans.addBean("post", adapter);
+        executor = ActionTestSupport.withAdapter(context, adapter);
         pointer = new SlackWeeklyDigestPointer(
                 slack,
                 connections,
                 identities,
-                new SlackMentorPoster(slack, delivery),
+                adapter,
                 conversations,
                 notes,
                 subscriptions,
@@ -135,6 +159,7 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
                 new SlackHephaestusUiLinks("https://hephaestus.example", new WorkspaceSubdomainProperties(false, "")),
                 replies,
                 executor);
+        beans.addBean("pointer", pointer);
     }
 
     /** How a digest's note stands, as its outbox action shows it. */
@@ -149,29 +174,26 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
                 INSERT INTO agent_action (id, workspace_id, kind, lane_key, idempotency_key, state, payload,
                   subject_account_id, max_attempts, next_attempt_at, created_at, updated_at)
                 VALUES (uuidv7(), ?, 'SLACK_POST', ?, ?, 'ADMITTED',
-                  jsonb_build_object('entryId', ?::text, 'turnId', NULL, 'taken', TRUE), ?, 3, now(), now(), now())
+                  jsonb_build_object('entryId', ?::text, 'turnId', NULL), ?, 3, now(), now(), now())
                 """,
                 workspace.getId(),
                 MentorSlackReplies.digestKey(digest.getId()),
                 MentorSlackReplies.digestKey(digest.getId()),
                 digest.getId().toString(),
                 accountId);
+        ActionTestSupport.due(jdbc, MentorSlackReplies.digestKey(digest.getId()));
+        ActionTestSupport.claimLane(jdbc, objectMapper, MentorSlackReplies.digestKey(digest.getId()))
+                .orElseThrow()
+                .fence()
+                .beginWrite();
+        ActionTestSupport.expireLease(jdbc, MentorSlackReplies.digestKey(digest.getId()));
     }
 
     /** Runs the note's due attempt on a server that did not write it, as any server's executor does. */
     private void settle(MentorEntry digest) {
         String key = MentorSlackReplies.digestKey(digest.getId());
         ActionTestSupport.due(jdbc, key);
-        var beans = new StaticListableBeanFactory(Map.of("pointer", pointer));
-        ActionTestSupport.runLane(
-                executor,
-                jdbc,
-                key,
-                new SlackPostAdapter(
-                        beans.getBeanProvider(SlackMentorProjector.class),
-                        beans.getBeanProvider(SlackWeeklyDigestPointer.class),
-                        replies,
-                        delivery));
+        ActionTestSupport.runLane(executor, jdbc, key);
     }
 
     @Test
@@ -207,6 +229,44 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
         assertThat(conversations.findMainBySlack(workspace.getId(), TEAM, SLACK_USER, DM))
                 .map(MentorConversation::getId)
                 .contains(main.getId());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"user", "team"})
+    void shouldNotBindThePostedDmWhenTheSlackRecipientChangesDuringThePost(String changed) {
+        MentorEntry digest = digest();
+        when(slack.postMessage(eq(workspace.getId()), eq(SLACK_USER), isNull(), anyList(), anyString(), any()))
+                .thenAnswer(invocation -> {
+                    if (changed.equals("user")) {
+                        when(identities.resolveSlackUserId(accountId, TEAM)).thenReturn(Optional.of("U2"));
+                    } else {
+                        when(connections.findActive(workspace.getId(), IntegrationKind.SLACK))
+                                .thenReturn(Optional.of(new Connection(
+                                        workspace,
+                                        IntegrationKind.SLACK,
+                                        "T2",
+                                        new ConnectionConfig.SlackConfig("T2", "not-a-key", null, Set.of()))));
+                    }
+                    return new SlackMessageService.Posted(DM, "300.2");
+                });
+
+        pointer.on(written(digest, WeeklyDigestPointer.SLACK));
+        pointer.on(written(digest, WeeklyDigestPointer.SLACK));
+
+        verify(slack, times(1))
+                .postMessage(eq(workspace.getId()), eq(SLACK_USER), isNull(), anyList(), anyString(), any());
+        assertThat(noteDelivery(digest)).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
+        assertThat(entryRepository.findById(digest.getId()).orElseThrow().getSlackTs())
+                .isNull();
+        MentorConversation unbound = conversations.require(workspace.getId(), main.getId());
+        assertThat(unbound.getSlackChannelId()).isNull();
+        assertThat(unbound.getSlackUserId()).isNull();
+        assertThat(jdbc.queryForObject(
+                        """
+                SELECT readback_ref::jsonb #>> '{recipient,userId}' FROM agent_action
+                WHERE workspace_id=? AND idempotency_key=?
+                """, String.class, workspace.getId(), MentorSlackReplies.digestKey(digest.getId())))
+                .isEqualTo(SLACK_USER);
     }
 
     @Test

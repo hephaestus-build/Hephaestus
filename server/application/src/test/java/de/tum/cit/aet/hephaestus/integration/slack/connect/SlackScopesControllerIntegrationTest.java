@@ -73,8 +73,8 @@ class SlackScopesControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         ensureAdminMembership(workspace);
         connectSlack();
         Set<String> granted = new HashSet<>(SlackConnectionStrategy.DEFAULT_SCOPES);
-        granted.remove("reactions:write");
-        granted.remove("assistant:write");
+        granted.remove("im:history");
+        granted.remove("chat:write");
         granted.add("commands");
         when(slackOAuthClient.grantedScopes(TOKEN)).thenReturn(granted);
 
@@ -86,7 +86,7 @@ class SlackScopesControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                 .getResponseBody();
 
         assertThat(scopes).isNotNull();
-        assertThat(scopes.missingScopes()).containsExactly("assistant:write", "reactions:write");
+        assertThat(scopes.missingScopes()).containsExactly("chat:write", "im:history");
     }
 
     @Test

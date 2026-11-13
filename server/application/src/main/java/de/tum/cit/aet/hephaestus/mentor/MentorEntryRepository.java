@@ -581,4 +581,28 @@ public interface MentorEntryRepository extends JpaRepository<MentorEntry, UUID> 
     @Transactional
     @Query("DELETE FROM MentorEntry x WHERE x.workspaceId = :workspaceId")
     int deleteByWorkspaceId(@Param("workspaceId") Long workspaceId);
+
+    @Query(
+            "SELECT e.id FROM MentorEntry e WHERE e.workspaceId=:workspaceId AND e.id IN (:ids) AND e.redactedAt IS NULL")
+    List<UUID> findUnredactedIds(@Param("workspaceId") long workspaceId, @Param("ids") Collection<UUID> ids);
+
+    /** Whether a confirmed Slack answer preceded this question in the conversation. */
+    @Query("""
+        SELECT COUNT(e) > 0 FROM MentorEntry e
+        WHERE e.workspaceId = :workspaceId AND e.conversationId = :conversationId
+          AND e.kind = de.tum.cit.aet.hephaestus.mentor.MentorEntry.Kind.HEPH AND e.slackTs IS NOT NULL
+          AND EXISTS (SELECT q.id FROM MentorEntry q WHERE q.workspaceId = e.workspaceId
+              AND q.turnId = e.turnId AND q.seq < :seq
+              AND q.kind = de.tum.cit.aet.hephaestus.mentor.MentorEntry.Kind.USER
+              AND q.surface = de.tum.cit.aet.hephaestus.mentor.MentorEntry.Surface.SLACK)
+        """)
+    boolean answeredInSlackBefore(
+            @Param("workspaceId") Long workspaceId,
+            @Param("conversationId") UUID conversationId,
+            @Param("seq") long seq);
+
+    @Modifying
+    @Query(
+            "UPDATE MentorEntry e SET e.slackTs = :ts WHERE e.id = :id AND e.workspaceId = :workspaceId AND e.redactedAt IS NULL")
+    int setSlackTs(@Param("workspaceId") Long workspaceId, @Param("id") UUID id, @Param("ts") String ts);
 }

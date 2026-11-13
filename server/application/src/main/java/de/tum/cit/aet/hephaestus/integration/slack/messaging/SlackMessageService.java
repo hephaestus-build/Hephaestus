@@ -29,6 +29,7 @@ import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -61,15 +62,6 @@ public class SlackMessageService {
      * and reading the whole response. The SDK sets none by default.
      */
     static final int NATIVE_CALL_TIMEOUT_MS = 10_000;
-
-    /**
-     * The agent session status of a Slack thread while Heph works there. Slack shows it with its Stop control, which
-     * sends {@code agent_session_stopped}.
-     */
-    private static final String SESSION_PROCESSING = "processing";
-
-    /** The agent session status of a Slack thread in which Heph does not work now. */
-    private static final String SESSION_ACTIVE = "active";
 
     /**
      * The smallest {@code conversations.history} or {@code conversations.replies} page any install gets: Slack's clamp
@@ -161,29 +153,6 @@ public class SlackMessageService {
         return new Posted(postedTo == null || postedTo.isBlank() ? channelId : postedTo, ts);
     }
 
-    /** Replaces the blocks, text and metadata of a message the app wrote, such as a stream that Slack already ended. */
-    public void updateMessage(
-            long workspaceId,
-            String channelId,
-            String ts,
-            List<LayoutBlock> blocks,
-            String text,
-            Message.@Nullable Metadata metadata) {
-        callWrite(
-                workspaceId,
-                channelId,
-                methods -> methods.chatUpdate(req ->
-                        req.channel(channelId).ts(ts).blocks(blocks).text(text).metadata(metadata)));
-    }
-
-    /** Deletes a message the app wrote. */
-    public void deleteMessage(long workspaceId, String channelId, String ts) {
-        callWrite(
-                workspaceId,
-                channelId,
-                methods -> methods.chatDelete(req -> req.channel(channelId).ts(ts)));
-    }
-
     /**
      * Post an <strong>ephemeral</strong> message via {@code chat.postEphemeral} — visible only to {@code slackUserId}
      * in {@code channelId} and gone on reload. Throws {@link SlackSendException} carrying the Slack error so the
@@ -256,74 +225,6 @@ public class SlackMessageService {
         }
     }
 
-    /**
-     * Begin a streamed assistant reply in {@code threadTs}; returns the streaming message {@code ts} to append
-     * to. {@code markdownText} is standard Markdown (Slack renders it, incl. tables) — not Slack mrkdwn.
-     */
-    public String startStream(long workspaceId, String channel, @Nullable String threadTs, String markdownText) {
-        String ts = callWrite(
-                        workspaceId,
-                        channel,
-                        methods -> methods.chatStartStream(
-                                req -> req.channel(channel).threadTs(threadTs).markdownText(markdownText)))
-                .getTs();
-        if (ts == null || ts.isBlank()) throw new SlackSendException(workspaceId, channel, "invalid_receipt");
-        return ts;
-    }
-
-    /** Append a Markdown delta to an in-progress stream. Throws with the Slack error so callers can detect a gone recipient. */
-    public void appendStream(long workspaceId, String channel, String ts, String markdownText) {
-        callWrite(
-                workspaceId,
-                channel,
-                methods -> methods.chatAppendStream(
-                        req -> req.channel(channel).ts(ts).markdownText(markdownText)));
-    }
-
-    /**
-     * How {@link #stopStream} ends a stream.
-     *
-     * @param markdownText a last piece of Markdown
-     * @param blocks blocks under the text, such as feedback buttons
-     * @param metadata metadata that tags the message for the reconciler
-     * @param working whether Heph still works in the stream's thread after it ends, for another attempt or turn: the
-     *     thread's agent session stays {@code processing}. Slack makes it {@code active} when the request does not say.
-     */
-    public record StreamStop(
-            @Nullable String markdownText,
-            List<LayoutBlock> blocks,
-            Message.@Nullable Metadata metadata,
-            boolean working) {}
-
-    public void stopStream(long workspaceId, String channel, String ts, StreamStop stop) {
-        callWrite(
-                workspaceId,
-                channel,
-                methods -> methods.chatStopStream(req -> req.channel(channel)
-                        .ts(ts)
-                        .markdownText(stop.markdownText())
-                        .blocks(stop.blocks().isEmpty() ? null : stop.blocks())
-                        .metadata(stop.metadata())
-                        .sessionStatus(sessionStatus(stop.working()))));
-    }
-
-    /**
-     * Sets the status of the app's agent session in the Slack thread {@code threadTs}
-     * ({@code agents.sessions.setStatus}): {@code processing} while Heph works there, which shows Slack's Stop, and
-     * {@code active} once it does not.
-     */
-    public void setSessionStatus(long workspaceId, String channel, String threadTs, boolean working) {
-        callWrite(
-                workspaceId,
-                channel,
-                methods -> methods.agentsSessionsSetStatus(
-                        req -> req.channelId(channel).threadTs(threadTs).status(sessionStatus(working))));
-    }
-
-    private static String sessionStatus(boolean working) {
-        return working ? SESSION_PROCESSING : SESSION_ACTIVE;
-    }
-
     private interface WriteCall<T extends SlackApiTextResponse> {
         T call(MethodsClient methods) throws SlackApiException, IOException;
     }
@@ -369,34 +270,6 @@ public class SlackMessageService {
     }
 
     /**
-     * Adds ({@code present}) or removes the app's emoji reaction on a message. A reaction that is already in the
-     * wanted state counts as done.
-     *
-     * @throws SlackSendException with the Slack error when Slack refused it
-     */
-    public void setReaction(long workspaceId, String channel, String ts, String emoji, boolean present) {
-        try {
-            if (present) {
-                callWrite(
-                        workspaceId,
-                        channel,
-                        methods -> methods.reactionsAdd(
-                                req -> req.channel(channel).timestamp(ts).name(emoji)));
-            } else {
-                callWrite(
-                        workspaceId,
-                        channel,
-                        methods -> methods.reactionsRemove(
-                                req -> req.channel(channel).timestamp(ts).name(emoji)));
-            }
-        } catch (SlackSendException e) {
-            if (!(present ? "already_reacted" : "no_reaction").equals(e.slackError())) {
-                throw e;
-            }
-        }
-    }
-
-    /**
      * The messages that a filter takes from one page of Slack history.
      *
      * @param ts the {@code ts} of each message that the filter takes, oldest first
@@ -436,7 +309,7 @@ public class SlackMessageService {
                                         .includeAllMetadata(true)
                                         .limit(HISTORY_MATCH_LIMIT)));
                 messages = r.getMessages();
-                error = r.isOk() ? null : r.getError();
+                error = r.isOk() ? null : Objects.requireNonNullElse(r.getError(), "unknown");
                 more = Matches.holdsMore(r.isHasMore(), r.getResponseMetadata());
             } else {
                 var r = callHonoringRateLimit(
@@ -449,7 +322,7 @@ public class SlackMessageService {
                                         .includeAllMetadata(true)
                                         .limit(HISTORY_MATCH_LIMIT)));
                 messages = r.getMessages();
-                error = r.isOk() ? null : r.getError();
+                error = r.isOk() ? null : Objects.requireNonNullElse(r.getError(), "unknown");
                 more = Matches.holdsMore(r.isHasMore(), r.getResponseMetadata());
             }
             if (error != null) {

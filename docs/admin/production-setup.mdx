@@ -99,9 +99,7 @@ The bot token scope set stays minimal — every scope maps to a feature the code
 | Scope                                 | Feature                                                                                      |
 | ------------------------------------- | -------------------------------------------------------------------------------------------- |
 | `chat:write`                          | Hephaestus replies in DMs, weekly digest notes, and monitored-channel announcements                |
-| `assistant:write`                     | Hephaestus's streamed answers in DM threads                                                        |
 | `im:history`                          | DM `message` events with their edits and deletions, and DM history reads that look for an unsettled Hephaestus reply or weekly digest note |
-| `reactions:write`                     | The 👀 reaction on a DM question while Hephaestus works on it                                      |
 | `channels:history` / `groups:history` | Reading messages in workspace-admin-consented monitored channels (public / private)          |
 | `channels:read` / `groups:read`       | Channel directory listing for the admin channel picker and periodic channel-metadata refresh |
 | `channels:join`                       | Letting an admin add a public channel to monitoring directly from the picker                 |
@@ -133,8 +131,6 @@ Its `settings.event_subscriptions` covers these event groups:
   DM edits and deletions arrive as `message` events too.
 - Channel-lifecycle events that update the monitored-channel allow-list.
 - App-lifecycle events, and `app_home_opened` for the Home tab.
-- `agent_session_stopped`, which Slack sends when a developer selects **Stop** while Hephaestus works in a Slack thread.
-  It needs no OAuth scope beyond `chat:write`, which also sets that Stop's status.
 
 Hephaestus does not read Slack reactions.
 
@@ -147,21 +143,15 @@ It needs no additional scopes.
 
 #### Update an existing Slack app
 
-A Slack app that you created from an older manifest does not have `reactions:write`.
-Without it, Hephaestus cannot show its working reaction on a DM.
+Hephaestus posts one complete answer after the turn ends.
+It needs no streaming or progress-reaction scope.
 
-1. Apply the current [`slack-app-manifest-template.yml`](./slack-app-manifest-template.yml) to the Slack app.
-2. Reinstall the app in the Slack dashboard when Slack asks for it.
-3. In each Hephaestus workspace with Slack, use **Reconnect Slack** with the same Slack workspace ([Integrations](./integrations.mdx#slack)).
+The cutover needs no new OAuth scope.
+To remove the unused streaming and reaction permissions, apply the current [`slack-app-manifest-template.yml`](./slack-app-manifest-template.yml).
+If Slack asks you to reinstall the app, reinstall it, then use **Reconnect Slack** in each Hephaestus workspace with that Slack workspace ([Integrations](./integrations.mdx#slack)).
 
-Only a new authorization gives the stored bot token the new scope.
 The workspace's Slack page names each scope that the stored token lacks ([Integrations](./integrations.mdx#slack)).
 [`MIGRATION.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) gives the full upgrade procedure.
-
-A Slack app from an older manifest also does not subscribe to `agent_session_stopped`.
-Without it, Slack shows no Stop while Hephaestus works in a Slack thread, and developers stop Hephaestus in the app.
-Apply the current manifest to add the subscription.
-It adds no OAuth scope, so a Slack app that already has `reactions:write` keeps its bot token.
 
 ### Outline integration
 
