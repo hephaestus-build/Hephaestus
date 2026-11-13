@@ -65,6 +65,9 @@ const makeCore = () => {
 
 interface GitHubOptions {
 	readonly resolvedPull?: PullRequest;
+	readonly reviewDecision?: string | null;
+	readonly reviewHead?: string;
+	readonly reviewResponse?: unknown;
 	readonly reviews?: readonly Review[];
 	readonly failPullWith?: Error;
 	readonly failReviewWith?: Error;
@@ -83,10 +86,26 @@ const makeGitHub = (options: GitHubOptions = {}) => {
 	};
 
 	const github: GitHubApi = {
-		graphql: async (_query, variables) => {
+		graphql: async (query, variables) => {
+			if (query.startsWith("query")) {
+				assert.deepEqual(variables, {
+					...context.repo,
+					number: (options.resolvedPull ?? pull).number,
+				});
+				if (options.reviewResponse !== undefined) return options.reviewResponse;
+				return {
+					repository: {
+						pullRequest: {
+							headRefOid: options.reviewHead ?? (options.resolvedPull ?? pull).head.sha,
+							reviewDecision: options.reviewDecision === undefined ? null : options.reviewDecision,
+						},
+					},
+				};
+			}
 			if (options.failMinimizeWith) {
 				throw options.failMinimizeWith;
 			}
+			assert.ok(typeof variables.subjectId === "string");
 			minimized.push(variables.subjectId);
 			return {};
 		},
@@ -201,6 +220,7 @@ void describe("review policy", () => {
 
 	void describe("decide", () => {
 		const base = {
+			reviewDecision: null,
 			author: "MaIntAiner",
 			headSha: HEAD,
 			reviews: [] as readonly Review[],
@@ -266,6 +286,66 @@ void describe("review policy", () => {
 			assert.equal(review.commit_id, HEAD);
 			assert.ok(review.body.includes(APPROVAL_MARKER));
 			assert.deepEqual(core.failures, []);
+		});
+
+		void it("refreshes an exact-head approval when stacking makes GitHub require another review", async () => {
+			const { submitted, minimized, github } = makeGitHub({
+				reviews: [ours({ id: 5891029650 })],
+				reviewDecision: "REVIEW_REQUIRED",
+			});
+			const core = makeCore();
+			await enforce({ github, context, core });
+			assert.equal(onlyReview(submitted).commit_id, HEAD);
+			assert.deepEqual(minimized, ["review-5891029650"]);
+			assert.deepEqual(core.failures, []);
+		});
+
+		void it("keeps its current approval when GitHub requires no fresh approval", async () => {
+			for (const reviewDecision of ["APPROVED", "CHANGES_REQUESTED", null]) {
+				const { submitted, github } = makeGitHub({ reviews: [ours({ id: 1 })], reviewDecision });
+				await enforce({ github, context, core: makeCore() });
+				assert.deepEqual(submitted, []);
+			}
+		});
+
+		void it("fails closed on malformed native review metadata", async () => {
+			for (const reviewResponse of [
+				null,
+				{},
+				{ repository: { pullRequest: { headRefOid: 17, reviewDecision: "APPROVED" } } },
+			]) {
+				const { submitted, github } = makeGitHub({ reviewResponse });
+				const core = makeCore();
+				await enforce({ github, context, core });
+				assert.deepEqual(submitted, []);
+				assert.equal(core.failures.length, 1);
+			}
+		});
+
+		void it("does not refresh approvals for an unlisted author or a changed head", async () => {
+			for (const options of [
+				{ resolvedPull: { ...pull, user: { login: "Contributor" } } },
+				{ reviewHead: OTHER },
+			]) {
+				const { submitted, github } = makeGitHub({
+					...options,
+					reviews: [ours({ id: 1 })],
+					reviewDecision: "REVIEW_REQUIRED",
+				});
+				await enforce({ github, context, core: makeCore() });
+				assert.deepEqual(submitted, []);
+			}
+		});
+
+		void it("fails closed on an unrecognized native review decision", async () => {
+			const { submitted, github } = makeGitHub({
+				reviews: [ours({ id: 1 })],
+				reviewDecision: "UNKNOWN",
+			});
+			const core = makeCore();
+			await enforce({ github, context, core });
+			assert.deepEqual(submitted, []);
+			assert.match(core.failures.join("\n"), /Unknown native review decision/u);
 		});
 
 		void it("minimizes earlier automatic approvals after submitting their replacement", async () => {
@@ -405,7 +485,7 @@ void describe("review policy", () => {
 
 		void it("re-runs on every push, because the ruleset dismisses stale approvals", () => {
 			assert.match(collector, /- synchronize\n/u);
-			for (const action of ["opened", "reopened", "ready_for_review", "edited"]) {
+			for (const action of ["opened", "reopened", "ready_for_review", "edited", "stacked"]) {
 				assert.match(collector, new RegExp(`- ${action}\\n`, "u"));
 			}
 			assert.equal(approvalJob.needs, "resolve");

@@ -38,7 +38,14 @@ export interface ResolvedPullRequest {
 }
 
 /** The actions that `pull-request.yml` runs on. */
-const ACTIONS = new Set(["opened", "edited", "synchronize", "reopened", "ready_for_review"]);
+const ACTIONS = new Set([
+	"opened",
+	"edited",
+	"synchronize",
+	"reopened",
+	"ready_for_review",
+	"stacked",
+]);
 
 /**
  * The pull request number and event action that the recording run wrote, or `undefined` when the

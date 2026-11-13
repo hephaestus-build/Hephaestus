@@ -368,6 +368,12 @@ A stacked layer gets approval while it still targets the layer below.
 After that layer merges, retargeting to `main` must not depend on another event. The `edited` trigger also
 re-evaluates explicit base changes.
 
+The `stacked` trigger re-evaluates a layer when it joins a stack.
+GitHub applies the stack base's review rules to each layer. An earlier approval can remain
+`APPROVED` on the same commit while GitHub requires a new review in that context.
+The policy checks GitHub's current review decision before it reuses an automatic approval.
+It posts a fresh approval for a listed maintainer when GitHub reports `REVIEW_REQUIRED`.
+
 ### Pull request policy
 
 The title, commit identity and attribution checks, the maintainer approval and the author assignment need write access to the pull request.
