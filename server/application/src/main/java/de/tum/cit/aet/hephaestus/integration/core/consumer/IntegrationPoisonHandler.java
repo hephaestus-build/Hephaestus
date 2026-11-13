@@ -50,6 +50,10 @@ public class IntegrationPoisonHandler {
     /** Prevent shift and multiplication overflow during a long outage. */
     private static final int MAX_EXPONENT = 30;
 
+    private static final int MAX_DIAGNOSTIC_FRAMES = 32;
+    private static final int ORIGIN_FRAMES = 15;
+    private static final int APPLICATION_FRAMES = MAX_DIAGNOSTIC_FRAMES - ORIGIN_FRAMES - 1;
+
     private final ProviderEventConsumerProperties properties;
     private final MeterRegistry meterRegistry;
     private final ProviderEventStore store;
@@ -73,7 +77,7 @@ public class IntegrationPoisonHandler {
             Throwable diagnostic = diagnosticCause(failure);
             if (store.dead(
                     claimed.id(), claimed.leaseEpoch(), diagnostic.getClass().getName())) {
-                log.atError()
+                var captured = log.atError()
                         .addKeyValue("event.name", "integration.message.captured")
                         .addKeyValue("integration.operation", "capture-for-replay")
                         .addKeyValue("integration.event.id", claimed.id())
@@ -82,8 +86,10 @@ public class IntegrationPoisonHandler {
                         .addKeyValue("integration.delivery", claimed.attempt())
                         .addKeyValue("error.type", failure.getClass().getName())
                         .addKeyValue("error.root_type", diagnostic.getClass().getName())
-                        .addKeyValue("error.stack_trace", diagnosticFrames(diagnostic))
-                        .log("Failed event stored for replay");
+                        .addKeyValue("error.stack_trace", diagnosticFrames(diagnostic));
+                String state = sqlState(failure);
+                if (state != null) captured = captured.addKeyValue("db.response.status_code", state);
+                captured.log("Failed event stored for replay");
                 poisonCounter(subject).increment();
             }
             return;
@@ -122,17 +128,36 @@ public class IntegrationPoisonHandler {
                 .filter(index -> frames[index].getClassName().startsWith("de.tum.cit.aet.hephaestus."))
                 .findFirst()
                 .orElse(frames.length);
-        if (application >= 32 && application < frames.length) {
+        if (application >= MAX_DIAGNOSTIC_FRAMES && application < frames.length) {
             return Stream.concat(
                             Stream.concat(
-                                    Arrays.stream(frames, 0, 15).map(StackTraceElement::toString),
-                                    Stream.of("... framework frames omitted ...")),
+                                    Arrays.stream(frames, 0, ORIGIN_FRAMES).map(StackTraceElement::toString),
+                                    Stream.of(
+                                            "... " + (application - ORIGIN_FRAMES) + " framework frames omitted ...")),
                             Arrays.stream(frames, application, frames.length)
-                                    .limit(16)
+                                    .limit(APPLICATION_FRAMES)
                                     .map(StackTraceElement::toString))
                     .toList();
         }
-        return Arrays.stream(frames).limit(32).map(StackTraceElement::toString).toList();
+        return Arrays.stream(frames)
+                .limit(MAX_DIAGNOSTIC_FRAMES)
+                .map(StackTraceElement::toString)
+                .toList();
+    }
+
+    /** A transport cause can sit below the JDBC exception that supplies the SQLSTATE. */
+    static @Nullable String sqlState(Throwable failure) {
+        Throwable cause = failure;
+        for (int depth = 0; depth < 16; depth++) {
+            if (cause instanceof SQLException sql) {
+                String state = sql.getSQLState();
+                if (state != null && state.matches("[A-Z0-9]{5}")) return state;
+            }
+            Throwable nested = cause.getCause();
+            if (nested == null) break;
+            cause = nested;
+        }
+        return null;
     }
 
     private enum FailureKind {

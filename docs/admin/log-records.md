@@ -72,9 +72,13 @@ The subject, which names an owner and a repository, stays out of the record.
 Workspaces are identified by `workspace.id`. The workspace slug is not a log field.
 
 Provider-event failures identify `integration.operation` and `integration.event.id`.
-Database failures include a valid five-character SQLSTATE as `db.response.status_code`.
+When a database failure supplies a valid five-character SQLSTATE, the failed and dead-letter records include it as `db.response.status_code`.
+
 The bounded frame list keeps the failure origin and the first application call site, even when framework proxies fill its 32-frame budget.
-An omission marker separates the retained frame sections.
+An omission marker counts the framework frames between the retained sections.
+The application section can start in shared tenancy advice.
+The operation values are `handle`, `write-fence` and `capture-for-replay`.
+
 Expected inbox write-fence contention uses `integration.message.retry` at `DEBUG`, with its reason and event ID. It returns the event to the inbox without spending its failure budget.
 
 Run production at `INFO`.

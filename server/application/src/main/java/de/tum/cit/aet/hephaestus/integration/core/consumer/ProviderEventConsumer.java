@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.sync.activity.ConnectionActivityRecorder;
 import jakarta.annotation.PreDestroy;
-import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -316,12 +315,8 @@ public class ProviderEventConsumer {
                 .addKeyValue("error.type", thrown.getClass().getName());
         if (claimed.workspaceId() != null) logged = logged.addKeyValue("integration.scope.id", claimed.workspaceId());
         Throwable diagnostic = IntegrationPoisonHandler.diagnosticCause(thrown);
-        if (diagnostic instanceof SQLException sqlException) {
-            String state = sqlException.getSQLState();
-            if (state != null && state.matches("[A-Z0-9]{5}")) {
-                logged = logged.addKeyValue("db.response.status_code", state);
-            }
-        }
+        String state = IntegrationPoisonHandler.sqlState(thrown);
+        if (state != null) logged = logged.addKeyValue("db.response.status_code", state);
         if (claimed.attempt() <= 1) {
             logged = logged.addKeyValue("error.root_type", diagnostic.getClass().getName())
                     .addKeyValue("error.stack_trace", IntegrationPoisonHandler.diagnosticFrames(diagnostic));
