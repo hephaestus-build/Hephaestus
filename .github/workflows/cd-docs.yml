@@ -17,6 +17,12 @@ on:
       - "scripts/lib/json.ts"
       - "scripts/lib/process.ts"
       - ".github/workflows/cd-docs.yml"
+  # A release republishes the site root with its docs (docs/README.md § Versions). The release workflow publishes with
+  # GITHUB_TOKEN, whose release event starts no workflow, so this follows its completed run instead.
+  workflow_run: # zizmor: ignore[dangerous-triggers] Nothing from the run is checked out or executed.
+    workflows: ["Release / Publish"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions: {}
@@ -79,12 +85,50 @@ jobs:
           path: docs-preview-comment.json
           retention-days: 1
 
-  build-production:
-    name: Build (production)
+  # The release whose docs the site root serves: the newest release candidate before 1.0.0, the newest stable after.
+  release-ref:
+    name: Resolve the release
+    if: >-
+      ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+        || github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' }}
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      publish: ${{ steps.release.outputs.publish }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+      # The release workflow runs after every push to main, and most runs publish nothing. A run republishes the site
+      # only when a release tag points at its commit.
+      - id: release
+        env:
+          EVENT: ${{ github.event_name }}
+          RELEASED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          tag=$(node scripts/docs-release.ts)
+          publish=true
+          if [ "$EVENT" = workflow_run ] && [ -z "$(git tag --points-at "$RELEASED_SHA" --list 'v*')" ]; then
+            publish=false
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+
+  # The site root: the docs of the latest release, built from its tag with that tag's own toolchain.
+  build-release:
+    name: Build (latest release)
+    needs: release-ref
+    if: needs.release-ref.outputs.publish == 'true'
     concurrency:
-      group: docs-production-build-${{ github.ref }}
+      group: docs-build-release-${{ github.ref }}
       cancel-in-progress: true
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:
@@ -92,6 +136,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.release-ref.outputs.tag }}
           persist-credentials: false
       - uses: ./.github/actions/setup-toolchain
         with:
@@ -101,16 +146,58 @@ jobs:
           path: |
             docs/.docusaurus
             docs/node_modules/.cache
-          key: ${{ runner.os }}-docusaurus-production-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('docs/**/*.md', 'docs/**/*.mdx', 'docs/**/*.ts') }}
+          key: ${{ runner.os }}-docusaurus-latest-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('docs/**/*.md', 'docs/**/*.mdx', 'docs/**/*.ts') }}
           restore-keys: |
-            ${{ runner.os }}-docusaurus-production-${{ hashFiles('pnpm-lock.yaml') }}-
-            ${{ runner.os }}-docusaurus-production-
+            ${{ runner.os }}-docusaurus-latest-${{ hashFiles('pnpm-lock.yaml') }}-
+            ${{ runner.os }}-docusaurus-latest-
       - run: vp run --filter docs build
         env:
           DOCUSAURUS_BASE_URL: "/"
+          DOCS_CHANNEL: latest
+          DOCS_RELEASE: ${{ needs.release-ref.outputs.tag }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: docs-build-production
+          name: docs-build-latest
+          path: docs/build
+          retention-days: 1
+
+  # /next/: the docs of main, with the banner that marks them unreleased.
+  build-production:
+    name: Build (next)
+    needs: release-ref
+    if: needs.release-ref.outputs.publish == 'true'
+    concurrency:
+      group: docs-build-next-${{ github.ref }}
+      cancel-in-progress: true
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            docs/.docusaurus
+            docs/node_modules/.cache
+          key: ${{ runner.os }}-docusaurus-next-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('docs/**/*.md', 'docs/**/*.mdx', 'docs/**/*.ts') }}
+          restore-keys: |
+            ${{ runner.os }}-docusaurus-next-${{ hashFiles('pnpm-lock.yaml') }}-
+            ${{ runner.os }}-docusaurus-next-
+      - run: vp run --filter docs build
+        env:
+          DOCUSAURUS_BASE_URL: "/next/"
+          DOCS_CHANNEL: next
+          DOCS_RELEASE: ${{ needs.release-ref.outputs.tag }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: docs-build-next
           path: docs/build
           retention-days: 1
 
@@ -186,10 +273,9 @@ jobs:
   deploy:
     name: GitHub Pages
     concurrency:
-      group: docs-production-deploy-${{ github.ref }}
+      group: docs-production-deploy
       cancel-in-progress: false
-    needs: build-production
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build-release, build-production]
     timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:
@@ -201,8 +287,12 @@ jobs:
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: docs-build-production
+          name: docs-build-latest
           path: docs-build
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: docs-build-next
+          path: docs-build/next
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: docs-build

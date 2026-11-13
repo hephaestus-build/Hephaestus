@@ -15,6 +15,19 @@ const envBaseUrl = process.env.DOCUSAURUS_BASE_URL;
  */
 const baseUrl = envBaseUrl === undefined || envBaseUrl === "" ? "/" : envBaseUrl;
 
+const SITE_URL = "https://docs.hephaestus.build";
+
+/*
+ * The Pages workflow builds the latest release tag at the site root with DOCS_CHANNEL=latest, and `main` at `/next/`
+ * (docs/README.md § Versions). Any other build, such as a local build or a PR preview, shows `main`, so it is `next`.
+ * DOCS_RELEASE names the release in the version switcher.
+ */
+const channel = process.env.DOCS_CHANNEL === "latest" ? "latest" : "next";
+const envRelease = process.env.DOCS_RELEASE?.trim() ?? "";
+const release = envRelease === "" ? undefined : envRelease;
+const latestLabel = release === undefined ? "Latest release" : `Latest release (${release})`;
+const nextLabel = "Next (unreleased)";
+
 const GUIDES = [
 	{ path: "user", label: "User guide" },
 	{ path: "admin", label: "Admin guide" },
@@ -142,8 +155,10 @@ const config: Config = {
 		},
 	},
 
-	url: "https://docs.hephaestus.build",
+	url: SITE_URL,
 	baseUrl,
+	// The unreleased docs repeat most pages of the release docs, so search engines index only the release.
+	noIndex: channel === "next",
 	organizationName: "hephaestus-build",
 	projectName: "Hephaestus",
 
@@ -343,6 +358,16 @@ const config: Config = {
 				},
 
 				{
+					// Each version is a separate build, so the switcher links whole sites, not pages.
+					type: "dropdown",
+					label: channel === "latest" ? latestLabel : nextLabel,
+					position: "right",
+					items: [
+						{ label: latestLabel, href: `${SITE_URL}/` },
+						{ label: nextLabel, href: `${SITE_URL}/next/` },
+					],
+				},
+				{
 					href: "https://hephaestus.build",
 					label: "Open Hephaestus",
 					position: "right",
@@ -424,12 +449,19 @@ const config: Config = {
 			],
 			copyright: `Developed at the <a href="https://www.tum.de/en/">Technical University of Munich</a>. There, Hephaestus is the research platform for a study of how AI-generated feedback can improve developers’ application of engineering practices. <a href="https://aet.cit.tum.de/">Applied Education Technologies</a> maintains Hephaestus under the MIT license. Source on <a href="${REPO_URL}">GitHub</a>.`,
 		},
-		announcementBar: {
-			id: "pre-1-0",
-			// Docusaurus does not base-URL-prefix a raw HTML href or check it via onBrokenLinks — write it absolute.
-			content: `Hephaestus is <strong>pre-1.0</strong>: only the latest release is supported, and a minor release can require action. <a href="${baseUrl}admin/compatibility-policy">Read the compatibility policy</a>.`,
-			isCloseable: true,
-		},
+		announcementBar:
+			channel === "next"
+				? {
+						id: "unreleased",
+						content: `<strong>Unreleased:</strong> these docs describe the next release. <a href="${SITE_URL}/">Read the docs of the latest release</a>.`,
+						isCloseable: false,
+					}
+				: {
+						id: "pre-1-0",
+						// Docusaurus does not base-URL-prefix a raw HTML href or check it via onBrokenLinks — write it absolute.
+						content: `Hephaestus is <strong>pre-1.0</strong>: only the latest release is supported, and a minor release can require action. <a href="${baseUrl}admin/compatibility-policy">Read the compatibility policy</a>.`,
+						isCloseable: true,
+					},
 		docs: {
 			sidebar: {
 				hideable: true,
