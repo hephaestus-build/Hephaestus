@@ -4,11 +4,25 @@ title: Structured logging
 
 # Structured logging
 
-The [operator observability contract](/admin/observability) owns the JSON schema, event names,
+The [log record contract](/admin/log-records) owns the JSON schema, event names,
 and correlation semantics. Preserve that contract when changing a log producer or its encoder.
 [Observability principles](./observability-principles.md) says why each change ships its signal and what a signal must not carry.
 Logging is an operational interface: useful severity, trustworthy context, and bounded disclosure
 matter more than a console with no warnings.
+
+## Choose the level
+
+| Level | Use |
+| --- | --- |
+| ERROR | An operation failed and needs operator action. Log the failure at the boundary that owns its outcome. |
+| WARN | An operation is degraded, or a guard refused unexpected state. Include its effect and a safe reason. |
+| INFO | A lifecycle transition, a configuration decision, or a batch summary that an operator needs during normal operation. |
+| DEBUG | Per-item progress, successful polls, and capture details. Keep these safe even when an operator enables them. |
+| TRACE | Fine-grained diagnostics with bounded, safe values. Never use this level to expose private data. |
+
+A normal return from a degraded state is INFO.
+Do not log each item at INFO when a lifecycle event or batch summary already records the outcome.
+Keep an actionable failure visible at WARN or ERROR.
 
 ## Use the existing framework facilities
 
@@ -16,6 +30,10 @@ Use SLF4J's fluent API for events operators need to query. Keep a stable `event.
 human-readable message, and typed fields rather than embedding `key=value` fragments in the message.
 Use parameterized logging for ordinary diagnostic text. Do not build a second event abstraction or
 serialize a JSON string inside a log message.
+
+Use `{}` placeholders for values. Do not concatenate values into a message or call `String.format` for its text.
+PMD checks concatenation in SLF4J messages, including fluent messages. Compile-time constant text can span several literals.
+The architecture tier rejects access to `System.out` and `System.err`.
 
 ```java
 log.atWarn()
@@ -33,7 +51,11 @@ Two customizers in `observability/` complete the format:
 - `LogContextCustomizer` writes the MDC and the event's key-value pairs as one nested `context` object.
 - `CredentialMaskingCustomizer` masks credential formats in every value.
 
-Put a scope identifier in MDC: `job.id`, `workspace.id`, or the trace IDs.
+Put a scope identifier in MDC. Use the key names in the
+[log record contract](/admin/log-records#fields) and `StructuredLogKeys` where the module boundary permits it.
+Set context at the boundary that knows the scope: an HTTP request, an inbox handler, a claimed run, or an outbox attempt.
+Keep the agent run ID and its lease epoch distinct from the attempt count.
+
 Put a fact of one event in its key-value pairs: `event.name`, an outcome, a duration.
 An event can name a scope identifier again, for example because it also runs outside the scope.
 Then the record carries the event's value once.
@@ -48,6 +70,17 @@ SQL/row values. Exception messages can contain those same values. At a shared in
 prefer the failure class and safe request metadata to the full exception. Preserve useful failure
 severity and correlation.
 Do not replace an operational failure with silence.
+
+Log an exception once, at the boundary that decides the operation's outcome.
+A helper that rethrows adds safe context to the exception. It does not log the same failure again.
+
+Use a class-only stack trace when frames help diagnosis. The shipped encoder removes exception messages.
+Never log a person's login, name, email address, or work text. Use an ID.
+
+PMD checks known personal-data accessors and variable names on typed SLF4J logger and builder calls.
+The rule does not follow messages through local variables or check `String.format`.
+The test log scan checks the records that a test emits.
+These checks do not trace arbitrary text through the application. Review each logged value at its source.
 
 Use fixed field names. Request-controlled keys must not become top-level log keys. The configured
 encoder escapes string values and keeps MDC in a separate object. This prevents JSON record
@@ -75,6 +108,15 @@ identifier left behind cannot pass unnoticed. Keep high-cardinality identifiers 
 not metric labels. The [OpenTelemetry log data model](https://opentelemetry.io/docs/specs/otel/logs/data-model/)
 distinguishes event attributes, severity, resource identity, and trace/span correlation.
 It does not make log text or an identifier proof of successful export.
+
+## Browser and agent logs
+
+The webapp's `no-console` rule keeps routine browser work out of console logs.
+Report browser faults through the existing fault boundary, with its closed fields and no page content.
+Do not add a second browser log exporter.
+The agent runner uses the diagnostic events and typed fields in `pi-diagnostics.json`.
+Do not add prompts, model replies, tool output, credentials, or arbitrary exception text to those records.
+The server admits only records that match that contract.
 
 ## Verify the emitted record
 

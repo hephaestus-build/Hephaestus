@@ -59,7 +59,6 @@ gradle.projectsEvaluated {
             "PMD must resolve platform types against its analysis toolchain."
         }
         setSource(application.files(File(directory, "Canary.java")))
-        classpath = application.files(javaLauncher.map { it.metadata.installationPath.file("lib/jrt-fs.jar") })
         reports.xml.outputLocation.set(File(directory, "report.xml"))
         reports.html.required.set(false)
     }
@@ -78,6 +77,87 @@ gradle.projectsEvaluated {
 				source:
 					"public class Canary { public void skip(java.io.InputStream stream) throws java.io.IOException { stream.skip(1); } }",
 				violations: ["UnusedReturnValue"],
+				errors: 0,
+			},
+			{
+				name: "parameterized and constant log messages",
+				source: `public class Canary {
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Canary.class);
+    public void log(String value) {
+        logger.info("Value {}", value);
+        logger.info(org.slf4j.MarkerFactory.getMarker("safe"), "Value {}", value);
+        logger.info("Value {}", "prefix-" + value);
+        logger.info("Constant " + "message");
+        logger.atInfo().addKeyValue("value", value).log("Constant message");
+        java.util.logging.Logger.getLogger("canary").info("Other logger " + value);
+    }
+}`,
+				violations: [],
+				errors: 0,
+			},
+			{
+				name: "concatenated classic and fluent log messages",
+				source: `public class Canary {
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Canary.class);
+    public void log(String value) {
+        logger.info("Value " + value);
+        logger.atInfo().log("Value " + value);
+        logger.atInfo().setMessage("Value " + value).log();
+        logger.info(org.slf4j.MarkerFactory.getMarker("safe"), "Value " + value);
+    }
+}`,
+				violations: [
+					"ParameterizedLogMessage",
+					"ParameterizedLogMessage",
+					"ParameterizedLogMessage",
+					"ParameterizedLogMessage",
+				],
+				errors: 0,
+			},
+			{
+				name: "private arguments in classic, fluent, and retained builders",
+				source: `public class Canary {
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Canary.class);
+    private static org.slf4j.spi.LoggingEventBuilder event() { return logger.atWarn(); }
+    public void log(String accountLogin, String workspaceSlug,
+            de.tum.cit.aet.hephaestus.workspace.Workspace workspace,
+            de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession session) {
+        logger.info("Scope {}", workspace.getAccountLogin());
+        logger.info("Scope {}", session.accountLogin());
+        logger.info("Scope {}", session.slug());
+        logger.atInfo().addKeyValue("scope", accountLogin).log("Started");
+        var builder = logger.atLevel(org.slf4j.event.Level.WARN);
+        builder.addArgument(workspaceSlug).log("Scope {}");
+        event().addKeyValue("scope", workspace.getAccountLogin()).log("Started");
+    }
+}`,
+				violations: Array.from({ length: 6 }, () => "NoPersonalLogArgument"),
+				errors: 0,
+			},
+			{
+				name: "private context, optional login, and misleading organization names",
+				source: `public class Canary {
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Canary.class);
+    public void log(de.tum.cit.aet.hephaestus.integration.scm.domain.user.User orgMember,
+            String organizationMemberLogin, String safeSlug,
+            de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext context) {
+        logger.info("Member {}", orgMember.getLogin());
+        logger.info("Member {}", organizationMemberLogin);
+        logger.info("Scope {}", context.slug());
+        logger.info("Actor {}", de.tum.cit.aet.hephaestus.core.security.SecurityUtils.getCurrentUserLogin().orElse("system"));
+        logger.info("Scope {}", safeSlug);
+    }
+}`,
+				violations: Array.from({ length: 5 }, () => "NoPersonalLogArgument"),
+				errors: 0,
+			},
+			{
+				name: "private arguments through Lombok's logger",
+				source: `@lombok.extern.slf4j.Slf4j
+public class Canary {
+    public void log(String accountLogin) { log.info("Scope {}", accountLogin); }
+}`,
+				violations: ["NoPersonalLogArgument"],
 				errors: 0,
 			},
 			{

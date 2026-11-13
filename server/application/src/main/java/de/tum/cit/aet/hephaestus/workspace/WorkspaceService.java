@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
-import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.exception.AccessForbiddenException;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
@@ -346,10 +345,7 @@ public class WorkspaceService {
         String currentSlug = workspace.getWorkspaceSlug();
 
         if (currentSlug.equals(newSlug)) {
-            log.debug(
-                    "Skipped workspace rename: reason=slugUnchanged, workspaceId={}, slug={}",
-                    workspaceId,
-                    LoggingUtils.sanitizeForLog(newSlug));
+            log.debug("Skipped workspace rename: reason=slugUnchanged, workspaceId={}", workspaceId);
             return workspace;
         }
 
@@ -367,11 +363,7 @@ public class WorkspaceService {
             throw new WorkspaceSlugConflictException(newSlug, exception);
         }
 
-        log.info(
-                "Renamed workspace: workspaceId={}, oldSlug={}, newSlug={}",
-                workspaceId,
-                LoggingUtils.sanitizeForLog(currentSlug),
-                LoggingUtils.sanitizeForLog(newSlug));
+        log.info("Renamed workspace: workspaceId={}", workspaceId);
 
         return saved;
     }

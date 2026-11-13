@@ -133,7 +133,7 @@ public class GitHubTeamSyncService {
             log.warn("Skipped team sync: reason=missingOrgLogin, scopeId={}", scopeId);
             return 0;
         }
-        String safeOrgLogin = Objects.requireNonNull(sanitizeForLog(organizationLogin));
+        String logScopeId = scopeId.toString();
 
         // Provider-type-scoped so a same-login GitLab org cannot collide (ADR-0012).
         Long organizationId = organizationRepository
@@ -141,7 +141,7 @@ public class GitHubTeamSyncService {
                 .map(Organization::getId)
                 .orElse(null);
         if (organizationId == null) {
-            log.warn("Skipped team sync: reason=organizationNotFound, orgLogin={}", safeOrgLogin);
+            log.warn("Skipped team sync: reason=organizationNotFound, scopeId={}", logScopeId);
             return 0;
         }
 
@@ -162,8 +162,8 @@ public class GitHubTeamSyncService {
                 pageCount++;
                 if (pageCount >= MAX_PAGINATION_PAGES) {
                     log.warn(
-                            "Reached maximum pagination limit for teams: orgLogin={}, limit={}",
-                            safeOrgLogin,
+                            "Reached maximum pagination limit for teams: scopeId={}, limit={}",
+                            logScopeId,
                             MAX_PAGINATION_PAGES);
                     break;
                 }
@@ -185,8 +185,8 @@ public class GitHubTeamSyncService {
                                 .jitter(JITTER_FACTOR)
                                 .filter(ScmTransportErrors::isTransportError)
                                 .doBeforeRetry(signal -> log.warn(
-                                        "Retrying team sync after transport error: orgLogin={}, page={}, attempt={}, error={}",
-                                        safeOrgLogin,
+                                        "Retrying team sync after transport error: scopeId={}, page={}, attempt={}, error={}",
+                                        logScopeId,
                                         currentPage,
                                         signal.totalRetries() + 1,
                                         signal.failure().getClass().getSimpleName())))
@@ -200,8 +200,8 @@ public class GitHubTeamSyncService {
                                 retryAttempt,
                                 MAX_RETRY_ATTEMPTS,
                                 "team sync",
-                                "orgLogin",
-                                safeOrgLogin,
+                                "scopeId",
+                                logScopeId,
                                 log))) {
                             retryAttempt++;
                             continue;
@@ -209,9 +209,11 @@ public class GitHubTeamSyncService {
                         break;
                     }
                     log.warn(
-                            "Received invalid GraphQL response: orgLogin={}, errors={}",
-                            safeOrgLogin,
-                            graphQlResponse != null ? graphQlResponse.getErrors() : "null");
+                            "Received invalid GraphQL response: scopeId={}, errorCount={}",
+                            logScopeId,
+                            graphQlResponse != null
+                                    ? graphQlResponse.getErrors().size()
+                                    : 0);
                     break;
                 }
 
@@ -220,8 +222,7 @@ public class GitHubTeamSyncService {
 
                 // Check if we should pause due to rate limiting
                 if (graphQlClientProvider.isRateLimitCritical(scopeId)) {
-                    if (!graphQlSyncHelper.waitForRateLimitIfNeeded(
-                            scopeId, "team sync", "orgLogin", safeOrgLogin, log)) {
+                    if (!graphQlSyncHelper.waitForRateLimitIfNeeded(scopeId, "team sync", "scopeId", logScopeId, log)) {
                         break;
                     }
                 }
@@ -254,7 +255,7 @@ public class GitHubTeamSyncService {
             // Raw nodes received vs teams.totalCount (totalSynced is post-filter).
             if (reportedTotalCount >= 0) {
                 GraphQlConnectionOverflowDetector.checkPaginated(
-                        "teams", teamsReceived, reportedTotalCount, hasNextPage, "orgLogin=" + safeOrgLogin);
+                        "teams", teamsReceived, reportedTotalCount, hasNextPage, "scopeId=" + logScopeId);
             }
 
             complete = !hasNextPage;
@@ -265,7 +266,7 @@ public class GitHubTeamSyncService {
         } catch (Exception e) {
             ClassificationResult classification = exceptionClassifier.classifyWithDetails(e);
             if (!graphQlSyncHelper.handleGraphQlClassification(new GraphQlClassificationContext(
-                    classification, 0, MAX_RETRY_ATTEMPTS, "team sync", "orgLogin", safeOrgLogin, log))) {
+                    classification, 0, MAX_RETRY_ATTEMPTS, "team sync", "scopeId", logScopeId, log))) {
                 return 0;
             }
             return 0;
@@ -273,21 +274,20 @@ public class GitHubTeamSyncService {
 
         if (!complete) {
             log.warn(
-                    "Skipped stale team removal: reason=incompleteSync, orgLogin={}, pagesProcessed={}",
-                    safeOrgLogin,
+                    "Skipped stale team removal: reason=incompleteSync, scopeId={}, pagesProcessed={}",
+                    logScopeId,
                     pagesProcessed);
         }
         // GitHub has answered for every team. A database failure propagates, so the caller's transient-failure retry
         // gets a fresh transaction.
         TeamWrite written = Objects.requireNonNull(transactionTemplate.execute(
-                status -> store(organizationId, organizationLogin, scopeId, fetched, complete, safeOrgLogin)));
+                status -> store(organizationId, organizationLogin, scopeId, fetched, complete, logScopeId)));
         log.info(
-                "Completed team sync: orgLogin={}, teamCount={}, permissionCount={}, complete={}, scopeId={}",
-                safeOrgLogin,
+                "Completed team sync: scopeId={}, teamCount={}, permissionCount={}, complete={}",
+                logScopeId,
                 written.teams(),
                 written.permissions(),
-                complete,
-                scopeId);
+                complete);
         return written.teams();
     }
 
@@ -316,7 +316,7 @@ public class GitHubTeamSyncService {
             Long scopeId,
             List<FetchedTeam> fetched,
             boolean complete,
-            String safeOrgLogin) {
+            String logScopeId) {
         Organization organization =
                 organizationRepository.findById(organizationId).orElse(null);
         if (organization == null) {
@@ -355,7 +355,7 @@ public class GitHubTeamSyncService {
         }
 
         // Parents resolve after every team is persisted, so a child listed before its parent still finds it.
-        resolveParentReferences(syncedTeamsByNativeId, parentNativeIdByChildNativeId, safeOrgLogin);
+        resolveParentReferences(syncedTeamsByNativeId, parentNativeIdByChildNativeId, logScopeId);
 
         // Only a complete listing removes stale teams: an aborted one (rate limit, error, pagination limit) would
         // delete teams that still exist.
@@ -401,10 +401,10 @@ public class GitHubTeamSyncService {
      *
      * @param syncedTeamsByNativeId         map of GitHub native ID → persisted Team
      * @param parentNativeIdByChildNativeId map of child native ID → parent native ID from GraphQL
-     * @param safeOrgLogin                  sanitized org login for logging
+     * @param logScopeId                  scope ID for logging
      */
     private void resolveParentReferences(
-            Map<Long, Team> syncedTeamsByNativeId, Map<Long, Long> parentNativeIdByChildNativeId, String safeOrgLogin) {
+            Map<Long, Team> syncedTeamsByNativeId, Map<Long, Long> parentNativeIdByChildNativeId, String logScopeId) {
         List<Team> changed = new ArrayList<>();
 
         for (Map.Entry<Long, Team> entry : syncedTeamsByNativeId.entrySet()) {
@@ -419,10 +419,10 @@ public class GitHubTeamSyncService {
                     correctParentId = parent.getId();
                 } else {
                     log.warn(
-                            "Parent team not found in current sync: child={}, parentNativeId={}, orgLogin={}",
+                            "Parent team not found in current sync: child={}, parentNativeId={}, scopeId={}",
                             child.getName(),
                             parentNativeId,
-                            safeOrgLogin);
+                            logScopeId);
                 }
             }
 
@@ -434,7 +434,7 @@ public class GitHubTeamSyncService {
 
         if (!changed.isEmpty()) {
             teamRepository.saveAll(changed);
-            log.info("Resolved parent team references: orgLogin={}, updated={}", safeOrgLogin, changed.size());
+            log.info("Resolved parent team references: scopeId={}, updated={}", logScopeId, changed.size());
         }
     }
 
@@ -726,9 +726,9 @@ public class GitHubTeamSyncService {
                     break;
                 }
                 log.warn(
-                        "Received invalid GraphQL response for team members: teamSlug={}, errors={}",
+                        "Received invalid GraphQL response for team members: teamSlug={}, errorCount={}",
                         teamSlug,
-                        graphQlResponse != null ? graphQlResponse.getErrors() : "null");
+                        graphQlResponse != null ? graphQlResponse.getErrors().size() : 0);
                 break;
             }
 
@@ -841,9 +841,9 @@ public class GitHubTeamSyncService {
                     break;
                 }
                 log.warn(
-                        "Received invalid GraphQL response for team repositories: teamSlug={}, errors={}",
+                        "Received invalid GraphQL response for team repositories: teamSlug={}, errorCount={}",
                         teamSlug,
-                        graphQlResponse != null ? graphQlResponse.getErrors() : "null");
+                        graphQlResponse != null ? graphQlResponse.getErrors().size() : 0);
                 break;
             }
 
@@ -929,7 +929,7 @@ public class GitHubTeamSyncService {
         }
 
         if (removed > 0) {
-            log.info("Removed stale teams: orgLogin={}, teamCount={}", sanitizeForLog(organizationLogin), removed);
+            log.info("Removed stale teams: scopeId={}, teamCount={}", context.scopeId(), removed);
         }
     }
 

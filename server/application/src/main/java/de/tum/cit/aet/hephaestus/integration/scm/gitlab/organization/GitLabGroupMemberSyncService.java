@@ -422,9 +422,8 @@ public class GitLabGroupMemberSyncService {
         if (!staleUserIds.isEmpty()) {
             organizationMembershipRepository.deleteByOrganizationIdAndUserIdIn(organization.getId(), staleUserIds);
             log.info(
-                    "Removed stale group memberships: orgId={}, groupPath={}, removedCount={}",
+                    "Removed stale group memberships: orgId={}, removedCount={}",
                     organization.getId(),
-                    sanitizeForLog(organization.getLogin()),
                     staleUserIds.size());
         }
     }

@@ -1,7 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.sync;
 
-import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
-
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
@@ -266,9 +264,8 @@ public class GitHubDataSyncScheduler {
                     handle -> runScopeSyncBody(session, handle, SyncJobType.RECONCILIATION));
         } catch (SyncJobConflictException e) {
             log.info(
-                    "Skipped scheduled sync: reason=manualSyncAlreadyRunning, scopeId={}, scopeSlug={}, activeJobId={}",
+                    "Skipped scheduled sync: reason=manualSyncAlreadyRunning, scopeId={}, activeJobId={}",
                     session.scopeId(),
-                    session.slug(),
                     e.activeJob().getId());
         }
     }
@@ -283,11 +280,7 @@ public class GitHubDataSyncScheduler {
         try {
             syncContextProvider.setContext(session.syncContext());
 
-            log.info(
-                    "Starting scope sync: scopeId={}, scopeSlug={}, accountLogin={}",
-                    session.scopeId(),
-                    session.slug(),
-                    sanitizeForLog(session.accountLogin()));
+            log.info("Starting scope sync: scopeId={}", session.scopeId());
 
             Runnable syncTask = syncContextProvider.wrapWithContext(() -> {
                 // Report every phase boundary, not just the repository loop. A reconcile spends real
@@ -318,9 +311,8 @@ public class GitHubDataSyncScheduler {
                     // incremental updates and historical backfill eligibility.
                     if (rateLimitTracker.isCritical(session.scopeId())) {
                         log.info(
-                                "Rate limit critical during scheduled sync, waiting for reset: scopeId={}, scopeSlug={}, remaining={}, totalRepos={}, reposProcessed={}, reposRemaining={}",
+                                "Rate limit critical during scheduled sync, waiting for reset: scopeId={}, remaining={}, totalRepos={}, reposProcessed={}, reposRemaining={}",
                                 session.scopeId(),
-                                session.slug(),
                                 rateLimitTracker.getRemaining(session.scopeId()),
                                 session.syncTargets().size(),
                                 reposProcessed,
@@ -429,18 +421,17 @@ public class GitHubDataSyncScheduler {
             }
         } catch (InstallationNotFoundException e) {
             log.warn(
-                    "Aborting scope sync: reason=installationDeleted, scopeId={}, scopeSlug={}, installationId={}",
+                    "Aborting scope sync: reason=installationDeleted, scopeId={}, installationId={}",
                     session.scopeId(),
-                    session.slug(),
                     e.getInstallationId());
             if (handle != null) {
                 throw e;
             }
         } catch (Exception e) {
-            log.error("Failed to sync scope: scopeId={}, scopeSlug={}", session.scopeId(), session.slug(), e);
             if (handle != null) {
                 throw new IllegalStateException("Failed to sync GitHub scope " + session.scopeId(), e);
             }
+            log.error("Failed to sync scope: scopeId={}", session.scopeId(), e);
         } finally {
             syncContextProvider.clearContext();
         }
@@ -468,12 +459,12 @@ public class GitHubDataSyncScheduler {
 
     private void syncSubIssues(SyncSession session, @Nullable SyncExecutionHandle handle) {
         try {
-            log.debug("Starting sub-issues sync: scopeId={}, scopeSlug={}", session.scopeId(), session.slug());
+            log.debug("Starting sub-issues sync: scopeId={}", session.scopeId());
             subIssueSyncService.syncSubIssuesForScope(session.scopeId());
         } catch (InstallationNotFoundException e) {
             throw e;
         } catch (Exception e) {
-            log.error("Failed to sync sub-issues: scopeId={}, scopeSlug={}", session.scopeId(), session.slug(), e);
+            log.error("Failed to sync sub-issues: scopeId={}", session.scopeId(), e);
             reportWarning(handle);
         }
     }
@@ -496,55 +487,38 @@ public class GitHubDataSyncScheduler {
         }
 
         try {
-            log.debug(
-                    "Starting team sync: scopeId={}, scopeSlug={}, orgLogin={}",
-                    session.scopeId(),
-                    session.slug(),
-                    sanitizeForLog(accountLogin));
+            log.debug("Starting team sync: scopeId={}", session.scopeId());
             int teamCount = teamSyncService.syncTeamsForOrganization(session.scopeId(), accountLogin);
             syncTargetProvider.updateTeamsSyncTimestamp(session.scopeId(), Instant.now());
-            log.debug(
-                    "Completed team sync: scopeId={}, orgLogin={}, teamCount={}",
-                    session.scopeId(),
-                    sanitizeForLog(accountLogin),
-                    teamCount);
+            log.debug("Completed team sync: scopeId={}, teamCount={}", session.scopeId(), teamCount);
         } catch (InstallationNotFoundException e) {
             throw e;
         } catch (Exception e) {
-            log.error(
-                    "Failed to sync teams: scopeId={}, scopeSlug={}, orgLogin={}",
-                    session.scopeId(),
-                    session.slug(),
-                    sanitizeForLog(accountLogin),
-                    e);
+            log.error("Failed to sync teams: scopeId={}", session.scopeId(), e);
             reportWarning(handle);
         }
     }
 
     private void syncIssueTypes(SyncSession session, @Nullable SyncExecutionHandle handle) {
         try {
-            log.debug("Starting issue types sync: scopeId={}, scopeSlug={}", session.scopeId(), session.slug());
+            log.debug("Starting issue types sync: scopeId={}", session.scopeId());
             issueTypeSyncService.syncIssueTypesForScope(session.scopeId());
         } catch (InstallationNotFoundException e) {
             throw e;
         } catch (Exception e) {
-            log.error("Failed to sync issue types: scopeId={}, scopeSlug={}", session.scopeId(), session.slug(), e);
+            log.error("Failed to sync issue types: scopeId={}", session.scopeId(), e);
             reportWarning(handle);
         }
     }
 
     private void syncIssueDependencies(SyncSession session, @Nullable SyncExecutionHandle handle) {
         try {
-            log.debug("Starting issue dependencies sync: scopeId={}, scopeSlug={}", session.scopeId(), session.slug());
+            log.debug("Starting issue dependencies sync: scopeId={}", session.scopeId());
             issueDependencySyncService.syncDependenciesForScope(session.scopeId());
         } catch (InstallationNotFoundException e) {
             throw e;
         } catch (Exception e) {
-            log.error(
-                    "Failed to sync issue dependencies: scopeId={}, scopeSlug={}",
-                    session.scopeId(),
-                    session.slug(),
-                    e);
+            log.error("Failed to sync issue dependencies: scopeId={}", session.scopeId(), e);
             reportWarning(handle);
         }
     }

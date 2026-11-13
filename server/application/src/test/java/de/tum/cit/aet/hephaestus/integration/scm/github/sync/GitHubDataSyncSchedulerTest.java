@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.sync;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -11,6 +13,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
@@ -47,6 +52,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.slf4j.LoggerFactory;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class GitHubDataSyncSchedulerTest extends BaseUnitTest {
@@ -247,6 +253,25 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
             // Override the outer setUp's critical-rate-limit stub. That gate warns on its own, which
             // would make "did the sweep warn?" unanswerable — two warnings and no way to tell whose.
             lenient().when(rateLimitTracker.isCritical(WORKSPACE_ID)).thenReturn(false);
+        }
+
+        @Test
+        void shouldLeaveTrackedFailureLoggingToTheJobBoundary() {
+            var failure = new IllegalStateException("synthetic sync failure");
+            doThrow(failure).when(syncContextProvider).setContext(any());
+            Logger logger = (Logger) LoggerFactory.getLogger(GitHubDataSyncScheduler.class);
+            var appender = new ListAppender<ILoggingEvent>();
+            appender.start();
+            logger.addAppender(appender);
+            try {
+                assertThatThrownBy(() -> scheduler.syncWorkspaceNow(WORKSPACE_ID, handle, SyncJobType.INITIAL))
+                        .isInstanceOf(IllegalStateException.class)
+                        .hasCause(failure);
+                assertThat(appender.list).noneMatch(event -> event.getThrowableProxy() != null);
+            } finally {
+                logger.detachAppender(appender);
+                appender.stop();
+            }
         }
 
         @Test

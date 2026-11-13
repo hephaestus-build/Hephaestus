@@ -348,9 +348,8 @@ public class GitHubHistoricalBackfillService {
             long completed = targets.size() - pendingIncrementalSync;
             log.debug(
                     "Some repos pending incremental sync (backfill proceeds for completed repos): "
-                            + "scopeId={}, scopeSlug={}, incrementalComplete={}, incrementalPending={}",
+                            + "scopeId={}, incrementalComplete={}, incrementalPending={}",
                     scopeId,
-                    session.slug(),
                     completed,
                     pendingIncrementalSync);
         }

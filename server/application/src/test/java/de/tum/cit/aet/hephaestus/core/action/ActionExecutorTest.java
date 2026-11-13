@@ -16,11 +16,16 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.slf4j.MDC;
 import tools.jackson.databind.json.JsonMapper;
 
 /** The executor's last guard: an adapter that throws never turns a write that may exist into a retry. */
@@ -159,6 +164,53 @@ class ActionExecutorTest extends BaseUnitTest {
 
         verify(store).endStale(eq(ending), any());
         verify(store).claim(anyInt(), any());
+    }
+
+    /** An adapter's own records name the action; the caller's log context is back after the attempt. */
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldNameTheActionInTheLogContextOfItsAttemptAndRestoreTheCallers(boolean failure) {
+        var during = new AtomicReference<Map<String, String>>();
+        MDC.put("workspace.id", "9");
+        MDC.put("traceId", "0123456789abcdef0123456789abcdef");
+        try {
+            executor(attempt -> {
+                        during.set(MDC.getCopyOfContextMap());
+                        if (failure) throw new IllegalStateException("adapter failed");
+                        return new ActionResult.Done(null);
+                    })
+                    .run(new ActionStore.Claim(ID, 42L, ActionKind.EMAIL, "key", "{}", 3, 7L, false, null));
+
+            assertThat(during.get())
+                    .containsEntry("action.id", ID.toString())
+                    .containsEntry("action.kind", "EMAIL")
+                    .containsEntry("action.attempt", "3")
+                    .containsEntry("workspace.id", "42")
+                    .containsEntry("traceId", "0123456789abcdef0123456789abcdef");
+            assertThat(MDC.getCopyOfContextMap())
+                    .isEqualTo(Map.of("workspace.id", "9", "traceId", "0123456789abcdef0123456789abcdef"));
+        } finally {
+            MDC.clear();
+        }
+    }
+
+    /** An instance-level action has no workspace: it does not inherit the caller's. */
+    @Test
+    void shouldNotNameTheCallersWorkspaceForAnInstanceLevelAction() {
+        var during = new AtomicReference<Map<String, String>>();
+        MDC.put("workspace.id", "9");
+        try {
+            executor(attempt -> {
+                        during.set(MDC.getCopyOfContextMap());
+                        return new ActionResult.Done(null);
+                    })
+                    .run(claim(false));
+
+            assertThat(during.get()).doesNotContainKey("workspace.id").containsEntry("action.id", ID.toString());
+            assertThat(MDC.get("workspace.id")).isEqualTo("9");
+        } finally {
+            MDC.clear();
+        }
     }
 
     private ActionExecutor executor(Function<ActionAttempt, ActionResult> execute) {

@@ -185,7 +185,7 @@ public class LinkedWorkItemContentSource {
             root.put("truncated", false);
 
             files.put(OUTPUT_FILE, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root));
-            log.info("Linked work items: wrote {} item(s), unresolved={}", items.size(), unresolved.size());
+            log.debug("Linked work items: wrote {} item(s), unresolved={}", items.size(), unresolved.size());
             return new CaptureContribution(
                     files,
                     // Number references cannot prove that all linked work was found.

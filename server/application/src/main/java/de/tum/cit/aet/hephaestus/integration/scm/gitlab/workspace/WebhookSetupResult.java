@@ -11,17 +11,32 @@ import org.jspecify.annotations.Nullable;
  * @param status        the outcome status (SUCCESS, SKIPPED, or FAILED)
  * @param webhookId     the GitLab webhook ID (non-null when successful)
  * @param groupId       the GitLab group numeric ID (non-null when successful)
- * @param failureReason human-readable reason when registration failed or was skipped
+ * @param reason fixed diagnostic code, safe to log
+ * @param httpStatus GitLab's response status, when a request failed
  */
 public record WebhookSetupResult(
         Status status,
         @Nullable Long webhookId,
         @Nullable Long groupId,
-        @Nullable String failureReason) {
+        Reason reason,
+        @Nullable Integer httpStatus) {
     public enum Status {
         SUCCESS,
         SKIPPED,
         FAILED,
+    }
+
+    public enum Reason {
+        REGISTERED,
+        NOT_GITLAB,
+        ROUTING_SECRET_MISSING,
+        CLIENT_UNAVAILABLE,
+        GROUP_PATH_MISSING,
+        CONNECTION_NOT_CONFIGURED,
+        ROUTING_KEY_UNKNOWN,
+        SUPERSEDED,
+        PERMISSION_DENIED,
+        API_ERROR,
     }
 
     /** Convenience: returns {@code true} when the webhook was successfully registered or already existed. */
@@ -30,14 +45,14 @@ public record WebhookSetupResult(
     }
 
     public static WebhookSetupResult success(long webhookId, long groupId) {
-        return new WebhookSetupResult(Status.SUCCESS, webhookId, groupId, null);
+        return new WebhookSetupResult(Status.SUCCESS, webhookId, groupId, Reason.REGISTERED, null);
     }
 
-    public static WebhookSetupResult failed(String reason) {
-        return new WebhookSetupResult(Status.FAILED, null, null, reason);
+    public static WebhookSetupResult failed(Reason reason, int httpStatus) {
+        return new WebhookSetupResult(Status.FAILED, null, null, reason, httpStatus);
     }
 
-    public static WebhookSetupResult skipped(String reason) {
-        return new WebhookSetupResult(Status.SKIPPED, null, null, reason);
+    public static WebhookSetupResult skipped(Reason reason) {
+        return new WebhookSetupResult(Status.SKIPPED, null, null, reason, null);
     }
 }

@@ -119,10 +119,7 @@ public class WorkspaceRepositoryMonitorService {
     @Transactional(readOnly = true)
     public List<String> getMonitoredRepositories(String slug) {
         Workspace workspace = requireWorkspace(slug);
-        log.debug(
-                "Retrieved monitored repositories: workspaceId={}, workspaceSlug={}",
-                workspace.getId(),
-                LoggingUtils.sanitizeForLog(slug));
+        log.debug("Retrieved monitored repositories: workspaceId={}", workspace.getId());
         return workspace.getRepositoriesToMonitor().stream()
                 .map(RepositoryToMonitor::getNameWithOwner)
                 .toList();
@@ -132,10 +129,7 @@ public class WorkspaceRepositoryMonitorService {
     public List<String> getMonitoredRepositories(WorkspaceContext workspaceContext) {
         String slug = requireSlug(workspaceContext);
         Workspace workspace = requireWorkspace(slug);
-        log.debug(
-                "Retrieved monitored repositories: workspaceId={}, workspaceSlug={}",
-                workspace.getId(),
-                LoggingUtils.sanitizeForLog(slug));
+        log.debug("Retrieved monitored repositories: workspaceId={}", workspace.getId());
         return workspace.getRepositoriesToMonitor().stream()
                 .map(RepositoryToMonitor::getNameWithOwner)
                 .toList();
@@ -367,9 +361,9 @@ public class WorkspaceRepositoryMonitorService {
         var snapshots = enumerator.enumerate(installationId);
         if (snapshots.isEmpty()) {
             log.warn(
-                    "Skipped repository enumeration: reason=noDataReturned, installationId={}," + " workspaceSlug={}",
+                    "Skipped repository enumeration: reason=noDataReturned, installationId={}," + " workspaceId={}",
                     installationId,
-                    LoggingUtils.sanitizeForLog(workspace.getWorkspaceSlug()));
+                    workspace.getId());
             return;
         }
 

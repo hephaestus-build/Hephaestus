@@ -30,7 +30,7 @@ public class WorkspaceAccessService {
 
         Set<WorkspaceRole> userRoles = context.roles();
         if (userRoles == null || userRoles.isEmpty()) {
-            log.debug("Denied role check: reason=noRoles, workspaceSlug={}", context.slug());
+            log.debug("Denied role check: reason=noRoles, workspaceId={}", context.id());
             return false;
         }
 
@@ -42,17 +42,17 @@ public class WorkspaceAccessService {
 
         if (requiredRole != WorkspaceRole.OWNER && SecurityUtils.isSuperAdmin()) {
             log.debug(
-                    "Granted role check: reason=superAdminElevation, requiredRole={}," + " workspaceSlug={}",
+                    "Granted role check: reason=superAdminElevation, requiredRole={}," + " workspaceId={}",
                     requiredRole,
-                    context.slug());
+                    context.id());
             return true;
         }
 
         log.debug(
-                "Denied role check: reason=insufficientRole, userRoles={}, requiredRole={}," + " workspaceSlug={}",
+                "Denied role check: reason=insufficientRole, userRoles={}, requiredRole={}," + " workspaceId={}",
                 userRoles,
                 requiredRole,
-                context.slug());
+                context.id());
         return false;
     }
 

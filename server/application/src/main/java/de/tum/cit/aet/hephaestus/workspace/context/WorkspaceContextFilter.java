@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.workspace.context;
 
-import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AdminPasskeyAccess;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry.ActorProfile;
@@ -129,7 +128,6 @@ public class WorkspaceContextFilter implements Filter {
         }
 
         String slug = matcher.group(1);
-        String safeSlug = LoggingUtils.sanitizeForLog(slug);
         String method = httpRequest.getMethod();
         String remainingPath = matcher.group(2) != null ? matcher.group(2) : "";
         boolean isBasePath = remainingPath.isBlank() || "/".equals(remainingPath);
@@ -154,8 +152,8 @@ public class WorkspaceContextFilter implements Filter {
 
             if (workspace.getStatus() != WorkspaceStatus.ACTIVE && !allowNonActive) {
                 log.debug(
-                        "Denied workspace access: reason=nonActiveStatus, workspaceSlug={}," + " status={}",
-                        safeSlug,
+                        "Denied workspace access: reason=nonActiveStatus, workspaceId={}," + " status={}",
+                        workspace.getId(),
                         workspace.getStatus());
                 sendWorkspaceNotFoundError(httpResponse, slug);
                 return;
@@ -179,9 +177,9 @@ public class WorkspaceContextFilter implements Filter {
                     return;
                 }
                 log.info(
-                        "Granted workspace access via instance-admin elevation: accountId={}," + " workspaceSlug={}",
+                        "Granted workspace access via instance-admin elevation: accountId={}," + " workspaceId={}",
                         SecurityUtils.getCurrentAccountId().orElse(null),
-                        safeSlug);
+                        workspace.getId());
                 roles = Set.of(WorkspaceRole.ADMIN);
                 // Both audit trails read this elevation marker.
                 WorkspaceElevationContext.set(workspace.getId());
@@ -196,7 +194,7 @@ public class WorkspaceContextFilter implements Filter {
                 } else {
                     // A non-member gets the answer for a workspace that does not exist, as GitHub and GitLab
                     // do, so a signed-in account cannot learn which workspaces exist.
-                    log.debug("Denied workspace access: reason=notMember, workspaceSlug={}", safeSlug);
+                    log.debug("Denied workspace access: reason=notMember, workspaceId={}", workspace.getId());
                     sendWorkspaceNotFoundError(httpResponse, slug);
                 }
                 return;
@@ -207,7 +205,7 @@ public class WorkspaceContextFilter implements Filter {
             WorkspaceContext context = WorkspaceContext.fromWorkspace(workspace, roles, null);
 
             if (WorkspaceContextHolder.getContext() != null) {
-                log.warn("Detected context leak: reason=contextAlreadySet, workspaceSlug={}", safeSlug);
+                log.warn("Detected context leak: reason=contextAlreadySet, workspaceId={}", workspace.getId());
             }
 
             WorkspaceContextHolder.setContext(context);
@@ -216,11 +214,7 @@ public class WorkspaceContextFilter implements Filter {
             resolveWorkspaceIdentity(workspace, currentUsers, membership.memberUserIds())
                     .ifPresent(user -> CurrentScmIdentityHolder.set(user.actorId(), membership.memberUserIds()));
 
-            log.debug(
-                    "Set workspace context: workspaceSlug={}, workspaceId={}, roles={}",
-                    safeSlug,
-                    context.id(),
-                    context.roles());
+            log.debug("Set workspace context: workspaceId={}, roles={}", context.id(), context.roles());
 
             chain.doFilter(request, response);
         } finally {
@@ -276,7 +270,8 @@ public class WorkspaceContextFilter implements Filter {
 
         if (workspace == null) {
             log.warn(
-                    "Skipped slug redirect: reason=missingWorkspace, oldSlug={}", LoggingUtils.sanitizeForLog(oldSlug));
+                    "Skipped slug redirect: reason=missingWorkspace, workspaceId={}",
+                    history.getWorkspace().getId());
             return false;
         }
 
@@ -302,10 +297,7 @@ public class WorkspaceContextFilter implements Filter {
             location += '?' + queryString;
         }
 
-        log.debug(
-                "Redirecting workspace slug: oldSlug={}, newSlug={}",
-                LoggingUtils.sanitizeForLog(oldSlug),
-                LoggingUtils.sanitizeForLog(newSlug));
+        log.debug("Redirecting workspace slug: workspaceId={}", workspace.getId());
 
         response.setStatus(HttpStatus.PERMANENT_REDIRECT.value());
         response.setHeader(HttpHeaders.LOCATION, location);

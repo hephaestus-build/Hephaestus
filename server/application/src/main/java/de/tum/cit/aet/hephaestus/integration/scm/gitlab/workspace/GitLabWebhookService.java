@@ -115,29 +115,28 @@ public class GitLabWebhookService {
         Optional<GitLabConfig> configOpt = gitLabConfig(workspace);
         Optional<Connection> connection = connectionService.findActive(workspace.getId(), IntegrationKind.GITLAB);
         if (configOpt.isEmpty() || connection.isEmpty()) {
-            return WebhookSetupResult.skipped("Not a GitLab workspace");
+            return WebhookSetupResult.skipped(WebhookSetupResult.Reason.NOT_GITLAB);
         }
 
         if (!routeCredential.isConfigured()) {
-            return WebhookSetupResult.skipped("The webhook routing secret is not configured.");
+            return WebhookSetupResult.skipped(WebhookSetupResult.Reason.ROUTING_SECRET_MISSING);
         }
 
         var client = webhookClientProvider.getIfAvailable();
         if (client == null) {
-            return WebhookSetupResult.skipped(
-                    "The GitLab webhook client is not available because hephaestus.integration.gitlab.enabled is false.");
+            return WebhookSetupResult.skipped(WebhookSetupResult.Reason.CLIENT_UNAVAILABLE);
         }
 
         Long scopeId = workspace.getId();
         String accountLogin = workspace.getAccountLogin();
         if (accountLogin == null || accountLogin.isBlank()) {
-            return WebhookSetupResult.skipped("GitLab group path is missing");
+            return WebhookSetupResult.skipped(WebhookSetupResult.Reason.GROUP_PATH_MISSING);
         }
         GitLabConfig config = configOpt.get();
         Optional<String> origin = ScmOrigin.of(config.serverUrl());
         Long connectionId = connection.get().getId();
         if (origin.isEmpty() || connectionId == null) {
-            return WebhookSetupResult.skipped("GitLab instance is not configured on the connection");
+            return WebhookSetupResult.skipped(WebhookSetupResult.Reason.CONNECTION_NOT_CONFIGURED);
         }
         Long storedWebhookId = config.gitlabWebhookId();
 
@@ -161,8 +160,7 @@ public class GitLabWebhookService {
             }
             Optional<String> storedKeyId = stored.flatMap(hook -> ownKeyId(hook.url(), connectionId));
             if (storedKeyId.isPresent() && !routeCredential.isAccepted(storedKeyId.get())) {
-                return WebhookSetupResult.skipped(
-                        "Webhook is registered under a routing key this server does not know");
+                return WebhookSetupResult.skipped(WebhookSetupResult.Reason.ROUTING_KEY_UNKNOWN);
             }
 
             // Step 3: Adopt this route's hook, or register it
@@ -195,7 +193,7 @@ public class GitLabWebhookService {
             // credential and is dropped as a duplicate by the next registration.
             if (!recordWebhookId(scopeId, storedWebhookId, webhookId)) {
                 log.info("Webhook registration superseded by a concurrent one: workspaceId={}", scopeId);
-                return WebhookSetupResult.skipped("Another registration recorded a different webhook");
+                return WebhookSetupResult.skipped(WebhookSetupResult.Reason.SUPERSEDED);
             }
 
             // Step 5: Retire the hook this one replaces, when it is this connection's hook under a known key
@@ -210,15 +208,7 @@ public class GitLabWebhookService {
             log.info("Registered webhook: workspaceId={}, groupId={}, webhookId={}", scopeId, groupId, webhookId);
             return WebhookSetupResult.success(webhookId, groupId);
         } catch (WebClientResponseException e) {
-            if (GitLabWebhookClient.isPermissionOrNotFoundError(e.getStatusCode())) {
-                String reason = String.format(
-                        "Insufficient permissions (HTTP %d). You need the Owner role on GitLab group '%s' with the Premium tier.",
-                        e.getStatusCode().value(), workspace.getAccountLogin());
-                log.info("Webhook registration failed: workspaceId={}, reason={}", scopeId, reason);
-                return WebhookSetupResult.failed(reason);
-            }
             int status = e.getStatusCode().value();
-            String apiReason = String.format("GitLab API error: %d", status);
             // A provider error response can echo the webhook secret or private request data.
             log.atWarn()
                     .addKeyValue("event.name", "integration.webhook.registration.failed")
@@ -226,7 +216,11 @@ public class GitLabWebhookService {
                     .addKeyValue("workspace.id", scopeId)
                     .addKeyValue("http.response.status_code", status)
                     .log("GitLab webhook registration failed");
-            return WebhookSetupResult.failed(apiReason);
+            return WebhookSetupResult.failed(
+                    GitLabWebhookClient.isPermissionOrNotFoundError(e.getStatusCode())
+                            ? WebhookSetupResult.Reason.PERMISSION_DENIED
+                            : WebhookSetupResult.Reason.API_ERROR,
+                    status);
         }
     }
 
@@ -454,11 +448,11 @@ public class GitLabWebhookService {
                             "Re-registered webhook: workspaceId={}, newWebhookId={}",
                             workspace.getId(),
                             result.webhookId());
-                } else {
+                } else if (result.status() == WebhookSetupResult.Status.SKIPPED) {
                     log.warn(
                             "Failed to re-register webhook: workspaceId={}, reason={}",
                             workspace.getId(),
-                            result.failureReason());
+                            result.reason());
                 }
             } catch (Exception e) {
                 log.debug("Webhook health check failed: workspaceId={}", workspace.getId(), e);

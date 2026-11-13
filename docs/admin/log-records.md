@@ -22,7 +22,9 @@ This page lists the fields and the events.
 | `context.job.id`, `context.workspace.id`          | Thread-scoped context, when available                                                            |
 | `context.run.id`, `context.run.epoch`, `context.subject.key` | The [agent run](#agent-run-and-outbox-events) whose holder writes the record, the epoch of its claim, and its subject, such as `review:<id>`. Two records of one run with different epochs come from different claims |
 | `context.sandbox.name`                            | The agent sandbox that made a gateway request: its claim, Sandbox and Pod name. Each gateway request also names its subject, workspace and review when its subject is a review. A request for one run also names `run.id` and `run.epoch`, after the gateway checks that the run is the sandbox's own |
-| `context.installation_id`                         | The GitHub App installation of a sync run, when it has one                                      |
+| `context.installation.id`                         | The GitHub App installation of a sync run, when it has one                                      |
+| `context.proxy.principal`, `context.proxy.api_protocol` | The proxy caller's scope ID and selected API protocol. These contain no credential |
+| `context.action.id`, `context.action.kind`, `context.action.attempt` | The outbox action, kind, and attempt count. Every record inside an attempt carries these fields, including adapter records. A workspace action also carries `workspace.id` |
 | `context.integration.route`, `context.integration.delivery` | On `integration.message.failed`: provider and event (`github.push`), and the delivery count |
 | `context.*`                                       | Every other event field and thread-scoped value                                                  |
 | `error.type`, `error.stack_trace`                 | Exception class and frames when a call site includes the exception. Not present on every failure |

@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.StreamOutcome;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.UpstreamResult;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
@@ -183,8 +184,8 @@ class LlmProxyService {
         accounting.recordGatewayRequest(body.length);
         // Begun first and closed last, so that nothing before the provider call can leave it open for the turn's end.
         try (ProxyCallsInFlight.Call inFlight = callsInFlight.begin(routing.attempt())) {
-            MDC.put("proxy.principal", routing.principalDescription());
-            MDC.put("proxy.apiProtocol", routing.apiProtocol());
+            MDC.put(StructuredLogKeys.PROXY_PRINCIPAL, routing.principalDescription());
+            MDC.put(StructuredLogKeys.PROXY_API_PROTOCOL, routing.apiProtocol());
             String operation = "chat";
             Span span = tracer.spanBuilder()
                     .name("gen_ai." + operation)
@@ -233,8 +234,8 @@ class LlmProxyService {
                     line.log(failure == null ? "conversation model call" : "conversation model call failed");
                 }
                 span.end();
-                MDC.remove("proxy.principal");
-                MDC.remove("proxy.apiProtocol");
+                MDC.remove(StructuredLogKeys.PROXY_PRINCIPAL);
+                MDC.remove(StructuredLogKeys.PROXY_API_PROTOCOL);
             }
         }
     }

@@ -15,6 +15,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -58,6 +61,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -335,9 +339,31 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         void shouldReturnIncompleteSetupWhenEnabledRegistrationReportsFailure() {
             stubDiscovery(GitLabSyncResult.completed(List.of(), 1, 0, 0));
             when(gitLabWebhookService.registerWebhook(workspace))
-                    .thenReturn(WebhookSetupResult.failed("GitLab refused"));
+                    .thenReturn(WebhookSetupResult.failed(WebhookSetupResult.Reason.PERMISSION_DENIED, 403));
 
             assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
+        }
+
+        @ParameterizedTest
+        @EnumSource(
+                value = WebhookSetupResult.Reason.class,
+                names = {"ROUTING_SECRET_MISSING", "ROUTING_KEY_UNKNOWN"})
+        void shouldReportTheReasonWhenRegistrationStopsBeforeAnApiCall(WebhookSetupResult.Reason reason) {
+            stubDiscovery(GitLabSyncResult.completed(List.of(), 1, 0, 0));
+            when(gitLabWebhookService.registerWebhook(workspace)).thenReturn(WebhookSetupResult.skipped(reason));
+            Logger logger = (Logger) LoggerFactory.getLogger(GitLabWorkspaceInitializationService.class);
+            var appender = new ListAppender<ILoggingEvent>();
+            appender.start();
+            logger.addAppender(appender);
+            try {
+                assertThat(initService.initialize(workspace)).isEqualTo(SyncResult.abortedError(0));
+                assertThat(appender.list)
+                        .anySatisfy(event -> assertThat(event.getFormattedMessage())
+                                .contains("Webhook setup: workspaceId=1, registered=false, reason=" + reason));
+            } finally {
+                logger.detachAppender(appender);
+                appender.stop();
+            }
         }
 
         @Test

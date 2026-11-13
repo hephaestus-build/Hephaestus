@@ -147,7 +147,7 @@ public class IssueContentSource {
             contentStates.put(COMMENTS, ordered.isEmpty() ? SourceContentState.EMPTY : SourceContentState.NON_EMPTY);
         }
 
-        log.info(
+        log.debug(
                 "Issue context built: issueId={}, number={}, comments={}, jobId={}",
                 issueId,
                 issue.getNumber(),

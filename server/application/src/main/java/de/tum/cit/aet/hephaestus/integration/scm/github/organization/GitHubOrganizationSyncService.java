@@ -111,7 +111,7 @@ public class GitHubOrganizationSyncService {
             log.warn("Skipped organization sync: reason=missingLogin, scopeId={}", scopeId);
             return null;
         }
-        String safeOrganizationLogin = Objects.requireNonNullElse(sanitizeForLog(organizationLogin), organizationLogin);
+        String logScopeId = scopeId.toString();
 
         HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
 
@@ -124,8 +124,8 @@ public class GitHubOrganizationSyncService {
                             .jitter(JITTER_FACTOR)
                             .filter(ScmTransportErrors::isTransportError)
                             .doBeforeRetry(signal -> log.warn(
-                                    "Retrying after transport error: context=organizationSync, orgLogin={}, attempt={}, error={}",
-                                    safeOrganizationLogin,
+                                    "Retrying after transport error: context=organizationSync, scopeId={}, attempt={}, error={}",
+                                    logScopeId,
                                     signal.totalRetries() + 1,
                                     signal.failure().getClass().getSimpleName())))
                     .block(syncProperties.graphqlTimeout());
@@ -134,21 +134,15 @@ public class GitHubOrganizationSyncService {
                 ClassificationResult classification = graphQlSyncHelper.classifyGraphQlErrors(graphQlResponse);
                 if (classification != null) {
                     if (graphQlSyncHelper.handleGraphQlClassification(new GraphQlClassificationContext(
-                            classification,
-                            0,
-                            MAX_RETRY_ATTEMPTS,
-                            "organization sync",
-                            "orgLogin",
-                            safeOrganizationLogin,
-                            log))) {
+                            classification, 0, MAX_RETRY_ATTEMPTS, "organization sync", "scopeId", logScopeId, log))) {
                         return syncOrganization(scopeId, organizationLogin);
                     }
                     return null;
                 }
                 log.warn(
-                        "Received invalid GraphQL response: orgLogin={}, errors={}",
-                        safeOrganizationLogin,
-                        graphQlResponse != null ? graphQlResponse.getErrors() : "null");
+                        "Received invalid GraphQL response: scopeId={}, errorCount={}",
+                        logScopeId,
+                        graphQlResponse != null ? graphQlResponse.getErrors().size() : 0);
                 return null;
             }
 
@@ -158,7 +152,7 @@ public class GitHubOrganizationSyncService {
             // Check if we should pause due to rate limiting
             if (graphQlClientProvider.isRateLimitCritical(scopeId)) {
                 if (!graphQlSyncHelper.waitForRateLimitIfNeeded(
-                        scopeId, "organization sync", "orgLogin", safeOrganizationLogin, log)) {
+                        scopeId, "organization sync", "scopeId", logScopeId, log)) {
                     return null;
                 }
             }
@@ -166,7 +160,7 @@ public class GitHubOrganizationSyncService {
             GHOrganization graphQlOrg = graphQlResponse.field("organization").toEntity(GHOrganization.class);
 
             if (graphQlOrg == null) {
-                log.warn("Skipped organization sync: reason=notFound, orgLogin={}", safeOrganizationLogin);
+                log.warn("Skipped organization sync: reason=notFound, scopeId={}", logScopeId);
                 return null;
             }
 
@@ -188,9 +182,9 @@ public class GitHubOrganizationSyncService {
                 organization.setLastSyncAt(Instant.now());
 
                 log.info(
-                        "Synced organization: orgId={}, orgLogin={}, memberCount={}",
+                        "Synced organization: orgId={}, organizationId={}, memberCount={}",
                         organization.getNativeId(),
-                        Objects.requireNonNullElse(sanitizeForLog(organization.getLogin()), "unknown"),
+                        organization.getId(),
                         membersSynced);
             }
 
@@ -201,13 +195,7 @@ public class GitHubOrganizationSyncService {
         } catch (Exception e) {
             ClassificationResult classification = exceptionClassifier.classifyWithDetails(e);
             if (!graphQlSyncHelper.handleGraphQlClassification(new GraphQlClassificationContext(
-                    classification,
-                    0,
-                    MAX_RETRY_ATTEMPTS,
-                    "organization sync",
-                    "orgLogin",
-                    safeOrganizationLogin,
-                    log))) {
+                    classification, 0, MAX_RETRY_ATTEMPTS, "organization sync", "scopeId", logScopeId, log))) {
                 return null;
             }
             return null;
@@ -231,9 +219,9 @@ public class GitHubOrganizationSyncService {
         var membersConnection = graphQlOrg.getMembersWithRole();
         if (membersConnection == null || membersConnection.getEdges() == null) {
             log.debug(
-                    "No members found for organization: orgId={}, orgLogin={}",
+                    "No members found for organization: orgId={}, organizationId={}",
                     organization.getNativeId(),
-                    Objects.requireNonNullElse(sanitizeForLog(organization.getLogin()), "unknown"));
+                    organization.getId());
             return 0;
         }
 
@@ -261,17 +249,17 @@ public class GitHubOrganizationSyncService {
             // This would cause re-fetching from the beginning, leading to duplicates
             if (cursor == null) {
                 log.warn(
-                        "Missing pagination cursor while hasNextPage=true: orgLogin={}, pageCount={}. "
+                        "Missing pagination cursor while hasNextPage=true: organizationId={}, pageCount={}. "
                                 + "This indicates a bug - check that GetOrganization.graphql includes endCursor in pageInfo.",
-                        Objects.requireNonNullElse(sanitizeForLog(organization.getLogin()), "unknown"),
+                        organization.getId(),
                         pageCount);
                 break;
             }
             pageCount++;
             if (pageCount >= MAX_PAGINATION_PAGES) {
                 log.warn(
-                        "Reached maximum pagination limit for organization members: orgLogin={}, limit={}",
-                        Objects.requireNonNullElse(sanitizeForLog(organization.getLogin()), "unknown"),
+                        "Reached maximum pagination limit for organization members: organizationId={}, limit={}",
+                        organization.getId(),
                         MAX_PAGINATION_PAGES);
                 break;
             }
@@ -293,8 +281,8 @@ public class GitHubOrganizationSyncService {
                             .jitter(JITTER_FACTOR)
                             .filter(ScmTransportErrors::isTransportError)
                             .doBeforeRetry(signal -> log.warn(
-                                    "Retrying after transport error: context=orgMembersSync, orgLogin={}, page={}, attempt={}, error={}",
-                                    Objects.requireNonNullElse(sanitizeForLog(organization.getLogin()), "unknown"),
+                                    "Retrying after transport error: context=orgMembersSync, organizationId={}, page={}, attempt={}, error={}",
+                                    organization.getId(),
                                     currentPage,
                                     signal.totalRetries() + 1,
                                     signal.failure().getClass().getSimpleName())))
@@ -317,9 +305,9 @@ public class GitHubOrganizationSyncService {
                     break;
                 }
                 log.warn(
-                        "Received invalid GraphQL response for members: orgLogin={}, errors={}",
-                        Objects.requireNonNullElse(sanitizeForLog(organization.getLogin()), "unknown"),
-                        graphQlResponse != null ? graphQlResponse.getErrors() : "null");
+                        "Received invalid GraphQL response for members: organizationId={}, errorCount={}",
+                        organization.getId(),
+                        graphQlResponse != null ? graphQlResponse.getErrors().size() : 0);
                 break;
             }
 
@@ -380,9 +368,9 @@ public class GitHubOrganizationSyncService {
         }
 
         log.debug(
-                "Fetched organization members: orgId={}, orgLogin={}, fetchedCount={}, totalCount={}, pages={}, complete={}",
+                "Fetched organization members: orgId={}, organizationId={}, fetchedCount={}, totalCount={}, pages={}, complete={}",
                 organization.getNativeId(),
-                Objects.requireNonNullElse(sanitizeForLog(organization.getLogin()), "unknown"),
+                organization.getId(),
                 allMembers.size(),
                 latestTotalCount,
                 pageCount + 1,
@@ -430,8 +418,8 @@ public class GitHubOrganizationSyncService {
             removeStaleMemberships(organization, syncedUserIds);
         } else {
             log.warn(
-                    "Skipped stale membership removal: reason=incompleteSync, orgLogin={}, pagesProcessed={}",
-                    Objects.requireNonNullElse(sanitizeForLog(organization.getLogin()), "unknown"),
+                    "Skipped stale membership removal: reason=incompleteSync, organizationId={}, pagesProcessed={}",
+                    organization.getId(),
                     pageCount + 1);
         }
 
@@ -453,9 +441,9 @@ public class GitHubOrganizationSyncService {
         if (!staleUserIds.isEmpty()) {
             organizationMembershipRepository.deleteByOrganizationIdAndUserIdIn(organization.getId(), staleUserIds);
             log.debug(
-                    "Removed stale organization memberships: orgId={}, orgLogin={}, removedCount={}",
+                    "Removed stale organization memberships: orgId={}, organizationId={}, removedCount={}",
                     organization.getNativeId(),
-                    Objects.requireNonNullElse(sanitizeForLog(organization.getLogin()), "unknown"),
+                    organization.getId(),
                     staleUserIds.size());
         }
     }

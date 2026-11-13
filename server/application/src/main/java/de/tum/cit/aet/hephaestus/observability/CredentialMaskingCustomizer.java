@@ -48,7 +48,7 @@ public class CredentialMaskingCustomizer implements StructuredLoggingJsonMembers
 
     // Order matters where formats overlap: "Bearer ghp_…" must lose the whole credential to the first rule.
     private static final List<Mask> VALUE_MASKS = List.of(
-            new Mask(Pattern.compile("(?i)(Bearer|Basic)\\s+[A-Za-z0-9._~+/=-]+"), "$1 " + MASK),
+            new Mask(Pattern.compile("(?iU)(Bearer|Basic)\\s+[A-Za-z0-9._~+/=-]+"), "$1 " + MASK),
             new Mask(Pattern.compile("glpat-[A-Za-z0-9_-]+"), "glpat-" + MASK),
             new Mask(Pattern.compile("(github_pat_|gh[pousr]_)[A-Za-z0-9_]+"), "$1" + MASK),
             new Mask(Pattern.compile("(xox[abeprs]-|xapp-)[A-Za-z0-9-]+"), "$1" + MASK),

@@ -245,7 +245,7 @@ class RedactionContractTest {
             event.addKeyValuePair(new KeyValuePair("event.name", "agent.job.started"));
             event.addKeyValuePair(new KeyValuePair("job.id", "from-event"));
             event.addKeyValuePair(new KeyValuePair("workspace.id", 42L));
-            event.addKeyValuePair(new KeyValuePair("agent.jobType", "scm.pull_request"));
+            event.addKeyValuePair(new KeyValuePair("job.type", "scm.pull_request"));
             event.addKeyValuePair(new KeyValuePair("review.id", null));
         });
         JsonNode json = new ObjectMapper().readTree(line);
@@ -253,7 +253,7 @@ class RedactionContractTest {
         assertEquals("from-event", text(json, "context.job.id"));
         JsonNode workspace = node(json, "context.workspace.id");
         assertTrue(workspace != null && workspace.isNumber(), line);
-        assertEquals("scm.pull_request", text(json, "context.agent.jobType"));
+        assertEquals("scm.pull_request", text(json, "context.job.type"));
         assertNull(node(json, "context.review"), line);
     }
 
@@ -361,6 +361,9 @@ class RedactionContractTest {
     @ParameterizedTest
     @CsvSource({
         "Bearer synthetic-private-token, Bearer ***",
+        "Bearer\u0085synthetic-private-token, Bearer ***",
+        "Bearer\u00A0synthetic-private-token, Bearer ***",
+        "Basic\u2028synthetic-private-token, Basic ***",
         "Basic c3ludGhldGljOnByaXZhdGU=, Basic ***",
         "glpat-synthetic-private, glpat-***",
         "github_pat_synthetic_private, github_pat_***",

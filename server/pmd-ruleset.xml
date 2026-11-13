@@ -16,6 +16,53 @@
     <rule ref="category/java/bestpractices.xml/NonExhaustiveSwitch"/>
     <rule ref="category/java/bestpractices.xml/UseCollectionIsEmpty"/>
 
+    <rule name="ParameterizedLogMessage" language="java"
+          class="net.sourceforge.pmd.lang.rule.xpath.XPathRule"
+          message="Use SLF4J placeholders for values in a log message.">
+        <description>Keep runtime values out of concatenated classic and fluent log messages.</description>
+        <priority>2</priority>
+        <properties>
+            <property name="xpath">
+                <value><![CDATA[
+                    //MethodCall[@MethodName = ('trace', 'debug', 'info', 'warn', 'error', 'log', 'setMessage')]
+                      [*[1][pmd-java:typeIs('org.slf4j.Logger') or pmd-java:typeIs('org.slf4j.spi.LoggingEventBuilder')]]
+                      /ArgumentList/*[
+                        (position() = 1 and not(pmd-java:typeIs('org.slf4j.Marker')))
+                        or (position() = 2 and ../*[1][pmd-java:typeIs('org.slf4j.Marker')])
+                      ]/descendant-or-self::InfixExpression
+                      [@Operator = '+' and pmd-java:typeIs('java.lang.String') and @CompileTimeConstant = false()]
+                ]]></value>
+            </property>
+        </properties>
+    </rule>
+
+    <rule name="NoPersonalLogArgument" language="java"
+          class="net.sourceforge.pmd.lang.rule.xpath.XPathRule"
+          message="Log an ID instead of a login, email address, or workspace slug.">
+        <description>Inspect known personal-data getters and argument names on typed SLF4J logger and builder calls.</description>
+        <priority>2</priority>
+        <properties>
+            <!-- These sources describe public project contributors, an organization, or dev fixture accounts. -->
+            <property name="violationSuppressXPath" value="ancestor::ClassDeclaration[@CanonicalName = ('de.tum.cit.aet.hephaestus.contributors.ContributorService', 'de.tum.cit.aet.hephaestus.integration.scm.github.organization.GitHubOrganizationProcessor', 'de.tum.cit.aet.hephaestus.core.auth.dev.DevLoginService')]"/>
+            <property name="xpath">
+                <value><![CDATA[
+                    //MethodCall[@MethodName = ('trace', 'debug', 'info', 'warn', 'error', 'log', 'setMessage', 'addArgument', 'addKeyValue')]
+                      [*[1][pmd-java:typeIs('org.slf4j.Logger') or pmd-java:typeIs('org.slf4j.spi.LoggingEventBuilder')]]
+                      /ArgumentList/descendant::*[self::MethodCall or self::VariableAccess][pmd-java:typeIs('java.lang.String') or self::MethodCall[@MethodName = 'getCurrentUserLogin']][
+                        self::MethodCall[
+                          matches(@MethodName, '(login|username|email|workspaceslug|scopeslug)$', 'i')
+
+                        ]
+                        or self::MethodCall[@MethodName = 'slug'][*[1][pmd-java:typeIs('de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncSession') or pmd-java:typeIs('de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext')]]
+                        or self::VariableAccess[
+                          matches(@Name, '(^login$|^username$|^email$|Login$|Username$|Email$|WorkspaceSlug$|ScopeSlug$|^slug$|^safeSlug$|^oldSlug$|^newSlug$)', 'i')
+                        ]
+                      ]
+                ]]></value>
+            </property>
+        </properties>
+    </rule>
+
     <!-- Error prone -->
 
     <rule ref="category/java/errorprone.xml/AvoidMultipleUnaryOperators"/>

@@ -527,10 +527,7 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
             var orgOpt =
                     organizationRepository.findByLoginIgnoreCaseAndProvider_Type(orgLogin, IdentityProviderType.GITHUB);
             if (orgOpt.isEmpty()) {
-                log.warn(
-                        "Skipped issue type creation: reason=orgNotFound, issueTypeName={}, orgLogin={}",
-                        dto.name(),
-                        orgLogin);
+                log.warn("Skipped issue type creation: reason=orgNotFound, issueTypeNodeId={}", dto.nodeId());
                 return null;
             }
             return issueTypeSyncService.findOrCreateFromWebhook(

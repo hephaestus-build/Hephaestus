@@ -91,9 +91,8 @@ public class WorkspaceActivationService {
                         .exceptionally(ex -> {
                             // Catches errors outside activateWorkspace itself, e.g. thread pool rejection.
                             log.error(
-                                    "Unexpected error during workspace activation: workspaceId={}, accountLogin={}",
+                                    "Unexpected error during workspace activation: workspaceId={}",
                                     workspace.getId(),
-                                    workspace.getAccountLogin(),
                                     ex);
                             return null;
                         }))

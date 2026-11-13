@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.slf4j.spi.LoggingEventBuilder;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -137,8 +138,28 @@ public class ActionExecutor {
         return run(claim, Objects.requireNonNull(adapters.get(claim.kind())));
     }
 
-    /** Carries out a claim with the given adapter. */
+    /**
+     * Carries out a claim with the given adapter. Each record of the attempt, the adapter's own included, names the
+     * action, its attempt and its workspace in the log context. The caller's context is back when it returns: {@link
+     * #runNow} runs on a request thread. The keys are the observability contract's names, written here because {@code
+     * core} cannot depend on the observability module.
+     */
     ActionResult run(ActionStore.Claim claim, ActionAdapter adapter) {
+        Map<String, String> caller = MDC.getCopyOfContextMap();
+        MDC.put("action.id", claim.id().toString());
+        MDC.put("action.kind", claim.kind().name());
+        MDC.put("action.attempt", Integer.toString(claim.attempts()));
+        if (claim.workspaceId() == null) MDC.remove("workspace.id");
+        else MDC.put("workspace.id", claim.workspaceId().toString());
+        try {
+            return attempt(claim, adapter);
+        } finally {
+            if (caller == null) MDC.clear();
+            else MDC.setContextMap(caller);
+        }
+    }
+
+    private ActionResult attempt(ActionStore.Claim claim, ActionAdapter adapter) {
         var fenced = new AtomicBoolean();
         var attempt = new ActionAttempt(
                 claim.id(),
