@@ -18,37 +18,25 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-/** A completed erasure receipt never reopens, and no request is left in the retired EXPIRED state. */
+/** A completed erasure receipt never reopens, whatever path writes its state. */
 @Tag("database")
 class PersonDataRequestLifecycleMigrationTest {
     private static final String CHANGELOG = "-rootfix-person-data-lifecycle.xml";
-    private static final String EXPIRED = "00000000-0000-0000-0000-000000979999";
 
     @Test
-    void shouldKeepACompletedRequestCompleteAndRepairExpiredPreviewsWhenUpgrading() throws Exception {
+    void shouldKeepACompletedRequestCompleteWhenUpgrading() throws Exception {
         var database = PostgreSQLTestContainer.createDatabase(
                 "person_data_lifecycle_" + UUID.randomUUID().toString().replace("-", ""));
         PracticeMigrationFixture.upgradeBefore(database, "prod", CHANGELOG);
         for (var before : State.values()) {
             for (var after : State.values()) insert(database, id(before, after), before.name());
         }
-        insert(database, EXPIRED, "EXPIRED");
 
         liquibase(database, liquibase -> PracticeMigrationFixture.upgradeOnly(liquibase, "prod", CHANGELOG));
 
         try (var connection =
                         DriverManager.getConnection(database.jdbcUrl(), database.username(), database.password());
                 var statement = connection.createStatement()) {
-            // An expired preview stays expired: it can no longer be admitted.
-            assertThat(PracticeMigrationFixture.column(
-                            database,
-                            "SELECT state || '/' || (expires_at <= CURRENT_TIMESTAMP)::text"
-                                    + " FROM person_data_request WHERE id='" + EXPIRED + "'"))
-                    .containsExactly("PREVIEW/true");
-            assertThatExceptionOfType(SQLException.class)
-                    .isThrownBy(() -> statement.executeUpdate(update(EXPIRED, "EXPIRED")))
-                    .satisfies(failure -> assertThat(failure.getSQLState()).isEqualTo("23514"));
-
             for (var before : State.values()) {
                 for (var after : State.values()) {
                     String id = id(before, after);
@@ -69,7 +57,6 @@ class PersonDataRequestLifecycleMigrationTest {
 
         liquibase(database, liquibase -> PracticeMigrationFixture.rollbackOnly(liquibase, "prod", CHANGELOG));
         PracticeMigrationFixture.execute(database, update(id(State.COMPLETE, State.ERASING), "ERASING"));
-        PracticeMigrationFixture.execute(database, update(EXPIRED, "EXPIRED"));
         assertThat(PracticeMigrationFixture.column(
                         database,
                         "SELECT count(*)::text FROM pg_trigger WHERE tgname='person_data_request_transition'"))

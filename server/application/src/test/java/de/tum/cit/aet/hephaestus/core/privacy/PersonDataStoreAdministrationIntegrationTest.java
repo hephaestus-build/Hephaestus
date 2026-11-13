@@ -22,6 +22,9 @@ class PersonDataStoreAdministrationIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private ObjectMapper mapper;
 
+    @Autowired
+    private PersonDataService service;
+
     @Test
     void erasesOnlyTheExactStepActorAndKeepsCountsTimesAndAnotherAdministratorsAttribution() {
         databaseTestUtils.cleanDatabase();
@@ -46,5 +49,29 @@ class PersonDataStoreAdministrationIntegrationTest extends BaseIntegrationTest {
                 mapper, requests.findById(request.getId()).orElseThrow().getCompletedJson());
         assertThat(receipts.get("first")).isEqualTo(new PersonDataStoreReceipt(12, time, null));
         assertThat(receipts.get("second")).isEqualTo(new PersonDataStoreReceipt(7, time, 84L));
+    }
+
+    @Test
+    void shouldExpireAnExpiredPreviewAndDropItsDataWhenPreviewsExpire() {
+        databaseTestUtils.cleanDatabase();
+        var expired = new PersonDataRequest();
+        expired.setScopeJson("{\"accountId\":5}");
+        expired.setSelectionsJson("{}");
+        expired.setExpiresAt(Instant.now().minusSeconds(60));
+        var open = new PersonDataRequest();
+        open.setScopeJson("{\"accountId\":6}");
+        open.setSelectionsJson("{}");
+        requests.saveAndFlush(expired);
+        requests.saveAndFlush(open);
+
+        service.expirePreviews();
+
+        var after = requests.findById(expired.getId()).orElseThrow();
+        assertThat(after.getState()).isEqualTo(PersonDataRequest.State.EXPIRED);
+        assertThat(after.getScopeJson()).isNull();
+        assertThat(after.getSelectionsJson()).isNull();
+        var untouched = requests.findById(open.getId()).orElseThrow();
+        assertThat(untouched.getState()).isEqualTo(PersonDataRequest.State.PREVIEW);
+        assertThat(untouched.getScopeJson()).isNotNull();
     }
 }

@@ -93,20 +93,22 @@ public class PersonDataRequest {
     }
 
     /**
-     * A preview expires by its {@code expiresAt}, not by a state. The trigger {@code guard_person_data_request}
-     * keeps a completed request complete in the database too.
+     * {@code EXPIRED} is terminal: {@code expirePreviews} drops the preview data, so an expired request cannot be
+     * confirmed. The trigger {@code guard_person_data_request} keeps a completed request complete in the database too.
      */
     public enum State implements Lifecycle<State> {
         PREVIEW,
         ERASING,
         FAILED,
-        COMPLETE;
+        COMPLETE,
+        EXPIRED;
 
         private static final Map<State, Set<State>> LEGAL = Map.of(
-                PREVIEW, Set.of(ERASING),
+                PREVIEW, Set.of(ERASING, EXPIRED),
                 ERASING, Set.of(FAILED, COMPLETE),
                 FAILED, Set.of(ERASING),
-                COMPLETE, Set.of());
+                COMPLETE, Set.of(),
+                EXPIRED, Set.of());
 
         @Override
         public boolean canTransitionTo(State next) {

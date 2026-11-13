@@ -44,7 +44,7 @@ class LifecycleContractTest extends HephaestusArchitectureTest {
                 new Contract<>(
                         PersonDataRequest.State.class,
                         Set.of(PersonDataRequest.State.PREVIEW),
-                        Set.of(PersonDataRequest.State.COMPLETE)),
+                        Set.of(PersonDataRequest.State.COMPLETE, PersonDataRequest.State.EXPIRED)),
                 new Contract<>(
                         Workspace.WorkspaceStatus.class,
                         Set.of(Workspace.WorkspaceStatus.ACTIVE),

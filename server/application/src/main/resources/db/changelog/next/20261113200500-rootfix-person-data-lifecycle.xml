@@ -5,11 +5,8 @@
             <dbms type="postgresql"/>
             <tableExists tableName="person_data_request"/>
         </preConditions>
-        <comment>A person data request has no EXPIRED state: a preview expires by expires_at. A completed request keeps its state, including when a writer uses SQL.</comment>
+        <comment>A completed person data request keeps its state, including when a writer uses SQL.</comment>
         <sql splitStatements="false">
-UPDATE person_data_request SET state = 'PREVIEW', expires_at = LEAST(expires_at, CURRENT_TIMESTAMP) WHERE state = 'EXPIRED';
-ALTER TABLE person_data_request DROP CONSTRAINT ck_person_data_request_state;
-ALTER TABLE person_data_request ADD CONSTRAINT ck_person_data_request_state CHECK (state IN ('PREVIEW', 'ERASING', 'FAILED', 'COMPLETE'));
 CREATE FUNCTION guard_person_data_request() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
  IF OLD.state = 'COMPLETE' AND NEW.state IS DISTINCT FROM OLD.state THEN
@@ -23,8 +20,6 @@ CREATE TRIGGER person_data_request_transition AFTER UPDATE OF state ON person_da
             <sql splitStatements="false">
 DROP TRIGGER person_data_request_transition ON person_data_request;
 DROP FUNCTION guard_person_data_request();
-ALTER TABLE person_data_request DROP CONSTRAINT ck_person_data_request_state;
-ALTER TABLE person_data_request ADD CONSTRAINT ck_person_data_request_state CHECK (state IN ('PREVIEW', 'ERASING', 'FAILED', 'COMPLETE', 'EXPIRED'));
             </sql>
         </rollback>
     </changeSet>

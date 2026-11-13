@@ -67,4 +67,15 @@ class PersonDataRequestTest extends BaseUnitTest {
         assertThat(request.getState()).isEqualTo(State.FAILED);
         assertThat(request.getFailureCode()).isEqualTo("EXTERNAL_COPIES_REQUIRE_REMOVAL");
     }
+
+    @Test
+    void shouldExpireAPreviewAndRefuseEveryMoveOutOfExpired() {
+        assertThat(State.PREVIEW.canTransitionTo(State.EXPIRED)).isTrue();
+        for (var next : State.values()) {
+            assertThat(State.EXPIRED.canTransitionTo(next)).isFalse();
+        }
+        for (var from : new State[] {State.ERASING, State.FAILED, State.COMPLETE}) {
+            assertThat(from.canTransitionTo(State.EXPIRED)).isFalse();
+        }
+    }
 }

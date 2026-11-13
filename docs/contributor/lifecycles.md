@@ -154,16 +154,19 @@ These methods refuse an illegal move.
 ```mermaid
 stateDiagram-v2
     accTitle: Lifecycle of a person data request
-    accDescr: A preview starts in PREVIEW. An admitted erasure moves to ERASING. A failed erasure moves to FAILED, and an administrator resumes it to ERASING. A finished erasure moves to COMPLETE, which has no exit.
+    accDescr: A preview starts in PREVIEW. An unconfirmed preview moves to EXPIRED, which has no exit. An admitted erasure moves to ERASING. A failed erasure moves to FAILED, and an administrator resumes it to ERASING. A finished erasure moves to COMPLETE, which has no exit.
     [*] --> PREVIEW: preview, account deletion
     PREVIEW --> ERASING: startErasure
+    PREVIEW --> EXPIRED: expirePreviews
+    EXPIRED --> [*]
     ERASING --> FAILED: fail
     FAILED --> ERASING: startErasure
     ERASING --> COMPLETE: complete
     COMPLETE --> [*]
 ```
 
-A preview expires by its `expires_at` time and keeps the state `PREVIEW`.
+A preview that passes its `expires_at` time moves to `EXPIRED`.
+`expirePreviews` removes its scope and selections, so nobody can confirm it.
 A temporary store failure keeps the request in `ERASING` with the failure code `STORE_ERASURE_RETRY_PENDING`, and the next run retries it.
 `complete` removes the identifying scope and the selections, so the receipt keeps only counts and times.
 
