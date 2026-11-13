@@ -108,10 +108,7 @@ public class ReviewAttemptCustody {
 
         private final ReentrantLock preparation = new ReentrantLock();
 
-        /**
-         * Guards {@link #inputs} and {@link #closed}. A lock, not a monitor: closing inputs removes their folder and
-         * records it, and on Java 21 a virtual thread that blocks under a monitor pins its carrier.
-         */
+        /** Guards {@link #inputs} and {@link #closed}. */
         private final ReentrantLock state = new ReentrantLock();
 
         PreparedJobInputs get(Supplier<PreparedJobInputs> prepare) {

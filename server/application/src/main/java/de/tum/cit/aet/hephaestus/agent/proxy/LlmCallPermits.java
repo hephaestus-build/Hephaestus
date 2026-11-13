@@ -617,7 +617,7 @@ public class LlmCallPermits {
         if (reached == null) return;
         long millis =
                 Math.min(reached.pause().toMillis(), properties.maxCooldown().toMillis());
-        var unused = Thread.ofVirtual().name("llm-bucket-reached").start(() -> {
+        var _ = Thread.ofVirtual().name("llm-bucket-reached").start(() -> {
             try {
                 boolean applied = Boolean.TRUE.equals(transactions.execute(status -> {
                     var pool = pools.lockAdmission(permit.poolId).orElse(null);
@@ -660,7 +660,7 @@ public class LlmCallPermits {
         int millis = Math.toIntExact(Math.min(TimeUnit.NANOSECONDS.toMillis(nanos), Integer.MAX_VALUE));
         permit.firstTokenMillis = millis;
         meters.pool(permit.pool).firstToken(permit.band, millis);
-        var unused = Thread.ofVirtual().name("llm-first-token").start(() -> {
+        var _ = Thread.ofVirtual().name("llm-first-token").start(() -> {
             try {
                 transactions.executeWithoutResult(status -> learnFromFirstToken(permit, millis, instanceCredential));
             } catch (RuntimeException failed) {

@@ -97,8 +97,7 @@ public class PostgresPersonDataCopyFence implements PersonDataCopyFence {
         }
         var receipts = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
         return new Lease() {
-            // One close runs the unlock. No monitor: the unlock is SQL, and on Java 21 a virtual thread that blocks
-            // under a monitor pins its carrier.
+            // One close runs the unlock.
             private final AtomicBoolean closed = new AtomicBoolean();
 
             @Override

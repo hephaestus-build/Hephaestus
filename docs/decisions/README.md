@@ -176,6 +176,7 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0100](0100-the-server-serves-the-web-app.md) | The server serves the web app | Accepted |
 | [0101](0101-a-connection-cannot-adopt-an-upstream-resource-whose-removal-is-unresolved.md) | A connection cannot adopt an upstream resource whose removal is unresolved | Accepted |
 | [0103](0103-the-public-api-grows-only-by-addition-and-every-client-tolerates-what-it-does-not-know.md) | The public API grows only by addition, and every client tolerates what it does not know | Proposed |
+| [0109](0109-the-server-compiles-tests-and-runs-on-java-25.md) | The server compiles, tests and runs on Java 25 LTS | Accepted |
 
 | [0102](0102-sync-status-hints-use-postgresql-notifications.md) | Sync-status hints use PostgreSQL notifications | Accepted |
 

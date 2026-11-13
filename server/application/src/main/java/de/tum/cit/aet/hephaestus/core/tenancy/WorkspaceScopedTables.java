@@ -255,7 +255,7 @@ public class WorkspaceScopedTables {
         key.getKeyPart()
                 .forEachSelectable((index, selectable) -> columns.add(normalize(selectable.getSelectionExpression())));
         if (columns.size() != 1 || columns.getFirst().isEmpty()) return;
-        keys.computeIfAbsent(table, unused -> new HashSet<>()).add(columns.getFirst());
+        keys.computeIfAbsent(table, _ -> new HashSet<>()).add(columns.getFirst());
     }
 
     /** Bare, unquoted, lowercase — the form the inspector compares against. */

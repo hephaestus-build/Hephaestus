@@ -350,7 +350,7 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
                         var call = new Socket(InetAddress.getLoopbackAddress(), Integer.parseInt(args[1]))) {
                     assertThat(permit.isRevoked()).isFalse();
                     // The proxy ends its exchange on this signal.
-                    var unused = permit.revoked()
+                    var _ = permit.revoked()
                             .doOnSuccess(revoked -> closeQuietly(call))
                             .subscribe();
                     call.getOutputStream()

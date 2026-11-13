@@ -8,8 +8,9 @@ import jdk.jfr.consumer.RecordingStream;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The parks that pinned a virtual thread to its carrier, as the JDK records them ({@code jdk.VirtualThreadPinned}). On
- * Java 21 a virtual thread that blocks under a monitor keeps its carrier, and enough of them stall every virtual thread.
+ * The parks that pinned a virtual thread to its carrier, as the JDK records them ({@code jdk.VirtualThreadPinned}). Since
+ * JDK 24 a monitor no longer pins (JEP 491), but a park in a native frame or a class initializer still does, and enough
+ * of them stall every virtual thread.
  */
 public final class PinnedParks {
 

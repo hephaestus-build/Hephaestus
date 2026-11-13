@@ -1,6 +1,6 @@
 # Server
 
-Spring Boot 4 / Java 21 / Spring Modulith 2. Liquibase owns the schema. The OpenAPI spec and the
+Spring Boot 4 / Java 25 / Spring Modulith 2. Liquibase owns the schema. The OpenAPI spec and the
 GraphQL clients are generated. Package layout under
 `application/src/main/java/de/tum/cit/aet/hephaestus/` follows the domain (`core/`, `workspace/`, `agent/`,
 `practices/`, `integration/`, `mentor/`, …) — read it rather than a copy of it here.

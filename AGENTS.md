@@ -114,7 +114,7 @@ The SPA talks to the server only through the generated client.
 
 ## Where code lives
 
-- `server/` — Spring Boot 4, Java 21, Spring Modulith 2, PostgreSQL with Liquibase. Guide: `server/AGENTS.md`.
+- `server/` — Spring Boot 4, Java 25, Spring Modulith 2, PostgreSQL with Liquibase. Guide: `server/AGENTS.md`.
 - `webapp/` — React 19, TanStack Router/Query, Tailwind 4. Guides: `webapp/AGENTS.md` and `webapp/DESIGN.md`.
 - `extension/` — the Chrome extension. Guide: `extension/AGENTS.md`.
 - `docs/` — user, admin and contributor docs on GitHub Pages.

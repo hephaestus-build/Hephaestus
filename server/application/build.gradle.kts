@@ -55,6 +55,9 @@ dependencies {
     compileOnly(libs.lombok)
     // PostgreSQL driver types carry Checker Framework annotations that javac must resolve.
     compileOnly(libs.checker.qual)
+    // Resilience4j's own nullness annotations carry JSR-305 meta-annotations that javac must
+    // resolve.
+    compileOnly(libs.jsr305)
     implementation(libs.spring.modulith.starter.core)
     // Event publication registry: the durable outbox behind notification listeners (ADR 0044).
     implementation(libs.spring.modulith.starter.jdbc)
@@ -163,7 +166,7 @@ tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.addAll(
         // Spring, JPA and JUnit annotations are runtime metadata, not processor inputs. Javac's
         // processing lint reports every unclaimed runtime annotation despite successful processing.
-        listOf("-Werror", "-Xlint:all,-processing", "-XDaddTypeAnnotationsToSymbol=true")
+        listOf("-Werror", "-Xlint:all,-processing")
     )
     options.errorprone {
         // Google Javadoc style only: a doc that is just @param or @return tags is complete here.
@@ -363,7 +366,12 @@ tasks.withType<Test>().configureEach {
     environment("PATH", providers.environmentVariable("PATH").get())
     environment("MANAGEMENT_PORT", "0")
     environment("SERVER_PORT", "0")
-    jvmArgs("-XX:+EnableDynamicAgentLoading", "-XX:+ExitOnOutOfMemoryError")
+    jvmArgs(
+        "-XX:+EnableDynamicAgentLoading",
+        "-XX:+ExitOnOutOfMemoryError",
+        // Netty loads its native transport; from Java 24 on, that warns unless native access is on.
+        "--enable-native-access=ALL-UNNAMED",
+    )
     // No cached lookup bypasses OfflineNetwork: each attempt is recorded, and a declared name ends
     // with its class.
     jvmArgs(
@@ -450,16 +458,15 @@ for ((taskName, tag) in testTiers.filterKeys { it != "test" }) {
                 }
         }
         if (tag == "integration") {
-            // On Java 21 a virtual thread that blocks under a monitor keeps its carrier, and a few
-            // of them stall every
+            // A virtual thread that parks in a native frame or a class initializer keeps its
+            // carrier (since JDK 24 a monitor no longer pins, JEP 491). A few of them stall every
             // virtual thread, a pool's waiters among them. The JDK records each such park of 20 ms
-            // or more, and the
-            // tier fails on any, with its call path.
+            // or more, and the tier fails on any, with its call path.
             val pinnedParks =
                 layout.buildDirectory.file("$name-pinned-virtual-threads.jfr").get().asFile
             val pinnedSettings = file("src/test/resources/pinned-virtual-threads.jfc")
             jvmArgs(
-                // The frame that holds the monitor sits far below the park; JFR keeps 64 frames by
+                // The frame that causes the pin sits far below the park; JFR keeps 64 frames by
                 // default.
                 "-XX:FlightRecorderOptions=stackdepth=256",
                 "-XX:StartFlightRecording=filename=$pinnedParks,settings=${pinnedSettings.absolutePath},dumponexit=true",
@@ -482,8 +489,8 @@ for ((taskName, tag) in testTiers.filterKeys { it != "test" }) {
                         }
                     throw GradleException(
                         "${pinned.size} park(s) of 20 ms or more pinned a virtual thread to its carrier. Load a " +
-                            "blocking cache entry outside the cache's lock (CacheLoads), and do not block under a " +
-                            "monitor.\n\n$parks"
+                            "blocking cache entry outside the cache's lock (CacheLoads), and do not block in a " +
+                            "native call or a class initializer.\n\n$parks"
                     )
                 }
             }

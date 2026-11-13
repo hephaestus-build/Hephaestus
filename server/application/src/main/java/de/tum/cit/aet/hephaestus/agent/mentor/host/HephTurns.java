@@ -79,7 +79,7 @@ public class HephTurns {
         var account = conversations.findAccountIdByIdAndWorkspaceId(conversationId, sandbox.workspaceId());
         // A suppressed or erased account can still end its run. The domain end omits its person data.
         account.ifPresent(accountId -> {
-            var unused = writeFence.holdForAccountWrite(accountId);
+            var _ = writeFence.holdForAccountWrite(accountId);
         });
     }
 

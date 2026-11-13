@@ -74,7 +74,7 @@ class ScmGitTreeTest extends BaseUnitTest {
         }
     }
 
-    /** Captures run on virtual threads; a Git read under the cache's lock would pin each one that waits for it. */
+    /** Captures run on virtual threads; no park while the tree is read may pin one to its carrier. */
     @Test
     void shouldReadAPinnedTreeWithoutPinningTheVirtualThreadThatAsks() throws Exception {
         String commit = "a".repeat(40);

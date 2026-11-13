@@ -67,7 +67,7 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 
 ### Coding conventions
 
-- Use Java 21 features where they simplify code. Records, pattern matching, and sealed hierarchies improve readability.
+- Use Java 25 features where they simplify code. Records, pattern matching, sealed hierarchies and unnamed variables (`_`) improve readability. Do not use preview features.
 - Keep controllers thin. Push orchestration into services and prefer constructor helpers over static util classes.
 - A read returns a record shaped like the screen from its query, so it needs no mapper. [Read and write the database](./read-and-write-the-database.mdx) owns the pattern.
 - Treat `Optional` as a signal for missing data. Avoid returning `null` from repository methods.

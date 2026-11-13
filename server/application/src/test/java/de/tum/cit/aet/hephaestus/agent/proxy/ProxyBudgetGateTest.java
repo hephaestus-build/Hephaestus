@@ -242,7 +242,7 @@ class ProxyBudgetGateTest extends BaseUnitTest {
     @Nested
     class DirectModelCap {}
 
-    /** The proxy serves model calls on virtual threads, which a ledger read under a monitor would pin on Java 21. */
+    /** The proxy serves model calls on virtual threads, and a ledger read must not pin one to its carrier. */
     @Nested
     class VirtualThreads {
 
