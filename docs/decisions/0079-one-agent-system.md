@@ -711,3 +711,20 @@ The server's model connection can stop during a rollout. The native sandbox runt
 `HephTurnGatewayIntegrationTest.shouldRetryACutModelStreamOnAnotherServerAndAdmitAndChargeTheAnswerOnce` exercises two real gateway applications on PostgreSQL, stops the first during streaming, and checks the surviving server's completion, usage rows and single admitted result.
 
 The reservation counts all old and new servers during one update, because Kubernetes excludes terminating Pods from `maxSurge`. A PodDisruptionBudget protects voluntary evictions. The Deployment strategy governs the rollout. See the Kubernetes sources on [Deployment termination](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#terminating-pods) and [disruption budgets](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/#pod-disruption-budgets).
+
+## Update — 2026-11-13: a composition claim talks to its model only in the server's words
+
+This update adds a guardrail to item 4 of the update of 2026-11-09. The other sections stay.
+
+The gateway keeps a transcript of each `REVIEW_COMPOSE` claim.
+It records the sessions that it issued, their turns, and the tool answers that it gave.
+It also records each reply that it served, linked to the exact conversation that the reply answered, and each tool call.
+It forwards a model request of the claim only when the request continues that conversation as the composer does.
+A composition tool route runs a call only when the claim's model wrote it in a session of the same destination, and only once.
+
+Thus a process that holds the sandbox token cannot write any text that the model reads.
+It can only choose among the server's texts and the model's own replies, in the order that the composer uses them.
+It cannot send a conversation again after the conversation got its answer, and it cannot run a tool call that the model did not write.
+Copies of one request sent at the same time can each get an answer, so it can choose among several of the model's own answers.
+A composer whose answer is lost on the way after the gateway recorded it cannot send that request again, and its attempt ends `UNEXPECTED`.
+[Practice review pipeline](../contributor/practice-review-pipeline.mdx#compose-feedback) owns the behavior.

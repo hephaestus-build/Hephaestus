@@ -205,6 +205,10 @@ export class ModelSession {
 			case "CALLS_IN_FLIGHT": {
 				return failed("PROVIDER");
 			}
+			// The gateway found the request off this composition's conversation: a fault of this loop, not of the model.
+			case "NOT_COMPOSER_REQUEST": {
+				throw new Error("The gateway refused a request that does not continue this composition");
+			}
 			default: {
 				return failed("PROVIDER");
 			}

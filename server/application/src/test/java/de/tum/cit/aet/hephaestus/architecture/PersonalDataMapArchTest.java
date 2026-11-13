@@ -61,6 +61,9 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "agent_run",
             // A sandbox's subject key, claim name and times: a pointer to its subject, like a run's, and no content.
             "agent_sandbox",
+            // Digests of what a compose run's claim was given and served, and its tool call IDs and names, never the
+            // content; it goes with its run.
+            "composer_transcript_part",
             "commit_pull_request",
             "connection",
             "connection_activity",

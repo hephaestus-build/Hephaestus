@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.gateway;
 
+import de.tum.cit.aet.hephaestus.agent.composer.ComposerTranscript;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.composer.ReviewComposeSandboxKind;
@@ -43,6 +44,10 @@ import tools.jackson.databind.JsonNode;
  * keeps what each call decided, so the composer loop in the sandbox holds no provider token and no state that a
  * guardrail depends on. Every write is fenced on the run's current lease in its own transaction; a stale claim answers
  * {@code 409}, and inputs that are no longer retained answer {@code 410} with the stop as the reason.
+ *
+ * <p>Each session and each tool answer goes into the claim's {@link ComposerTranscript}, so that the gateway forwards
+ * only model requests made of them. A tool call runs only when the claim's model wrote it, and only once. Any other
+ * tool call answers {@code 403} and runs nothing.
  */
 @RestController
 @RequestMapping("/internal/agent/runs/{runId}/composition")
@@ -54,10 +59,13 @@ import tools.jackson.databind.JsonNode;
 public class CompositionController {
     private final ReviewComposeSandboxKind kind;
     private final CompositionSessions sessions;
+    private final ComposerTranscript transcript;
 
-    public CompositionController(ReviewComposeSandboxKind kind, CompositionSessions sessions) {
+    public CompositionController(
+            ReviewComposeSandboxKind kind, CompositionSessions sessions, ComposerTranscript transcript) {
         this.kind = kind;
         this.sessions = sessions;
+        this.transcript = transcript;
     }
 
     @PostMapping("/next")
@@ -69,8 +77,10 @@ public class CompositionController {
             boolean last = sessions.lastAttempt(composing.job());
             return sessions.next(composing.job(), composing.identity(), finished)
                     .map(next -> switch (next) {
-                        case CompositionSessions.Session session ->
-                            ResponseEntity.ok(new NextAnswer(session, null, deadline, last));
+                        case CompositionSessions.Session session -> {
+                            transcript.issued(run.fence(), session);
+                            yield ResponseEntity.ok(new NextAnswer(session, null, deadline, last));
+                        }
                         case CompositionSessions.Unavailable unavailable ->
                             ResponseEntity.ok(new NextAnswer(null, unavailable.cause(), deadline, last));
                     })
@@ -82,10 +92,13 @@ public class CompositionController {
     public CompositionSessions.ToolResult tool(
             SandboxRun run, @PathVariable String name, @Valid @RequestBody ToolRequest request) {
         return fenced(run, composing -> {
+            if (!transcript.useCall(
+                    run.fence(), request.destination().name(), request.callId(), name, request.arguments()))
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "NOT_A_MODEL_TOOL_CALL");
             // The server never waits for a readback past the run's own end.
             Instant bound = notAfter(composing);
             Instant deadline = request.deadline().isBefore(bound) ? request.deadline() : bound;
-            return sessions.tool(
+            var result = sessions.tool(
                     composing.job(),
                     composing.identity(),
                     new CompositionSessions.ToolCall(
@@ -95,6 +108,8 @@ public class CompositionController {
                             request.arguments(),
                             request.publicationContext(),
                             deadline));
+            transcript.answered(run.fence(), request.destination().name(), request.callId(), result.text());
+            return result;
         });
     }
 
@@ -152,8 +167,9 @@ public class CompositionController {
             boolean lastAttempt) {}
 
     /**
-     * One tool call of a composer session, as the model wrote it. It carries nothing the server must trust: what earlier
-     * calls decided is read from the composition's tool trace and its prepared rows.
+     * One tool call of a composer session, as the model wrote it. The route checks it against the run's recorded model
+     * calls, and it carries nothing else the server must trust: what earlier calls decided is read from the
+     * composition's tool trace and its prepared rows.
      *
      * @param publicationContext the session's public history, as the session gave it
      * @param deadline the composition's deadline

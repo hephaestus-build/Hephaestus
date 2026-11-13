@@ -5,9 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.composer.ComposerTranscript;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.composer.ReviewComposeSandboxKind;
@@ -42,7 +45,8 @@ class CompositionControllerTest {
 
     private final ReviewComposeSandboxKind kind = mock(ReviewComposeSandboxKind.class);
     private final CompositionSessions sessions = mock(CompositionSessions.class);
-    private final CompositionController controller = new CompositionController(kind, sessions);
+    private final ComposerTranscript transcript = mock(ComposerTranscript.class);
+    private final CompositionController controller = new CompositionController(kind, sessions, transcript);
     private final AgentRunFence fence = new AgentRunFence(UUID.randomUUID(), 7L, 2);
     private final SandboxRun run = new SandboxRun(
             new AgentSandboxes.LiveSandbox(UUID.randomUUID(), 7L, "review:1", AgentSandboxKind.REVIEW),
@@ -53,6 +57,25 @@ class CompositionControllerTest {
             RuntimeReviewTestData.job(),
             new ResultAdmissionService.AdmissionIdentity(UUID.randomUUID(), 7L, 1, fence.runId()),
             RUN_ENDS);
+
+    {
+        // The run's model wrote each call, unless a test says otherwise.
+        when(transcript.useCall(eq(fence), any(), any(), any(), any())).thenReturn(true);
+    }
+
+    @Test
+    void shouldRunNoToolCallThatTheRunsModelDidNotWrite() {
+        when(kind.prepare(run)).thenReturn(composing);
+        var call = request(RUN_ENDS);
+        when(transcript.useCall(fence, "ON_WORK", call.callId(), "publish_package", call.arguments()))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> controller.tool(run, "publish_package", call))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        refused -> assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
+        verify(sessions, never()).tool(any(), any(), any());
+    }
 
     @Test
     void shouldAnswerTheStaleClaimWhenTheRunNoLongerHoldsItsLease() {

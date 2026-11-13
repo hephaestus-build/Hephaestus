@@ -47,6 +47,20 @@ erDiagram
         BYTEA public_key "NOT NULL"
     }
 
+    ComposerTranscriptPart {
+        UUID id PK
+        BIGINT workspace_id FK "NOT NULL"
+        UUID run_id FK "NOT NULL"
+        INTEGER lease_epoch "NOT NULL"
+        VARCHAR(8) kind "NOT NULL"
+        VARCHAR(64) digest "NOT NULL"
+        VARCHAR(16) destination
+        VARCHAR(256) call_id
+        VARCHAR(64) tool
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ used_at
+    }
+
     FxRate {
         BIGINT id PK
         DATE rate_date UK "NOT NULL"
@@ -351,6 +365,7 @@ erDiagram
     %% One-to-Many relationships
     Workspace ||--o{ AgentRun : has
     Workspace ||--o{ AgentSandbox : has
+    AgentRun ||--o{ ComposerTranscriptPart : has
     Account ||--o{ InstanceLlmSetting : has
     LlmCallPool ||--o{ LlmCallPermit : has
     LlmConnection ||--o{ LlmModel : has

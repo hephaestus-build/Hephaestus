@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.composer.ComposerTranscript;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
@@ -49,12 +50,13 @@ public final class SandboxModelProxy {
                 mapper,
                 meters,
                 context.getBean(PlatformTransactionManager.class));
+        var accounting = new ProxyAccounting(budgets, ledger, meters, mapper);
         var service = new LlmProxyService(
                 Tracer.NOOP,
                 context.getBean(WebClient.Builder.class).clone().build(),
                 context.getBean(LlmModelResolver.class),
                 mapper,
-                new ProxyAccounting(budgets, ledger, meters, mapper),
+                accounting,
                 policy,
                 mock(ScanCallGuard.class),
                 new ProxyRoutingService(
@@ -68,6 +70,6 @@ public final class SandboxModelProxy {
                 new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                 permits,
                 new HephCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)));
-        return new LlmProxyController(service);
+        return new LlmProxyController(service, context.getBean(ComposerTranscript.class), accounting);
     }
 }

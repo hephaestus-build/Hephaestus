@@ -360,7 +360,9 @@ Claim reservations do not add a second wait observation when the model call uses
 
 `refused` is the model's own decision.
 A call that the proxy refuses never reaches a provider, so it has no outcome.
-`llm_proxy_refused_total` counts those, by `refusal`: `capacity`, `calls_in_flight`, `budget`, `work_time`, `attempt_ended`, or `ai_choice`.
+`llm_proxy_refused_total` counts those, by `refusal`: `capacity`, `calls_in_flight`, `budget`, `work_time`, `attempt_ended`, `ai_choice`, or `not_composer_request`.
+`not_composer_request` counts a request of a composition run that does not continue that composition's conversation.
+The composer never sends one, so any count is worth a look in the server log.
 A refusal at a budget cap also counts in `llm_budget_blocked_total`, with `surface="model_call"` and its `cap`.
 
 ## Privacy-job metrics

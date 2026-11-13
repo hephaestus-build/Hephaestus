@@ -187,6 +187,9 @@ public final class ModelSession {
                         // Transient, as a provider's rate limit is.
                         case CALLS_IN_FLIGHT -> Failure.PROVIDER;
                         case CAPACITY -> Failure.NO_CAPACITY;
+                        // Only a composition run's request can get it; a refusal here is a fault of this server.
+                        case NOT_COMPOSER_REQUEST ->
+                            throw new IllegalStateException("The gateway refused a request of no composition");
                     });
         int status = answer.status();
         if (status == 408 || status == 429 || status >= 500) return new Reply(null, List.of(), Failure.PROVIDER);

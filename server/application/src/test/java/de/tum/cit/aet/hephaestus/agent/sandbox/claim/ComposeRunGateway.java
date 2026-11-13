@@ -6,6 +6,8 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptKeyFixtures;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
+import de.tum.cit.aet.hephaestus.agent.composer.ComposerTranscript;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionSessions;
 import de.tum.cit.aet.hephaestus.agent.composer.ReviewComposeSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
@@ -46,6 +48,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.UnaryOperator;
 import org.springframework.boot.SpringApplication;
@@ -62,7 +65,9 @@ import org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfiguration;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
@@ -82,6 +87,7 @@ import tools.jackson.databind.json.JsonMapper;
 public final class ComposeRunGateway implements AutoCloseable {
     private static final AttemptSigningKey KEY = AttemptSigningKey.generate();
     private static final Path DRIVER = Path.of("src/test/resources/agent/review-compose-sandbox.ts");
+    private static final Path FORGED_CALLS = Path.of("src/test/resources/agent/review-compose-forged-calls.ts");
 
     private final ConfigurableApplicationContext gateway;
     private final AgentSandboxes sandboxes;
@@ -97,7 +103,7 @@ public final class ComposeRunGateway implements AutoCloseable {
             ReviewMemberAiPolicy policy,
             ReviewAttemptCustody custody,
             UnaryOperator<JsonNode> model) {
-        this(context, policy, custody, modelRoute(model));
+        this(context, policy, custody, modelRoute(model, context));
     }
 
     /** The real model proxy, with delivery advanced by the test instead of a background worker. */
@@ -159,7 +165,9 @@ public final class ComposeRunGateway implements AutoCloseable {
             factory.registerSingleton("agentNextController", new AgentNextController(sandboxes, List.of(kind), drain));
             factory.registerSingleton(
                     "agentRunController", new AgentRunController(runs, sandboxes, transactions, List.of(kind)));
-            factory.registerSingleton("compositionController", new CompositionController(kind, sessions));
+            factory.registerSingleton(
+                    "compositionController",
+                    new CompositionController(kind, sessions, context.getBean(ComposerTranscript.class)));
             factory.registerSingleton("modelEndpoint", modelEndpoint);
             factory.registerSingleton("sandboxRunArguments", new WebMvcConfigurer() {
                 @Override
@@ -208,9 +216,24 @@ public final class ComposeRunGateway implements AutoCloseable {
      * @return what the driver printed: {@code {"ended": <status>}}, or {@code {"idle": true}}
      */
     public String drive(String token) throws Exception {
+        return node(DRIVER, token);
+    }
+
+    /**
+     * Runs agent-side code with the sandbox's token: it leases the subject's next run, sends changed copies of the
+     * composer's first model request and then the request itself, and posts the model's tool call, that call again, and
+     * a call that no model wrote ({@code review-compose-forged-calls.ts}).
+     *
+     * @return what it printed, as one JSON object
+     */
+    public String forge(String token) throws Exception {
+        return node(FORGED_CALLS, token);
+    }
+
+    private String node(Path script, String token) throws Exception {
         Path output = Files.createTempFile("review-compose-driver-", ".out");
         try {
-            var process = new ProcessBuilder("node", DRIVER.toString(), "http://localhost:" + port, token)
+            var process = new ProcessBuilder("node", script.toString(), "http://localhost:" + port, token)
                     .redirectError(ProcessBuilder.Redirect.INHERIT)
                     .redirectOutput(output.toFile())
                     .start();
@@ -235,18 +258,35 @@ public final class ComposeRunGateway implements AutoCloseable {
     }
 
     /**
-     * The provider behind the model proxy: a call that gets here was admitted by the proxy's security chain. A route
-     * function, so that the test context's component scan does not take it for one of its own controllers.
+     * The provider behind the model proxy: a call that gets here was admitted by the proxy's security chain. It checks
+     * each request against the claim's transcript and records the reply and tool calls of each answer, as the proxy
+     * does. A route function, so that the test context's component scan does not take it for one of its own
+     * controllers.
      */
-    private static RouterFunction<ServerResponse> modelRoute(UnaryOperator<JsonNode> model) {
+    private static RouterFunction<ServerResponse> modelRoute(
+            UnaryOperator<JsonNode> model, ApplicationContext context) {
         var mapper = new JsonMapper();
+        var transcript = context.getBean(ComposerTranscript.class);
+        var jdbc = context.getBean(JdbcTemplate.class);
         return RouterFunctions.route()
-                .POST(
-                        "/internal/llm/chat/completions",
-                        request -> ServerResponse.ok()
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .body(mapper.writeValueAsString(
-                                        model.apply(mapper.readTree(request.body(String.class))))))
+                .POST("/internal/llm/chat/completions", request -> {
+                    byte[] body = request.body(byte[].class);
+                    var headers = request.headers();
+                    UUID run = UUID.fromString(Objects.requireNonNull(headers.firstHeader("X-Agent-Run")));
+                    int epoch = Integer.parseInt(Objects.requireNonNull(headers.firstHeader("X-Agent-Epoch")));
+                    long workspace = Objects.requireNonNull(
+                            jdbc.queryForObject("SELECT workspace_id FROM agent_run WHERE id = ?", Long.class, run));
+                    if (!(transcript.check(workspace, run, epoch, LlmApiProtocol.OPENAI_COMPLETIONS, body)
+                            instanceof ComposerTranscript.Forward forward))
+                        return ServerResponse.status(HttpStatus.FORBIDDEN)
+                                .header("Hephaestus-Proxy-Refusal", "NOT_COMPOSER_REQUEST")
+                                .build();
+                    byte[] answer = mapper.writeValueAsBytes(model.apply(mapper.readTree(body)));
+                    transcript.served(workspace, run, epoch, LlmApiProtocol.OPENAI_COMPLETIONS, forward, answer);
+                    return ServerResponse.ok()
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .body(answer);
+                })
                 .build();
     }
 
