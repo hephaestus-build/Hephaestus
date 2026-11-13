@@ -112,6 +112,7 @@ The job's own limit cancels the run and can lose its log, so the list is the evi
 | Quality → Webapp stories                                               | Storybook interaction tests, `export:assets` diff, Storybook build, Chromatic                                                                                                                             | `vp run test:webapp:stories`                                             |
 | Quality → Extension                                                     | `vp check` for `extension/`, format, unit and story tests, the production zip and its manifest check. Keeps the zip as `extension-chrome-*`                                                               | `vp run ci:extension`                                                    |
 | Quality → Windows                                                       | Every gate that needs neither Gradle, Docker nor the agent sandbox, on `windows-latest`, uncached                                                                                                         | `vp run --no-cache ci:windows`                                           |
+| Quality → Client generators | The [client generator round trip](#client-generator-round-trip) when the spec, the templates or the script change | `vp run gate:client-generators` |
 | Quality → Clean install                                                 | `vp install --frozen-lockfile` on a runner with Node and the launcher and nothing else, then `gate:toolchain` and the hooks path                                                                          | `vp install`                                                             |
 | Build → Server package                                             | `./gradlew :application:bootJar :application:testClasses`. Uploads the classes and JARs once                                                                                                              | —                                                                        |
 | Build → Generated API                                 | `generate:api` diff against the packaged JAR. [API compatibility](#api-compatibility) with the previous stable release. The [OpenAPI lint](#openapi-lint). `db:check-drift`, which replays `master.xml` and diffs the JPA model. ERD diff | `vp run generate:api`, `gate:api-compatibility`, `gate:openapi-lint`, `db:check-drift`, `db:generate-erd-docs` |
@@ -331,6 +332,45 @@ Thus, a Redocly update cannot add a rule that we did not review.
 
 `scripts/openapi-lint/plugin.ts` contains the `hephaestus/deprecation-header` rule.
 `scripts/check-openapi-lint.test.ts` lints small fixture specs to prove the rules.
+
+#### Client generator round trip
+
+`vp run gate:client-generators` proves that strict generators read the spec as it is ([ADR 0103](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0103-the-public-api-grows-only-by-addition-and-every-client-tolerates-what-it-does-not-know.md) rules 2, 3 and 5).
+It generates two clients from the unmodified `server/openapi.yaml`:
+
+- A Swift client with [swift-openapi-generator](https://github.com/apple/swift-openapi-generator).
+  It builds in the official `swift` image, which the script pins by its index digest.
+- A Kotlin client with the `kotlin` generator of [OpenAPI Generator](https://openapi-generator.tech/docs/generators/kotlin/).
+  It uses the `jvm-okhttp4` library and kotlinx.serialization.
+  `.github/ci-tools/openapi-generator-cli.json` pins the generator JAR by its SHA-256.
+  The Gradle wrapper of the server builds the client.
+
+Then each client runs its decode tests.
+A test decodes a fixture of a public response type, and the fixture has a property that the client does not know.
+The fixtures are in `scripts/client-generators/fixtures/`.
+The two client templates are in `scripts/client-generators/swift/` and `scripts/client-generators/kotlin/`.
+
+The gate fails when one of these conditions occurs:
+
+- A generator refuses the spec, or a client does not compile.
+- A decode test fails.
+- swift-openapi-generator skips a schema that a public response reaches. A client then loses that value.
+  The gate lists a skip in a schema that no public response reaches.
+  Such a skip does not fail the gate.
+
+- **Where it runs.** `Quality → Client generators` runs it when the spec, the public operations, the templates, the script or the generator pin change.
+  It needs Docker and JDK 21, and it takes minutes, so `check` does not run it.
+- **Add a decode test.** Add the fixture to `scripts/client-generators/fixtures/`.
+  Then add a test to each template that decodes it with the `decodeFixture` function.
+  For example, a fixture with an unknown value of an open enum proves rule 3.
+- **Update a generator.** For Swift, change the exact versions in `Package.swift`.
+  Then run `swift package resolve` in the pinned image to update `Package.resolved`.
+  For Kotlin, change the version and the SHA-256 in the pin file.
+  Compare the JAR with the `.sha1` file beside it on Maven Central.
+  The Kotlin template uses the plugin and library versions that the generator writes into its own build.
+  `scripts/client-generators/kotlin/gradle/verification-metadata.xml` pins their checksums.
+  After you change a version, copy the template to a temporary directory.
+  Run `server/gradlew --project-dir <copy> --write-verification-metadata sha256 dependencies buildEnvironment`, then copy back the file.
 
 ### Merge policy
 

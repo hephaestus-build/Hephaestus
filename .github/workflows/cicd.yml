@@ -68,6 +68,7 @@ jobs:
       e2e: ${{ steps.filter.outputs.e2e }}
       extension-e2e: ${{ steps.filter.outputs.extension-e2e }}
       api-clients: ${{ steps.filter.outputs.api-clients }}
+      client-generators: ${{ steps.filter.outputs.client-generators }}
       agent-images: ${{ steps.filter.outputs.agent-images }}
       postgres-image: ${{ steps.filter.outputs.postgres-image }}
       # Only a merge group runs the seeded upgrade, on the images that it builds.
@@ -576,6 +577,15 @@ jobs:
               - '.github/actions/setup-browsers/**'
             # The generated clients and their generator configuration: a hand edit or a generator bump
             # must meet the same drift check a server change does.
+            # gate:client-generators judges the spec with these templates and this script.
+            client-generators:
+              - 'server/openapi.yaml'
+              - 'server/public-api-operations.json'
+              - 'scripts/client-generators/**'
+              - 'scripts/check-client-generators.ts'
+              - 'scripts/check-api-compatibility.ts'
+              - '.github/ci-tools/openapi-generator-cli.json'
+              - '.github/workflows/ci-quality-gates.yml'
             api-clients:
               - 'webapp/src/api/**'
               - 'extension/src/api/**'
@@ -1055,6 +1065,7 @@ jobs:
       application_server_changed: ${{ (needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       tooling_changed: ${{ (needs.detect-changes.outputs.tooling == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       windows_changed: ${{ needs.detect-changes.outputs.light-tier != 'true' && (needs.detect-changes.outputs.windows != 'false' || needs.detect-changes.outputs.queue-tier != 'false') && 'true' || 'false' }}
+      client_generators_changed: ${{ (needs.detect-changes.outputs.client-generators == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       light_tier: ${{ needs.detect-changes.outputs.light-tier }}
       pmd_canary: ${{ (needs.detect-changes.outputs.pmd-canary == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       gradle_dependencies: ${{ needs.detect-changes.outputs.gradle-dependencies }}

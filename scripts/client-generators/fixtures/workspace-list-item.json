@@ -1,0 +1,13 @@
+{
+	"accountLogin": "octo-org",
+	"createdAt": "2026-01-02T03:04:05Z",
+	"displayName": "Octo Org",
+	"id": 42,
+	"linkHosts": ["github.com"],
+	"practicesEnabled": true,
+	"publishesPublicActivity": false,
+	"status": "ACTIVE",
+	"workspaceAddress": "https://hephaestus.example/w/octo-org",
+	"workspaceSlug": "octo-org",
+	"propertyOfALaterRelease": { "kind": "unknown to this client", "count": 3 }
+}

@@ -48,6 +48,11 @@ on:
         required: false
         type: string
         default: "false"
+      client_generators_changed:
+        description: "Whether the OpenAPI spec or the client generator round trip changed"
+        required: false
+        type: string
+        default: "true"
       light_tier:
         description: "Whether a stacked layer runs the light tier, which skips the story tests"
         required: false
@@ -497,6 +502,32 @@ jobs:
       - run: vp run gate:toolchain
       - run: test "$(git config core.hooksPath)" = ".vite-hooks"
 
+  # Generates a Swift and a Kotlin client from server/openapi.yaml, compiles both and decodes the
+  # fixtures. docs/contributor/ci-cd.mdx § API compatibility.
+  client-generators:
+    name: "Client generators"
+    if: inputs.should_skip != 'true' && inputs.client_generators_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+      - uses: ./.github/actions/setup-caches
+      - uses: ./.github/actions/setup-ci-tool
+        with:
+          tool: openapi-generator-cli
+      - name: Generator round trip
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: vp run gate:client-generators
+
   webapp-stories:
     name: "Webapp stories"
     if: inputs.should_skip != 'true' && inputs.webapp_changed == 'true' && inputs.light_tier != 'true'
@@ -749,6 +780,14 @@ jobs:
   fail-fast-clean-install:
     name: Stop the merge group early
     needs: [clean-install]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    permissions:
+      actions: write
+    uses: ./.github/workflows/merge-group-cancel.yml
+
+  fail-fast-client-generators:
+    name: Stop the merge group early
+    needs: [client-generators]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
     permissions:
       actions: write

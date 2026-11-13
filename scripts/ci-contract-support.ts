@@ -122,10 +122,12 @@ export const TASK_INVOCATION =
 // test, and `check` does not, so the pre-push hook stays fast; every local server test task runs it.
 // The public contract gate compares with a release that moves too, so it runs next to the changesets.
 // The API compatibility check judges the spec that CI generates from the packaged server against a base
-// that moves with each release. Every other CI gate is part of `check`.
+// that moves with each release. The client generator round trip needs Docker and a JDK and takes minutes.
+// Every other CI gate is part of `check`.
 export const CI_ONLY_GATES = new Set([
 	"gate:alerts",
 	"gate:api-compatibility",
+	"gate:client-generators",
 	"gate:load-syntax",
 	"gate:pmd-canary",
 	"gate:public-contract",
