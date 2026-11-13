@@ -21,6 +21,7 @@ import path from "node:path";
 import { JSDOM } from "jsdom";
 
 import { asRecord, asString, readJsonFile } from "./lib/json.ts";
+import { subsetProblems } from "./lib/mermaid-subset.ts";
 
 /** Resolved from this file, so the gate answers the same whatever the working directory is. */
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
@@ -100,6 +101,10 @@ for (const { label, source, requiresAccessibleName } of diagrams) {
 			`${label}\n  Add non-empty accTitle and accDescr lines so the diagram has an accessible name and description.\n`,
 		);
 	}
+	for (const problem of subsetProblems(source)) {
+		failed = true;
+		console.error(`${label}\n  ${problem}\n`);
+	}
 	try {
 		await mermaid.parse(source);
 	} catch (error) {
@@ -111,7 +116,7 @@ for (const { label, source, requiresAccessibleName } of diagrams) {
 
 if (failed) {
 	console.error(
-		`Fix the Mermaid ${version} parse or accessibility errors above before publishing.`,
+		`Fix the Mermaid ${version} parse, accessibility or Mermaid 13 subset errors above before publishing.`,
 	);
 	process.exit(1);
 }

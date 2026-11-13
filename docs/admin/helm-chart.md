@@ -4,6 +4,8 @@ description: The clusters that the Helm chart supports, what it runs, its profil
 page_type: reference
 ---
 
+import SystemDiagram from "@site/src/components/SystemDiagram"
+
 This page describes the Helm chart of a release: the clusters it supports, the objects it runs, and its values.
 [Install on a Kubernetes cluster](./kubernetes) and [Install on one host](./k3s) give the procedures.
 From 1.0, the chart is the supported deployment: [ADR 0058](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) records the decision, and the [compatibility policy](./compatibility-policy#support-for-1x) gives the terms.
@@ -56,7 +58,7 @@ Slack posts that lose their receipt are found by message metadata.
 
 | Component | Kind | Role or image |
 | --- | --- | --- |
-| `server` | Deployment, 1 replica, or 0 while stopped | Server role: the API and provider webhook receiver. |
+| `server` | Deployment, 2 replicas by default, or 0 while stopped | Server role: the API and provider webhook receiver. |
 | `migration` | Job, one for each Helm revision | The server image in its migrate run mode. It applies the release's database migrations and exits. |
 | `webapp` | Deployment | The SPA, from the non-root webapp image. |
 | `postgresql` | StatefulSet, optional | The release PostgreSQL image, with `pg_partman` and pgBackRest. |
@@ -89,6 +91,64 @@ An incompatible schema, including the cutover to 1.0, requires the stopped proce
 
 The server also runs the sandboxes when `sandbox.enabled` is on.
 [Database maintenance](./maintenance#database-maintenance) gives the order of the roles for a change of the database or of a schema that needs every role stopped.
+
+### Where each part runs on a managed cluster
+
+This UML deployment view shows where each part of Hephaestus runs on a managed cluster, and who deploys and runs it.
+It shows the managed-cluster profile (`profiles/cluster.yaml`), with the bundled PostgreSQL and with sandboxes on.
+Each Pod is an execution environment with the image that it runs. Its namespace is in braces. The chart does not pin a Pod to a node, so the view shows the worker nodes as one group.
+
+Each arrow is a network connection, labelled with its protocol and port. It points from the side that opens the connection.
+Each box names who deploys and runs it:
+
+- `«Hephaestus chart»`: the chart that you install deploys it in your two namespaces, and you run it.
+- `«created at runtime»`: the agent-sandbox controller creates it from a template that the chart deploys.
+- `«cluster admin»`: the cluster admins run it.
+- `«external»`: a service outside the cluster.
+
+Look at the two control paths. The server and the agent-sandbox controller never connect to each other: both connect to the Kubernetes API server. The server creates a `SandboxClaim` there, and the controller watches the claims and creates each sandbox Pod.
+Public traffic goes through the Gateway data plane, the proxy or load balancer that the cluster admins' Gateway API implementation runs. It reaches the server Service on port 8080.
+
+<SystemDiagram name="deployment-cluster" title="Deployment view: Hephaestus on a managed Kubernetes cluster" alt="Deployment diagram: the Gateway data plane and API server, worker nodes with the server, PostgreSQL, controller and sandbox Pods, each with its image and connections.">
+
+| From | To | Protocol | What crosses |
+| --- | --- | --- | --- |
+| Browser | Gateway data plane | HTTPS | The SPA and the API |
+| GitHub, GitLab, Slack, Outline | Gateway data plane | HTTPS | Webhooks |
+| Gateway data plane | Server Pods | HTTP, port 8080 | The SPA, the API and the webhooks, after TLS ends at the Gateway |
+| Server Pods | GitHub, GitLab, Slack, Outline | HTTPS | Provider reads and writes |
+| Server Pods | Model provider, email server | HTTPS, SMTP | Model calls, email |
+| Server Pods | Kubernetes API server | HTTPS, the API server port | `SandboxClaim` writes, with the server's ServiceAccount |
+| agent-sandbox controller Pod | Kubernetes API server | HTTPS, the API server port | Watches the claims and creates the sandbox Pods, with the controller's ServiceAccount |
+| Server Pods | PostgreSQL Pod | TCP, port 5432 | SQL, with the database login |
+| PostgreSQL Pod | Persistent volume | Volume mount | The database files |
+| Sandbox Pod | Server Pods | HTTP, port 8081 | The sandbox gateway, with the sandbox token |
+
+</SystemDiagram>
+
+These facts complete the view:
+
+- You need access to the two namespaces only. The cluster admins apply one admin bundle: the CRDs, the PriorityClasses and a read-only ClusterRole. With the cluster profile, the chart renders no cluster-wide object.
+- The agent-sandbox controller has a Role in each of the two namespaces and the admin bundle's read-only ClusterRole.
+- The server runs two replicas by default, with a PodDisruptionBudget. The chart sets no rule that spreads the replicas over nodes, so the cluster's scheduler places them.
+- PostgreSQL stores its data on a persistent volume from the cluster's storage class. With an external PostgreSQL, you deploy and run it outside the chart ([External database](./external-database)).
+- A network policy lets a sandbox reach only port 8081. The public route has no rule for that port.
+- The egress policies allow the Kubernetes API only at `networkPolicy.kubernetesApi.cidr` and `.port`. Set the endpoint after address translation, not the Service port.
+- The nodes that run sandboxes need the agent image before the first claim. A cold image pull alone takes longer than the cold-start target.
+
+The view shows two decided changes that the chart does not have yet.
+The server serves the SPA ([ADR 0100](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0100-the-server-serves-the-web-app.md)). Until that change lands, the `webapp` Deployment serves it with nginx.
+No NATS server runs. Until [#4243](https://github.com/hephaestus-build/Hephaestus/pull/4243) lands, the optional `nats` StatefulSet carries the sync-status hints.
+
+The sandbox namespace enforces the restricted Pod Security Standard. The runtime class decides the rest of the isolation ([Sandbox prerequisites](./sandboxes#sandbox-prerequisites)):
+
+| Runtime | Isolation of a sandbox |
+| --- | --- |
+| runc | A user namespace (`hostUsers: false`) |
+| gVisor | The gVisor kernel, without a user namespace |
+
+On one host, the same parts run on one k3s node, and you are also the cluster admin.
+Traefik is the Gateway, the agent-sandbox controller runs in `agent-sandbox-system`, and the chart's PostgreSQL runs in the release namespace ([Install on one host](./k3s)).
 
 ## Profiles
 

@@ -16,6 +16,8 @@
 		"@commitlint/config-conventional": "21.2.4",
 		"@earendil-works/pi-ai": "1.4.0",
 		"@earendil-works/pi-coding-agent": "1.4.0",
+		"@hylimo/cli": "3.0.0-alpha.2",
+		"@hylimo/fonts": "3.0.0-alpha.2",
 		"@nats-io/jetstream": "3.4.0",
 		"@nats-io/transport-node": "3.4.0",
 		"@types/k6": "2.3.1",

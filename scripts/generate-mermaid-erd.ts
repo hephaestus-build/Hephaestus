@@ -344,11 +344,11 @@ export function buildMermaidContent(
 	}
 
 	lines.push(
-		// Stroke only: a fixed fill under the theme's text colour is unreadable in one of the two themes.
+		// No colour: the site's monochrome Mermaid themes colour every diagram, and a fixed colour breaks one of them.
 		"    %% Styling",
-		"    classDef primaryEntity stroke:#0288d1,stroke-width:2px",
-		"    classDef associationEntity stroke:#8e24aa,stroke-width:2px",
-		"    classDef metadataEntity stroke:#43a047,stroke-width:2px",
+		"    classDef primaryEntity stroke-width:2px",
+		"    classDef associationEntity stroke-width:1px",
+		"    classDef metadataEntity stroke-width:1px",
 		"    classDef referenceEntity stroke-dasharray:5 5",
 		"",
 	);

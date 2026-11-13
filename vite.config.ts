@@ -132,7 +132,13 @@ const policyGates = [
 ];
 const serverGates = [...serverStaticGates, "gate:server"];
 const agentGates = ["gate:agents", "gate:agent-tests"];
-const docsGates = ["gate:docs", "gate:diagrams", "gate:docs-tokens", "gate:docs-pages"];
+const docsGates = [
+	"gate:docs",
+	"gate:diagrams",
+	"gate:system-diagrams",
+	"gate:docs-tokens",
+	"gate:docs-pages",
+];
 const loadGates = ["gate:load-format"];
 const checkTasks = [
 	...policyGates,
@@ -395,6 +401,15 @@ export default defineConfig({
 				docsLintInputs,
 			),
 			"gate:diagrams": cached("node scripts/check-mermaid-diagrams.ts"),
+			// The HyLiMo CLI runs in a child process, so the inputs are named.
+			"gate:system-diagrams": cachedOn("node scripts/render-diagrams.ts --check", [
+				"docs/diagrams/**",
+				"docs/static/img/diagrams/**",
+				"docs/static/fonts/**",
+				"scripts/render-diagrams.ts",
+				"pnpm-lock.yaml",
+			]),
+			"generate:diagrams": run("node scripts/render-diagrams.ts"),
 			"gate:docs-pages": cached(
 				"node scripts/check-docs-pages.ts && node --test scripts/check-docs-pages.test.ts",
 			),

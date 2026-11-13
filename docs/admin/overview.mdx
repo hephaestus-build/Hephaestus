@@ -4,6 +4,8 @@ description: What a Hephaestus deployment consists of and the order to set it up
 page_type: overview
 ---
 
+import SystemDiagram from "@site/src/components/SystemDiagram";
+
 This guide is for people who run a Hephaestus deployment.
 It has five parts:
 
@@ -18,8 +20,34 @@ People who change the code need the [Contributor guide](/contributor/overview).
 
 ## What a deployment consists of
 
+This view shows who uses Hephaestus and which services it connects to.
+Each grey dashed box marked `«external»` is a service that you connect.
+Each arrow points from the side that starts the exchange. GitHub, GitLab and Slack start some exchanges too: they send work events and questions.
+An admin is a workspace admin or an instance admin, as [Two kinds of admin](#two-kinds-of-admin) explains.
+
+<SystemDiagram name="context-admin" title="System context: Hephaestus" alt="Context diagram: developers and admins use Hephaestus, which connects to GitHub, GitLab, Slack, Outline, a model provider and an email server.">
+
+| From | To | What happens |
+| --- | --- | --- |
+| Developer | Hephaestus | Reads feedback and asks questions |
+| Admin | Hephaestus | Configures Hephaestus and approves feedback |
+| GitHub, GitLab | Hephaestus | Send work events |
+| Hephaestus | GitHub, GitLab | Signs people in, reads work and writes feedback |
+| Slack | Hephaestus | Sends questions |
+| Hephaestus | Slack | Answers |
+| Outline | Hephaestus | Sends document events |
+| Hephaestus | Outline | Reads documents |
+| Hephaestus | Model provider | Model calls |
+| Hephaestus | Email server | Sends email |
+
+</SystemDiagram>
+
+GitHub or GitLab is required: it supplies the work and the sign-in.
+Slack, Outline and email are optional.
+A model provider is required for reviews and conversations. Only Hephaestus holds its key.
+
 One application image runs the server.
-A deployment also has PostgreSQL and a NATS event buffer.
+A deployment also has PostgreSQL. It also has a NATS server for sync-status hints until [#4243](https://github.com/hephaestus-build/Hephaestus/pull/4243) removes it.
 On [Helm chart reference](./helm-chart#what-the-chart-runs), the Helm chart runs them on a cluster or on one host with k3s, and a Gateway API controller handles TLS.
 
 Sign-in uses a GitHub or GitLab OAuth app that you register during installation.

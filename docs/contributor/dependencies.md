@@ -49,6 +49,7 @@ Each accepted exception has a row here, with the condition that makes us examine
 | Package | Item | Reason | Examine again when |
 |---|---|---|---|
 | `@isaacs/nonrecursive-glob-match@1.0.3` | 5. Maintainers | `minimatch` 11 needs it, and only `minimatch` 11 fixes GHSA-g3hv-75wg-m249. The single maintainer of `minimatch` released this code from the `minimatch` tree. We already ship `minimatch` with the same single maintainer. Thus, the trust boundary stays the same. The package has no dependencies, no install script and a permissive license. | `minimatch` gets an organization or a second maintainer, or npm provenance. |
+| `@hylimo/cli@3.0.0-alpha.2` and its `@hylimo/*` packages | 5. Maintainers | One npm account publishes the packages, with npm provenance. The maintainer chose HyLiMo for the system diagrams. It runs only in `scripts/render-diagrams.ts`, at development time. The rendered SVGs are committed, so the docs build and the site do not run it. It has no install script and an MIT license. | A stable 3.x release ships, or the project releases nothing for 12 months. |
 
 ### Held versions
 
