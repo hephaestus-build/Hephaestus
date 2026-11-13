@@ -77,9 +77,6 @@ class PrometheusSecurityIntegrationTest {
             var environment = context.getEnvironment();
             int managementPort = environment.getRequiredProperty("local.management.port", Integer.class);
             int applicationPort = environment.getRequiredProperty("local.server.port", Integer.class);
-            // Not compared: the two listeners bind different addresses (127.0.0.1 and ::1), and the kernel
-            // allocates ephemeral ports per address, so both may get the same number. The requests below address
-            // each listener by its own host and port.
             assertThat(environment.getRequiredProperty("management.server.address"))
                     .isEqualTo("::1");
             var registry = context.getBean(MeterRegistry.class);
