@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -60,7 +61,7 @@ public class AgentSandboxConfiguration {
      * holder renews its lease, the capacity home's one period for taking work back.
      */
     @Bean
-    @Profile("!test")
+    @ConditionalOnBackgroundWork
     ScheduledTaskRegistrar agentSandboxReaperTask(AgentSandboxReaper reaper, AgentCapacityProperties capacity) {
         var tasks = new ScheduledTaskRegistrar();
         Duration period = capacity.leaseRenewal();

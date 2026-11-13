@@ -28,10 +28,9 @@ spring:
 
 # Artifact generation loads the runtime contract, not deployment bootstrap or integrations.
 hephaestus:
-    integration:
-        consumer:
-            # Artifact generation has no inbox to claim.
-            claimers: 0
+    # Artifact generation has no database to work on (ConditionalOnBackgroundWork).
+    background-work:
+        enabled: false
     sync:
         nats:
             enabled: false

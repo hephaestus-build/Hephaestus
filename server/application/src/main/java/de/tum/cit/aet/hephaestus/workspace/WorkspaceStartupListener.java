@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.event.WorkspacesInitializedEvent;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceProvisioningHook;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProvisioning;
@@ -9,7 +10,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.annotation.Profile;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
  * {@link Order#value()} must let the NATS consumer initialize before {@link WorkspacesInitializedEvent} is published.
  */
 @Component
-@Profile("!specs & !test")
+@ConditionalOnBackgroundWork
 @ConditionalOnServerRole
 @Order(Ordered.LOWEST_PRECEDENCE)
 public class WorkspaceStartupListener {

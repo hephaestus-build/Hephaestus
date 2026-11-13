@@ -2,12 +2,12 @@ package de.tum.cit.aet.hephaestus.agent.context;
 
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceErasureNotifications;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Duration;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.config.FixedDelayTask;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
@@ -35,7 +35,7 @@ class JobEvidenceMaintenanceConfiguration {
     }
 
     @Bean
-    @Profile("!test & !specs & !cds-training")
+    @ConditionalOnBackgroundWork
     ScheduledTaskRegistrar evidenceReconcileTasks(EvidenceErasureNotifications erasures) {
         erasures.subscribe(reconciler::reconcile);
         var tasks = new ScheduledTaskRegistrar();

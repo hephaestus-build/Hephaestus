@@ -641,13 +641,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(
-            strings = {
-                "hephaestus.runtime.server.enabled=false",
-                "spring.profiles.active=specs",
-                "spring.profiles.active=cds-training"
-            })
-    void shouldNotMaintainEvidenceWithoutTheServerRoleOrInBuildOnlyProfiles(String setting) {
+    @ValueSource(strings = {"hephaestus.runtime.server.enabled=false", "hephaestus.background-work.enabled=false"})
+    void shouldNotMaintainEvidenceWithoutTheServerRoleOrWithoutBackgroundWork(String setting) {
         var layout = new FabricLayout(root.toString());
         byte[] bytes = "evidence".getBytes(StandardCharsets.UTF_8);
         var preparing = new JobEvidenceFiles(layout, jobs, clock, personCopies(), mock(AttemptInputs.class));

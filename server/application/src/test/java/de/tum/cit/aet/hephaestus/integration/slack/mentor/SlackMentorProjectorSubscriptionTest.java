@@ -41,8 +41,7 @@ class SlackMentorProjectorSubscriptionTest extends BaseUnitTest {
 
     @Test
     void shouldSubscribeTheProjectorOnAServerWithSlack() {
-        runner.withPropertyValues("spring.profiles.active=default")
-                .run(context -> assertThat(context).hasBean("slackMentorProjectorSubscription"));
+        runner.run(context -> assertThat(context).hasBean("slackMentorProjectorSubscription"));
     }
 
     @Test
@@ -72,7 +71,7 @@ class SlackMentorProjectorSubscriptionTest extends BaseUnitTest {
         try (var workers = Executors.newVirtualThreadPerTaskExecutor()) {
             new ApplicationContextRunner()
                     .withUserConfiguration(SlackMentorProjector.SubscriptionConfiguration.class)
-                    .withPropertyValues("spring.profiles.active=default", "hephaestus.integration.slack.enabled=true")
+                    .withPropertyValues("hephaestus.integration.slack.enabled=true")
                     .withBean(MentorLedgerNotifications.class, () -> notifications)
                     .withBean(SlackMentorProjector.class, () -> new SlackMentorProjector(messages, replies, executor))
                     .withBean(AsyncAnnotationBeanPostProcessor.class, () -> {
@@ -113,14 +112,12 @@ class SlackMentorProjectorSubscriptionTest extends BaseUnitTest {
     @ParameterizedTest
     @ValueSource(
             strings = {
-                "spring.profiles.active=test",
-                "spring.profiles.active=specs",
-                "spring.profiles.active=cds-training",
+                "hephaestus.background-work.enabled=false",
                 "hephaestus.integration.slack.enabled=false",
                 "hephaestus.runtime.server.enabled=false"
             })
-    void shouldSubscribeNoProjectorInTestAndBuildProfilesWithoutSlackOrWithoutTheServerRole(String setting) {
-        runner.withPropertyValues("spring.profiles.active=default", setting)
+    void shouldSubscribeNoProjectorWithoutBackgroundWorkWithoutSlackOrWithoutTheServerRole(String setting) {
+        runner.withPropertyValues(setting)
                 .run(context -> assertThat(context).doesNotHaveBean("slackMentorProjectorSubscription"));
     }
 }

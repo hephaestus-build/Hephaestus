@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.mentor;
 
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
@@ -13,7 +14,6 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
@@ -28,14 +28,13 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
     private final ActionExecutor executor;
 
     /**
-     * Subscribes the projector to the ledger once the application is ready. The test profile drives a projector of its
-     * own and subscribes none, since a subscribed projector reads every later test's Slack turns on its own threads. The
-     * build profiles serve no turn, and their database cannot {@code LISTEN}.
+     * Subscribes the projector to the ledger once the application is ready. The subscription is background work: the
+     * projector then posts every Slack turn on its own threads. Tests drive a projector of their own.
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnServerRole
     @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true")
-    @Profile("!test & !specs & !cds-training")
+    @ConditionalOnBackgroundWork
     static class SubscriptionConfiguration {
         @Bean
         ApplicationListener<ApplicationReadyEvent> slackMentorProjectorSubscription(
