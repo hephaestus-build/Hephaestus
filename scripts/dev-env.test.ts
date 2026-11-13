@@ -73,26 +73,30 @@ await describe("the local database password", async () => {
 		});
 	});
 
-	await test("a database made under the old fixed password keeps working", async () => {
+	await test("existing data without a configured password refuses without changing the file", async () => {
 		await checkout(async (paths) => {
 			await mkdir(paths.dataDirectory);
 			await writeFile(path.join(paths.dataDirectory, "PG_VERSION"), "18");
 			await writeFile(paths.envFile, "POSTGRES_PORT=15432\n");
-			assert.equal(await ensureDatabasePassword({ ...paths, environment: {} }), "legacy");
-			assert.equal(await passwordIn(paths.envFile), "root");
-			assert.equal(await ensureDatabasePassword({ ...paths, environment: {} }), "present");
+			await assert.rejects(
+				ensureDatabasePassword({ ...paths, environment: {} }),
+				/Set its password in server\/\.env/u,
+			);
+			assert.equal(await readFile(paths.envFile, "utf8"), "POSTGRES_PORT=15432\n");
 		});
 	});
 
-	await test("the reset replaces the kept old password once the data is gone", async () => {
+	await test("existing data keeps its configured password and other settings", async () => {
 		await checkout(async (paths) => {
+			await mkdir(paths.dataDirectory);
+			await writeFile(path.join(paths.dataDirectory, "PG_VERSION"), "18");
 			await writeFile(
 				paths.envFile,
-				"POSTGRES_PORT=15432\nPOSTGRES_PASSWORD=root\nSERVER_PORT=18080\n",
+				"POSTGRES_PORT=15432\nPOSTGRES_PASSWORD=chosen\nSERVER_PORT=18080\n",
 			);
-			assert.equal(await ensureDatabasePassword({ ...paths, environment: {} }), "generated");
+			assert.equal(await ensureDatabasePassword({ ...paths, environment: {} }), "present");
 			const values = await readEnvFile(paths.envFile);
-			assert.match(values.POSTGRES_PASSWORD ?? "", /^[0-9a-f]{48}$/u);
+			assert.equal(values.POSTGRES_PASSWORD, "chosen");
 			assert.equal(values.POSTGRES_PORT, "15432");
 			assert.equal(values.SERVER_PORT, "18080");
 		});
@@ -125,18 +129,22 @@ await describe("the Compose project of a checkout", async () => {
 		assert.notEqual(names[0], names[1]);
 	});
 
-	await test("a checkout whose database exists keeps the name its containers run under", async () => {
+	await test("existing data without a configured project refuses without creating a file", async () => {
 		await checkout(async (paths) => {
 			await mkdir(paths.dataDirectory);
 			await writeFile(path.join(paths.dataDirectory, "PG_VERSION"), "18");
-			assert.equal(await ensureComposeProject({ ...paths, environment: {} }), "server");
-			const values = await readEnvFile(paths.envFile);
-			assert.equal(values.COMPOSE_PROJECT_NAME, "server");
+			await assert.rejects(
+				ensureComposeProject({ ...paths, environment: {} }),
+				/Set its project name in server\/\.env/u,
+			);
+			await assert.rejects(readFile(paths.envFile, "utf8"));
 		});
 	});
 
 	await test("a name from the file or the shell wins and is not written", async () => {
 		await checkout(async (paths) => {
+			await mkdir(paths.dataDirectory);
+			await writeFile(path.join(paths.dataDirectory, "PG_VERSION"), "18");
 			await writeFile(paths.envFile, "COMPOSE_PROJECT_NAME=mine\n");
 			assert.equal(await ensureComposeProject({ ...paths, environment: {} }), "mine");
 			await writeFile(paths.envFile, "");
