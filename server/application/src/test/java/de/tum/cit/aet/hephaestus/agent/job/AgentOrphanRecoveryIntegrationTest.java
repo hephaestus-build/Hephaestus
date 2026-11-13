@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmittedResultFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackCompositionService;
@@ -1064,7 +1065,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                         SandboxTestLimits.PROPERTIES,
                         transactionTemplate,
                         objectMapper,
-                        telemetry),
+                        telemetry,
+                        context.getBean(JobEvidenceFiles.class)),
                 new ReviewJobTerminal(jobRepository, agentRuns, continuation),
                 reviewRuns,
                 new PracticeScriptRunRecorder(scriptReports, scriptRuns, meterRegistry, objectMapper, assignments),

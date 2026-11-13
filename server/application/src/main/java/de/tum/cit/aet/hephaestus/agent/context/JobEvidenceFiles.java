@@ -161,6 +161,104 @@ public class JobEvidenceFiles implements SandboxResultListener {
         this.attemptInputs = attemptInputs;
     }
 
+    /** The durable preparation checkpoint; the owning protocol is in the agent-runs guide. */
+    public enum Preparation {
+        NEW,
+        INTERRUPTED,
+        PUBLISHED,
+        UNAVAILABLE
+    }
+
+    /** Called under the preparation cluster lock, before any provider read or new capture. */
+    public Preparation preparation(ReviewJob job) {
+        JsonNode capture = job.getCapture();
+        boolean published = capture != null
+                && capture.path("attempt").asInt(-1) == job.getAttempt()
+                && job.getRunId().toString().equals(capture.path("runId").asString(null));
+        boolean recorded = !attemptInputs.list(job).isEmpty();
+        if (published && capture != null)
+            return recorded
+                            && !expired(capture)
+                            && personCopies.vouchesForLiveAttempt(job.getId(), job.getWorkspaceId(), job.getAttempt())
+                    ? Preparation.PUBLISHED
+                    : Preparation.UNAVAILABLE;
+        return recorded || personCopies.hasAttemptCapture(job) ? Preparation.INTERRUPTED : Preparation.NEW;
+    }
+
+    private boolean expired(JsonNode capture) {
+        return capture.path(COPIES_EXPIRE_AT).isString()
+                && !Instant.parse(capture.path(COPIES_EXPIRE_AT).asString()).isAfter(clock.instant());
+    }
+
+    /** Reuses exactly the frozen files; a resumed epoch never captures the providers again. */
+    public PreparedJobInputs resume(ReviewJob job) {
+        return personCopies.withLiveAttempt(job, () -> {
+            JsonNode capture = Objects.requireNonNull(job.getCapture());
+            var lease = acquireForRebuild(job);
+            Path root = directory(job);
+            try {
+                var recorded = attemptInputs.list(job);
+                if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) rebuild(job, root, capture, recorded);
+                var paths = new LinkedHashMap<String, Path>();
+                for (var file : recorded) {
+                    Path path = safePath(root, file.path());
+                    if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+                            || !path.toRealPath().startsWith(root.toRealPath()))
+                        throw new CheckoutUnverifiedException(
+                                CheckoutUnverifiedException.Reason.UNAVAILABLE, "A frozen input is unavailable");
+                    try (var content = Files.newInputStream(path)) {
+                        if (!file.sha256().equals(ProvenanceDigest.sha256Hex(content)))
+                            throw new CheckoutUnverifiedException(
+                                    CheckoutUnverifiedException.Reason.MISMATCH,
+                                    "A frozen input differs from its recorded digest");
+                    }
+                    if (!Files.getPosixFilePermissions(path)
+                            .equals(PosixFilePermissions.fromString(file.permissions())))
+                        throw new CheckoutUnverifiedException(
+                                CheckoutUnverifiedException.Reason.MISMATCH,
+                                "A frozen input differs from its recorded permissions");
+                    paths.put(file.path(), path);
+                }
+                var directories = new ArrayList<EvidenceDirectory>();
+                for (var target : capture.path("directories")) {
+                    String name = target.asString();
+                    Path checkout = safePath(root, name.substring(0, name.length() - 1));
+                    String expected = capture.path(CHECKOUTS).path(name).asString(null);
+                    if (expected == null
+                            || !checkoutDigest(checkout, SEARCH_PROOF_BYTES).equals(Optional.of(expected)))
+                        throw new CheckoutUnverifiedException(
+                                CheckoutUnverifiedException.Reason.MISMATCH,
+                                "A frozen checkout differs from its recorded content digest");
+                    directories.add(new EvidenceDirectory(
+                            name,
+                            checkout,
+                            CHECKOUT_KEY_READER.treeToValue(
+                                    capture.path(CHECKOUT_KEYS).path(name), CheckoutKey.class)));
+                }
+                var manifest = CHECKOUT_KEY_READER.treeToValue(capture.path("manifest"), JobFolderIndex.class);
+                var readiness = capture.path("readiness").isObject()
+                        ? CHECKOUT_KEY_READER.treeToValue(
+                                capture.path("readiness"), AutomatedReviewReadinessReport.class)
+                        : null;
+                Instant expiry = capture.path(COPIES_EXPIRE_AT).isString()
+                        ? Instant.parse(capture.path(COPIES_EXPIRE_AT).asString())
+                        : null;
+                if (expired(capture))
+                    throw new CheckoutUnverifiedException(
+                            CheckoutUnverifiedException.Reason.UNAVAILABLE, "The frozen inputs expired");
+                lease.shareWithRemovals();
+                return new PreparedJobInputs(
+                        paths, directories, List.of(() -> retire(job, root), lease), manifest, readiness, expiry);
+            } catch (IOException failure) {
+                lease.close();
+                throw new UncheckedIOException(failure);
+            } catch (RuntimeException | Error failure) {
+                lease.close();
+                throw failure;
+            }
+        });
+    }
+
     public void beginPersonCapture(ReviewJob job) {
         personCopies.beginCapture(job);
     }
@@ -955,8 +1053,8 @@ public class JobEvidenceFiles implements SandboxResultListener {
 
     /**
      * Keeps the native session transcripts of an admitted upload beside the attempt folder for a day. Only while the
-     * job is still owned as the attempt that was launched, only by the runtime that holds that attempt's lease, and only
-     * for its READY receipt in this store. A receipt that cannot index every copied dependency keeps a summary the
+     * job is still owned as the attempt that was launched, only while copy admission and the local folder lease protect
+     * its READY receipt in this store. A receipt that cannot index every copied dependency keeps a summary the
      * server rebuilds itself, marked METADATA_ONLY. Never throws into the upload, and never changes the job's status.
      */
     private void keepTranscript(LaunchedAttempt launched, Map<String, byte[]> files) {
@@ -968,14 +1066,13 @@ public class JobEvidenceFiles implements SandboxResultListener {
         if (traces.isEmpty()) return;
         try {
             // A delayed upload of an earlier attempt finds the job requeued under another attempt or owner.
-            boolean owned = jobs.findByIdAndWorkspaceId(launched.jobId(), launched.workspaceId())
+            var owned = jobs.findByIdAndWorkspaceId(launched.jobId(), launched.workspaceId())
                     .filter(job -> job.getAttempt() == launched.attempt()
-                            && launched.runId().equals(job.getRunId()))
-                    .isPresent();
-            if (!owned) return;
+                            && launched.runId().equals(job.getRunId()));
+            if (owned.isEmpty()) return;
             Path root = directory(launched.workspaceId(), launched.jobId(), launched.attempt(), launched.runId());
             Path trace = root.resolveSibling(root.getFileName() + TRACE_SUFFIX);
-            EvidenceFolderLease.writeAsRuntime(layout.root(), launched.workspaceId(), launched.jobId(), () -> {
+            writeTranscript(owned.get(), () -> {
                 var custody = personCopies.traceCustody(launched.jobId(), launched.workspaceId(), launched.attempt());
                 if (custody == EvidenceFolderPersonDataCatalog.TraceCustody.NOT_HELD
                         || Files.exists(trace, LinkOption.NOFOLLOW_LINKS)) return;
@@ -1032,12 +1129,23 @@ public class JobEvidenceFiles implements SandboxResultListener {
                     if (Files.exists(staging, LinkOption.NOFOLLOW_LINKS)) delete(staging);
                 }
             });
-        } catch (IOException | RuntimeException exception) {
+        } catch (RuntimeException exception) {
             log.warn(
                     "Could not keep the review transcript of job {}: {}",
                     launched.jobId(),
                     exception.getClass().getSimpleName());
         }
+    }
+
+    /** Copy admission precedes the local folder lock, as it does during restoration and erasure. */
+    private void writeTranscript(ReviewJob job, EvidenceFolderLease.Removal write) {
+        personCopies.withLiveAttempt(job, () -> {
+            try {
+                return EvidenceFolderLease.removeAsOwner(layout.root(), job.getWorkspaceId(), job.getId(), write);
+            } catch (IOException failure) {
+                throw new UncheckedIOException(failure);
+            }
+        });
     }
 
     /** The sandbox cannot enlarge debug retention beyond the collector's declared limits. */

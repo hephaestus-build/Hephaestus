@@ -486,6 +486,67 @@ A review's `REVIEW` run is measured in the review's own sandbox (`ReviewSandboxR
    The kind first empties `/workspace`. Thus, a requeued attempt that the same sandbox pulls starts from its own captured workspace, not from the files that an earlier attempt left in `/workspace`.
 5. The runner's result arrives at `…/runs/{runId}/runtime/result`, with the runner's exit. `ReviewAttemptResults` then ends the attempt, requeues it, or hands an admitted review on to its `REVIEW_COMPOSE` run (`ReviewRunKind.continueToCompose`), which the same sandbox pulls next.
 
+### Review preparation recovery
+
+ADR [0079](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md) keeps the sandbox as the lease writer.
+A server restart does not assign a new epoch by itself.
+`JobEvidenceFiles.Preparation` classifies the durable checkpoint before a replica prepares the attempt.
+One `ClusterLock` serializes this work by workspace, run and epoch.
+The PostgreSQL session releases that lock if the server dies.
+No database transaction stays open while a provider is read.
+
+| Checkpoint | Durable proof | Next action |
+| --- | --- | --- |
+| `NEW` | No input rows or copy receipt for the attempt | Capture once |
+| `INTERRUPTED` | Capture began, but its files, READY receipt and attempt-bound provenance did not all publish | Requeue through `ReviewRunKind`. The next claim assigns a fresh epoch |
+| `PUBLISHED` | Frozen files, a live READY receipt and provenance for this run and attempt | Restore the same snapshot and verify its digests |
+| `UNAVAILABLE` | Published provenance remains, but its files or receipt no longer vouch for the snapshot | Fail closed |
+
+```mermaid
+stateDiagram-v2
+    accTitle: Review preparation checkpoints across server restarts
+    accDescr: A new attempt captures once. Complete publication can be restored on any replica. Interrupted publication requires a new fenced epoch. Erased or expired inputs cannot be reused.
+    [*] --> NEW
+    NEW --> INTERRUPTED: capture begins
+    INTERRUPTED --> PUBLISHED: the original capture publishes files, receipt and provenance
+    INTERRUPTED --> [*]: requeue for a fresh epoch
+    PUBLISHED --> PUBLISHED: verify and restore on another replica
+    PUBLISHED --> UNAVAILABLE: inputs or custody are lost
+    UNAVAILABLE --> [*]: fail closed
+```
+
+A replica never inserts a second snapshot under the same immutable input keys.
+It checks each recorded file path, digest and permission set before reuse.
+A conflicting local file is rejected without an overwrite.
+Temporary preparation contention returns HTTP 503 with `Retry-After` and does not change the claim.
+It checks each checkout's content digest and the runner program digest before it serves a restored workspace.
+The checkpoint stores the image, command, stable environment and input scaffolding, with their program digest.
+Credentials and request trace context are separate from that identity.
+Git pack files and index metadata are rebuilt, so the original full snapshot digest remains provenance.
+It is not recomputed from those transport bytes.
+The existing checkout key pins the commit and tree.
+The capture's branch and tag inventory stays a recorded file.
+A replica reuses that published program even if a deploy changes its live runner settings.
+Erasure holds the existing copy fence against restoration.
+Preparation reads its start from the database clock after capture.
+It builds the credential and spec before it commits that start with the frozen Program.
+A credential is not exposed before that transaction commits.
+A failure before publication stays a preparation failure.
+The persisted start fixes the signed work deadline on every replica.
+Recovery does not reset it.
+If a publication reply is lost, a direct database read resolves the outcome.
+A committed Program returns HTTP 503 so the same claim can restore it.
+A confirmed rollback records the stage and cause.
+An unreadable outcome returns HTTP 503 without a terminal write.
+The published checkpoint also keeps the ended-practice count from before execution.
+A result that reaches a cold replica uses that baseline and the normal result-admission guards.
+It does not prepare a workspace or capture inputs again.
+Transcript retention takes copy admission before a short local folder lease.
+A cold replica can keep the admitted transcript without restoring the workspace.
+An erased receipt permits no write.
+Proxy routing reads that start from PostgreSQL and does not depend on a replica's preparation cache.
+Custody cleanup removes the local cache entry with its folder and gateway session, including on replicas that did not receive the result.
+
 ## Turns
 
 `TurnRunKind` is the handler of conversation turns. A turn's run uses its conversation as its subject: `conversation:<id>`. The conversation's sandbox uses the same subject.

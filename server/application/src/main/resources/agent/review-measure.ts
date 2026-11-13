@@ -9,6 +9,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync, symlinkSync } from "node:fs";
 import { chmod, lstat, readdir, rm } from "node:fs/promises";
 import path from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import type { KindRunner, RunContext, RunOutcome } from "./driver.ts";
 
@@ -141,16 +142,51 @@ async function removeTree(target: string): Promise<void> {
 	await rm(target, { recursive: true, force: true });
 }
 
+/** The descriptor GET is replayable; a busy or restarting replica must not hand a still-leased run back. */
+export async function readMeasureContext(
+	run: RunContext,
+	transport: typeof globalThis.fetch = globalThis.fetch,
+): Promise<MeasureContext | null> {
+	const { signal } = run;
+	const base = `${run.gateway.url}/internal/agent/runs/${run.assignment.runId}`;
+	for (;;) {
+		signal.throwIfAborted();
+		try {
+			const answer = await transport(`${base}/context`, { headers: run.gateway.headers, signal });
+			if (answer.status === 409) {
+				await answer.body?.cancel();
+				return null;
+			}
+			if ([425, 429, 503].includes(answer.status)) {
+				const retryAfter = answer.headers.get("retry-after");
+				const seconds = retryAfter === null ? Number.NaN : Number(retryAfter);
+				await answer.body?.cancel();
+				await sleep(Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : 1000, undefined, {
+					signal,
+				});
+				continue;
+			}
+			if (!answer.ok) {
+				await answer.body?.cancel();
+				throw new Error(`the measurement context answered ${String(answer.status)}`);
+			}
+			return parseMeasureContext(await answer.json());
+		} catch (error) {
+			if (signal.aborted || !(error instanceof TypeError)) {
+				throw error;
+			}
+			await sleep(1000, undefined, { signal });
+		}
+	}
+}
+
 /** The REVIEW kind: it measures the review, and the server admits what the upload brings. */
 export const measureReview: KindRunner = async (run): Promise<RunOutcome> => {
 	const { signal } = run;
-	const base = `${run.gateway.url}/internal/agent/runs/${run.assignment.runId}`;
-	const answer = await fetch(`${base}/context`, { headers: run.gateway.headers, signal });
-	if (!answer.ok) {
-		await answer.body?.cancel();
-		throw new Error(`the measurement context answered ${String(answer.status)}`);
+	const context = await readMeasureContext(run);
+	if (context === null) {
+		return { leaseLost: true };
 	}
-	const context = parseMeasureContext(await answer.json());
 	const env = measureEnvironment(run, context);
 	// A sandbox also serves its review's next attempt. Each attempt's /workspace starts from its own captured workspace,
 	// as each review Job's empty volume did, never from what an earlier attempt extracted or wrote there.

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -38,6 +39,37 @@ class SandboxGatewaySessionsTest {
     Path temporary;
 
     private final SandboxGatewaySessions sessions = new SandboxGatewaySessions();
+
+    @Test
+    void shouldReceiveAColdReplicasResultWithoutAnInputArchive() throws Exception {
+        var job = new ReviewJob();
+        job.setId(UUID.randomUUID());
+        byte[] result = resultTar();
+        var upload =
+                sessions.receiveAttempt(job, "agent:test", new ByteArrayInputStream(result), contentDigest(result));
+        assertThat(upload.files()).containsOnlyKeys("observations.json");
+        assertThat(upload.etag()).isEqualTo(etag(result));
+        assertThat(sessions.jobIds()).isEmpty();
+    }
+
+    @Test
+    void shouldVerifyTheResultDigestBeforeKeepingAnyListenerCopy() throws Exception {
+        var told = new ArrayList<Map<String, byte[]>>();
+        var receiver = new SandboxGatewaySessions(
+                SandboxGatewaySessions.WORKSPACE_BYTE_BUDGET, List.of((jobId, attempt, image) -> told::add));
+        var job = new ReviewJob();
+        job.setId(UUID.randomUUID());
+        byte[] result = resultTar();
+        String wrongDigest = contentDigest(new byte[0]);
+        assertThatThrownBy(
+                        () -> receiver.receiveAttempt(job, "agent:test", new ByteArrayInputStream(result), wrongDigest))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        refused -> assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+        assertThat(told).isEmpty();
+        receiver.receiveAttempt(job, "agent:test", new ByteArrayInputStream(result), contentDigest(result));
+        assertThat(told).singleElement().satisfies(files -> assertThat(files).containsOnlyKeys("observations.json"));
+    }
 
     @Test
     void shouldServeOnlyFrozenSelectedBytesAndRetryWithoutSpendingAgain() throws Exception {

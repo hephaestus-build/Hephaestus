@@ -65,6 +65,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
+import org.apache.commons.io.FileUtils;
 import org.eclipse.jgit.api.Git;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
@@ -90,6 +92,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                 EvidenceFolderPersonDataCatalog.class,
                 invocation -> switch (invocation.getMethod().getName()) {
                     case "finishCapture" -> released;
+                    case "withLiveAttempt" -> ((Supplier<?>) invocation.getArgument(1)).get();
                     case "removeErasedFolders" -> new EvidenceFolderPersonDataCatalog.ErasedFolders(0, 0);
                     default -> Answers.RETURNS_DEFAULTS.answer(invocation);
                 });
@@ -111,6 +114,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
 
     @Test
     void refusesAnOversizedDiskFolderBeforeCopyingAndReleasesRenderScratch() throws Exception {
+        assertThat(JobEvidenceFiles.SEARCH_PROOF_BYTES)
+                .isGreaterThanOrEqualTo(SandboxGatewaySessions.WORKSPACE_BYTE_BUDGET);
         Path oversized = root.resolve("oversized");
         try (var output = FileChannel.open(oversized, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
             output.position(SandboxGatewaySessions.WORKSPACE_BYTE_BUDGET);
@@ -1103,7 +1108,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldWriteNoTranscriptOutsideTheRuntimeLeaseAndNeverFailTheUpload() throws Exception {
+    void shouldKeepATranscriptOnAColdReplicaAndNeverFailTheUpload() throws Exception {
         var layout = new FabricLayout(root.toString());
         var copies = personCopies();
         var job = launched();
@@ -1112,9 +1117,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var upload = files.bind(job.getId(), 0, IMAGE);
 
         upload.accept(TRACED_UPLOAD);
-        assertThat(traceOf(layout, job, 0))
-                .as("the runtime no longer holds the attempt")
-                .doesNotExist();
+        assertThat(traceOf(layout, job, 0).resolve("0001.jsonl")).exists();
+        FileUtils.deleteDirectory(traceOf(layout, job, 0).toFile());
 
         when(copies.traceCustody(job.getId(), 1L, 0)).thenThrow(new IllegalStateException("receipts unavailable"));
         var lease = runtimeLease(layout, job);

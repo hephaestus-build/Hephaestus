@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -13,12 +15,13 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
+import de.tum.cit.aet.hephaestus.agent.context.AttemptFolderBusyException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewAttemptCustody;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
-import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
+import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
@@ -28,20 +31,29 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
+import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.MDC;
+import org.springframework.http.HttpStatus;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.ErrorResponseException;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -49,16 +61,29 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
     @TempDir
     Path root;
 
+    private static ClusterLock preparationLocks() {
+        var locks = mock(ClusterLock.class);
+        when(locks.call(anyString(), any(), any())).thenAnswer(invocation -> {
+            Supplier<?> prepare = invocation.getArgument(2);
+            return Optional.of(prepare.get());
+        });
+        return locks;
+    }
+
     @Test
     void shouldRemoveTheGatewayArchiveBeforeReleasingTheAttemptsInputFolder() throws Exception {
         var mapper = JsonMapper.builder().build();
         var runs = mock(AgentRuns.class);
+        when(runs.isCurrent(any(), eq(1))).thenReturn(true);
         var custody = new ReviewAttemptCustody(runs);
         var jobs = mock(ReviewJobRepository.class);
         var preparation = mock(ReviewAttemptPreparation.class);
         var workspaces = mock(SandboxWorkspaceManager.class);
         var sessions = new SandboxGatewaySessions();
         var transactions = mock(TransactionTemplate.class);
+        var terminal = mock(ReviewJobTerminal.class);
+        var results = mock(ReviewAttemptResults.class);
+        var reviewRuns = mock(ReviewRunKind.class);
         UUID jobId = UUID.randomUUID();
         var fence = new AgentRunFence(UUID.randomUUID(), 7, 1);
         var job = new ReviewJob();
@@ -101,34 +126,45 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                 null);
         var spec = mock(SandboxSpec.class);
         when(spec.image()).thenReturn("agent:test");
-        when(preparation.prepare(eq(jobId), eq(job), eq(fence), any(), any()))
-                .thenReturn(new ReviewAttemptPreparation.PreparedSandbox(spec, inputs));
-        when(transactions.execute(any())).thenReturn(1);
+
+        when(spec.workDeadline()).thenReturn(Instant.now().plusSeconds(600));
         when(workspaces.createInputTar(any(), anyMap(), anyMap(), anyList())).thenReturn(archive);
         var runtime = new ReviewSandboxRuns(
                 mock(ReviewJobClaimService.class),
                 preparation,
                 custody,
-                mock(ReviewJobTerminal.class),
+                terminal,
                 jobs,
                 workspaces,
                 sessions,
                 transactions,
                 mapper,
-                mock(DefaultReviewExecutionHandler.class),
-                mock(ReviewAttemptResults.class),
-                mock(ReviewRunKind.class),
+                results,
+                reviewRuns,
                 runs,
-                mock(JobEvidenceFiles.class));
+                mock(JobEvidenceFiles.class),
+                preparationLocks());
         var sandbox = new AgentSandboxes.LiveSandbox(
                 UUID.randomUUID(), 7, "review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW);
         var run = new SandboxRun(sandbox, fence, AgentRunKind.REVIEW, 0);
 
+        when(preparation.prepare(eq(jobId), eq(job), eq(fence), any(), any()))
+                .thenThrow(new AttemptFolderBusyException("Another local request holds the folder"));
+        assertThatThrownBy(() -> runtime.context(run)).isInstanceOfSatisfying(ErrorResponseException.class, busy -> {
+            assertThat(busy.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+            assertThat(busy.getHeaders().getFirst("Retry-After")).isEqualTo("1");
+        });
+        verifyNoInteractions(terminal, results, reviewRuns, transactions, runs, workspaces);
+        when(preparation.prepare(eq(jobId), eq(job), eq(fence), any(), any()))
+                .thenReturn(new ReviewAttemptPreparation.PreparedSandbox(spec, inputs));
         runtime.context(run);
         var session = runtime.session(run);
         assertThat(archive).exists();
         assertThat(copiedPerson).exists();
-        custody.releaseJob(jobId);
+        custody.releaseEnded();
+        when(preparation.prepare(eq(jobId), eq(job), eq(fence), any(), any()))
+                .thenThrow(new ResultAdmissionService.StaleAttemptException());
+        assertThatThrownBy(() -> runtime.context(run)).isInstanceOf(StaleRunException.class);
 
         assertThat(archive).doesNotExist();
         assertThat(copiedPerson).doesNotExist();
@@ -136,37 +172,69 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldEndAResultWhoseAttemptThisReplicaDidNotPrepareWithoutPreparingIt() {
+    void shouldReleaseAnInterruptedPreparationWithoutWaitingForItsOwnCacheLoad() {
+        var mapper = new JsonMapper();
         var jobs = mock(ReviewJobRepository.class);
-        var preparation = mock(ReviewAttemptPreparation.class);
         var fence = new AgentRunFence(UUID.randomUUID(), 7, 1);
         var job = new ReviewJob();
         job.setId(UUID.randomUUID());
         job.setWorkspaceId(7);
         job.setRunId(fence.runId());
         job.setReviewId(UUID.randomUUID());
+        job.setConfigSnapshot(new ConfigSnapshot(
+                        ConfigSnapshot.SCHEMA_VERSION,
+                        new FrozenModel(
+                                LlmApiProtocol.OPENAI_COMPLETIONS,
+                                "https://model.invalid/v1",
+                                "model",
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                false),
+                        null,
+                        null,
+                        600)
+                .toJson(mapper));
         when(jobs.findByRunIdAndWorkspaceId(fence.runId(), 7)).thenReturn(Optional.of(job));
+        var preparation = mock(ReviewAttemptPreparation.class);
+        when(preparation.prepare(any(), any(), any(), any(), any()))
+                .thenThrow(new ReviewAttemptPreparation.FreshEpochRequired());
+        var reviewRuns = mock(ReviewRunKind.class);
+        when(reviewRuns.requeue(any(), any(), any(), any(), any())).thenReturn(true);
+        var transactions = mock(TransactionTemplate.class);
+        doAnswer(invocation -> {
+                    Consumer<TransactionStatus> action = invocation.getArgument(0);
+                    action.accept(mock(TransactionStatus.class));
+                    return null;
+                })
+                .when(transactions)
+                .executeWithoutResult(any());
+        var runs = mock(AgentRuns.class);
         var runtime = new ReviewSandboxRuns(
                 mock(ReviewJobClaimService.class),
                 preparation,
-                mock(ReviewAttemptCustody.class),
+                new ReviewAttemptCustody(runs),
                 mock(ReviewJobTerminal.class),
                 jobs,
                 mock(SandboxWorkspaceManager.class),
                 new SandboxGatewaySessions(),
-                mock(TransactionTemplate.class),
-                JsonMapper.builder().build(),
-                mock(DefaultReviewExecutionHandler.class),
+                transactions,
+                mapper,
                 mock(ReviewAttemptResults.class),
-                mock(ReviewRunKind.class),
-                mock(AgentRuns.class),
-                mock(JobEvidenceFiles.class));
+                reviewRuns,
+                runs,
+                mock(JobEvidenceFiles.class),
+                preparationLocks());
         var sandbox = new AgentSandboxes.LiveSandbox(
                 UUID.randomUUID(), 7, ReviewRunKind.subject(job.getReviewId()), AgentSandboxKind.REVIEW);
         var run = new SandboxRun(sandbox, fence, AgentRunKind.REVIEW, 0);
-
-        assertThatThrownBy(() -> runtime.preparedSession(run)).isInstanceOf(StaleRunException.class);
-        verifyNoInteractions(preparation);
+        Assertions.assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
+            assertThatThrownBy(() -> runtime.context(run)).isInstanceOf(StaleRunException.class);
+        });
     }
 
     @ParameterizedTest
@@ -203,11 +271,11 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                 new SandboxGatewaySessions(),
                 mock(TransactionTemplate.class),
                 JsonMapper.builder().build(),
-                mock(DefaultReviewExecutionHandler.class),
                 mock(ReviewAttemptResults.class),
                 reviewRuns,
                 mock(AgentRuns.class),
-                mock(JobEvidenceFiles.class));
+                mock(JobEvidenceFiles.class),
+                mock(ClusterLock.class));
         var sandbox = new AgentSandboxes.LiveSandbox(
                 UUID.randomUUID(), 7, ReviewRunKind.subject(job.getReviewId()), AgentSandboxKind.REVIEW);
         var run = new SandboxRun(sandbox, fence, AgentRunKind.REVIEW, 0);

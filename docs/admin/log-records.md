@@ -183,6 +183,7 @@ These are fields, not metric labels.
 
 | `event.name` | Emitted when | Fields |
 | --- | --- | --- |
+| `agent.review.preparation_restarted` | A replica finds an interrupted publication and requeues it for a fresh epoch | `run.id`, `run.epoch`, `subject.key`, `workspace.id`, `review.id`, `job.id`, `job.attempt` |
 | `agent.run.continued` | The reaper replaces an expired composition run and relinks its review in one transaction | `run.id`, `run.epoch`, `subject.key`, `workspace.id`, `run.kind`, `run.next_id` |
 | `agent.run.requeued` | The reaper takes back an expired lease, and the run has retries left | `run.id`, `run.epoch`, `subject.key`, `workspace.id`, `run.kind` |
 | `agent.run.ended` | The reaper ends a run: its lease expired at its retry limit, or it passed its deadline | The same, and `run.stop_reason` |
@@ -191,6 +192,11 @@ These are fields, not metric labels.
 | `action.result.late` | An attempt ended after another claim took its action, or after an erasure deleted it. Its result changes nothing | `action.id`, `action.kind`, `action.attempt`, and `workspace.id` when the action has a workspace |
 | `action.ended.uncertain` | An action ended `UNCERTAIN`: its write may have reached the provider, and nothing confirms it | `action.id`, `action.kind`, `action.reason`, and `workspace.id` when the action has a workspace |
 | `action.batch.outlived` | Outbox attempts of one replica ran longer than their lease. They keep running, and their late results change nothing | `action.claims` |
+
+If `agent.review.preparation_restarted` repeats for one review, check server restarts, deploys and capture-stage failures.
+The old snapshot stays immutable.
+Do not delete or rewrite its input rows to force it through.
+The [preparation protocol](/contributor/agent-runs#review-preparation-recovery) owns the recovery rule.
 
 An outbox event names no person and no payload.
 An account email has no workspace, so its events have no `workspace.id`.

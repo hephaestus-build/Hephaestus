@@ -80,8 +80,22 @@ public class SandboxGatewaySessions {
      */
     public Session registerAttempt(
             UUID jobId, int attempt, String image, String token, Path inputTar, String outputRoot) throws IOException {
+        return register(jobId, token, inputTar, outputRoot, bind(jobId, attempt, image));
+    }
+
+    /** A result is admitted by the domain fence, without recreating its input archive on this replica. */
+    public ReceivedResult receiveAttempt(ReviewJob job, String image, InputStream input, String contentDigest)
+            throws IOException {
+        var uploaded = readUpload(input, contentDigest, "out");
+        notifyUploaded(job.getId(), bind(job.getId(), job.getAttempt(), image), uploaded.files());
+        return uploaded;
+    }
+
+    public record ReceivedResult(Map<String, byte[]> files, String etag) {}
+
+    private List<Consumer<Map<String, byte[]>>> bind(UUID jobId, int attempt, String image) {
         var bound = new ArrayList<Consumer<Map<String, byte[]>>>();
-        for (SandboxResultListener listener : listeners) {
+        for (var listener : listeners) {
             try {
                 bound.add(listener.bind(jobId, attempt, image));
             } catch (RuntimeException exception) {
@@ -91,7 +105,32 @@ public class SandboxGatewaySessions {
                         exception.getClass().getSimpleName());
             }
         }
-        return register(jobId, token, inputTar, outputRoot, bound);
+        return bound;
+    }
+
+    private static void notifyUploaded(
+            UUID id, List<Consumer<Map<String, byte[]>>> listeners, Map<String, byte[]> files) {
+        for (var listener : listeners) {
+            try {
+                listener.accept(files);
+            } catch (RuntimeException exception) {
+                log.warn(
+                        "A result listener failed for session {}: {}",
+                        id,
+                        exception.getClass().getSimpleName());
+            }
+        }
+    }
+
+    private static ReceivedResult readUpload(InputStream input, String contentDigest, String outputRoot)
+            throws IOException {
+        byte[] expected = Session.parseDigest(contentDigest);
+        var digest = Session.sha256();
+        var files = Map.copyOf(new SandboxOutputArchive().read(new DigestInputStream(input, digest), outputRoot));
+        byte[] actual = digest.digest();
+        if (!MessageDigest.isEqual(expected, actual))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Result digest does not match its body");
+        return new ReceivedResult(files, Session.etag(actual));
     }
 
     private Session register(
@@ -156,7 +195,7 @@ public class SandboxGatewaySessions {
         private boolean closed;
         private boolean uploading;
         private @Nullable Map<String, byte[]> result;
-        private byte @Nullable [] resultDigest;
+        private @Nullable String resultEtag;
         private final List<Consumer<Map<String, byte[]>>> admitted;
 
         private Session(
@@ -253,7 +292,6 @@ public class SandboxGatewaySessions {
         public record UploadResult(boolean admitted, String etag) {}
 
         public UploadResult upload(InputStream input, String contentDigest) throws IOException {
-            byte[] expectedDigest = parseDigest(contentDigest);
             synchronized (this) {
                 if (closed) {
                     throw new ResponseStatusException(HttpStatus.NOT_FOUND);
@@ -264,35 +302,22 @@ public class SandboxGatewaySessions {
                 uploading = true;
             }
             try {
-                var digest = sha256();
-                var files =
-                        Map.copyOf(new SandboxOutputArchive().read(new DigestInputStream(input, digest), outputRoot));
-                byte[] actualDigest = digest.digest();
-                if (!MessageDigest.isEqual(expectedDigest, actualDigest)) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Result digest does not match its body");
-                }
+                var uploaded = readUpload(input, contentDigest, outputRoot);
+                var files = uploaded.files();
+                String actualEtag = uploaded.etag();
                 synchronized (this) {
                     if (closed) {
                         throw new ResponseStatusException(HttpStatus.NOT_FOUND);
                     }
-                    if (resultDigest != null) {
-                        return new UploadResult(false, etag(resultDigest));
+                    if (resultEtag != null) {
+                        return new UploadResult(false, resultEtag);
                     }
                     result = files;
-                    resultDigest = actualDigest;
+                    resultEtag = actualEtag;
                 }
-                // Before the sandbox is answered, so whatever a listener keeps exists before the attempt can end.
-                for (var listener : admitted) {
-                    try {
-                        listener.accept(files);
-                    } catch (RuntimeException exception) {
-                        log.warn(
-                                "A result listener failed for session {}: {}",
-                                id,
-                                exception.getClass().getSimpleName());
-                    }
-                }
-                return new UploadResult(true, etag(actualDigest));
+                // Before the sandbox is answered, so listener copies exist before its domain end.
+                notifyUploaded(id, admitted, files);
+                return new UploadResult(true, actualEtag);
             } finally {
                 synchronized (this) {
                     uploading = false;
@@ -346,7 +371,7 @@ public class SandboxGatewaySessions {
             }
             selections.clear();
             result = null;
-            resultDigest = null;
+            resultEtag = null;
             sessions.remove(id, this);
         }
     }

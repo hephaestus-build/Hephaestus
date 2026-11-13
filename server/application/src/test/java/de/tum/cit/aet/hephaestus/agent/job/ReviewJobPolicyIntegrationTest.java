@@ -56,6 +56,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
+import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
@@ -774,11 +775,11 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 mock(SandboxGatewaySessions.class),
                 transactions,
                 mapper,
-                mock(DefaultReviewExecutionHandler.class),
                 mock(ReviewAttemptResults.class),
                 reviewRuns,
                 agentRuns,
-                mock(JobEvidenceFiles.class));
+                mock(JobEvidenceFiles.class),
+                mock(ClusterLock.class));
         String subject = Objects.requireNonNull(
                 jdbc.queryForObject("SELECT concurrency_key FROM agent_run WHERE id=?", String.class, job.getRunId()));
 

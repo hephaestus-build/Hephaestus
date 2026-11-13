@@ -80,15 +80,9 @@ public class ReviewSandboxController {
             HttpServletRequest request,
             HttpServletResponse response) {
         current(run);
-        var session = reviews.preparedSession(run);
         try {
-            var upload = session.upload(request.getInputStream(), contentDigest);
-            if (!upload.admitted()) {
-                response.setHeader("ETag", upload.etag());
-                response.setStatus(HttpStatus.CONFLICT.value());
-                return;
-            }
-            reviews.measured(run, new SandboxResult(exitCode, session.result(), "", timedOut, Duration.ZERO));
+            var upload = reviews.receive(run, request.getInputStream(), contentDigest);
+            reviews.measured(run, new SandboxResult(exitCode, upload.files(), "", timedOut, Duration.ZERO));
             // Only now: the runner reads a 409 with this ETag as confirmed, and an error answer keeps the headers.
             response.setHeader("ETag", upload.etag());
             response.setStatus(HttpStatus.NO_CONTENT.value());

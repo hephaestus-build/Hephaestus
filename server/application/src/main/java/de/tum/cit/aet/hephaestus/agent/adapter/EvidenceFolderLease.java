@@ -89,15 +89,6 @@ public final class EvidenceFolderLease implements AutoCloseable {
         return true;
     }
 
-    /**
-     * Runs a write of the attempt's debug transcript under this JVM's shared runtime lease only. False when this JVM
-     * no longer runs the attempt: then an erasure or a sweep may own the job's folders, and nothing is written.
-     */
-    public static boolean writeAsRuntime(Path store, long workspaceId, UUID jobId, Removal write) throws IOException {
-        var local = LOCAL.get(lockFile(store, workspaceId, jobId));
-        return local != null && local.removeIfShared(write);
-    }
-
     /** Called once the capture's folder is published: admission and retirement may then remove it. */
     public void shareWithRemovals() {
         guard.lock();
