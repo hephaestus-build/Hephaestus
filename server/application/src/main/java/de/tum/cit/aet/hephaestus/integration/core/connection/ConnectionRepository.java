@@ -12,6 +12,7 @@ import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.NativeQuery;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -89,6 +90,21 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     }
 
     List<Connection> findByWorkspaceIdAndState(long workspaceId, IntegrationState state);
+
+    String ACTIVE_INSTALLATION_SNAPSHOT_SQL = """
+        SELECT c.id, c.workspace_id, c.lifecycle_generation, c.version
+        FROM connection c JOIN workspace w ON w.id=c.workspace_id
+        WHERE c.kind='GITHUB' AND c.state='ACTIVE' AND c.instance_key=:instanceKey
+          AND c.config->>'type'='GITHUB_APP' AND w.status='ACTIVE'
+        """;
+
+    /** The JSON discriminator repeats the partial installation-ownership index predicate. No credentials are read. */
+    @WorkspaceAgnostic(
+            "Installation reconciliation captures its current workspace and revalidates that exact connection before writes")
+    @NativeQuery(ACTIVE_INSTALLATION_SNAPSHOT_SQL)
+    Optional<InstallationSnapshot> findActiveInstallationSnapshot(@Param("instanceKey") String instanceKey);
+
+    record InstallationSnapshot(Long connectionId, Long workspaceId, long lifecycleGeneration, Long version) {}
 
     @Query("""
         SELECT new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository$WorkspaceMetadataRow(

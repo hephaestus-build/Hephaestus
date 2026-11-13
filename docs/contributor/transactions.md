@@ -41,6 +41,10 @@ Spring: "self-invocation (in effect, a method within the target object calling a
 - Call a model, GitHub, GitLab, Slack, Outline, Kubernetes or SMTP only when no transaction is active.
 - Use this sequence: read in a short transaction, call with no transaction, then write in a short transaction.
   The write checks the state again with a row lock or a compare-and-set.
+  GitHub installation enumeration captures the owning connection and its generation first.
+  After the provider answers, it locks the workspace and connection in that order and rejects an earlier generation.
+  A pause followed by resume still invalidates the earlier answer.
+  It also compares the captured monitor list, so a provider removal that committed during the call cannot be undone by that answer.
 - If a row lock must stay across a call, record the reason in an ADR.
   `GitLabTokenLifecycleService` holds such a lock.
   Provider removal uses the separate capture, dispatch and settle transactions in [ADR 0101](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0101-a-connection-cannot-adopt-an-upstream-resource-whose-removal-is-unresolved.md).

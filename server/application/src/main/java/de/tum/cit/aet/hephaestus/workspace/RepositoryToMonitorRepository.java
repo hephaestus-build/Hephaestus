@@ -54,6 +54,15 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
 
     List<RepositoryToMonitor> findByWorkspaceId(Long workspaceId);
 
+    @Query("""
+        SELECT new de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository$MonitorSnapshot(
+               m.id, m.nativeId, m.nameWithOwner)
+        FROM RepositoryToMonitor m WHERE m.workspace.id=:workspaceId ORDER BY m.id
+        """)
+    List<MonitorSnapshot> findSnapshotsByWorkspaceId(@Param("workspaceId") Long workspaceId);
+
+    record MonitorSnapshot(Long id, Long nativeId, String nameWithOwner) {}
+
     @Modifying
     @Transactional
     @WorkspaceAgnostic("Keyed by the sync target id of the sync run that records its own error")

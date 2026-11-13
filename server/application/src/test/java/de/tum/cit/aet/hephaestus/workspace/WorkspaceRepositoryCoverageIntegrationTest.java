@@ -37,6 +37,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.workspace.RepositoryProviderNot
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.ScmWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceRepositoryMonitorService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.QueryPlans;
 import de.tum.cit.aet.hephaestus.testconfig.StubInstallationRepositoryEnumerator;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceSyncTargetProvider;
@@ -55,10 +56,12 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.http.HttpHeaders;
@@ -67,7 +70,9 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -76,6 +81,9 @@ import reactor.core.publisher.Mono;
 class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private Environment environment;
 
     private static final long INSTALLATION_ID = 9912345L;
 
@@ -164,6 +172,169 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
                                         new ClassPathResource(
                                                 GitHubGraphQlFragments.COMMIT_ENRICHMENT_FIELDS_RESOURCE))))
                         .build());
+    }
+
+    @Test
+    void shouldReadOnlyTheActiveInstallationFenceWithAnIndexedGenericPlan() {
+        Workspace workspace = persistWorkspace(RepositorySelection.ALL);
+        Connection connection = connectionRepository
+                .findActive(workspace.getId(), IntegrationKind.GITHUB)
+                .orElseThrow();
+        var captured = connectionRepository
+                .findActiveInstallationSnapshot(Long.toString(INSTALLATION_ID))
+                .orElseThrow();
+        assertThat(captured.connectionId()).isEqualTo(connection.getId());
+        assertThat(captured.workspaceId()).isEqualTo(workspace.getId());
+        assertThat(captured.lifecycleGeneration()).isEqualTo(connection.getLifecycleGeneration());
+        assertThat(captured.version()).isEqualTo(connection.getVersion());
+        assertThat(
+                        new QueryPlans(environment)
+                                .fullScans(
+                                        List.of(
+                                                ConnectionRepository.ACTIVE_INSTALLATION_SNAPSHOT_SQL.replace(
+                                                        ":instanceKey", "?"),
+                                                "SELECT id,native_id,name_with_owner FROM repository_to_monitor WHERE workspace_id=? ORDER BY id")))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldApplyInstallationEnumerationWithoutHoldingADatabaseTransaction() {
+        Workspace workspace = persistWorkspace(RepositorySelection.ALL);
+        repositoryEnumerator.answers(id -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive())
+                    .isFalse();
+            return List.of(snapshot(92L, "HephaestusTest/outside-transaction", "outside-transaction", true));
+        });
+
+        workspaceRepositoryMonitorService.ensureAllInstallationRepositoriesCovered(INSTALLATION_ID, null, true);
+
+        assertThat(repositoryToMonitorRepository.findByWorkspaceId(workspace.getId()))
+                .extracting(RepositoryToMonitor::getNativeId)
+                .containsExactly(92L);
+    }
+
+    @Test
+    void shouldNotRestoreRepositoriesRemovedByAProviderEventWhileEnumerationWasInFlight() {
+        Workspace workspace = persistWorkspace(RepositorySelection.ALL);
+        Repository removed = persistGitHubRepository(95L, "HephaestusTest/removed-during-read");
+        monitorWithScope(workspace, removed.getNameWithOwner(), removed.getNativeId());
+        Connection connection = connectionRepository
+                .findActive(workspace.getId(), IntegrationKind.GITHUB)
+                .orElseThrow();
+        Long version = connection.getVersion();
+        repositoryEnumerator.answers(id -> {
+            workspaceRepositoryMonitorService.removeRepositoryMonitorForInstallation(
+                    INSTALLATION_ID, removed.getNameWithOwner(), removed.getNativeId());
+            assertThat(connectionRepository
+                            .findById(connection.getId())
+                            .orElseThrow()
+                            .getVersion())
+                    .isEqualTo(version);
+            return List.of(
+                    snapshot(95L, removed.getNameWithOwner(), removed.getName(), true),
+                    snapshot(96L, "HephaestusTest/stale-add", "stale-add", false));
+        });
+
+        workspaceRepositoryMonitorService.ensureAllInstallationRepositoriesCovered(INSTALLATION_ID, null, true);
+
+        assertThat(repositoryToMonitorRepository.findByWorkspaceId(workspace.getId()))
+                .isEmpty();
+        assertThat(repositoryRepository.findByNameWithOwner(removed.getNameWithOwner()))
+                .isEmpty();
+        assertThat(repositoryRepository.findByNameWithOwner("HephaestusTest/stale-add"))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldRefuseInstallationEnumerationBeforeProviderIoWhenTheCallerHoldsATransaction() {
+        persistWorkspace(RepositorySelection.ALL);
+        var calls = new AtomicInteger();
+        repositoryEnumerator.answers(id -> {
+            calls.incrementAndGet();
+            return List.of();
+        });
+
+        transactionTemplate.executeWithoutResult(status -> assertThatThrownBy(
+                        () -> workspaceRepositoryMonitorService.ensureAllInstallationRepositoriesCovered(
+                                INSTALLATION_ID, null, true))
+                .isInstanceOf(IllegalTransactionStateException.class));
+        assertThat(calls).hasValue(0);
+    }
+
+    @Test
+    void shouldLetAnotherReplicaPauseAndResumeDuringEnumerationAndDiscardTheOldGeneration() throws Exception {
+        Workspace workspace = persistWorkspace(RepositorySelection.ALL);
+        Repository retained = persistGitHubRepository(93L, "HephaestusTest/retained");
+        RepositoryToMonitor monitor = monitorWithScope(workspace, retained.getNameWithOwner(), retained.getNativeId());
+        Connection connection = connectionRepository
+                .findActive(workspace.getId(), IntegrationKind.GITHUB)
+                .orElseThrow();
+        long generation = connection.getLifecycleGeneration();
+        var requested = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        repositoryEnumerator.answers(id -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive())
+                    .isFalse();
+            requested.countDown();
+            awaitRelease(release);
+            return List.of(snapshot(94L, "HephaestusTest/obsolete-response", "obsolete-response", false));
+        });
+        try (var replica = Executors.newSingleThreadExecutor()) {
+            var enumeration =
+                    replica.submit(() -> workspaceRepositoryMonitorService.ensureAllInstallationRepositoriesCovered(
+                            INSTALLATION_ID, null, true));
+            try {
+                assertThat(requested.await(20, SECONDS)).isTrue();
+                // This session represents a second server: both authority rows remain writable during I/O.
+                transactionTemplate.executeWithoutResult(status -> {
+                    assertThat(jdbc.queryForObject(
+                                    "SELECT id FROM workspace WHERE id=? FOR UPDATE NOWAIT",
+                                    Long.class,
+                                    workspace.getId()))
+                            .isEqualTo(workspace.getId());
+                    assertThat(jdbc.queryForObject(
+                                    "SELECT id FROM connection WHERE id=? FOR UPDATE NOWAIT",
+                                    Long.class,
+                                    connection.getId()))
+                            .isEqualTo(connection.getId());
+                });
+                connectionService.transition(
+                        connection,
+                        new ConnectionService.TransitionRequest(
+                                IntegrationState.SUSPENDED,
+                                "SUSPEND",
+                                "SYSTEM",
+                                "test",
+                                UUID.randomUUID().toString(),
+                                "Paused"));
+                Connection suspended =
+                        connectionRepository.findById(connection.getId()).orElseThrow();
+                connectionService.transition(
+                        suspended,
+                        new ConnectionService.TransitionRequest(
+                                IntegrationState.ACTIVE,
+                                "RESUME",
+                                "SYSTEM",
+                                "test",
+                                UUID.randomUUID().toString(),
+                                "Resumed"));
+                gitHubAppTokenService.markInstallationActive(INSTALLATION_ID);
+                Connection resumed =
+                        connectionRepository.findById(connection.getId()).orElseThrow();
+                assertThat(resumed.getState()).isEqualTo(IntegrationState.ACTIVE);
+                assertThat(resumed.getLifecycleGeneration()).isGreaterThan(generation);
+            } finally {
+                release.countDown();
+            }
+            enumeration.get(20, SECONDS);
+        }
+        assertThat(repositoryToMonitorRepository.findById(monitor.getId())).isPresent();
+        assertThat(repositoryRepository.findById(retained.getId())).isPresent();
+        assertThat(repositoryToMonitorRepository.findByWorkspaceId(workspace.getId()))
+                .extracting(RepositoryToMonitor::getNativeId)
+                .containsExactly(93L);
+        assertThat(repositoryRepository.findByNameWithOwner("HephaestusTest/obsolete-response"))
+                .isEmpty();
     }
 
     @Test

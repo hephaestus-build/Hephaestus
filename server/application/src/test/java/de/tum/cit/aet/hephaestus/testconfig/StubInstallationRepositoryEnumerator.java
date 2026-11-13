@@ -3,20 +3,26 @@ package de.tum.cit.aet.hephaestus.testconfig;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationRepositoryEnumerator;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import java.util.List;
+import java.util.function.LongFunction;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 
 @Order(Ordered.LOWEST_PRECEDENCE)
 public class StubInstallationRepositoryEnumerator implements InstallationRepositoryEnumerator {
 
-    private List<InstallationRepository> repositories = List.of();
+    private LongFunction<List<InstallationRepository>> response = ignored -> List.of();
 
     public void returns(List<InstallationRepository> repositories) {
-        this.repositories = List.copyOf(repositories);
+        var captured = List.copyOf(repositories);
+        this.response = ignored -> captured;
     }
 
     public void reset() {
-        repositories = List.of();
+        response = ignored -> List.of();
+    }
+
+    public void answers(LongFunction<List<InstallationRepository>> response) {
+        this.response = response;
     }
 
     @Override
@@ -26,6 +32,6 @@ public class StubInstallationRepositoryEnumerator implements InstallationReposit
 
     @Override
     public List<InstallationRepository> enumerate(long installationId) {
-        return repositories;
+        return response.apply(installationId);
     }
 }

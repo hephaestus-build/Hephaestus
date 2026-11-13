@@ -32,7 +32,7 @@ public class QueryPlans {
 
     private final Environment environment;
 
-    QueryPlans(Environment environment) {
+    public QueryPlans(Environment environment) {
         this.environment = environment;
     }
 
