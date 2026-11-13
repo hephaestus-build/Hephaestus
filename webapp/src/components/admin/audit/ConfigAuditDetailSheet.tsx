@@ -12,7 +12,6 @@ import {
 	CodeBlockContent,
 	CodeBlockCopyButton,
 	CodeBlockHeader,
-	CodeBlockLine,
 	CodeBlockTitle,
 } from "@/components/ui/code-block";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -23,7 +22,6 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from "@/components/ui/sheet";
-import { useHighlightedCode } from "@/hooks/use-highlighted-code";
 import { hasText } from "@/lib/text";
 
 import {
@@ -177,7 +175,6 @@ export function ConfigAuditDetailSheet({
 
 /** One stored snapshot, as JSON, under the side of the change it was taken on. */
 function RawSnapshot({ title, raw }: { title: "Before" | "After"; raw: string }) {
-	const lines = useHighlightedCode(raw, "json");
 	return (
 		<CodeBlock size="sm">
 			<CodeBlockHeader>
@@ -186,11 +183,7 @@ function RawSnapshot({ title, raw }: { title: "Before" | "After"; raw: string })
 					<CodeBlockCopyButton value={raw} aria-label={`Copy ${title.toLowerCase()} snapshot`} />
 				</CodeBlockActions>
 			</CodeBlockHeader>
-			<CodeBlockContent className="max-h-48">
-				{lines.map((line, index) => (
-					<CodeBlockLine key={index}>{line}</CodeBlockLine>
-				))}
-			</CodeBlockContent>
+			<CodeBlockContent className="max-h-48">{raw}</CodeBlockContent>
 		</CodeBlock>
 	);
 }

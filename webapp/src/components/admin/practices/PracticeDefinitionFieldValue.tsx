@@ -12,9 +12,7 @@ import {
 	CodeBlockActions,
 	CodeBlockContent,
 	CodeBlockCopyButton,
-	CodeBlockLine,
 } from "@/components/ui/code-block";
-import { useHighlightedCode } from "@/hooks/use-highlighted-code";
 
 export interface PracticeDefinitionFieldValueProps {
 	definition: PracticeDefinition;
@@ -28,8 +26,6 @@ export function PracticeDefinitionFieldValue({
 	const { visual, guide } = definition.guidance;
 	// Only a practice script is code. Every other field is prose, so it keeps the reading face.
 	const script = field === "SCRIPT" ? definition.script : null;
-	// A practice script is TypeScript.
-	const scriptLines = useHighlightedCode(script ?? "", "typescript");
 	return (
 		<div className="flex flex-col gap-2">
 			{script === null ? (
@@ -42,9 +38,7 @@ export function PracticeDefinitionFieldValue({
 						<CodeBlockCopyButton value={script} aria-label="Copy practice script" />
 					</CodeBlockActions>
 					<CodeBlockContent lineNumbers className="max-h-48">
-						{scriptLines.map((line, index) => (
-							<CodeBlockLine key={index}>{line}</CodeBlockLine>
-						))}
+						{script}
 					</CodeBlockContent>
 				</CodeBlock>
 			)}

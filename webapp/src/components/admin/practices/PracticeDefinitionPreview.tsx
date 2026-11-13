@@ -25,10 +25,8 @@ import {
 	CodeBlockActions,
 	CodeBlockContent,
 	CodeBlockCopyButton,
-	CodeBlockLine,
 } from "@/components/ui/code-block";
 import { Separator } from "@/components/ui/separator";
-import { useHighlightedCode } from "@/hooks/use-highlighted-code";
 
 export interface PracticeDefinitionPreviewProps {
 	slug: string;
@@ -91,8 +89,6 @@ export function PracticeDefinitionPreview({
 		options.itemTypes.flatMap((type) => type.events).find((event) => event.name === name)?.label ??
 		name;
 	const { guidance, script, scan } = definition;
-	// A practice script is TypeScript.
-	const scriptLines = useHighlightedCode(script ?? "", "typescript");
 	const scanSupported = itemType?.scanSupported === true;
 
 	return (
@@ -198,9 +194,7 @@ export function PracticeDefinitionPreview({
 									<CodeBlockCopyButton value={script} aria-label="Copy practice script" />
 								</CodeBlockActions>
 								<CodeBlockContent lineNumbers className="max-h-80">
-									{scriptLines.map((line, index) => (
-										<CodeBlockLine key={index}>{line}</CodeBlockLine>
-									))}
+									{script}
 								</CodeBlockContent>
 							</CodeBlock>
 						</AccordionContent>
