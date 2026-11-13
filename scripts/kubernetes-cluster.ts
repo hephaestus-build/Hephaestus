@@ -66,11 +66,13 @@ import {
 	directMessageEvent,
 	installCookie,
 	installState,
+	type ReceivedCall,
+	receivedCalls,
 	slackSignature,
 } from "./lib/slack-turn.ts";
 import { parseResolvedImages } from "./resolve-release-images.ts";
 import { isolationGate, type Target } from "./sandbox-isolation.ts";
-import { FAKE_INSTALL_CODE, FAKE_TEAM, type ReceivedCall } from "./slack-fake.ts";
+import { FAKE_INSTALL_CODE, FAKE_TEAM } from "./slack-fake.ts";
 
 const ROOT = path.join(import.meta.dirname, "..");
 const CHART = path.join(ROOT, "deploy", "chart", "hephaestus");
@@ -2023,23 +2025,6 @@ const SLACK_API_BASE_ENV = "HEPHAESTUS_INTEGRATION_SLACK_API_BASE";
 /** What the fake model says once the drill released it and no `bash` result is left to repeat. */
 const SLACK_ANSWER = "The commands printed";
 
-/** What the fake received, from its `GET /received`. */
-export function receivedCalls(text: string): ReceivedCall[] {
-	return asArray(parseJson(text), "received calls").map((entry) => {
-		const call = asRecord(entry, "received call");
-		const optional = (key: string) =>
-			call[key] === null ? null : asString(call[key], `received call ${key}`);
-		return {
-			method: asString(call.method, "received call method"),
-			authorized: call.authorized === true,
-			channel: optional("channel"),
-			threadTs: optional("threadTs"),
-			text: optional("text"),
-			ts: optional("ts"),
-		};
-	});
-}
-
 /** The Slack turn of the drill, from the database: its status, and its answer once the reply carries a Slack `ts`. */
 export interface SlackTurnState {
 	status: string;
@@ -2061,25 +2046,49 @@ export function slackTurnState(text: string): SlackTurnState | null {
 	};
 }
 
+/** How long the drill waits at the fake for a call before it looks at what the server recorded. */
+const SLACK_POLL_MS = 5000;
+/** The whole wait for the Slack reply, after the event was stored. */
+const SLACK_REPLY_MINUTES = 5;
+
 /**
- * A Slack message from a member's linked Slack identity reaches a turn, and the answer comes back to Slack. The
- * install runs through the server's own OAuth callback against the fake, and the message is a signed Events API
- * request, so the server verifies what it verifies for Slack. The turn runs in the member's conversation sandbox.
+ * Why the server gave up on the Slack reply, from what it records: the Slack turn's status, and the state of the
+ * outbox action that posts the reply (`agent_action`). Null while neither shows a failure.
  */
-async function slackTurn(base: string, token: string, signingSecret: string): Promise<void> {
-	const received = async () =>
-		receivedCalls(
-			await kubectl([
-				"-n",
-				ROLL_PROVIDER,
-				"exec",
-				"deployment/slack",
-				"--",
-				"node",
-				"-e",
-				"fetch('http://127.0.0.1:8080/received').then((r)=>r.text()).then((t)=>process.stdout.write(t))",
-			]),
-		);
+export function slackDeliveryFailure(text: string): string | null {
+	if (text.trim() === "") {
+		return null;
+	}
+	const row = asRecord(parseJson(text), "Slack delivery");
+	const turn = row.turn === null ? null : asString(row.turn, "Slack turn status");
+	const post = row.post === null ? null : asString(row.post, "Slack post state");
+	if (turn === "FAILED" || turn === "STOPPED") {
+		return `the Slack turn is ${turn}`;
+	}
+	if (post !== null && ["FAILED", "CANCELLED", "UNCERTAIN"].includes(post.split(":")[0] ?? "")) {
+		return `the server's Slack post is ${post}`;
+	}
+	return null;
+}
+
+/** The calls from the `after`th on; the fake holds the request until there is one, or `timeoutMs` passes. */
+async function slackReceived(after: number, timeoutMs: number): Promise<ReceivedCall[]> {
+	return receivedCalls(
+		await kubectl([
+			"-n",
+			ROLL_PROVIDER,
+			"exec",
+			"deployment/slack",
+			"--",
+			"node",
+			"-e",
+			`fetch('http://127.0.0.1:8080/received?after=${after}&timeoutMs=${Math.floor(timeoutMs)}').then((r)=>r.text()).then((t)=>process.stdout.write(t))`,
+		]),
+	);
+}
+
+/** Installs Slack in the workspace through the server's OAuth callback, and links the member's Slack identity. */
+async function installSlack(base: string, token: string): Promise<void> {
 	const started = asRecord(
 		await syntheticApi(base, token)("POST", `/workspaces/${ROLL_WORKSPACE}/connections`, {
 			kind: "SLACK",
@@ -2092,23 +2101,27 @@ async function slackTurn(base: string, token: string, signingSecret: string): Pr
 		{ headers: { cookie: installCookie(state), accept: "application/json" }, redirect: "manual" },
 	);
 	const callbackBody = await callback.text();
-	const connection = await psql(
+	const installed = await psql(
 		`SELECT state FROM connection WHERE workspace_id = 986600 AND kind = 'SLACK'`,
 	);
+	const connection = installed.trim();
 	report([
 		{
 			claim:
 				"the Slack install ended through the server's OAuth callback with an ACTIVE connection",
 			failure:
-				connection.trim() === "ACTIVE"
+				connection === "ACTIVE"
 					? undefined
-					: `the callback answered ${callback.status} ${callbackBody.slice(0, 200)}; the connection is '${connection.trim()}'`,
+					: `the callback answered ${String(callback.status)} ${callbackBody.slice(0, 200)}; the connection is '${connection}'`,
 		},
 	]);
 	await psql(
 		`INSERT INTO identity (account_id, provider_id, provider_user_key, team_key, linked_via, linked_at, last_login_at) SELECT a.id, p.id, '${SLACK_USER}', '${FAKE_TEAM.id}', 'MANUAL', now(), now() FROM account a JOIN identity_provider p ON p.type = 'SLACK' AND p.server_url = 'https://slack.com' WHERE a.display_name = '${ROLL_ADMIN}' ON CONFLICT DO NOTHING`,
 	);
+}
 
+/** Sends the member's direct message as a signed Events API request, which the server stores for its workspace. */
+async function sendSlackMessage(base: string, signingSecret: string): Promise<void> {
 	const sent = Math.floor(Date.now() / 1000);
 	const event = directMessageEvent({
 		team: FAKE_TEAM.id,
@@ -2134,13 +2147,56 @@ async function slackTurn(base: string, token: string, signingSecret: string): Pr
 			failure:
 				delivery.status === 202
 					? undefined
-					: `the webhook answered ${delivery.status} ${deliveryBody.slice(0, 200)}`,
+					: `the webhook answered ${String(delivery.status)} ${deliveryBody.slice(0, 200)}`,
 		},
 	]);
+}
 
-	const delivered = await until(
-		"the Slack turn did not end with its reply settled",
-		5,
+/**
+ * Waits for the reply's `chat.postMessage` at the fake, which answers the moment a call arrives. Between waits, the
+ * server's own record of a failed turn or post ends the wait at once, and so does a post that the fake refused. One
+ * deadline covers it all.
+ */
+async function awaitSlackReply(deadline: number): Promise<ReceivedCall> {
+	const calls: ReceivedCall[] = [];
+	for (;;) {
+		const left = deadline - Date.now();
+		if (left <= 0) {
+			throw new Error(
+				`turn roll: the Slack reply did not arrive in ${String(SLACK_REPLY_MINUTES)} minutes; the fake received ${JSON.stringify(
+					calls.map(({ method, authorized, channel, error }) => ({
+						method,
+						authorized,
+						channel,
+						error,
+					})),
+				)}`,
+			);
+		}
+		calls.push(...(await slackReceived(calls.length, Math.min(SLACK_POLL_MS, left))));
+		const post = calls.find((call) => call.method === "chat.postMessage");
+		if (post?.error !== undefined && post.error !== null) {
+			throw new Error(`turn roll: the fake Slack refused the reply with ${post.error}`);
+		}
+		if (post !== undefined) {
+			return post;
+		}
+		const failure = slackDeliveryFailure(
+			await psql(
+				`SELECT json_build_object('turn', (SELECT t.status FROM mentor_turn t WHERE t.workspace_id = 986600 AND t.surface = 'SLACK' LIMIT 1), 'post', (SELECT a.state || coalesce(':' || a.stop_reason, '') FROM agent_action a WHERE a.workspace_id = 986600 AND a.kind = 'SLACK_POST' AND a.idempotency_key LIKE 'slack_reply:%' ORDER BY a.created_at DESC LIMIT 1))`,
+			),
+		);
+		if (failure !== null) {
+			throw new Error(`turn roll: the Slack reply failed: ${failure}`);
+		}
+	}
+}
+
+/** The Slack turn once the server settled it: ended, with the reply's `ts` on the answer when it was DONE. */
+async function settledSlackTurn(deadline: number): Promise<SlackTurnState | null> {
+	return until(
+		"the server did not settle the Slack turn",
+		Math.max(deadline - Date.now(), 1000) / 60_000,
 		async () =>
 			slackTurnState(
 				await psql(
@@ -2153,47 +2209,61 @@ async function slackTurn(base: string, token: string, signingSecret: string): Pr
 				observed.status === "STOPPED" ||
 				(observed.status === "DONE" && observed.replyTs !== null)),
 	);
-	const posts = (await received()).filter((call) => call.method === "chat.postMessage");
-	const reply = posts.find((call) => call.text?.includes(SLACK_ANSWER) === true);
-	report([
+}
+
+/** The checks on the Slack turn and on what the fake received for it. */
+export function slackTurnChecks(reply: ReceivedCall, turn: SlackTurnState | null): RollCheck[] {
+	return [
 		{
 			claim: "the Slack turn ended DONE",
-			failure: delivered?.status === "DONE" ? undefined : `it ended ${delivered?.status}`,
+			failure: turn?.status === "DONE" ? undefined : `it ended ${String(turn?.status)}`,
 		},
 		{
 			claim: "the answer is the model's, not a refusal",
 			failure:
-				delivered?.answer.includes(SLACK_ANSWER) === true
+				turn?.answer.includes(SLACK_ANSWER) === true
 					? undefined
-					: `the answer is ${JSON.stringify(delivered?.answer)}`,
+					: `the answer is ${JSON.stringify(turn?.answer)}`,
 		},
 		{
 			claim: "the fake Slack received the answer as chat.postMessage in the member's DM",
+			failure: reply.channel === SLACK_DM ? undefined : `it went to ${String(reply.channel)}`,
+		},
+		{
+			claim:
+				"the reader sees the answer in the posted blocks, and the notification text has it too",
 			failure:
-				reply === undefined
-					? `no chat.postMessage carries the answer; the fake received ${JSON.stringify(
-							(await received()).map(({ method, authorized, channel }) => ({
-								method,
-								authorized,
-								channel,
-							})),
-						)}`
-					: reply.channel === SLACK_DM
-						? undefined
-						: `it went to ${reply.channel}`,
+				reply.blocksText?.includes(SLACK_ANSWER) === true &&
+				reply.text?.includes(SLACK_ANSWER) === true
+					? undefined
+					: `the blocks say ${JSON.stringify(reply.blocksText)}, the text ${JSON.stringify(reply.text)}`,
 		},
 		{
 			claim: "the reply carried the bot token that the install stored",
-			failure: reply?.authorized === true ? undefined : "its token is not the install's",
+			failure: reply.authorized ? undefined : "its token is not the install's",
 		},
 		{
 			claim: "the server recorded the reply's Slack ts on the answer",
 			failure:
-				reply !== undefined && reply.ts === delivered?.replyTs
+				reply.ts !== null && reply.ts === turn?.replyTs
 					? undefined
-					: `the answer's ts is ${delivered?.replyTs}, the fake's ${reply?.ts}`,
+					: `the answer's ts is ${String(turn?.replyTs)}, the fake's ${String(reply.ts)}`,
 		},
-	]);
+	];
+}
+
+/**
+ * A Slack message from a member's linked Slack identity reaches a turn, and the answer comes back to Slack. The
+ * install runs through the server's own OAuth callback against the fake, and the message is a signed Events API
+ * request, so the server verifies what it verifies for Slack. The turn runs in the member's conversation sandbox.
+ */
+async function slackTurn(base: string, token: string, signingSecret: string): Promise<void> {
+	await installSlack(base, token);
+	await sendSlackMessage(base, signingSecret);
+	const deadline = Date.now() + SLACK_REPLY_MINUTES * 60_000;
+	const reply = await awaitSlackReply(deadline);
+	// The server settles the reply in its own transaction after the fake answered, so this waits for that commit.
+	report(slackTurnChecks(reply, await settledSlackTurn(deadline)));
 }
 
 async function rollRestart(

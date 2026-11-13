@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import de.tum.cit.aet.hephaestus.integration.slack.SlackProperties;
 import de.tum.cit.aet.hephaestus.integration.slack.connect.SlackOAuthClient.OAuthV2Access;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
@@ -29,7 +30,8 @@ class SlackOAuthClientTest extends BaseUnitTest {
         slackMock = new MockWebServer();
         slackMock.start();
         String base = slackMock.url("/").toString().replaceAll("/$", "");
-        client = new SlackOAuthClient("test-client-id", "test-client-secret", base, RestClient.builder());
+        client = new SlackOAuthClient(
+                "test-client-id", "test-client-secret", new SlackProperties(base), RestClient.builder());
     }
 
     @AfterEach
@@ -91,8 +93,8 @@ class SlackOAuthClientTest extends BaseUnitTest {
 
     @Test
     void exchangeCode_blankClientCredentials_throwsBeforeHttp() throws IOException {
-        SlackOAuthClient unconfigured =
-                new SlackOAuthClient("", "", slackMock.url("/").toString().replaceAll("/$", ""), RestClient.builder());
+        SlackOAuthClient unconfigured = new SlackOAuthClient(
+                "", "", new SlackProperties(slackMock.url("/").toString()), RestClient.builder());
         assertThatThrownBy(() -> unconfigured.exchangeCode("code", "https://example.test/api/oauth/callback/slack"))
                 .isInstanceOf(SlackOAuthException.class)
                 .hasMessageContaining("slack oauth client not configured");

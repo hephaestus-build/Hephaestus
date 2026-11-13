@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.slack.SlackProperties;
 import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialProvider;
 import de.tum.cit.aet.hephaestus.testconfig.CredentialReaders;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -74,7 +75,7 @@ class SlackMessageServiceLiveTest {
                 credentialProvider,
                 new SlackRateLimitTracker(new SimpleMeterRegistry()),
                 new OutboundEgressGuard(() -> false),
-                "https://slack.com");
+                new SlackProperties(SlackProperties.SLACK));
 
         // The real send: block-kit payload through the app's SlackMessageService to the live channel.
         try {

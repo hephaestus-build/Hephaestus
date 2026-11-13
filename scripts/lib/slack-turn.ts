@@ -4,6 +4,25 @@
  */
 import { createHash, createHmac } from "node:crypto";
 
+import { asArray, asRecord, asString, parseJson } from "./json.ts";
+
+/** One call that reached the fake, with what the drill asserts on. */
+export interface ReceivedCall {
+	method: string;
+	/** Whether the call carried the bot token that the install handed out. */
+	authorized: boolean;
+	channel: string | null;
+	threadTs: string | null;
+	/** The `text` argument: what notifications show. */
+	text: string | null;
+	/** The text of every block that `chat.postMessage` carried: what the reader sees. */
+	blocksText: string | null;
+	/** The `ts` that `chat.postMessage` answered with. */
+	ts: string | null;
+	/** The Slack error that the fake answered with; null when it accepted the call. */
+	error: string | null;
+}
+
 /** Slack's `v0` signature of a request: HMAC-SHA256 over `v0:<timestamp>:<body>`. */
 export function slackSignature(secret: string, timestamp: number, body: string): string {
 	return `v0=${createHmac("sha256", secret).update(`v0:${timestamp}:${body}`).digest("hex")}`;
@@ -50,4 +69,23 @@ export function installState(vendorUrl: string): string {
 export function installCookie(state: string): string {
 	const hash = createHash("sha256").update(state).digest("hex");
 	return `__Host-CONNECT_${hash.slice(0, 16)}=${hash}`;
+}
+
+/** What the Slack fake received, from its `GET /received`. */
+export function receivedCalls(text: string): ReceivedCall[] {
+	return asArray(parseJson(text), "received calls").map((entry) => {
+		const call = asRecord(entry, "received call");
+		const optional = (key: string) =>
+			call[key] === null ? null : asString(call[key], `received call ${key}`);
+		return {
+			method: asString(call.method, "received call method"),
+			authorized: call.authorized === true,
+			channel: optional("channel"),
+			threadTs: optional("threadTs"),
+			text: optional("text"),
+			blocksText: optional("blocksText"),
+			ts: optional("ts"),
+			error: optional("error"),
+		};
+	});
 }

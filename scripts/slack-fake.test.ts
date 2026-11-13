@@ -1,36 +1,72 @@
 import assert from "node:assert/strict";
-import type { AddressInfo } from "node:net";
+import { once } from "node:events";
 import { test } from "node:test";
 
+import { asRecord, parseJson } from "./lib/json.ts";
 import {
 	directMessageEvent,
 	installCookie,
 	installState,
+	receivedCalls,
 	slackSignature,
 } from "./lib/slack-turn.ts";
-import { FAKE_INSTALL_CODE, FAKE_TEAM, slackFake } from "./slack-fake.ts";
+import { FAKE_INSTALL_CODE, FAKE_TEAM, postRefusal, slackFake } from "./slack-fake.ts";
 
 async function withFake(body: (base: string, token: string) => Promise<void>): Promise<void> {
 	const { server, token } = slackFake();
 	server.listen(0, "127.0.0.1");
-	await new Promise((resolve) => server.once("listening", resolve));
+	await once(server, "listening");
+	const address = server.address();
+	if (address === null || typeof address === "string") {
+		throw new TypeError("the fake listens on no port");
+	}
 	try {
-		await body(`http://127.0.0.1:${(server.address() as AddressInfo).port}`, token);
+		await body(`http://127.0.0.1:${address.port}`, token);
 	} finally {
 		server.close();
 	}
 }
 
-const received = async (base: string) => (await fetch(`${base}/received`)).json();
+async function json(response: Response): Promise<unknown> {
+	return (await response.json()) as unknown;
+}
+
+/** The calls the fake listed, from the `after`th on, waiting at most `timeoutMs` for one. */
+async function received(base: string, query = ""): Promise<ReturnType<typeof receivedCalls>> {
+	const response = await fetch(`${base}/received${query}`);
+	return receivedCalls(await response.text());
+}
+
+const FORM = "application/x-www-form-urlencoded";
+
+async function postMessage(
+	base: string,
+	headers: Record<string, string>,
+	body: string,
+	contentType = FORM,
+): Promise<Record<string, unknown>> {
+	return asRecord(
+		await json(
+			await fetch(`${base}/api/chat.postMessage`, {
+				method: "POST",
+				headers: { "content-type": contentType, ...headers },
+				body,
+			}),
+		),
+		"chat.postMessage answer",
+	);
+}
 
 await test("the fake installs the app for its code only, and hands out one token per start", async () => {
 	await withFake(async (base, token) => {
-		const post = (code: string) =>
-			fetch(`${base}/api/oauth.v2.access`, {
-				method: "POST",
-				headers: { "content-type": "application/x-www-form-urlencoded" },
-				body: new URLSearchParams({ code, client_id: "c", client_secret: "s" }),
-			}).then((response) => response.json());
+		const post = async (code: string) =>
+			json(
+				await fetch(`${base}/api/oauth.v2.access`, {
+					method: "POST",
+					headers: { "content-type": FORM },
+					body: new URLSearchParams({ code, client_id: "c", client_secret: "s" }),
+				}),
+			);
 		assert.deepEqual(await post("wrong"), { ok: false, error: "invalid_code" });
 		assert.deepEqual(await post(FAKE_INSTALL_CODE), {
 			ok: true,
@@ -51,32 +87,32 @@ await test("the fake installs the app for its code only, and hands out one token
 
 await test("the fake lists a posted message with its channel, its text and whether the install's token sent it", async () => {
 	await withFake(async (base, token) => {
-		const post = (headers: Record<string, string>, body: string, contentType: string) =>
-			fetch(`${base}/api/chat.postMessage`, {
-				method: "POST",
-				headers: { "content-type": contentType, ...headers },
-				body,
-			}).then((response) => response.json());
+		const auth = { authorization: `Bearer ${token}` };
 		assert.deepEqual(
-			await post(
+			await postMessage(
+				base,
 				{ authorization: "Bearer xoxb-other" },
 				new URLSearchParams({ channel: "D1", text: "no" }).toString(),
-				"application/x-www-form-urlencoded",
 			),
 			{ ok: false, error: "invalid_auth" },
 		);
-		const posted = await post(
-			{ authorization: `Bearer ${token}` },
-			new URLSearchParams({ channel: "D1", text: "an answer", thread_ts: "1.2" }).toString(),
-			"application/x-www-form-urlencoded",
+		const posted = await postMessage(
+			base,
+			auth,
+			new URLSearchParams({
+				channel: "D1",
+				text: "an answer",
+				thread_ts: "1760000000.000100",
+			}).toString(),
 		);
-		assert.equal((posted as { ok: boolean }).ok, true);
-		const json = await post(
-			{ authorization: `Bearer ${token}` },
+		assert.equal(posted.ok, true);
+		const asJson = await postMessage(
+			base,
+			auth,
 			JSON.stringify({ channel: "D2", text: "as JSON", blocks: [{ type: "markdown" }] }),
 			"application/json; charset=utf-8",
 		);
-		assert.equal((json as { channel: string }).channel, "D2");
+		assert.equal(asJson.channel, "D2");
 		assert.deepEqual(await received(base), [
 			{
 				method: "chat.postMessage",
@@ -84,15 +120,19 @@ await test("the fake lists a posted message with its channel, its text and wheth
 				channel: "D1",
 				threadTs: null,
 				text: "no",
+				blocksText: null,
 				ts: null,
+				error: "invalid_auth",
 			},
 			{
 				method: "chat.postMessage",
 				authorized: true,
 				channel: "D1",
-				threadTs: "1.2",
+				threadTs: "1760000000.000100",
 				text: "an answer",
-				ts: (posted as { ts: string }).ts,
+				blocksText: null,
+				ts: posted.ts,
+				error: null,
 			},
 			{
 				method: "chat.postMessage",
@@ -100,7 +140,9 @@ await test("the fake lists a posted message with its channel, its text and wheth
 				channel: "D2",
 				threadTs: null,
 				text: "as JSON",
-				ts: (json as { ts: string }).ts,
+				blocksText: "",
+				ts: asJson.ts,
+				error: null,
 			},
 		]);
 	});
@@ -113,10 +155,13 @@ await test("the fake refuses another method, and lists it", async () => {
 			headers: { authorization: `Bearer ${token}` },
 			body: "user=U1",
 		});
-		assert.deepEqual(await answer.json(), { ok: false, error: "unknown_method" });
-		assert.equal(((await received(base)) as { method: string }[])[0]?.method, "users.info");
-		assert.equal((await fetch(`${base}/health`)).status, 200);
-		assert.equal((await fetch(`${base}/nothing`)).status, 404);
+		assert.deepEqual(await json(answer), { ok: false, error: "unknown_method" });
+		const calls = await received(base);
+		assert.equal(calls[0]?.method, "users.info");
+		const health = await fetch(`${base}/health`);
+		assert.equal(health.status, 200);
+		const nothing = await fetch(`${base}/nothing`);
+		assert.equal(nothing.status, 404);
 	});
 });
 
@@ -133,16 +178,19 @@ await test("Slack's signature is the v0 HMAC over the timestamp and the exact bo
 });
 
 await test("a direct message event names its team, member, channel and delivery", () => {
-	const event = JSON.parse(
-		directMessageEvent({
-			team: "T1",
-			user: "U1",
-			channel: "D1",
-			text: "hi",
-			ts: "1760000000.000100",
-			eventId: "Ev1",
-		}),
-	) as Record<string, unknown>;
+	const event = asRecord(
+		parseJson(
+			directMessageEvent({
+				team: "T1",
+				user: "U1",
+				channel: "D1",
+				text: "hi",
+				ts: "1760000000.000100",
+				eventId: "Ev1",
+			}),
+		),
+		"event",
+	);
 	assert.equal(event.team_id, "T1");
 	assert.equal(event.event_id, "Ev1");
 	assert.deepEqual(event.event, {
@@ -169,4 +217,120 @@ await test("the install's state and its browser cookie are what the server's cal
 		installCookie("abc"),
 		"__Host-CONNECT_ba7816bf8f01cfea=ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
 	);
+});
+
+await test("the fake refuses what chat.postMessage refuses, with Slack's error, and lists the refusal", async () => {
+	const good: Record<string, string> = {
+		channel: "D1",
+		text: "an answer",
+		blocks: JSON.stringify([{ type: "markdown", text: "the visible answer" }]),
+		thread_ts: "1760000000.000100",
+		metadata: JSON.stringify({ event_type: "heph_entry", event_payload: { entry_id: "e" } }),
+	};
+	const refused = (changes: Record<string, string | undefined>) =>
+		postRefusal(
+			new Map(
+				Object.entries({ ...good, ...changes }).flatMap(([key, value]) =>
+					value === undefined ? [] : [[key, value] as const],
+				),
+			),
+		).error;
+	assert.equal(refused({}), null);
+	assert.equal(refused({ blocks: "not-json" }), "invalid_blocks_format");
+	assert.equal(refused({ blocks: '{"type":"markdown"}' }), "invalid_blocks_format");
+	assert.equal(refused({ blocks: '[{"text":"no type"}]' }), "invalid_blocks");
+	assert.equal(refused({ blocks: "[1]" }), "invalid_blocks");
+	assert.equal(refused({ channel: undefined }), "channel_not_found");
+	assert.equal(refused({ channel: "" }), "channel_not_found");
+	assert.equal(refused({ text: undefined, blocks: undefined }), "no_text");
+	assert.equal(refused({ text: "", blocks: "[]" }), "no_text");
+	assert.equal(refused({ text: undefined }), null);
+	assert.equal(refused({ blocks: undefined }), null);
+	for (const threadTs of [
+		"",
+		"1.2",
+		"not-a-ts",
+		"1760000000",
+		"1760000000.0001",
+		"x760000000.000100",
+	]) {
+		assert.equal(refused({ thread_ts: threadTs }), "invalid_arguments", threadTs);
+	}
+	assert.equal(refused({ metadata: "{" }), "invalid_metadata_format");
+	assert.equal(refused({ metadata: "[]" }), "invalid_metadata_schema");
+	assert.equal(refused({ metadata: '{"event_type":"x"}' }), "invalid_metadata_schema");
+	assert.equal(refused({ metadata: '{"event_payload":{}}' }), "invalid_metadata_schema");
+
+	await withFake(async (base, token) => {
+		const post = async (fields: Record<string, string>) =>
+			postMessage(
+				base,
+				{ authorization: `Bearer ${token}` },
+				new URLSearchParams(fields).toString(),
+			);
+		assert.deepEqual(await post({ channel: "D1", text: "x", blocks: "not-json" }), {
+			ok: false,
+			error: "invalid_blocks_format",
+		});
+		assert.deepEqual(await post({ channel: "D1", text: "x", thread_ts: "1.2" }), {
+			ok: false,
+			error: "invalid_arguments",
+		});
+		assert.deepEqual(await post({ channel: "D1" }), { ok: false, error: "no_text" });
+		const calls = await received(base);
+		assert.deepEqual(
+			calls.map((call) => [call.error, call.ts]),
+			[
+				["invalid_blocks_format", null],
+				["invalid_arguments", null],
+				["no_text", null],
+			],
+		);
+	});
+});
+
+await test("the fake lists the words of the blocks that a post carried", async () => {
+	await withFake(async (base, token) => {
+		const posted = await postMessage(
+			base,
+			{ authorization: `Bearer ${token}` },
+			JSON.stringify({
+				channel: "D1",
+				text: "fallback",
+				blocks: [
+					{ type: "markdown", text: "the visible answer" },
+					{ type: "context", elements: [{ type: "plain_text", text: "an AI label" }] },
+				],
+			}),
+			"application/json",
+		);
+		assert.equal(posted.ok, true);
+		const calls = await received(base);
+		assert.equal(calls[0]?.blocksText, "the visible answer\nan AI label");
+	});
+});
+
+await test("a request for the received calls returns as soon as one arrives, or empty at its deadline", async () => {
+	await withFake(async (base, token) => {
+		const started = Date.now();
+		assert.deepEqual(await received(base, "?after=0&timeoutMs=100"), []);
+		assert.ok(Date.now() - started >= 90);
+
+		const waiting = received(base, "?after=0&timeoutMs=20000");
+		await postMessage(
+			base,
+			{ authorization: `Bearer ${token}` },
+			new URLSearchParams({ channel: "D1", text: "hello" }).toString(),
+		);
+		const arrived = await waiting;
+		assert.deepEqual(
+			arrived.map((call) => call.text),
+			["hello"],
+		);
+		assert.ok(Date.now() - started < 10_000, "it did not wait for its deadline");
+		// A call that arrived before the request is not held back, and `after` skips what the caller has seen.
+		const heldBack = await received(base, "?after=0&timeoutMs=20000");
+		assert.equal(heldBack.length, 1);
+		assert.deepEqual(await received(base, "?after=1"), []);
+	});
 });

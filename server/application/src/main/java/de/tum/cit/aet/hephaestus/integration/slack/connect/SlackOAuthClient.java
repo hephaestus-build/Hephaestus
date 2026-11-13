@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.egress.EgressExempt;
 import de.tum.cit.aet.hephaestus.integration.core.egress.EgressExemption;
+import de.tum.cit.aet.hephaestus.integration.slack.SlackProperties;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
@@ -48,7 +49,7 @@ public class SlackOAuthClient {
     public SlackOAuthClient(
             @Value("${hephaestus.integration.slack.client-id:}") String clientId,
             @Value("${hephaestus.integration.slack.client-secret:}") String clientSecret,
-            @Value("${hephaestus.integration.slack.api-base:https://slack.com}") String apiBase,
+            SlackProperties properties,
             RestClient.Builder restClients) {
         this.clientId = clientId == null ? "" : clientId;
         this.clientSecret = clientSecret == null ? "" : clientSecret;
@@ -58,7 +59,7 @@ public class SlackOAuthClient {
         requests.setReadTimeout(TIMEOUT);
         this.restClient = restClients
                 .requestFactory(requests)
-                .baseUrl(stripTrailingSlash(apiBase))
+                .baseUrl(properties.apiBase())
                 .build();
     }
 
@@ -194,11 +195,6 @@ public class SlackOAuthClient {
             @JsonProperty("team_id") @Nullable String teamId,
             @JsonProperty("user_id") @Nullable String userId,
             @JsonProperty("error") @Nullable String error) {}
-
-    private static String stripTrailingSlash(String url) {
-        if (url == null || url.isEmpty()) return "";
-        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
-    }
 
     /** Slack authentication status and its explicit revocation receipt. */
     @JsonIgnoreProperties(ignoreUnknown = true)

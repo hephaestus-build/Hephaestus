@@ -35,7 +35,7 @@ import {
 	signInPod,
 	statefulPods,
 	outcomeChecks,
-	receivedCalls,
+	slackDeliveryFailure,
 	slackTurnState,
 	turnOutcome,
 	turnState,
@@ -43,6 +43,7 @@ import {
 	verify,
 } from "./kubernetes-cluster.ts";
 import { asArray, asRecord, isRecord } from "./lib/json.ts";
+import { receivedCalls } from "./lib/slack-turn.ts";
 
 const chart = fileURLToPath(new URL("../deploy/chart/hephaestus/", import.meta.url));
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
@@ -718,7 +719,9 @@ await test("the drill reads what the Slack fake received, and the state of the S
 					channel: "D1",
 					threadTs: null,
 					text: "an answer",
+					blocksText: "the visible answer",
 					ts: "1760000001.000100",
+					error: null,
 				},
 			]),
 		),
@@ -729,7 +732,9 @@ await test("the drill reads what the Slack fake received, and the state of the S
 				channel: "D1",
 				threadTs: null,
 				text: "an answer",
+				blocksText: "the visible answer",
 				ts: "1760000001.000100",
+				error: null,
 			},
 		],
 	);
@@ -742,6 +747,29 @@ await test("the drill reads what the Slack fake received, and the state of the S
 	});
 	assert.equal(slackTurnState('{"status":"QUEUED","answer":"","replyTs":null}')?.replyTs, null);
 	assert.throws(() => slackTurnState('{"status":"DONE"}'), /answer/u);
+});
+
+await test("the drill ends its wait for the Slack reply when the server records a failure", () => {
+	assert.equal(slackDeliveryFailure(""), null);
+	assert.equal(slackDeliveryFailure('{"turn":null,"post":null}'), null);
+	assert.equal(slackDeliveryFailure('{"turn":"RUNNING","post":null}'), null);
+	assert.equal(slackDeliveryFailure('{"turn":"DONE","post":"ADMITTED"}'), null);
+	assert.equal(slackDeliveryFailure('{"turn":"DONE","post":"EXECUTING"}'), null);
+	assert.equal(slackDeliveryFailure('{"turn":"DONE","post":"DONE"}'), null);
+	assert.equal(slackDeliveryFailure('{"turn":"FAILED","post":null}'), "the Slack turn is FAILED");
+	assert.equal(slackDeliveryFailure('{"turn":"STOPPED","post":null}'), "the Slack turn is STOPPED");
+	for (const state of [
+		"FAILED:REJECTED",
+		"CANCELLED:RECIPIENT_UNAVAILABLE",
+		"UNCERTAIN:WRITE_UNCONFIRMED",
+		"FAILED",
+	]) {
+		assert.equal(
+			slackDeliveryFailure(JSON.stringify({ turn: "DONE", post: state })),
+			`the server's Slack post is ${state}`,
+		);
+	}
+	assert.throws(() => slackDeliveryFailure('{"turn":1,"post":null}'), /status/u);
 });
 
 await test("the drill reads the local port that kubectl port-forward reports", () => {

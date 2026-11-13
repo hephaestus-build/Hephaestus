@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressSuppresse
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
+import de.tum.cit.aet.hephaestus.integration.slack.SlackProperties;
 import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialProvider;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import jakarta.annotation.PreDestroy;
@@ -39,7 +40,6 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
@@ -78,17 +78,13 @@ public class SlackMessageService {
     private final OutboundEgressGuard egressGuard;
     private final ConcurrentMap<Long, BotIdentity> botCache = new ConcurrentHashMap<>();
 
-    /**
-     * @param apiBase the Slack API's origin, which {@code hephaestus.integration.slack.api-base} sets for the OAuth
-     *     client too
-     */
     @Autowired
     public SlackMessageService(
             SlackCredentialProvider credentialProvider,
             SlackRateLimitTracker rateLimitTracker,
             OutboundEgressGuard egressGuard,
-            @Value("${hephaestus.integration.slack.api-base:https://slack.com}") String apiBase) {
-        this(Slack.getInstance(nativeConfig(apiBase)), credentialProvider, rateLimitTracker, egressGuard);
+            SlackProperties properties) {
+        this(Slack.getInstance(nativeConfig(properties)), credentialProvider, rateLimitTracker, egressGuard);
     }
 
     /**
@@ -107,13 +103,13 @@ public class SlackMessageService {
 
     /**
      * The configuration of this gateway's own Slack client, with a deadline for each HTTP call
-     * ({@link #NATIVE_CALL_TIMEOUT_MS}) and the methods under {@code apiBase}. The SDK's shared default client and its
-     * configuration stay unchanged.
+     * ({@link #NATIVE_CALL_TIMEOUT_MS}) and the methods under the API origin of {@code properties}. The SDK's shared
+     * default client and its configuration stay unchanged.
      */
-    static SlackConfig nativeConfig(String apiBase) {
+    static SlackConfig nativeConfig(SlackProperties properties) {
         SlackConfig config = new SlackConfig();
         config.setHttpClientCallTimeoutMillis(NATIVE_CALL_TIMEOUT_MS);
-        config.setMethodsEndpointUrlPrefix(apiBase.replaceAll("/+$", "") + "/api/");
+        config.setMethodsEndpointUrlPrefix(properties.apiBase() + "/api/");
         return config;
     }
 

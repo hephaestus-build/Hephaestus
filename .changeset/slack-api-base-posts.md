@@ -2,4 +2,4 @@
 "hephaestus": patch
 ---
 
-`HEPHAESTUS_INTEGRATION_SLACK_API_BASE` now sets where the server sends its Slack replies and reads, as it already did for connecting a workspace. A test Slack server that you point it at receives Hephaestus's answers. The default, `https://slack.com`, is unchanged.
+Slack replies now honour the existing `HEPHAESTUS_INTEGRATION_SLACK_API_BASE` setting, as connecting a workspace already did. The setting is for tests only: the server refuses to start unless it is an `http` or `https` URL with a host, and the bot token and messages of every workspace go to the host that it names.
