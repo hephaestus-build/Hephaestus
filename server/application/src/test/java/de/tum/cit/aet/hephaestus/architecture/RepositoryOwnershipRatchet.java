@@ -171,6 +171,7 @@ final class RepositoryOwnershipRatchet {
                     Set.of(
                             "integration.core.connection.api.ConnectionAdminService",
                             "integration.core.oauth.OAuthCallbackService",
+                            "integration.core.oauth.state.OAuthStateNonceStore",
                             "integration.core.sync.SyncJobService")),
             new Entry(
                     "integration.outline",

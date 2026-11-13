@@ -8,6 +8,7 @@
         allowedDependencies = {
             "core",
             "core::auth-spi",
+            "core::config-audit-spi",
             "core::current-account",
             "core::event",
             "core::exception",
