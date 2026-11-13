@@ -23,7 +23,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.CredentialReaders;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
+import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -51,7 +52,10 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
     private ConnectionService connectionService;
 
     @Mock
-    private WorkspaceRepository workspaceRepository;
+    private WorkspaceSummaryQuery workspaces;
+
+    @Mock
+    private EntityManager entityManager;
 
     @Mock
     private IntegrationManifestRegistry manifests;
@@ -67,11 +71,12 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
         service = new ConnectionAdminService(
                 connectionRepository,
                 connectionService,
-                workspaceRepository,
+                workspaces,
                 manifests,
                 credentialConverter,
                 mock(ProviderResourceRepairs.class),
                 mock(ApplicationEventPublisher.class));
+        ReflectionTestUtils.setField(service, "entityManager", entityManager);
     }
 
     @Test
@@ -116,7 +121,9 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
         long workspaceId = 17L;
         Workspace workspace = new Workspace();
         workspace.setId(workspaceId);
-        when(workspaceRepository.findById(workspaceId)).thenReturn(Optional.of(workspace));
+        when(workspaces.findState(workspaceId))
+                .thenReturn(Optional.of(new WorkspaceSummaryQuery.WorkspaceState(workspaceId, "test", "ACTIVE", true)));
+        when(entityManager.getReference(Workspace.class, workspaceId)).thenReturn(workspace);
         when(connectionRepository.save(any(Connection.class))).thenAnswer(inv -> {
             Connection saved = inv.getArgument(0);
             setId(saved, 99L);
@@ -160,7 +167,7 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
 
     @Test
     void createInlineConnection_missingWorkspace_throws() {
-        when(workspaceRepository.findById(99L)).thenReturn(Optional.empty());
+        when(workspaces.findState(99L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.createInlineConnection(
                         99L, IntegrationKind.OUTLINE, "x", new BearerToken("t", null), Map.of(), 42L))
                 .isInstanceOf(EntityNotFoundException.class);

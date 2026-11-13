@@ -21,8 +21,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncProgress;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceStatusFixture;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -59,7 +59,7 @@ class SyncJobServiceTest extends BaseUnitTest {
     private ConnectionRepository connectionRepository;
 
     @Mock
-    private WorkspaceRepository workspaceRepository;
+    private WorkspaceSummaryQuery workspaceQueries;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -93,7 +93,13 @@ class SyncJobServiceTest extends BaseUnitTest {
         workspace = new Workspace();
         workspace.setId(WORKSPACE_ID);
         workspace.resume();
-        lenient().when(workspaceRepository.findByIdForUpdate(WORKSPACE_ID)).thenReturn(Optional.of(workspace));
+        lenient()
+                .when(workspaceQueries.findStateForUpdate(WORKSPACE_ID))
+                .thenAnswer(invocation -> Optional.of(new WorkspaceSummaryQuery.WorkspaceState(
+                        WORKSPACE_ID,
+                        "test",
+                        workspace.getStatus().name(),
+                        workspace.getStatus() == Workspace.WorkspaceStatus.ACTIVE)));
         connection = mock(Connection.class);
         lenient().when(connection.getId()).thenReturn(CONNECTION_ID);
         lenient().when(connection.getWorkspace()).thenReturn(workspace);
@@ -178,12 +184,7 @@ class SyncJobServiceTest extends BaseUnitTest {
                 });
 
         service = new SyncJobService(
-                syncJobRepository,
-                connectionRepository,
-                workspaceRepository,
-                eventPublisher,
-                transactionTemplate,
-                clock);
+                syncJobRepository, connectionRepository, workspaceQueries, eventPublisher, transactionTemplate, clock);
     }
 
     private SyncJob newJob(long id, SyncJobStatus status) {

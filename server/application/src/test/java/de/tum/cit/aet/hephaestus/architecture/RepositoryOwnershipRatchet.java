@@ -128,13 +128,9 @@ final class RepositoryOwnershipRatchet {
             new Entry(
                     "integration.core",
                     "workspace.WorkspaceRepository",
-                    "DDD9",
-                    "workspace::spi WorkspaceQueries and WorkspaceCommands",
-                    Set.of(
-                            "integration.core.connection.api.ConnectionAdminService",
-                            "integration.core.oauth.OAuthCallbackService",
-                            "integration.core.oauth.state.OAuthStateNonceStore",
-                            "integration.core.sync.SyncJobService")),
+                    "DDD9 (ROLE)",
+                    "workspace::spi WorkspaceSummaryQuery.findStateForUpdate; workspace-owned connection initiation",
+                    Set.of("integration.core.oauth.state.OAuthStateNonceStore")),
             new Entry(
                     "integration.outline",
                     "integration.core.connection.ConnectionRepository",

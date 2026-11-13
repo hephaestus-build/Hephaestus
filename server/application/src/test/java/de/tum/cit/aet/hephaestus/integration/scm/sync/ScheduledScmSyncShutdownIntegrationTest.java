@@ -51,6 +51,7 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
@@ -134,6 +135,9 @@ class ScheduledScmSyncShutdownIntegrationTest extends AbstractWorkspaceIntegrati
     private WorkspaceRepository workspaceRepository;
 
     @Autowired
+    private WorkspaceSummaryQuery workspaceQueries;
+
+    @Autowired
     private ApplicationEventPublisher events;
 
     @Autowired
@@ -154,7 +158,7 @@ class ScheduledScmSyncShutdownIntegrationTest extends AbstractWorkspaceIntegrati
     @BeforeEach
     void setUp() {
         // The server context stops this instance on close; the shared test context keeps its own.
-        jobs = new SyncJobService(jobRepository, connectionRepository, workspaceRepository, events, transactions);
+        jobs = new SyncJobService(jobRepository, connectionRepository, workspaceQueries, events, transactions);
         otherReplica = new JdbcTemplateLockProvider(JdbcTemplateLockProvider.Configuration.builder()
                 .withJdbcTemplate(jdbc)
                 .usingDbTime()
