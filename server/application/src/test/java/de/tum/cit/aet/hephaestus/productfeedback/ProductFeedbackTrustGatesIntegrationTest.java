@@ -335,7 +335,8 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
             row.setFiledAfter(Instant.EPOCH);
         });
         if (whileFiling)
-            ReflectionTestUtils.setField(AopTestUtils.getUltimateTargetObject(filing), "lastWrite", Instant.EPOCH);
+            ReflectionTestUtils.setField(
+                    AopTestUtils.<FilingService>getUltimateTargetObject(filing), "lastWrite", Instant.EPOCH);
     }
 
     private long fileActions(UUID id) {
