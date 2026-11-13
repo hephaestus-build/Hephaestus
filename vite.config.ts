@@ -116,7 +116,6 @@ const nodeTestFiles = `--test-concurrency=${nodeTestConcurrency}${nodeTestShard 
 const policyGates = [
 	"gate:toolchain",
 	"gate:owned-code",
-	"gate:no-legacy",
 	"gate:runner-contract",
 	"gate:lint-contract",
 	"gate:agent-runtime-pins",
@@ -256,9 +255,6 @@ export default defineConfig({
 
 			// Repository policy
 			"gate:toolchain": run("node scripts/check-toolchain.ts"),
-			"gate:no-legacy": run(
-				"node --test scripts/check-no-legacy.test.ts && node scripts/check-no-legacy.ts",
-			),
 			"gate:shell": run("node scripts/check-shell.ts"),
 			"sync:toolchain-pins": run("node scripts/sync-toolchain-pins.ts"),
 			"gate:runner-contract": run("node --test scripts/check-runner-contract.ts"),

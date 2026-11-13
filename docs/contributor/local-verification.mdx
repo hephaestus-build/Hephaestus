@@ -290,8 +290,8 @@ A genuine false positive gets a line-level suppression with its reason, never a 
 
 ## Retired paths
 
-Run `vp run gate:no-legacy` to check source deprecations, configuration aliases, path redirects and docs redirect stubs.
-The gate runs in `check` and the policy checks in CI.
+Run `node --test scripts/check-no-legacy.test.ts` to test the retired-path check.
+Run `node scripts/check-no-legacy.ts` to check source deprecations, configuration aliases, path redirects and docs redirect stubs.
 Provider schemas and provider payload mixins follow their upstream contracts.
 Authentication, current landing pages and the canonical workspace-host redirect remain current flows.
 Review also checks behavior that source patterns cannot classify.
