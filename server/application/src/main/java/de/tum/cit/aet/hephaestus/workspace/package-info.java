@@ -12,6 +12,31 @@
  * WorkspacesInitializedEvent}) — placing them in either feature module would form a cycle with
  * {@code integration.scm} (workspace adapters already implement integration.spi SPIs).
  */
-@org.springframework.modulith.ApplicationModule(displayName = "Workspace (Tenancy)")
+@org.springframework.modulith.ApplicationModule(
+        displayName = "Workspace (Tenancy)",
+        allowedDependencies = {
+            "core",
+            "core::auth-dto",
+            "core::auth-reference",
+            "core::auth-spi",
+            "core::auth-types",
+            "core::auth-validation",
+            "core::config-audit-spi",
+            "core::current-account",
+            "core::event",
+            "core::exception",
+            "core::installed-clients",
+            "core::person-data",
+            "core::runtime",
+            "core::security",
+            "core::settings-spi",
+            "core::web",
+            "integration.core",
+            "integration.core::consumer",
+            "integration.core::events",
+            "integration.core::framework",
+            "integration.core::handler",
+            "integration.core::spi",
+        })
 @org.jspecify.annotations.NullMarked
 package de.tum.cit.aet.hephaestus.workspace;

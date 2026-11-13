@@ -1,5 +1,9 @@
 @org.springframework.modulith.ApplicationModule(
         displayName = "Integration · Docs",
-        allowedDependencies = {"integration.core::spi", "evidence", "evidence::capture", "core::person-data"})
+        allowedDependencies = {
+            "evidence",
+            "evidence::capture",
+            "integration.core::spi",
+        })
 @org.jspecify.annotations.NullMarked
 package de.tum.cit.aet.hephaestus.integration.docs;

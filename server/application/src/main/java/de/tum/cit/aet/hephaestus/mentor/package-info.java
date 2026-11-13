@@ -16,7 +16,22 @@
  *   <li>{@link de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents}: what changed, published inside the write</li>
  * </ul>
  */
-@ApplicationModule(displayName = "Mentor")
+@ApplicationModule(
+        displayName = "Mentor",
+        allowedDependencies = {
+            "core",
+            "core::action",
+            "core::auth-spi",
+            "core::event",
+            "core::exception",
+            "core::person-data",
+            "core::runtime",
+            "core::web",
+            "evidence",
+            "practices::spi",
+            "practices::weekly-digest",
+            "workspace::spi",
+        })
 @NullMarked
 package de.tum.cit.aet.hephaestus.mentor;
 

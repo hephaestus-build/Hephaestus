@@ -177,6 +177,46 @@ Modulith verification therefore does not enforce their persistence encapsulation
 The architecture tests enforce the core, domain and provider boundary.
 [Workspace context](./workspace-context) owns tenant enforcement.
 
+### Context map
+
+The architecture tier generates the context map from the verified module model. CI retains it in `server-context-map-<attempt>` for fourteen days.
+The artifact contains the overview and per-module C4 diagrams, module canvases and `all-docs.adoc`.
+
+Run `./gradlew :application:architectureTest --tests '*ContextMapCoverageTest'` from `server/` to write the same files under `application/build/spring-modulith-docs`.
+Do not keep a hand-drawn copy of the graph. The table below owns the relationships. Each module declaration owns its dependency list.
+
+| Module | Responsibility | Relationship | Decision |
+| --- | --- | --- | --- |
+| `account` | Account profile and sign-in views | Customer/Supplier: workspace and practice queries | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
+| `activity` | Engineering activity and its public pages | Conformist: the provider-neutral SCM kernel | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
+| `agent` | Review and conversation execution and admission | Customer/Supplier: practices, mentor and integration ports | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
+| `config` | Shared Spring properties and executor names | Shared Kernel: technical configuration | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
+| `contributors` | Contributor information | Customer/Supplier: core services | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
+| `core` | Shared auth, privacy, action and web contracts | Shared Kernel: platform contracts | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
+| `evidence` | Captured-source and citation contracts | Shared Kernel: evidence contracts | [ADR 0039](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0039-git-and-postgresql-own-evidence.md) |
+| `feature` | Feature descriptors | Shared Kernel: feature names | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
+| `integration` | Provider identity linking | Anticorruption Layer: provider identities to accounts | [ADR 0095](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) |
+| `integration.chat` | Neutral conversation items | Published Language: chat item and evidence contracts | [ADR 0095](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) |
+| `integration.core` | Connection lifecycle, inbox and integration ports | Shared Kernel: integration contracts | [ADR 0095](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) |
+| `integration.docs` | Neutral document items | Published Language: document item and evidence contracts | [ADR 0095](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) |
+| `integration.outline` | Outline adapter | Anticorruption Layer: Outline API to integration ports | [ADR 0095](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) |
+| `integration.scm` | Neutral SCM model and shared mirror | Shared Kernel: SCM adapters and activity | [ADR 0095](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) |
+| `integration.scm.github` | GitHub adapter | Anticorruption Layer: GitHub API to SCM and integration ports | [ADR 0095](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) |
+| `integration.scm.gitlab` | GitLab adapter | Anticorruption Layer: GitLab API to SCM and integration ports | [ADR 0095](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) |
+| `integration.slack` | Slack adapter | Anticorruption Layer: Slack API to chat and integration ports | [ADR 0095](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) |
+| `mentor` | Conversation, entries and turn ledger | Customer/Supplier: conversation execution and delivery | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
+| `notification` | Account notifications and their transports | Customer/Supplier: notification-producing domains | [ADR 0044](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0044-email-is-a-notification-transport.md) |
+| `observability` | Structured logging and metric contracts | Shared Kernel: observability | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
+| `practices` | Definitions, reviews, results and feedback | Customer/Supplier: evidence providers and execution | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
+| `productfeedback` | Feedback about Hephaestus and its issue filing | Customer/Supplier: the SCM ProductFeedbackIssues port | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
+| `workspace` | Tenant lifecycle and workspace policies | Customer/Supplier: product modules and provider lifecycle | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
+
+[ADR 0095](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) permits five integration modules to stay open. Their allowed dependencies still constrain their edges.
+The architecture tests guard provider isolation. [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) owns the declaration and repository-ownership rules.
+
+Existing repository accesses outside their owning module are listed with owners in `RepositoryOwnershipRatchet`.
+Each removal must also remove its ratchet witness. A new access, stale witness or stable release with remaining debt fails the architecture check.
+
 ## Sign-in
 
 The server federates sign-in to GitHub or GitLab with Spring Security `oauth2Login`, then issues its own cookie-session JWT.

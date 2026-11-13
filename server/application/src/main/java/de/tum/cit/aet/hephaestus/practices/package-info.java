@@ -1,3 +1,34 @@
-@org.springframework.modulith.ApplicationModule(displayName = "Practices")
+@org.springframework.modulith.ApplicationModule(
+        displayName = "Practices",
+        allowedDependencies = {
+            "core",
+            "core::action",
+            "core::auth-dto",
+            "core::auth-reference",
+            "core::auth-spi",
+            "core::auth-types",
+            "core::config-audit-spi",
+            "core::current-account",
+            "core::event",
+            "core::exception",
+            "core::person-data",
+            "core::release",
+            "core::runtime",
+            "core::security",
+            "core::settings-spi",
+            "core::time",
+            "core::web",
+            "evidence",
+            "integration.core::events",
+            "integration.core::framework",
+            "integration.core::items",
+            "integration.core::spi",
+            "workspace",
+            "workspace::authorization",
+            "workspace::context",
+            "workspace::events",
+            "workspace::settings",
+            "workspace::spi",
+        })
 @org.jspecify.annotations.NullMarked
 package de.tum.cit.aet.hephaestus.practices;
