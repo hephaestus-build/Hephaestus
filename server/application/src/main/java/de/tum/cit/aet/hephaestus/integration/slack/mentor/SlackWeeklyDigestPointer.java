@@ -17,7 +17,6 @@ import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestTransport
 import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestWritten;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
-import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -39,9 +38,11 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
  * The Slack note that a weekly digest is ready: one top-level message in the developer's DM with Hephaestus, posted through
@@ -75,7 +76,6 @@ public class SlackWeeklyDigestPointer implements WeeklyDigestTransport {
     private final WorkspaceSummaryQuery workspaces;
     private final SlackHephaestusUiLinks links;
     private final MentorSlackReplies replies;
-    private final ActionExecutor executor;
 
     public SlackWeeklyDigestPointer(
             SlackMessageService slack,
@@ -87,8 +87,7 @@ public class SlackWeeklyDigestPointer implements WeeklyDigestTransport {
             WeeklyDigestSubscriptions subscriptions,
             WorkspaceSummaryQuery workspaces,
             SlackHephaestusUiLinks links,
-            MentorSlackReplies replies,
-            ActionExecutor executor) {
+            MentorSlackReplies replies) {
         this.slack = slack;
         this.connections = connections;
         this.identities = identities;
@@ -99,7 +98,6 @@ public class SlackWeeklyDigestPointer implements WeeklyDigestTransport {
         this.workspaces = workspaces;
         this.links = links;
         this.replies = replies;
-        this.executor = executor;
     }
 
     @Override
@@ -115,15 +113,15 @@ public class SlackWeeklyDigestPointer implements WeeklyDigestTransport {
                 .isPresent();
     }
 
-    /** Posts the note once, as an outbox action that this server carries out now ({@link MentorSlackReplies}). */
-    @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)
+    /** Enqueues the note in the transaction that admits the completed digest. */
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
+    @Transactional(propagation = Propagation.MANDATORY)
     public void on(WeeklyDigestWritten event) {
         if (event.pointer() != WeeklyDigestPointer.SLACK) {
             return;
         }
         notes.note(event.workspaceId(), event.entryId())
-                .flatMap(note -> replies.digest(event.workspaceId(), note.accountId(), event.entryId()))
-                .ifPresent(action -> executor.runNow(action));
+                .ifPresent(note -> replies.digest(event.workspaceId(), note.accountId(), event.entryId()));
     }
 
     /**

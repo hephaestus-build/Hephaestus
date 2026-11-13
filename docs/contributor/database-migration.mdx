@@ -94,7 +94,10 @@ It refuses a draft with any of these properties:
 - A DOCTYPE declaration.
 - Content outside a change set.
 - Root attributes other than the standard Liquibase and XML Schema namespaces and `xsi:schemaLocation`.
-- Change-set attributes other than `id` and `author`.
+- Change-set attributes other than `id`, `author` and `runInTransaction`.
+
+Promotion preserves an explicit `runInTransaction="true"` or `runInTransaction="false"`.
+Use `false` for a concurrent index change set.
 
 Promotion would drop unsupported attributes.
 State conditions as `preConditions` inside the change set.

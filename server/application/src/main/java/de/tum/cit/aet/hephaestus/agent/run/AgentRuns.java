@@ -217,9 +217,15 @@ public class AgentRuns {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<AgentRunLease> claimCapped(AgentRunKind kind, int cap) {
-        runs.lockKindClaims(kind.name());
-        if (runs.countLeased(kind.name()) >= cap) return Optional.empty();
+        runs.lockKindClaims(kind.conversation() ? AgentRunKind.TURN.name() : kind.name());
+        if (countLeased(kind) >= cap) return Optional.empty();
         return claimNext(Set.of(kind), List.of());
+    }
+
+    private long countLeased(AgentRunKind kind) {
+        return kind.conversation()
+                ? runs.countLeased(AgentRunKind.TURN.name()) + runs.countLeased(AgentRunKind.DIGEST.name())
+                : runs.countLeased(kind.name());
     }
 
     /**
@@ -231,12 +237,11 @@ public class AgentRuns {
         if (kinds.isEmpty()) return Optional.empty();
         Set<AgentRunKind> offered = kinds;
         Integer turnCap = capacity.turns();
-        if (kinds.contains(AgentRunKind.TURN)
+        if (kinds.stream().anyMatch(AgentRunKind::conversation)
                 && turnCap != null
-                && (!runs.tryLockKindClaims(AgentRunKind.TURN.name())
-                        || runs.countLeased(AgentRunKind.TURN.name()) >= turnCap)) {
+                && (!runs.tryLockKindClaims(AgentRunKind.TURN.name()) || countLeased(AgentRunKind.TURN) >= turnCap)) {
             offered = EnumSet.copyOf(kinds);
-            offered.remove(AgentRunKind.TURN);
+            offered.removeIf(AgentRunKind::conversation);
             if (offered.isEmpty()) return Optional.empty();
         }
         return runs.claimSubject(

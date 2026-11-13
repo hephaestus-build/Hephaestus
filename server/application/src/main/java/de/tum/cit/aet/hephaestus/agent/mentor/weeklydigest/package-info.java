@@ -1,16 +1,11 @@
 /**
- * The weekly digest: once a week, for a developer who turned it on, the server writes, in each workspace where it is
- * available and something happened, one {@code DIGEST} entry into their Heph conversation and publishes {@link
- * de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestWritten}. Java composes it from facts
- * ({@code practices.weeklydigest}); no model writes it.
+ * Opt-in proactive work in a developer's conversation. A schedule enqueues a background digest run with a real
+ * system stimulus. The conversation sandbox writes the recap under the same admission and evidence rules as an
+ * answer. Its end commits the text and the Slack or email notification actions together.
  *
- * <p>The entry's stored text and the Slack or email note that it is ready name no count and no practice: a workspace
- * owner may export Slack DMs, an email cannot be corrected, and a frozen number cannot follow a later withdrawal.
- *
- * <p>Other modules plug in through two ports: {@link
- * de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestSubscriptions} (the account's choice, kept by
- * the notification module) and {@link de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestTransport}
- * (whether Slack or email can carry the note).
+ * <p>The notification names no practice or count: exported Slack DMs and email cannot follow a later withdrawal.
+ * The conversation's digest facts are rendered at read time. Subscriptions own the account's choice; transports
+ * declare whether a note can reach that account in its workspace.
  */
 @org.springframework.modulith.NamedInterface("weekly-digest")
 @org.jspecify.annotations.NullMarked

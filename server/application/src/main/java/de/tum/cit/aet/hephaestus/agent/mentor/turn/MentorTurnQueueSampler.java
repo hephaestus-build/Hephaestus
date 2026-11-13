@@ -38,7 +38,7 @@ public class MentorTurnQueueSampler {
     @Scheduled(fixedDelay = 30, initialDelay = 10, timeUnit = TimeUnit.SECONDS)
     public void sample() {
         try {
-            queued.set(turns.countByStatus(MentorTurn.Status.QUEUED));
+            queued.set(turns.countByStatusAndSurfaceNot(MentorTurn.Status.QUEUED, MentorTurn.Surface.SYSTEM));
         } catch (RuntimeException e) {
             // A database blip must not read as an empty queue.
             log.warn(

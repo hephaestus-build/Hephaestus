@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestFacts;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestPayload;
@@ -36,6 +37,7 @@ public class WeeklyDigestContentSource implements ContentSource {
 
     private final MentorConversationService conversations;
     private final MentorEntryService entries;
+    private final MentorEntryRepository rows;
     private final WeeklyDigestFacts facts;
     private final ObjectMapper objectMapper;
 
@@ -52,10 +54,7 @@ public class WeeklyDigestContentSource implements ContentSource {
     @Override
     @Transactional(readOnly = true)
     public void contribute(MentorContextRequest request, Map<String, byte[]> files) {
-        files.put(
-                OUTPUT_KEY,
-                objectMapper.writeValueAsBytes(
-                        buildPayload(request.workspaceId(), request.developerId(), request.threadId())));
+        files.put(OUTPUT_KEY, objectMapper.writeValueAsBytes(buildPayload(request)));
     }
 
     /** The document Heph reads: the digest as the app shows it, with the results and problems behind each piece. */
@@ -69,6 +68,23 @@ public class WeeklyDigestContentSource implements ContentSource {
                 .orElse(null));
     }
 
+    private Document buildPayload(MentorContextRequest request) {
+        if (conversations.require(request.workspaceId(), request.threadId()).getAccountId() != request.developerId())
+            return new Document(null);
+        UUID message = request.stimulusEntryId();
+        if (message != null) {
+            var digest = entries.find(request.workspaceId(), message)
+                    .filter(entry -> entry.getConversationId().equals(request.threadId())
+                            && entry.getKind() == MentorEntry.Kind.DIGEST
+                            && !entry.isRedacted())
+                    .flatMap(entry -> WeeklyDigestPayload.fromJson(entry.getPayload(), objectMapper));
+            if (digest.isPresent())
+                return new Document(facts.render(request.workspaceId(), request.developerId(), List.of(digest.get()))
+                        .getFirst());
+        }
+        return buildPayload(request.workspaceId(), request.developerId(), request.threadId());
+    }
+
     /** The stored digest the account's thread replies to, if it is a thread on one. */
     private Optional<WeeklyDigestPayload> digestOf(long workspaceId, long accountId, UUID conversationId) {
         MentorConversation conversation = conversations.require(workspaceId, conversationId);
@@ -77,7 +93,18 @@ public class WeeklyDigestContentSource implements ContentSource {
             return Optional.empty();
         }
         return entries.find(workspaceId, parentEntryId)
-                .filter(entry -> entry.getKind() == MentorEntry.Kind.DIGEST && !entry.isRedacted())
+                .filter(entry -> !entry.isRedacted())
+                .flatMap(entry -> digestStimulus(workspaceId, entry))
                 .flatMap(entry -> WeeklyDigestPayload.fromJson(entry.getPayload(), objectMapper));
+    }
+
+    private Optional<MentorEntry> digestStimulus(long workspaceId, MentorEntry parent) {
+        if (parent.getKind() == MentorEntry.Kind.DIGEST) return Optional.of(parent);
+        UUID turnId = parent.getTurnId();
+        if (parent.getKind() != MentorEntry.Kind.HEPH
+                || parent.getSurface() != MentorEntry.Surface.SYSTEM
+                || turnId == null) return Optional.empty();
+        return rows.findByWorkspaceIdAndTurnIdAndKind(workspaceId, turnId, MentorEntry.Kind.DIGEST)
+                .filter(entry -> !entry.isRedacted());
     }
 }

@@ -514,6 +514,10 @@ class LlmProxyService {
                         HttpStatus.SERVICE_UNAVAILABLE, UPSTREAM_PAUSED, "The model capacity lease ended.");
             }
             try {
+                if (!requestPolicy.allows(routing)) {
+                    permit.released();
+                    return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.AI_CHOICE, AI_CHOICE_REFUSED);
+                }
                 row.sending(credential.upstreamModelId());
             } catch (ProxyCallLedger.ClaimLost lost) {
                 permit.released();
@@ -551,10 +555,6 @@ class LlmProxyService {
                                     + "this call's tokens will not be metered",
                             routing.principalDescription());
                     accounting.recordStreamUsageUnsupported(routing.apiProtocol());
-                    if (!requestPolicy.allows(routing)) {
-                        permit.released();
-                        return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.AI_CHOICE, AI_CHOICE_REFUSED);
-                    }
                     if (workTimeOver(routing)) {
                         permit.released();
                         return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.WORK_TIME, WORK_TIME_OVER);
@@ -565,6 +565,10 @@ class LlmProxyService {
                                 HttpStatus.SERVICE_UNAVAILABLE,
                                 ProxyRefusal.CAPACITY,
                                 "Model capacity is unavailable for this retry.");
+                    }
+                    if (!requestPolicy.allows(routing)) {
+                        permit.released();
+                        return refusal(HttpStatus.FORBIDDEN, ProxyRefusal.AI_CHOICE, AI_CHOICE_REFUSED);
                     }
                     row.sending(credential.upstreamModelId());
                     upstream = callUpstream(

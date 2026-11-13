@@ -4,6 +4,8 @@ import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestPayload;
 import java.time.Instant;
 import java.util.Optional;
@@ -20,6 +22,7 @@ public class WeeklyDigestNotes {
 
     private final MentorEntryService entries;
     private final MentorConversationService conversations;
+    private final MentorTurnRepository turns;
     private final ObjectMapper objectMapper;
 
     /**
@@ -40,6 +43,12 @@ public class WeeklyDigestNotes {
             return Optional.empty();
         }
         MentorEntry entry = found.get();
+        if (entry.getTurnId() != null
+                && turns.findByIdAndWorkspaceId(entry.getTurnId(), workspaceId)
+                        .filter(turn -> turn.getStatus() == MentorTurn.Status.DONE)
+                        .isEmpty()) {
+            return Optional.empty();
+        }
         return WeeklyDigestPayload.fromJson(entry.getPayload(), objectMapper).map(payload -> {
             MentorConversation conversation = conversations.require(workspaceId, entry.getConversationId());
             return new Note(

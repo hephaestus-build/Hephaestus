@@ -158,11 +158,11 @@ public class DocumentCaptureSource implements ContentSource {
 
     @Nullable
     private String currentUserMessageText(MentorContextRequest request) {
-        if (request.currentUserMessageId() == null) {
+        if (request.stimulusEntryId() == null) {
             return null;
         }
         return mentorMessages
-                .textForMessage(request.workspaceId(), request.developerId(), request.currentUserMessageId())
+                .textForMessage(request.workspaceId(), request.developerId(), request.stimulusEntryId())
                 .orElse(null);
     }
 

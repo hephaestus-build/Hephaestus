@@ -85,7 +85,7 @@ public class MentorContextPathBuilder {
             }
             before.add(head);
         }
-        MentorEntry question = entries.findQuestion(turn.getWorkspaceId(), turn.getId());
+        MentorEntry question = entries.findStimulus(turn.getWorkspaceId(), turn.getId());
         if (question.isRedacted()) {
             throw new IllegalStateException("The question of mentor turn " + turnId + " was deleted");
         }
@@ -247,6 +247,9 @@ public class MentorContextPathBuilder {
         String parentId = null;
         for (Head head : selected) {
             MentorEntry entry = Objects.requireNonNull(rows.get(head.id()));
+            if (entry.getKind() == MentorEntry.Kind.DIGEST
+                    && entry.getTurnId() != null
+                    && statuses.get(entry.getTurnId()) != MentorTurn.Status.DONE) continue;
             ObjectNode rendered = renderEntry(entry, head.piId(), parentId, zone);
             if (rendered == null) {
                 continue;

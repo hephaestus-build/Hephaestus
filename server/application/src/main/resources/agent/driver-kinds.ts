@@ -20,8 +20,11 @@ const reviewCompose: KindRunner = async ({ assignment, gateway, signal }) => {
 	return { leaseLost: false, outcome: outcome.handedOn === null ? "completed" : "handed_on" };
 };
 
+const conversation = turnRunner();
+
 export const KINDS: Readonly<Record<string, KindRunner>> = {
 	REVIEW: measureReview,
 	REVIEW_COMPOSE: reviewCompose,
-	TURN: turnRunner(),
+	TURN: conversation,
+	DIGEST: conversation,
 };

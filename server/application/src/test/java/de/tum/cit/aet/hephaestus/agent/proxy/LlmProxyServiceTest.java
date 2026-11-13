@@ -833,6 +833,17 @@ class LlmProxyServiceTest extends BaseUnitTest {
             return new Answer(answer.getStatusCode().value(), text);
         }
 
+        @Test
+        void shouldRefuseChangedEligibilityBeforeEgressWithoutOpeningUsage() throws Exception {
+            var permit = mock(LlmCallPermits.Permit.class);
+            when(permit.revoked()).thenReturn(Mono.never());
+            when(requestPolicy.allows(any())).thenReturn(true, false);
+            var answer = proxyPooledStream(upstream.url("/v1").toString(), permit);
+            assertThat(answer.status()).isEqualTo(403);
+            assertThat(upstream.getRequestCount()).isZero();
+            verify(callLedger, never()).open(any(), any(), any());
+        }
+
         /** The hold: the ledger refuses to open a call whose upper bound does not fit under its purse's cap. */
         @Test
         void shouldRefuseACallWhoseUpperBoundDoesNotFitUnderTheCapBeforeItReachesItsProvider() throws Exception {
@@ -1638,7 +1649,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     .build());
             ProxyRouting routing = streamingRouting();
             stubStreamCredential(routing);
-            when(requestPolicy.allows(any())).thenReturn(true, false);
+            when(requestPolicy.allows(any())).thenReturn(true, true, false);
 
             var answer = proxyReview(routing, new MockHttpServletResponse());
 

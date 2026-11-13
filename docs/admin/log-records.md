@@ -151,7 +151,7 @@ Each record has an `event.name` and `workspace.id`.
 | `practice_review.stage.ended` | A stage of a review attempt ends | `review.stage`, `review.stage.outcome`, `duration.ms` |
 | `practice_review.ended` | A review reaches its terminal status | `review.id`, `review.kind`, `review.status`, `review.reason` |
 | `feedback.copy.settled` | Feedback reaches a destination's final state | `feedback.id`, `review.id`, `feedback.destination`, `feedback.state`, `feedback.reason` |
-| `mentor.turn.ended` | An attempt of a conversation turn ends | `turn.id`, `turn.attempt`, `turn.outcome` |
+| `mentor.turn.ended` | An attempt of a conversation turn ends | `turn.id`, `turn.attempt`, `turn.outcome`, `turn.surface` (`app`, `slack`, `system`) |
 
 `practice_review.stage.ended` takes `workspace.id`, `job.id`, `job.attempt`, `review.id`, `run.id`, `run.epoch`, `subject.key` and the trace ID from the log context of its attempt. `job.attempt` starts at zero. `run.epoch` identifies the lease claim and starts at one. Join stages by `job.id` and `job.attempt`. Use `review.id` to join attempts of one review, and `run.id` with `run.epoch` to identify the holder.
 

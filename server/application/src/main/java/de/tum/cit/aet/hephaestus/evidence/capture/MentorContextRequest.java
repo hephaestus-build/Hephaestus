@@ -8,7 +8,7 @@ public record MentorContextRequest(
         long workspaceId,
         long developerId,
         UUID threadId,
-        @Nullable UUID currentUserMessageId) {
+        @Nullable UUID stimulusEntryId) {
     public MentorContextRequest {
         Objects.requireNonNull(threadId, "threadId");
         if (workspaceId <= 0 || developerId <= 0) {

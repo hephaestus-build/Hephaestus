@@ -143,8 +143,12 @@ export function promoteDraft(draftXml: string, timestamp: number, existing?: str
 	let next = Math.max(0, ...numbers);
 	const renumbered = sets.map((set) =>
 		set.replace(/<changeSet\b[^>]*>/u, () => {
+			const parsed = asRecord(draftParser.parse(set), "change set document");
+			const attributes = asRecord(asArray(parsed.changeSet, "change sets")[0], "change set");
+			const transaction = transactionMode(attributes);
+			const mode = transaction === undefined ? "" : ` runInTransaction="${transaction}"`;
 			next += 1;
-			return `<changeSet id="${timestamp}-${next}" author="hephaestus">`;
+			return `<changeSet id="${timestamp}-${next}" author="hephaestus"${mode}>`;
 		}),
 	);
 	const body = renumbered.map((set) => `    ${set}\n`).join("");
@@ -167,11 +171,19 @@ const rootNamespaces = new Map([
 	["xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance"],
 ]);
 
+function transactionMode(attributes: Record<string, unknown>): "true" | "false" | undefined {
+	const value = attributes["@_runInTransaction"];
+	if (value !== undefined && value !== "true" && value !== "false") {
+		throw new Error("runInTransaction must be true or false");
+	}
+	return value;
+}
+
 /**
  * Checks an author-written draft before promotion. Promotion keeps only each change set's body and
  * replaces its opening tag and the changelog root, so anything else in the draft, a root attribute
  * other than the root's own namespace declarations and `xsi:schemaLocation`, or a change-set
- * attribute other than `id` and `author` would be dropped or changed without a trace: all are
+ * attribute other than `id`, `author` and `runInTransaction` would be dropped or changed without a trace: all are
  * refused instead.
  */
 export function validateDraft(draftXml: string): void {
@@ -214,13 +226,21 @@ export function validateDraft(draftXml: string): void {
 		throw new Error(`Only change sets are promoted; move or remove: ${outside}`);
 	}
 	for (const set of sets) {
-		const keys = Object.keys(asRecord(set, "change set"));
+		const attributes = asRecord(set, "change set");
+		transactionMode(attributes);
+		const keys = Object.keys(attributes);
 		const dropped = keys
-			.filter((key) => key.startsWith("@_") && key !== "@_id" && key !== "@_author")
+			.filter(
+				(key) =>
+					key.startsWith("@_") &&
+					key !== "@_id" &&
+					key !== "@_author" &&
+					key !== "@_runInTransaction",
+			)
 			.map((key) => key.slice(2));
 		if (dropped.length > 0) {
 			throw new Error(
-				`Promotion keeps only id and author on a change set and would drop: ${dropped.join(", ")}`,
+				`Promotion keeps only id, author and runInTransaction on a change set and would drop: ${dropped.join(", ")}`,
 			);
 		}
 		if (!keys.some((key) => !key.startsWith("@_"))) {

@@ -6175,7 +6175,7 @@ export const MentorThreadSummarySchema = {
 
 export const MentorTurnSchema = {
 	type: "object",
-	description: "One question to Hephaestus and the work to answer it",
+	description: "One conversation turn: a requested answer or an opted-in proactive digest",
 	properties: {
 		attempt: {
 			type: "integer",
@@ -6215,7 +6215,7 @@ export const MentorTurnSchema = {
 		},
 		requestId: {
 			type: "string",
-			description: "The submission that asked; the question's entry carries the same value",
+			description: "The submission or schedule key; the stimulus entry carries the same value",
 		},
 		status: {
 			type: "string",
@@ -6223,7 +6223,7 @@ export const MentorTurnSchema = {
 		},
 		surface: {
 			type: "string",
-			enum: ["APP", "SLACK"],
+			enum: ["APP", "SLACK", "SYSTEM"],
 		},
 		waitingFor: {
 			type: "string",

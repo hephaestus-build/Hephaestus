@@ -11,6 +11,13 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.WeeklyDigestContentSource;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAdmission;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorRefusal;
+import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
@@ -24,6 +31,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.item.Item;
 import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmSourceFingerprints;
+import de.tum.cit.aet.hephaestus.mentor.MentorContextPathBuilder;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
@@ -31,8 +39,14 @@ import de.tum.cit.aet.hephaestus.mentor.MentorEntryDTO;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryDraft;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
+import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.mentor.MentorRedaction;
+import de.tum.cit.aet.hephaestus.mentor.MentorSlackReplies;
 import de.tum.cit.aet.hephaestus.mentor.MentorTimeline;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasis;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository;
@@ -42,6 +56,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData.Scenario;
+import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
@@ -59,6 +74,8 @@ import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestPayload;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestWindow;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.HeldTransaction;
+import de.tum.cit.aet.hephaestus.testconfig.WeeklyDigestTestFixtures;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
@@ -82,11 +99,15 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -96,12 +117,36 @@ import tools.jackson.databind.ObjectMapper;
  * rendering and the document Heph reads in its thread. The evidence authorization boundary permits every stored
  * result of the workspace, as in the other review-evidence tests.
  */
+@RecordApplicationEvents
 class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
+    @Autowired
+    private ApplicationEvents observedEvents;
 
     private static final ZoneId BERLIN = ZoneId.of("Europe/Berlin");
 
     @MockitoBean
     EvidenceAuthorization evidenceAuthorization;
+
+    @MockitoBean
+    DigestAdmission liveDigestAdmission;
+
+    @MockitoBean(name = "digestTransactionTransport")
+    WeeklyDigestTransport transactionTransport;
+
+    @Autowired
+    private MentorTurnService turns;
+
+    @Autowired
+    private MentorTurnRepository turnRows;
+
+    @Autowired
+    private AgentRuns runs;
+
+    @Autowired
+    private LlmUsageEventRepository usage;
+
+    @Autowired
+    private ConversationClaims claims;
 
     @Autowired
     private ReviewIntegrationData data;
@@ -140,6 +185,9 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
     private MentorTimeline timeline;
 
     @Autowired
+    private MentorContextPathBuilder paths;
+
+    @Autowired
     private MentorRedaction redaction;
 
     @Autowired
@@ -147,9 +195,6 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private PersonDataWriteFence writeFence;
-
-    @Autowired
-    private PlatformTransactionManager transactionManager;
 
     @Autowired
     private TransactionTemplate transactionTemplate;
@@ -164,6 +209,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
     private final List<Object> published = new CopyOnWriteArrayList<>();
 
     private final ApplicationEventPublisher events = published::add;
+    private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
     private final WeeklyDigestSubscriptions subscriptions = mock(WeeklyDigestSubscriptions.class);
     private final AccountMembershipQuery memberships = mock(AccountMembershipQuery.class);
     private final AccountDirectory accounts = mock(AccountDirectory.class);
@@ -188,6 +234,8 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        when(transactionTransport.pointer()).thenReturn(WeeklyDigestPointer.SLACK);
+        when(liveDigestAdmission.refuses(anyLong(), any())).thenReturn(false);
         databaseTestUtils.cleanDatabase();
         when(evidenceAuthorization.permitsAll(anyLong(), anyCollection(), any()))
                 .thenAnswer(invocation -> sameWorkspace(invocation.getArgument(0), invocation.getArgument(1)));
@@ -212,6 +260,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         week = WeeklyDigestWindow.previousWeek(Instant.now(), BERLIN);
 
         when(subscriptions.subscribedAccountIds()).thenReturn(List.of(accountId));
+        when(subscriptions.enabledSince(accountId)).thenReturn(Optional.of(week.start()));
         when(accounts.timeZone(accountId)).thenReturn(Optional.of(BERLIN));
         when(memberships.membershipsForAccount(accountId))
                 .thenReturn(List.of(new AccountMembershipQuery.MembershipView(
@@ -240,12 +289,12 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         save(FeedbackDestination.CONVERSATION, FeedbackState.UNCONFIRMED, inWeek(3));
         save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, week.start().minusSeconds(60));
 
-        assertThat(composer(Clock.fixed(due(), ZoneOffset.UTC)).composeDue()).isEqualTo(1);
+        assertThat(schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue()).isEqualTo(1);
 
         MentorEntry digest = digestEntry().orElseThrow();
         assertThat(digest.getKind()).isEqualTo(MentorEntry.Kind.DIGEST);
         assertThat(digest.getSurface()).isEqualTo(MentorEntry.Surface.SYSTEM);
-        assertThat(digest.getText()).isEqualTo(WeeklyDigestComposer.text(week));
+        assertThat(digest.getText()).contains(week.daysWithYear(), "inputs/context/weekly_digest.json");
         JsonNode payload = Objects.requireNonNull(digest.getPayload());
         assertThat(payload.path("window").path("weekStart").asString())
                 .isEqualTo(week.weekStart().toString());
@@ -262,12 +311,17 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                 .map(MentorConversation::getId)
                 .contains(digest.getConversationId());
 
-        assertThat(written()).singleElement().satisfies(note -> {
-            assertThat(note.entryId()).isEqualTo(digest.getId());
-            assertThat(note.accountId()).isEqualTo(accountId);
-            assertThat(note.weekDays()).isEqualTo(week.days());
-            assertThat(note.pointer()).isEqualTo(WeeklyDigestPointer.NONE);
-        });
+        var turn = turnRows.findByIdAndWorkspaceId(Objects.requireNonNull(digest.getTurnId()), workspaceId)
+                .orElseThrow();
+        assertThat(turn.getSurface()).isEqualTo(MentorTurn.Surface.SYSTEM);
+        assertThat(turn.getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
+        var run = runs.find(new AgentRunRef(turn.getRunId(), workspaceId)).orElseThrow();
+        assertThat(run.getKind()).isEqualTo(AgentRunKind.DIGEST);
+        assertThat(run.getBand()).isEqualTo(AgentRunBand.BACKGROUND);
+        assertThat(run.getConcurrencyKey()).isEqualTo("conversation:" + digest.getConversationId());
+        assertThat(written()).isEmpty();
+        assertThat(timeline.liveEntry(workspaceId, digest.getId())).isEmpty();
+        assertThat(timeline.entries(workspaceId, accountId, null, 50).content()).isEmpty();
     }
 
     @Test
@@ -280,20 +334,20 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                 () -> entries.appendOnce(
                         workspaceId,
                         main.getId(),
-                        MentorEntryDraft.digest(
-                                WeeklyDigestComposer.text(week),
+                        WeeklyDigestTestFixtures.historical(
+                                "Weekly digest for " + week.daysWithYear() + ".",
                                 new WeeklyDigestPayload(week, List.of(), List.of()).toJson(objectMapper),
                                 requestId())));
         CompletableFuture<Integer> overlapping = CompletableFuture.supplyAsync(
-                () -> composer(Clock.fixed(due(), ZoneOffset.UTC)).composeDue());
+                () -> schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue());
 
         first.commitAfter(overlapping);
 
         assertThat(overlapping.get(20, TimeUnit.SECONDS)).isZero();
         assertThat(written()).isEmpty();
         // A second run in the same window finds the digest and writes nothing either.
-        assertThat(composer(Clock.fixed(due().plus(Duration.ofHours(3)), ZoneOffset.UTC))
-                        .composeDue())
+        assertThat(schedule(Clock.fixed(due().plus(Duration.ofHours(3)), ZoneOffset.UTC))
+                        .enqueueDue())
                 .isZero();
     }
 
@@ -301,7 +355,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
     void shouldWriteNothingWhenTheWeekWasQuiet() {
         save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, week.start().minusSeconds(3600));
 
-        assertThat(composer(Clock.fixed(due(), ZoneOffset.UTC)).composeDue()).isZero();
+        assertThat(schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue()).isZero();
 
         assertThat(digestEntry()).isEmpty();
         assertThat(published).isEmpty();
@@ -312,7 +366,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
         when(admission.refusal(workspaceId, accountId)).thenReturn(Optional.of(MentorRefusal.NO_AI));
 
-        assertThat(composer(Clock.fixed(due(), ZoneOffset.UTC)).composeDue()).isZero();
+        assertThat(schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue()).isZero();
 
         assertThat(digestEntry()).isEmpty();
     }
@@ -322,7 +376,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
         when(memberships.isActiveVisibleMember(workspaceId, accountId)).thenReturn(false);
 
-        assertThat(composer(Clock.fixed(due(), ZoneOffset.UTC)).composeDue()).isZero();
+        assertThat(schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue()).isZero();
 
         assertThat(digestEntry()).isEmpty();
     }
@@ -333,7 +387,9 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         WeeklyDigestTransport email = transport(WeeklyDigestPointer.EMAIL, true);
         WeeklyDigestTransport slack = transport(WeeklyDigestPointer.SLACK, true);
 
-        composer(Clock.fixed(due(), ZoneOffset.UTC), List.of(email, slack)).composeDue();
+        schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue();
+        assertThat(written()).isEmpty();
+        finishDigest(List.of(email, slack));
 
         assertThat(written())
                 .singleElement()
@@ -427,7 +483,8 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                 .createdAt(inWeek(1))
                 .build());
 
-        composer(Clock.fixed(due(), ZoneOffset.UTC)).composeDue();
+        schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue();
+        finishDigest(List.of());
 
         assertThat(digestOnTheTimeline().feedback()).singleElement().satisfies(row -> {
             assertThat(row.feedbackId()).isEqualTo(inConversation.id());
@@ -447,7 +504,8 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
     void shouldShowWithdrawnFeedbackByItsPracticeAndHideFeedbackWhenItsEvidenceCannotBeShown() {
         Piece hidden = save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
         Piece withdrawn = save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(2));
-        composer(Clock.fixed(due(), ZoneOffset.UTC)).composeDue();
+        schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue();
+        finishDigest(List.of());
 
         assertThat(digestOnTheTimeline().feedback())
                 .extracting(WeeklyDigestFeedbackDTO::feedbackId)
@@ -477,9 +535,10 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
     void shouldListReplacedFeedbackWhenItReachedTheDeveloperInTheWeek() {
         Piece replacedInTheWeek = save(FeedbackDestination.ON_WORK, FeedbackState.REPLACED, inWeek(1));
         Piece replacedLater = save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(2));
-        composer(Clock.fixed(due(), ZoneOffset.UTC)).composeDue();
+        schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue();
 
         jdbcTemplate.update("UPDATE feedback SET state='REPLACED' WHERE id=?", replacedLater.id());
+        finishDigest(List.of());
 
         assertThat(digestOnTheTimeline().feedback())
                 .extracting(WeeklyDigestFeedbackDTO::feedbackId, WeeklyDigestFeedbackDTO::replaced)
@@ -518,7 +577,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldGiveHephTheDigestWithItsResultsAndProblemsOnlyWhenItRunsInAThreadOnIt() throws Exception {
         Piece onTheWork = save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
-        composer(Clock.fixed(due(), ZoneOffset.UTC)).composeDue();
+        schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue();
         MentorEntry digest = digestEntry().orElseThrow();
         MentorConversation thread = conversations.openThread(workspaceId, digest.getId());
 
@@ -542,6 +601,23 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         assertThat(inMain.isEmpty()).isTrue();
     }
 
+    @Test
+    void shouldGiveAReplyOnTheCompletedRecapItsWeeklyFacts() throws Exception {
+        Piece feedback = save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue();
+        var stimulus = digestEntry().orElseThrow();
+        finishDigest(List.of());
+        var answer = entryRepository
+                .findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
+                        workspaceId, Objects.requireNonNull(stimulus.getTurnId()), MentorEntry.Kind.HEPH)
+                .getFirst();
+        var thread = conversations.openThread(workspaceId, answer.getId());
+        assertThat(document(thread.getId()).path("weeklyDigest").path("feedback"))
+                .singleElement()
+                .satisfies(row -> assertThat(row.path("feedbackId").asString())
+                        .isEqualTo(feedback.id().toString()));
+    }
+
     private static Set<UUID> sameWorkspace(long workspaceId, Collection<Result> results) {
         return results.stream()
                 .filter(result -> result.getWorkspaceId() == workspaceId)
@@ -553,24 +629,262 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         return facts.render(workspaceId, accountId, List.of(payload)).getFirst().digest();
     }
 
-    private WeeklyDigestComposer composer(Clock clock) {
-        return composer(clock, List.of());
-    }
-
-    private WeeklyDigestComposer composer(Clock clock, List<WeeklyDigestTransport> transports) {
-        return new WeeklyDigestComposer(
+    private DigestSchedule schedule(Clock clock) {
+        return new DigestSchedule(
                 subscriptions,
                 new WeeklyDigestAvailability(memberships, readiness, admission),
                 accounts,
                 facts,
                 conversations,
                 entries,
+                turns,
                 writeFence,
-                transports,
-                events,
                 objectMapper,
-                transactionManager,
+                transactionTemplate,
                 clock);
+    }
+
+    private DigestAdmission eligibility() {
+        return new DigestAdmission(
+                turnRows,
+                turns,
+                entryRepository,
+                subscriptions,
+                new WeeklyDigestAvailability(memberships, readiness, admission),
+                facts,
+                objectMapper,
+                Clock.fixed(due(), ZoneOffset.UTC));
+    }
+
+    private DigestDelivery delivery(List<WeeklyDigestTransport> transports) {
+        return new DigestDelivery(
+                turnRows, turns, entryRepository, eligibility(), transports, objectMapper, events, Clock.systemUTC());
+    }
+
+    private void finishDigest(List<WeeklyDigestTransport> transports) {
+        finishDigest(transports, MentorTurn.Status.DONE);
+    }
+
+    private void finishDigest(List<WeeklyDigestTransport> transports, MentorTurn.Status outcome) {
+        var stimulus = digestEntry().orElseThrow();
+        UUID turnId = Objects.requireNonNull(stimulus.getTurnId());
+        transactionTemplate.executeWithoutResult(tx -> {
+            assertThat(writeFence.holdForAccountWrite(accountId)).isTrue();
+            var claim = runs.claimSubject(
+                            workspaceId, "conversation:" + stimulus.getConversationId(), Set.of(AgentRunKind.DIGEST))
+                    .orElseThrow();
+            assertThat(turns.start(workspaceId, claim.runId(), claim.epoch()))
+                    .get()
+                    .extracting(MentorTurn::getId)
+                    .isEqualTo(turnId);
+            assertThat(turns.updatePartial(
+                            workspaceId,
+                            turnId,
+                            claim.epoch(),
+                            claim.runId(),
+                            new MentorTurnProgress.Update(1, 0, 0, 0, "Unadmitted draft")))
+                    .isFalse();
+            var answer = objectMapper
+                    .createObjectNode()
+                    .put("type", "message")
+                    .put("id", UUID.randomUUID().toString())
+                    .put("timestamp", Instant.now().toString());
+            answer.putObject("message")
+                    .put("role", "assistant")
+                    .putArray("content")
+                    .addObject()
+                    .put("type", "text")
+                    .put("text", "Your weekly recap is ready.");
+            var prompt = objectMapper
+                    .createObjectNode()
+                    .put("type", "message")
+                    .put("id", UUID.randomUUID().toString());
+            prompt.putObject("message").put("role", "user").put("content", stimulus.getText());
+            new MentorTurnCompletion(
+                            turns, eligibility(), claims, usage, meters, Clock.fixed(due(), ZoneOffset.UTC), events)
+                    .end(
+                            workspaceId,
+                            turnId,
+                            claim.epoch(),
+                            claim.runId(),
+                            new MentorTurnCompletion.Ending(outcome, List.of(prompt, answer), null, null, null, null));
+            delivery(transports)
+                    .on(new MentorLedgerEvents.TurnChanged(
+                            workspaceId,
+                            stimulus.getConversationId(),
+                            turnId,
+                            outcome,
+                            MentorTurn.Surface.SYSTEM,
+                            claim.epoch()));
+        });
+    }
+
+    @Test
+    void shouldCommitTheModelAnswerAndTheActualSlackActionTogether() {
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        assertThat(schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue()).isEqualTo(1);
+        var stimulus = digestEntry().orElseThrow();
+        when(transactionTransport.reaches(workspaceId, accountId)).thenReturn(true);
+        finishDigest(List.of());
+        assertThat(entryRepository.findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
+                        workspaceId, Objects.requireNonNull(stimulus.getTurnId()), MentorEntry.Kind.HEPH))
+                .isNotEmpty();
+        assertThat(digestActions(stimulus)).containsExactly("SLACK_POST");
+    }
+
+    @Test
+    void shouldRollBackTheModelAnswerAndLeaveNoNotificationAction() {
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        assertThat(schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue()).isEqualTo(1);
+        var stimulus = digestEntry().orElseThrow();
+        when(transactionTransport.reaches(workspaceId, accountId)).thenReturn(true);
+        transactionTemplate.executeWithoutResult(status -> {
+            finishDigest(List.of());
+            status.setRollbackOnly();
+        });
+        assertThat(entryRepository.findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
+                        workspaceId, Objects.requireNonNull(stimulus.getTurnId()), MentorEntry.Kind.HEPH))
+                .isEmpty();
+        assertThat(digestActions(stimulus)).isEmpty();
+    }
+
+    private List<String> digestActions(MentorEntry stimulus) {
+        return jdbcTemplate
+                .queryForList(
+                        "SELECT kind FROM agent_action WHERE workspace_id=? AND idempotency_key=?",
+                        String.class,
+                        workspaceId,
+                        MentorSlackReplies.digestKey(stimulus.getId()))
+                .stream()
+                .map(Objects::requireNonNull)
+                .toList();
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = MentorTurn.Status.class,
+            names = {"STOPPED", "FAILED"})
+    void shouldPublishNoPartialOrMessageForAnUnfinishedDigest(MentorTurn.Status outcome) {
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        assertThat(schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue()).isEqualTo(1);
+        var stimulus = digestEntry().orElseThrow();
+        UUID turnId = Objects.requireNonNull(stimulus.getTurnId());
+        finishDigest(List.of(), outcome);
+        assertThat(entryRepository.findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
+                        workspaceId, turnId, MentorEntry.Kind.HEPH))
+                .isEmpty();
+        assertThat(timeline.liveEntry(workspaceId, stimulus.getId())).isEmpty();
+        assertThat(entryRepository.searchByWorkspaceId(
+                        workspaceId, List.of(stimulus.getConversationId()), null, null, null, 50))
+                .noneMatch(hit -> hit.getId().equals(stimulus.getId()));
+        assertThat(observedEvents.stream(MentorLedgerEvents.ProgressChanged.class)
+                        .filter(event -> event.turnId().equals(turnId))
+                        .toList())
+                .isEmpty();
+        assertThat(written()).isEmpty();
+    }
+
+    @Test
+    void shouldDiscardTheAnswerAndSendNoNoteWhenTheDeveloperOptsOutBeforeCompletion() {
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        assertThat(schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue()).isEqualTo(1);
+        var stimulus = digestEntry().orElseThrow();
+        UUID turnId = Objects.requireNonNull(stimulus.getTurnId());
+        when(subscriptions.enabledSince(accountId)).thenReturn(Optional.empty());
+
+        finishDigest(List.of());
+
+        assertThat(turnRows.findByIdAndWorkspaceId(turnId, workspaceId))
+                .get()
+                .extracting(MentorTurn::getStatus)
+                .isEqualTo(MentorTurn.Status.FAILED);
+        assertThat(entryRepository.findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
+                        workspaceId, turnId, MentorEntry.Kind.HEPH))
+                .isEmpty();
+        assertThat(timeline.liveEntry(workspaceId, stimulus.getId())).isEmpty();
+        assertThat(written()).isEmpty();
+        assertThat(meters.find(AgentMetrics.MENTOR_TURN_COMPLETED).counters()).isEmpty();
+        var next = turns.submit(
+                workspaceId,
+                stimulus.getConversationId(),
+                new MentorTurnService.Question(
+                        MentorTurn.Surface.APP,
+                        "What should I read next?",
+                        UUID.randomUUID().toString(),
+                        null,
+                        null));
+        assertThat(paths.forTurn(workspaceId, next.turn().getId(), BERLIN).entries())
+                .isEmpty();
+    }
+
+    @Test
+    void shouldWriteTheEligibleRecapWhenOlderFeedbackWasAlreadyWithdrawn() {
+        Piece removed = save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        Piece kept = save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(2));
+        jdbcTemplate.update(
+                "INSERT INTO feedback_decision(id,workspace_id,feedback_id,action,note,decided_at)"
+                        + " VALUES (?,?,?,'WITHDRAW','Wrong about the work',?)",
+                UUID.randomUUID(),
+                workspaceId,
+                removed.id(),
+                Timestamp.from(Instant.now()));
+        assertThat(schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue()).isEqualTo(1);
+        var stimulus = digestEntry().orElseThrow();
+        UUID turnId = Objects.requireNonNull(stimulus.getTurnId());
+        assertThat(eligibility().refuses(workspaceId, turnId)).isFalse();
+        finishDigest(List.of());
+        assertThat(turnRows.findByIdAndWorkspaceId(turnId, workspaceId))
+                .get()
+                .extracting(MentorTurn::getStatus)
+                .isEqualTo(MentorTurn.Status.DONE);
+        assertThat(digestOnTheTimeline().feedback())
+                .extracting(WeeklyDigestFeedbackDTO::feedbackId)
+                .containsExactly(kept.id());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldRejectCapturedFactsThatLoseEligibilityEvenWhenOtherFactsRemain(boolean withdrawn) {
+        Piece removed = save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        Piece kept = save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(2));
+        assertThat(schedule(Clock.fixed(due(), ZoneOffset.UTC)).enqueueDue()).isEqualTo(1);
+        var stimulus = digestEntry().orElseThrow();
+        UUID turnId = Objects.requireNonNull(stimulus.getTurnId());
+        assertThat(eligibility().refuses(workspaceId, turnId)).isFalse();
+        if (withdrawn) {
+            jdbcTemplate.update(
+                    "INSERT INTO feedback_decision(id,workspace_id,feedback_id,action,note,decided_at)"
+                            + " VALUES (?,?,?,'WITHDRAW','Wrong about the work',?)",
+                    UUID.randomUUID(),
+                    workspaceId,
+                    removed.id(),
+                    Timestamp.from(Instant.now()));
+        } else {
+            data.mark(removed.result(), ResultMarkKind.INCORRECT, accountId);
+        }
+        assertThat(facts.compose(workspaceId, accountId, week))
+                .get()
+                .extracting(WeeklyDigestPayload::feedbackIds)
+                .isEqualTo(List.of(kept.id()));
+        assertThat(eligibility().refuses(workspaceId, turnId)).isTrue();
+        finishDigest(List.of());
+        assertThat(turnRows.findByIdAndWorkspaceId(turnId, workspaceId))
+                .get()
+                .extracting(MentorTurn::getStatus)
+                .isEqualTo(MentorTurn.Status.FAILED);
+        assertThat(entryRepository.findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
+                        workspaceId, turnId, MentorEntry.Kind.HEPH))
+                .isEmpty();
+        assertThat(digestActions(stimulus)).isEmpty();
+        assertThat(written()).isEmpty();
+    }
+
+    @Test
+    void shouldSkipADigestWhenLessThanOneSecondRemainsInItsDeliveryWindow() {
+        save(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, inWeek(1));
+        var nearClosing = week.end().plus(Duration.ofHours(21)).minusMillis(500);
+        assertThat(schedule(Clock.fixed(nearClosing, BERLIN)).enqueueDue()).isZero();
+        assertThat(digestEntry()).isEmpty();
     }
 
     private static WeeklyDigestTransport transport(WeeklyDigestPointer pointer, boolean reaches) {
@@ -597,7 +911,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
     }
 
     private String requestId() {
-        return WeeklyDigestComposer.requestId(workspaceId, accountId, week);
+        return DigestSchedule.requestId(workspaceId, accountId, week);
     }
 
     private Optional<MentorEntry> digestEntry() {

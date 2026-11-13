@@ -46,18 +46,20 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
         Instant getDeadline();
     }
 
-    /** A merged conversation keeps its ledger order; other subjects keep the order in which their runs were created. */
+    /** Questions precede queued digests; each kind keeps conversation ledger order, and other subjects keep age order. */
     String SUBJECT_PREDECESSOR = """
-            COALESCE((SELECT earlier.seq < question.seq
+            CASE WHEN r.kind='TURN' AND s.kind='DIGEST' THEN FALSE
+                 WHEN r.kind='DIGEST' AND s.kind='TURN' THEN TRUE
+                 ELSE COALESCE((SELECT earlier.seq < question.seq
                         FROM mentor_turn earlier_turn
                         JOIN mentor_entry earlier ON earlier.turn_id = earlier_turn.id
-                            AND earlier.workspace_id = earlier_turn.workspace_id AND earlier.kind = 'USER'
+                            AND earlier.workspace_id = earlier_turn.workspace_id AND earlier.kind IN ('USER','DIGEST')
                         JOIN mentor_turn current_turn ON current_turn.run_id = r.id
                             AND current_turn.workspace_id = r.workspace_id
                         JOIN mentor_entry question ON question.turn_id = current_turn.id
-                            AND question.workspace_id = current_turn.workspace_id AND question.kind = 'USER'
+                            AND question.workspace_id = current_turn.workspace_id AND question.kind IN ('USER','DIGEST')
                        WHERE earlier_turn.run_id = s.id AND earlier_turn.workspace_id = s.workspace_id),
-                     (s.created_at, s.id) < (r.created_at, r.id))
+                     (s.created_at, s.id) < (r.created_at, r.id)) END
             """;
 
     /**
@@ -93,7 +95,7 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             """;
 
     /** The lease a claim or a renewal gives: a person waits on a turn, so it is taken back sooner. */
-    String LEASE_SECONDS = "CASE r.kind WHEN 'TURN' THEN :turnTtlSeconds ELSE :ttlSeconds END";
+    String LEASE_SECONDS = "CASE WHEN r.kind IN ('TURN','DIGEST') THEN :turnTtlSeconds ELSE :ttlSeconds END";
 
     /** A queued run that the claim would offer, as the dispatch of sandboxes reads it. */
     interface DueRow {

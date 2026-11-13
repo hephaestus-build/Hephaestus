@@ -67,6 +67,9 @@ public interface MentorEntryRepository extends JpaRepository<MentorEntry, UUID> 
      */
     String SHOWN = """
              e.kind IN ('USER', 'HEPH', 'DIGEST')
+             AND NOT EXISTS (SELECT 1 FROM mentor_turn t
+                 WHERE (t.id,t.workspace_id)=(e.turn_id,e.workspace_id)
+                   AND t.surface='SYSTEM' AND t.status<>'DONE')
              AND (e.kind <> 'HEPH' OR (e.redacted_at IS NULL AND (e.text <> '' OR EXISTS (
                  SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(e.payload -> 'message' -> 'content') = 'array'
                      THEN e.payload -> 'message' -> 'content' ELSE '[]'::jsonb END) AS block(value)
@@ -90,6 +93,13 @@ public interface MentorEntryRepository extends JpaRepository<MentorEntry, UUID> 
     }
 
     Optional<MentorEntry> findByIdAndWorkspaceId(UUID id, Long workspaceId);
+
+    /** The same visibility predicate for a live entry as for a page or search. */
+    @Query(
+            value = "SELECT EXISTS(SELECT 1 FROM mentor_entry e WHERE e.workspace_id=:workspaceId AND e.id=:id AND "
+                    + SHOWN + ")",
+            nativeQuery = true)
+    boolean isShown(@Param("workspaceId") long workspaceId, @Param("id") UUID id);
 
     /** The conversation an entry belongs to, read without loading the entry. */
     @Query("SELECT e.conversationId FROM MentorEntry e WHERE e.id = :id AND e.workspaceId = :workspaceId")
@@ -219,10 +229,11 @@ public interface MentorEntryRepository extends JpaRepository<MentorEntry, UUID> 
 
     Optional<MentorEntry> findByWorkspaceIdAndTurnIdAndKind(Long workspaceId, UUID turnId, MentorEntry.Kind kind);
 
-    /** The developer's question that a turn answers. */
-    default MentorEntry findQuestion(Long workspaceId, UUID turnId) {
+    /** The user question or real system digest entry that starts this conversation work. */
+    default MentorEntry findStimulus(Long workspaceId, UUID turnId) {
         return findByWorkspaceIdAndTurnIdAndKind(workspaceId, turnId, MentorEntry.Kind.USER)
-                .orElseThrow(() -> new IllegalStateException("Mentor turn " + turnId + " has no question"));
+                .or(() -> findByWorkspaceIdAndTurnIdAndKind(workspaceId, turnId, MentorEntry.Kind.DIGEST))
+                .orElseThrow(() -> new IllegalStateException("Mentor turn " + turnId + " has no stimulus"));
     }
 
     boolean existsByWorkspaceIdAndRequestId(Long workspaceId, String requestId);
@@ -244,11 +255,14 @@ public interface MentorEntryRepository extends JpaRepository<MentorEntry, UUID> 
     /**
      * Stores Pi's entry for a question. A deleted question keeps no copy of its words, so a redacted row is skipped.
      * An edited question keeps Pi's entry with its current text, never the words the host read before the edit.
+     * A digest keeps its fact membership and stores only the Pi id needed to rebuild the path.
      */
     @Modifying(flushAutomatically = true)
     @Query(value = """
             UPDATE mentor_entry
-               SET payload = CASE WHEN edited_at IS NULL THEN CAST(:piEntry AS jsonb)
+               SET payload = CASE WHEN kind = 'DIGEST'
+                   THEN payload || jsonb_build_object('id', CAST(:piEntry AS jsonb) -> 'id')
+                   WHEN edited_at IS NULL THEN CAST(:piEntry AS jsonb)
                    ELSE jsonb_set(CAST(:piEntry AS jsonb), '{message,content}', to_jsonb(text)) END
              WHERE id = :id AND workspace_id = :workspaceId AND redacted_at IS NULL
             """, nativeQuery = true)
@@ -345,8 +359,10 @@ public interface MentorEntryRepository extends JpaRepository<MentorEntry, UUID> 
                    END AS "excerpt"
             FROM mentor_entry e
             WHERE e.workspace_id = :workspaceId AND e.conversation_id IN (:conversationIds)
-              AND e.kind IN ('USER', 'HEPH', 'DIGEST') AND e.search_text <> ''
-              AND e.redacted_at IS NULL
+              AND e.search_text <> ''
+              AND (
+            """ + SHOWN + """
+              ) AND e.redacted_at IS NULL
               AND (CAST(:query AS text) IS NULL
                    OR to_tsvector('simple', e.search_text) @@ websearch_to_tsquery('simple', CAST(:query AS text)))
               AND (CAST(:before AS timestamptz) IS NULL OR e.created_at < CAST(:before AS timestamptz))

@@ -32,10 +32,10 @@ public record MentorEntryDraft(
         this(kind, surface, text, kind.isMessage() ? text : "", payload, turnId, requestId, slackTs);
     }
 
-    /** A weekly digest: written by the server outside any turn, idempotent by {@code requestId}. */
-    public static MentorEntryDraft digest(String text, JsonNode payload, String requestId) {
+    /** The system's weekly digest stimulus, owned by the same turn that writes its model answer. */
+    static MentorEntryDraft digest(String text, JsonNode payload, String requestId, UUID turnId) {
         return new MentorEntryDraft(
-                MentorEntry.Kind.DIGEST, MentorEntry.Surface.SYSTEM, text, payload, null, requestId, null);
+                MentorEntry.Kind.DIGEST, MentorEntry.Surface.SYSTEM, text, payload, turnId, requestId, null);
     }
 
     static MentorEntryDraft question(

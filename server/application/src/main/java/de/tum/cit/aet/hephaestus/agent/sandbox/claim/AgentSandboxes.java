@@ -215,7 +215,8 @@ public class AgentSandboxes {
      * Leases the subject's next run of these kinds to its sandbox, while the sandbox is live: one transaction holds the
      * sandbox, so the reaper cannot take it back between the check and the claim. {@code claimed} moves the run's
      * domain row in the same transaction; when it answers false, its kind ended or requeued the run, and the sandbox
-     * gets none. A lease is a use of the sandbox.
+     * gets none. A pull takes the sandbox write lock without waiting, so two pulls cannot hold shared locks while
+     * their run claims wait on each other. A lease is a use of the sandbox.
      */
     public Optional<AgentRunLease> lease(
             LiveSandbox sandbox, Set<AgentRunKind> kinds, Predicate<AgentRunLease> claimed) {
@@ -229,7 +230,7 @@ public class AgentSandboxes {
         return Objects.requireNonNull(transactions.execute(status -> {
             beforeWrite.run();
             if (sandboxes
-                    .lockLive(sandbox.id(), sandbox.workspaceId(), sandbox.subjectKey())
+                    .tryLockForClaim(sandbox.id(), sandbox.workspaceId(), sandbox.subjectKey())
                     .isEmpty()) return Optional.<AgentRunLease>empty();
             var lease = runs.claimSubject(sandbox.workspaceId(), sandbox.subjectKey(), kinds);
             if (lease.isEmpty()) return lease;

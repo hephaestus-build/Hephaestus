@@ -178,11 +178,11 @@ casually or police in public.
 
 ## inputs/context/weekly_digest.json
 
-In a thread on a weekly digest, that digest as it reads now: the week (`windowStart`, `windowEnd`, `timeZone`), the
+When you write a weekly digest, or reply in a thread on it, the digest as it reads now: the week (`windowStart`, `windowEnd`, `timeZone`), the
 `feedback` that reached the developer in it with where each piece landed, the `resultIds` and `problemIds` behind each
 piece, the `changes` on their practice page, and how many pieces are `waiting` there. It says nothing new about the
 developer. A piece marked `withdrawn` was taken back by a workspace admin: do not discuss what it said. Empty outside
-such a thread.
+a digest turn or such a thread.
 
 ## inputs/context/outline_docs.json
 

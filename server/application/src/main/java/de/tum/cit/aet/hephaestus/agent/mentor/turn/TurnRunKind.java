@@ -91,8 +91,10 @@ public class TurnRunKind implements AgentRunHandler {
             case NOT_STARTED -> {
                 if (turn.getStatus() != MentorTurn.Status.QUEUED) return;
                 turns.expireQueued(turn, MentorTurnCompletion.COULD_NOT_START);
-                meters.counter(AgentMetrics.MENTOR_TURN_COMPLETED, "outcome", "failed")
-                        .increment();
+                if (turn.getSurface() != MentorTurn.Surface.SYSTEM) {
+                    meters.counter(AgentMetrics.MENTOR_TURN_COMPLETED, "outcome", "failed")
+                            .increment();
+                }
                 log.warn("Conversation turn {} could not start before its start wait ran out", turn.getId());
             }
             case DEADLINE -> {

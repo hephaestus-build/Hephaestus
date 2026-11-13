@@ -20,9 +20,11 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
  * The email note that a weekly digest is ready, for a developer with no Slack identity in the workspace. It names
@@ -57,7 +59,8 @@ public class WeeklyDigestEmailListener implements WeeklyDigestTransport, EmailNo
                 && contacts.activeVerifiedPrimaryEmail(accountId).isPresent();
     }
 
-    @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
+    @Transactional(propagation = Propagation.MANDATORY)
     public void on(WeeklyDigestWritten event) {
         if (event.pointer() == WeeklyDigestPointer.EMAIL) {
             emails.enqueue(this, event);

@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
-class WeeklyDigestComposerTest extends BaseUnitTest {
+class DigestScheduleTest extends BaseUnitTest {
 
     private static final ZoneId BERLIN = ZoneId.of("Europe/Berlin");
 
@@ -25,17 +25,17 @@ class WeeklyDigestComposerTest extends BaseUnitTest {
         "2026-10-13T07:00:00Z, false",
     })
     void shouldBeDueOnlyOnMondayFromNineToNineInTheEveningLocalTimeWhenTheJobRuns(Instant now, boolean due) {
-        assertThat(WeeklyDigestComposer.isDue(now, BERLIN)).isEqualTo(due);
+        assertThat(DigestSchedule.isDue(now, BERLIN)).isEqualTo(due);
     }
 
     @Test
     void shouldBeDueInTheDevelopersOwnZoneWhenItIsAnotherDayInUtc() {
-        assertThat(WeeklyDigestComposer.isDue(Instant.parse("2026-10-11T23:30:00Z"), ZoneId.of("Asia/Tokyo")))
+        assertThat(DigestSchedule.isDue(Instant.parse("2026-10-11T23:30:00Z"), ZoneId.of("Asia/Tokyo")))
                 .isFalse();
-        assertThat(WeeklyDigestComposer.isDue(Instant.parse("2026-10-12T00:30:00Z"), ZoneId.of("Asia/Tokyo")))
+        assertThat(DigestSchedule.isDue(Instant.parse("2026-10-12T00:30:00Z"), ZoneId.of("Asia/Tokyo")))
                 .isTrue();
         // Monday 20:00 in Los Angeles is Tuesday in UTC.
-        assertThat(WeeklyDigestComposer.isDue(Instant.parse("2026-10-13T03:00:00Z"), ZoneId.of("America/Los_Angeles")))
+        assertThat(DigestSchedule.isDue(Instant.parse("2026-10-13T03:00:00Z"), ZoneId.of("America/Los_Angeles")))
                 .isTrue();
     }
 }

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.exception.MentorRefusedException;
+import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.DigestAdmission;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -158,7 +159,14 @@ class MentorTurnStarterIntegrationTest extends AbstractWorkspaceIntegrationTest 
     }
 
     private MentorTurnStarter starter(MeterRegistry meters) {
-        return new MentorTurnStarter(turns, admission, turnRepository, writeFence, meters, connections);
+        return new MentorTurnStarter(
+                turns,
+                admission,
+                beans.getBean(DigestAdmission.class),
+                turnRepository,
+                writeFence,
+                meters,
+                connections);
     }
 
     private MentorTurn failedTurn() {

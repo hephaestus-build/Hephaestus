@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorContextPathBuilder;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import de.tum.cit.aet.hephaestus.mentor.MentorSituation;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
@@ -201,6 +202,7 @@ public class HephTurnContexts {
      * @return whether the attempt holds the claim
      */
     public boolean showFeedback(TurnAttempt turn, UUID feedbackId) {
+        if (turns.require(turn.workspaceId(), turn.turnId()).getSurface() == MentorTurn.Surface.SYSTEM) return false;
         return feedback.claimConversationCopy(turn.workspaceId(), feedbackId, turn.turnId(), turn.attempt())
                 .isPresent();
     }

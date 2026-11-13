@@ -45,6 +45,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
+import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.DigestAdmission;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.productfeedback.DraftReportAdapterFixture;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
@@ -448,6 +449,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                                 "",
                                 new LlmProperties.Egress(true, List.of(), false),
                                 new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL))),
+                mock(DigestAdmission.class),
                 jobRepository,
                 turnRepository,
                 reviewAi,

@@ -2170,7 +2170,7 @@ export const zMentorTurnPartial = z.object({
 });
 
 /**
- * One question to Hephaestus and the work to answer it
+ * One conversation turn: a requested answer or an opted-in proactive digest
  */
 export const zMentorTurn = z.object({
 	attempt: z
@@ -2186,7 +2186,7 @@ export const zMentorTurn = z.object({
 	partial: zMentorTurnPartial.optional(),
 	requestId: z.string(),
 	status: z.enum(["QUEUED", "RUNNING", "DONE", "FAILED", "STOPPED"]),
-	surface: z.enum(["APP", "SLACK"]),
+	surface: z.enum(["APP", "SLACK", "SYSTEM"]),
 	waitingFor: z.enum(["FREE_HEPH"]).optional(),
 });
 

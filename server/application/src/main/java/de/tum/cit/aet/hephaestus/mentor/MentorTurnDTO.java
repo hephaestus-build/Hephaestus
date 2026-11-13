@@ -7,7 +7,7 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-@Schema(description = "One question to Hephaestus and the work to answer it")
+@Schema(description = "One conversation turn: a requested answer or an opted-in proactive digest")
 public record MentorTurnDTO(
         @NonNull UUID id,
         @NonNull UUID conversationId,
@@ -16,7 +16,7 @@ public record MentorTurnDTO(
         @Nullable
         UUID parentEntryId,
 
-        @Schema(description = "The submission that asked; the question's entry carries the same value") @NonNull
+        @Schema(description = "The submission or schedule key; the stimulus entry carries the same value") @NonNull
         String requestId,
 
         MentorTurn.@NonNull Status status,

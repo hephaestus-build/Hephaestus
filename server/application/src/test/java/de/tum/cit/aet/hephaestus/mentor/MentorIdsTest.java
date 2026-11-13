@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.mentor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.testconfig.WeeklyDigestTestFixtures;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,7 +24,10 @@ class MentorIdsTest {
             MentorTurn turn =
                     new MentorTurn(main, "request-" + round, MentorTurn.Surface.APP, null, UUID.randomUUID(), NOW);
             MentorEntry entry = new MentorEntry(
-                    main, round, MentorEntryDraft.digest("Digest", JsonNodeFactory.instance.objectNode(), "r"), NOW);
+                    main,
+                    round,
+                    WeeklyDigestTestFixtures.historical("Digest", JsonNodeFactory.instance.objectNode(), "r"),
+                    NOW);
             MentorConversation thread = MentorConversation.thread(main, entry.getId(), NOW);
             ids.addAll(List.of(main.getId(), turn.getId(), entry.getId(), thread.getId()));
         }

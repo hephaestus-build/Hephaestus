@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.validation.Validator;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
@@ -23,8 +24,11 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -55,12 +59,13 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
         workspace = workspaces
                 .save(TestEntities.activeWorkspace("turn-cap-" + UUID.randomUUID()))
                 .getId();
-        capped = withTurnCap(rows.countLeased(AgentRunKind.TURN.name()) + 1);
+        capped = withTurnCap(
+                rows.countLeased(AgentRunKind.TURN.name()) + rows.countLeased(AgentRunKind.DIGEST.name()) + 1);
         sandboxes = SandboxOwnerFixtures.owner(
                 beans, new AttemptTokenIssuer(AttemptKeyFixtures.keyring(AttemptSigningKey.generate())), capped);
     }
 
-    private AgentRuns withTurnCap(int cap) {
+    private AgentRuns withTurnCap(@Nullable Integer cap) {
         AgentCapacityProperties capacity = runs.capacity();
         return new AgentRuns(
                 rows,
@@ -78,22 +83,32 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
                 new SimpleMeterRegistry());
     }
 
-    @Test
-    void shouldLeaveTurnWorkQueuedWhenTheConfiguredCapacityIsZero() {
+    @ParameterizedTest
+    @EnumSource(
+            value = AgentRunKind.class,
+            names = {"TURN", "DIGEST"})
+    void shouldLeaveTurnWorkQueuedWhenTheConfiguredCapacityIsZero(AgentRunKind kind) {
         String subject = "conversation:" + UUID.randomUUID();
-        AgentRunRef queued = queue(subject);
+        AgentRunRef queued = queue(subject, kind);
         AgentRuns stopped = withTurnCap(0);
         assertThat(beans.getBean(Validator.class).validate(stopped.capacity())).isEmpty();
-        var claimed =
-                transactions.execute(status -> stopped.claimSubject(workspace, subject, Set.of(AgentRunKind.TURN)));
+        var claimed = transactions.execute(status -> stopped.claimSubject(workspace, subject, Set.of(kind)));
         assertThat(claimed).isEmpty();
         assertThat(rows.findByRef(queued.id(), workspace).orElseThrow().getState())
                 .isEqualTo(AgentRunState.QUEUED);
     }
 
     private AgentRunRef queue(String subject) {
-        return Objects.requireNonNull(transactions.execute(
-                status -> runs.enqueue(workspace, AgentRunKind.TURN, AgentRunBand.INTERACTIVE, subject, null)));
+        return queue(subject, AgentRunKind.TURN);
+    }
+
+    private AgentRunRef queue(String subject, AgentRunKind kind) {
+        return Objects.requireNonNull(transactions.execute(status -> runs.enqueue(
+                workspace,
+                kind,
+                kind == AgentRunKind.DIGEST ? AgentRunBand.BACKGROUND : AgentRunBand.INTERACTIVE,
+                subject,
+                null)));
     }
 
     private AgentSandboxes.LiveSandbox sandbox(String subject) {
@@ -110,19 +125,58 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldKeepTwoSubjectsWithinTheCapAcrossConcurrentPullsAndAdmitTheNextAfterCompletion() throws Exception {
+        keepWithinCap(AgentRunKind.TURN, AgentRunKind.TURN);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = AgentRunKind.class,
+            names = {"TURN", "DIGEST"})
+    void shouldShareOneCapBetweenInteractiveAndDigestWork(AgentRunKind firstKind) throws Exception {
+        keepWithinCap(firstKind, firstKind == AgentRunKind.TURN ? AgentRunKind.DIGEST : AgentRunKind.TURN);
+    }
+
+    @Test
+    void shouldLetAQuestionPassItsQueuedDigestAsSoonAsConversationCapacityReturns() {
+        String occupied = "conversation:" + UUID.randomUUID();
+        queue(occupied);
+        var held = transactions.execute(status -> capped.claimSubject(workspace, occupied, Set.of(AgentRunKind.TURN)));
+        var lease = Objects.requireNonNull(held).orElseThrow();
+        String subject = "conversation:" + UUID.randomUUID();
+        var digest = queue(subject, AgentRunKind.DIGEST);
+        var question = Objects.requireNonNull(transactions.execute(status ->
+                runs.enqueue(workspace, AgentRunKind.TURN, AgentRunBand.INTERACTIVE, subject, Duration.ofMinutes(3))));
+        var offered = Set.of(AgentRunKind.TURN, AgentRunKind.DIGEST);
+        assertThat(capped.due(offered, Integer.MAX_VALUE))
+                .filteredOn(run -> run.run().workspaceId() == workspace)
+                .extracting(AgentRuns.DueRun::run)
+                .contains(question)
+                .doesNotContain(digest);
+        var blocked = transactions.execute(status -> capped.claimSubject(workspace, subject, offered));
+        assertThat(blocked).isEmpty();
+        transactions.executeWithoutResult(status -> runs.end(lease.fence()));
+        var claimed = transactions.execute(status -> capped.claimSubject(workspace, subject, offered));
+        assertThat(claimed).get().extracting(AgentRunLease::runId).isEqualTo(question.id());
+        assertThat(rows.findByRef(digest.id(), workspace))
+                .get()
+                .extracting(AgentRun::getState)
+                .isEqualTo(AgentRunState.QUEUED);
+    }
+
+    private void keepWithinCap(AgentRunKind firstKind, AgentRunKind secondKind) throws Exception {
         String firstSubject = "conversation:" + UUID.randomUUID();
         String secondSubject = "conversation:" + UUID.randomUUID();
-        AgentRunRef first = queue(firstSubject);
-        AgentRunRef second = queue(secondSubject);
+        AgentRunRef first = queue(firstSubject, firstKind);
+        AgentRunRef second = queue(secondSubject, secondKind);
         var firstSandbox = sandbox(firstSubject);
         var secondSandbox = sandbox(secondSubject);
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             AgentRunLease claimed = Objects.requireNonNull(transactions.execute(status -> {
                 var lease = sandboxes
-                        .lease(firstSandbox, Set.of(AgentRunKind.TURN), ignored -> true)
+                        .lease(firstSandbox, Set.of(firstKind), ignored -> true)
                         .orElseThrow();
-                var concurrent = executor.submit(
-                        () -> sandboxes.lease(secondSandbox, Set.of(AgentRunKind.TURN), ignored -> true));
+                var concurrent =
+                        executor.submit(() -> sandboxes.lease(secondSandbox, Set.of(secondKind), ignored -> true));
                 try {
                     assertThat(concurrent.get(5, TimeUnit.SECONDS)).isEmpty();
                 } catch (Exception failure) {
@@ -131,12 +185,12 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
                 return lease;
             }));
             assertThat(claimed.runId()).isEqualTo(first.id());
-            assertThat(sandboxes.lease(secondSandbox, Set.of(AgentRunKind.TURN), ignored -> true))
+            assertThat(sandboxes.lease(secondSandbox, Set.of(secondKind), ignored -> true))
                     .isEmpty();
             assertThat(rows.findByRef(second.id(), workspace).orElseThrow().getState())
                     .isEqualTo(AgentRunState.QUEUED);
             transactions.executeWithoutResult(status -> runs.end(claimed.fence()));
-            assertThat(sandboxes.lease(secondSandbox, Set.of(AgentRunKind.TURN), ignored -> true))
+            assertThat(sandboxes.lease(secondSandbox, Set.of(secondKind), ignored -> true))
                     .map(AgentRunLease::runId)
                     .contains(second.id());
         }
@@ -144,6 +198,49 @@ class TurnSubjectCapacityIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(AgentRunState.ENDED);
         assertThat(rows.findByRef(second.id(), workspace).orElseThrow().getState())
                 .isEqualTo(AgentRunState.LEASED);
+    }
+
+    @Test
+    void shouldLeaveAnUncappedQuestionQueuedWhileItsSandboxClaimsTheDigest() throws Exception {
+        var owner = SandboxOwnerFixtures.owner(
+                beans,
+                new AttemptTokenIssuer(AttemptKeyFixtures.keyring(AttemptSigningKey.generate())),
+                withTurnCap(null));
+        String subject = "conversation:" + UUID.randomUUID();
+        var digest = queue(subject, AgentRunKind.DIGEST);
+        var sandbox = sandbox(subject);
+        var offered = Set.of(AgentRunKind.TURN, AgentRunKind.DIGEST);
+        var claimed = new CountDownLatch(1);
+        var finish = new CountDownLatch(1);
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var first = executor.submit(() -> owner.lease(sandbox, offered, lease -> {
+                claimed.countDown();
+                try {
+                    if (!finish.await(10, TimeUnit.SECONDS))
+                        throw new IllegalStateException("The test did not release the first pull");
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(interrupted);
+                }
+                return true;
+            }));
+            AgentRunRef question;
+            try {
+                assertThat(claimed.await(5, TimeUnit.SECONDS)).isTrue();
+                question = queue(subject);
+                var second = executor.submit(() -> owner.lease(sandbox, offered, ignored -> true));
+                assertThat(second.get(5, TimeUnit.SECONDS)).isEmpty();
+            } finally {
+                finish.countDown();
+            }
+            var lease = first.get(5, TimeUnit.SECONDS).orElseThrow();
+            assertThat(lease.runId()).isEqualTo(digest.id());
+            transactions.executeWithoutResult(status -> runs.end(lease.fence()));
+            assertThat(owner.lease(sandbox, offered, ignored -> true))
+                    .get()
+                    .extracting(AgentRunLease::runId)
+                    .isEqualTo(question.id());
+        }
     }
 
     @Test

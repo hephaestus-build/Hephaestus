@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.weeklydigest;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -14,6 +15,7 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>It does not store whose digest it is: the digest is rendered for the account that owns its conversation.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record WeeklyDigestPayload(
         WeeklyDigestWindow window, List<UUID> feedbackIds, List<WeeklyDigestChangeKey> changeKeys) {
 

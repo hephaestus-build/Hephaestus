@@ -367,7 +367,7 @@ public class MentorEntryService {
                     .ifPresent(accountId -> slackReplies.ended(
                             turn,
                             accountId,
-                            entries.findQuestion(turn.getWorkspaceId(), turn.getId())
+                            entries.findStimulus(turn.getWorkspaceId(), turn.getId())
                                     .getId()));
         if (slotsChanged) {
             slotsChanged(turn.getWorkspaceId());

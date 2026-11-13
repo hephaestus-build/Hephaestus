@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnAdmission;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRun;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -57,7 +58,13 @@ class ProxyRoutingService {
     AgentRunBand band(ProxyRouting routing) {
         if (routing.attempt().sourceType() == UsageSourceType.PRODUCT_FEEDBACK_DRAFT
                 || routing.attempt().sourceType() == UsageSourceType.PROBE) return AgentRunBand.BACKGROUND;
-        if (routing.hephTurn()) return AgentRunBand.INTERACTIVE;
+        if (routing.hephTurn()) {
+            var attempt = routing.attempt();
+            if (attempt.runId() == null || routing.workspaceId() == null) throw attemptEnded();
+            return runs.find(new AgentRunRef(attempt.runId(), routing.workspaceId()))
+                    .map(AgentRun::getBand)
+                    .orElseThrow(ProxyRoutingService::attemptEnded);
+        }
         var job = agentJobRepository.findById(routing.sourceId()).orElseThrow(ProxyRoutingService::attemptEnded);
         if (ResultAdmissionService.isAdmitted(job)) return AgentRunBand.BATCH;
         return reviews.find(job.getWorkspaceId(), job.getReviewId())

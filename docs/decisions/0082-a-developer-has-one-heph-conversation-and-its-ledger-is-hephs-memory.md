@@ -79,14 +79,15 @@ A rule that main does not satisfy yet says "1.0 target" ([ADR 0070](0070-1-0-is-
     Decided, not shipped: one `llm_usage_event` row for each call, as [ADR 0079](0079-one-agent-system.md) § Data model states. No pull request delivers it yet.
     Enforced by: `MentorTurnCompletionIntegrationTest#shouldBillEachLostAttemptFromTheProxyWhenTheReaperTakesItsLeaseBack`. Not enforced for persons. Review of a usage DTO catches a person field.
 19. **The weekly digest is opt-in.** It is off by default, and one account switch covers every workspace. It is due on Monday from 09:00 to 21:00 local time. A quiet week writes nothing. It shows no score, rank or streak ([ADR 0045](0045-activity-counts-work-and-never-ranks-people.md)).
-    Enforced by: `WeeklyDigestComposerTest#shouldBeDueOnlyOnMondayFromNineToNineInTheEveningLocalTimeWhenTheJobRuns`, `WeeklyDigestIntegrationTest#shouldWriteNothingWhenTheWeekWasQuiet`.
+    Enforced by: `DigestScheduleTest#shouldBeDueOnlyOnMondayFromNineToNineInTheEveningLocalTimeWhenTheJobRuns`, `WeeklyDigestIntegrationTest#shouldWriteNothingWhenTheWeekWasQuiet`.
 20. **A note points to the digest.** A Slack note, or else an email, says that it is ready. The note has no counts, no practice names and no feedback text.
     The Slack note is a `slack_post` action, and the email is an `email` action. Both go through the outbox.
     Enforced by: `SlackWeeklyDigestPointerIntegrationTest#shouldPostOneNoteWithoutContentsAndLearnTheDmWhenADigestIsWritten`.
 21. **A model writes the digest and nudges.** Each is a `digest` run in the conversation's sandbox ([ADR 0079](0079-one-agent-system.md) § Interactive and proactive work). Admission checks each claim against its sources. The destination rules of [ADR 0057](0057-one-heph-conversation-per-developer.md#weekly-digest) choose its facts.
     Nudges follow the digest opt-in, so they are off by default. A nudge outside the conversation carries no content, as the digest note does.
-    Decided, not shipped: no pull request delivers it yet. On main, `WeeklyDigestComposer` writes the digest from facts.
-    Not enforced until the `digest` run ships.
+    A weekly schedule enqueues the digest. The conversation runner writes its answer under the same admission and epoch fence as requested work.
+    Completion checks the current subscription and sources before it stores the answer or enqueues a note.
+    Enforced by: `WeeklyDigestIntegrationTest#shouldDiscardTheAnswerAndSendNoNoteWhenTheDeveloperOptsOutBeforeCompletion` and the digest gateway tests.
 
 ## What changed, and why
 
