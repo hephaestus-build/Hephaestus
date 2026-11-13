@@ -15,9 +15,9 @@ BEGIN
  IF OLD.state = 'COMPLETE' AND NEW.state IS DISTINCT FROM OLD.state THEN
   RAISE EXCEPTION 'a completed person data request keeps its state' USING ERRCODE = '55000';
  END IF;
- RETURN NEW;
+ RETURN NULL;
 END $$;
-CREATE TRIGGER person_data_request_transition BEFORE UPDATE OF state ON person_data_request FOR EACH ROW EXECUTE FUNCTION guard_person_data_request();
+CREATE TRIGGER person_data_request_transition AFTER UPDATE OF state ON person_data_request FOR EACH ROW EXECUTE FUNCTION guard_person_data_request();
         </sql>
         <rollback>
             <sql splitStatements="false">
