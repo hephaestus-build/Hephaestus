@@ -276,14 +276,20 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
 
     private static Set<String> guideSections() throws IOException {
         Pattern heading = Pattern.compile("^#{2,6} (.+)$");
+        // A heading that keeps an older anchor ends with an explicit ID: `## Server role {/*#runtime-roles*/}`.
+        Pattern explicitId = Pattern.compile("\\{/\\*#([a-z0-9-]+)\\*/}$");
         Set<String> anchors = new HashSet<>();
         for (String line : Files.readAllLines(Path.of("..", "..", "docs", "admin", "configuration-readiness.mdx"))) {
             Matcher match = heading.matcher(line);
             if (match.matches()) {
-                anchors.add(match.group(1)
-                        .toLowerCase(Locale.ROOT)
-                        .replaceAll("[^a-z0-9 -]", "")
-                        .replace(' ', '-'));
+                Matcher id = explicitId.matcher(match.group(1));
+                anchors.add(
+                        id.find()
+                                ? id.group(1)
+                                : match.group(1)
+                                        .toLowerCase(Locale.ROOT)
+                                        .replaceAll("[^a-z0-9 -]", "")
+                                        .replace(' ', '-'));
             }
         }
         return anchors;
