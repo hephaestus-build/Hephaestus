@@ -1088,7 +1088,9 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     }
 
     private List<ConnectionAudit> selectionChanges(Workspace target) {
-        return connectionAuditRepository.findByConnectionIdOrderByOccurredAtDesc(connectionId(target)).stream()
+        return connectionAuditRepository
+                .findByWorkspaceIdAndConnectionIdOrderByOccurredAtDesc(target.getId(), connectionId(target))
+                .stream()
                 .filter(audit -> audit.getEventType().equals("PROJECT_SELECTION_CHANGED"))
                 .toList();
     }

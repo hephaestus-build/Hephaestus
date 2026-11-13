@@ -19,6 +19,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
+@WorkspaceAgnostic("SCM mirror rows are shared across workspaces; callers validate the provider or monitored scope")
 public interface IssueCommentRepository extends JpaRepository<IssueComment, Long> {
     /**
      * Comment {@code c} of repository {@code :repositoryId} hangs on issue row {@code i}, and that number is a

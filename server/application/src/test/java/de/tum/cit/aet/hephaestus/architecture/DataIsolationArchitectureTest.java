@@ -5,24 +5,31 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.fields;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.BASE_PACKAGE;
 import static de.tum.cit.aet.hephaestus.architecture.conditions.HephaestusConditions.beNotNullableIfWorkspaceType;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.domain.JavaParameterizedType;
 import com.tngtech.archunit.core.domain.JavaType;
+import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
+import de.tum.cit.aet.hephaestus.architecture.conditions.WorkspaceQueryParameters;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAudit;
+import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.persistence.Entity;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Data Isolation Architecture Tests - Prevents Cross-Workspace Data Access.
@@ -340,6 +347,33 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
 
         @Test
         void entityReturningMethodsAreWorkspaceScoped() {
+            entityReturningMethodsRule().check(classes);
+        }
+
+        @Test
+        void shouldRejectAnUnscopedEntityReadByAnotherId() {
+            var fixtures = new ClassFileImporter()
+                    .importClasses(
+                            UnscopedFixtureRepository.class,
+                            ScopedFixtureRepository.class,
+                            ExemptFixtureRepository.class);
+            var violations = entityReturningMethodsRule()
+                    .evaluate(fixtures)
+                    .getFailureReport()
+                    .getDetails();
+            assertThat(violations)
+                    .hasSize(6)
+                    .anySatisfy(violation -> assertThat(violation).contains("UnscopedFixtureRepository.readHistory"))
+                    .anySatisfy(
+                            violation -> assertThat(violation).contains("UnscopedFixtureRepository.findByConnectionId"))
+                    .anySatisfy(violation -> assertThat(violation).contains("UnscopedFixtureRepository.unbound"))
+                    .anySatisfy(violation -> assertThat(violation).contains("UnscopedFixtureRepository.unused"))
+                    .anySatisfy(violation -> assertThat(violation).contains("UnscopedFixtureRepository.readDefault"))
+                    .anySatisfy(violation -> assertThat(violation)
+                            .contains("UnscopedFixtureRepository.findByConnectionIdOrWorkspaceId"));
+        }
+
+        private ArchRule entityReturningMethodsRule() {
             ArchCondition<JavaMethod> beWorkspaceScopedIfReturningEntity =
                     new ArchCondition<>("be workspace-scoped if returning entity types") {
                         @Override
@@ -382,26 +416,18 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
                                 return;
                             }
 
-                            boolean isWorkspaceScoped = methodName.contains("Workspace")
-                                    || methodName.contains("workspace")
-                                    || methodName.contains("ByWorkspace")
-                                    || methodName.contains("ForWorkspace");
-
-                            boolean hasWorkspaceParam = method.getRawParameterTypes().stream()
-                                    .anyMatch(p -> p.getSimpleName().equals("Long")
-                                            || p.getSimpleName().equals("long")
-                                            || // workspaceId
-                                            p.getSimpleName().equals("Workspace"));
-
-                            boolean hasQueryWithWorkspaceFilter = false;
-                            if (method.isAnnotatedWith(Query.class)) {
-                                Query q = method.getAnnotationOfType(Query.class);
-                                hasQueryWithWorkspaceFilter = q.value().contains("workspaceId")
-                                        || q.value().contains("workspace.id")
-                                        || q.value().contains("JOIN Workspace");
+                            boolean isWorkspaceScoped;
+                            if (method.isAnnotatedWith(Query.class)
+                                    || method.reflect().isDefault()) {
+                                isWorkspaceScoped = WorkspaceQueryParameters.bindsWorkspaceParameter(method.reflect());
+                            } else {
+                                isWorkspaceScoped = methodName.matches(".*By.*Workspace(?:Id|_Id)?(?:And|OrderBy|$).*")
+                                        && !Pattern.compile("Or(?=[A-Z])")
+                                                .matcher(methodName)
+                                                .find();
                             }
 
-                            if (!isWorkspaceScoped && !hasWorkspaceParam && !hasQueryWithWorkspaceFilter) {
+                            if (!isWorkspaceScoped) {
                                 events.add(SimpleConditionEvent.violated(
                                         method,
                                         String.format(
@@ -413,7 +439,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
                         }
                     };
 
-            ArchRule rule = methods()
+            return methods()
                     .that()
                     .areDeclaredInClassesThat()
                     .haveSimpleNameEndingWith("Repository")
@@ -422,8 +448,6 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
                     .areInterfaces()
                     .should(beWorkspaceScopedIfReturningEntity)
                     .because("Methods returning entities must be workspace-scoped");
-
-            rule.check(classes);
         }
     }
 
@@ -487,6 +511,43 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
 
             rule.check(classes);
         }
+    }
+
+    interface UnscopedFixtureRepository {
+        List<ConnectionAudit> readHistory(long connectionId);
+
+        List<ConnectionAudit> findByConnectionIdOrderByOccurredAtDesc(long workspaceId);
+
+        @Query("SELECT a FROM ConnectionAudit a WHERE a.workspaceId = :workspaceId")
+        List<ConnectionAudit> unbound(@Param("connectionId") long workspaceId);
+
+        @Query("SELECT a FROM ConnectionAudit a WHERE a.connection.id = :connectionId")
+        List<ConnectionAudit> unused(long workspaceId, long connectionId);
+
+        default List<ConnectionAudit> readDefault(long connectionId) {
+            return List.of();
+        }
+
+        List<ConnectionAudit> findByConnectionIdOrWorkspaceId(long connectionId, long workspaceId);
+    }
+
+    interface ScopedFixtureRepository {
+        List<ConnectionAudit> findByWorkspaceIdAndConnectionId(long workspaceId, long connectionId);
+
+        @Query("SELECT a FROM ConnectionAudit a WHERE a.workspaceId = :workspaceId")
+        List<ConnectionAudit> readBoxed(@Param("workspaceId") Long wsId);
+
+        @Query("SELECT a FROM ConnectionAudit a WHERE a.connection.workspace = :workspace")
+        List<ConnectionAudit> readObject(Workspace workspace);
+
+        default List<ConnectionAudit> readDefault(long workspaceId) {
+            return findByWorkspaceIdAndConnectionId(workspaceId, 1L);
+        }
+    }
+
+    interface ExemptFixtureRepository {
+        @WorkspaceAgnostic("Explicit unscoped fixture for the architecture rule")
+        List<ConnectionAudit> readHistory(long connectionId);
     }
 
     /** The simple names of a type and of every type argument in it, at any depth. */

@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
  * provider identity.
  */
 @Repository
+@WorkspaceAgnostic("SCM mirror rows are shared across workspaces; callers validate the provider or monitored scope")
 public interface LabelRepository extends JpaRepository<Label, Long> {
     /** Every workspace's mirror rows. Only tests call it, to check what sync stored; production code reads by scope. */
     @Override

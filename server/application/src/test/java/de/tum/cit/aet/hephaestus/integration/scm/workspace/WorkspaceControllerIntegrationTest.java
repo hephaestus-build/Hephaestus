@@ -1103,8 +1103,11 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                         workspace.getId(), IntegrationKind.GITLAB, IntegrationState.ACTIVE)
                 .or(() -> connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
                         workspace.getId(), IntegrationKind.GITLAB, IntegrationState.SUSPENDED))
-                .map(connection ->
-                        connectionAuditRepository.findByConnectionIdOrderByOccurredAtDesc(connection.getId()).stream()
+                .map(
+                        connection -> connectionAuditRepository
+                                .findByWorkspaceIdAndConnectionIdOrderByOccurredAtDesc(
+                                        workspace.getId(), connection.getId())
+                                .stream()
                                 .filter(audit -> audit.getEventType().equals("STOPPED_PROJECT_WORK_REMOVED"))
                                 .toList())
                 .orElseThrow();
@@ -1116,7 +1119,9 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                         workspace.getId(), IntegrationKind.GITLAB, IntegrationState.ACTIVE)
                 .orElseThrow()
                 .getId();
-        return connectionAuditRepository.findByConnectionIdOrderByOccurredAtDesc(connectionId).stream()
+        return connectionAuditRepository
+                .findByWorkspaceIdAndConnectionIdOrderByOccurredAtDesc(workspace.getId(), connectionId)
+                .stream()
                 .filter(audit -> audit.getEventType().equals("PROJECT_SELECTION_CHANGED"))
                 .toList();
     }

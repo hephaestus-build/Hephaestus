@@ -333,7 +333,8 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
         Connection reloaded = connectionRepository.findById(connection.getId()).orElseThrow();
         assertThat(reloaded.getState()).isEqualTo(IntegrationState.ACTIVE);
         assertThat(reloaded.getCredentialsEncrypted()).isNotNull();
-        assertThat(connectionAuditRepository.findByWorkspaceId(workspace.getId()))
+        assertThat(connectionAuditRepository.findByWorkspaceIdAndConnectionIdOrderByOccurredAtDesc(
+                        workspace.getId(), connection.getId()))
                 .noneSatisfy(audit -> assertThat(audit.getToState()).isEqualTo(IntegrationState.UNINSTALLED));
         assertThat(repositoryToMonitorRepository.findByWorkspaceId(workspace.getId()))
                 .hasSize(1);

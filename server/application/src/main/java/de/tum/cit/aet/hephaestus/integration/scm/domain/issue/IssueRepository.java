@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
  * All queries filter by repository ID, which inherently carries scope
  * through the repository -> workspace relationship chain.
  */
+@WorkspaceAgnostic("SCM mirror rows are shared across workspaces; callers validate the provider or monitored scope")
 public interface IssueRepository extends JpaRepository<Issue, Long> {
 
     /** Every workspace's mirror rows. Only tests call it, to check what sync stored; production code reads by scope. */

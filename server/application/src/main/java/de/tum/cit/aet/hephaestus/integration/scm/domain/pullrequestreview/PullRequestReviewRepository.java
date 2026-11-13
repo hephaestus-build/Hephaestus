@@ -21,6 +21,7 @@ import org.springframework.stereotype.Repository;
  * sync flows; workspace context is established by the caller.
  */
 @Repository
+@WorkspaceAgnostic("SCM mirror rows are shared across workspaces; callers validate the provider or monitored scope")
 public interface PullRequestReviewRepository extends JpaRepository<PullRequestReview, Long> {
     /** Every workspace's reviews. Only tests call it, to check what sync stored; production code reads by scope. */
     @Override

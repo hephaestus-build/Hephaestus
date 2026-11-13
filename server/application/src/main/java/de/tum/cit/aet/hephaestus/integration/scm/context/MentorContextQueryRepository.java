@@ -362,6 +362,8 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
         ORDER BY CASE WHEN t.state = de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread.State.UNRESOLVED THEN 0 ELSE 1 END,
                  t.id DESC, c.createdAt ASC, c.id ASC
         """)
+    @WorkspaceAgnostic("Reads one pull request that MergeReadinessContentSource first resolved through the"
+            + " workspace's monitored repository scope")
     List<PullRequestReviewComment> findThreadCommentsUnresolvedFirst(
             @Param("pullRequestId") Long pullRequestId, Pageable page);
 
