@@ -1,8 +1,9 @@
 name: CI / Feedback eval panel
 
 # The model panel of the feedback eval gate: docs/contributor/feedback-quality-evals.md § Model panel.
-# The checks that need no model gate every pull request in cicd.yml. This workflow composes the fixed
-# panel with a model each night on main, on a manual run, and on a pull request labelled `eval:run`.
+# The checks that need no model gate every pull request in cicd.yml. With a configured provider, this
+# workflow composes the fixed panel each night on main, on a manual run, and on a pull request
+# labelled `eval:run`.
 
 on:
   schedule:
@@ -18,14 +19,45 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  panel:
-    name: Model panel
-    # The repository variables select the provider and the model. Without them, only a manual run
-    # starts, and its summary says why: no night and no label run asks for a panel it cannot compose.
+  # The panel runs only with a configured provider: docs/contributor/ci-cd.mdx § Feedback eval
+  # panel provider. A cron cannot be conditional, so a night without the variables starts no job.
+  provider:
+    name: Model provider
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (vars.FEEDBACK_EVAL_MODEL != '' &&
-        (github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'eval:run')))
+      (github.event_name == 'schedule' && vars.FEEDBACK_EVAL_BASE_URL != '' && vars.FEEDBACK_EVAL_MODEL != '') ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'eval:run'))
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions: {}
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      # A secret cannot appear in an `if:`, so this step reads only whether the key is set.
+      - name: Check the provider settings
+        id: check
+        env:
+          BASE_URL_SET: ${{ vars.FEEDBACK_EVAL_BASE_URL != '' }}
+          MODEL_SET: ${{ vars.FEEDBACK_EVAL_MODEL != '' }}
+          KEY_SET: ${{ secrets.FEEDBACK_EVAL_API_KEY != '' }}
+        run: |
+          if [ "$BASE_URL_SET" = true ] && [ "$MODEL_SET" = true ] && [ "$KEY_SET" = true ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Feedback eval panel"
+            echo
+            echo "The model provider is not configured, so the panel did not run."
+            echo "The deterministic feedback eval gate still covers every pull request."
+            echo "docs/contributor/ci-cd.mdx § Feedback eval panel provider lists the settings."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  panel:
+    name: Model panel
+    needs: [provider]
+    if: needs.provider.outputs.configured == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
@@ -42,9 +74,7 @@ jobs:
         with:
           install: "frozen"
 
-      - name: Set up the Java build
-        if: vars.FEEDBACK_EVAL_MODEL != ''
-        uses: ./.github/actions/setup-caches
+      - uses: ./.github/actions/setup-caches
 
       - name: Compose the panel
         id: gate
@@ -64,8 +94,9 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
-  # A night has no pull request to fail, so it keeps one tracking issue. A red or skipped night
-  # comments on it with the commits since the last green night. The next green night closes it.
+  # A night has no pull request to fail, so it keeps one tracking issue. A red or unfinished night
+  # comments on it with the commits since the last green night. The next green night closes it. A
+  # night without a provider runs no panel, so it never reaches this job.
   report:
     name: "Report a failure"
     needs: [panel]
@@ -98,7 +129,7 @@ jobs:
           fi
           case "$STATUS" in
             failed) what="fell below a floor" ;;
-            skipped) what="was skipped, so it measured nothing" ;;
+            skipped) what="measured nothing, because the endpoint gave no composition for a panel case" ;;
             *) what="did not finish ($RESULT)" ;;
           esac
           # This run is not green yet, so the newest successful scheduled run is the last green night.

@@ -328,25 +328,16 @@ The panel does not run for each pull request. The `CI / Feedback eval panel` wor
 - On a manual run.
 - On a pull request with the `eval:run` label, when the label is added and on each later push.
 
-Three repository settings select the model provider:
-
-| Setting | Kind | Value |
-| --- | --- | --- |
-| `FEEDBACK_EVAL_BASE_URL` | Variable | The OpenAI-compatible base URL, without `/v1/chat/completions` |
-| `FEEDBACK_EVAL_MODEL` | Variable | The model name at that endpoint |
-| `FEEDBACK_EVAL_API_KEY` | Secret | A budget-capped key for that endpoint |
-
-The workflow passes them to the live test as the three `HEPHAESTUS_LIVE_LLM_*` variables.
-Without `FEEDBACK_EVAL_MODEL`, only a manual run starts, and its summary names the missing settings.
-GitHub Models gave access with the workflow token and no secret. GitHub retired it on 2026-07-30, so the panel has no default provider.
+The panel runs only with a configured model provider.
+[Feedback eval panel provider](./ci-cd.mdx#feedback-eval-panel-provider) lists the settings and what happens without them.
 
 ### A skipped panel
 
-The panel is skipped when the run has no provider, or when the endpoint gives no composition for a panel case.
-A forked pull request gets no secret. An endpoint failure is never retried.
+With a provider, the panel is skipped when the endpoint gives no composition for a panel case.
+An endpoint failure is never retried.
 A skip is not a pass: the panel job fails and names the reason.
 
-A night can fall below a floor, be skipped or not finish.
+With a provider, a night can fall below a floor, be skipped or not finish.
 Each such night comments on one tracking issue, "The nightly feedback eval panel is not green".
 The workflow opens the issue if it is not open.
 The comment links the run, the kept result and the commits since the last green night.

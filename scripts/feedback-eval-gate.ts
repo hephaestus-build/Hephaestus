@@ -112,7 +112,7 @@ function runPanel(): { panel: Panel; model: Model | null } {
 		return {
 			panel: {
 				status: "skipped",
-				reason: `No model provider in this run: ${missing.join(", ")} not set. In CI, the repository variables FEEDBACK_EVAL_BASE_URL and FEEDBACK_EVAL_MODEL and the secret FEEDBACK_EVAL_API_KEY set them, and a forked pull request gets no secret. GitHub Models, which needed no secret, was retired on 2026-07-30.`,
+				reason: `No model provider in this run: ${missing.join(", ")} not set. docs/contributor/ci-cd.mdx § Feedback eval panel provider says how CI sets them.`,
 			},
 			model: null,
 		};
