@@ -55,11 +55,11 @@ public class GitHubResourceAdapter implements ProviderResourceAdapter {
                 || !app.isConfigured()
                 || !resource.parentId().equals(Long.toString(app.getConfiguredAppId())))
             return Removal.NEEDS_AUTHORIZATION;
-        // App JWT authentication positively scopes both reads and deletes to this App. A hidden 404 throws and retains
-        // the fence.
+        // App JWT scopes this lookup to this App. The dispatcher uses dispatch history to decide whether absence
+        // resolves the removal or an earlier uncertain attempt still needs confirmation.
         try {
             app.installation(Long.parseLong(resource.resourceId()));
-        } catch (InstallationNotFoundException hiddenOrAbsent) {
+        } catch (InstallationNotFoundException absentFromApp) {
             return Removal.VERIFIED_ABSENT;
         }
         if (!beforeDispatch.getAsBoolean()) return Removal.CANCELLED;

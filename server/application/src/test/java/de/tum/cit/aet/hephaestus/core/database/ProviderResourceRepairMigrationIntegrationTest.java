@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 
 @Tag("integration")
 class ProviderResourceRepairMigrationIntegrationTest {
-    private static final String CHANGELOG = "20261113123749-feat-provider-resource-adoption-fence.xml";
+    private static final String CHANGELOG = "20261113151121-feat-provider-resource-adoption-fence.xml";
     private static final String VALIDATION =
             "SELECT convalidated::int::text FROM pg_constraint WHERE conrelid IN ('public.auth_event'::regclass, 'public.config_audit_event'::regclass) AND conname IN ('ck_config_audit_event_entity_type', 'ck_config_audit_event_scope', 'ck_auth_event_event_type') ORDER BY conname";
 

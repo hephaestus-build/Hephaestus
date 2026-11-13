@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
@@ -68,7 +69,8 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
                 workspaceRepository,
                 manifests,
                 credentialConverter,
-                mock(ProviderResourceRepairs.class));
+                mock(ProviderResourceRepairs.class),
+                mock(ApplicationEventPublisher.class));
     }
 
     @Test

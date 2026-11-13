@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
+import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionCredentialsReplacedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.CredentialBundle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -28,6 +29,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,6 +61,7 @@ public class ConnectionAdminService {
     private final WorkspaceRepository workspaceRepository;
     private final IntegrationManifestRegistry manifests;
     private final CredentialBundleConverter credentialConverter;
+    private final ApplicationEventPublisher events;
 
     public ConnectionAdminService(
             ConnectionRepository connectionRepository,
@@ -66,7 +69,9 @@ public class ConnectionAdminService {
             WorkspaceRepository workspaceRepository,
             IntegrationManifestRegistry manifests,
             CredentialBundleConverter credentialConverter,
-            ProviderResourceRepairs repairs) {
+            ProviderResourceRepairs repairs,
+            ApplicationEventPublisher events) {
+        this.events = events;
         this.repairs = repairs;
         this.connectionRepository = connectionRepository;
         this.connectionService = connectionService;
@@ -182,6 +187,8 @@ public class ConnectionAdminService {
             return;
         }
         connection.setCredentials(bundle, credentialConverter);
+        events.publishEvent(new ConnectionCredentialsReplacedEvent(
+                connection.getId(), connection.getWorkspace().getId(), connection.getKind()));
         log.debug(
                 "Encrypted credentials for connection={} kind={} (bundle type={})",
                 connection.getId(),

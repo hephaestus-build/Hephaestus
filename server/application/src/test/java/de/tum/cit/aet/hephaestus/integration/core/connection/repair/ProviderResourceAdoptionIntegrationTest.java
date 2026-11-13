@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection.repair;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
@@ -47,6 +48,7 @@ import jakarta.persistence.PersistenceContext;
 import java.io.Serial;
 import java.net.URI;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -476,6 +478,90 @@ class ProviderResourceAdoptionIntegrationTest extends BaseIntegrationTest {
         assertThat(rows.findById(other).orElseThrow().getNextAttemptAt()).isEqualTo(delayed);
         assertThat(rows.findById(other).orElseThrow().getState())
                 .isEqualTo(ProviderResourceRepair.State.NEEDS_AUTHORIZATION);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = IntegrationKind.class,
+            names = {"GITLAB", "OUTLINE"})
+    void shouldWakeRemovalThroughAnActualInlineReconnect(IntegrationKind kind) {
+        Wire provider = new Wire(kind);
+        Context context = context(provider.adapter);
+        Connection old = Objects.requireNonNull(context.transactions().execute(status -> {
+            var workspace = workspaces.save(WorkspaceTestFixtures.activeWorkspace("inline-wake-" + UUID.randomUUID()));
+            String instance = kind == IntegrationKind.GITLAB ? "99" : provider.origin();
+            var owner = new Connection(workspace, kind, instance, provider.config(false, false));
+            owner.setState(IntegrationState.UNINSTALLED);
+            owner.setCredentials(provider.credential(false), converter);
+            return connections.saveAndFlush(owner);
+        }));
+        UUID id = request(context, old).getFirst();
+        jdbc.update(
+                "UPDATE provider_resource_repair SET state='NEEDS_AUTHORIZATION', next_attempt_at=clock_timestamp()+interval '1 hour' WHERE id=?",
+                id);
+        long before = rows.findById(id).orElseThrow().getAttemptEpoch();
+        long generation = old.getCredentialsGeneration();
+
+        Connection reconnected = connectionAdmin.createInlineConnection(
+                old.getWorkspace().getId(),
+                kind,
+                old.getInstanceKey(),
+                new BearerToken("restored-" + UUID.randomUUID(), null),
+                Map.of("server_url", provider.origin()),
+                null);
+
+        assertThat(reconnected.getId()).isEqualTo(old.getId());
+        assertThat(reconnected.getCredentialsGeneration()).isGreaterThan(generation);
+        // No manual event or listener call: the real reconnect transaction publishes the durable wake.
+        await().atMost(Duration.ofSeconds(15))
+                .untilAsserted(() -> assertThat(rows.findById(id)
+                                .map(row -> row.getAttemptEpoch() > before)
+                                .orElse(true))
+                        .isTrue());
+    }
+
+    @Test
+    void shouldWakeRemovalEvenWhileRegistrationDiscoveryKeepsFailing() {
+        Wire provider = new Wire(IntegrationKind.OUTLINE);
+        provider.terminal = true;
+        Context context = context(provider.adapter);
+        Connection old = owner(provider, false, false, IntegrationState.UNINSTALLED);
+        UUID id = request(context, old).getFirst();
+        UUID registration = Objects.requireNonNull(context.transactions().execute(status -> {
+            var marker = new Resource(
+                    IntegrationKind.OUTLINE,
+                    provider.origin(),
+                    ProviderResourceAdapter.ResourceType.REGISTRATION,
+                    "subscriptions",
+                    UUID.randomUUID().toString(),
+                    ProviderResourceAdapter.fingerprint(provider.hookUrl(false)));
+            var row = rows.saveAndFlush(
+                    new ProviderResourceRepair(marker, context.clock().instant()));
+            references.save(new ConnectionProviderRepair(old, row));
+            return row.getId();
+        }));
+        context.clock().now = context.clock().instant().plusSeconds(601);
+        provider.readUnavailable = true;
+        context.dispatcher().dispatch(registration);
+        assertThat(rows.findById(registration).orElseThrow().getState())
+                .isEqualTo(ProviderResourceRepair.State.CHECKING);
+        provider.readUnavailable = false;
+        context.transactions().executeWithoutResult(status -> {
+            var removal = rows.findById(id).orElseThrow();
+            removal.transition(
+                    ProviderResourceRepair.State.CHECKING, context.clock().instant());
+            removal.transition(
+                    ProviderResourceRepair.State.NEEDS_AUTHORIZATION,
+                    context.clock().instant());
+        });
+
+        context.dispatcher()
+                .on(new ConnectionCredentialsReplacedEvent(
+                        old.getId(), old.getWorkspace().getId(), old.getKind()));
+
+        assertThat(rows.existsById(id)).isFalse();
+        assertThat(rows.findById(registration).orElseThrow().getState())
+                .isEqualTo(ProviderResourceRepair.State.CHECKING);
     }
 
     private List<UUID> request(Context context, Connection owner) {

@@ -175,6 +175,10 @@ public class ProviderResourceRepairs {
         Objects.requireNonNull(entityManager).clear();
         var pending = references.findByWorkspaceIdAndConnection_Id(workspaceId, connectionId).stream()
                 .map(ConnectionProviderRepair::getRepair)
+                .filter(repair -> switch (repair.resource().type()) {
+                    case REGISTRATION, OAUTH_EXCHANGE -> false;
+                    default -> true;
+                })
                 .toList();
         if (pending.stream()
                 .anyMatch(repair -> repair.getState() == ProviderResourceRepair.State.CHECKING
