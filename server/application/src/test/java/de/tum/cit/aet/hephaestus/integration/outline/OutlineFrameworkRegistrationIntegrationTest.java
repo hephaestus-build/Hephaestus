@@ -228,6 +228,22 @@ class OutlineFrameworkRegistrationIntegrationTest extends BaseIntegrationTest {
                 "connection-not-active");
         double before = refusal.count();
 
+        var unsigned = new LinkedHashMap<>(headers);
+        unsigned.remove(
+                switch (kind) {
+                    case GITHUB -> "X-Hub-Signature-256";
+                    case GITLAB -> "X-Gitlab-Token";
+                    case SLACK -> "X-Slack-Signature";
+                    case OUTLINE -> "Outline-Signature";
+                });
+        post(path, unsigned, body).expectStatus().isUnauthorized().expectBody(Void.class);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM provider_event WHERE workspace_id = ?", Integer.class, workspaceId))
+                .isZero();
+        assertThat(refusal.count())
+                .as("an unauthenticated request never reaches lifecycle admission")
+                .isEqualTo(before);
+
         signedPost(path, headers, body);
 
         assertThat(refusal.count()).isEqualTo(before + 1);
@@ -272,6 +288,11 @@ class OutlineFrameworkRegistrationIntegrationTest extends BaseIntegrationTest {
                         "SELECT payload FROM provider_event WHERE workspace_id = ?", byte[].class, workspaceId))
                 .singleElement()
                 .isEqualTo(body.getBytes(StandardCharsets.UTF_8));
+        signedPost(path, headers, body);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM provider_event WHERE workspace_id = ?", Integer.class, workspaceId))
+                .as("a duplicate signed delivery stores no second payload")
+                .isEqualTo(1);
         if (kind == IntegrationKind.OUTLINE) {
             var foreign = outlineRoutes.issue();
             String changed = body.replace(delivery, UUID.randomUUID().toString());
