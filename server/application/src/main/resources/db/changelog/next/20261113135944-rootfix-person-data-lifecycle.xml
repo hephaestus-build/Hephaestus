@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794578384528-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <dbms type="postgresql"/>
+            <tableExists tableName="person_data_request"/>
+        </preConditions>
+        <comment>A person data request has no EXPIRED state: a preview expires by expires_at. A completed request keeps its state, including when a writer uses SQL.</comment>
+        <sql splitStatements="false">
+UPDATE person_data_request SET state = 'PREVIEW', expires_at = LEAST(expires_at, CURRENT_TIMESTAMP) WHERE state = 'EXPIRED';
+ALTER TABLE person_data_request DROP CONSTRAINT ck_person_data_request_state;
+ALTER TABLE person_data_request ADD CONSTRAINT ck_person_data_request_state CHECK (state IN ('PREVIEW', 'ERASING', 'FAILED', 'COMPLETE'));
+CREATE FUNCTION guard_person_data_request() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF OLD.state = 'COMPLETE' AND NEW.state IS DISTINCT FROM OLD.state THEN
+  RAISE EXCEPTION 'a completed person data request keeps its state' USING ERRCODE = '55000';
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER person_data_request_transition BEFORE UPDATE OF state ON person_data_request FOR EACH ROW EXECUTE FUNCTION guard_person_data_request();
+        </sql>
+        <rollback>
+            <sql splitStatements="false">
+DROP TRIGGER person_data_request_transition ON person_data_request;
+DROP FUNCTION guard_person_data_request();
+ALTER TABLE person_data_request DROP CONSTRAINT ck_person_data_request_state;
+ALTER TABLE person_data_request ADD CONSTRAINT ck_person_data_request_state CHECK (state IN ('PREVIEW', 'ERASING', 'FAILED', 'COMPLETE', 'EXPIRED'));
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

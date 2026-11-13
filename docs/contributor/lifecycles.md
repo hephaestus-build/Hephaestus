@@ -144,3 +144,27 @@ Only `WorkspaceLifecycleService.purgeWorkspace` calls `markPurged`, after every 
 `WorkspaceCreationArchTest` refuses a call of the constructor outside `Workspace`.
 
 The database trigger `guard_workspace` also refuses a change of a purged workspace's status.
+
+## Person data requests
+
+`PersonDataRequest.State` owns the transition table of an erasure request.
+`PersonDataRequest` changes its state only through `startErasure`, `fail` and `complete`.
+These methods refuse an illegal move.
+
+```mermaid
+stateDiagram-v2
+    accTitle: Lifecycle of a person data request
+    accDescr: A preview starts in PREVIEW. An admitted erasure moves to ERASING. A failed erasure moves to FAILED, and an administrator resumes it to ERASING. A finished erasure moves to COMPLETE, which has no exit.
+    [*] --> PREVIEW: preview, account deletion
+    PREVIEW --> ERASING: startErasure
+    ERASING --> FAILED: fail
+    FAILED --> ERASING: startErasure
+    ERASING --> COMPLETE: complete
+    COMPLETE --> [*]
+```
+
+A preview expires by its `expires_at` time and keeps the state `PREVIEW`.
+A temporary store failure keeps the request in `ERASING` with the failure code `STORE_ERASURE_RETRY_PENDING`, and the next run retries it.
+`complete` removes the identifying scope and the selections, so the receipt keeps only counts and times.
+
+The database trigger `guard_person_data_request` also refuses a change to a completed request's state.

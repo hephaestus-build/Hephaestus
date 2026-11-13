@@ -27,7 +27,8 @@ class PersonDataStoreAdministrationIntegrationTest extends BaseIntegrationTest {
         databaseTestUtils.cleanDatabase();
         var time = Instant.parse("2026-10-02T12:00:00Z");
         var request = new PersonDataRequest();
-        request.setState(PersonDataRequest.State.COMPLETE);
+        request.startErasure(null);
+        request.complete(time);
         request.setCompletedJson(mapper.writeValueAsString(Map.of(
                 "first", new PersonDataStoreReceipt(12, time, 42L),
                 "second", new PersonDataStoreReceipt(7, time, 84L))));
