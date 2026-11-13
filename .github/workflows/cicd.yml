@@ -1255,6 +1255,15 @@ jobs:
           # they changed: the release runs the verifier twice for the same reason.
           node scripts/verify-release-evidence.ts evidence --verify-capture
 
+      # The publication gate of release.yml, run before the cut: the verifiers of the earlier
+      # releases that hosts run must accept this ref's images, or a reviewed break must name the pair.
+      # It skips only the steps that need the signed draft (scripts/previous-verifier-probe.ts).
+      - name: Check that earlier releases' verifiers accept this ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: v${{ needs.detect-changes.outputs.version }}
+        run: node scripts/check-previous-verifier.ts --preflight "$RELEASE" evidence/manifest.json security/release-images.json
+
       - name: Qualify sandbox boundaries on this ref's image
         env:
           IMAGE: ghcr.io/hephaestus-build/agent-pi@${{ steps.release-evidence.outputs.agent-pi-digest }}

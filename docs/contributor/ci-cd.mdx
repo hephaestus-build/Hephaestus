@@ -448,6 +448,7 @@ The pull request's run and a dispatch on its branch share one concurrency lane, 
 Dispatch only when no run for the head is active or awaiting approval.
 
 Either run reports `CI Status Gate` on the branch head, which is the pull request's head commit, and requires its own release evidence preflight.
+The preflight also runs the verifiers of the earlier releases that `publish-release` runs, against the head's lock ([Release Management § Joint lock with the chart](./release-management.mdx#joint-lock-with-the-chart)).
 Thus, validation precedes the merge that cuts a release.
 
 `Verify changesets`
