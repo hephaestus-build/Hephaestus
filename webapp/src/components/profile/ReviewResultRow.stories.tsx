@@ -329,11 +329,10 @@ export const NotMetWithProblems: Story = {
 				.sort((a, b) => a.position - b.position)
 				.map((problem) => SEVERITY_DEFS[problem.severity].label),
 		);
-		await expect(
-			within(problems).getByText(
-				'@Cacheable(cacheNames = "practice-catalog", key = "#workspaceId")',
-			),
-		).toBeVisible();
+		// A quoted line of code is split into tokens once it is highlighted, so it is read whole.
+		await expect(problems).toHaveTextContent(
+			'@Cacheable(cacheNames = "practice-catalog", key = "#workspaceId")',
+		);
 	},
 };
 
@@ -368,9 +367,7 @@ export const ExampleFromThisWork: Story = {
 				"This commit moves the loader and changes nothing else, so it can be reverted on its own.",
 			),
 		).toBeVisible();
-		await expect(
-			within(example).getByText("package de.tum.cit.aet.hephaestus.practices.catalog;"),
-		).toBeVisible();
+		await expect(example).toHaveTextContent("package de.tum.cit.aet.hephaestus.practices.catalog;");
 		await expect(example.querySelector("[class*='success']")).toBeNull();
 		await expect(canvas.queryByText(/great|well done|nice work/iu)).toBeNull();
 	},

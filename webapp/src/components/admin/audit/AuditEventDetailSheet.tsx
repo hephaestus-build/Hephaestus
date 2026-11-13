@@ -5,7 +5,13 @@ import { refLabel, workspaceLabel } from "@/components/admin/audit/ref-label";
 import { formatTimestamp } from "@/components/admin/audit/time-format";
 import { DetailRow } from "@/components/common/DetailRow";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+	CodeBlock,
+	CodeBlockActions,
+	CodeBlockContent,
+	CodeBlockCopyButton,
+	CodeBlockLine,
+} from "@/components/ui/code-block";
 import {
 	Sheet,
 	SheetContent,
@@ -13,6 +19,7 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from "@/components/ui/sheet";
+import { useHighlightedCode } from "@/hooks/use-highlighted-code";
 import { hasText } from "@/lib/text";
 
 import { eventLabel, resultLabel } from "./audit-format";
@@ -34,6 +41,7 @@ export function AuditEventDetailSheet({
 	const account = event ? refLabel(event.account, event.accountId) : null;
 	const actor = event ? refLabel(event.actor, event.actingAccountId) : null;
 	const pretty = event ? prettyJson(event.details) : null;
+	const rawLines = useHighlightedCode(pretty ?? "", "json");
 	const workspaceName =
 		event?.workspaceId == null ? undefined : resolveWorkspaceName?.(event.workspaceId);
 
@@ -104,9 +112,16 @@ export function AuditEventDetailSheet({
 						</DetailRow>
 						<DetailRow label="Raw data">
 							{hasText(pretty) ? (
-								<ScrollArea viewportClassName="max-h-48">
-									<pre className="rounded bg-muted p-2 text-xs">{pretty}</pre>
-								</ScrollArea>
+								<CodeBlock size="sm">
+									<CodeBlockActions>
+										<CodeBlockCopyButton value={pretty} aria-label="Copy raw data" />
+									</CodeBlockActions>
+									<CodeBlockContent className="max-h-48">
+										{rawLines.map((line, index) => (
+											<CodeBlockLine key={index}>{line}</CodeBlockLine>
+										))}
+									</CodeBlockContent>
+								</CodeBlock>
 							) : (
 								"—"
 							)}

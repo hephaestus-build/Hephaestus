@@ -2,6 +2,12 @@ import type { ReviewFeedback } from "@/api/types.gen";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import { ADMIN_WITHHELD_TEXT } from "@/components/practice-vocabulary/feedback-destination-defs";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+	CodeBlock,
+	CodeBlockActions,
+	CodeBlockContent,
+	CodeBlockCopyButton,
+} from "@/components/ui/code-block";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { hasText } from "@/lib/text";
 
@@ -63,9 +69,13 @@ export function FeedbackBody({ feedback, className }: FeedbackBodyProps) {
 						<UntrustedMarkdown>{feedbackDisplayMarkdown(body)}</UntrustedMarkdown>
 					</TabsContent>
 					<TabsContent value="source">
-						<pre className="rounded-md bg-muted p-3 text-xs break-words whitespace-pre-wrap">
-							{body}
-						</pre>
+						<CodeBlock size="sm">
+							<CodeBlockActions>
+								<CodeBlockCopyButton value={body} aria-label="Copy source" />
+							</CodeBlockActions>
+							{/* One text node, so the source is the stored text exactly. */}
+							<CodeBlockContent wrap>{body}</CodeBlockContent>
+						</CodeBlock>
 					</TabsContent>
 				</CardContent>
 			</Tabs>

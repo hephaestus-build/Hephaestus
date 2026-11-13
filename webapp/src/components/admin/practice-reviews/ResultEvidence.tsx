@@ -9,6 +9,17 @@ import {
 	groupCitationsBySource,
 } from "@/components/practice-vocabulary/evidence-source-defs";
 import { Badge } from "@/components/ui/badge";
+import {
+	CodeBlock,
+	CodeBlockActions,
+	CodeBlockContent,
+	CodeBlockCopyButton,
+	CodeBlockFooter,
+	CodeBlockHeader,
+	CodeBlockLine,
+} from "@/components/ui/code-block";
+import { useHighlightedCode } from "@/hooks/use-highlighted-code";
+import { codeLanguage } from "@/lib/code-language";
 import { hasText } from "@/lib/text";
 
 export interface ResultEvidenceProps {
@@ -85,18 +96,8 @@ function EvidenceSourceSection({
 			</div>
 			<ul className="space-y-3 sm:pl-11">
 				{citations.map((citation, index) => (
-					<li
-						key={`${citationKey(citation)}:${index}`}
-						className="overflow-hidden rounded-lg border"
-					>
-						<CitationHeader citation={citation} locator={def.locator} />
-						{citation.quote === null ? (
-							<RedactedQuote located={citationLocation(citation) !== undefined} />
-						) : (
-							<pre className="overflow-x-auto p-3 text-xs break-words whitespace-pre-wrap">
-								{citation.quote}
-							</pre>
-						)}
+					<li key={`${citationKey(citation)}:${index}`}>
+						<CitationQuote citation={citation} locator={def.locator} />
 					</li>
 				))}
 			</ul>
@@ -129,7 +130,8 @@ export function citationSide(citation: CitationPlace): string | undefined {
 		: undefined;
 }
 
-function CitationHeader({
+/** One passage: where it sits, when that is a place in the work, then its words or why they are missing. */
+function CitationQuote({
 	citation,
 	locator,
 }: {
@@ -138,40 +140,62 @@ function CitationHeader({
 }) {
 	const side = citationSide(citation);
 	const location = citationLocation(citation);
-	// The source's heading already names an object source; it has no place of its own to show.
-	if (locator !== "code" && !hasText(citation.commit)) {
-		return null;
-	}
+	const { quote, path } = citation;
+	const lines = useHighlightedCode(quote ?? "", location === undefined ? "" : codeLanguage(path));
+	const fileName =
+		location === undefined || path === null ? undefined : path.slice(path.lastIndexOf("/") + 1);
+	const copy = quote !== null && (
+		<CodeBlockActions>
+			<CodeBlockCopyButton
+				value={quote}
+				aria-label={fileName === undefined ? "Copy passage" : `Copy passage from ${fileName}`}
+			/>
+		</CodeBlockActions>
+	);
 	return (
-		<div className="flex flex-wrap items-center gap-2 border-b bg-muted/50 px-3 py-2">
-			{locator === "code" &&
-				(location === undefined ? (
-					<p className="min-w-0 text-xs break-words text-muted-foreground">Location not recorded</p>
-				) : (
-					<code className="min-w-0 text-xs break-all">{location}</code>
-				))}
-			{side !== undefined && (
-				<Badge variant="outline" className="shrink-0">
-					{side}
-				</Badge>
+		<CodeBlock size="sm">
+			{/* The source's heading already names an object source; it has no place of its own to show. */}
+			{locator === "code" ? (
+				<CodeBlockHeader>
+					{location === undefined ? (
+						<p className="min-w-0 break-words">Location not recorded</p>
+					) : (
+						<code className="min-w-0 break-all text-foreground">{location}</code>
+					)}
+					{side !== undefined && (
+						<Badge variant="outline" className="shrink-0">
+							{side}
+						</Badge>
+					)}
+					{copy}
+				</CodeBlockHeader>
+			) : (
+				copy
+			)}
+			{quote === null ? (
+				<CodeBlockFooter>
+					<p className="flex items-start gap-2">
+						<ShieldAlertIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
+						{location === undefined
+							? "Not quoted. The passage was withheld."
+							: "Not quoted. The passage was withheld, so only its location was kept."}
+					</p>
+				</CodeBlockFooter>
+			) : (
+				<CodeBlockContent wrap>
+					{lines.map((line, index) => (
+						<CodeBlockLine key={index}>{line}</CodeBlockLine>
+					))}
+				</CodeBlockContent>
 			)}
 			{hasText(citation.commit) && (
-				<p className="min-w-0 basis-full text-xs break-all text-muted-foreground">
-					Commit <code>{citation.commit}</code>
-				</p>
+				<CodeBlockFooter>
+					<p className="min-w-0 break-all">
+						Commit <code>{citation.commit}</code>
+					</p>
+				</CodeBlockFooter>
 			)}
-		</div>
-	);
-}
-
-function RedactedQuote({ located }: { located: boolean }) {
-	return (
-		<p className="flex items-start gap-2 p-3 text-sm text-muted-foreground">
-			<ShieldAlertIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
-			{located
-				? "Not quoted. The passage was withheld, so only its location was kept."
-				: "Not quoted. The passage was withheld."}
-		</p>
+		</CodeBlock>
 	);
 }
 

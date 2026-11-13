@@ -126,6 +126,11 @@ export const Default: Story = {
 		canvas.getByText("webapp/src/components/admin/practice-reviews/ReviewRow.tsx:12–13");
 		canvas.getByText("Before");
 		await expect(canvas.queryByText("scm.pull-request.diff")).not.toBeInTheDocument();
+		await expect(
+			canvas.getByRole("button", { name: "Copy passage from ReviewRow.tsx" }),
+		).toBeVisible();
+		// An object passage has no header, so its copy button floats over the quote.
+		await expect(canvas.getByRole("button", { name: "Copy passage" })).toBeEnabled();
 	},
 };
 
