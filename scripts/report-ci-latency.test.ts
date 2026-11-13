@@ -6,7 +6,11 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 import {
+	cancellationBudget,
+	classifyCancellation,
+	queueAncestors,
 	failedJobNames,
 	isFastTier,
 	isFullVerification,
@@ -326,7 +330,7 @@ void test("latency summaries preserve exceeded targets and distinguish absent ev
 });
 
 void test(
-	"the CLI reads cancelled merge-group jobs before it reports their failure share",
+	"the CLI retains first-attempt failure evidence while a later rerun is in progress",
 	{
 		skip: process.platform === "win32",
 	},
@@ -340,9 +344,9 @@ void test(
 					{
 						id: 1,
 						event: "merge_group",
-						status: "completed",
-						conclusion: "cancelled",
-						run_attempt: 1,
+						status: "in_progress",
+						conclusion: null,
+						run_attempt: 2,
 						created_at: timestamp,
 					},
 				],
@@ -352,8 +356,13 @@ void test(
 			{
 				total_count: 2,
 				jobs: [
-					{ name: "Server tests / Integration (1 of 8)", conclusion: "failure" },
-					{ name: "CI Status Gate", conclusion: "cancelled" },
+					{
+						run_id: 1,
+						run_attempt: 1,
+						name: "Server tests / Integration (1 of 8)",
+						conclusion: "failure",
+					},
+					{ run_id: 1, run_attempt: 1, name: "CI Status Gate", conclusion: "cancelled" },
 				],
 			},
 		]);
@@ -364,6 +373,7 @@ void test(
 printf '%s\\n' "$*" >> "$CI_REPORT_API_LOG"
 case "$*" in
   *event=merge_group*) printf '%s\\n' '${runs}' ;;
+  */runs/1/attempts/1) printf '%s\\n' '{"id":1,"event":"merge_group","run_attempt":1,"status":"completed","conclusion":"cancelled","created_at":"${timestamp}"}' ;;
   */runs/1/attempts/1/jobs*) printf '%s\\n' '${jobs}' ;;
   *) printf '%s\\n' '[{"workflow_runs":[]}]' ;;
 esac
@@ -386,16 +396,333 @@ esac
 			},
 		);
 		assert.equal(result.status, 0, result.stderr);
-		assert.match(await readFile(calls, "utf8"), /runs\/1\/attempts\/1\/jobs/u);
+		const apiCalls = await readFile(calls, "utf8");
+		assert.match(apiCalls, /runs\/1\/attempts\/1\/jobs/u);
+		assert.doesNotMatch(apiCalls, /attempts\/2/u);
 		const report: unknown = JSON.parse(
 			await readFile(path.join(directory, "tmp/ci-metrics/ci-latency.json"), "utf8"),
 		);
 		assert.ok(typeof report === "object" && report !== null && "failures" in report);
+		assert.ok("cancellations" in report);
+		assert.deepEqual(report.cancellations, {
+			groups: 1,
+			cancelled: 1,
+			causes: { worker_failure: 1, predecessor_drop: 0, manual: 0, timeout: 0, unknown: 0 },
+			nonOwnFailure: 0,
+			share: 0,
+			limit: 0.1,
+			status: "within-budget",
+		});
 		assert.deepEqual(report.failures, {
 			groups: 1,
 			queueTierFailed: 1,
 			fastTierFailed: 0,
 			queueTierShare: null,
 		});
+	},
+);
+
+void test("the recorded 183 first attempts retain all 70 cancellations and their causes", async () => {
+	const fixture = asRecord(
+		parseJson(await readFile(new URL("fixtures/ci-cancellations.json", import.meta.url), "utf8")),
+		"fixture",
+	);
+	const runs = asArray(fixture.runs, "runs").map((value) => asRecord(value, "run"));
+	const removals = asArray(fixture.removals, "removals").map((value) => {
+		const entry = asRecord(value, "removal");
+		assert.ok(typeof entry.pullRequest === "number");
+		return {
+			head: asString(entry.head, "head"),
+			reason: asString(entry.reason, "reason"),
+			at: asString(entry.at, "at"),
+			pullRequest: entry.pullRequest,
+		};
+	});
+	const groups = runs
+		.filter((run) => run.counted === true)
+		.map((run) => ({
+			conclusion: asString(run.conclusion, "conclusion"),
+			...(run.conclusion === "cancelled"
+				? {
+						cancellation: classifyCancellation(
+							run,
+							asArray(run.jobs, "jobs").map((job) => asRecord(job, "job")),
+							// Failed workers need no queue metadata; the fixture keeps only their native evidence.
+							run.head_branch === undefined ? [] : queueAncestors(run, runs),
+							removals,
+						),
+					}
+				: {}),
+		}));
+	groups.push(
+		...asArray(fixture.successfulRunIds, "successful runs")
+			.filter((id) => !runs.some((run) => run.counted === true && run.id === id))
+			.map(() => ({ conclusion: "success" })),
+	);
+	assert.deepEqual(cancellationBudget(groups), {
+		groups: 183,
+		cancelled: 70,
+		causes: { worker_failure: 60, predecessor_drop: 9, manual: 1, timeout: 0, unknown: 0 },
+		nonOwnFailure: 10,
+		share: 10 / 183,
+		limit: 0.1,
+		status: "within-budget",
+	});
+	const descendant = runs.find((run) => run.id === 43018554661);
+	assert.ok(descendant);
+	const chain = queueAncestors(descendant, runs);
+	assert.ok(
+		chain.some((run) => run.id === 43015530065 && run.conclusion === "success"),
+		"a successful intermediate group remains in the invalidated chain",
+	);
+});
+
+void test("cancellation attribution requires exact trees and causal timestamps", () => {
+	const run = {
+		head_sha: "a".repeat(40),
+		head_branch: `gh-readonly-queue/main/pr-1-${"b".repeat(40)}`,
+		created_at: "2026-11-13T10:00:00Z",
+		updated_at: "2026-11-13T10:10:00Z",
+	};
+	const jobs = [
+		{ name: "CI Status Gate", conclusion: "failure" },
+		{
+			name: "Build / Generated API",
+			conclusion: "cancelled",
+			completed_at: "2026-11-13T10:05:00Z",
+		},
+	];
+	const manual = {
+		head: run.head_sha,
+		reason: "manual",
+		at: "2026-11-13T10:04:00Z",
+		pullRequest: 1,
+	};
+	assert.equal(classifyCancellation(run, jobs, [run], [manual]).cause, "manual");
+	for (const removal of [
+		{ ...manual, head: "c".repeat(40) },
+		{ ...manual, at: "2026-11-13T09:59:00Z" },
+		{ ...manual, at: "2026-11-13T10:06:00Z" },
+	]) {
+		assert.equal(classifyCancellation(run, jobs, [run], [removal]).cause, "unknown");
+	}
+	assert.equal(
+		classifyCancellation(run, [{ name: "Build / Generated API", conclusion: "timed_out" }], [], [])
+			.cause,
+		"timeout",
+	);
+	assert.equal(
+		classifyCancellation(
+			run,
+			[{ name: "Build / Stop the merge group early", conclusion: "failure" }],
+			[],
+			[],
+		).cause,
+		"unknown",
+	);
+});
+
+void test("the seven-day cancellation guard keeps unknowns and enforces the inclusive 10 percent limit", () => {
+	const cancelled = { conclusion: "cancelled", cancellation: { cause: "manual" as const } };
+	const other = Array.from({ length: 9 }, () => ({ conclusion: "failure" }));
+	assert.equal(cancellationBudget([cancelled, ...other]).status, "within-budget");
+	assert.equal(cancellationBudget([cancelled, ...other.slice(1)]).status, "exceeded");
+	assert.equal(cancellationBudget([]).status, "insufficient-data");
+	const unknown = cancellationBudget([{ conclusion: "cancelled" }, ...other]);
+	assert.equal(unknown.status, "incomplete");
+	assert.equal(unknown.nonOwnFailure, 1);
+	assert.equal(unknown.causes.unknown, 1);
+	assert.match(
+		renderLatencyBudget(latencyBudget([]), [], queueTierFailures([]), unknown),
+		/Unknown \| 1/u,
+	);
+});
+
+void test(
+	"the CLI reads paginated queue evidence and flags the existing report",
+	{ skip: process.platform === "win32" },
+	async (context) => {
+		const directory = await mkdtemp(path.join(tmpdir(), "ci-queue-cause-"));
+		context.after(async () => rm(directory, { recursive: true, force: true }));
+		const created = new Date(Date.now() - 300_000).toISOString();
+		const removed = new Date(Date.now() - 120_000).toISOString();
+		const completed = new Date(Date.now() - 60_000).toISOString();
+		const head = "a".repeat(40);
+		const runs = JSON.stringify([
+			{
+				workflow_runs: [
+					{
+						id: 1,
+						event: "merge_group",
+						status: "completed",
+						conclusion: "cancelled",
+						run_attempt: 1,
+						head_sha: head,
+						head_branch: `gh-readonly-queue/main/pr-1-${"b".repeat(40)}`,
+						created_at: created,
+						updated_at: completed,
+					},
+				],
+			},
+		]);
+		const jobs = JSON.stringify([
+			{
+				total_count: 1,
+				jobs: [
+					{
+						run_id: 1,
+						run_attempt: 1,
+						name: "Build / Generated API",
+						conclusion: "cancelled",
+						completed_at: completed,
+					},
+				],
+			},
+		]);
+		const page = (nodes: unknown[], hasPreviousPage: boolean, startCursor: string) =>
+			JSON.stringify({
+				data: {
+					repository: {
+						pullRequest: { timelineItems: { nodes, pageInfo: { hasPreviousPage, startCursor } } },
+					},
+				},
+			});
+		const newest = page([], true, "older");
+		const older = page(
+			[{ createdAt: removed, reason: "manual", beforeCommit: { oid: head } }],
+			false,
+			"oldest",
+		);
+		const calls = path.join(directory, "calls.log");
+		await writeFile(
+			path.join(directory, "gh"),
+			`#!/bin/sh
+printf '%s\\n' "$*" >> "$CI_REPORT_API_LOG"
+case "$*" in
+  *event=merge_group*) printf '%s\\n' '${runs}' ;;
+  */runs/1/attempts/1/jobs*) printf '%s\\n' '${jobs}' ;;
+  *cursor=older*) printf '%s\\n' '${older}' ;;
+  *graphql*) printf '%s\\n' '${newest}' ;;
+  *) printf '%s\\n' '[{"workflow_runs":[]}]' ;;
+esac
+`,
+			{ mode: 0o755 },
+		);
+		const invoke = () =>
+			spawnSync(
+				process.execPath,
+				[fileURLToPath(new URL("report-ci-latency.ts", import.meta.url))],
+				{
+					cwd: directory,
+					encoding: "utf8",
+					env: {
+						...process.env,
+						GITHUB_REPOSITORY: "owner/repo",
+						GITHUB_STEP_SUMMARY: undefined,
+						CI_REPORT_API_LOG: calls,
+						PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
+					},
+				},
+			);
+		const result = invoke();
+		assert.equal(result.status, 0, result.stderr);
+		assert.match(result.stdout, /::warning title=Merge-group cancellation guard/u);
+		const report = asRecord(
+			parseJson(await readFile(path.join(directory, "tmp/ci-metrics/ci-latency.json"), "utf8")),
+			"report",
+		);
+		assert.deepEqual(report.cancellations, {
+			groups: 1,
+			cancelled: 1,
+			causes: { worker_failure: 0, predecessor_drop: 0, manual: 1, timeout: 0, unknown: 0 },
+			nonOwnFailure: 1,
+			share: 1,
+			limit: 0.1,
+			status: "exceeded",
+		});
+		assert.match(await readFile(calls, "utf8"), /cursor=older/u);
+		// A queue branch can lead through hundreds of already merged groups. Stop at main.
+		const ancestorHeads = Array.from({ length: 101 }, (_, index) =>
+			index === 0 ? "b".repeat(40) : index.toString(16).padStart(40, "0"),
+		);
+		const old = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString();
+		const ancestors = ancestorHeads.slice(0, -1).map((sha, index) => ({
+			id: index + 2,
+			event: "merge_group",
+			status: "completed",
+			conclusion: "cancelled",
+			run_attempt: 1,
+			head_sha: sha,
+			head_branch: `gh-readonly-queue/main/pr-${index + 2}-${ancestorHeads[index + 1]}`,
+			created_at: old,
+			updated_at: old,
+		}));
+		const original = asRecord(asArray(parseJson(runs), "pages")[0], "page");
+		const longChain = JSON.stringify([
+			{ workflow_runs: [...asArray(original.workflow_runs, "runs"), ...ancestors] },
+		]);
+		const noReason = page(
+			[{ createdAt: removed, reason: null, beforeCommit: { oid: head } }],
+			false,
+			"unknown",
+		);
+		const merged = page(
+			[
+				{
+					createdAt: new Date(Date.parse(created) - 60_000).toISOString(),
+					reason: "merged",
+					beforeCommit: { oid: ancestorHeads[0] },
+				},
+			],
+			false,
+			"merged",
+		);
+		await writeFile(calls, "");
+		await writeFile(
+			path.join(directory, "gh"),
+			`#!/bin/sh
+printf '%s\\n' "$*" >> "$CI_REPORT_API_LOG"
+case "$*" in
+  *event=merge_group*) printf '%s\\n' '${longChain}' ;;
+  */runs/1/attempts/1/jobs*) printf '%s\\n' '${jobs}' ;;
+  *number=1*) printf '%s\\n' '${noReason}' ;;
+  *number=2*) printf '%s\\n' '${merged}' ;;
+  *graphql*) exit 99 ;;
+  *) printf '%s\\n' '[{"workflow_runs":[]}]' ;;
+esac
+`,
+			{ mode: 0o755 },
+		);
+		const bounded = invoke();
+		assert.equal(bounded.status, 0, bounded.stderr);
+		assert.match(bounded.stdout, /Unknown \| 1/u);
+		assert.deepEqual(
+			(await readFile(calls, "utf8")).match(/number=\d+/gu),
+			["number=1", "number=2"],
+			"only the cancelled group and its nearest merged predecessor need timeline reads",
+		);
+		await writeFile(
+			path.join(directory, "gh"),
+			`#!/bin/sh
+case "$*" in
+  *event=merge_group*) printf '%s\\n' '${runs}' ;;
+  */jobs*) printf '%s\\n' '[{"total_count":0,"jobs":[]}]' ;;
+  *graphql*) exit 99 ;;
+  *) printf '%s\\n' '[{"workflow_runs":[]}]' ;;
+esac
+`,
+			{ mode: 0o755 },
+		);
+		const missingJobs = invoke();
+		assert.equal(missingJobs.status, 0, missingJobs.stderr);
+		assert.match(missingJobs.stdout, /Unknown \| 1/u);
+		await writeFile(
+			path.join(directory, "gh"),
+			`#!/bin/sh\nprintf '%s\\n' '[{"workflow_runs":[],"total_count":1000}]'\n`,
+			{ mode: 0o755 },
+		);
+		const capped = invoke();
+		assert.notEqual(capped.status, 0);
+		assert.match(capped.stderr, /1,000-run daily API cap/u);
 	},
 );

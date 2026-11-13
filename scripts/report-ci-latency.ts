@@ -11,6 +11,7 @@ const WINDOW_DAYS = 28;
 
 /** The window of the queue-tier failure share, the tier split's revert criterion. */
 const FAILURE_WINDOW_DAYS = 14;
+const CANCELLATION_WINDOW_DAYS = 7;
 const DAY = 24 * 60 * 60 * 1000;
 
 /**
@@ -151,6 +152,102 @@ export function queueTierFailures(
 	};
 }
 
+type QueueRemoval = { head: string; reason: string | null; at: string; pullRequest: number };
+type CancellationCause = "worker_failure" | "predecessor_drop" | "manual" | "timeout" | "unknown";
+type Cancellation = { cause: CancellationCause; failedJobs?: string[]; removal?: QueueRemoval };
+
+/** Queue branch suffixes identify the exact predecessor tree, not the PR's mutable head. */
+export function queueAncestors(
+	run: Record<string, unknown>,
+	runs: readonly Record<string, unknown>[],
+) {
+	const chain = [run];
+	const seen = new Set<unknown>([run.head_sha]);
+	for (let current = run; ;) {
+		const parent = asString(current.head_branch, "queue branch").match(
+			/\/pr-\d+-([a-f0-9]{40})$/u,
+		)?.[1];
+		const ancestor = runs.find(
+			(candidate) => candidate.head_sha === parent && parent !== undefined,
+		);
+		if (!ancestor || seen.has(parent)) return chain;
+		seen.add(parent);
+		chain.push(ancestor);
+		current = ancestor;
+	}
+}
+
+/** Absence of a failed job alone cannot establish a queue reset or manual cancellation. */
+export function classifyCancellation(
+	run: Record<string, unknown>,
+	jobs: readonly Record<string, unknown>[],
+	ancestors: readonly Record<string, unknown>[],
+	removals: readonly QueueRemoval[],
+): Cancellation {
+	const failedJobs = failedJobNames(jobs).filter(
+		(name) => !verdictJob.test(canonicalCiJobName(name)),
+	);
+	if (failedJobs.length > 0) return { cause: "worker_failure", failedJobs };
+	if (jobs.some((job) => job.conclusion === "timed_out")) return { cause: "timeout" };
+	const start = Date.parse(asString(run.created_at, "created_at"));
+	const cancelledEnds = jobs
+		.filter(
+			(job) =>
+				job.conclusion === "cancelled" &&
+				job.completed_at !== null &&
+				job.completed_at !== undefined,
+		)
+		.map((job) => Date.parse(asString(job.completed_at, "completed_at")));
+	const end =
+		cancelledEnds.length > 0
+			? Math.min(...cancelledEnds)
+			: Date.parse(asString(run.updated_at, "updated_at"));
+	if (![start, end, ...cancelledEnds].every(Number.isFinite))
+		throw new Error("Invalid cancellation timestamp");
+	const matching = (head: unknown) =>
+		removals.find(
+			(removal) =>
+				removal.head === head && Date.parse(removal.at) >= start && Date.parse(removal.at) <= end,
+		);
+	const own = matching(run.head_sha);
+	if (own?.reason === "manual") return { cause: "manual", removal: own };
+	if (own?.reason === "stack_invalidated") return { cause: "predecessor_drop", removal: own };
+	for (const ancestor of ancestors.slice(1)) {
+		const removal = matching(ancestor.head_sha);
+		if (removal && removal.reason !== null && removal.reason !== "merged")
+			return { cause: "predecessor_drop", removal };
+	}
+	return { cause: "unknown" };
+}
+
+export function cancellationBudget(
+	groups: readonly { conclusion: string; cancellation?: Cancellation }[],
+) {
+	const causes = { worker_failure: 0, predecessor_drop: 0, manual: 0, timeout: 0, unknown: 0 };
+	for (const group of groups) {
+		if (group.conclusion === "cancelled") causes[group.cancellation?.cause ?? "unknown"] += 1;
+	}
+	const cancelled = Object.values(causes).reduce((sum, count) => sum + count, 0);
+	const nonOwnFailure = cancelled - causes.worker_failure;
+	const share = groups.length === 0 ? null : nonOwnFailure / groups.length;
+	return {
+		groups: groups.length,
+		cancelled,
+		causes,
+		nonOwnFailure,
+		share,
+		limit: 0.1,
+		status:
+			share === null
+				? "insufficient-data"
+				: share > 0.1
+					? "exceeded"
+					: causes.unknown > 0
+						? "incomplete"
+						: "within-budget",
+	};
+}
+
 export function latencyBudget(values: number[]) {
 	if (values.some((value) => !Number.isFinite(value) || value < 0)) {
 		throw new Error("Verdict durations must be finite and nonnegative");
@@ -183,6 +280,7 @@ export function renderLatencyBudget(
 	budget: ReturnType<typeof latencyBudget>,
 	pullRequests: readonly number[] = [],
 	failures: ReturnType<typeof queueTierFailures> = queueTierFailures([]),
+	cancellations: ReturnType<typeof cancellationBudget> = cancellationBudget([]),
 ): string {
 	const share =
 		failures.queueTierShare === null
@@ -206,37 +304,166 @@ export function renderLatencyBudget(
 		"",
 		`${share} of ${failures.groups} completed groups failed a queue-tier job; ${failures.fastTierFailed} more failed only fast-tier jobs. Revert criterion: above 10 %.`,
 		"",
+		`## Merge-group cancellations, last ${CANCELLATION_WINDOW_DAYS} days (first attempts)`,
+		"",
+		`Status: **${cancellations.status}**. ${cancellations.cancelled} of ${cancellations.groups} completed groups were cancelled.`,
+		"",
+		"| Cause | Cancelled groups |",
+		"|---|---:|",
+		`| Native worker failure | ${cancellations.causes.worker_failure} |`,
+		`| Predecessor drop | ${cancellations.causes.predecessor_drop} |`,
+		`| Manual removal | ${cancellations.causes.manual} |`,
+		`| Timeout | ${cancellations.causes.timeout} |`,
+		`| Unknown | ${cancellations.causes.unknown} |`,
+		"",
+		`Non-own-failure cancellations: ${cancellations.nonOwnFailure}/${cancellations.groups} (${cancellations.share === null ? "Not available" : `${(100 * cancellations.share).toFixed(1)} %`}). Target: ≤ 10 %. Unknown causes count against the target.`,
+		"",
 		"Historical timings include runner waiting and earlier commits; this is not a verdict on the current change.",
 		"Inspect the retained ci-latency.json run timelines to distinguish queue delays from execution before changing CI.",
 		"",
 	].join("\n");
 }
 
-async function listRuns(repository: string, event: string, since: number) {
-	const created = encodeURIComponent(`>=${new Date(since).toISOString()}`);
-	const pages = asArray(
-		parseJson(
-			await output("gh", [
-				"api",
-				"--paginate",
-				"--slurp",
-				`repos/${repository}/actions/workflows/cicd.yml/runs?event=${event}&status=completed&created=${created}&per_page=100`,
-			]),
-		),
-		"run pages",
-	);
+async function batches<T, U>(values: readonly T[], read: (value: T) => Promise<U>) {
+	const result: U[] = [];
+	for (let start = 0; start < values.length; start += 8) {
+		result.push(...(await Promise.all(values.slice(start, start + 8).map(read))));
+	}
+	return result;
+}
+
+function runId(run: Record<string, unknown>) {
+	const { id } = run;
+	if (typeof id !== "number" || !Number.isSafeInteger(id) || id < 1)
+		throw new Error("Invalid run ID");
+	return id;
+}
+
+async function listRuns(repository: string, event: string, since: number, now: number) {
+	const days = [];
+	for (let day = Math.floor(since / DAY) * DAY; day <= now; day += DAY) days.push(day);
+	const daily = await batches(days, async (day) => {
+		const created = encodeURIComponent(
+			`${new Date(day).toISOString()}..${new Date(day + DAY - 1).toISOString()}`,
+		);
+		// A rerun can be in progress even though its first attempt is already complete.
+		const pages = asArray(
+			parseJson(
+				await output("gh", [
+					"api",
+					"--paginate",
+					"--slurp",
+					`repos/${repository}/actions/workflows/cicd.yml/runs?event=${event}&created=${created}&per_page=100`,
+				]),
+			),
+			"run pages",
+		).map((page) => asRecord(page, "run page"));
+		const runs = pages.flatMap((page) =>
+			asArray(page.workflow_runs, "workflow_runs").map((run) => asRecord(run, "run")),
+		);
+		if (
+			runs.length >= 1000 ||
+			pages.some((page) => typeof page.total_count === "number" && page.total_count >= 1000)
+		) {
+			throw new Error(
+				"Run listing reached the 1,000-run daily API cap; no complete-window verdict",
+			);
+		}
+		return runs;
+	});
 	return {
-		workflow_runs: pages.flatMap((page) =>
-			asArray(asRecord(page, "run page").workflow_runs, "workflow_runs"),
-		),
+		workflow_runs: [
+			...new Map(
+				daily
+					.flat()
+					.filter((run) => {
+						const created = Date.parse(asString(run.created_at, "created_at"));
+						if (!Number.isFinite(created)) throw new Error("Invalid run creation timestamp");
+						return created >= since && created <= now;
+					})
+					.map((run) => [runId(run), run]),
+			).values(),
+		],
 	};
 }
 
-async function jobsOf(repository: string, run: Record<string, unknown>, attempt: unknown) {
-	const { id } = run;
-	if (typeof id !== "number" || !Number.isSafeInteger(id) || id < 1) {
-		throw new Error("Invalid run ID");
+async function firstAttempt(repository: string, run: Record<string, unknown>) {
+	const id = runId(run);
+	if (run.run_attempt === 1) return run;
+	if (
+		typeof run.run_attempt !== "number" ||
+		!Number.isSafeInteger(run.run_attempt) ||
+		run.run_attempt < 2
+	)
+		throw new Error("Invalid run attempt");
+	const first = asRecord(
+		parseJson(await output("gh", ["api", `repos/${repository}/actions/runs/${id}/attempts/1`])),
+		"first attempt",
+	);
+	if (first.id !== id || first.run_attempt !== 1 || first.event !== "merge_group")
+		throw new Error("Mismatched first attempt");
+	return first;
+}
+
+async function queueRemovals(repository: string, pullRequest: number, since: number) {
+	const [owner, name] = repository.split("/");
+	const removals: QueueRemoval[] = [];
+	let cursor: string | undefined;
+	for (;;) {
+		const args = [
+			"api",
+			"graphql",
+			"-f",
+			`query=query($owner:String!,$name:String!,$number:Int!,$cursor:String) {
+			repository(owner:$owner,name:$name) { pullRequest(number:$number) {
+				timelineItems(last:100,before:$cursor,itemTypes:[REMOVED_FROM_MERGE_QUEUE_EVENT]) {
+					nodes { ... on RemovedFromMergeQueueEvent { createdAt reason beforeCommit { oid } } }
+					pageInfo { hasPreviousPage startCursor }
+				}
+			} }
+		}`,
+			"-f",
+			`owner=${owner}`,
+			"-f",
+			`name=${name}`,
+			"-F",
+			`number=${pullRequest}`,
+		];
+		if (cursor !== undefined) args.push("-f", `cursor=${cursor}`);
+		const response = asRecord(parseJson(await output("gh", args)), "queue events response");
+		if (response.errors !== undefined) throw new Error("Queue timeline API returned errors");
+		const repo = asRecord(asRecord(response.data, "data").repository, "repository");
+		const timeline = asRecord(
+			asRecord(repo.pullRequest, "pullRequest").timelineItems,
+			"timelineItems",
+		);
+		const events = asArray(timeline.nodes, "queue events").map((value) => {
+			const entry = asRecord(value, "queue removal");
+			const at = asString(entry.createdAt, "removal time");
+			if (!Number.isFinite(Date.parse(at))) throw new Error("Invalid queue removal timestamp");
+			return {
+				at,
+				reason: entry.reason === null ? null : asString(entry.reason, "removal reason"),
+				head:
+					entry.beforeCommit === null
+						? ""
+						: asString(asRecord(entry.beforeCommit, "beforeCommit").oid, "beforeCommit oid"),
+				pullRequest,
+			};
+		});
+		removals.push(...events);
+		const page = asRecord(timeline.pageInfo, "queue page info");
+		if (typeof page.hasPreviousPage !== "boolean") throw new Error("Invalid queue pagination");
+		if (!page.hasPreviousPage || events.some((entry) => Date.parse(entry.at) < since))
+			return removals;
+		const previous = asString(page.startCursor, "queue cursor");
+		if (previous === cursor) throw new Error("Queue pagination did not advance");
+		cursor = previous;
 	}
+}
+
+async function jobsOf(repository: string, run: Record<string, unknown>, attempt: unknown) {
+	const id = runId(run);
 	const pages = asArray(
 		parseJson(
 			await output("gh", [
@@ -248,10 +475,13 @@ async function jobsOf(repository: string, run: Record<string, unknown>, attempt:
 		),
 		"job pages",
 	).map((page) => asRecord(page, "job page"));
-	return {
-		total_count: pages[0]?.total_count,
-		jobs: pages.flatMap((page) => asArray(page.jobs, "jobs")),
-	};
+	const jobs = pages.flatMap((page) =>
+		asArray(page.jobs, "jobs").map((job) => asRecord(job, "job")),
+	);
+	if (pages[0]?.total_count !== jobs.length) throw new Error("Incomplete attempt job list");
+	if (jobs.some((job) => job.run_id !== id || job.run_attempt !== attempt))
+		throw new Error("Mismatched attempt jobs");
+	return { total_count: jobs.length, jobs };
 }
 
 export function failedJobNames(jobs: readonly unknown[]): string[] {
@@ -288,36 +518,82 @@ if (import.meta.main) {
 		throw new Error("GITHUB_REPOSITORY must be owner/repository");
 	}
 	const now = Date.now();
-	const groups = await listRuns(repository, "merge_group", now - WINDOW_DAYS * DAY);
-	const pullRequests = await listRuns(repository, "pull_request", now - WINDOW_DAYS * DAY);
+	const groups = {
+		workflow_runs: await batches(
+			(await listRuns(repository, "merge_group", now - WINDOW_DAYS * DAY, now)).workflow_runs,
+			(run) => firstAttempt(repository, run),
+		),
+	};
+	const pullRequests = await listRuns(repository, "pull_request", now - WINDOW_DAYS * DAY, now);
 	const full = await sample(repository, groups, now, "merge_group", isFullVerification);
 	const fast = await sample(repository, pullRequests, now, "pull_request", isFastTier);
 	const budget = latencyBudget(full.map((run) => run.verdictSeconds));
 
-	const recent = groups.workflow_runs
-		.map((run) => asRecord(run, "run"))
-		.filter(
-			(run) =>
-				Date.parse(asString(run.created_at, "created_at")) >= now - FAILURE_WINDOW_DAYS * DAY,
-		);
-	const outcomes = [];
-	// Cancelled runs need native evidence too; bounded batches keep this read-only observer timely.
-	for (let start = 0; start < recent.length; start += 8) {
-		outcomes.push(
-			...(await Promise.all(
-				recent.slice(start, start + 8).map(async (run) => {
-					const conclusion = asString(run.conclusion, "conclusion");
-					let failedJobs: string[] = [];
-					if (conclusion === "failure" || conclusion === "cancelled") {
-						const { jobs } = await jobsOf(repository, run, run.run_attempt);
-						failedJobs = failedJobNames(jobs);
+	const recent = groups.workflow_runs.filter(
+		(run) =>
+			run.status === "completed" &&
+			Date.parse(asString(run.created_at, "created_at")) >= now - FAILURE_WINDOW_DAYS * DAY,
+	);
+	const removalCache = new Map<number, Promise<QueueRemoval[]>>();
+	const outcomes = await batches(recent, async (run) => {
+		const conclusion = asString(run.conclusion, "conclusion");
+		const jobs =
+			conclusion === "failure" || conclusion === "cancelled"
+				? (await jobsOf(repository, run, 1)).jobs
+				: [];
+		let cancellation: Cancellation | undefined;
+		if (
+			conclusion === "cancelled" &&
+			Date.parse(asString(run.created_at, "created_at")) >= now - CANCELLATION_WINDOW_DAYS * DAY
+		) {
+			cancellation =
+				jobs.length === 0 ? { cause: "unknown" } : classifyCancellation(run, jobs, [], []);
+			if (cancellation.cause === "unknown" && jobs.length > 0) {
+				const ancestors = queueAncestors(run, groups.workflow_runs);
+				const removals: QueueRemoval[] = [];
+				// Read nearest first. A merged predecessor is main history, not part of this queue.
+				// Each of the eight outcome workers has at most one timeline request in flight.
+				for (const ancestor of ancestors) {
+					const number = asString(ancestor.head_branch, "queue branch").match(
+						/\/pr-(\d+)-[a-f0-9]{40}$/u,
+					)?.[1];
+					if (number === undefined) break;
+					const pr = Number(number);
+					let cached = removalCache.get(pr);
+					if (cached === undefined) {
+						cached = queueRemovals(repository, pr, now - CANCELLATION_WINDOW_DAYS * DAY);
+						removalCache.set(pr, cached);
 					}
-					return { conclusion, failedJobs };
-				}),
-			)),
-		);
-	}
+					const events = await cached;
+					removals.push(...events);
+					cancellation = classifyCancellation(run, jobs, ancestors, removals);
+					if (
+						cancellation.cause !== "unknown" ||
+						events.some(
+							(event) =>
+								event.head === ancestor.head_sha &&
+								event.reason === "merged" &&
+								Date.parse(event.at) <= Date.parse(asString(run.created_at, "created_at")),
+						)
+					)
+						break;
+				}
+			}
+		}
+		return {
+			runId: runId(run),
+			attempt: 1,
+			createdAt: asString(run.created_at, "created_at"),
+			conclusion,
+			failedJobs: failedJobNames(jobs),
+			...(cancellation === undefined ? {} : { cancellation }),
+		};
+	});
 	const failures = queueTierFailures(outcomes);
+	const cancellationOutcomes = outcomes.filter(
+		(run) => Date.parse(run.createdAt) >= now - CANCELLATION_WINDOW_DAYS * DAY,
+	);
+	const cancellations = cancellationBudget(cancellationOutcomes);
 
 	const report = {
 		observedAt: new Date(now).toISOString(),
@@ -325,6 +601,9 @@ if (import.meta.main) {
 		failureWindowDays: FAILURE_WINDOW_DAYS,
 		budget,
 		failures,
+		cancellationWindowDays: CANCELLATION_WINDOW_DAYS,
+		cancellations,
+		groupOutcomes: outcomes,
 		fullVerification: full,
 		pullRequests: fast,
 	};
@@ -334,6 +613,7 @@ if (import.meta.main) {
 		budget,
 		fast.map((run) => run.verdictSeconds),
 		failures,
+		cancellations,
 	);
 	process.stdout.write(rendered);
 	if (process.env.GITHUB_STEP_SUMMARY !== undefined) {
@@ -346,6 +626,11 @@ if (import.meta.main) {
 	} else if (budget.status === "insufficient-data") {
 		process.stdout.write(
 			"::notice title=Full-verification latency baseline incomplete::Fewer than ten qualifying runs; no performance verdict yet.\n",
+		);
+	}
+	if (cancellations.status === "exceeded" || cancellations.status === "incomplete") {
+		process.stdout.write(
+			"::warning title=Merge-group cancellation guard::Non-own-failure cancellations exceed 10 percent or have unknown causes; inspect the seven-day counts and retained evidence.\n",
 		);
 	}
 	if (failures.queueTierShare !== null && failures.queueTierShare > 0.1) {
