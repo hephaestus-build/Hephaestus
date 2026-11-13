@@ -44,7 +44,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -338,13 +337,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
                                 spec.inputFilesOnDisk(),
                                 spec.inputDirectories());
                         try {
-                            var session = sessions.registerAttempt(
-                                    job.getId(),
-                                    job.getAttempt(),
-                                    spec.image(),
-                                    UUID.randomUUID().toString(),
-                                    input,
-                                    "out");
+                            var session = sessions.register(job.getId(), input);
                             measurement.set(
                                     new Measurement(spec, Objects.requireNonNull(spec.workDeadline()), session));
                             var retained = new PreparedJobInputs(

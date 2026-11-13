@@ -562,7 +562,7 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                                 captured.filesOnDisk(),
                                 captured.directories());
                 assertThat(archive).startsWith(server.folder(job));
-                var session = sessions.register(job.getId(), "archive-token", archive, "results/");
+                var session = sessions.register(job.getId(), archive);
                 try (var download = session.download("repo", "reviewed")) {
                     assertThat(download.input().readAllBytes())
                             .containsSequence(SOURCE.getBytes(StandardCharsets.UTF_8));
