@@ -686,6 +686,24 @@ The host applies it on its next reconcile.
 Verify staging before production promotion.
 Hotfixes use the normal process: PR → changeset → merge → merge the Version PR.
 
+### Operator actions on the project's hosts
+
+The project's staging host follows `main`.
+Thus, a merged `.migration/` fragment reaches staging at the next automatic promotion, not at the next release.
+The release manager owns the action of each fragment on the project's hosts:
+
+1. Before a pull request with a `#### 🔴` fragment enters the merge queue, read the fragment.
+   Compare it with the site values, the Secret, and the platform files of each host.
+2. Do the staging action when the pull request merges, before its first promotion applies.
+   If the old chart and the new chart refuse each other's values, pause the staging reconciler before the merge.
+   Change the values after the merge, then resume the reconciler ([Settings for the chart](../admin/pull-based-deployment#settings-for-the-chart)).
+3. For a host that runs releases, record the action in that host's operations record.
+   Do it in the stopped window of the next release that carries the fragment.
+4. After a change on a host, copy the changed file to its operations record.
+
+A host whose values the chart refuses keeps its last release.
+Each later promotion then fails, so do not wait for the next release candidate.
+
 ### Deployment history
 
 Each promotion that moves an environment records one GitHub deployment of the release or commit that its channel names.
