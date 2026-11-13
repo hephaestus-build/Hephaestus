@@ -77,8 +77,11 @@ export function validateReleaseSourceSbom(
 	if (
 		!artifacts.some((item) =>
 			asArray(asRecord(item, "artifact").locations, "artifact locations").some(
+				// Syft reports a file inside the scanned archive from the archive's root, as `/<path>`, from
+				// v1.56 on, and as `<path>` before.
 				(location) =>
-					asRecord(location, "location").path === "gradle-inputs/buildscript/gradle.lockfile",
+					asString(asRecord(location, "location").path, "location path").replace(/^\/+/u, "") ===
+					"gradle-inputs/buildscript/gradle.lockfile",
 			),
 		)
 	) {
