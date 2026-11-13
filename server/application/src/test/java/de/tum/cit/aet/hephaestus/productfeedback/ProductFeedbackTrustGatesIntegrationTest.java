@@ -285,6 +285,8 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void shouldRecoverAnExpiredLookupAndIgnoreItsLateAnswer(boolean whileFiling) throws Exception {
+        // The poll claims the oldest report across the instance; this test needs to own the due queue.
+        jdbc.update("DELETE FROM product_feedback");
         UUID id = whileFiling ? privateReportDue() : report();
         dueForLookup(id, whileFiling);
         Object service = AopTestUtils.getUltimateTargetObject(whileFiling ? filing : routing);
