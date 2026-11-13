@@ -1,0 +1,22 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "openai/gpt-oss-120b",
+      "object": "model",
+      "created": 1794521974,
+      "owned_by": "vllm",
+      "max_model_len": 131072,
+      "max_model_len_current_min": 131072,
+      "max_model_len_current_max": 131072,
+      "max_model_len_overall": 131072
+    },
+    {
+      "id": "autotrust/JEV-27B-VL",
+      "object": "model",
+      "created": 1794521974,
+      "owned_by": "vllm",
+      "max_model_len_overall": 262144
+    }
+  ]
+}

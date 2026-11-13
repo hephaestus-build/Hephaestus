@@ -1922,6 +1922,25 @@ export const zLlmModelCapabilities = z.object({
 });
 
 /**
+ * Token limits the model runs with, each with where its value comes from
+ */
+export const zLlmModelLimits = z.object({
+	bounded: z.boolean(),
+	contextWindow: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	contextWindowSource: z.enum(["ADMIN", "DISCOVERED", "CATALOG", "DERIVED"]).optional(),
+	maxOutputTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxOutputTokensSource: z.enum(["ADMIN", "DISCOVERED", "CATALOG", "DERIVED"]).optional(),
+});
+
+/**
  * A model's price, per 1M tokens
  */
 export const zLlmModelPrice = z.object({
@@ -1974,6 +1993,7 @@ export const zLlmModel = z.object({
 	forcedToolChoice: z.boolean().optional(),
 	grantedWorkspaceIds: z.array(z.int()),
 	id: z.int(),
+	limits: zLlmModelLimits,
 	maxOutputTokens: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -5509,7 +5529,9 @@ export const zUpdateLlmModelRequest = z.object({
 		])
 		.optional(),
 	clearBrand: z.boolean().optional(),
+	clearContextWindow: z.boolean().optional(),
 	clearDataHandling: z.boolean().optional(),
+	clearMaxOutputTokens: z.boolean().optional(),
 	clearReasoningEffort: z.boolean().optional(),
 	contextWindow: z
 		.int()
@@ -5698,7 +5720,9 @@ export const zUpdateWorkspaceLlmModelRequest = z.object({
 		])
 		.optional(),
 	clearBrand: z.boolean().optional(),
+	clearContextWindow: z.boolean().optional(),
 	clearDataHandling: z.boolean().optional(),
+	clearMaxOutputTokens: z.boolean().optional(),
 	clearReasoningEffort: z.boolean().optional(),
 	contextWindow: z
 		.int()
@@ -6196,6 +6220,7 @@ export const zWorkspaceLlmModel = z.object({
 	enabled: z.boolean(),
 	forcedToolChoice: z.boolean().optional(),
 	id: z.int(),
+	limits: zLlmModelLimits,
 	maxOutputTokens: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })

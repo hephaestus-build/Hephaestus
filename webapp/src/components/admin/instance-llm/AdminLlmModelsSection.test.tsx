@@ -17,6 +17,7 @@ const model: LlmModel = {
 	reasoningEffort: "MEDIUM",
 	visibility: "GRANTED",
 	grantedWorkspaceIds: [10],
+	limits: { contextWindow: 128_000, maxOutputTokens: 16_384, bounded: true },
 	createdAt: new Date("2026-07-01T00:00:00Z"),
 };
 

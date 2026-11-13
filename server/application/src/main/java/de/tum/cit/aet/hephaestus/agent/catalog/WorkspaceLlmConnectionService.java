@@ -29,7 +29,7 @@ public class WorkspaceLlmConnectionService {
     private final WorkspaceRepository workspaceRepository;
     private final EgressPolicy egressPolicy;
     private final InstanceLlmSettingsService instanceLlmSettingsService;
-    private final LlmConnectionProbeService probeService;
+    private final LlmModelLimitDiscovery limitDiscovery;
     private final ConfigAuditPort configAudit;
 
     @Transactional(readOnly = true)
@@ -146,15 +146,9 @@ public class WorkspaceLlmConnectionService {
                 ConfigAuditEntityType.WORKSPACE_LLM_CONNECTION, id, workspaceContext.id(), before));
     }
 
-    /** Deliberately NOT {@code @Transactional} — see {@link LlmConnectionProbeService#probeStored}. */
+    /** Deliberately NOT {@code @Transactional} — see {@link LlmModelLimitDiscovery}. */
     public WorkspaceLlmProbeResultDTO probe(WorkspaceContext workspaceContext, Long id) {
-        LlmProbeTarget target = connectionRepository
-                .findProbeTargetByIdAndWorkspaceId(id, workspaceContext.id())
-                .orElseThrow(() -> new EntityNotFoundException("WorkspaceLlmConnection", id));
-        boolean privateTarget = egressPolicy.validate(target.baseUrl());
-        LlmProbeResultDTO raw = probeService.probeCredential(
-                target.baseUrl(), target.authMode(), target.apiKey(), privateTarget, target.apiProtocol());
-        return WorkspaceLlmProbeResultDTO.from(raw);
+        return WorkspaceLlmProbeResultDTO.from(limitDiscovery.probeWorkspaceConnection(workspaceContext.id(), id));
     }
 
     private void requireByoEnabled() {

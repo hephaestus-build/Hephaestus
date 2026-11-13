@@ -23,6 +23,7 @@ const base = {
 	visibility: "PUBLIC",
 	grantedWorkspaceIds: [],
 	currentPrice: price,
+	limits: { contextWindow: 131_072, maxOutputTokens: 16_384, bounded: true },
 	createdAt: new Date("2026-05-01T10:00:00Z"),
 } satisfies Partial<LlmModel>;
 
@@ -70,6 +71,16 @@ const mockModels: LlmModel[] = [
 		reasoningEffort: undefined,
 		currentPrice: undefined,
 	},
+	{
+		...base,
+		id: 5,
+		slug: "self-hosted-qwen",
+		displayName: "Qwen (no limits known)",
+		upstreamModelId: "Qwen/Qwen3.8-27B",
+		dataHandlingTier: "IN_HOUSE",
+		operatedBy: "OWN_ORGANISATION",
+		limits: { bounded: false },
+	},
 ];
 
 /**
@@ -113,8 +124,18 @@ export const Default: Story = {
 				.getAllByRole("cell")
 				.map((cell) => cell.textContent),
 		);
-		await expect(cells.map((row) => row[1])).toStrictEqual(["In-house", "Cloud", "Not declared"]);
-		await expect(cells.map((row) => row[4])).toStrictEqual(["Ready", "Ready", "Price missing"]);
+		await expect(cells.map((row) => row[1])).toStrictEqual([
+			"In-house",
+			"Cloud",
+			"Not declared",
+			"In-house",
+		]);
+		await expect(cells.map((row) => row[4])).toStrictEqual([
+			"Ready",
+			"Ready",
+			"Price missing",
+			"Limits missing",
+		]);
 		const missing = canvas.getByText("Price missing").closest("[data-slot=badge]");
 		await expect(missing?.querySelector("svg")).not.toBeNull();
 		await expect(canvas.getAllByText("Ready")[0]?.closest("[data-slot=badge]")).toBeNull();

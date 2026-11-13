@@ -112,7 +112,8 @@ public class WorkspaceLlmConnectionController {
     @PostMapping("/{id}/probe")
     @Operation(summary = "Test your AI provider connection", operationId = "workspaceProbeLlmConnection")
     @RequireAtLeastWorkspaceAdmin
-    @AuditExempt(reason = "tests a stored credential; stores no configuration")
+    @AuditExempt(
+            reason = "tests a stored credential; stores only the limits the provider reports, never an admin's value")
     public ResponseEntity<WorkspaceLlmProbeResultDTO> probe(WorkspaceContext workspaceContext, @PathVariable Long id) {
         return ResponseEntity.ok(connectionService.probe(workspaceContext, id));
     }

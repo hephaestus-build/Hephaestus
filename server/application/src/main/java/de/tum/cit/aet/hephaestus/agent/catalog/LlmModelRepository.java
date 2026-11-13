@@ -5,6 +5,7 @@ import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -64,4 +65,18 @@ public interface LlmModelRepository extends JpaRepository<LlmModel, Long> {
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE LlmModel m SET m.callPoolId = :poolId WHERE m.id IN :ids")
     int joinCallPool(@Param("poolId") Long poolId, @Param("ids") Collection<Long> ids);
+
+    /** Sets only the discovered limits: an admin's columns are not part of the statement. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE LlmModel m SET m.discoveredContextWindow = :contextWindow,"
+            + " m.discoveredMaxOutputTokens = :maxOutputTokens"
+            + " WHERE m.connection.id = :connectionId AND m.upstreamModelId = :upstreamModelId")
+    int recordDiscoveredLimits(
+            @Param("connectionId") Long connectionId,
+            @Param("upstreamModelId") String upstreamModelId,
+            @Param("contextWindow") @Nullable Integer contextWindow,
+            @Param("maxOutputTokens") @Nullable Integer maxOutputTokens);
+
+    @Query("SELECT m.upstreamModelId FROM LlmModel m WHERE m.connection.id = :connectionId")
+    List<String> findUpstreamModelIdsByConnectionId(@Param("connectionId") Long connectionId);
 }

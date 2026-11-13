@@ -19,6 +19,7 @@ const base = {
 	per1mInputUsd: 0.25,
 	per1mOutputUsd: 2,
 	currency: "USD",
+	limits: { contextWindow: 400_000, maxOutputTokens: 128_000, bounded: true },
 	createdAt: new Date("2026-06-01T10:00:00Z"),
 } satisfies Partial<WorkspaceLlmModel>;
 
@@ -105,6 +106,20 @@ export const ModelOff: Story = {
 		const rows = canvas.getAllByRole("row").slice(1);
 		const status = rows.map((row) => within(row).getAllByRole("cell")[3]?.textContent);
 		await expect(status).toStrictEqual(["Off", "Ready", "Ready"]);
+	},
+};
+
+/** A model whose limits nobody knows cannot run, and the table says so. */
+export const LimitsMissing: Story = {
+	args: {
+		models: mockModels.map((model, index) =>
+			index === 1 ? { ...model, limits: { bounded: false } } : model,
+		),
+	},
+	play: async ({ canvas }) => {
+		const rows = canvas.getAllByRole("row").slice(1);
+		const status = rows.map((row) => within(row).getAllByRole("cell")[3]?.textContent);
+		await expect(status).toStrictEqual(["Off", "Limits missing", "Ready"]);
 	},
 };
 

@@ -48,4 +48,10 @@ public record UpdateLlmModelRequestDTO(
         Boolean clearBrand,
 
         @Nullable @Schema(description = "Clear the data-handling declaration, so the model is undeclared")
-        Boolean clearDataHandling) {}
+        Boolean clearDataHandling,
+
+        @Nullable @Schema(description = "True clears the admin's context window, so the provider's value applies")
+        Boolean clearContextWindow,
+
+        @Nullable @Schema(description = "True clears the admin's maximum output, so the provider's value applies")
+        Boolean clearMaxOutputTokens) {}

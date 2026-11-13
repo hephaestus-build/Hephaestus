@@ -253,6 +253,8 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 null,
                 null,
                 null,
+                null,
+                null,
                 null);
         webTestClient
                 .patch()
@@ -358,7 +360,7 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new UpdateWorkspaceLlmModelRequestDTO(
                         null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                        true))
+                        true, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -504,7 +506,7 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new UpdateWorkspaceLlmModelRequestDTO(
                         null, null, null, null, null, null, null, false, null, null, null, null, null, null, null, null,
-                        null))
+                        null, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()

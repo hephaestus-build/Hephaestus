@@ -116,7 +116,7 @@ Eight more checks need a read before the window:
 - The first daily run erases old feedback and results. See *Choose the feedback retention before you upgrade*.
 - A production server needs a root HTTPS issuer. See *Use a root HTTPS API issuer in production*.
 - Slack connections need the canonical callback on the Slack app: *Use the canonical Slack workspace callback*.
-- Each chat model needs **Max output tokens** or **Context window**. See *Stop every role before moving model usage to one row for each call*.
+- Each chat model needs an output limit. The server reads missing limits from the provider when it starts. Check that no model in **AI providers** is marked **Limits missing** ([Model limits](./ai-providers#model-limits)). See *Stop every role before moving model usage to one row for each call*.
 - Duplicate repository monitor names stop the migration: run the query of *Stop every role before enforcing unique repository monitor names*.
 - A practice identifier can collide with a reserved route name: run the preflight of *Check practice identifiers before upgrading*.
 

@@ -1,4 +1,4 @@
-import { CircleDollarSignIcon, CircleOffIcon, LockIcon, UnplugIcon } from "lucide-react";
+import { CircleDollarSignIcon, CircleOffIcon, GaugeIcon, LockIcon, UnplugIcon } from "lucide-react";
 
 import type { StatusDefs } from "@/components/common/status-def";
 
@@ -6,7 +6,12 @@ import type { StatusDefs } from "@/components/common/status-def";
  * Why a registered model, or the provider it runs on, cannot be used now. A model that can run is
  * the normal case and draws nothing.
  */
-export type ModelReadiness = "OFF" | "CONNECTION_OFF" | "PRICE_MISSING" | "NO_WORKSPACE_ACCESS";
+export type ModelReadiness =
+	| "OFF"
+	| "CONNECTION_OFF"
+	| "PRICE_MISSING"
+	| "LIMITS_MISSING"
+	| "NO_WORKSPACE_ACCESS";
 
 export const MODEL_READINESS_DEFS: StatusDefs<ModelReadiness> = {
 	OFF: {
@@ -26,6 +31,13 @@ export const MODEL_READINESS_DEFS: StatusDefs<ModelReadiness> = {
 		icon: CircleDollarSignIcon,
 		badgeVariant: "warning",
 		description: "Workspaces cannot use it until it has a price or is marked as having no cost.",
+	},
+	LIMITS_MISSING: {
+		label: "Limits missing",
+		icon: GaugeIcon,
+		badgeVariant: "warning",
+		description:
+			"Hephaestus refuses its calls until it knows its output limit. Set Max output tokens or Context window, or test the connection.",
 	},
 	NO_WORKSPACE_ACCESS: {
 		label: "No workspace access",

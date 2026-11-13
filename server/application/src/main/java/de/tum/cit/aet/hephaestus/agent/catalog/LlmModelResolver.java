@@ -37,8 +37,8 @@ public class LlmModelResolver {
                     c.getBaseUrl(),
                     c.getApiProtocol().wire(),
                     instance.getUpstreamModelId(),
-                    instance.getContextWindow(),
-                    instance.getMaxOutputTokens(),
+                    instance.limits().contextWindow(),
+                    instance.limits().maxOutputTokens(),
                     instance.getReasoningEffort(),
                     Boolean.TRUE.equals(instance.getForcedToolChoice()));
         }
@@ -52,8 +52,8 @@ public class LlmModelResolver {
                     c.getBaseUrl(),
                     c.getApiProtocol().wire(),
                     byo.getUpstreamModelId(),
-                    byo.getContextWindow(),
-                    byo.getMaxOutputTokens(),
+                    byo.limits().contextWindow(),
+                    byo.limits().maxOutputTokens(),
                     byo.getReasoningEffort(),
                     Boolean.TRUE.equals(byo.getForcedToolChoice()));
         }
@@ -214,8 +214,8 @@ public class LlmModelResolver {
                         model.getCallPoolId()),
                 c.getApiProtocol(),
                 model.getReasoningEffort(),
-                model.getContextWindow(),
-                model.getMaxOutputTokens());
+                model.limits().contextWindow(),
+                model.limits().maxOutputTokens());
     }
 
     /** Pool-lock rechecks must read the database even when the claim already loaded the model entity. */

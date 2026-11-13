@@ -38,7 +38,37 @@ const mockModel: LlmModel = {
 		currency: "USD",
 		effectiveFrom: new Date("2026-05-01T00:00:00Z"),
 	},
+	limits: {
+		contextWindow: 1_050_000,
+		contextWindowSource: "CATALOG",
+		maxOutputTokens: 128_000,
+		maxOutputTokensSource: "CATALOG",
+		bounded: true,
+	},
 	createdAt: new Date("2026-05-01T10:00:00Z"),
+};
+
+/** A self-hosted model whose server reports only its context window. */
+const selfHostedModel: LlmModel = {
+	...mockModel,
+	id: 3,
+	slug: "gpt-oss",
+	displayName: "gpt-oss-120b",
+	upstreamModelId: "openai/gpt-oss-120b",
+	limits: {
+		contextWindow: 131_072,
+		contextWindowSource: "DISCOVERED",
+		maxOutputTokens: 16_384,
+		maxOutputTokensSource: "DERIVED",
+		bounded: true,
+	},
+};
+
+/** A model whose provider reports no limits, and that no admin has given any. */
+const unboundedModel: LlmModel = {
+	...selfHostedModel,
+	id: 4,
+	limits: { bounded: false },
 };
 
 /** A model from before data handling could be declared: no operator, still saveable. */
@@ -235,6 +265,40 @@ export const AdvancedDisclosure: Story = {
 		const reopened = await within(dialog).findByLabelText(/^Context window/u);
 		await expect(reopened).toHaveAttribute("aria-invalid", "true");
 		await expectSettledVisible(await within(dialog).findByText(/tokens or fewer/u));
+	},
+};
+
+/** Each limit names its source; a blank field keeps the provider's value and saves nothing over it. */
+export const DiscoveredLimits: Story = {
+	args: { editing: selfHostedModel },
+	play: async ({ args }) => {
+		const dialog = await screen.findByRole("dialog");
+		await userEvent.click(within(dialog).getByRole("button", { name: "Limits and capabilities" }));
+		await expectSettledVisible(await within(dialog).findByText(/The provider reports 131,072/u));
+		await expect(
+			within(dialog).getByText(/16,384: a quarter of the context window/u),
+		).toBeVisible();
+		await expect(within(dialog).getByLabelText(/^Context window/u)).toHaveAttribute(
+			"placeholder",
+			"131072",
+		);
+
+		await userEvent.click(within(dialog).getByRole("button", { name: /^save changes$/iu }));
+		await expect(args.onSave.mock.calls[0]?.[0].metadata).toMatchObject({
+			clearContextWindow: true,
+			clearMaxOutputTokens: true,
+		});
+	},
+};
+
+/** A model that cannot run says so, and opens the two fields that fix it. */
+export const LimitsMissing: Story = {
+	args: { editing: unboundedModel },
+	play: async () => {
+		const dialog = await screen.findByRole("dialog");
+		await expectSettledVisible(within(dialog).getByText("This model cannot run yet"));
+		await expect(within(dialog).getByLabelText(/^Max output tokens/u)).toBeVisible();
+		await expect(within(dialog).getAllByText(/^Unknown\./u)).toHaveLength(2);
 	},
 };
 

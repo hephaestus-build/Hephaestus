@@ -134,6 +134,9 @@ function AdminLlmModelFormDialogContent({
 			? {
 					...metadataShared,
 					clearBrand: fields.brand === undefined,
+					// A blank limit field hands the limit back to the provider's metadata.
+					clearContextWindow: !fields.contextWindow.trim(),
+					clearMaxOutputTokens: !fields.maxOutputTokens.trim(),
 					clearDataHandling: fields.operatedBy === undefined,
 					...reasoningEffortUpdateOf(fields.reasoningEffort),
 				}
@@ -187,6 +190,7 @@ function AdminLlmModelFormDialogContent({
 						onChange={setFields}
 						errors={errors}
 						upstreamIdSuggestions={probedModelIds}
+						limits={editing?.limits}
 					/>
 
 					{!isEdit && (

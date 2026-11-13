@@ -180,7 +180,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .isEqualTo(1);
 
         var updateRequest = new UpdateLlmModelRequestDTO(
-                "Renamed Model", null, null, null, null, null, null, null, null, null, null);
+                "Renamed Model", null, null, null, null, null, null, null, null, null, null, null, null);
         webTestClient
                 .patch()
                 .uri("/admin/llm/models/{id}", created.id())
@@ -267,8 +267,8 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .uri("/admin/llm/models/{id}", created.id())
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(
-                        new UpdateLlmModelRequestDTO(null, null, null, null, null, null, null, null, null, null, true))
+                .bodyValue(new UpdateLlmModelRequestDTO(
+                        null, null, null, null, null, null, null, null, null, null, true, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -326,7 +326,19 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new UpdateLlmModelRequestDTO(
-                        null, null, null, null, null, LlmDataOperator.OWN_ORGANISATION, null, true, null, null, null))
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        LlmDataOperator.OWN_ORGANISATION,
+                        null,
+                        true,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null))
                 .exchange()
                 .expectStatus()
                 .isOk()

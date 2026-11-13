@@ -54,6 +54,7 @@ function model(id: number, connectionId: number, displayName: string) {
 		enabled: true,
 		visibility: "PUBLIC" as const,
 		grantedWorkspaceIds: [],
+		limits: { contextWindow: 128_000, maxOutputTokens: 16_384, bounded: true },
 		createdAt: new Date("2026-07-01T00:00:00Z"),
 	};
 }

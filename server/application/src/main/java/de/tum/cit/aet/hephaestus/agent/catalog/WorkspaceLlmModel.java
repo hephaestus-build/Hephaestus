@@ -90,6 +90,16 @@ public class WorkspaceLlmModel {
     @Column(name = "max_output_tokens")
     private Integer maxOutputTokens;
 
+    /** The context window the provider's model metadata reported; {@link #getContextWindow()} wins over it. */
+    @Nullable
+    @Column(name = "discovered_context_window")
+    private Integer discoveredContextWindow;
+
+    /** The maximum output the provider's model metadata reported; {@link #getMaxOutputTokens()} wins over it. */
+    @Nullable
+    @Column(name = "discovered_max_output_tokens")
+    private Integer discoveredMaxOutputTokens;
+
     /** Null until a probe establishes the model's forced tool-choice support. */
     @Nullable
     @Column(name = "forced_tool_choice")
@@ -167,6 +177,12 @@ public class WorkspaceLlmModel {
 
     public DataHandlingTier getDataHandlingTier() {
         return getDataHandling().tier();
+    }
+
+    /** The limits the model runs with: an admin's, else the provider's, else derived ({@link ModelLimits}). */
+    public ModelLimits limits() {
+        return ModelLimits.of(
+                upstreamModelId, contextWindow, maxOutputTokens, discoveredContextWindow, discoveredMaxOutputTokens);
     }
 
     @PrePersist

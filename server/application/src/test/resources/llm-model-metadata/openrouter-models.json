@@ -1,0 +1,24 @@
+{
+  "data": [
+    {
+      "id": "deepseek/deepseek-v3.2",
+      "canonical_slug": "deepseek/deepseek-v3.2",
+      "name": "DeepSeek: DeepSeek V3.2",
+      "created": 1764594642,
+      "context_length": 163840,
+      "architecture": {"modality": "text->text", "input_modalities": ["text"], "output_modalities": ["text"], "tokenizer": "DeepSeek"},
+      "pricing": {"prompt": "0.00000028", "completion": "0.00000042"},
+      "top_provider": {"context_length": 131072, "max_completion_tokens": 65536, "is_moderated": false},
+      "per_request_limits": null,
+      "supported_parameters": ["max_tokens", "temperature", "tools"]
+    },
+    {
+      "id": "qwen/qwen3-coder",
+      "canonical_slug": "qwen/qwen3-coder-480b-a35b-07-25",
+      "name": "Qwen: Qwen3 Coder 480B A35B",
+      "created": 1753230546,
+      "context_length": 262144,
+      "top_provider": {"context_length": 262144, "max_completion_tokens": null, "is_moderated": false}
+    }
+  ]
+}

@@ -5,6 +5,7 @@ import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -74,4 +75,26 @@ public interface WorkspaceLlmModelRepository extends JpaRepository<WorkspaceLlmM
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE WorkspaceLlmModel m SET m.callPoolId = :poolId WHERE m.id IN :ids")
     int joinCallPool(@Param("poolId") Long poolId, @Param("ids") Collection<Long> ids);
+
+    /** Sets only the discovered limits: an admin's columns are not part of the statement. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE WorkspaceLlmModel m SET m.discoveredContextWindow = :contextWindow,"
+            + " m.discoveredMaxOutputTokens = :maxOutputTokens WHERE m.workspace.id = :workspaceId AND m.connection.id = :connectionId"
+            + " AND m.upstreamModelId = :upstreamModelId")
+    int recordDiscoveredLimits(
+            @Param("workspaceId") Long workspaceId,
+            @Param("connectionId") Long connectionId,
+            @Param("upstreamModelId") String upstreamModelId,
+            @Param("contextWindow") @Nullable Integer contextWindow,
+            @Param("maxOutputTokens") @Nullable Integer maxOutputTokens);
+
+    @Query("SELECT m.upstreamModelId FROM WorkspaceLlmModel m"
+            + " WHERE m.connection.id = :connectionId AND m.workspace.id = :workspaceId")
+    List<String> findUpstreamModelIdsByConnectionIdAndWorkspaceId(
+            @Param("connectionId") Long connectionId, @Param("workspaceId") Long workspaceId);
+
+    @WorkspaceAgnostic("Startup limit discovery finds every workspace's enabled models whose limits are unknown")
+    @Query("SELECT m FROM WorkspaceLlmModel m JOIN FETCH m.connection c JOIN FETCH m.workspace"
+            + " WHERE m.enabled = true AND c.enabled = true ORDER BY m.id")
+    List<WorkspaceLlmModel> findAllEnabledWithEnabledConnection();
 }

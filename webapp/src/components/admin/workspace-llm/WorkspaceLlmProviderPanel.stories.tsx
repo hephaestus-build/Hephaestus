@@ -46,6 +46,7 @@ const gpt: WorkspaceLlmModel = {
 	per1mInputUsd: 0.25,
 	per1mOutputUsd: 2,
 	currency: "USD",
+	limits: { contextWindow: 128_000, maxOutputTokens: 16_384, bounded: true },
 	createdAt: new Date("2026-06-01T10:00:00Z"),
 };
 

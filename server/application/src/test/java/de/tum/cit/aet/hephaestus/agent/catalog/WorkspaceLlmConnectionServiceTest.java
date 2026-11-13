@@ -3,17 +3,14 @@ package de.tum.cit.aet.hephaestus.agent.catalog;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.core.SsrfGuardedResolverGroup;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditAction;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
@@ -26,12 +23,9 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
-import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import mockwebserver3.MockResponse;
-import mockwebserver3.MockWebServer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -39,8 +33,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.springframework.web.client.RestClient;
-import tools.jackson.databind.ObjectMapper;
 
 class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
 
@@ -60,7 +52,7 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
     private InstanceLlmSettingsService instanceLlmSettingsService;
 
     @Mock
-    private LlmConnectionProbeService probeService;
+    private LlmModelLimitDiscovery limitDiscovery;
 
     @Mock
     private ConfigAuditPort configAudit;
@@ -305,21 +297,7 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
 
         @Test
         void reachableProbeReportsOnlyTheModelCountNeverTheRawList() {
-            byoEnabled(true);
-            // A projection, not the entity: the probe runs outside any transaction, so it must not
-            // depend on a managed entity still being attached.
-            when(connectionRepository.findProbeTargetByIdAndWorkspaceId(5L, 1L))
-                    .thenReturn(Optional.of(new LlmProbeTarget(
-                            "https://api.openai.com",
-                            LlmAuthMode.BEARER,
-                            "sk-abc",
-                            LlmApiProtocol.OPENAI_COMPLETIONS)));
-            when(probeService.probeCredential(
-                            "https://api.openai.com",
-                            LlmAuthMode.BEARER,
-                            "sk-abc",
-                            false,
-                            LlmApiProtocol.OPENAI_COMPLETIONS))
+            when(limitDiscovery.probeWorkspaceConnection(1L, 5L))
                     .thenReturn(LlmProbeResultDTO.reachable(List.of("gpt-5", "gpt-5-mini"), 200));
 
             WorkspaceLlmProbeResultDTO result = connectionService.probe(workspaceContext, 5L);
@@ -330,11 +308,7 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
 
         @Test
         void unreachableProbeCarriesTheAdvisoryMessage() {
-            byoEnabled(true);
-            when(connectionRepository.findProbeTargetByIdAndWorkspaceId(5L, 1L))
-                    .thenReturn(Optional.of(new LlmProbeTarget(
-                            "https://api.openai.com", LlmAuthMode.BEARER, null, LlmApiProtocol.OPENAI_COMPLETIONS)));
-            when(probeService.probeCredential(any(), any(), any(), anyBoolean(), any()))
+            when(limitDiscovery.probeWorkspaceConnection(1L, 5L))
                     .thenReturn(LlmProbeResultDTO.unreachable(503, "The provider answered with HTTP 503."));
 
             WorkspaceLlmProbeResultDTO result = connectionService.probe(workspaceContext, 5L);
@@ -342,82 +316,6 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
             assertThat(result.reachable()).isFalse();
             assertThat(result.modelCount()).isEqualTo(0);
             assertThat(result.message()).isEqualTo("The provider answered with HTTP 503.");
-        }
-
-        // The page tells an embedding or reranking provider that lists no models apart from a broken one by
-        // this status.
-        @Test
-        @DisplayName("a provider whose /models answers 404 reports that status")
-        void shouldReportTheProvidersStatusWhenItsModelListAnswers404() throws IOException, InterruptedException {
-            try (MockWebServer upstream = new MockWebServer()) {
-                WorkspaceLlmProbeResultDTO result = probeAnswering404(upstream, false);
-
-                assertThat(result.reachable()).isFalse();
-                assertThat(result.statusCode()).isEqualTo(404);
-                assertThat(upstream.takeRequest().getTarget()).isEqualTo("/v1/models");
-            }
-        }
-
-        /** Status and cause would let a workspace admin map the operator's network through the list. */
-        @Test
-        void shouldReportOnlyUnreachableWhenAPrivateHostFails() throws IOException {
-            try (MockWebServer upstream = new MockWebServer()) {
-                WorkspaceLlmProbeResultDTO result = probeAnswering404(upstream, true);
-
-                assertThat(result.reachable()).isFalse();
-                assertThat(result.statusCode()).isNull();
-                assertThat(result.message())
-                        .isEqualTo("Hephaestus could not reach the provider. The server log has the reason.");
-            }
-        }
-
-        private WorkspaceLlmProbeResultDTO probeAnswering404(MockWebServer upstream, boolean privateTarget)
-                throws IOException {
-            upstream.start();
-            upstream.enqueue(new MockResponse.Builder().code(404).build());
-            String baseUrl = upstream.url("/v1").toString();
-            when(connectionRepository.findProbeTargetByIdAndWorkspaceId(5L, 1L))
-                    .thenReturn(Optional.of(
-                            new LlmProbeTarget(baseUrl, LlmAuthMode.BEARER, null, LlmApiProtocol.OPENAI_COMPLETIONS)));
-            when(egressPolicy.validate(baseUrl)).thenReturn(privateTarget);
-            when(egressPolicy.resolverGroup()).thenReturn(SsrfGuardedResolverGroup.LOOPBACK_EXEMPT_INSTANCE);
-            var probing = new WorkspaceLlmConnectionService(
-                    connectionRepository,
-                    modelRepository,
-                    workspaceRepository,
-                    egressPolicy,
-                    instanceLlmSettingsService,
-                    new LlmConnectionProbeService(
-                            mock(LlmConnectionRepository.class),
-                            egressPolicy,
-                            new ObjectMapper(),
-                            RestClient.builder()),
-                    configAudit);
-            return probing.probe(workspaceContext, 5L);
-        }
-
-        /**
-         * A stored connection is re-checked on every probe: the instance allowlist can tighten after it
-         * was created, and DNS for a host that was public then can point inside the network now.
-         */
-        @Test
-        void doesNotProbeAStoredConnectionWhoseBaseUrlTheEgressPolicyNowRejects() {
-            byoEnabled(true);
-            when(connectionRepository.findProbeTargetByIdAndWorkspaceId(5L, 1L))
-                    .thenReturn(Optional.of(new LlmProbeTarget(
-                            "https://api.openai.com",
-                            LlmAuthMode.BEARER,
-                            "sk-abc",
-                            LlmApiProtocol.OPENAI_COMPLETIONS)));
-            doThrow(new IllegalArgumentException("Base URL must be a public https:// address"))
-                    .when(egressPolicy)
-                    .validate("https://api.openai.com");
-
-            assertThatThrownBy(() -> connectionService.probe(workspaceContext, 5L))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("public https");
-
-            verifyNoInteractions(probeService);
         }
     }
 }
