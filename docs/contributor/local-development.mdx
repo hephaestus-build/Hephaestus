@@ -707,6 +707,6 @@ It does not report an unused artifact inside a component that the build still do
 For a Gradle wrapper update, also run the build with `--warning-mode all` and review plugin
 compatibility before accepting a new major. Do not suppress upstream deprecations to make the
 upgrade appear clean. A JDK-line change updates `.java-version`, Renovate's matching
-`constraints.java`, the image's `BP_JVM_VERSION` in `server/application/project.toml` and the JRE pin in
-`.github/ci-tools/buildpack-liberica-jre.json`, whose checksums come from the pinned builder's Liberica buildpack.
-`gate:toolchain` rejects drift between them.
+`constraints.java` and the JRE pin in `.github/ci-tools/buildpack-liberica-jre.json`, whose checksums come
+from the pinned builder's Liberica buildpack. The image's JVM buildpack reads the line from the JAR
+manifest. `gate:toolchain` rejects drift between them.

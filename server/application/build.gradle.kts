@@ -367,7 +367,12 @@ tasks.withType<Test>().configureEach {
     environment("PATH", providers.environmentVariable("PATH").get())
     environment("MANAGEMENT_PORT", "0")
     environment("SERVER_PORT", "0")
-    jvmArgs("-XX:+EnableDynamicAgentLoading", "-XX:+ExitOnOutOfMemoryError")
+    jvmArgs(
+        "-XX:+EnableDynamicAgentLoading",
+        "-XX:+ExitOnOutOfMemoryError",
+        // Netty loads its native transport; from Java 24 on, that warns unless native access is on.
+        "--enable-native-access=ALL-UNNAMED",
+    )
     // No cached lookup bypasses OfflineNetwork: each attempt is recorded, and a declared name ends
     // with its class.
     jvmArgs(

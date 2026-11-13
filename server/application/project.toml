@@ -23,10 +23,8 @@ uri = "docker://paketobuildpacks/health-checker@sha256:7ef317843d076c93682a2f0f7
 name = "BP_RESPONSE_HEADER_TIMEOUT"
 value = "60"
 
-[[io.buildpacks.build.env]]
-name = "BP_JVM_VERSION"
-value = "25"
-
+# No BP_JVM_VERSION: the JVM buildpack takes the JVM line from the JAR manifest's Build-Jdk-Spec, which
+# Gradle writes from .java-version, and gate:toolchain refuses a value that restates it.
 [[io.buildpacks.build.env]]
 name = "BP_JVM_CDS_ENABLED"
 value = "true"

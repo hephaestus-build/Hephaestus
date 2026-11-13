@@ -40,13 +40,13 @@ The Paketo Spring Boot buildpack deprecates the CDS switch of ADR 0067 in favor 
 **Option 4.** A reviewer can check each rule against the diff.
 
 1. `.java-version` contains `25`. Gradle, `actions/setup-java` and Renovate read it. No file pins a JDK inline.
-2. `BP_JVM_VERSION` in `server/application/project.toml` and the JRE pin in `.github/ci-tools/buildpack-liberica-jre.json` follow `.java-version`. The pin's checksums come from the `buildpack.toml` of the Liberica buildpack in the pinned builder. `gate:toolchain` fails on drift.
+2. The image's JVM buildpack reads the JDK line from the JAR manifest (`Build-Jdk-Spec`, which Gradle writes from `.java-version`), so `server/application/project.toml` does not restate it. The JRE pin in `.github/ci-tools/buildpack-liberica-jre.json` belongs to that line, and its checksums come from the `buildpack.toml` of the Liberica buildpack in the pinned builder. `gate:toolchain` fails on drift.
 3. `-Werror` and `-Xlint:all,-processing` stay. A new finding is fixed, not suppressed. Missing annotation metadata goes on the compile-only classpath.
 4. The compiler arguments drop `-XDaddTypeAnnotationsToSymbol=true`. NullAway's JSpecify mode needs it only before JDK 22.
 5. The pinned-park gate and `PinnedParks` stay. On 25 they detect the pinning that remains: a native frame, a class initializer that blocks, or a wait for class initialization.
 6. `CacheLoads` and the locks stay. A comment that gives Java 21 pinning as the reason states the constraint that still holds, or goes.
 7. The server uses no preview feature and no incubator module.
-8. CDS stays as ADR 0067 decides. A separate change moves the image to the AOT cache, with its own startup measurement, and updates ADR 0067.
+8. CDS stays as ADR 0067 decides. A separate change moves the image to the AOT cache and turns on compact object headers, with its own measurement, and updates ADR 0067. The training run and the runtime then need the same JVM options ([JEP 483](https://openjdk.org/jeps/483)).
 9. A separate change removes `jdk.virtualThreadScheduler.maxPoolSize` from the chart. On 25 a Tomcat socket wait unmounts, so the setting has no effect, but it is harmless until then.
 
 ## Consequences
@@ -58,7 +58,8 @@ The Paketo Spring Boot buildpack deprecates the CDS switch of ADR 0067 in favor 
 - Bad: each contributor installs a JDK 25, because Gradle does not download toolchains here.
 - Bad: the first CI run after the change starts with a cold Gradle cache.
 - Bad: JDK 25 disables SHA-1 in TLS 1.2 handshake signatures ([JDK-8340321](https://bugs.openjdk.org/browse/JDK-8340321)). A self-hosted GitLab, Outline or SMTP server that still signs with SHA-1 fails the handshake.
-- Bad: on JDK 24 and later, Netty's native library load prints a JNI warning ([JEP 472](https://openjdk.org/jeps/472)), and Lombok's annotation processor prints a `sun.misc.Unsafe` warning in javac ([JEP 498](https://openjdk.org/jeps/498)). JDK 26 makes that memory access throw by default.
+- Bad: on JDK 24 and later, Netty's native library load prints a JNI warning ([JEP 472](https://openjdk.org/jeps/472)). The test JVM and `bootRun` enable native access. The image starts the application from a class path, not with `java -jar`, so a JAR manifest entry does not enable it there. The AOT cache change decides how the image does.
+- Bad: Lombok's annotation processor prints a `sun.misc.Unsafe` warning in javac ([JEP 498](https://openjdk.org/jeps/498)). JDK 26 makes that memory access throw by default.
 - Found by the move: since JDK 23 the JDK `HttpServer` sends the headers of a chunked response only with its body ([JDK-6968351](https://bugs.openjdk.org/browse/JDK-6968351), release note [JDK-8331847](https://bugs.openjdk.org/browse/JDK-8331847)). The live-test stand-in for the model proxy forwarded with `transferTo`, which never flushes. It held streamed frames even on 21, and on 25 its client waited for the headers. It now flushes each read.
 
 ## Rollback
