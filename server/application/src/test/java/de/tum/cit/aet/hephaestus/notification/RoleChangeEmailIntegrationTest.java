@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
@@ -10,6 +11,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.event.RoleChangedEvent;
 import de.tum.cit.aet.hephaestus.core.privacy.CorePrivacyPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.notification.email.CapturingJavaMailSender;
 import de.tum.cit.aet.hephaestus.notification.email.CapturingMailTestConfiguration;
@@ -27,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -81,6 +84,18 @@ class RoleChangeEmailIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private CapturingJavaMailSender mailSender;
+
+    @Autowired
+    private InstanceSettingsService settings;
+
+    @BeforeEach
+    void releaseSilentMode() {
+        var current = settings.get();
+        if (current.isSilentModeEngaged()) {
+            settings.updateSilentMode(
+                    false, null, null, EntityTagPrecondition.parse("\"" + current.getVersion() + "\""));
+        }
+    }
 
     @Test
     void shouldClaimAndSendTheRoleChangedVariantThroughTheRegisteredEmailAdapter() throws Exception {
