@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, assert, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
 	PracticeProfileOverview,
@@ -40,13 +40,25 @@ import {
 import { STORY_NOW } from "@/stories/story-clock";
 import { pending } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter, loadRouteCode } from "@/test/router-harness";
 import { storeUserView } from "@/test/user-view";
 
 // Mounting the real route pulls in the whole app shell and its lazy modules.
-vi.setConfig({ testTimeout: ROUTE_RENDER_WAIT.timeout });
 
 const PAGE = "/w/acme/practice-profile";
+
+beforeAll(
+	async () =>
+		loadRouteCode(
+			PAGE,
+			"/w/acme/activity",
+			"/w/acme/onboarding",
+			"/w/acme/conversation",
+			"/w/acme/admin/settings",
+			"/w/acme/admin/practices/review",
+		),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 const stack = (router: { state: { location: { search: { detail?: unknown } } } }) =>
 	stackInSearch(router.state.location.search.detail);

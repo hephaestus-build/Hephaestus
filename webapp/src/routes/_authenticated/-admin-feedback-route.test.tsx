@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type {
 	FeedbackItem,
@@ -12,10 +12,13 @@ import type {
 import type { Wire } from "@/lib/dates";
 import { problemType } from "@/lib/problem-detail";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, renderRouteAt, loadRouteCode } from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole admin layout and its lazy modules.
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(
+	async () => loadRouteCode("/admin/feedback", "/w/acme/practices/code-review"),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 const bugReport = {
 	id: "f1f1f1f1-0000-0000-0000-000000000001",

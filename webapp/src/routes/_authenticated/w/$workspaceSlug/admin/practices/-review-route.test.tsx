@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type PathParams } from "msw";
-import { assert, describe, expect, it, onTestFinished, vi } from "vitest";
+import { assert, beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { listWorkspacesQueryKey } from "@/api/@tanstack/react-query.gen";
 import type {
@@ -30,9 +30,13 @@ import {
 	renderRouteAt,
 	renderRouteAtWithRouter,
 	testQueryClient,
+	loadRouteCode,
 } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 20_000 });
+beforeAll(
+	async () => loadRouteCode("/w/acme/admin/practices/review", "/w/acme/admin/models"),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 const fixture = buildFeedbackModeFixture({
 	workspaceDefault: "APPROVE_FIRST",

@@ -1,7 +1,7 @@
 import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { adminListUsersInfiniteQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { AdminAccountView, InstanceSettings } from "@/api/types.gen";
@@ -9,10 +9,15 @@ import { problemType } from "@/lib/problem-detail";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 import { deferred, type Deferred } from "@/test/async";
-import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
+import {
+	ROUTE_RENDER_WAIT,
+	renderRouteAt,
+	renderRouteAtWithRouter,
+	loadRouteCode,
+} from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole admin layout and its lazy modules.
-vi.setConfig({ testTimeout: 20_000 });
+beforeAll(async () => loadRouteCode("/admin/users"), ROUTE_RENDER_WAIT.timeout);
 
 const accountPage = (content: unknown[], page = 0, totalPages = 1) => ({
 	content,

@@ -1,15 +1,20 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http, type PathParams } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import type { AdminWorkspaceLlmUsage, WorkspaceLlmUsageReport } from "@/api/types.gen";
 import { currentMonthUtc, formatMonthLabel } from "@/components/admin/usage/usage-utils";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
-import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
+import {
+	ROUTE_RENDER_WAIT,
+	renderRouteAt,
+	renderRouteAtWithRouter,
+	loadRouteCode,
+} from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole admin layout and its lazy modules.
-vi.setConfig({ testTimeout: 20_000 });
+beforeAll(async () => loadRouteCode("/admin/usage"), ROUTE_RENDER_WAIT.timeout);
 
 /** The real current month: the editor and the cap state are withdrawn on a closed one. */
 const MONTH = currentMonthUtc();

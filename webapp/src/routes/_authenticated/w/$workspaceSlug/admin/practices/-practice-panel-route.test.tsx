@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { currentDefinition } from "@/components/admin/practices/practice-definition-fields";
 
 import type { PracticeReleaseProposal } from "@/api/types.gen";
@@ -10,7 +10,7 @@ import { detailSearch } from "@/components/layout/detail-drawer/detail-stack";
 import type { Wire } from "@/lib/dates";
 import { stringifySearch } from "@/lib/router-search";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, renderRouteAt, loadRouteCode } from "@/test/router-harness";
 
 import {
 	practiceSetupHandlers,
@@ -19,7 +19,7 @@ import {
 	wirePractice,
 } from "./-practice-server";
 
-vi.setConfig({ testTimeout: 20_000 });
+beforeAll(async () => loadRouteCode("/w/acme/admin/practices"), ROUTE_RENDER_WAIT.timeout);
 
 const at = (kind: "practice" | "practice-edit", id: string) =>
 	`/w/acme/admin/practices${stringifySearch(detailSearch({ kind, id }))}`;

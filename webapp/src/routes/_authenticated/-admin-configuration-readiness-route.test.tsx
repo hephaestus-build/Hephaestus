@@ -1,14 +1,14 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { assert, describe, expect, it, vi } from "vitest";
+import { assert, beforeAll, describe, expect, it } from "vitest";
 
 import { adminGetConfigurationReadinessQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { ConfigurationFact } from "@/api/types.gen";
 import { server } from "@/mocks/server";
-import { renderRouteAt, ROUTE_RENDER_WAIT } from "@/test/router-harness";
+import { renderRouteAt, ROUTE_RENDER_WAIT, loadRouteCode } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 20_000 });
+beforeAll(async () => loadRouteCode("/admin"), ROUTE_RENDER_WAIT.timeout);
 
 const GUIDE = "https://docs.hephaestus.build/admin/configuration-readiness";
 const PLANTED_SECRET = "PLANTED-SECRET-THAT-MUST-NEVER-RENDER";

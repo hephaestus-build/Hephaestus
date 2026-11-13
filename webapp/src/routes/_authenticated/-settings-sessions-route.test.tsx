@@ -1,14 +1,14 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { problemType } from "@/lib/problem-detail";
 import { sessions } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, renderRouteAt, loadRouteCode } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(async () => loadRouteCode("/settings"), ROUTE_RENDER_WAIT.timeout);
 
 async function sessionsRegion(): Promise<HTMLElement> {
 	return screen.findByRole("region", { name: "Active sessions" }, ROUTE_RENDER_WAIT);
