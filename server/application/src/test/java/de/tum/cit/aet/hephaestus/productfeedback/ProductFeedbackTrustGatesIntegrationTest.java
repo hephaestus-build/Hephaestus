@@ -204,11 +204,28 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldKeepAReportPrivateWhenConsentIsWithdrawnDuringTheFilingLookup() {
+    void shouldKeepAReportPrivateWhenConsentIsWithdrawnDuringTheRoutingLookup() {
         Account reporter = newReporter();
         UUID id = send(reporter, true);
-        heldForPublic(id);
-        dueForLookup(id, true);
+        transactionTemplate.executeWithoutResult(status -> filings.lock(id)
+                .orElseThrow()
+                .setAnswer(routing.write(new Draft(
+                        Draft.Disposition.ISSUE,
+                        Draft.Type.BUG,
+                        "The list jumps",
+                        "The list jumps when it loads",
+                        "The list stays in place",
+                        List.of("Open the list"),
+                        "",
+                        "",
+                        List.of(),
+                        "",
+                        null,
+                        false,
+                        false,
+                        true,
+                        Draft.Confidence.HIGH))));
+        dueForLookup(id, false);
         var withdrawn = new AtomicBoolean();
         when(issues.repository(PUBLIC_REPOSITORY.fullName())).thenAnswer(call -> {
             assertThat(TransactionSynchronizationManager.isActualTransactionActive())
@@ -218,14 +235,15 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
             return Optional.of(PUBLIC_REPOSITORY);
         });
 
-        filing.fileDue();
+        routing.routeAnswered();
 
         var row = filings.findById(id).orElseThrow();
         assertThat(withdrawn).isTrue();
         assertThat(row.getState()).isEqualTo(FilingState.QUEUED);
         assertThat(row.getRoute()).isEqualTo(FilingRoute.PRIVATE);
         assertThat(row.isAllowPublic()).isFalse();
-        assertThat(row.getRepositoryId()).isNull();
+        assertThat(row.getRepositoryId()).isEqualTo(PRIVATE_REPOSITORY.id());
+        assertThat(row.getRepository()).isEqualTo(PRIVATE_REPOSITORY.fullName());
         assertThat(fileActions(id)).isZero();
         filings.deleteById(id);
     }
@@ -299,8 +317,8 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
             assertThat(filings.findById(id).orElseThrow().getRepositoryId()).isEqualTo(replacement.id());
         } finally {
             release.countDown();
-            pending.get(10, TimeUnit.SECONDS);
             ReflectionTestUtils.setField(service, "clock", previous);
+            pending.get(10, TimeUnit.SECONDS);
         }
         var row = filings.findById(id).orElseThrow();
         assertThat(row.getState()).isEqualTo(whileFiling ? FilingState.FILING : FilingState.QUEUED);
