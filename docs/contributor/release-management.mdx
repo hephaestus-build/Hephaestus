@@ -392,6 +392,9 @@ which performs every check except signature verification.
 | Image index signature and build provenance match the release subjects | **Yes, structurally.** The index signature names the reusable image workflow on `refs/heads/main`. Native SLSA v1 build provenance names that workflow and the full source commit, and excludes self-hosted runners. A reused digest can retain its merge-group build provenance. |
 | The manifest names a release version                                             | **Yes, structurally.** Only `plan-release.ts` decides the tag. The preflight substitutes the version the ref carries                                                                                                                               |
 | The bundle describes the images this run built                                   | No — the preflight and `release.yml` resolve subjects through the image build's published commit tag. `ci-contract.test.ts` requires that tag for every supported event of either caller. See [CI/CD § Image identity](./ci-cd.mdx#image-identity) |
+| The verifiers of earlier releases accept the image set, the lock's image identities and the evidence manifest | No — the preflight runs the same verifiers and accepted breaks as `publish-release` ([Joint lock with the chart](#joint-lock-with-the-chart)) |
+| The verifiers of earlier releases accept the signed draft, its chart package and its signing identity | **Yes, structurally.** The signed lock, the chart and its signature exist only after `release.yml` creates the draft |
+| The one-host install from the signed k3s bundle passes `release-smoke` on both architectures | **Yes, structurally.** `k3s-install.sh` verifies the bundle and the chart by the release workflow's signing identity. The preflight has no signed bundle and no release identity |
 
 The two signature entries are the verifier's only mode-conditional behavior.
 `ci-contract.test.ts` asserts this: a check gated on anything except `mode === "verify-signatures"` fails the contract test.
@@ -476,6 +479,12 @@ Only an immutable published release from 1.0.0-rc.4 on counts, so a pushed tag r
 Older tooling follows the [manual step](../admin/upgrade#hosts-with-reconciler-tooling-from-before-100-rc4).
 A host adopts new tooling only after it applies a release, so an older verifier decides.
 The job stops before publication if one refuses.
+
+The Version PR's release evidence preflight runs the same verifiers first, with `check-previous-verifier.ts --preflight`.
+No signed draft exists yet, so each verifier gets the lock that the release would sign, without its chart.
+`scripts/previous-verifier-probe.ts` calls the lock, evidence and chart-value checks of that verifier's own tree, which its `prepare-release-chart.ts` calls too.
+It skips the download, the signature checks and the chart pull.
+Thus, a change to the image set fails the Version PR, not the release.
 
 A digest or tag change in the same image set does not trip this check.
 For tooling up to 1.0.0-rc.4, an added, removed, or renamed chart image does.

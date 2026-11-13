@@ -7,7 +7,7 @@
  * This job holds write tokens, so a pushed tag must never name the code that runs here. Only a
  * published immutable release counts: its tag cannot move, and its code passed a release.
  */
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,6 +17,7 @@ import { output } from "./lib/process.ts";
 import { releaseRepository } from "./lib/release-identities.ts";
 import { compareVersions, parseVersion } from "./lib/release-version.ts";
 import { listReleases } from "./plan-release.ts";
+import { lockFromEvidence } from "./release-image-lock.ts";
 
 const versionOf = (tag: string) => (tag.startsWith("v") ? parseVersion(tag.slice(1)) : undefined);
 
@@ -101,12 +102,13 @@ export function parseAcceptedBreaks(value: unknown): AcceptedBreak[] {
 	});
 }
 
+/** The program and arguments that an earlier verifier's tree runs against this release. */
+type VerifierCommand = (verifier: string, tree: string) => Promise<string[]>;
+
 async function checkVerifier(
 	verifier: string,
 	release: string,
-	commit: string,
-	destination: string,
-	inventory: string,
+	command: VerifierCommand,
 	run: Run,
 ): Promise<void> {
 	// The release job's checkout has one commit and no tags. In a full clone, a depth would make the
@@ -125,19 +127,10 @@ async function checkVerifier(
 	}
 	const scratch = await mkdtemp(path.join(tmpdir(), "previous-verifier-"));
 	const tree = path.join(scratch, "tree");
-	const chart = path.join(destination, verifier);
 	try {
-		await mkdir(chart, { recursive: true });
 		await run("git", ["worktree", "add", "--quiet", "--detach", tree, verifier]);
 		try {
-			await run(process.execPath, [
-				path.join(tree, "scripts/prepare-release-chart.ts"),
-				release,
-				commit,
-				chart,
-				"helm",
-				inventory,
-			]);
+			await run(process.execPath, await command(verifier, tree));
 		} catch (error) {
 			throw new Error(`the verifier of ${verifier} did not accept ${release}`, { cause: error });
 		}
@@ -155,17 +148,27 @@ function failureOf(error: unknown): string {
 	return lines.find((line) => line.startsWith("Error: ")) ?? lines[0] ?? "";
 }
 
-export async function checkPreviousVerifiers(
+type ListReleases = () => Promise<readonly Published[]>;
+type AcceptedBreaks = () => Promise<readonly AcceptedBreak[]>;
+interface Outcome {
+	verifiers: string[];
+	breaks: (AcceptedBreak & { failure: string })[];
+}
+
+const listPublished =
+	(release: string): ListReleases =>
+	async () =>
+		listReleases(releaseRepository(release, process.env));
+const readAcceptedBreaks: AcceptedBreaks = async () =>
+	parseAcceptedBreaks(await readJsonFile(fileURLToPath(acceptedBreaksFile)));
+
+async function checkWith(
 	release: string,
-	commit: string,
-	destination: string,
-	inventory: string,
-	list: () => Promise<readonly Published[]> = async () =>
-		listReleases(releaseRepository(release, process.env)),
-	run: Run = output,
-	accepted: () => Promise<readonly AcceptedBreak[]> = async () =>
-		parseAcceptedBreaks(await readJsonFile(fileURLToPath(acceptedBreaksFile))),
-): Promise<{ verifiers: string[]; breaks: (AcceptedBreak & { failure: string })[] }> {
+	command: VerifierCommand,
+	list: ListReleases,
+	run: Run,
+	accepted: AcceptedBreaks,
+): Promise<Outcome> {
 	const verifiers = verifiersOf(await list(), release);
 	if (verifiers.length === 0) {
 		throw new Error(
@@ -176,7 +179,7 @@ export async function checkPreviousVerifiers(
 	const breaks: (AcceptedBreak & { failure: string })[] = [];
 	for (const verifier of verifiers) {
 		try {
-			await checkVerifier(verifier, release, commit, destination, inventory, run);
+			await checkVerifier(verifier, release, command, run);
 		} catch (error) {
 			const planned = known.find(
 				(entry) => entry.release === release && entry.verifier === verifier,
@@ -191,18 +194,96 @@ export async function checkPreviousVerifiers(
 	return { verifiers, breaks };
 }
 
-if (import.meta.main) {
-	const [release = "", commit = "", destination = "", inventory = ""] = process.argv.slice(2);
-	const { verifiers, breaks } = await checkPreviousVerifiers(
+/** The publication gate: each verifier prepares the signed draft as a host would. */
+export async function checkPreviousVerifiers(
+	release: string,
+	commit: string,
+	destination: string,
+	inventory: string,
+	list: ListReleases = listPublished(release),
+	run: Run = output,
+	accepted: AcceptedBreaks = readAcceptedBreaks,
+): Promise<Outcome> {
+	return checkWith(
 		release,
-		commit,
-		destination,
-		inventory,
+		async (verifier, tree) => {
+			const chart = path.join(destination, verifier);
+			await mkdir(chart, { recursive: true });
+			return [
+				path.join(tree, "scripts/prepare-release-chart.ts"),
+				release,
+				commit,
+				chart,
+				"helm",
+				inventory,
+			];
+		},
+		list,
+		run,
+		accepted,
 	);
+}
+
+/**
+ * The same gate before a release exists: the Version PR's release evidence preflight. The same
+ * verifiers and accepted breaks decide, through scripts/previous-verifier-probe.ts, which skips only
+ * the steps that need the signed draft. A break thus fails the Version PR instead of the release.
+ */
+export async function checkPreviousVerifiersBeforeRelease(
+	release: string,
+	lock: string,
+	manifest: string,
+	inventory: string,
+	list: ListReleases = listPublished(release),
+	run: Run = output,
+	accepted: AcceptedBreaks = readAcceptedBreaks,
+): Promise<Outcome> {
+	const probe = fileURLToPath(new URL("previous-verifier-probe.ts", import.meta.url));
+	return checkWith(
+		release,
+		async (_verifier, tree) => [
+			probe,
+			tree,
+			release,
+			path.resolve(lock),
+			path.resolve(manifest),
+			path.resolve(inventory),
+		],
+		list,
+		run,
+		accepted,
+	);
+}
+
+function report(release: string, { verifiers, breaks }: Outcome): void {
 	for (const { verifier, reason, failure } of breaks) {
 		process.stdout.write(
 			`::warning::Accepted: ${verifier} on ${release}: ${failure} (${reason})\n`,
 		);
 	}
 	process.stdout.write(`Checked ${release} with the verifiers of ${verifiers.join(" and ")}\n`);
+}
+
+if (import.meta.main && process.argv[2] === "--preflight") {
+	const [release = "", manifest = "", inventory = ""] = process.argv.slice(3);
+	if ([release, manifest, inventory].includes("")) {
+		throw new Error(
+			"usage: check-previous-verifier --preflight <release> <manifest.json> <inventory.json>",
+		);
+	}
+	// The lock that this release would sign, without the chart that only the release pushes.
+	const scratch = await mkdtemp(path.join(tmpdir(), "preflight-lock-"));
+	try {
+		const lock = path.join(scratch, "lock.json");
+		await writeFile(
+			lock,
+			`${JSON.stringify(lockFromEvidence(await readJsonFile(manifest), release), null, 2)}\n`,
+		);
+		report(release, await checkPreviousVerifiersBeforeRelease(release, lock, manifest, inventory));
+	} finally {
+		await rm(scratch, { recursive: true, force: true });
+	}
+} else if (import.meta.main) {
+	const [release = "", commit = "", destination = "", inventory = ""] = process.argv.slice(2);
+	report(release, await checkPreviousVerifiers(release, commit, destination, inventory));
 }

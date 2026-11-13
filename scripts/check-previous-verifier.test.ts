@@ -6,6 +6,7 @@ import { test } from "node:test";
 
 import {
 	checkPreviousVerifiers,
+	checkPreviousVerifiersBeforeRelease,
 	parseAcceptedBreaks,
 	verifiersOf,
 } from "./check-previous-verifier.ts";
@@ -234,4 +235,65 @@ await test("the release runs the older verifiers before it publishes", async () 
 	const check = workflow.indexOf("node scripts/check-previous-verifier.ts");
 	assert.ok(check !== -1, "release.yml runs the check");
 	assert.ok(check < workflow.indexOf("name: Publish immutable release"));
+});
+
+await test("before a release, each verifier probes this ref's lock, manifest and inventory", async () => {
+	const { calls, run } = tools(async () => "");
+	const { verifiers } = await checkPreviousVerifiersBeforeRelease(
+		"v1.1.0",
+		"lock.json",
+		"evidence/manifest.json",
+		"security/release-images.json",
+		listed,
+		run,
+		noBreaks,
+	);
+	assert.deepEqual(verifiers, ["v1.1.0-rc.1", "v1.0.0"]);
+	const tree = calls.find((call) => call[2] === "add")?.[5];
+	assert.ok(tree !== undefined);
+	assert.deepEqual(
+		calls.find((call) => call[0] === process.execPath),
+		[
+			process.execPath,
+			path.join(import.meta.dirname, "previous-verifier-probe.ts"),
+			tree,
+			"v1.1.0",
+			path.resolve("lock.json"),
+			path.resolve("evidence/manifest.json"),
+			path.resolve("security/release-images.json"),
+		],
+	);
+});
+
+await test("before a release, the same accepted breaks decide", async () => {
+	const entry = {
+		release: "v1.0.1",
+		verifier: "v1.0.0",
+		reason: "Removes an image. See the upgrade guide.",
+	};
+	const check = async (breaks: readonly (typeof entry)[]) =>
+		checkPreviousVerifiersBeforeRelease(
+			"v1.0.1",
+			"lock.json",
+			"manifest.json",
+			"inventory.json",
+			listed,
+			tools(refusing).run,
+			async () => breaks,
+		);
+	const accepted = await check([entry]);
+	assert.deepEqual(
+		accepted.breaks.map(({ verifier }) => verifier),
+		["v1.0.0"],
+	);
+	await assert.rejects(check([]), /verifier of v1\.0\.0 did not accept v1\.0\.1/u);
+});
+
+await test("the Version PR's preflight runs the older verifiers too", async () => {
+	const workflow = await readFile(
+		new URL("../.github/workflows/cicd.yml", import.meta.url),
+		"utf8",
+	);
+	const preflight = workflow.slice(workflow.indexOf("Release-preflight:"));
+	assert.match(preflight, /node scripts\/check-previous-verifier\.ts --preflight "\$RELEASE"/u);
 });
