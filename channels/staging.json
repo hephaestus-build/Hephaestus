@@ -1,15 +1,15 @@
 {
-	"commit": "bba2e6f8f78d83f5b056043be75976b53d97bad2",
+	"commit": "6d8e3d1cb7c039d8edd13c3e24c829792312d47a",
 	"images": {
 		"HEPHAESTUS_IMAGE_NATS": "docker.io/synadia/nats-server@sha256:b7d1beaf165653db85ebf4aeefa51298c9634fe88f1af66a3148a8b4f830dbcd",
 		"HEPHAESTUS_IMAGE_VICTORIA_METRICS": "docker.io/victoriametrics/victoria-metrics@sha256:f60dc268b54ecf87f6e09d740c2b732838aa9193090cc741417c9f6386a130df",
 		"HEPHAESTUS_IMAGE_VMALERT": "docker.io/victoriametrics/vmalert@sha256:3256cba5ddaca5974eae6141105cec4ce37871f1c213f0a5c267ec0111bc68e1",
 		"HEPHAESTUS_IMAGE_ALERTMANAGER": "docker.io/prom/alertmanager@sha256:39d8bb3966c694a124428a3a88fbcffd40bd069129ecd47c059f8a3f17c55f3b",
 		"HEPHAESTUS_IMAGE_POSTGRES_EXPORTER": "docker.io/prometheuscommunity/postgres-exporter@sha256:c90657083f5d8ccbf9be16049d1174e221a55c3760121174a2c657a44e323ec6",
-		"HEPHAESTUS_IMAGE_WEBAPP": "ghcr.io/hephaestus-build/webapp@sha256:7cad9b68f78c1cb8cc29bdb8a37970fb6868a32d1fe8d37cb82cb5c0050d4b30",
-		"HEPHAESTUS_IMAGE_APPLICATION_SERVER": "ghcr.io/hephaestus-build/application-server@sha256:d7d66b8185130777a055995b34ef638daea6179045512fdba24503cab4b1797b",
-		"HEPHAESTUS_IMAGE_AGENT_PI": "ghcr.io/hephaestus-build/agent-pi@sha256:28c5c0b805aacfaedc64001acf1f2156df41150055b2717016ba0bd3142e08fc",
-		"HEPHAESTUS_IMAGE_POSTGRES": "ghcr.io/hephaestus-build/postgres@sha256:0bcc10c17bd4b2a0e826cc4da8b00fe4b39216b63ce385ed60ebbedd1c25a78f"
+		"HEPHAESTUS_IMAGE_WEBAPP": "ghcr.io/hephaestus-build/webapp@sha256:031ee57833e65f2b8d30a1db519a1c0b8b41cb63c0bcba18a8a2a411c7c99fd6",
+		"HEPHAESTUS_IMAGE_APPLICATION_SERVER": "ghcr.io/hephaestus-build/application-server@sha256:90555991ec6c39737090713cc5b16411824791220e405ba890b9369ee1d15b2d",
+		"HEPHAESTUS_IMAGE_AGENT_PI": "ghcr.io/hephaestus-build/agent-pi@sha256:89aaee4913be40440a5277015ee3c4a3e56e6fc0f290ae4af0cd535a27730572",
+		"HEPHAESTUS_IMAGE_POSTGRES": "ghcr.io/hephaestus-build/postgres@sha256:788f6339c5795a531d37af15f6e7241d924d565bb3d85069712bdb3fce7ccb99"
 	},
 	"allowRollback": false,
 	"freeze": false,
