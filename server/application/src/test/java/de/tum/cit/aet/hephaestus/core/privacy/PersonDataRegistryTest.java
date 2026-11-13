@@ -40,6 +40,49 @@ class PersonDataRegistryTest extends BaseUnitTest {
                 .hasMessage("Person data catalog does not implement its store declaration");
     }
 
+    @Test
+    void shouldKeepTheCopyScrubLastWhenInboxStoresRunImmediatelyBeforeIt() {
+        var registry = new PersonDataRegistry(List.of(new FinalStores(Integer.MAX_VALUE, Integer.MAX_VALUE - 1)));
+
+        assertThat(registry.stores())
+                .extracting(PersonDataContributor::store)
+                .containsExactly("profile", "provider_event_replay", "mentor_entry_tool_result_copy");
+    }
+
+    @Test
+    void shouldRejectAnotherStoreAtTheFinalCopyScrubOrder() {
+        assertThatThrownBy(() -> new PersonDataRegistry(List.of(new FinalStores(Integer.MAX_VALUE, Integer.MAX_VALUE))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("The mentor copy store must be the only store at the last erasure order");
+    }
+
+    @Test
+    void shouldRejectTheFinalOrderWhenItBelongsToAnotherStore() {
+        assertThatThrownBy(() ->
+                        new PersonDataRegistry(List.of(new FinalStores(Integer.MAX_VALUE - 1, Integer.MAX_VALUE))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("The mentor copy store must be the only store at the last erasure order");
+    }
+
+    @Test
+    void shouldRejectACopyScrubThatDoesNotUseTheFinalOrder() {
+        assertThatThrownBy(() ->
+                        new PersonDataRegistry(List.of(new FinalStores(Integer.MAX_VALUE - 1, Integer.MAX_VALUE - 1))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("The mentor copy store must be the only store at the last erasure order");
+    }
+
+    @PersonDataStores({"profile", "mentor_entry_tool_result_copy", "provider_event_replay"})
+    private record FinalStores(int copyOrder, int replayOrder) implements PersonDataCatalog {
+        @Override
+        public List<PersonDataContributor> contributors() {
+            return List.of(
+                    new SelectedStore("profile"),
+                    new SelectedStore("mentor_entry_tool_result_copy", copyOrder),
+                    new SelectedStore("provider_event_replay", replayOrder));
+        }
+    }
+
     @PersonDataStores({"profile"})
     private static class ProfileCatalog implements PersonDataCatalog {
         @Override
@@ -68,7 +111,16 @@ class PersonDataRegistryTest extends BaseUnitTest {
         }
     }
 
-    private record SelectedStore(String store) implements PersonDataContributor {
+    private record SelectedStore(String store, int order) implements PersonDataContributor {
+        private SelectedStore(String store) {
+            this(store, 0);
+        }
+
+        @Override
+        public int getOrder() {
+            return order;
+        }
+
         @Override
         public PersonDataSelection select(PersonScope person) {
             return new PersonDataSelection(List.of(new PersonDataSelection.RowKey(Map.of("id", "42"))));

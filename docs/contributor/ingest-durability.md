@@ -119,6 +119,9 @@ Person erasure deletes matching events in every state, including LEASED, and cas
 The inbox is a live-predicate erasure store: its preview counts can change without invalidating the frozen identity scope.
 Each erasure pass deletes current matches as well as the frozen keys, and resume repeats the pass even after an earlier receipt.
 Each pass covers deliveries stored before its inbox step. Webhook admission stays available during erasure.
+Both inbox stores run after ordinary source erasure and before the final conversation copy scrub.
+That scrub must stay last: its receipt also fences the tool results of turns that finish after erasure
+([Personal-data map](/admin/dsms/personal-data-map#shared-source-content-and-hephaestus-tool-results)).
 A named write step holds copy admission and a key-share row lock until commit. Renewal remains possible.
 The reaper uses FOR UPDATE SKIP LOCKED, which skips that key-share lock.
 Spring rechecks LEASED and the epoch with a shared row lock at commit in every write transaction.

@@ -27,6 +27,9 @@ import tools.jackson.databind.ObjectMapper;
     "item_event_requester"
 })
 public class IntegrationCoreConnectionPersonDataCatalog implements PersonDataCatalog {
+    // Scan live inbox matches after source erasure, before the final mentor copy scrub records its receipt.
+    private static final int INBOX_ERASURE_ORDER = Integer.MAX_VALUE - 1;
+
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
 
@@ -92,7 +95,7 @@ public class IntegrationCoreConnectionPersonDataCatalog implements PersonDataCat
                         "id,workspace_id,provider,state,error_class,received_at,ended_at",
                         "id",
                         "",
-                        Integer.MAX_VALUE),
+                        INBOX_ERASURE_ORDER),
                 // The account that replayed a dead letter. The event stays; only the attribution goes.
                 new LiveJdbcPersonDataStore(
                         jdbc,
@@ -103,7 +106,7 @@ public class IntegrationCoreConnectionPersonDataCatalog implements PersonDataCat
                         "id,workspace_id,provider,state,replayed_at,replayed_by",
                         "id",
                         "replayed_by=NULL",
-                        Integer.MAX_VALUE),
+                        INBOX_ERASURE_ORDER),
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,
