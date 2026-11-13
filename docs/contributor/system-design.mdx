@@ -1,11 +1,15 @@
 ---
-id: system-design
-sidebar_position: 5
 title: System design
-description: Runtime roles, module boundaries, and the paths from connected work to practice feedback and Hephaestus.
+description: How the server, PostgreSQL and the sandboxes work together, from connected work to practice feedback and answers.
+page_type: explanation
 ---
 
 import SystemDiagram from "@site/src/components/SystemDiagram";
+
+Hephaestus is one server that runs as several replicas, with PostgreSQL as its only truth.
+The server receives provider events, syncs the work, and runs practice reviews and conversation turns in sandboxes.
+A sandbox runs the agent's code. It holds no application secret, only a token for its own subject, and it reaches only the server's gateway.
+The server delivers feedback, Hephaestus's Slack answers, email, and product feedback issues through one outbox.
 
 The container view also shows one decided change that `main` does not have yet. The text below it names it.
 [Runtime roles](/admin/runtime-roles) describes what runs today.
@@ -112,8 +116,10 @@ Each interface carries the name of its Java type or route. "Provider SPI" is the
 Every part stores its state in PostgreSQL, so the view leaves that connection out.
 The view also leaves out `AgentRunHandler`: through it, the reaper moves a review or a turn together with its run ([Agent runs](./agent-runs.mdx)).
 
-One JAR boots in the server role, which also receives provider webhooks. Only a server with `AGENT_ENABLED` creates sandbox Pods and runs conversation turns.
-Each conversation sandbox uses the same driver, run claim and gateway as review sandboxes.
+One JAR boots in the server role, which also receives provider webhooks.
+Only a server with `AGENT_ENABLED` runs the agent runtime: it writes sandbox claims and serves the gateway and the LLM proxy. The chart sets it from `sandbox.enabled`.
+Without it, no review and no conversation turn runs.
+Each conversation sandbox uses the same driver, run lease and gateway as review sandboxes.
 
 [Runtime roles](/admin/runtime-roles) owns role configuration, capacity, and drain behavior.
 [Set up monitoring](/admin/monitoring#scrape-metrics) owns the private management listener on port 9090.
@@ -159,7 +165,7 @@ instance.
 Additional login providers do not create additional GitLab sync instances.
 [Provider resource repair](./provider-resource-repair.md) owns removal dispatch and adoption fencing across these adapters.
 
-`agent` owns execution jobs and sandbox orchestration.
+`agent` owns the run queue, the sandboxes, the gateway and the LLM proxy.
 `practices` owns definitions, durable reviews, assignments, results, problems and feedback.
 Core uses neutral item, capture and citation-verifier ports.
 Domain modules own kind, version, role and evidence meaning.
@@ -173,44 +179,27 @@ The architecture tests enforce the core, domain and provider boundary.
 
 ## Sign-in
 
-```mermaid
-sequenceDiagram
-    accTitle: Native federated sign-in
-    accDescr: The browser starts sign-in on the server, authenticates at GitHub or GitLab, and returns to the OAuth callback. The server issues a cookie session and the webapp reads the current account.
-    participant B as Browser
-    participant S as Server
-    participant P as GitHub or GitLab
-    B->>S: Start sign-in
-    S-->>B: Redirect to provider
-    B->>P: Authenticate and authorize
-    P-->>B: Redirect with authorization code
-    B->>S: OAuth callback with code and state
-    S->>P: Exchange code and resolve identity
-    S-->>B: HttpOnly cookie session and redirect to webapp
-    B->>S: GET /user
-    S-->>B: Current account and access
-```
-
-Spring Security `oauth2Login` federates sign-in.
-Hephaestus issues its own cookie-session JWTs.
-Keycloak is not part of the deployment. Slack and Outline are link-only identity providers.
-[ADR 0017](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0017-replace-keycloak-with-spring-native-auth.md)
-records native auth. [Instance administration](./instance-admin) owns recent-sign-in and user-view implementation.
+The server federates sign-in to GitHub or GitLab with Spring Security `oauth2Login`, then issues its own cookie-session JWT.
+Slack and Outline are link-only identity providers.
+[ADR 0088](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md) records the sign-in model, and [Auth architecture](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/auth-architecture.md) shows the request flow.
+[Instance administration](./instance-admin) describes the recent-sign-in gate and the user view.
 
 ## Practice reviews
 
-The server's receiver verifies and durably buffers provider events. Its consumers sync the work and
-record item events. Eligible reviews create PostgreSQL-backed execution jobs.
-The server claims these jobs and executes them in isolated sandboxes. It admits the results of a review through the shared Java admission service
-before composition and feedback delivery.
+Provider events wait in the PostgreSQL inbox. A server leases each event, syncs the work and records item events.
+An eligible review becomes a `REVIEW` run in the run queue ([Agent runs](./agent-runs.mdx)).
 
-Feedback on the work awaits workspace-admin approval by default. Delivery rechecks policy and
-silent mode independently from measurement.
+A server with `AGENT_ENABLED` starts the review's sandbox.
+The sandbox pulls the `REVIEW` run through the gateway, then the `REVIEW_COMPOSE` run that writes the feedback.
+Admission checks every result before composition and delivery, and missing required capture produces no result.
+[Agent runs § A review in its sandbox](./agent-runs.mdx#a-review-in-its-sandbox) gives the execution and retry boundaries.
 
-The [review pipeline](./practice-review-pipeline) owns selection, capture, result admission, composition,
-and delivery. [Review runtime](./practice-review-runtime) owns execution and retry boundaries.
-[Workspace ABI](./agent/workspace-abi.mdx) owns the job folder, capture manifest, and output contract.
-Missing required capture produces no result.
+Feedback on the work waits for a workspace admin's approval by default.
+Delivery checks the feedback mode and silent mode again before it posts.
+Workspace review history gives no access to a member's private Practice profile or Hephaestus feedback ([ADR 0047](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0047-the-practice-profile-has-one-reader.md)).
+
+The [review pipeline](./practice-review-pipeline) describes selection, capture, admission, composition and delivery.
+The [workspace ABI](./agent/workspace-abi.mdx) describes the job folder, the capture manifest and the output contract.
 
 ## Conversation
 
@@ -282,25 +271,25 @@ sequenceDiagram
 These are the parts of the turn that the arrows alone do not explain:
 
 - **Durability.** A Slack event is a row in the `provider_event` inbox before Slack gets its `202` ([Ingest durability](./ingest-durability.md)). A question from the app is a row before the server answers. A server can stop at any step, and the next one starts again from PostgreSQL.
-- **The fence.** The lease raises the run's epoch. The gateway accepts a call on a run (`…/runs/{runId}/…`) only with the current epoch. Thus a sandbox that lost its lease cannot write.
+- **The fence.** The lease raises the run's epoch. The gateway accepts a call on a run (`…/runs/{runId}/…`) only with the current epoch. A sandbox that lost its lease cannot write.
 - **Two streams.** The LLM proxy forwards the model's tokens to the sandbox and accounts for them in the usage row. The answer that a person sees is a separate stream of deltas that the sandbox sends.
-- **Any replica.** The server writes no row for a delta. It sends the delta to every server as PostgreSQL notification frames. Each server keeps the partial answer in memory (`MentorTurnProgress`). The live hub of the server that holds the app's stream sends it on. Thus the sandbox and the app can use different server replicas.
+- **Any replica.** The server writes no row for a delta. It sends the delta to every server as PostgreSQL notification frames. Each server keeps the partial answer in memory (`MentorTurnProgress`). The live hub of the server that holds the app's stream sends it on. The sandbox and the app can therefore use different server replicas.
 - **Only the end is stored.** The entries are stored once, when the turn ends. A server that misses a frame shows the partial answer again at the next whole snapshot. A whole snapshot comes at least every two seconds.
 - **Slack delivery.** The answer for Slack is an `agent_action` row that the outbox executes ([The outbox](./outbox.md)). The executor confirms the post with the message timestamp that Slack returns.
 - **Out of scope.** This success path leaves out a stopped turn and a retry. [Conversation runtime](./unified-pi-runtime) owns them.
 
 Each turn is a `TURN` run in band `INTERACTIVE`, keyed to its conversation.
-A conversation keeps one sandbox while it is in use. Thus a follow-up turn starts at once.
+A conversation keeps one sandbox while it is in use, so a follow-up turn starts at once.
 The reaper deletes the sandbox when it leased no run for `conversation-sandbox-idle` (15 minutes). The next question starts a new one from PostgreSQL.
 
 PostgreSQL holds the whole conversation in three workspace-scoped tables.
-The server role owns the HTTP API, the live stream, Slack ingress and posts, submission, and the weekly digest.
+The server role owns the HTTP API, the live stream, Slack ingress and posts, submission, and the schedule of the weekly digest.
 A server with `AGENT_ENABLED` owns run admission, sandbox claims and the turn gateway endpoints.
+The weekly digest is a `DIGEST` run in the conversation's sandbox, with the same runner, admission and fence as a turn ([Agent runs § Proactive digests](./agent-runs.mdx#proactive-digests)).
 No conversation state lives in a process, so any such server serves any call of any turn.
 [Conversation runtime](./unified-pi-runtime) owns the turn lifecycle, its runner and the context of a turn.
 
-The UI uses shadcn components over Base UI.
-It renders the stored messages and the partial answer from the generated client, with no assistant runtime.
+The app renders the stored messages and the partial answer from the generated client.
 
 Each account has one [Conversation](./practice-feedback-language.md#conversation) per workspace, with one level of threads.
 The app shows the whole conversation. Slack shows what was asked there.
@@ -310,19 +299,13 @@ recent work, review requests, assigned issues, the conversation itself, practice
 context. [Conversation runtime](./unified-pi-runtime#delivery-of-shown-feedback) owns how a turn delivers feedback.
 [Ask Hephaestus](/user/ask-hephaestus) owns the member-facing behavior.
 
-## Member pages
-
-A workspace that reviews practices opens on the member's private Practice profile. Other workspaces
-open on Activity. Activity and Workspace activity count and list work without ranking developers.
-Members read reviews of their own work from the Practice profile. Workspace admins inspect the wider
-history under Practice reviews. Workspace review history does not grant access to a member's private Practice profile or Hephaestus feedback.
-
 ## Repository scans
 
-Scans pin a monitored default branch and keep durable practice/file membership.
-Serial execution jobs can expire while report membership and product history remain.
-Reports have separate recorded totals and current open-problem counts.
-The [scan guide](/admin/practice-scans) owns procedures and export availability.
+A scan is a `SCAN` review, so it runs as `REVIEW` runs. A workspace runs one scan at a time.
+It pins the default branch of a monitored repository and records which practices and files it covered.
+Its report keeps the problems that it recorded and, separately, the count of problems that are still open.
+After the feedback retention period, the raw proof and its exports go, and the aggregate report stays.
+The [scan guide](/admin/practice-scans) describes how to run a scan and export its report.
 
 ## Diagram map
 
