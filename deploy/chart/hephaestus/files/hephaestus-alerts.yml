@@ -75,7 +75,12 @@ groups:
           summary: Product feedback refused a state move; the report keeps its state and can hold back filing
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusPrivateRepositoryNotWithdrawn
-        expr: sum(increase(product_feedback_steps_total{job="hephaestus",step="private_repository",outcome="not_withdrawn"}[1h])) > 0
+        expr: >-
+          sum(
+            increase(product_feedback_steps_total{job="hephaestus",step="private_repository",outcome="not_withdrawn"}[1h]) > 0
+            or (product_feedback_steps_total{job="hephaestus",step="private_repository",outcome="not_withdrawn"} > 0
+              unless product_feedback_steps_total{job="hephaestus",step="private_repository",outcome="not_withdrawn"} offset 1h)
+          ) > 0
         labels:
           severity: critical
         annotations:

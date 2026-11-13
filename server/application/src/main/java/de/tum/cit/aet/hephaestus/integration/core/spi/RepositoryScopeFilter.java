@@ -18,7 +18,8 @@ public interface RepositoryScopeFilter {
      * Check if a repository is allowed for processing.
      * <p>
      * When filtering is active, only repositories explicitly allowed by the configuration
-     * will pass this check. When filtering is inactive, all repositories are allowed.
+     * will pass this check. Provider-wide exclusions can still refuse a repository
+     * when allow-list filtering is inactive; callers always make this check.
      *
      * @param nameWithOwner the repository identifier in "owner/repo" format (e.g., "ls1intum/Hephaestus")
      * @return true if the repository should be processed, false to skip
@@ -29,11 +30,12 @@ public interface RepositoryScopeFilter {
     boolean isRepositoryMonitored(Long scopeId, Long repositoryId);
 
     /**
-     * Check if any filtering is currently active.
+     * Whether configured allow-list filtering is active.
      * <p>
-     * When inactive, all repositories are allowed and no filter checks are necessary.
+     * This controls allow-list organization admission and statistics. It does not
+     * disable provider-wide exclusions or replace {@link #isRepositoryAllowed}.
      *
-     * @return true if filtering is enabled, false if all repositories are allowed
+     * @return true when an allow-list limits the repositories
      */
     boolean isActive();
 }

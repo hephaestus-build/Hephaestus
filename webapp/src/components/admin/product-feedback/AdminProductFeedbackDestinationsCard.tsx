@@ -184,7 +184,7 @@ function DestinationsForm({
 					<RepositoryField
 						id={`${id}-private`}
 						label="Private repository"
-						description="Reports that stay private become issues here. Saving takes this repository out of every workspace, with its issues and their Activity. After you rename or transfer it, update it here, or a workspace can monitor it again. A repository you replace can be monitored again."
+						description="Reports that stay private become issues here. Saving removes this repository from every workspace, with its issues, Activity and the text of its work items. The data stays on GitHub. Until removal finishes, workspace members can still see copies. After you rename or transfer it, update it here, or a workspace can monitor it again. A repository you replace can be monitored again."
 						value={privateRepository}
 						saved={saved.privateRepository}
 						check={saved.privateCheck}

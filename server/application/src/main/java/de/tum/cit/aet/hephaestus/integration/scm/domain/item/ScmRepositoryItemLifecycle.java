@@ -32,7 +32,10 @@ public class ScmRepositoryItemLifecycle {
     public void onWithdrawn(RepositoryWithdrawnFromWorkspaceEvent event) {
         for (long repositoryId : event.repositoryIds()) {
             items.findSource(event.workspaceId(), ScmItemEvents.REPOSITORY.value(), repositoryId)
-                    .ifPresent(item -> removeBelow(event.workspaceId(), item.getId()));
+                    .ifPresent(item -> {
+                        removeBelow(event.workspaceId(), item.getId());
+                        writer.remove(event.workspaceId(), item.getId(), clock.instant());
+                    });
         }
     }
 

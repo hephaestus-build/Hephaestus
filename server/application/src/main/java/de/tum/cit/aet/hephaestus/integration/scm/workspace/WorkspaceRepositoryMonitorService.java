@@ -43,11 +43,11 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
@@ -296,7 +296,8 @@ public class WorkspaceRepositoryMonitorService {
      * Takes an excluded repository out of every workspace with what they hold of it. A GitLab project is a different
      * repository that can share the path, so its workspace keeps it.
      */
-    @EventListener
+    @TransactionalEventListener(fallbackExecution = true)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void onExcludedFromWorkspaces(RepositoryExcludedFromWorkspacesEvent event) {
         // Each workspace in its own transaction: one that fails must not keep the repository in all the others.
         int failed = 0;

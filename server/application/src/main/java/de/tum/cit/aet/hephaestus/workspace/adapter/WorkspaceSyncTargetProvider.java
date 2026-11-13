@@ -39,8 +39,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Component
 public class WorkspaceSyncTargetProvider implements SyncTargetProvider, RepositoryScopeProvider {
@@ -547,13 +545,7 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider, Reposito
                 Workspace owner = Objects.requireNonNull(rtm.getWorkspace());
                 if (!hasActiveProvider(owner, IntegrationKind.GITLAB)
                         && workspaceScopeFilter.isExcluded(resolvedNameWithOwner)) {
-                    String excluded = resolvedNameWithOwner;
-                    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                        @Override
-                        public void afterCommit() {
-                            eventPublisher.publishEvent(new RepositoryExcludedFromWorkspacesEvent(excluded));
-                        }
-                    });
+                    eventPublisher.publishEvent(new RepositoryExcludedFromWorkspacesEvent(resolvedNameWithOwner));
                 }
             }
 

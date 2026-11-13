@@ -123,6 +123,9 @@ public class ManualRepositoryMonitorService {
             if (!(current.getConfig() instanceof ConnectionConfig.GitHubPatConfig config)) {
                 throw new RepositoryManagementNotAllowedException(slug);
             }
+            if (scopeFilter.isExcluded(nameWithOwner) || scopeFilter.isExcluded(reported.fullPath())) {
+                throw new RepositoryExcludedFromWorkspacesException(nameWithOwner);
+            }
             // A new token or a reconnect keeps the row; only its version shows that GitHub answered an earlier one.
             if (!Objects.equals(current.getVersion(), answeredVersion)) {
                 throw new RepositorySelectionChangedException();

@@ -50,7 +50,9 @@ A destination change is audited.
 It never redirects a report already queued for the previous repository.
 Those reports stay saved in the console, with the admin email if it is set up, and carry `DESTINATION_CHANGED`.
 
-The private repository stays out of every workspace, so only its maintainers see its issues.
+Once removal finishes, the private repository stays out of every workspace, so only its maintainers see its issues.
+Until then, workspace members can still see copies already held there, including while a failed removal waits for a retry.
+
 An installation that covers all repositories does not add it, and a workspace admin cannot add it.
 When you set it, Hephaestus removes it from each workspace that monitors it, and a repair tries again every 15 minutes until that succeeds. If it keeps failing, the alert `HephaestusPrivateRepositoryNotWithdrawn` fires.
 Those workspaces lose its issues, their Activity, and the text of its work items. This cannot be undone, but the data stays on GitHub.

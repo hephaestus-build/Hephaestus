@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -19,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationRepositoryEnumerator.InstallationRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryIdentityLookup.RepositoryIdentity;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryScopeFilter;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -27,6 +29,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClie
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.GitHubGraphQlTestMapper;
+import de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubRepositoryIdentityLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubRepositorySyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssueUpdates;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssues;
@@ -66,6 +69,7 @@ import org.springframework.http.codec.json.JacksonJsonEncoder;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.reactive.function.client.ClientResponse;
@@ -102,6 +106,9 @@ class PrivateDestinationOutOfWorkspacesIntegrationTest extends BaseIntegrationTe
 
     @Autowired
     private ManualRepositoryMonitorService manualMonitors;
+
+    @MockitoSpyBean
+    private GitHubRepositoryIdentityLookup githubIdentities;
 
     @Autowired
     private StubInstallationRepositoryEnumerator enumerator;
@@ -402,6 +409,8 @@ class PrivateDestinationOutOfWorkspacesIntegrationTest extends BaseIntegrationTe
     @Test
     void enumerationWithdrawsARenamedPrivateRepositoryWithItsHistory() {
         long item = heldIn(workspace, PRIVATE_ID, 91L);
+        long repository = repositoryId(PRIVATE_ID);
+        long parent = number("SELECT parent_id FROM item WHERE id=?", item);
         jdbc.update(
                 "UPDATE repository_to_monitor SET name_with_owner = 'acme/old-reports'"
                         + " WHERE workspace_id = ? AND native_id = ?",
@@ -413,6 +422,10 @@ class PrivateDestinationOutOfWorkspacesIntegrationTest extends BaseIntegrationTe
         monitors.ensureAllInstallationRepositoriesCovered(INSTALLATION, List.of("acme/old-reports"), true);
 
         assertThat(monitorsOf("acme/old-reports")).isZero();
+        assertThat(number("SELECT COUNT(*) FROM item WHERE id=? AND removed_at IS NOT NULL", parent))
+                .isOne();
+        assertThat(number("SELECT COUNT(*) FROM repository WHERE id=?", repository))
+                .isZero();
         assertThat(activityOf(workspace)).isZero();
         assertThat(number("SELECT COUNT(*) FROM item WHERE id = ? AND removed_at IS NOT NULL", item))
                 .isEqualTo(1);
@@ -500,6 +513,63 @@ class PrivateDestinationOutOfWorkspacesIntegrationTest extends BaseIntegrationTe
                     assertThat(refused.getBody().getDetail()).doesNotContainIgnoringCase("feedback");
                 });
         assertThat(monitorsOf(PRIVATE)).isZero();
+    }
+
+    @Test
+    void shouldRefuseAManualAddWhenTheDestinationChangesDuringItsLookup() {
+        Workspace manual = workspaces.save(WorkspaceTestFixtures.activeWorkspace("manual-private"));
+        long manualId = Objects.requireNonNull(manual.getId());
+        var connection = new Connection(
+                manual,
+                IntegrationKind.GITHUB,
+                "manual-private",
+                new ConnectionConfig.GitHubPatConfig("acme", null, Set.of()));
+        ReflectionTestUtils.setField(connection, "state", IntegrationState.ACTIVE);
+        connections.save(connection);
+        doAnswer(call -> {
+                    save(PRIVATE);
+                    return Optional.of(new RepositoryIdentity(PRIVATE_ID, PRIVATE));
+                })
+                .when(githubIdentities)
+                .resolve(manualId, PRIVATE);
+
+        assertThatThrownBy(() -> manualMonitors.add(manual, PRIVATE))
+                .isInstanceOf(RepositoryExcludedFromWorkspacesException.class);
+        assertThat(number("SELECT COUNT(*) FROM repository_to_monitor WHERE workspace_id=?", manual.getId()))
+                .isZero();
+        assertThat(destinationRows
+                        .findById(ProductFeedbackDestination.SINGLETON)
+                        .orElseThrow()
+                        .getPrivateRepository())
+                .isEqualTo(PRIVATE);
+    }
+
+    @Test
+    void shouldWithdrawOnlyAfterTheExclusionEventCommits() {
+        long item = heldIn(workspace, PRIVATE_ID, 91L);
+        var destination = new ProductFeedbackDestination();
+        destination.setPublicRepository(PUBLIC);
+        destination.setPrivateRepository(PRIVATE);
+        destinationRows.save(destination);
+        transactions.executeWithoutResult(status -> {
+            events.publishEvent(new RepositoryExcludedFromWorkspacesEvent(PRIVATE));
+            assertThat(monitorsOf(PRIVATE)).isEqualTo(2);
+            status.setRollbackOnly();
+        });
+        assertThat(monitorsOf(PRIVATE)).isEqualTo(2);
+        assertThat(activityOf(workspace)).isOne();
+        assertThat(number("SELECT COUNT(*) FROM item WHERE id=? AND removed_at IS NULL", item))
+                .isOne();
+
+        transactions.executeWithoutResult(status -> {
+            events.publishEvent(new RepositoryExcludedFromWorkspacesEvent(PRIVATE));
+            assertThat(monitorsOf(PRIVATE)).isEqualTo(2);
+        });
+
+        assertThat(monitorsOf(PRIVATE)).isZero();
+        assertThat(activityOf(workspace)).isZero();
+        assertThat(number("SELECT COUNT(*) FROM item WHERE id=? AND removed_at IS NOT NULL", item))
+                .isOne();
     }
 
     @Test
