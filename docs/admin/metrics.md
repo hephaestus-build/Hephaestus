@@ -628,7 +628,7 @@ The hash is the last eight characters of the script's file name, which name one 
 
 ## Outbox metrics
 
-[Effect boundary](../contributor/outbox.md#effect-boundary) defines which provider writes use the outbox.
+[Effect boundary](/contributor/outbox#effect-boundary) defines which provider writes use the outbox.
 Each server replica samples the backlog every 30 seconds.
 A failed sample keeps the last values.
 
