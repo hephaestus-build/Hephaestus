@@ -7,6 +7,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -16,7 +17,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * The outbox backlog as gauges: actions that have not ended, by kind and state, and how long the oldest due action of
+ * The outbox backlog as gauges: actions that have not ended and that this build can decode, by kind and state, and how long the oldest due action of
  * each kind has waited. A due action that waits long means that no replica's executor takes it, or that its lane is
  * held by an action that does not end. One query each pass, off the request paths. A failed pass keeps the last values,
  * so a database blip does not read as an empty outbox.
@@ -31,12 +32,14 @@ public class ActionBacklogSampler {
     private static final ActionState[] OPEN = {ActionState.PROPOSED, ActionState.ADMITTED, ActionState.EXECUTING};
 
     private final AgentActionRepository actions;
+    private final ActionAdmission admission;
     private final Map<ActionKind, Map<ActionState, AtomicLong>> backlog = new EnumMap<>(ActionKind.class);
     private final Map<ActionKind, AtomicLong> oldestDue = new EnumMap<>(ActionKind.class);
     private final Counter failures;
 
-    ActionBacklogSampler(AgentActionRepository actions, MeterRegistry meters) {
+    ActionBacklogSampler(AgentActionRepository actions, List<ActionAdapter> adapters, MeterRegistry meters) {
         this.actions = actions;
+        this.admission = ActionAdmission.of(adapters);
         // Every series exists from the start, so an alert on a backlog that is still empty has a series to read.
         for (ActionKind kind : ActionKind.values()) {
             Map<ActionState, AtomicLong> states = new EnumMap<>(ActionState.class);
@@ -68,7 +71,7 @@ public class ActionBacklogSampler {
         try {
             Map<ActionKind, Map<ActionState, Long>> counts = new EnumMap<>(ActionKind.class);
             Map<ActionKind, Long> ages = new EnumMap<>(ActionKind.class);
-            for (var row : actions.backlog(ActionKind.names())) {
+            for (var row : actions.backlog(admission.json())) {
                 ActionKind kind = ActionKind.valueOf(row.getKind());
                 counts.computeIfAbsent(kind, ignored -> new EnumMap<>(ActionState.class))
                         .put(ActionState.valueOf(row.getState()), row.getActions());

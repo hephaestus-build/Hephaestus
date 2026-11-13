@@ -288,13 +288,17 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         assertThat(actions.enqueueNew(request(lane, lane + ":1", null, 3), Duration.ZERO))
                 .as("the key is already enqueued")
                 .isEmpty();
-        assertThat(store.claim(next, LEASE)).as("it waits for its lane").isEmpty();
-        assertThat(store.claim(head, LEASE)).as("its delay has not passed").isEmpty();
+        assertThat(store.claim(next, LEASE, admission()))
+                .as("it waits for its lane")
+                .isEmpty();
+        assertThat(store.claim(head, LEASE, admission()))
+                .as("its delay has not passed")
+                .isEmpty();
         ActionTestSupport.due(jdbc, lane);
-        assertThat(store.claim(head, LEASE))
+        assertThat(store.claim(head, LEASE, admission()))
                 .as("the head is now due")
                 .hasValueSatisfying(claim -> assertThat(claim.attempts()).isOne());
-        assertThat(store.claim(head, LEASE)).as("taken once").isEmpty();
+        assertThat(store.claim(head, LEASE, admission())).as("taken once").isEmpty();
     }
 
     @Test
@@ -425,7 +429,7 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
     private List<ActionStore.Claim> claimOwn(List<UUID> ids) {
         // Other tests leave due actions behind; take enough to reach ours, then release the rest at once.
         var claimed = new ArrayList<ActionStore.Claim>();
-        for (ActionStore.Claim claim : store.claim(1000, LEASE)) {
+        for (ActionStore.Claim claim : store.claim(1000, LEASE, admission())) {
             if (ids.contains(claim.id())) claimed.add(claim);
             else
                 store.settle(
@@ -441,12 +445,17 @@ class ActionStoreIntegrationTest extends BaseIntegrationTest {
         return refused.getMostSpecificCause() instanceof SQLException sql ? sql.getSQLState() : null;
     }
 
+    private ActionAdmission admission() {
+        return ActionTestSupport.untyped();
+    }
+
     private static void ignore(ActionEnded ended) {}
 
     /** Ends every stale action, as one reaper run does. */
     private List<ActionStore.Settled> endStale(Consumer<ActionEnded> onEnd) {
         var ended = new ArrayList<ActionStore.Settled>();
-        for (UUID id : store.findStale(1000)) store.endStale(id, onEnd).ifPresent(ended::add);
+        for (UUID id : store.findStale(1000, admission()))
+            store.endStale(id, admission(), onEnd).ifPresent(ended::add);
         return ended;
     }
 

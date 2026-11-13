@@ -11,6 +11,12 @@ package de.tum.cit.aet.hephaestus.core.action;
 public interface ActionAdapter {
     ActionKind kind();
 
+    /**
+     * The values of every discriminator that this adapter decodes, so that a row of a newer build with another value is
+     * left to that build. Declare {@link ActionVariants#one} when the payload names no variant.
+     */
+    ActionVariants variants();
+
     ActionResult execute(ActionAttempt attempt);
 
     /**

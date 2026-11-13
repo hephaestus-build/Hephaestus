@@ -14,7 +14,6 @@ import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -155,15 +154,15 @@ class ActionExecutorTest extends BaseUnitTest {
         UUID failing = UUID.randomUUID();
         UUID ending = UUID.randomUUID();
         var executor = executor(attempt -> new ActionResult.Done(null));
-        when(store.findStale(anyInt())).thenReturn(List.of(failing, ending));
-        when(store.endStale(eq(failing), any())).thenThrow(new IllegalStateException("domain row refused"));
-        when(store.endStale(eq(ending), any())).thenReturn(Optional.empty());
-        when(store.claim(anyInt(), any())).thenReturn(List.of());
+        when(store.findStale(anyInt(), any())).thenReturn(List.of(failing, ending));
+        when(store.endStale(eq(failing), any(), any())).thenThrow(new IllegalStateException("domain row refused"));
+        when(store.endStale(eq(ending), any(), any())).thenReturn(Optional.empty());
+        when(store.claim(anyInt(), any(), any())).thenReturn(List.of());
 
         executor.runDue();
 
-        verify(store).endStale(eq(ending), any());
-        verify(store).claim(anyInt(), any());
+        verify(store).endStale(eq(ending), any(), any());
+        verify(store).claim(anyInt(), any(), any());
     }
 
     /** An adapter's own records name the action; the caller's log context is back after the attempt. */
@@ -219,19 +218,7 @@ class ActionExecutorTest extends BaseUnitTest {
     }
 
     private static List<ActionAdapter> adapters(Function<ActionAttempt, ActionResult> execute) {
-        return Arrays.stream(ActionKind.values())
-                .map(kind -> (ActionAdapter) new ActionAdapter() {
-                    @Override
-                    public ActionKind kind() {
-                        return kind;
-                    }
-
-                    @Override
-                    public ActionResult execute(ActionAttempt attempt) {
-                        return execute.apply(attempt);
-                    }
-                })
-                .toList();
+        return ActionTestSupport.adapters(execute);
     }
 
     private static ActionStore.Claim claim(boolean writeStarted) {

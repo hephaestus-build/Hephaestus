@@ -93,11 +93,7 @@ public class FeedbackSendQueue {
         actions.cancelPending(row.getWorkspaceId(), lane(row.getId()));
         int generation = prior.map(p -> generationOf(p.idempotencyKey()) + 1).orElse(1);
         actions.enqueue(new ActionRequest(
-                switch (action) {
-                    case POST, READBACK -> ActionKind.DELIVER_FEEDBACK;
-                    case EDIT -> ActionKind.EDIT_FEEDBACK;
-                    case RETRACT -> ActionKind.RETRACT_FEEDBACK;
-                },
+                kindOf(action),
                 row.getWorkspaceId(),
                 lane(row.getId()),
                 lane(row.getId()) + ":" + generation + ":" + action.name(),
@@ -105,6 +101,15 @@ public class FeedbackSendQueue {
                 row.getDeveloperId(),
                 MAX_ATTEMPTS,
                 null));
+    }
+
+    /** The kind of action that carries out a send. */
+    public static ActionKind kindOf(FeedbackSendAction action) {
+        return switch (action) {
+            case POST, READBACK -> ActionKind.DELIVER_FEEDBACK;
+            case EDIT -> ActionKind.EDIT_FEEDBACK;
+            case RETRACT -> ActionKind.RETRACT_FEEDBACK;
+        };
     }
 
     /** The lane of a feedback's sends. */

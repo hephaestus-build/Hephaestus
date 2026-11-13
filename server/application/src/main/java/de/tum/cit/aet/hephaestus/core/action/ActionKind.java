@@ -5,8 +5,8 @@ import java.util.List;
 
 /**
  * What an action does in the outside world. The database CHECK lists the same names, and each kind has exactly one
- * {@link ActionAdapter}. The executor, the reaper, the gauges and the retention sweep select only the kinds that a build
- * declares ({@link #names()}): a row that a newer build wrote under another kind stays as it is, and still holds its lane.
+ * {@link ActionAdapter}. A build selects only what its adapters declare ({@link ActionAdapter#variants()}): a row that a
+ * newer build wrote under another kind or variant stays as it is, and still holds its lane.
  */
 public enum ActionKind {
     /**
@@ -75,7 +75,7 @@ public enum ActionKind {
         this.instanceLevel = instanceLevel;
     }
 
-    /** The names of every kind of this build: the kinds that the executor, the reaper, the gauges and the retention sweep take. */
+    /** The names of every kind of this build: the kinds that the retention sweep takes, as an ended row has no payload. */
     static List<String> names() {
         return NAMES;
     }

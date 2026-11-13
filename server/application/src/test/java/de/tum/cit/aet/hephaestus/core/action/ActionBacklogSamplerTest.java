@@ -15,9 +15,11 @@ class ActionBacklogSamplerTest extends BaseUnitTest {
 
     private final AgentActionRepository repository = mock(AgentActionRepository.class);
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
+    private final List<ActionAdapter> adapters = ActionTestSupport.adapters(attempt -> new ActionResult.Done(null));
+    private final String decodable = ActionAdmission.of(adapters).json();
     // Micrometer gauges hold their state object by weak reference. The fixture keeps the sampler, which owns that
     // state, for the meter's lifetime, as the Spring singleton does.
-    private final ActionBacklogSampler sampler = new ActionBacklogSampler(repository, meters);
+    private final ActionBacklogSampler sampler = new ActionBacklogSampler(repository, adapters, meters);
 
     @Test
     void shouldStartWithAnEmptyBacklogForEveryKindAndOpenState() {
@@ -30,10 +32,10 @@ class ActionBacklogSamplerTest extends BaseUnitTest {
 
     @Test
     void shouldKeepTheLastValuesAndCountTheFailureWhenAPassFails() {
-        when(repository.backlog(ActionKind.names())).thenReturn(List.of(row("EMAIL", "ADMITTED", 4, 900)));
+        when(repository.backlog(decodable)).thenReturn(List.of(row("EMAIL", "ADMITTED", 4, 900)));
         sampler.sample();
 
-        when(repository.backlog(ActionKind.names())).thenThrow(new QueryTimeoutException("slow"));
+        when(repository.backlog(decodable)).thenThrow(new QueryTimeoutException("slow"));
         sampler.sample();
 
         assertThat(backlog(ActionKind.EMAIL, "ADMITTED")).isEqualTo(4);
@@ -46,9 +48,9 @@ class ActionBacklogSamplerTest extends BaseUnitTest {
 
     @Test
     void shouldReadAKindWithNoOpenActionAsAnEmptyBacklogAgain() {
-        when(repository.backlog(ActionKind.names())).thenReturn(List.of(row("EMAIL", "EXECUTING", 2, 0)));
+        when(repository.backlog(decodable)).thenReturn(List.of(row("EMAIL", "EXECUTING", 2, 0)));
         sampler.sample();
-        when(repository.backlog(ActionKind.names())).thenReturn(List.of());
+        when(repository.backlog(decodable)).thenReturn(List.of());
         sampler.sample();
 
         assertThat(backlog(ActionKind.EMAIL, "EXECUTING")).isZero();

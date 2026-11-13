@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,6 +25,8 @@ class ActionBacklogSamplerIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private AgentActionRepository repository;
 
+    private final List<ActionAdapter> adapters = ActionTestSupport.adapters(attempt -> new ActionResult.Done(null));
+
     @Autowired
     private JdbcTemplate jdbc;
 
@@ -34,7 +37,7 @@ class ActionBacklogSamplerIntegrationTest extends BaseIntegrationTest {
     void createSampler() {
         // Micrometer gauges hold their state object by weak reference. The fixture keeps the sampler, which owns that
         // state, for the meter's lifetime, as the Spring singleton does.
-        sampler = new ActionBacklogSampler(repository, meters);
+        sampler = new ActionBacklogSampler(repository, adapters, meters);
     }
 
     @Test
