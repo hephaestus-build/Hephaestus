@@ -3,9 +3,11 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.capture;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
@@ -72,6 +74,23 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
         var prepared = preparer.prepare(context);
         assertThat(prepared.head()).isEqualTo("a".repeat(40));
         assertThat(prepared.target()).isEqualTo("b".repeat(40));
+    }
+
+    @Test
+    void shouldFetchTheReviewRefOfAHeadThatNoBranchReaches() {
+        when(tokens.reviewHeadRef(anyLong())).thenReturn(Optional.of("refs/pull/7/head"));
+        var remote = preparer.remote(context.pinned(), context.work());
+
+        preparer.fetch(remote);
+
+        verify(git).ensureRepository(remote.key(), "https://scm.example/owner/repo.git", "test-token");
+        verify(git)
+                .fetchRemoteCommit(
+                        remote.key(),
+                        "https://scm.example/owner/repo.git",
+                        "refs/pull/7/head",
+                        "a".repeat(40),
+                        "test-token");
     }
 
     @Test

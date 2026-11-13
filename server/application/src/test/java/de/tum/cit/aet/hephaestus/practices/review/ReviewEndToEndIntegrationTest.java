@@ -546,6 +546,8 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 List.of(practice.getId()),
                 false,
                 Set.of(),
+                null,
+                null,
                 null));
     }
 

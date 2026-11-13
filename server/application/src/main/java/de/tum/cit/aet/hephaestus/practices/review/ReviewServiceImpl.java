@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemChecks;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OccasionKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
@@ -69,6 +70,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -111,23 +113,61 @@ public class ReviewServiceImpl implements ReviewService {
     private final List<CapturedApplicability> applicability;
     private final ItemEventService itemEvents;
     private final ReviewClosure closure;
+    private final ReviewRequestTransactions transactions;
 
+    /**
+     * Admits the request without a lock. Then it pins the item and reads the sources that the plan queues with no
+     * transaction, since a repository pin or a source read fetches the repository. It records the review under the
+     * workspace lock, which admits and plans the request again. A replay returns its review without a pin. A caller
+     * that already holds a transaction gains nothing from the early read, so the locked step reads its sources.
+     */
     @Override
-    @Transactional(noRollbackFor = ReviewRequestRejected.class)
     public UUID request(ReviewRequest request) {
         validate(request);
-        var workspace = workspaces.findByIdForUpdate(request.workspaceId()).orElseThrow();
+        return switch (transactions.read(() -> admit(request, workspace(request)))) {
+            case Admission.Replay replay -> replay.reviewId();
+            case Admission.Admitted admitted -> {
+                var pinned = pin(request, admitted.item());
+                var early = TransactionSynchronizationManager.isActualTransactionActive()
+                        ? null
+                        : earlyRead(request, admitted.item(), pinned);
+                yield transactions.write(() -> {
+                    var workspace =
+                            workspaces.findByIdForUpdate(request.workspaceId()).orElseThrow();
+                    return switch (admit(request, workspace)) {
+                        case Admission.Replay replay -> replay.reviewId();
+                        case Admission.Admitted locked ->
+                            recordReview(
+                                    request, workspace, pinned, plan(request, workspace, locked.item(), pinned), early);
+                    };
+                });
+            }
+        };
+    }
+
+    private ReviewWorkspace workspace(ReviewRequest request) {
+        return workspaces.findById(request.workspaceId()).orElseThrow();
+    }
+
+    private sealed interface Admission {
+        record Replay(UUID reviewId) implements Admission {}
+
+        record Admitted(ItemRef item) implements Admission {}
+    }
+
+    private Admission admit(ReviewRequest request, ReviewWorkspace workspace) {
         if (request.requestKey() != null) {
             var existing = reviews.findByWorkspaceIdAndRequestKey(request.workspaceId(), request.requestKey());
             if (existing.isPresent()) {
                 if (!Objects.equals(existing.orElseThrow().getRequestDigest(), request.requestDigest()))
                     throw replayConflict(existing.orElseThrow());
-                return existing.orElseThrow().getId();
+                return new Admission.Replay(existing.orElseThrow().getId());
             }
         }
         if (request.eventId() != null) {
             var prior = reviews.findByWorkspaceIdAndEventId(request.workspaceId(), request.eventId());
-            if (prior.isPresent()) return prior.orElseThrow().getId();
+            if (prior.isPresent())
+                return new Admission.Replay(prior.orElseThrow().getId());
         }
         if (!workspace.active())
             throw new ReviewRequestRejected(
@@ -149,18 +189,20 @@ public class ReviewServiceImpl implements ReviewService {
         }
         if (!budget.canRequest(request.workspaceId(), request.kind(), request.budgetUsd()))
             throw ReviewRequestRejected.budgetUnavailable();
-        var ref = items.require(request.workspaceId(), request.itemId());
+        return new Admission.Admitted(items.require(request.workspaceId(), request.itemId()));
+    }
+
+    private ItemSnapshot pin(ReviewRequest request, ItemRef ref) {
         // An event review keeps the occasion's own version, state and roles once its source retained them. Every
-        // decision below still reads the workspace, its members and their choices as they are now.
-        var occasion = request.origin() == ReviewOrigin.EVENT ? request.eventId() : null;
+        // decision after the pin still reads the workspace, its members and their choices as they are now.
+        var occasion = occasion(request);
         var requestedVersion = request.version();
-        ItemSnapshot pinned;
         try {
-            pinned = occasion != null && requestedVersion != null
+            return occasion != null && requestedVersion != null
                     ? items.pinOccasion(ref, requestedVersion, occasion)
                     : items.pin(ref, requestedVersion);
         } catch (ItemCaptureException unavailable) {
-            // Settled here, not in the listener: any other exception leaving this method rolls the transaction back.
+            // Settled here, not in the listener: any other exception leaving the request rolls its transaction back.
             if (unavailable.code() != ItemCaptureCode.OCCASION_EVIDENCE_UNAVAILABLE) throw unavailable;
             throw new ReviewRequestRejected(
                     ReviewRequestRejected.Reason.ITEM_INELIGIBLE,
@@ -168,8 +210,42 @@ public class ReviewServiceImpl implements ReviewService {
                     ReviewRequestReason.OCCASION_EVIDENCE_UNAVAILABLE,
                     unavailable);
         }
-        var now = clock.instant();
-        Instant ordered = now;
+    }
+
+    /** The sources that a first plan queues for an item review, and their fingerprints, read with no transaction. */
+    private record EarlyRead(Set<SourceKind> kinds, Map<SourceKind, String> fingerprints) {}
+
+    private @Nullable EarlyRead earlyRead(ReviewRequest request, ItemRef ref, ItemSnapshot pinned) {
+        if (request.kind() != ReviewKind.ITEM) return null;
+        var kinds = transactions.read(() -> queuedKinds(
+                pinned, plan(request, workspace(request), ref, pinned).planned()));
+        return new EarlyRead(kinds, items.fingerprints(pinned.item(), kinds, occasion(request)));
+    }
+
+    /**
+     * The fingerprints of the sources that the locked plan queues: the early read's, or read now in the caller's
+     * transaction. A practice that came to read another source after the early read refuses the request.
+     */
+    private Map<SourceKind, String> fingerprints(
+            ItemSnapshot pinned, ReviewRequest request, Set<SourceKind> kinds, @Nullable EarlyRead early) {
+        if (early == null) return items.fingerprints(pinned.item(), kinds, occasion(request));
+        if (!early.kinds().containsAll(kinds))
+            throw new ReviewRequestRejected(
+                    ReviewRequestRejected.Reason.REQUEST_CONFLICT,
+                    "The practices changed what they read while the review was requested.");
+        return early.fingerprints();
+    }
+
+    private static @Nullable UUID occasion(ReviewRequest request) {
+        return request.origin() == ReviewOrigin.EVENT ? request.eventId() : null;
+    }
+
+    private record Plan(
+            @Nullable Instant occurredAt, List<SelectedPractice> planned, ReviewMethod method, ObjectNode checks) {}
+
+    private Plan plan(ReviewRequest request, ReviewWorkspace workspace, ItemRef ref, ItemSnapshot pinned) {
+        var occasion = occasion(request);
+        Instant occurredAt = null;
         var occasions = new HashSet<>(request.occasions());
         if (request.eventId() != null) {
             var fact = itemRows.event(request.workspaceId(), request.itemId(), request.eventId());
@@ -177,7 +253,7 @@ public class ReviewServiceImpl implements ReviewService {
                 throw new ReviewRequestRejected(
                         ReviewRequestRejected.Reason.REQUEST_CONFLICT, "The event version does not match the review.");
             occasions.add(new ItemEventName(fact.getName()));
-            ordered = fact.getOccurredAt();
+            occurredAt = fact.getOccurredAt();
         }
         List<Practice> selected;
         if (request.kind() == ReviewKind.SCAN) {
@@ -262,6 +338,37 @@ public class ReviewServiceImpl implements ReviewService {
                         ReviewRequestRejected.Reason.SOURCE_UNAVAILABLE,
                         "The repository default branch is unavailable.");
             checks.put("ref", branch);
+            if (request.scanRef() != null && !request.scanRef().equals(branch)) {
+                var refusal = new ReviewRequestRejected(
+                        ReviewRequestRejected.Reason.REF_UNSUPPORTED, "Only the default branch supports scans.");
+                refusal.getBody().setProperty("supportedRef", branch);
+                throw refusal;
+            }
+            if (request.expectedVersion() != null
+                    && !request.expectedVersion().equals(pinned.version().value())) {
+                var refusal = new ReviewRequestRejected(
+                        ReviewRequestRejected.Reason.VERSION_CHANGED, "The repository version changed.");
+                refusal.getBody().setProperty("currentVersion", pinned.version().value());
+                throw refusal;
+            }
+        }
+        return new Plan(occurredAt, planned, method, checks);
+    }
+
+    private UUID recordReview(
+            ReviewRequest request,
+            ReviewWorkspace workspace,
+            ItemSnapshot pinned,
+            Plan plan,
+            @Nullable EarlyRead early) {
+        var now = clock.instant();
+        var ordered = plan.occurredAt() != null ? plan.occurredAt() : now;
+        var planned = plan.planned();
+        // Before the save: a refusal commits what came before it.
+        JsonNode queuedSources = null;
+        if (request.kind() == ReviewKind.ITEM) {
+            var kinds = queuedKinds(pinned, planned);
+            queuedSources = queuedSources(kinds, fingerprints(pinned, request, kinds, early));
         }
         var review = reviews.save(Review.builder()
                 .id(UUID.randomUUID())
@@ -280,26 +387,25 @@ public class ReviewServiceImpl implements ReviewService {
                 .rolloutRevision(workspace.reviewSettings().rolloutRevision())
                 .orderedAt(ordered)
                 .createdAt(now)
-                .checks(checks)
+                .checks(plan.checks())
                 .build());
-        var queuedSources = request.kind() == ReviewKind.ITEM ? queuedSources(pinned, planned, occasion) : null;
-        for (var plan : planned) {
-            var practice = plan.practice();
-            var version = plan.version();
+        for (var selected : planned) {
+            var practice = selected.practice();
+            var version = selected.version();
             var assignment = assignments.save(ReviewPractice.builder()
                     .reviewId(review.getId())
                     .workspaceId(request.workspaceId())
                     .practiceId(practice.getId())
                     .practiceVersionId(version.getId())
-                    .captureDecision(plan.reason() == null ? queuedSources : null)
-                    .method(method)
+                    .captureDecision(selected.reason() == null ? queuedSources : null)
+                    .method(plan.method())
                     .build());
             if (request.kind() == ReviewKind.ITEM) {
-                var roles = plan.roles();
+                var roles = selected.roles();
                 var detail = json.createObjectNode();
                 if (roles.size() == 1) detail.put("developerId", roles.getFirst());
                 else detail.putNull("developerId");
-                var reason = plan.reason();
+                var reason = selected.reason();
                 memberships.save(ReviewItem.builder()
                         .workspaceId(request.workspaceId())
                         .reviewId(review.getId())
@@ -443,7 +549,7 @@ public class ReviewServiceImpl implements ReviewService {
                 : "ROLE_UNAVAILABLE";
     }
 
-    private JsonNode queuedSources(ItemSnapshot item, List<SelectedPractice> plans, @Nullable UUID occasion) {
+    private Set<SourceKind> queuedKinds(ItemSnapshot item, List<SelectedPractice> plans) {
         var kinds = new HashSet<SourceKind>();
         for (var plan : plans) {
             if (plan.reason() != null) continue;
@@ -462,10 +568,15 @@ public class ReviewServiceImpl implements ReviewService {
                 adapter.evaluate(item.item().kind(), clauses, List.of(), Map.of())
                         .forEach(clause -> kinds.add(clause.readFrom()));
         }
+        return Set.copyOf(kinds);
+    }
+
+    private JsonNode queuedSources(Set<SourceKind> kinds, Map<SourceKind, String> fingerprints) {
         var facts = json.createObjectNode();
-        var fingerprints = facts.putObject(ReviewCaptureDecision.SOURCE_FINGERPRINTS);
-        items.fingerprints(item.item(), kinds, occasion)
-                .forEach((kind, value) -> fingerprints.put(kind.value(), value));
+        var queued = facts.putObject(ReviewCaptureDecision.SOURCE_FINGERPRINTS);
+        fingerprints.forEach((kind, value) -> {
+            if (kinds.contains(kind)) queued.put(kind.value(), value);
+        });
         return facts;
     }
 

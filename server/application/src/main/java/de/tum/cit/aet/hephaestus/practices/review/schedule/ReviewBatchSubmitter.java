@@ -14,8 +14,6 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @ConditionalOnServerRole
@@ -35,7 +33,7 @@ public class ReviewBatchSubmitter {
     private final ReviewService reviews;
     private final ReviewRepository ledger;
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    /** Not transactional: a scan's request pins the repository, which fetches its mirror, outside any transaction. */
     public SubmissionOutcome offer(ReviewBatch batch, long itemId, @Nullable BigDecimal budgetUsd) {
         var item = items.find(batch.getWorkspaceId(), itemId);
         if (item.isEmpty()) return new SubmissionOutcome.Skipped();

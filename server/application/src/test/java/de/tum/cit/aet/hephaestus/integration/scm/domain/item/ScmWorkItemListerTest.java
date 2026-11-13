@@ -22,6 +22,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.projection.SpelAwareProxyProjectionFactory;
+import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
 
 class ScmWorkItemListerTest extends BaseUnitTest {
@@ -69,7 +70,12 @@ class ScmWorkItemListerTest extends BaseUnitTest {
                 .toList();
         when(queries.listWork(10, "ISSUE")).thenReturn(rows);
         when(queries.owners(List.of(11L, 12L), false)).thenReturn(rows);
-        var lister = new ScmWorkItemLister(sources, new ScmWorkItemIndex(writer, queries), new ObjectMapper(), queries);
+        var lister = new ScmWorkItemLister(
+                sources,
+                new ScmWorkItemIndex(writer, queries),
+                new ObjectMapper(),
+                queries,
+                mock(PlatformTransactionManager.class));
         var first = lister.list(new ItemListRequest(root, commit, ScmItemEvents.ISSUE, null, 1));
         assertThat(first.complete()).isFalse();
         revision.set("after");

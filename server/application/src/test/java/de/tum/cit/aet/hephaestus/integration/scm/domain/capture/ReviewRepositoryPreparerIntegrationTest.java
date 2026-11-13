@@ -181,7 +181,9 @@ class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
                 GitTransportFixtures.copyFence());
         var realPreparer = new ReviewRepositoryPreparer(git, pullRequests, connections, List.of(tokens), repositories);
 
-        assertThatThrownBy(() -> realPreparer.prepare(context))
+        var remote = realPreparer.remote(context.pinned(), context.work());
+
+        assertThatThrownBy(() -> realPreparer.fetch(remote))
                 .isInstanceOf(GitRepositoryManager.GitOperationException.class)
                 .hasCauseInstanceOf(InvalidRemoteException.class)
                 .hasRootCauseInstanceOf(NoRemoteRepositoryException.class);
@@ -201,8 +203,12 @@ class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
         var content =
                 new PullRequestContentSource(new JsonMapper(), git, pullRequests, comments, realPreparer, delivered);
         var tree = new RepositoryTreeContentSource(git, realPreparer, personCopies);
-        var captured = content.capture(context, content.sourceKinds());
-        var repository = tree.capture(context, Set.of(RepositoryTreeContentSource.KIND));
+        var capture = new ScmCaptureContext(
+                context.pinned(), context.request(), context.work(), new ScmCapturePreparation(), context.capturedAt());
+        var remote = realPreparer.remote(capture.pinned(), capture.work());
+        capture.preparation().fetch(() -> realPreparer.fetch(remote));
+        var captured = content.capture(capture, content.sourceKinds());
+        var repository = tree.capture(capture, Set.of(RepositoryTreeContentSource.KIND));
         try {
             assertThat(new String(
                             Objects.requireNonNull(captured.files().get(PullRequestContentSource.DESCRIPTION_FILE)),

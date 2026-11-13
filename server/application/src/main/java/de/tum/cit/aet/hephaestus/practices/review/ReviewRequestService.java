@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.WorkspaceAdminAssurance;
 import de.tum.cit.aet.hephaestus.core.exception.AccessForbiddenException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RoleHolder;
@@ -37,6 +38,7 @@ public class ReviewRequestService {
     private final ReviewRequestPolicy policy;
     private final WorkspaceMemberships memberships;
     private final WorkspaceAdminAssurance adminAssurance;
+    private final ItemDescriptorRegistry descriptors;
 
     public boolean mayRequest(long workspaceId, ItemSnapshot snapshot, long accountId) {
         return mayRequest(workspaceId, snapshot, accountId, access::isAdmin);
@@ -105,6 +107,12 @@ public class ReviewRequestService {
             @Nullable UUID requestKey,
             ReviewRequest.@Nullable CommentAnswer answer) {
         var item = items.require(workspaceId, itemId);
+        // An item review is about a role holder. A kind without roles, such as a repository, has nobody to review, and
+        // its pin would fetch the repository inside this transaction. The refusal precedes the access check: 422, not
+        // 403.
+        if (descriptors.descriptorFor(item.kind()).map(d -> d.roles().isEmpty()).orElse(true))
+            throw new ReviewRequestRejected(
+                    ReviewRequestRejected.Reason.ITEM_INELIGIBLE, "No practice can review this item.");
         var pinned = items.pin(item, null);
         if (!mayRequest(workspaceId, pinned, accountId, admin))
             throw new AccessForbiddenException(

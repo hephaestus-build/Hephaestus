@@ -37,6 +37,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryMan
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTransportFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
+import de.tum.cit.aet.hephaestus.integration.scm.spi.ScmTokenSource;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.ItemFixtures;
@@ -87,6 +88,7 @@ class ScmItemRecordTest extends BaseUnitTest {
             mock(ScmFileVersions.class),
             mapper,
             mock(ScmWorkCapture.class),
+            new ScmItemTransactions(),
             Clock.systemUTC());
 
     @Test
@@ -110,7 +112,9 @@ class ScmItemRecordTest extends BaseUnitTest {
         when(items.parent(pinned.item(), ScmItemEvents.REPOSITORY)).thenReturn(holder);
         when(repositories.findById(3L)).thenReturn(Optional.of(repository));
         when(access.authorize(1, repository)).thenReturn(pinned.integration());
-        when(access.prepare(1, repository)).thenReturn(key);
+        when(access.remote(1, repository))
+                .thenReturn(new ScmRepositoryAccess.Remote(
+                        key, "https://scm.example/owner/repository.git", mock(ScmTokenSource.class)));
         when(tree.inventory(key, HEAD)).thenReturn(List.of(entry));
         when(tree.content(key, entry)).thenReturn(bytes);
         when(tree.snapshot(key, HEAD, Set.of("src/a.ts")))
@@ -199,7 +203,9 @@ class ScmItemRecordTest extends BaseUnitTest {
                 .thenReturn(new ItemRef(1, 4, ScmItemEvents.REPOSITORY, 3L, null, null));
         when(repositories.findById(3L)).thenReturn(Optional.of(repository));
         when(access.authorize(1, repository)).thenReturn(pinned.integration());
-        when(access.prepare(1, repository)).thenReturn(key);
+        when(access.remote(1, repository))
+                .thenReturn(new ScmRepositoryAccess.Remote(
+                        key, "https://scm.example/owner/repository.git", mock(ScmTokenSource.class)));
         var permitted = new HashSet<>(gitTree.index(key, commit)
                 .contextPaths("src/a.ts", broadContext ? List.of("**/*") : List.of("docs/*.md", "config/*.json")));
         permitted.add("src/a.ts");
@@ -241,7 +247,9 @@ class ScmItemRecordTest extends BaseUnitTest {
         when(repositories.findById(3L)).thenReturn(Optional.of(repository));
         when(access.authorize(1, repository)).thenReturn(pinned.integration());
         var key = new RepositoryKey(1, 3);
-        when(access.prepare(1, repository)).thenReturn(key);
+        when(access.remote(1, repository))
+                .thenReturn(new ScmRepositoryAccess.Remote(
+                        key, "https://scm.example/owner/repository.git", mock(ScmTokenSource.class)));
         var inventory = new ArrayList<ScmFileVersions.Entry>();
         inventory.add(new ScmFileVersions.Entry("src/a.ts", "100644", BLOB));
         if (exceedsBytes) {

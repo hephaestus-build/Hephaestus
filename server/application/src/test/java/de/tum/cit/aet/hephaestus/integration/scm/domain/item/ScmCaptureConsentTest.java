@@ -274,6 +274,10 @@ class ScmCaptureConsentTest extends BaseUnitTest {
                 linked,
                 tree,
                 consent,
+                mock(GitRepositoryManager.class),
+                preparer,
+                lookup,
+                mock(PullRequestReviewRepository.class),
                 mock(ItemEventService.class),
                 mock(PersonDataWriteFence.class),
                 mapper,
@@ -289,6 +293,7 @@ class ScmCaptureConsentTest extends BaseUnitTest {
                 mock(ScmFileVersions.class),
                 mapper,
                 capture,
+                new ScmItemTransactions(),
                 Clock.systemUTC());
         var pinned = service.pin(item, null);
         var core = PullRequestContentSource.CORE;

@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScanItemVersions;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,7 +14,6 @@ import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 @Component
 @ConditionalOnServerRole
@@ -24,16 +22,15 @@ public class ScmFileVersionComposer implements ScanItemVersions {
     private static final int ITEM_BATCH_SIZE = 1000;
     private final ScmItemAccess items;
     private final ScmRepositoryAccess access;
-    private final RepositoryRepository repositories;
     private final ScmGitTree tree;
     private final ScmFileVersions versions;
+    private final ScmItemTransactions transactions;
 
     @Override
     public Set<ItemKind> kinds() {
         return Set.of(ScmItemEvents.FILE);
     }
 
-    @Transactional(readOnly = true)
     @Override
     public Map<Long, ItemVersion> compose(List<ItemRef> selected, ItemVersion containerVersion, List<String> context) {
         if (selected.isEmpty()) return Map.of();
@@ -53,7 +50,6 @@ public class ScmFileVersionComposer implements ScanItemVersions {
         return Map.copyOf(composed);
     }
 
-    @Transactional(readOnly = true)
     @Override
     public List<String> contextPaths(ItemRef item, ItemVersion assignedVersion, List<String> context) {
         String commit = assignedVersion.baseVersion();
@@ -71,14 +67,11 @@ public class ScmFileVersionComposer implements ScanItemVersions {
         return pinned.contextPaths(path, context);
     }
 
+    /** Authorizes the item's repository in a read-only transaction, then syncs its mirror with none. */
     private ScmGitTree.Inventory inventory(ItemRef item, String commit) {
-        items.require(item);
         if (!kinds().contains(item.kind())) throw new IllegalArgumentException("Unsupported composed item kind");
-        var holder = items.parent(item, ScmItemEvents.REPOSITORY);
-        var repository =
-                repositories.findById(Objects.requireNonNull(holder.sourceId())).orElseThrow();
-        var key = access.prepare(item.workspaceId(), repository);
-        var inventory = tree.index(key, commit);
+        var remote = transactions.read(() -> access.remote(item));
+        var inventory = tree.index(access.sync(remote), commit);
         inventory.assigned(Objects.requireNonNull(item.path()));
         return inventory;
     }

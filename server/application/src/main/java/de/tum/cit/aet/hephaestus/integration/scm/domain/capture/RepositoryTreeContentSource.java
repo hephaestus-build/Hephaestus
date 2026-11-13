@@ -40,8 +40,13 @@ public class RepositoryTreeContentSource {
     private final ReviewRepositoryPreparer repositoryPreparer;
     private final PersonDataCopyRecorder personCopies;
 
+    /** Whether a capture of these sources reads the clone, for the tree at the reviewed head. */
+    public static boolean readsClone(Set<SourceKind> selectedKinds) {
+        return selectedKinds.contains(KIND);
+    }
+
     public CaptureContribution capture(ScmCaptureContext request, Set<SourceKind> selectedKinds) {
-        if (!selectedKinds.contains(KIND)) {
+        if (!readsClone(selectedKinds)) {
             return CaptureContribution.empty();
         }
         if (gitRepositoryManager.isEnabled() && request.pullRequest())

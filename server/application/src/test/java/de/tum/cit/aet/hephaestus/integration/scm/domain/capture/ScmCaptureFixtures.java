@@ -84,7 +84,14 @@ public final class ScmCaptureFixtures {
                         .build())
                 .build();
         var request = new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(), "3.0.0", 3);
-        return new ScmCaptureContext(snapshot, request, work, new ScmCapturePreparation(), Instant.now());
+        return new ScmCaptureContext(snapshot, request, work, fetched(), Instant.now());
+    }
+
+    /** A preparation whose fetch already ran, as a capture runs it before its transaction. */
+    public static ScmCapturePreparation fetched() {
+        var preparation = new ScmCapturePreparation();
+        preparation.fetch(() -> {});
+        return preparation;
     }
 
     public static ScmCaptureContext withVersion(ScmCaptureContext context, ItemVersion version) {

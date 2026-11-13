@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -31,13 +32,19 @@ public class ReviewRepositoryPreparer {
     private final List<ScmTokenSource> tokenSources;
     private final RepositoryRepository repositories;
 
-    private record Authorized(RepositoryKey key, String cloneUrl, ScmTokenSource source, int number) {}
+    /** The reviewed repository of pinned work, authorized for the workspace: what {@link #fetch} syncs. */
+    public record Remote(RepositoryKey key, String cloneUrl, ScmTokenSource source, ScmCapturedWork work) {}
 
     public record PreparedReview(RepositoryKey key, String head, String target) {}
 
     @Transactional(readOnly = true)
     public RepositoryKey authorize(ScmCaptureContext capture) {
-        return authorized(capture).key();
+        return authorized(capture.pinned(), capture.work()).key();
+    }
+
+    @Transactional(readOnly = true)
+    public Remote remote(ItemSnapshot pinned, ScmCapturedWork work) {
+        return authorized(pinned, work);
     }
 
     @Transactional(readOnly = true)
@@ -82,9 +89,8 @@ public class ReviewRepositoryPreparer {
                 .toUriString());
     }
 
-    private Authorized authorized(ScmCaptureContext capture) {
-        var work = capture.work();
-        long workspaceId = capture.workspaceId();
+    private Remote authorized(ItemSnapshot pinned, ScmCapturedWork work) {
+        long workspaceId = pinned.item().workspaceId();
         var pullRequest = pullRequests
                 .findByIdWithAuthorAndRepository(work.sourceId())
                 .filter(pr -> pr.getDeletedAt() == null)
@@ -97,7 +103,7 @@ public class ReviewRepositoryPreparer {
                 || !repositories.isMonitored(workspaceId, repository.getId()))
             throw new ItemCaptureException(
                     ItemCaptureCode.ITEM_NOT_VISIBLE, "Workspace does not monitor the pinned repository");
-        var integration = capture.pinned().integration();
+        var integration = pinned.integration();
         var connection = connections
                 .findActive(workspaceId, integration.kind())
                 .orElseThrow(() ->
@@ -122,32 +128,45 @@ public class ReviewRepositoryPreparer {
         String cloneUrl = cloneUrl(serverUrl, work.repositoryPath())
                 .orElseThrow(() -> new ItemCaptureException(
                         ItemCaptureCode.CAPTURE_FAILED, "Repository has an invalid provider path"));
-        return new Authorized(new RepositoryKey(workspaceId, work.repositoryId()), cloneUrl, source, work.number());
+        return new Remote(new RepositoryKey(workspaceId, work.repositoryId()), cloneUrl, source, work);
     }
 
+    /**
+     * Mints the credential and fetches the mirror and, for a head that no branch reaches, the provider's review ref.
+     * Neither call has a time bound, so the caller runs it outside a transaction.
+     */
+    public void fetch(Remote remote) {
+        var range = range(remote.work());
+        var key = remote.key();
+        String token = remote.source()
+                .accessToken(key.workspaceId())
+                .orElseThrow(() ->
+                        new ItemCaptureException(ItemCaptureCode.SOURCE_NOT_READY, "SCM credentials are unavailable"));
+        git.ensureRepository(key, remote.cloneUrl(), token);
+        if (!git.commitExists(key, range.head()))
+            remote.source()
+                    .reviewHeadRef(remote.work().number())
+                    .ifPresent(ref -> git.fetchRemoteCommit(key, remote.cloneUrl(), ref, range.head(), token));
+    }
+
+    /** The pinned range in the mirror that {@link #fetch} synced; it reads only the database and the mirror. */
     public PreparedReview prepare(ScmCaptureContext capture) {
-        var authorized = authorized(capture);
-        String head = Objects.requireNonNull(capture.work().head(), "Pinned SCM work has no head");
-        String base = Objects.requireNonNull(capture.work().base(), "Pinned SCM work has no base");
+        var key = authorized(capture.pinned(), capture.work()).key();
+        var range = range(capture.work());
+        if (!git.commitExists(key, range.head()) || !git.commitExists(key, range.target()))
+            throw new ItemCaptureException(
+                    ItemCaptureCode.VERSION_UNAVAILABLE, "Pinned review diff range is unavailable");
+        return new PreparedReview(key, range.head(), range.target());
+    }
+
+    private record Range(String head, String target) {}
+
+    private static Range range(ScmCapturedWork work) {
+        String head = Objects.requireNonNull(work.head(), "Pinned SCM work has no head");
+        String base = Objects.requireNonNull(work.base(), "Pinned SCM work has no base");
         if (!head.matches("[0-9a-f]{40}|[0-9a-f]{64}") || !base.matches("[0-9a-f]{40}|[0-9a-f]{64}"))
             throw new ItemCaptureException(
                     ItemCaptureCode.VERSION_UNAVAILABLE, "Pinned SCM version has invalid Git object ids");
-        String token = authorized
-                .source()
-                .accessToken(capture.workspaceId())
-                .orElseThrow(() ->
-                        new ItemCaptureException(ItemCaptureCode.SOURCE_NOT_READY, "SCM credentials are unavailable"));
-        var key = authorized.key();
-        git.ensureRepository(key, authorized.cloneUrl(), token);
-        if (!git.commitExists(key, head)) {
-            authorized
-                    .source()
-                    .reviewHeadRef(authorized.number())
-                    .ifPresent(ref -> git.fetchRemoteCommit(key, authorized.cloneUrl(), ref, head, token));
-        }
-        if (!git.commitExists(key, head) || !git.commitExists(key, base))
-            throw new ItemCaptureException(
-                    ItemCaptureCode.VERSION_UNAVAILABLE, "Pinned review diff range is unavailable");
-        return new PreparedReview(key, head, base);
+        return new Range(head, base);
     }
 }

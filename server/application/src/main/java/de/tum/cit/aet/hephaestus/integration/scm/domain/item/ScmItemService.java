@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.LinkedWorkItemCo
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.RepositoryTreeContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ReviewThreadContentSource;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCapturePreparation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCapturedWork;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCitableTexts;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
@@ -58,7 +59,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
@@ -70,7 +70,6 @@ import tools.jackson.databind.ObjectMapper;
 @Slf4j
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class ScmItemService implements ItemSource {
     // Bound both blob volume and manifest entries before the runner loads them into its fixed heap.
     static final long MAX_SCAN_BYTES = 8 * 1024 * 1024;
@@ -85,6 +84,7 @@ public class ScmItemService implements ItemSource {
     private final ScmFileVersions fileVersions;
     private final ObjectMapper mapper;
     private final ScmWorkCapture workCapture;
+    private final ScmItemTransactions transactions;
     private final Clock clock;
 
     @Override
@@ -92,17 +92,17 @@ public class ScmItemService implements ItemSource {
         return ScmItemEvents.ALL.contains(item.kind());
     }
 
+    @Transactional(readOnly = true)
     @Override
     public Map<Long, ItemLabel> labels(long workspaceId, Collection<ItemRef> refs) {
         items.requireAll(workspaceId, refs);
         return items.labels(workspaceId, refs.stream().map(ItemRef::itemId).toList());
     }
 
-    @Transactional(readOnly = true, noRollbackFor = ItemCaptureException.class)
     @Override
     public Optional<ItemSnapshot> current(ItemRef item) {
         try {
-            return Optional.of(pinItem(item, null));
+            return Optional.of(pin(item, null));
         } catch (ItemCaptureException e) {
             if (e.code() == ItemCaptureCode.ITEM_REMOVED || e.code() == ItemCaptureCode.ITEM_NOT_VISIBLE)
                 return Optional.empty();
@@ -110,10 +110,12 @@ public class ScmItemService implements ItemSource {
         }
     }
 
-    @Transactional(readOnly = true, noRollbackFor = ItemCaptureException.class)
+    /** Syncs the mirror that a repository or a file reads with no transaction, then pins in a short one. */
     @Override
     public ItemSnapshot pin(ItemRef item, @Nullable ItemVersion requested) {
-        return pinItem(item, requested);
+        if (ScmRepositoryAccess.readsMirror(item.kind()))
+            repositories.sync(transactions.read(() -> repositories.remote(item)));
+        return transactions.read(() -> pinItem(item, requested));
     }
 
     /**
@@ -157,7 +159,16 @@ public class ScmItemService implements ItemSource {
         ItemSnapshot snapshot;
         if (item.kind().equals(ScmItemEvents.REPOSITORY)) snapshot = repository(item, requested);
         else if (item.kind().equals(ScmItemEvents.FILE)) snapshot = file(item, requested);
-        else snapshot = work(item);
+        else {
+            var observed = observe(item, true);
+            snapshot = new ItemSnapshot(
+                    item,
+                    Objects.requireNonNull(observed.version()),
+                    observed.integration(),
+                    observed.state(),
+                    observed.roles(),
+                    observed.label());
+        }
         if (requested != null) {
             var actual = snapshot.version();
             boolean omitsRedundantBase = requested.baseVersion() == null
@@ -168,17 +179,6 @@ public class ScmItemService implements ItemSource {
                 throw versionUnavailable();
         }
         return snapshot;
-    }
-
-    private ItemSnapshot work(ItemRef item) {
-        var observed = observe(item, true);
-        return new ItemSnapshot(
-                item,
-                Objects.requireNonNull(observed.version()),
-                observed.integration(),
-                observed.state(),
-                observed.roles(),
-                observed.label());
     }
 
     /**
@@ -326,11 +326,10 @@ public class ScmItemService implements ItemSource {
      * {@link ItemCaptureCode#OCCASION_EVIDENCE_UNAVAILABLE}, never with the current work in its place. Other kinds pin
      * as {@link #pin} does.
      */
-    @Transactional(readOnly = true, noRollbackFor = ItemCaptureException.class)
     @Override
     public ItemSnapshot pinOccasion(ItemRef item, ItemVersion requested, UUID eventId) {
-        if (!ScmWorkCapture.retains(item.kind())) return pinItem(item, requested);
-        return occasion(item, requested, eventId).snapshot();
+        if (!ScmWorkCapture.retains(item.kind())) return pin(item, requested);
+        return transactions.read(() -> occasion(item, requested, eventId).snapshot());
     }
 
     private record Retained(
@@ -375,7 +374,7 @@ public class ScmItemService implements ItemSource {
         Repository repository =
                 repositoryRows.findById(Objects.requireNonNull(item.sourceId())).orElseThrow(ScmItemService::gone);
         IntegrationRef integration = repositories.authorize(item.workspaceId(), repository);
-        var key = repositories.prepare(item.workspaceId(), repository);
+        var key = repositories.remote(item.workspaceId(), repository).key();
         if (requested == null && repository.getDefaultBranch() == null) throw versionUnavailable();
         String sha = requested == null
                 ? tree.resolve(key, "refs/heads/" + Objects.requireNonNull(repository.getDefaultBranch()))
@@ -414,7 +413,7 @@ public class ScmItemService implements ItemSource {
         Repository repository = repositoryRows
                 .findById(Objects.requireNonNull(parent.sourceId()))
                 .orElseThrow(ScmItemService::gone);
-        var key = repositories.prepare(item.workspaceId(), repository);
+        var key = repositories.remote(item.workspaceId(), repository).key();
         var inventory = tree.inventory(key, holder.version().value());
         var file = inventory.stream()
                 .filter(e -> e.path().equals(item.path()))
@@ -449,9 +448,26 @@ public class ScmItemService implements ItemSource {
                         holder.integration().kind()));
     }
 
-    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, noRollbackFor = ItemCaptureException.class)
+    /**
+     * Fetches what the capture reads with no transaction, then captures in one read-only snapshot that checks the pin
+     * again. A repository or a file reads its mirror; pull request work reads the reviewed repository when a source
+     * that the request selects reads the clone.
+     */
     @Override
     public CaptureContribution capture(ItemSnapshot pinned, CaptureRequest request) {
+        var item = pinned.item();
+        var preparation = new ScmCapturePreparation();
+        if (ScmRepositoryAccess.readsMirror(item.kind()))
+            repositories.sync(transactions.read(() -> repositories.remote(item)));
+        else if (workCapture.readsClone(item.kind(), request)) {
+            var reviewed = transactions.read(() -> workCapture.reviewedRepository(pinned, request.eventId()));
+            preparation.fetch(() -> workCapture.fetch(reviewed));
+        }
+        return transactions.snapshot(() -> captureVerified(pinned, request, preparation));
+    }
+
+    private CaptureContribution captureVerified(
+            ItemSnapshot pinned, CaptureRequest request, ScmCapturePreparation preparation) {
         var eventId = request.eventId();
         // An event review captures its retained occasion: the same record, checked against current access again.
         var occasion = eventId == null || !ScmWorkCapture.retains(pinned.item().kind())
@@ -465,22 +481,16 @@ public class ScmItemService implements ItemSource {
             throw new ItemCaptureException(ItemCaptureCode.CAPTURE_FAILED, "Capture contract is unavailable");
         if (pinned.item().kind().equals(ScmItemEvents.REPOSITORY)
                 || pinned.item().kind().equals(ScmItemEvents.FILE)) return captureTree(pinned, request);
-        Issue work;
-        PullRequestReview review = null;
-        if (occasion != null) {
-            work = occasion.work();
-            review = occasion.review();
-        } else if (pinned.item().kind().equals(ScmItemEvents.PULL_REQUEST_REVIEW)) {
-            review = reviews.findById(Objects.requireNonNull(pinned.item().sourceId()))
-                    .orElseThrow(ScmItemService::gone);
-            work = Objects.requireNonNull(review.getPullRequest());
-        } else
-            work = workLookup
-                    .find(
-                            pinned.item().kind(),
-                            Objects.requireNonNull(pinned.item().sourceId()))
-                    .orElseThrow(ScmItemService::gone);
-        return workCapture.capture(pinned, request, work, review, occasion != null ? occasion.evidence() : null);
+        var work = occasion != null
+                ? new ScmWorkCapture.Work(occasion.work(), occasion.review())
+                : workCapture.currentWork(pinned.item());
+        return workCapture.capture(
+                pinned,
+                request,
+                work.work(),
+                work.review(),
+                occasion != null ? occasion.evidence() : null,
+                preparation);
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -534,7 +544,7 @@ public class ScmItemService implements ItemSource {
         Repository repository = repositoryRows
                 .findById(Objects.requireNonNull(holder.sourceId()))
                 .orElseThrow(ScmItemService::gone);
-        var key = repositories.prepare(holder.workspaceId(), repository);
+        var key = repositories.remote(holder.workspaceId(), repository).key();
         String sha = pinned.item().kind().equals(ScmItemEvents.FILE)
                 ? Objects.requireNonNull(pinned.version().baseVersion())
                 : pinned.version().value();
@@ -654,11 +664,11 @@ public class ScmItemService implements ItemSource {
         return value;
     }
 
-    private static ItemCaptureException gone() {
+    static ItemCaptureException gone() {
         return new ItemCaptureException(ItemCaptureCode.ITEM_REMOVED, "SCM item is unavailable");
     }
 
-    private static ItemCaptureException invisible() {
+    static ItemCaptureException invisible() {
         return new ItemCaptureException(
                 ItemCaptureCode.ITEM_NOT_VISIBLE, "SCM item does not belong to this workspace reference");
     }

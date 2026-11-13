@@ -949,7 +949,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         var plan = new CaptureRequest(
                 UUID.randomUUID(), UUID.randomUUID(), 0, Set.of(CORE), "3.0.0", 3, null, Set.of(CORE, DIFF));
         return new ScmCaptureContext(
-                original.pinned(), plan, original.work(), new ScmCapturePreparation(), original.capturedAt());
+                original.pinned(), plan, original.work(), ScmCaptureFixtures.fetched(), original.capturedAt());
     }
 
     @Nested
@@ -975,7 +975,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                 CaptureRequest selected = invocation.getArgument(1);
                 assertThat(selected.sources()).hasSize(1);
                 var context = new ScmCaptureContext(
-                        pinned, selected, original.work(), new ScmCapturePreparation(), original.capturedAt());
+                        pinned, selected, original.work(), ScmCaptureFixtures.fetched(), original.capturedAt());
                 return provider.capture(context, selected.sources());
             });
             var mapper = new JsonMapper();
@@ -1057,7 +1057,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                                 original.pinned(),
                                 selected,
                                 original.work(),
-                                new ScmCapturePreparation(),
+                                ScmCaptureFixtures.fetched(),
                                 original.capturedAt()),
                         selected.sources());
             });

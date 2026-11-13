@@ -44,6 +44,7 @@ class ScmCaptureRoleContextTest extends BaseUnitTest {
                 .withBean(ScmGitTree.class, () -> mock(ScmGitTree.class))
                 .withBean(ScmFileVersions.class, () -> mock(ScmFileVersions.class))
                 .withBean(ScmWorkCapture.class, () -> mock(ScmWorkCapture.class))
+                .withBean(ScmItemTransactions.class, ScmItemTransactions::new)
                 .withBean(ScmCaptureContributors.class, () -> mock(ScmCaptureContributors.class))
                 .withBean(RepositoryRepository.class, () -> mock(RepositoryRepository.class))
                 .withBean(PullRequestReviewRepository.class, () -> mock(PullRequestReviewRepository.class))

@@ -104,8 +104,13 @@ public class LinkedWorkItemContentSource {
         this.consent = consent;
     }
 
+    /** Whether a capture of these sources reads the clone, for the references in the commit messages. */
+    public static boolean readsClone(Set<SourceKind> selectedKinds) {
+        return selectedKinds.contains(KIND);
+    }
+
     public CaptureContribution capture(ScmCaptureContext request, Set<SourceKind> selectedKinds) {
-        if (!selectedKinds.contains(KIND) || !request.pullRequest()) {
+        if (!readsClone(selectedKinds) || !request.pullRequest()) {
             return CaptureContribution.empty();
         }
         try {
