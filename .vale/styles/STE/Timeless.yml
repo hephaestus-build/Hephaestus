@@ -1,0 +1,10 @@
+extends: existence
+message: "Write what the product does in this release. '%s' goes stale."
+level: suggestion
+ignorecase: true
+tokens:
+  - currently
+  - formerly
+  - at the moment
+  - coming soon
+  - new in
