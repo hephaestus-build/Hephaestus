@@ -41,7 +41,7 @@
 					"title": "Conversation first token within 10 seconds",
 					"description": "The share of turns over 1 hour.",
 					"expr": [
-						"sum(increase(mentor_turn_first_token_seconds_bucket{job=\"hephaestus\",le=\"10.0\"}[1h])) / sum(increase(mentor_turn_first_token_seconds_count{job=\"hephaestus\"}[1h]))"
+						"sum(increase(agent_run_first_token_seconds_bucket{job=\"hephaestus\",kind=\"turn\",le=\"10.0\"}[1h])) / sum(increase(agent_run_first_token_seconds_count{job=\"hephaestus\",kind=\"turn\"}[1h]))"
 					],
 					"alias": ["within 10 s"],
 					"unit": "share",

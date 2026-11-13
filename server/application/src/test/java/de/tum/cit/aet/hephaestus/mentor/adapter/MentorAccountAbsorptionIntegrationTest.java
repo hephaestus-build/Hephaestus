@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -47,6 +48,12 @@ import tools.jackson.databind.node.JsonNodeFactory;
 @Transactional
 @RecordApplicationEvents
 class MentorAccountAbsorptionIntegrationTest extends BaseIntegrationTest {
+
+    @BeforeEach
+    void clearOtherTestsRuns() {
+        // Turn capacity is global, including committed runs from other test classes.
+        databaseTestUtils.cleanDatabase();
+    }
 
     @Autowired
     private MentorTurnClaims claims;

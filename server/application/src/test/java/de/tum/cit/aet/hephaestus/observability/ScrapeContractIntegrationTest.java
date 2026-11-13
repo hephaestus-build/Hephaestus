@@ -59,7 +59,6 @@ class ScrapeContractIntegrationTest extends BaseIntegrationTest {
             Map.entry("sandbox_gateway_connections_limit", "worker role"),
             Map.entry("sandbox_gateway_refused_total", "worker role"),
             Map.entry("attempt_key_sync_failures_total", "worker role, and the first failure creates it"),
-            Map.entry("sandbox_isolation_passed", "worker role"),
             Map.entry("agent_sandbox_reaper_failure_total", "worker role"),
             Map.entry("agent_sandbox_revoked_total", "worker role"),
             Map.entry("agent_sandbox_dispatch_failure_total", "worker role"),
