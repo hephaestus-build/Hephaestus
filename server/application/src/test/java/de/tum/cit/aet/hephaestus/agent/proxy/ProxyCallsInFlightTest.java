@@ -38,6 +38,29 @@ class ProxyCallsInFlightTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldBoundRunlessProbesToOneCallAndFreeTheirSlotWithoutSealingTheNextCall() {
+        var probe = new ProxyRouting.BilledAttempt(UsageSourceType.PROBE, UUID.randomUUID(), 0, null);
+        var otherProbe = new ProxyRouting.BilledAttempt(UsageSourceType.PROBE, UUID.randomUUID(), 0, null);
+        try (var first = calls.begin(probe);
+                var other = calls.begin(otherProbe)) {
+            assertThat(first.isOverCap()).isFalse();
+            assertThat(other.isOverCap()).isFalse();
+            try (var refused = calls.begin(probe)) {
+                assertThat(refused.isOverCap()).isTrue();
+            }
+            try (var stillFull = calls.begin(probe)) {
+                assertThat(stillFull.isOverCap())
+                        .as("a refused call frees no admitted call's place")
+                        .isTrue();
+            }
+        }
+        try (var next = calls.begin(probe)) {
+            assertThat(next.isOverCap()).isFalse();
+            assertThat(next.failure()).isNull();
+        }
+    }
+
+    @Test
     @DisplayName("a conversation turn attempt keeps one call and one that a stop left closing")
     void shouldRefuseTheThirdCallWhenATurnAttemptHasTwo() {
         ProxyRouting.BilledAttempt turn = attempt(UsageSourceType.MENTOR_TURN);

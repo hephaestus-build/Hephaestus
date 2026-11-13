@@ -5,7 +5,7 @@ Stop the old conversation loop before the database migration. Drain and stop all
 1. Scale `<release>-conversation-loop` to zero and wait for its Pods to stop. Do this before upgrading the chart, which removes that Deployment.
 2. Stop the servers through their normal drain. Wait until every server Pod has stopped, then stop the webhook role.
 3. In this release's dedicated sandbox namespace, foreground-delete claims with `hephaestus.build/sandbox-id` and legacy Jobs with `app.kubernetes.io/part-of=hephaestus`. Wait until all sandbox Pods are gone.
-4. Rename `conversationLoop.turns` to `sandbox.conversationTurns`. Remove `conversationLoop.replicas` and `conversationLoop.resources`.
+4. Rename `conversationLoop.turns` to `sandbox.conversationTurns`. Remove `conversationLoop.replicas` and `conversationLoop.resources`. Remove `conversationLoop` from every values file after the rename.
 5. Remove `sandbox.runtime.runtimeClassName`, `sandbox.runtime.seccompProfile`, `sandbox.runtime.probeInterval`, and `sandbox.runtime.podOverhead`. The template runtime and overhead use `sandbox.templates.runtimeClassName` and `sandbox.templates.podOverhead`; its seccomp profile is `RuntimeDefault`.
 6. Remove `HEPHAESTUS_CONVERSATION_LOOP_SECRET` from the application Secret and local environment. Remove `SANDBOX_STOP_TIMEOUT` and `SANDBOX_RECONCILIATION_INTERVAL`; SandboxClaims and the common reaper own that lifecycle. No replacement loop credential is needed. Each sandbox receives its own subject-scoped token.
 7. Apply the new chart and run `node scripts/kubernetes-cluster.ts verify`, or run `scripts/sandbox-isolation.ts` against each template. Read [Sandbox prerequisites](https://docs.hephaestus.build/admin/sandboxes#sandbox-prerequisites) before enabling work.
