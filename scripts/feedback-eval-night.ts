@@ -63,14 +63,30 @@ const WHAT: Record<string, string> = {
 
 const GREEN_KEY = new RegExp(`^${LAST_GREEN_PREFIX}\\d+-(?<sha>[0-9a-f]{40})$`, "u");
 
-/** Names a failed API call by its HTTP status, or its message. */
+/** Masks what a message can carry that the job log must not show: URLs and long token-like strings. */
+export const masked = (message: string) =>
+	message
+		.replaceAll(/[a-z][a-z0-9+.-]*:\/\/\S+/giu, "<url>")
+		.replaceAll(/[\w-]{20,}/gu, "<redacted>");
+
+/**
+ * Names a failed API call for the issue: its HTTP status, or a fixed description by the error's class. An exception
+ * message can hold an internal URL or a token, so it never reaches the issue. The job log gets it, masked.
+ */
 function lookupFailure(error: unknown): string {
 	const { status } = record(error);
 	if (typeof status === "number") {
 		return `HTTP ${status}`;
 	}
-	return error instanceof Error ? error.message : "unknown error";
+	const kind = error instanceof Error ? error.name : typeof error;
+	console.error(
+		`Feedback eval night lookup failed (${kind}): ${masked(error instanceof Error ? error.message : String(error))}`,
+	);
+	return `lookup failed: ${kind}`;
 }
+
+/** Issue timestamps come from another clock, so the duplicate check looks a little before the run started. */
+const CLOCK_SKEW_MS = 5 * 60_000;
 
 /** Only a scheduled night on the default branch saves the state, so only its entries count. */
 const MAIN_REF = "refs/heads/main";
@@ -185,7 +201,8 @@ async function alreadyTold(
 	marker: string,
 ): Promise<boolean | { failure: string }> {
 	try {
-		const recent = await panelIssues(github, repo, { state: "all", since: night.date });
+		const since = new Date(Date.parse(night.date) - CLOCK_SKEW_MS).toISOString();
+		const recent = await panelIssues(github, repo, { state: "all", since });
 		for (const issue of recent) {
 			if (await holds(github, repo, issue, marker)) {
 				return true;

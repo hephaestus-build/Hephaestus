@@ -20,7 +20,7 @@ const repo = { owner: "owner", repo: "repo" };
 
 interface Fixture {
 	caches?: { key: string; created_at: string; ref: string }[];
-	cacheError?: number;
+	cacheError?: number | Error;
 	issues?: { number: number; title: string; state: string; updated_at?: string; body?: string }[];
 	comments?: Record<number, { user: { login: string }; body: string }[]>;
 	commentErrors?: number[];
@@ -80,6 +80,9 @@ function client({
 			actions: {
 				getActionsCacheList: async (input: Record<string, unknown>) => {
 					cacheQueries.push(input);
+					if (cacheError instanceof Error) {
+						throw cacheError;
+					}
 					if (cacheError !== undefined) {
 						throw Object.assign(new Error("Service Unavailable"), { status: cacheError });
 					}
@@ -178,6 +181,25 @@ void test("a failed cache lookup still posts the report and names the failure", 
 	);
 });
 
+void test("an exception without an HTTP status never writes its message to the issue", async (t) => {
+	const logged: string[] = [];
+	t.mock.method(console, "error", (line: string) => logged.push(line));
+	const token = `ghs_${"Q".repeat(36)}`;
+	const { github, written } = client({
+		cacheError: new TypeError(
+			`fetch failed for https://cache.internal.example:8443/list?auth=${token}`,
+		),
+	});
+	await reportNight(github, repo, night("failure", "failed"));
+	const body = bodyOf(written()[0]);
+	assert.ok(body.includes("(cache lookup failed: lookup failed: TypeError)"), body);
+	for (const text of [body, ...logged]) {
+		assert.doesNotMatch(text, /cache\.internal\.example/u);
+		assert.ok(!text.includes(token));
+	}
+	assert.match(logged.join("\n"), /TypeError\): fetch failed for <url>/u);
+});
+
 void test("the fallback finds the kept result on the run when it was not told it", async () => {
 	const { github, written } = client({ artifacts: [{ id: 5, name: "feedback-eval-panel" }] });
 	await reportNight(github, repo, night("timed_out", "", ""));
@@ -226,6 +248,23 @@ void test("a replay of an attempt that an issue updated since the run started ho
 				title: ISSUE_TITLE,
 				state: "closed",
 				updated_at: "2026-11-20T04:10:00Z",
+				body: reported,
+			},
+		],
+	});
+	assert.equal(await reportNight(github, repo, night("failure", "failed")), "unchanged");
+	assert.deepEqual(written(), []);
+});
+
+void test("the duplicate check allows for clock skew: an issue updated a second before the start is read", async () => {
+	const reported = `<!-- run:99:1 -->\nearlier report`;
+	const { github, written } = client({
+		issues: [
+			{
+				number: 3,
+				title: ISSUE_TITLE,
+				state: "closed",
+				updated_at: "2026-11-20T03:40:59Z",
 				body: reported,
 			},
 		],
