@@ -2,6 +2,10 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { parseSync } from "vite-plus";
+
+import { isRecord } from "./lib/json.ts";
+
 import { output } from "./lib/process.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
@@ -51,16 +55,110 @@ export function isUnconditional(text: string, end: number): boolean {
 	return comma !== null && /^(?:\(|async\b|function\b)/u.test(args.slice(comma[0].length));
 }
 
-function tsSkips(text: string): Skip[] {
+const SKIP_NAMES = new Set(["skip", "fixme", "todo"]);
+const BASE_NAMES = new Set(["describe", "it", "test", "bench", "suite"]);
+
+interface Name {
+	readonly name: string;
+	readonly start: number;
+}
+
+/**
+ * The identifiers of the non-computed member chain that ends at `member`, such as `foo.test.skip`.
+ * A computed member ends the chain: `api["it.skip"].skip` names only `skip`, never the quoted key.
+ */
+function chainNames(member: Record<string, unknown>): Name[] {
+	const names: Name[] = [];
+	let node: unknown = member;
+	while (
+		isRecord(node) &&
+		node.type === "MemberExpression" &&
+		node.computed === false &&
+		isIdentifier(node.property)
+	) {
+		names.unshift({ name: node.property.name, start: node.property.start });
+		node = node.object;
+	}
+	if (isIdentifier(node)) {
+		names.unshift({ name: node.name, start: node.start });
+	}
+	return names;
+}
+
+function isIdentifier(
+	node: unknown,
+): node is Record<string, unknown> & { name: string; start: number } {
+	return (
+		isRecord(node) &&
+		node.type === "Identifier" &&
+		typeof node.name === "string" &&
+		typeof node.start === "number"
+	);
+}
+
+function callStarts(file: string, text: string): ReadonlySet<number> {
+	const parsed = parseSync(file, text);
+	if (parsed.errors.length > 0) {
+		throw new Error(
+			`${file}: cannot parse test source: ${parsed.errors.map((error) => error.message).join("; ")}`,
+		);
+	}
+	const starts = new Set<number>();
+	function visit(value: unknown): void {
+		if (Array.isArray(value)) {
+			for (const item of value) {
+				visit(item);
+			}
+		} else if (isRecord(value)) {
+			if (
+				value.type === "CallExpression" &&
+				isRecord(value.callee) &&
+				typeof value.callee.start === "number"
+			) {
+				starts.add(value.callee.start);
+			}
+			if (value.type === "MemberExpression") {
+				// The first test-runner name before the skip, as `TS_SKIP` reads it in the text.
+				const names = chainNames(value);
+				const last = names.length - 1;
+				if (SKIP_NAMES.has(names[last]?.name ?? "")) {
+					const base = names.findIndex(
+						({ name }, index) =>
+							index < last &&
+							BASE_NAMES.has(name) &&
+							names.slice(index + 1, last).every((link) => !SKIP_NAMES.has(link.name)),
+					);
+					const first = names[base];
+					if (first !== undefined) {
+						starts.add(first.start);
+					}
+				}
+			}
+			for (const item of Object.values(value)) {
+				visit(item);
+			}
+		}
+	}
+	visit(parsed.program);
+	return starts;
+}
+
+function tsSkips(file: string, text: string): Skip[] {
+	const calls = callStarts(file, text);
 	const skips: Skip[] = [];
 	for (const match of text.matchAll(TS_SKIP)) {
 		const playwright = match.groups?.base === "test" && match.groups.chain === "";
-		if (!playwright || isUnconditional(text, match.index + match[0].length)) {
+		if (
+			calls.has(match.index) &&
+			(!playwright || isUnconditional(text, match.index + match[0].length))
+		) {
 			skips.push({ at: match.index, arguments: "" });
 		}
 	}
 	for (const match of text.matchAll(TS_PREFIXED)) {
-		skips.push({ at: match.index, arguments: "" });
+		if (calls.has(match.index)) {
+			skips.push({ at: match.index, arguments: "" });
+		}
 	}
 	return skips;
 }
@@ -97,7 +195,7 @@ function javaSkips(text: string): Skip[] {
  * passed or lies more than 14 days ahead.
  */
 export function quarantineFindings(file: string, content: string, today: Date): Finding[] {
-	const skips = file.endsWith(".java") ? javaSkips(content) : tsSkips(content);
+	const skips = file.endsWith(".java") ? javaSkips(content) : tsSkips(file, content);
 	const lines = content.split("\n");
 	const start = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
 	return skips
@@ -136,14 +234,8 @@ export function quarantineFindings(file: string, content: string, today: Date): 
 		});
 }
 
-// This gate's own fixtures spell out the skips that it rejects.
-const OWN_FIXTURES = "scripts/check-quarantine.test.ts";
-
 export function isTestSource(file: string): boolean {
-	return (
-		file !== OWN_FIXTURES &&
-		(JAVA_TEST.test(file) || (TS_TEST.test(file) && !file.includes("node_modules/")))
-	);
+	return JAVA_TEST.test(file) || (TS_TEST.test(file) && !file.includes("node_modules/"));
 }
 
 if (import.meta.main) {
