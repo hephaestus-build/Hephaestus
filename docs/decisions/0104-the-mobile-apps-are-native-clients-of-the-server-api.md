@@ -6,7 +6,7 @@
 
 **Builds on:** [ADR 0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md) (installed clients), [ADR 0076](0076-reads-are-shaped-like-the-screen.md) (reads are shaped like the screen), [ADR 0100](0100-the-server-serves-the-web-app.md) (one API under `/api`), [ADR 0103](0103-the-public-api-grows-only-by-addition-and-every-client-tolerates-what-it-does-not-know.md) (the public API contract)
 
-**Relates to:** [ADR 0105](0105-one-store-app-signs-in-to-any-instance-by-its-address.md), [ADR 0106](0106-the-mobile-apps-release-with-the-stores-own-tools.md), [ADR 0107](0107-a-push-is-one-web-push-message-from-the-instance.md)
+**Relates to:** [ADR 0105](0105-one-store-app-signs-in-to-any-instance-by-its-address.md), [ADR 0106](0106-the-mobile-apps-release-with-the-stores-own-tools.md), [ADR 0107](0107-a-push-is-one-web-push-message-from-the-instance.md), [ADR 0108](0108-the-store-apps-receive-push-through-one-stateless-relay.md)
 
 ## Context
 
