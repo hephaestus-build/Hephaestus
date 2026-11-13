@@ -192,7 +192,7 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
     interface Queued {
         UUID getId();
 
-        String getState();
+        LlmCallPermitState getState();
     }
 
     /** This server's requests that still have a row: those that an admission round granted read ACTIVE. */

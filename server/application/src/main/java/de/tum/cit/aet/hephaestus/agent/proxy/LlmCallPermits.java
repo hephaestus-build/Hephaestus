@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallDelay;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallLimit;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitState;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
@@ -353,7 +354,7 @@ public class LlmCallPermits {
                 Map<UUID, Boolean> queued = new HashMap<>();
                 if (!mine.isEmpty()) {
                     for (var row : rows.findQueued(ownerId, mine.keySet()))
-                        queued.put(row.getId(), row.getState().equals("ACTIVE"));
+                        queued.put(row.getId(), row.getState() == LlmCallPermitState.ACTIVE);
                 }
                 if (granted) notifyPool(poolId);
                 return new Round(queued, pool.getThrottleMark(), pool.getCooldownMillis() > 0, pool.getSlug(), expired);
@@ -547,7 +548,7 @@ public class LlmCallPermits {
                 if (permit == null) continue;
                 if (kept != null && kept.contains(id)) permit.confirmedAt = attempted;
                 else if (rows.findById(id)
-                        .map(row -> row.getState().equals("CLOSED"))
+                        .map(row -> row.getState() == LlmCallPermitState.CLOSED)
                         .orElse(false)) {
                     permit.revoke("lease_lost");
                     permit.forgetClosed();

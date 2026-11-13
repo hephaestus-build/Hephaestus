@@ -10,7 +10,6 @@ import com.tngtech.archunit.core.domain.JavaTypeVariable;
 import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermit;
 import de.tum.cit.aet.hephaestus.core.Lifecycle;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
@@ -31,7 +30,6 @@ class LifecycleSetterArchTest extends HephaestusArchitectureTest {
                     "DEBT-STATE",
                     "S-D10: PersonDataRequest needs guarded lifecycle transitions"),
             new Debt(ReviewBatch.class, "status", "RUN", "S-D12: ReviewBatch needs guarded lifecycle transitions"),
-            new Debt(LlmCallPermit.class, "state", "RUN-6", "LlmCallPermit stores its lifecycle as a String"),
             new Debt(
                     Connection.class,
                     "state",
