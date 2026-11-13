@@ -74,3 +74,12 @@ export function upgradeFromOf(head: string): string | undefined {
 		? BASELINE_RELEASE
 		: previous;
 }
+
+/**
+ * The release whose docs the site root serves: the newest stable release from 1.0.0 on, and before the first stable
+ * 1.0.0 the newest release of any kind, a release candidate included.
+ */
+export function docsRelease(all: readonly string[]): string | undefined {
+	const stable = previousRelease(all, []);
+	return stable !== undefined && !stable.startsWith("v0.") ? stable : latestRelease(all, []);
+}

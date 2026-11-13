@@ -13,6 +13,28 @@ This site is built with [Docusaurus 3](https://docusaurus.io/); `docusaurus.conf
 Those three directories are the whole site: each is one `@docusaurus/plugin-content-docs` instance in
 `docusaurus.config.ts`, and every page in them must be reachable from its sidebar.
 
+## Versions
+
+The site serves two versions, each built from its own Git ref:
+
+| Path | Ref | Banner |
+| --- | --- | --- |
+| `/` | The latest release tag | None |
+| `/next/` | `main` | "Unreleased: these docs describe the next release" |
+
+`scripts/docs-release.ts` picks the release tag.
+Before the first stable 1.0.0, it picks the newest release, a release candidate included.
+From 1.0.0 on, it picks the newest stable release.
+The version switcher in the navbar links the two sites.
+Search engines index only the site root.
+
+`cd-docs.yml` builds both refs on a push to `main` and after each run of the release workflow.
+A release republishes the site root with its own docs.
+The repository holds one copy of the docs: the release docs come from the tag, not from a copied tree.
+
+`DOCS_CHANNEL` (`latest` or `next`) and `DOCS_RELEASE` (the tag) set the banner and the switcher.
+A local build or a pull-request preview shows `main`, so it is `next`.
+
 ## Markdown for AI assistants
 
 `@signalwire/docusaurus-plugin-llms-txt` converts the built pages to Markdown after the build:
@@ -71,5 +93,5 @@ workflow runs the same package script.
 
 ## Deployment
 
-`cd-docs.yml` deploys a push to `main` to GitHub Pages and a pull request to a Surge.sh preview with
-a URL comment; `cd-docs-teardown.yml` removes the preview when the pull request closes.
+`cd-docs.yml` deploys both [versions](#versions) to GitHub Pages, and a pull request to a Surge.sh preview with
+a URL comment. `cd-docs-teardown.yml` removes the preview when the pull request closes.
