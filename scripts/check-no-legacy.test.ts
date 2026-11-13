@@ -187,7 +187,7 @@ await it("rejects changed redirect lists inside a baseline file", () => {
 	const before = findings(file, json).map((finding) => ({ ...finding, count: 1, owner: "LEGACY" }));
 	const after = findings(file, json.replace("/b", "/b2"));
 	assert.ok(violations(after, before, before, "1.0.0-rc.6").length > 0);
-	assert.deepEqual(original, []);
+	assert.ok(original.some((finding) => finding.rule === "docs-redirect"));
 });
 await it("rejects the common permanent redirect forms and component disguises", () => {
 	for (const [file, source] of [
@@ -346,5 +346,23 @@ await it("a changed canonical workspace source or destination is refused", () =>
 		original.replace("https://$workspace_slug.", "https://old.$workspace_slug."),
 	]) {
 		assert.ok(findings(file, changed).some((finding) => finding.rule === "path-alias"));
+	}
+});
+
+await it("refuses a re-added redirect plugin or config in each supported docs form", () => {
+	for (const [file, source] of [
+		["docs/package.json", '{"dependencies":{"@docusaurus/plugin-client-redirects":"3.10.2"}}'],
+		["docs/docusaurus.config.ts", 'plugins: ["@docusaurus/plugin-client-redirects"]'],
+		["docs/docusaurus.config.ts", 'const config = {redirects: [{from: "/old", to: "/current"}]};'],
+		["docs/docusaurus.config.ts", 'const config = {createRedirects(path) {return ["/old"];}};'],
+		["docs/docusaurus.config.ts", 'const config = {createRedirects: (path) => ["/old"]};'],
+		["docs/redirects.json", '{"redirects":[{"from":"/old","to":"/current"}]}'],
+	] satisfies [string, string][]) {
+		const found = findings(file, source);
+		assert.ok(
+			found.some((finding) => finding.rule === "docs-redirect"),
+			source,
+		);
+		assert.ok(violations(found, [], [], "1.0.0-rc.6").length > 0, source);
 	}
 });

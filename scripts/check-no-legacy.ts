@@ -190,7 +190,7 @@ export function findings(file: string, source: string, files: readonly string[] 
 			"docs-redirect",
 			/<\s*(?:Redirect|Navigate)\b|http-equiv\s*=\s*["']?refresh\b|(?:window\.)?location\.(?:(?:replace|assign)\s*\(|href\s*=)/giu,
 		);
-		matches("docs-redirect", /^\s*(?:redirects|createRedirects)\s*:/gmu);
+		matches("docs-redirect", /\b(?:redirects|createRedirects)\s*(?::|\()/gu);
 		matches("docs-redirect", /@docusaurus\/plugin-client-redirects/gu);
 		matches(
 			"docs-redirect",
