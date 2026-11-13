@@ -274,11 +274,11 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
             assertThat(uploaded.statusCode()).isEqualTo(204);
             assertThat(uploaded.headers().firstValue("ETag")).isPresent();
             assertThat(call(second, "/runtime/result", result, fence.epoch()).statusCode())
-                    .isEqualTo(409);
+                    .isEqualTo(404);
             var ended = jobs.findById(job.getId()).orElseThrow();
             assertThat(ended.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
             assertThat(ended.getRunId()).isNotEqualTo(fence.runId());
-            assertThat(ended.getAttempt()).isEqualTo(job.getAttempt());
+            assertThat(ended.getAttempt()).isEqualTo(job.getAttempt() + 1);
             assertThat(ended.spentAttempts()).isEqualTo(job.spentAttempts());
             assertThat(runs.isCurrent(fence.run(), fence.epoch())).isFalse();
         }

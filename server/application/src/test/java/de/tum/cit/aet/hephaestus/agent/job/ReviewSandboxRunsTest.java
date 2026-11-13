@@ -125,8 +125,6 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                 null,
                 null);
         var spec = mock(SandboxSpec.class);
-        when(spec.image()).thenReturn("agent:test");
-
         when(spec.workDeadline()).thenReturn(Instant.now().plusSeconds(600));
         when(workspaces.createInputTar(any(), anyMap(), anyMap(), anyList())).thenReturn(archive);
         var runtime = new ReviewSandboxRuns(
