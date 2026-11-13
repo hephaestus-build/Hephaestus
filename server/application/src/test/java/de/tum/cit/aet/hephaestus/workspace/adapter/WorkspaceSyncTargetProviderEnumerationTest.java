@@ -69,6 +69,9 @@ class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
         lenient()
                 .when(workspaceScopeFilter.isRepositoryAllowed(any(RepositoryToMonitor.class)))
                 .thenReturn(true);
+        lenient()
+                .when(workspaceScopeFilter.isGitHubRepositoryAllowed(any(RepositoryToMonitor.class)))
+                .thenReturn(true);
     }
 
     private static Workspace workspace(long id) {
@@ -245,6 +248,7 @@ class WorkspaceSyncTargetProviderEnumerationTest extends BaseUnitTest {
         when(workspaceRepository.findById(5L)).thenReturn(Optional.of(workspace));
         when(repositoryToMonitorRepository.findByWorkspaceId(5L))
                 .thenReturn(List.copyOf(workspace.getRepositoriesToMonitor()));
+        when(connectionService.findActiveProviderKind(5)).thenReturn(Optional.of(IntegrationKind.GITLAB));
         when(connectionService.findActiveGitLabConfig(5)).thenReturn(Optional.of(GITLAB_CONFIG));
         when(connectionService.findActiveBearerToken(5, IntegrationKind.GITLAB))
                 .thenThrow(unreadable(IntegrationKind.GITLAB));
