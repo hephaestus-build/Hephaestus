@@ -1,0 +1,15 @@
+// The k6 runtime has no DOM, and `load-tests/globals.d.ts` declares `crypto` and `console`, which DOM
+// also declares. `@types/k6` is the one package the scenarios load. See `tsconfig.declarations.json`.
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ESNext",
+		"moduleResolution": "Bundler",
+		"lib": ["ES2022"],
+		"types": ["k6"],
+		"strict": true,
+		"skipLibCheck": false,
+		"noEmit": true
+	},
+	"include": ["load-tests/**/*.d.ts"]
+}
