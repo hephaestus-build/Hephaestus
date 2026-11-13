@@ -357,7 +357,8 @@ The verifier of 1.0.0-rc.4 compares a fixed list of chart images, so it refuses 
 The verifiers from 1.0.0-rc.5 on read the images from the signed release lock and accept it.
 
 1. Promote the channel to `v1.0.0-rc.5`, and complete its migration instructions.
-2. Wait until the reconciler logs `Applied v1.0.0-rc.5`, and the tooling link names 1.0.0-rc.5.
+2. Wait until the reconciler logs `Applied v1.0.0-rc.5`.
+   Then `/var/lib/hephaestus/tooling` names `/var/lib/hephaestus/releases/v1.0.0-rc.5`.
 3. Promote the target release.
 
 A host whose tooling is 1.0.0-rc.5 or later needs no step.
@@ -419,6 +420,8 @@ The next run logs `Adopted the tooling of v1.0.0-rc.4`.
 The run after it logs `Applied v1.0.0-rc.4`: the new verifier checks the release, and a host that already runs it restarts no Pod.
 
 After the timer starts, do not restore the record. The older tooling would then apply the older chart. Use [Rollback](#rollback).
+
+Before a later release, also do [Hosts with reconciler tooling of 1.0.0-rc.4](#hosts-with-reconciler-tooling-of-100-rc4).
 
 ## Sandbox capacity during upgrade
 
