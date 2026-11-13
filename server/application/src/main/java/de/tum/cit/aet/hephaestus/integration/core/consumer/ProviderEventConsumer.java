@@ -306,7 +306,8 @@ public class ProviderEventConsumer {
             return;
         }
         // Exception messages can contain raw provider payloads. Log only the failure type.
-        var logged = log.atError()
+        // One failed delivery is a retry, at WARN with its delivery count; the dead letter is the verdict, at ERROR.
+        var logged = log.atWarn()
                 .addKeyValue("event.name", "integration.message.failed")
                 .addKeyValue("integration.operation", "handle")
                 .addKeyValue("integration.event.id", claimed.id())
@@ -357,7 +358,8 @@ public class ProviderEventConsumer {
     }
 
     private void timedOut(ProviderEventStore.Claimed claimed, boolean stopped) {
-        var logged = log.atError()
+        // A handler that stopped hands its event back for another delivery; one that did not stop breaks this replica.
+        var logged = (stopped ? log.atWarn() : log.atError())
                 .addKeyValue("event.name", "integration.message.timed_out")
                 .addKeyValue(
                         "integration.route",

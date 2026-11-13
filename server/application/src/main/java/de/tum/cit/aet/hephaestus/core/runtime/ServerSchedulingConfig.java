@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 /**
  * Activates Spring {@link EnableScheduling @EnableScheduling} only on the server-role pod.
@@ -43,7 +44,9 @@ public class ServerSchedulingConfig {
      */
     @Bean(name = "taskScheduler")
     TaskScheduler taskScheduler(ThreadPoolTaskSchedulerBuilder builder) {
-        return builder.build();
+        ThreadPoolTaskScheduler scheduler = builder.build();
+        scheduler.setErrorHandler(new ScheduledJobErrorHandler());
+        return scheduler;
     }
 
     @Bean

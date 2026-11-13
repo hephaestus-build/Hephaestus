@@ -98,7 +98,7 @@ class ProviderEventConsumerLoggingTest extends BaseUnitTest {
 
         assertThat(appender.list).hasSize(1);
         ILoggingEvent record = appender.list.getFirst();
-        assertThat(record.getLevel()).isEqualTo(Level.ERROR);
+        assertThat(record.getLevel()).isEqualTo(Level.WARN);
         assertThat(record.getFormattedMessage()).isEqualTo("Provider event handler failed");
         assertThat(record.getThrowableProxy()).isNull();
         var fields = record.getKeyValuePairs().stream().collect(Collectors.toMap(pair -> pair.key, pair -> pair.value));

@@ -1,16 +1,12 @@
 package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
+import de.tum.cit.aet.hephaestus.core.TransientFailures;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.handler.PayloadParsingException;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.net.SocketException;
-import java.net.SocketTimeoutException;
-import java.net.UnknownHostException;
 import java.sql.SQLException;
-import java.sql.SQLRecoverableException;
-import java.sql.SQLTransientException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -26,14 +22,7 @@ import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataAccessResourceFailureException;
-import org.springframework.dao.TransientDataAccessException;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClientResponseException;
-import org.springframework.web.reactive.function.client.WebClientRequestException;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 /**
  * Decides what a failed event does next. A proven operational failure retries with backoff until it recovers; a
@@ -167,45 +156,11 @@ public class IntegrationPoisonHandler {
     }
 
     private static FailureKind classify(Throwable failure) {
-        boolean transientFailure = false;
         Set<Throwable> seen = new HashSet<>();
         for (Throwable cause = failure; cause != null && seen.add(cause); cause = cause.getCause()) {
             if (cause instanceof PayloadParsingException) return FailureKind.PERMANENT;
-            if (cause instanceof SocketException
-                    || cause instanceof SocketTimeoutException
-                    || cause instanceof UnknownHostException
-                    || cause instanceof SQLTransientException
-                    || cause instanceof SQLRecoverableException
-                    || cause instanceof TransientDataAccessException
-                    || cause instanceof DataAccessResourceFailureException
-                    || cause instanceof WebClientRequestException) {
-                transientFailure = true;
-            }
-            if (cause instanceof WebClientResponseException response) {
-                transientFailure |= isTransientResponse(response.getStatusCode(), response.getHeaders());
-            }
-            if (cause instanceof RestClientResponseException response) {
-                transientFailure |= isTransientResponse(response.getStatusCode(), response.getResponseHeaders());
-            }
-            if (cause instanceof SQLException sql) {
-                String state = sql.getSQLState();
-                transientFailure |= state != null
-                        && (state.startsWith("08")
-                                || Set.of("40001", "40P01", "53300", "55P03", "57P01", "57P02", "57P03")
-                                        .contains(state));
-            }
         }
-        return transientFailure ? FailureKind.TRANSIENT : FailureKind.UNKNOWN;
-    }
-
-    private static boolean isTransientResponse(HttpStatusCode status, @Nullable HttpHeaders headers) {
-        return status.is5xxServerError()
-                || status.value() == 429
-                || status.value() == 408
-                || (status.value() == 403
-                        && headers != null
-                        && (headers.containsHeader(HttpHeaders.RETRY_AFTER)
-                                || "0".equals(headers.getFirst("X-RateLimit-Remaining"))));
+        return TransientFailures.isTransient(failure) ? FailureKind.TRANSIENT : FailureKind.UNKNOWN;
     }
 
     private Counter retryCounter(String subject) {
