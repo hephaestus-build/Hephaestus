@@ -313,6 +313,10 @@ This applies the rule that unknown visibility never permits an automatic repeat 
 
 #### Expiry and the weekly digest
 
+The weekly digest is a proactive `DIGEST` run on the conversation's subject.
+It uses the same sandbox runner, admission and epoch fence as a requested answer.
+[Agent runs § Proactive digests](./agent-runs#proactive-digests) owns its scheduling and completion contract.
+
 `ConversationFeedbackTtlSweeper` (server role, every hour) expires prepared conversation feedback that is older than 14 days and whose copy has no write.
 The feedback becomes `WITHHELD` with the stop reason `CONVERSATION_EXPIRED`.
 A later `show_feedback` call for it gets `422`.

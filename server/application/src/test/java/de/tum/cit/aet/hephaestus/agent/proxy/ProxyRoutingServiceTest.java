@@ -18,6 +18,8 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnAdmission;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRun;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
@@ -128,6 +130,18 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         failure -> assertThat(failure.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+    }
+
+    @Test
+    void shouldKeepAProactiveTurnInItsRunBandInsteadOfTheInteractiveReserve() {
+        var jwt = turnJwt(3);
+        leasedTurn(jwt, true);
+        var run = mock(AgentRun.class);
+        when(run.getBand()).thenReturn(AgentRunBand.BACKGROUND);
+        when(runs.find(new AgentRunRef(jwt.runId(), jwt.workspaceId()))).thenReturn(Optional.of(run));
+        var route = routing.resolve(ProxyIdentity.of(jwt));
+
+        assertThat(routing.band(route)).isEqualTo(AgentRunBand.BACKGROUND);
     }
 
     private static AttemptJwt turnJwt(int attempt) {

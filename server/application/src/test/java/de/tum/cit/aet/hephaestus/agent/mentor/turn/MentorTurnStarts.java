@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
+import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.DigestAdmission;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
@@ -30,11 +31,18 @@ public final class MentorTurnStarts {
 
     /** A starter that admits every turn on the test model. */
     public static MentorTurnStarter admitting(ApplicationContext beans, MeterRegistry metrics) {
+        return admitting(beans, metrics, beans.getBean(DigestAdmission.class));
+    }
+
+    /** A starter with a local digest policy, without another Spring application context. */
+    public static MentorTurnStarter admitting(
+            ApplicationContext beans, MeterRegistry metrics, DigestAdmission digests) {
         MentorAdmission admission = mock(MentorAdmission.class);
         when(admission.admit(anyLong(), anyLong())).thenReturn(LlmCatalogTestFixtures.admittedMentorConfig());
         return new MentorTurnStarter(
                 beans.getBean(MentorTurnService.class),
                 admission,
+                digests,
                 beans.getBean(MentorTurnRepository.class),
                 beans.getBean(PersonDataWriteFence.class),
                 metrics,

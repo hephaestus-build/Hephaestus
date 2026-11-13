@@ -10,6 +10,11 @@ No role of the previous release runs beside a 1.0 role.
 No role of the previous release runs on the 1.0 schema.
 Plan for one outage, from the first stopped role to the last passed check.
 
+The migration entry *Stop conversation work before enabling digest runs* requires matching runtime-contract-19 server and agent images.
+Drain and stop every server, take a verified backup, and remove the stopped release's conversation SandboxClaims.
+Run the sandbox isolation gate before you resume the servers.
+A count of zero for conversation turns stops both requested turns and proactive digests.
+
 1.0.0 carries the source and images of the last qualified release candidate.
 A host that already runs that candidate changes only its release metadata.
 It still stops every role, and it still needs the verified recovery point and the checks below.

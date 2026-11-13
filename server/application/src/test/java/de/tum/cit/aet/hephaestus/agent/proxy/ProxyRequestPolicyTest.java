@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
+import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.DigestAdmission;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
@@ -47,6 +48,9 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
     @Mock
     private ProductFeedbackDraftCalls drafts;
 
+    @Mock
+    private DigestAdmission digests;
+
     private ProxyRequestPolicy policy;
     private final UUID id = UUID.fromString("5f6696f2-1557-4ea1-b3d2-bfc338ae41bc");
     private final LlmModelResolver.ConnectionRef model =
@@ -54,7 +58,8 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        policy = new ProxyRequestPolicy(drafts, mock(LlmModelResolver.class), egress, jobs, turns, reviews, routing);
+        policy = new ProxyRequestPolicy(
+                drafts, mock(LlmModelResolver.class), egress, digests, jobs, turns, reviews, routing);
     }
 
     private ProxyRouting request(UsageSourceType source) {
@@ -127,6 +132,16 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
         when(drafts.waiting(id, 3)).thenReturn(Optional.empty());
         assertThat(policy.allows(request)).isFalse();
         verifyNoInteractions(jobs, turns, routing, reviews);
+    }
+
+    @Test
+    void shouldRefuseTheNextConversationCallWhenItsCapturedDigestFactsLoseEligibility() {
+        when(turns.findAccountIdByIdAndWorkspaceId(id, 1L)).thenReturn(Optional.of(21L));
+        when(routing.allows(1L, 21L, model)).thenReturn(true);
+        when(digests.refuses(1L, id)).thenReturn(false, true);
+        var request = request(UsageSourceType.MENTOR_TURN);
+        assertThat(policy.allows(request)).isTrue();
+        assertThat(policy.allows(request)).isFalse();
     }
 
     @Test

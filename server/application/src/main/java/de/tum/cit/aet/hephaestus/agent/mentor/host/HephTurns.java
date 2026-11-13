@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.TurnRunsAdapter;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
-import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
@@ -87,7 +86,7 @@ public class HephTurns {
     /** Checks the subject and current lease in the transaction that writes a tool's proposal. */
     public <T> T write(SandboxRun run, boolean ending, Function<TurnAttempt, T> proposal) {
         return Objects.requireNonNull(transactions.execute(status -> {
-            if (run.kind() != AgentRunKind.TURN || run.sandbox().kind() != AgentSandboxKind.CONVERSATION)
+            if (!run.kind().conversation() || run.sandbox().kind() != AgentSandboxKind.CONVERSATION)
                 throw new StaleRunException(run.fence());
             beforeWrite(run.sandbox());
             if (!sandboxes.hold(run.sandbox())) throw new StaleRunException(run.fence());

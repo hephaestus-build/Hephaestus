@@ -33,13 +33,13 @@ import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
-import de.tum.cit.aet.hephaestus.mentor.MentorEntryDraft;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import de.tum.cit.aet.hephaestus.mentor.MentorSlackMessages;
 import de.tum.cit.aet.hephaestus.mentor.MentorSlackReplies;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestPayload;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestWindow;
+import de.tum.cit.aet.hephaestus.testconfig.WeeklyDigestTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -61,6 +61,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 /** The Slack note that a weekly digest is ready: one top-level DM message, sent once, with no contents. */
@@ -157,14 +158,29 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
                 subscriptions,
                 workspaces,
                 new SlackHephaestusUiLinks("https://hephaestus.example", new WorkspaceSubdomainProperties(false, "")),
-                replies,
-                executor);
+                replies);
         beans.addBean("pointer", pointer);
     }
 
     /** How a digest's note stands, as its outbox action shows it. */
     private MentorEntry.@Nullable SlackDelivery noteDelivery(MentorEntry digest) {
         return replies.delivery(workspace.getId(), MentorSlackReplies.digestKey(digest.getId()));
+    }
+
+    private void enqueueAndDeliver(WeeklyDigestWritten event) {
+        context.getBean(TransactionTemplate.class).executeWithoutResult(status -> pointer.on(event));
+        ActionTestSupport.runLane(executor, jdbc, MentorSlackReplies.digestKey(event.entryId()));
+    }
+
+    @Test
+    void shouldSendNothingAndLeaveNoActionWhenTheDigestTransactionRollsBack() {
+        MentorEntry digest = digest();
+        context.getBean(TransactionTemplate.class).executeWithoutResult(status -> {
+            pointer.on(written(digest, WeeklyDigestPointer.SLACK));
+            verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+            status.setRollbackOnly();
+        });
+        assertThat(noteDelivery(digest)).isNull();
     }
 
     /** A note that a server took and did not settle: Slack may show it already. */
@@ -202,8 +218,8 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
         when(slack.postMessage(eq(workspace.getId()), eq(SLACK_USER), isNull(), anyList(), anyString(), any()))
                 .thenReturn(new SlackMessageService.Posted(DM, "300.1"));
 
-        pointer.on(written(digest, WeeklyDigestPointer.SLACK));
-        pointer.on(written(digest, WeeklyDigestPointer.SLACK));
+        enqueueAndDeliver(written(digest, WeeklyDigestPointer.SLACK));
+        enqueueAndDeliver(written(digest, WeeklyDigestPointer.SLACK));
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<LayoutBlock>> blocks = ArgumentCaptor.forClass(List.class);
@@ -250,8 +266,8 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
                     return new SlackMessageService.Posted(DM, "300.2");
                 });
 
-        pointer.on(written(digest, WeeklyDigestPointer.SLACK));
-        pointer.on(written(digest, WeeklyDigestPointer.SLACK));
+        enqueueAndDeliver(written(digest, WeeklyDigestPointer.SLACK));
+        enqueueAndDeliver(written(digest, WeeklyDigestPointer.SLACK));
 
         verify(slack, times(1))
                 .postMessage(eq(workspace.getId()), eq(SLACK_USER), isNull(), anyList(), anyString(), any());
@@ -273,11 +289,11 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
     void shouldPostNothingWhenTheAccountTurnedTheDigestOffOrOnOnlyAfterItWasWritten() {
         MentorEntry digest = digest();
         when(subscriptions.enabledSince(accountId)).thenReturn(Optional.empty());
-        pointer.on(written(digest, WeeklyDigestPointer.SLACK));
+        enqueueAndDeliver(written(digest, WeeklyDigestPointer.SLACK));
 
         when(subscriptions.enabledSince(accountId))
                 .thenReturn(Optional.of(Instant.now().plusSeconds(60)));
-        pointer.on(written(digest, WeeklyDigestPointer.SLACK));
+        enqueueAndDeliver(written(digest, WeeklyDigestPointer.SLACK));
 
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
         assertThat(noteDelivery(digest))
@@ -287,7 +303,7 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
 
     @Test
     void shouldPostNothingWhenTheNoteGoesByEmail() {
-        pointer.on(written(digest(), WeeklyDigestPointer.EMAIL));
+        enqueueAndDeliver(written(digest(), WeeklyDigestPointer.EMAIL));
 
         verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
     }
@@ -375,7 +391,7 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
         return entries.appendOnce(
                         workspace.getId(),
                         main.getId(),
-                        MentorEntryDraft.digest(
+                        WeeklyDigestTestFixtures.historical(
                                 "Weekly digest for 5–11 October 2026.",
                                 new WeeklyDigestPayload(WEEK, List.of(), List.of()).toJson(objectMapper),
                                 "weekly-digest:" + workspace.getId() + ":" + accountId + ":" + UUID.randomUUID()))

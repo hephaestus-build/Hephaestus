@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794556114236-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <columnExists tableName="mentor_turn" columnName="run_id"/>
+            <columnExists tableName="mentor_entry" columnName="turn_id"/>
+        </preConditions>
+        <sql splitStatements="false"><![CDATA[
+ALTER TABLE agent_run DROP CONSTRAINT ck_agent_run_kind,
+ ADD CONSTRAINT ck_agent_run_kind CHECK (kind IN ('REVIEW','REVIEW_COMPOSE','TURN','DIGEST')) NOT VALID;
+ALTER TABLE mentor_turn DROP CONSTRAINT chk_mentor_turn_surface,
+ ADD CONSTRAINT chk_mentor_turn_surface CHECK (surface IN ('APP','SLACK','SYSTEM')) NOT VALID;
+CREATE OR REPLACE FUNCTION enforce_mentor_turn_run() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+ paired record;
+BEGIN
+ FOR paired IN
+  SELECT t.status, t.surface, t.id, r.state, r.kind, t.workspace_id, t.conversation_id, r.concurrency_key
+   FROM mentor_turn t JOIN agent_run r ON (r.id,r.workspace_id)=(t.run_id,t.workspace_id)
+   WHERE (TG_TABLE_NAME='mentor_turn' AND t.id=NEW.id)
+      OR (TG_TABLE_NAME='agent_run' AND t.run_id=NEW.id)
+ LOOP
+  IF NOT ((paired.kind='TURN' AND paired.surface IN ('APP','SLACK'))
+       OR (paired.kind='DIGEST' AND paired.surface='SYSTEM'))
+     THEN
+   RAISE EXCEPTION 'a conversation turn needs its conversation run kind' USING ERRCODE='23514';
+  END IF;
+  IF paired.status IN ('QUEUED','RUNNING') AND paired.concurrency_key <> 'conversation:' || paired.conversation_id THEN
+   RAISE EXCEPTION 'a queued or running turn must use its conversation subject' USING ERRCODE='23514';
+  END IF;
+  IF paired.kind='DIGEST' AND NOT EXISTS(SELECT 1 FROM mentor_entry e
+      WHERE (e.turn_id,e.workspace_id)=(paired.id,paired.workspace_id) AND e.kind='DIGEST' AND e.surface='SYSTEM') THEN
+   RAISE EXCEPTION 'a digest run needs its real system digest stimulus' USING ERRCODE='23514';
+  END IF;
+  IF NOT ((paired.status='QUEUED' AND paired.state='QUEUED')
+       OR (paired.status='RUNNING' AND paired.state='LEASED')
+       OR (paired.status='STOPPED' AND paired.state IN ('LEASED','ENDED'))
+       OR (paired.status IN ('DONE','FAILED') AND paired.state='ENDED')) THEN
+   RAISE EXCEPTION 'a turn that is % needs a run that agrees, not one that is %', paired.status, paired.state USING ERRCODE='23514';
+  END IF;
+ END LOOP;
+ RETURN NULL;
+END $$;
+DROP TRIGGER mentor_turn_run_agrees ON mentor_turn;
+CREATE CONSTRAINT TRIGGER mentor_turn_run_agrees AFTER INSERT OR UPDATE OF status, run_id, surface ON mentor_turn
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION enforce_mentor_turn_run();
+DROP TRIGGER agent_run_turn_agrees ON agent_run;
+CREATE CONSTRAINT TRIGGER agent_run_turn_agrees AFTER UPDATE OF state ON agent_run
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (NEW.kind IN ('TURN','DIGEST')) EXECUTE FUNCTION enforce_mentor_turn_run();
+        ]]></sql>
+        <rollback><stop>Restore the verified database backup taken before proactive digest runs.</stop></rollback>
+    </changeSet>
+    <changeSet id="1794556114236-2" author="hephaestus">
+        <sql>ALTER TABLE agent_run VALIDATE CONSTRAINT ck_agent_run_kind; ALTER TABLE mentor_turn VALIDATE CONSTRAINT chk_mentor_turn_surface</sql>
+        <rollback/>
+    </changeSet>
+    <changeSet id="1794556114236-3" author="hephaestus" runInTransaction="false">
+        <sql>DROP INDEX CONCURRENTLY IF EXISTS ux_mentor_turn_stimulus; CREATE UNIQUE INDEX CONCURRENTLY ux_mentor_turn_stimulus ON mentor_entry(workspace_id,turn_id) WHERE turn_id IS NOT NULL AND kind IN ('USER','DIGEST')</sql>
+        <rollback><sql>DROP INDEX CONCURRENTLY IF EXISTS ux_mentor_turn_stimulus</sql></rollback>
+    </changeSet>
+</databaseChangeLog>

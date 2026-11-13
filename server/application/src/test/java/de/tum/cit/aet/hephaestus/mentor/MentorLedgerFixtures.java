@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.mentor;
 
+import de.tum.cit.aet.hephaestus.testconfig.WeeklyDigestTestFixtures;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.util.List;
@@ -127,7 +128,7 @@ public final class MentorLedgerFixtures {
     }
 
     static MentorEntryDraft digest(String requestId) {
-        return MentorEntryDraft.digest(
+        return WeeklyDigestTestFixtures.historical(
                 "Weekly digest for 5–11 October 2026. Read inputs/context/weekly_digest.json for it.",
                 NODES.objectNode().put("weekStart", "2026-10-05"),
                 requestId);

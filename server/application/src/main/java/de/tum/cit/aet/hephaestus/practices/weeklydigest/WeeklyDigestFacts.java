@@ -121,7 +121,10 @@ public class WeeklyDigestFacts {
         }
         return Optional.of(new WeeklyDigestPayload(
                 window,
-                rows.stream().map(row -> row.feedback().getId()).toList(),
+                rows.stream()
+                        .filter(row -> row.withdrawnAt() == null)
+                        .map(row -> row.feedback().getId())
+                        .toList(),
                 changes.stream().map(WeeklyDigestChangeKey::of).distinct().toList()));
     }
 

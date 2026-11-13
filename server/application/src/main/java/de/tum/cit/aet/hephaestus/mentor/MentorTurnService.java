@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.mentor.spi.TurnRuns;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -150,7 +151,7 @@ public class MentorTurnService {
             if (!turn.getConversationId().equals(conversationId)) {
                 throw new MentorRejectedException(MentorRejectedException.Reason.REQUEST_ID_REUSED);
             }
-            return new Submission(turn, entries.findQuestion(turn.getWorkspaceId(), turn.getId()), false);
+            return new Submission(turn, entries.findStimulus(turn.getWorkspaceId(), turn.getId()), false);
         }
         if (entries.findByWorkspaceIdAndRequestId(workspaceId, requestId).isPresent()) {
             throw new MentorRejectedException(MentorRejectedException.Reason.REQUEST_ID_REUSED);
@@ -169,6 +170,32 @@ public class MentorTurnService {
         // A new question is the last of its conversation, so no other turn's reason to wait changes.
         events.publishEvent(MentorLedgerEvents.TurnChanged.of(turn));
         return new Submission(turn, question, true);
+    }
+
+    public record DigestRequest(String requestId, String text, JsonNode facts, Duration startWithin) {}
+
+    /** A digest is a system stimulus on the same conversation ledger, with no invented user question. */
+    @Transactional
+    public boolean submitDigest(long workspaceId, UUID conversationId, DigestRequest request) {
+        MentorConversationService.holdWrite(
+                writeFence,
+                conversations
+                        .findAccountIdByIdAndWorkspaceId(conversationId, workspaceId)
+                        .orElseThrow(
+                                () -> new EntityNotFoundException("MentorConversation", conversationId.toString())));
+        MentorConversation conversation = entryService.lock(workspaceId, conversationId);
+        if (turns.findByWorkspaceIdAndRequestId(workspaceId, request.requestId())
+                        .isPresent()
+                || entries.existsByWorkspaceIdAndRequestId(workspaceId, request.requestId())) return false;
+        UUID runId = runs.enqueueDigest(workspaceId, conversationId, request.startWithin());
+        MentorTurn turn = turns.saveAndFlush(new MentorTurn(
+                conversation, request.requestId(), MentorTurn.Surface.SYSTEM, null, runId, clock.instant()));
+        MentorEntry stimulus = entryService.insert(
+                conversation,
+                MentorEntryDraft.digest(request.text(), request.facts(), request.requestId(), turn.getId()));
+        entryService.appended(conversation, List.of(stimulus));
+        events.publishEvent(MentorLedgerEvents.TurnChanged.of(turn));
+        return true;
     }
 
     /**
@@ -208,6 +235,7 @@ public class MentorTurnService {
         MentorTurnRepository.RunningAttempt running = turns.findRunningAttempt(workspaceId, turnId, epoch, runId)
                 .orElseThrow(() -> new MentorLeaseLostException(turnId, attempt));
         if (redaction.personErasedSince(running.getStartedAt())) throw new MentorLeaseLostException(turnId, attempt);
+        if (MentorTurn.Surface.SYSTEM.name().equals(running.getSurface())) return false;
         var frames = progress.frames(
                 workspaceId,
                 running.getConversationId(),
@@ -254,7 +282,12 @@ public class MentorTurnService {
         Set<UUID> feedbackCalled = MentorPiEntries.feedbackCalled(appended, ending.lastPartial());
         boolean contextErased =
                 hasAppendedContext && redaction.personErasedSince(Objects.requireNonNull(turn.getStartedAt()));
-        append(turn, stored, contextErased);
+        append(
+                turn,
+                turn.getSurface() == MentorTurn.Surface.SYSTEM && outcome != MentorTurn.Status.DONE
+                        ? List.of()
+                        : stored,
+                contextErased);
         Instant endedAt = clock.instant();
         turn.end(
                 contextErased ? MentorTurn.Status.FAILED : outcome,
@@ -436,10 +469,10 @@ public class MentorTurnService {
         return turns.databaseNow();
     }
 
-    /** The developer's question that started the turn. */
+    /** The real question or proactive stimulus that started the turn. */
     @Transactional(readOnly = true)
     public MentorEntry question(long workspaceId, UUID turnId) {
-        return entries.findQuestion(workspaceId, turnId);
+        return entries.findStimulus(workspaceId, turnId);
     }
 
     public MentorTurn require(long workspaceId, UUID turnId) {
@@ -488,7 +521,7 @@ public class MentorTurnService {
         Instant attemptStart = Objects.requireNonNull(turn.getStartedAt(), "A held turn has started");
         MentorConversation conversation = entryService.lockWithTree(turn.getWorkspaceId(), turn.getConversationId());
         // A redaction locks this tree first, so the question cannot be erased after this read.
-        MentorEntry question = entries.findQuestion(turn.getWorkspaceId(), turn.getId());
+        MentorEntry question = entries.findStimulus(turn.getWorkspaceId(), turn.getId());
         if (question.isRedacted()) {
             return;
         }

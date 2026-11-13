@@ -48,7 +48,7 @@ public class MentorSituation {
                 .findByIdAndWorkspaceId(turn.getConversationId(), workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "MentorConversation", turn.getConversationId().toString()));
-        MentorEntry question = entries.findQuestion(turn.getWorkspaceId(), turn.getId());
+        MentorEntry question = entries.findStimulus(turn.getWorkspaceId(), turn.getId());
         Instant now = clock.instant();
 
         StringBuilder text = new StringBuilder("<situation>\n");
@@ -57,6 +57,11 @@ public class MentorSituation {
                 switch (turn.getSurface()) {
                     case SLACK -> "The developer asked this in Slack. Your answer appears there.\n";
                     case APP -> "The developer asked this in the app. Your answer appears there.\n";
+                    case SYSTEM ->
+                        "Hephaestus scheduled this opt-in weekly digest. No developer asked a question. "
+                                + "Write a short proactive recap from inputs/context/weekly_digest.json. "
+                                + "Use the same source and claim rules as any conversation answer. "
+                                + "Do not infer a score, rank, streak, or a claim from missing work.\n";
                 });
         String page = turn.getPageContext();
         if (page != null && !page.isBlank()) {

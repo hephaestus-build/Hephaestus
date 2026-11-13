@@ -95,6 +95,7 @@ public class MentorTimeline {
         List<MentorTurn> activeTurns = turns.findActiveInTree(workspaceId, main.getId());
         Map<UUID, MentorTurn.WaitingFor> waiting = waits.waits(workspaceId, activeTurns);
         List<MentorTurnDTO> active = activeTurns.stream()
+                .filter(turn -> turn.getSurface() != MentorTurn.Surface.SYSTEM)
                 .map(turn -> turn(
                         turn,
                         parentEntryId(main, turn.getConversationId()),
@@ -182,6 +183,7 @@ public class MentorTimeline {
     @Transactional(readOnly = true)
     public Optional<Owned<MentorTurnDTO>> liveTurn(long workspaceId, UUID turnId) {
         return turns.findByIdAndWorkspaceId(turnId, workspaceId)
+                .filter(turn -> turn.getSurface() != MentorTurn.Surface.SYSTEM)
                 .flatMap(turn -> conversations
                         .findByIdAndWorkspaceId(turn.getConversationId(), workspaceId)
                         .map(conversation -> new Owned<>(
@@ -205,6 +207,11 @@ public class MentorTimeline {
         }
         MentorEntry entry = changed.get();
         if (!entry.getKind().isMessage()) {
+            return Optional.empty();
+        }
+        if (entry.getSurface() == MentorEntry.Surface.SYSTEM
+                && !entry.isRedacted()
+                && !entries.isShown(workspaceId, entryId)) {
             return Optional.empty();
         }
         MentorConversation conversation = conversation(workspaceId, entry.getConversationId());

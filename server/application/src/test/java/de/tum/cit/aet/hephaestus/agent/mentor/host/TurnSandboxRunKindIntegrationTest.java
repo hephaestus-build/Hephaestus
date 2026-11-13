@@ -22,8 +22,10 @@ import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarter;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.TurnRunsAdapter;
+import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.DigestAdmission;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.SandboxGatewayFixtures;
+import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
@@ -42,10 +44,14 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
+import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
+import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -80,6 +86,8 @@ import tools.jackson.databind.ObjectMapper;
 
 /** A conversation sandbox claims only its subject's turn, and the server fences every proposal on that claim. */
 class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest {
+    private final DigestAdmission digests = mock(DigestAdmission.class);
+
     @Autowired
     private ApplicationContext beans;
 
@@ -130,7 +138,7 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                 sandboxes,
                 transactions);
         kind = new TurnSandboxRunKind(
-                MentorTurnStarts.admitting(beans, meters),
+                MentorTurnStarts.admitting(beans, meters, digests),
                 beans.getBean(TurnRunsAdapter.class),
                 runs,
                 held,
@@ -180,6 +188,80 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
                                 new SandboxRun(sandbox, claimed.fence(), claimed.kind(), claimed.attempt())))
                 .orElseThrow();
         return new SandboxRun(sandbox, lease.fence(), lease.kind(), lease.attempt());
+    }
+
+    private MentorTurn queueDigest() {
+        var mapper = beans.getBean(ObjectMapper.class);
+        String request = "digest-gateway-" + UUID.randomUUID();
+        assertThat(turns.submitDigest(
+                        workspace.getId(),
+                        conversation.getId(),
+                        new MentorTurnService.DigestRequest(
+                                request,
+                                "Write the opted-in weekly recap.",
+                                mapper.createObjectNode(),
+                                Duration.ofHours(1))))
+                .isTrue();
+        return turnRows.findByWorkspaceIdAndRequestId(workspace.getId(), request)
+                .orElseThrow();
+    }
+
+    @Test
+    void shouldStartAQuestionAheadOfAnOlderQueuedDigest() {
+        var digest = queueDigest();
+        var question = ask("Answer my question before the weekly recap");
+        assertThat(turnRows.findClaimableIds(workspace.getId(), List.of(question.getId())))
+                .containsExactly(question.getId());
+        var run = claim();
+        assertThat(run.fence().runId()).isEqualTo(question.getRunId());
+        assertThat(turnRows.findById(question.getId()))
+                .get()
+                .extracting(MentorTurn::getStatus)
+                .isEqualTo(MentorTurn.Status.RUNNING);
+        assertThat(turnRows.findById(digest.getId()))
+                .get()
+                .extracting(MentorTurn::getStatus)
+                .isEqualTo(MentorTurn.Status.QUEUED);
+    }
+
+    @Test
+    void shouldRunARealDigestStimulusThroughTheConversationClaimAndEnd() {
+        var digest = queueDigest();
+        when(digests.refuses(workspace.getId(), digest.getId())).thenReturn(false);
+        var digestKind = new DigestSandboxRunKind(kind);
+        var sandbox = sandbox();
+        var lease = sandboxes
+                .lease(
+                        sandbox,
+                        Set.of(AgentRunKind.TURN, AgentRunKind.DIGEST),
+                        () -> digestKind.beforeWrite(sandbox),
+                        claimed -> digestKind.claimed(
+                                new SandboxRun(sandbox, claimed.fence(), claimed.kind(), claimed.attempt())))
+                .orElseThrow();
+        var run = new SandboxRun(sandbox, lease.fence(), lease.kind(), lease.attempt());
+        assertThat(lease.kind()).isEqualTo(AgentRunKind.DIGEST);
+        assertThat(runs.find(lease.fence().run()).orElseThrow().getBand()).isEqualTo(AgentRunBand.BACKGROUND);
+        assertThat(held.held(run, false).turnId()).isEqualTo(digest.getId());
+        assertThat(digestKind.attempt(run)).isPresent();
+        var copies = mock(ConversationClaims.class);
+        var contexts = HephTurnFixtures.contexts(beans, mock(ResultHistoryQuery.class), copies);
+        assertThat(contexts.showFeedback(held.held(run, false), UUID.randomUUID()))
+                .isFalse();
+        verifyNoInteractions(copies);
+        assertThat(beans.getBean(MentorEntryRepository.class)
+                        .findByWorkspaceIdAndTurnIdAndKind(workspace.getId(), digest.getId(), MentorEntry.Kind.USER))
+                .isEmpty();
+        assertThat(beans.getBean(MentorEntryRepository.class)
+                        .findByWorkspaceIdAndTurnIdAndKind(workspace.getId(), digest.getId(), MentorEntry.Kind.DIGEST))
+                .isPresent();
+        assertThat(Boolean.TRUE.equals(transactions.execute(status -> {
+                    digestKind.beforeWrite(sandbox);
+                    return digestKind.end(run, SandboxRunKind.Outcome.HANDED_ON);
+                })))
+                .isTrue();
+        assertThat(turnRows.findById(digest.getId()).orElseThrow().getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
+        assertThat(runs.find(run.fence().run()).orElseThrow().getState()).isEqualTo(AgentRunState.QUEUED);
+        assertThatThrownBy(() -> held.held(run, false)).isInstanceOf(StaleRunException.class);
     }
 
     @Test

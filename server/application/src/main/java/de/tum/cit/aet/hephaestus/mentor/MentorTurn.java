@@ -96,10 +96,16 @@ public class MentorTurn implements Persistable<UUID> {
     /** Where the developer asked. */
     public enum Surface {
         APP,
-        SLACK;
+        SLACK,
+        /** Proactive work starts from a real system entry, never a developer's fabricated question. */
+        SYSTEM;
 
         MentorEntry.Surface entrySurface() {
-            return this == SLACK ? MentorEntry.Surface.SLACK : MentorEntry.Surface.APP;
+            return switch (this) {
+                case APP -> MentorEntry.Surface.APP;
+                case SLACK -> MentorEntry.Surface.SLACK;
+                case SYSTEM -> MentorEntry.Surface.SYSTEM;
+            };
         }
     }
 

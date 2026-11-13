@@ -3129,7 +3129,7 @@ export type MentorThreadSummary = {
 };
 
 /**
- * One question to Hephaestus and the work to answer it
+ * One conversation turn: a requested answer or an opted-in proactive digest
  */
 export type MentorTurn = {
 	/**
@@ -3153,11 +3153,11 @@ export type MentorTurn = {
 	 */
 	partial?: MentorTurnPartial;
 	/**
-	 * The submission that asked; the question's entry carries the same value
+	 * The submission or schedule key; the stimulus entry carries the same value
 	 */
 	requestId: string;
 	status: "QUEUED" | "RUNNING" | "DONE" | "FAILED" | "STOPPED";
-	surface: "APP" | "SLACK";
+	surface: "APP" | "SLACK" | "SYSTEM";
 	/**
 	 * Why a queued turn has not started. FREE_HEPH: a server may start it, and every conversation slot of the deployment is taken, so it starts when one is free. Absent when the turn does not wait, waits for an earlier question of its conversation, or waits for a reason that the server does not know, such as a server without a configured conversation turn capacity.
 	 */

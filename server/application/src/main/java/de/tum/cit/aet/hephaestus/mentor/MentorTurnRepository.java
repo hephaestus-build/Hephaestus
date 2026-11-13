@@ -352,7 +352,7 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
     Instant databaseClock();
 
     @WorkspaceAgnostic("Fleet-wide queue depth for the mentor.turn.queued gauge")
-    long countByStatus(MentorTurn.Status status);
+    long countByStatusAndSurfaceNot(MentorTurn.Status status, MentorTurn.Surface surface);
 
     /**
      * Lets this transaction commit without waiting for its WAL flush. PostgreSQL serialises the commits of every

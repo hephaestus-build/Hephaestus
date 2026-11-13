@@ -49,6 +49,14 @@ public class TurnRunsAdapter implements TurnRuns {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public UUID enqueueDigest(long workspaceId, UUID conversationId, Duration startWithin) {
+        return runs.enqueue(
+                        workspaceId, AgentRunKind.DIGEST, AgentRunBand.BACKGROUND, subject(conversationId), startWithin)
+                .id();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public void requireCurrent(long workspaceId, UUID turnId, UUID runId, int epoch) {
         try {
             runs.requireCurrent(new AgentRunFence(runId, workspaceId, epoch));
@@ -94,6 +102,7 @@ public class TurnRunsAdapter implements TurnRuns {
     @Transactional(propagation = Propagation.MANDATORY)
     public void moveQueued(long workspaceId, UUID fromConversationId, UUID toConversationId) {
         runs.moveQueued(workspaceId, AgentRunKind.TURN, subject(fromConversationId), subject(toConversationId));
+        runs.moveQueued(workspaceId, AgentRunKind.DIGEST, subject(fromConversationId), subject(toConversationId));
     }
 
     @Override

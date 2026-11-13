@@ -164,7 +164,7 @@ COPY --from=gateway /opt/pi-sdk/dist/ /opt/pi-sdk/
 RUN node --input-type=module -e 'await import("/opt/pi-sdk/driver.js")'
 ENTRYPOINT ["node", "/opt/pi-sdk/driver.js"]
 
-LABEL hephaestus.agent.runtime-contract=18
+LABEL hephaestus.agent.runtime-contract=19
 LABEL hephaestus.agent.node-version=${NODE_VERSION}
 LABEL hephaestus.agent.pi-version=${PI_VERSION}
 

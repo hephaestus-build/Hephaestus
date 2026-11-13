@@ -87,7 +87,7 @@ public class MentorSlackMessages {
                         .stream()
                         .filter(entry -> !entry.isRedacted())
                         .toList();
-        MentorEntry question = entries.findQuestion(turn.getWorkspaceId(), turn.getId());
+        MentorEntry question = entries.findStimulus(turn.getWorkspaceId(), turn.getId());
         return Optional.of(new SlackTurn(
                 turn,
                 conversation.get().getAccountId(),

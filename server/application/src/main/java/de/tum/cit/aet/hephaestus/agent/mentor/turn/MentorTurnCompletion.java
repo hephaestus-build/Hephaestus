@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.turn;
 
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
+import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.DigestAdmission;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
@@ -67,6 +68,7 @@ public class MentorTurnCompletion {
     static final String SLACK_PARTLY = "Slack showed only part of what Hephaestus's answer showed of the feedback.";
 
     private final MentorTurnService turns;
+    private final DigestAdmission digests;
     private final ConversationClaims conversationClaims;
     private final LlmUsageEventRepository usage;
     private final MeterRegistry meters;
@@ -116,6 +118,9 @@ public class MentorTurnCompletion {
      */
     @Transactional
     public MentorTurn end(long workspaceId, UUID turnId, int epoch, UUID runId, Ending ending) {
+        Ending admitted = digests.refuses(workspaceId, turnId)
+                ? new Ending(MentorTurn.Status.FAILED, List.of(), null, DigestAdmission.REFUSED, null, null)
+                : ending;
         return finished(
                 turns.end(
                         workspaceId,
@@ -123,9 +128,9 @@ public class MentorTurnCompletion {
                         epoch,
                         runId,
                         new MentorTurnService.Ending(
-                                ending.outcome(), ending.entries(), ending.lastPartial(), ending.error())),
+                                admitted.outcome(), admitted.entries(), admitted.lastPartial(), admitted.error())),
                 epoch,
-                ending);
+                admitted);
     }
 
     /**
@@ -152,6 +157,7 @@ public class MentorTurnCompletion {
                 .addKeyValue("turn.id", turnId)
                 .addKeyValue("turn.attempt", attempt)
                 .addKeyValue("turn.outcome", status)
+                .addKeyValue("turn.surface", turn.getSurface().name().toLowerCase(Locale.ROOT))
                 .log("Conversation turn ended"));
         if (turn.getStatus() == MentorTurn.Status.FAILED) {
             String failureCause = ending.cause() == null ? turn.getFailureCause() : ending.cause();
@@ -167,7 +173,7 @@ public class MentorTurnCompletion {
                     lastFailedCall == null ? "none" : lastFailedCall.describe()));
         }
         bill(turn, attempt);
-        if (turn.getSurface() == MentorTurn.Surface.APP || turn.getStatus() != MentorTurn.Status.DONE) {
+        if (turn.getSurface() != MentorTurn.Surface.SLACK || turn.getStatus() != MentorTurn.Status.DONE) {
             // The app shows what a DONE answer showed; a stopped or failed answer may have shown what it called.
             receiptsDue(
                     turn,
@@ -177,15 +183,16 @@ public class MentorTurnCompletion {
                     CUT_OFF,
                     NOT_SHOWN);
         }
-        completed(
-                switch (turn.getStatus()) {
-                    case STOPPED -> "stopped";
-                    case FAILED -> "failed";
-                    default -> "success";
-                });
+        if (turn.getSurface() != MentorTurn.Surface.SYSTEM)
+            completed(
+                    switch (turn.getStatus()) {
+                        case STOPPED -> "stopped";
+                        case FAILED -> "failed";
+                        default -> "success";
+                    });
         Instant started = turn.getStartedAt();
         Instant finished = turn.getFinishedAt();
-        if (started != null && finished != null) {
+        if (turn.getSurface() != MentorTurn.Surface.SYSTEM && started != null && finished != null) {
             duration(meters).record(Duration.between(started, finished));
         }
         return turn;
@@ -261,10 +268,10 @@ public class MentorTurnCompletion {
                 LEASE_LOST,
                 NOT_SHOWN));
         bill(turn, lost.attempt());
-        if (turn.getStatus() == MentorTurn.Status.QUEUED) {
+        if (turn.getSurface() != MentorTurn.Surface.SYSTEM && turn.getStatus() == MentorTurn.Status.QUEUED) {
             meters.counter(AgentMetrics.MENTOR_TURN_RETRIED).increment();
         }
-        completed("lease_expired");
+        if (turn.getSurface() != MentorTurn.Surface.SYSTEM) completed("lease_expired");
     }
 
     /** Bills an attempt that the ledger took back ({@link MentorTurnService#requeueRunning}). */

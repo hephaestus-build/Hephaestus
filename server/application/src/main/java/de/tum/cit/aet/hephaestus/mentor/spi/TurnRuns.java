@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.mentor.spi;
 
 import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
+import java.time.Duration;
 import java.util.UUID;
 
 /**
@@ -12,6 +13,9 @@ public interface TurnRuns {
 
     /** Queues the run of a new turn of the conversation, and returns its id. */
     UUID enqueue(long workspaceId, UUID conversationId);
+
+    /** Queues proactive digest work behind this conversation's current holder, in the background band. */
+    UUID enqueueDigest(long workspaceId, UUID conversationId, Duration startWithin);
 
     /**
      * Holds the run under {@code epoch} until the caller's transaction ends.

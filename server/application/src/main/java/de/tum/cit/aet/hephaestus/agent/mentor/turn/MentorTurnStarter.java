@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.exception.MentorRefusedException;
+import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.DigestAdmission;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetExhaustedException;
@@ -19,6 +20,7 @@ import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -53,6 +55,7 @@ public class MentorTurnStarter {
 
     private final MentorTurnService turns;
     private final MentorAdmission admission;
+    private final DigestAdmission digests;
     private final MentorTurnRepository turnRows;
     private final PersonDataWriteFence writeFence;
     private final MeterRegistry meters;
@@ -91,9 +94,11 @@ public class MentorTurnStarter {
 
     private Optional<StartedTurn> admitInContext(MentorTurn turn) {
         long accountId = turns.accountId(turn);
-        meters.counter(AgentMetrics.MENTOR_TURN_STARTED).increment();
+        if (digests.refuses(turn.getWorkspaceId(), turn.getId())) return decline(turn, DigestAdmission.REFUSED);
+        if (turn.getSurface() != MentorTurn.Surface.SYSTEM)
+            meters.counter(AgentMetrics.MENTOR_TURN_STARTED).increment();
         Instant startedAt = turn.getStartedAt();
-        if (turn.getAttempt() == 1 && startedAt != null) {
+        if (turn.getSurface() != MentorTurn.Surface.SYSTEM && turn.getAttempt() == 1 && startedAt != null) {
             // A retry waited since its lease expired, which the row does not keep.
             Timer.builder(AgentMetrics.MENTOR_TURN_QUEUE_WAIT)
                     .description("From a question to the start of its first attempt")
@@ -158,12 +163,16 @@ public class MentorTurnStarter {
                 turn.getAttempt(),
                 turn.getRunId(),
                 new MentorTurnService.Ending(MentorTurn.Status.FAILED, List.of(), null, reason));
-        log.info(
-                "conversation turn {} attempt {} was declined at its start: {}",
-                turn.getId(),
-                turn.getAttempt(),
-                reason);
-        meters.counter(AgentMetrics.MENTOR_TURN_COMPLETED, "outcome", "failed").increment();
+        log.atInfo()
+                .addKeyValue("turn.surface", turn.getSurface().name().toLowerCase(Locale.ROOT))
+                .log(
+                        "conversation turn {} attempt {} was declined at its start: {}",
+                        turn.getId(),
+                        turn.getAttempt(),
+                        reason);
+        if (turn.getSurface() != MentorTurn.Surface.SYSTEM)
+            meters.counter(AgentMetrics.MENTOR_TURN_COMPLETED, "outcome", "failed")
+                    .increment();
         return Optional.empty();
     }
 }

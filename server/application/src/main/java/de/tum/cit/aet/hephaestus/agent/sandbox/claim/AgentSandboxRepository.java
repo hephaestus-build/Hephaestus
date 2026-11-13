@@ -110,12 +110,18 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
      * Holds a live sandbox until the caller's transaction ends, so no reaper or release takes it back meanwhile; the
      * reaper skips a row that this holds.
      */
-    @Query(value = "SELECT" + COLUMNS + """
+    String LIVE_ROW = "SELECT" + COLUMNS + """
              FROM agent_sandbox WHERE id = :id AND workspace_id = :workspaceId AND subject_key = :subjectKey
               AND state IN ('REQUESTED', 'READY') AND shutdown_at > clock_timestamp()
-            FOR SHARE
-            """, nativeQuery = true)
+            """;
+
+    @Query(value = LIVE_ROW + " FOR SHARE", nativeQuery = true)
     Optional<SandboxRow> lockLive(
+            @Param("id") UUID id, @Param("workspaceId") long workspaceId, @Param("subjectKey") String subjectKey);
+
+    /** One pull holds the physical sandbox exclusively, so competing run claims never wait on each other under shared locks. */
+    @Query(value = LIVE_ROW + " FOR UPDATE SKIP LOCKED", nativeQuery = true)
+    Optional<SandboxRow> tryLockForClaim(
             @Param("id") UUID id, @Param("workspaceId") long workspaceId, @Param("subjectKey") String subjectKey);
 
     /** The first claim of a run is cold only when this physical sandbox served no earlier claim. */

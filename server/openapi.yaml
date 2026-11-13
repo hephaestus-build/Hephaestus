@@ -17511,7 +17511,8 @@ components:
       - replyCount
     MentorTurn:
       type: object
-      description: One question to Hephaestus and the work to answer it
+      description: "One conversation turn: a requested answer or an opted-in proactive\
+        \ digest"
       properties:
         attempt:
           type: integer
@@ -17546,8 +17547,8 @@ components:
           description: Hephaestus's answer in progress; only while the turn runs
         requestId:
           type: string
-          description: The submission that asked; the question's entry carries the
-            same value
+          description: The submission or schedule key; the stimulus entry carries
+            the same value
         status:
           type: string
           enum:
@@ -17561,6 +17562,7 @@ components:
           enum:
           - APP
           - SLACK
+          - SYSTEM
         waitingFor:
           type: string
           description: "Why a queued turn has not started. FREE_HEPH: a server may\

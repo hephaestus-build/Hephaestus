@@ -12,6 +12,29 @@ A subject is the review, conversation or action that the work belongs to, such a
 Each kind's domain row points to its run and keeps its own lifecycle.
 Review jobs and conversation turns are on runs. `AgentRuns` in `agent.run` is the only writer of a run.
 
+## Proactive digests
+
+`DIGEST` is proactive conversation work in the `BACKGROUND` band.
+Its subject is `conversation:<id>`, the same subject as a requested `TURN`.
+The subject's unique lease prevents both from writing to the conversation at the same time.
+Both kinds share the conversation capacity limit, sandbox runner, admission and turn lifecycle.
+Queued digests yield to questions of the same conversation.
+A leased digest keeps its fence until it ends.
+A pull takes the physical sandbox write lock without waiting.
+Other pulls return no work while that claim commits.
+
+`DigestSchedule` selects opted-in accounts on Monday and enqueues one turn per workspace and week.
+The turn has the surface `SYSTEM` and a real `DIGEST` stimulus with its captured fact membership.
+It has no developer question.
+The context source renders that membership under the current evidence permissions.
+
+`DigestAdmission` checks the subscription, membership, delivery window and available facts before work starts, before each model call and at completion.
+Every captured feedback item and profile change must still be eligible, even when other facts remain.
+A refused completion stores no answer and sends no note.
+The digest stays out of the timeline until its turn is `DONE`.
+The answer and notification actions then commit together.
+The outbox owns the Slack or email send.
+
 ## States
 
 | State | Meaning | Next states |

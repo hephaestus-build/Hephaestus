@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
+import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.DigestAdmission;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
@@ -23,6 +24,7 @@ class ProxyRequestPolicy {
     private final ProductFeedbackDraftCalls drafts;
     private final LlmModelResolver resolver;
     private final EgressPolicy egress;
+    private final DigestAdmission digests;
     private final ReviewJobRepository jobs;
     private final MentorTurnRepository turns;
     private final ReviewMemberAiPolicy reviews;
@@ -60,7 +62,8 @@ class ProxyRequestPolicy {
             case PRODUCT_FEEDBACK_DRAFT, PROBE -> false;
             case MENTOR_TURN ->
                 turns.findAccountIdByIdAndWorkspaceId(attempt.sourceId(), workspaceId)
-                        .filter(account -> routing.allows(workspaceId, account, model))
+                        .filter(account -> !digests.refuses(workspaceId, attempt.sourceId())
+                                && routing.allows(workspaceId, account, model))
                         .isPresent();
             // Past ledger rows only: no call bills a practice script source.
             case PRACTICE_SCRIPT_DECISION, PRACTICE_SCRIPT_EMBEDDING, PRACTICE_SCRIPT_RERANKING -> false;

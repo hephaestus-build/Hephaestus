@@ -7,5 +7,12 @@ public enum AgentRunKind {
     /** A review's composition: the feedback written from its admitted results, after its measurement ended. */
     REVIEW_COMPOSE,
     /** A turn that answers one question in a conversation ({@code TurnRunKind}); its subject is the conversation. */
-    TURN
+    TURN,
+    /** Proactive model-written text in a conversation, started by its system digest stimulus. */
+    DIGEST;
+
+    /** Work that shares the conversation runner and its capacity. */
+    public boolean conversation() {
+        return this == TURN || this == DIGEST;
+    }
 }
