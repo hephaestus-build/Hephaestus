@@ -325,7 +325,13 @@ Do not put two callouts in a row.
 - Put a new page at `docs/<guide>/<name>.md`. The name is the subject in kebab-case, such as `backup-restore`. Do not repeat the guide name.
 - Use `<name>.mdx` for a new page only if it uses a component. Docusaurus reads both extensions as MDX, so existing pages keep their extension.
 - Add the page to its guide's sidebar, `docs/sidebars.<guide>.ts`, in the category of its task.
-- Do not rename a published page in a content change. A rename breaks links from outside the site. Rename pages only in a change to the guide's structure.
+- When you move, rename, or delete a page, update every link to it in the same pull request.
+  Look in `docs/`, the code, the chart, and the repository instructions.
+  The docs build fails on a broken link inside the docs.
+  Released entries in `CHANGELOG.md` and `MIGRATION.md` keep their links.
+- Do not add a redirect. A removed page shows the 404 page, which offers search and the three guides.
+- When a page keeps its topic, keep the IDs of the headings that other pages or the app link to.
+  If you reword such a heading, give it its old ID: `## Respond to feedback {#respond-to-feedback}`.
 - Do not put a date in a file name. A page states the current behavior. Git keeps the history.
 
 ## Checks
