@@ -16,10 +16,7 @@ import {
 	CodeBlockCopyButton,
 	CodeBlockFooter,
 	CodeBlockHeader,
-	CodeBlockLine,
 } from "@/components/ui/code-block";
-import { useHighlightedCode } from "@/hooks/use-highlighted-code";
-import { codeLanguage } from "@/lib/code-language";
 import { hasText } from "@/lib/text";
 
 export interface ResultEvidenceProps {
@@ -141,7 +138,6 @@ function CitationQuote({
 	const side = citationSide(citation);
 	const location = citationLocation(citation);
 	const { quote, path } = citation;
-	const lines = useHighlightedCode(quote ?? "", location === undefined ? "" : codeLanguage(path));
 	const fileName =
 		location === undefined || path === null ? undefined : path.slice(path.lastIndexOf("/") + 1);
 	const copy = quote !== null && (
@@ -182,11 +178,7 @@ function CitationQuote({
 					</p>
 				</CodeBlockFooter>
 			) : (
-				<CodeBlockContent wrap>
-					{lines.map((line, index) => (
-						<CodeBlockLine key={index}>{line}</CodeBlockLine>
-					))}
-				</CodeBlockContent>
+				<CodeBlockContent wrap>{quote}</CodeBlockContent>
 			)}
 			{hasText(citation.commit) && (
 				<CodeBlockFooter>

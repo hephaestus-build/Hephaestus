@@ -10,7 +10,6 @@ import {
 	CodeBlockActions,
 	CodeBlockContent,
 	CodeBlockCopyButton,
-	CodeBlockLine,
 } from "@/components/ui/code-block";
 import {
 	Sheet,
@@ -19,7 +18,6 @@ import {
 	SheetHeader,
 	SheetTitle,
 } from "@/components/ui/sheet";
-import { useHighlightedCode } from "@/hooks/use-highlighted-code";
 import { hasText } from "@/lib/text";
 
 import { eventLabel, resultLabel } from "./audit-format";
@@ -41,7 +39,6 @@ export function AuditEventDetailSheet({
 	const account = event ? refLabel(event.account, event.accountId) : null;
 	const actor = event ? refLabel(event.actor, event.actingAccountId) : null;
 	const pretty = event ? prettyJson(event.details) : null;
-	const rawLines = useHighlightedCode(pretty ?? "", "json");
 	const workspaceName =
 		event?.workspaceId == null ? undefined : resolveWorkspaceName?.(event.workspaceId);
 
@@ -116,11 +113,7 @@ export function AuditEventDetailSheet({
 									<CodeBlockActions>
 										<CodeBlockCopyButton value={pretty} aria-label="Copy raw data" />
 									</CodeBlockActions>
-									<CodeBlockContent className="max-h-48">
-										{rawLines.map((line, index) => (
-											<CodeBlockLine key={index}>{line}</CodeBlockLine>
-										))}
-									</CodeBlockContent>
+									<CodeBlockContent className="max-h-48">{pretty}</CodeBlockContent>
 								</CodeBlock>
 							) : (
 								"—"

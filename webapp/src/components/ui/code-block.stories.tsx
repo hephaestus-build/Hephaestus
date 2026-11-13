@@ -11,7 +11,6 @@ import {
 	CodeBlockLine,
 	CodeBlockTitle,
 } from "@/components/ui/code-block";
-import { useHighlightedCode } from "@/hooks/use-highlighted-code";
 import { expectNoPageOverflow } from "@/stories/reflow";
 
 const source = [
@@ -35,9 +34,6 @@ const writeText = fn(async (_text: string) => {
 /**
  * The shadcn code block, as installed. Code and tool output are set in it wherever the app shows
  * them: evidence quotes, practice scripts, stored JSON and provider errors.
- *
- * Highlighting is the `useHighlightedCode` hook's, not the block's. The hook returns plain lines at
- * once and coloured lines when Shiki has loaded, so a block never waits empty for its words.
  */
 const meta = {
 	component: CodeBlock,
@@ -78,14 +74,11 @@ export const Default: Story = {
 	},
 };
 
-function HighlightedSource({ startLine }: { startLine: number }) {
-	const lines = useHighlightedCode(source, "ts");
+function NumberedSource({ startLine }: { startLine: number }) {
 	return (
 		<CodeBlock>
 			<CodeBlockContent lineNumbers startLine={startLine}>
-				{lines.map((line, index) => (
-					<CodeBlockLine key={index}>{line}</CodeBlockLine>
-				))}
+				{source}
 			</CodeBlockContent>
 		</CodeBlock>
 	);
@@ -93,7 +86,7 @@ function HighlightedSource({ startLine }: { startLine: number }) {
 
 /** A passage from the middle of a file is numbered from the line it starts on. */
 export const StartLine: Story = {
-	render: () => <HighlightedSource startLine={60} />,
+	render: () => <NumberedSource startLine={60} />,
 	play: async () => {
 		// The code is a tab stop of its own, so a keyboard can scroll it.
 		await userEvent.tab();

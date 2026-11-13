@@ -12,11 +12,8 @@ import {
 	CodeBlockCopyButton,
 	CodeBlockFooter,
 	CodeBlockHeader,
-	CodeBlockLine,
 	CodeBlockTitle,
 } from "@/components/ui/code-block";
-import { useHighlightedCode } from "@/hooks/use-highlighted-code";
-import { codeLanguage } from "@/lib/code-language";
 import { hasText } from "@/lib/text";
 
 import { type EvidenceLocation, evidenceLineRangeLabel, splitPath } from "./evidence";
@@ -35,11 +32,7 @@ export function EvidenceFileBlock({ location }: EvidenceFileBlockProps) {
 	// Folded sides have the same recorded coordinates; the range locates both quoted versions.
 	const lineRange = locatedByLine ? evidenceLineRangeLabel(location) : undefined;
 	const sideLabel = change === undefined && side !== undefined ? DIFF_SIDE_LABELS[side] : undefined;
-	const language = locatedByLine ? codeLanguage(location.path) : "";
 	// Each side of a change is a passage of a different version of the file, so each is read alone.
-	const before = useHighlightedCode(change?.before ?? "", language);
-	const after = useHighlightedCode(change?.after ?? "", language);
-	const quoted = useHighlightedCode(snippet ?? "", language);
 	const copyText = change === undefined ? snippet : undefined;
 	const SourceIcon = source.icon;
 
@@ -96,9 +89,7 @@ export function EvidenceFileBlock({ location }: EvidenceFileBlockProps) {
 						lineNumbers={locatedByLine && location.startLine !== undefined}
 						startLine={location.startLine}
 					>
-						{before.map((line, index) => (
-							<CodeBlockLine key={index}>{line}</CodeBlockLine>
-						))}
+						{change.before}
 					</CodeBlockContent>
 					<CodeBlockHeader>
 						<CodeBlockTitle>After</CodeBlockTitle>
@@ -116,9 +107,7 @@ export function EvidenceFileBlock({ location }: EvidenceFileBlockProps) {
 						lineNumbers={locatedByLine && location.startLine !== undefined}
 						startLine={location.startLine}
 					>
-						{after.map((line, index) => (
-							<CodeBlockLine key={index}>{line}</CodeBlockLine>
-						))}
+						{change.after}
 					</CodeBlockContent>
 				</>
 			)}
@@ -128,9 +117,7 @@ export function EvidenceFileBlock({ location }: EvidenceFileBlockProps) {
 					lineNumbers={locatedByLine && location.startLine !== undefined}
 					startLine={location.startLine}
 				>
-					{quoted.map((line, index) => (
-						<CodeBlockLine key={index}>{line}</CodeBlockLine>
-					))}
+					{snippet}
 				</CodeBlockContent>
 			)}
 			{hasText(location.commit) && (

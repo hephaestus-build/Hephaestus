@@ -244,10 +244,10 @@ export const FoldedObjectSource: Story = {
 			snippet: ['"title" : "Page size"', '"body" : ""'].join("\n"),
 		},
 	},
-	play: async ({ canvas }) => {
+	play: async ({ canvas, canvasElement }) => {
 		await expect(canvas.getAllByText("The reviewed work itself")).toHaveLength(1);
-		await expect(canvas.getByText('"title" : "Page size"')).toBeVisible();
-		await expect(canvas.getByText('"body" : ""')).toBeVisible();
+		await expect(canvasElement).toHaveTextContent('"title" : "Page size"');
+		await expect(canvasElement).toHaveTextContent('"body" : ""');
 		// An object locator points into the runner's own file, so no line number is shown for either.
 		await expect(canvas.queryByText("line 4")).toBeNull();
 	},
