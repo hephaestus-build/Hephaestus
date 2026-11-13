@@ -13,12 +13,13 @@ import {
 	verdict,
 	type Panel,
 } from "./feedback-eval/gate.ts";
-import { asStringArray, parseJson } from "./lib/json.ts";
+import { parseJson } from "./lib/json.ts";
 
 const { values } = parseArgs({
 	options: {
 		output: { type: "string" },
 		model: { type: "boolean", default: false },
+		base: { type: "string" },
 	},
 });
 const output = path.resolve(values.output ?? ".context/feedback-eval-gate");
@@ -31,12 +32,57 @@ const catalog = catalogPractices(
 	readJson("server/application/src/main/resources/practices/default-catalog.json"),
 );
 const compositionsFile = readJson("scripts/feedback-eval/compositions.json");
+
+/** The manifest at the merge base. A base without one is the change that adds the gate. */
+function baseManifest(): unknown {
+	if (values.base === undefined) {
+		return;
+	}
+	const shown = spawnSync("git", ["show", `${values.base}:scripts/feedback-eval/gate.json`], {
+		encoding: "utf8",
+	});
+	if (shown.status !== 0) {
+		const listed = spawnSync("git", ["cat-file", "-e", `${values.base}^{commit}`]);
+		if (listed.status !== 0) {
+			throw new Error(`--base ${values.base} is not a commit in this checkout`);
+		}
+		return;
+	}
+	return parseJson(shown.stdout);
+}
+
+/**
+ * G6: the bundled practice scripts are deterministic, so each runs over the authored corpus and must
+ * give its recorded snapshot. An intended change records new snapshots in the same pull request.
+ */
+function practiceScripts(): string[] {
+	const corpus = "docker/agents/practice-scripts/corpus.test.ts";
+	const run = spawnSync("node", ["--test", "--test-reporter=tap", corpus], {
+		encoding: "utf8",
+		maxBuffer: 64 * 1024 * 1024,
+	});
+	if (run.status === 0) {
+		return [];
+	}
+	const differing = [...run.stdout.matchAll(/^not ok \d+ - (?<name>.+)$/gmu)].map(
+		(match) => match.groups?.name,
+	);
+	return differing.length === 0
+		? [`${corpus} failed with exit status ${String(run.status)}; run it to see why`]
+		: differing.map(
+				(slug) =>
+					`${slug ?? "a program"} gives other leads than its snapshot; if intended, run node --test --test-update-snapshots ${corpus}`,
+			);
+}
+
 const checks = deterministic({
 	gate,
+	base: baseManifest(),
 	compositions: compositionsFile,
 	claims: readJson("scripts/feedback-eval/cases.json"),
 	catalog,
 	read: readText,
+	scripts: practiceScripts(),
 });
 const deterministicPassed = checks.every((check) => check.problems.length === 0);
 
@@ -56,7 +102,8 @@ function runPanel(): { panel: Panel; model: Model | null } {
 		return {
 			panel: {
 				status: "not-run",
-				reason: "The model panel runs only on a pull request (--model).",
+				reason:
+					"This run asked for the deterministic checks only. CI / Feedback eval panel runs the model panel (--model).",
 			},
 			model: null,
 		};
@@ -65,7 +112,7 @@ function runPanel(): { panel: Panel; model: Model | null } {
 		return {
 			panel: {
 				status: "skipped",
-				reason: `No model credential in this run: ${missing.join(", ")} not set. A forked pull request never gets secrets.`,
+				reason: `No model provider in this run: ${missing.join(", ")} not set. In CI, the repository variables FEEDBACK_EVAL_BASE_URL and FEEDBACK_EVAL_MODEL and the secret FEEDBACK_EVAL_API_KEY set them, and a forked pull request gets no secret. GitHub Models, which needed no secret, was retired on 2026-07-30.`,
 			},
 			model: null,
 		};
@@ -113,9 +160,7 @@ function runPanel(): { panel: Panel; model: Model | null } {
 }
 
 const { panel, model } = runPanel();
-const prLabels = process.env.PR_LABELS ?? "";
-const labels = prLabels === "" ? [] : asStringArray(parseJson(prLabels), "PR_LABELS");
-const result = verdict(checks, panel, labels.includes(gate.acceptLabel));
+const result = verdict(checks, panel);
 const report = { version: 1, gateVersion: gate.version, checks, panel, model, verdict: result };
 writeFileSync(path.join(output, "feedback-eval-gate.json"), `${JSON.stringify(report, null, 2)}\n`);
 
@@ -145,13 +190,15 @@ const lines = [
 	),
 	"",
 	panelLines(panel),
-	panel.status === "skipped" && !result.pass
-		? `\nTo accept the skip, a maintainer adds the \`${gate.acceptLabel}\` label and re-runs this job.`
-		: "",
 ].join("\n");
 process.stdout.write(`${lines}\n`);
 const summaryFile = process.env.GITHUB_STEP_SUMMARY ?? "";
 if (summaryFile !== "") {
 	appendFileSync(summaryFile, `${lines}\n`);
+}
+// The nightly report reads whether the panel passed, fell below a floor or was skipped.
+const outputFile = process.env.GITHUB_OUTPUT ?? "";
+if (outputFile !== "") {
+	appendFileSync(outputFile, `status=${panel.status}\n`);
 }
 process.exitCode = result.pass ? 0 : 1;

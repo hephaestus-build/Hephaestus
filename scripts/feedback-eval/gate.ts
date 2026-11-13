@@ -15,7 +15,6 @@ import { deterministicChecks } from "./score.ts";
 export interface GateConfig {
 	version: number;
 	description: string;
-	acceptLabel: string;
 	claims: Record<string, string>;
 	panel: { cases: Record<string, string>; reasoningEffort: string; maxOutputTokens: number };
 	floors: {
@@ -24,7 +23,8 @@ export interface GateConfig {
 		raiseRecall: number;
 		withholdCorrect: number;
 	};
-	clauses: { criterion: string; file: string; text: string }[];
+	clauses: { criterion: string; file: string; text: string; paragraphSha256: string }[];
+	practices: Record<string, string>;
 	occasionGaps: string[];
 }
 
@@ -38,17 +38,16 @@ const validate = new Ajv2020({ strict: true }).compile<GateConfig>({
 	required: [
 		"version",
 		"description",
-		"acceptLabel",
 		"claims",
 		"panel",
 		"floors",
 		"clauses",
+		"practices",
 		"occasionGaps",
 	],
 	properties: {
 		version: { type: "integer", minimum: 1 },
 		description: { type: "string" },
-		acceptLabel: { type: "string", minLength: 1 },
 		claims: { ...digests, minProperties: 1 },
 		panel: {
 			type: "object",
@@ -77,14 +76,16 @@ const validate = new Ajv2020({ strict: true }).compile<GateConfig>({
 			items: {
 				type: "object",
 				additionalProperties: false,
-				required: ["criterion", "file", "text"],
+				required: ["criterion", "file", "text", "paragraphSha256"],
 				properties: {
 					criterion: { type: "string", minLength: 1 },
 					file: { type: "string", minLength: 1 },
 					text: { type: "string", minLength: 1 },
+					paragraphSha256: { type: "string", pattern: "^[0-9a-f]{64}$" },
 				},
 			},
 		},
+		practices: { ...digests, minProperties: 1 },
 		occasionGaps: { type: "array", uniqueItems: true, items: { type: "string" } },
 	},
 });
@@ -96,12 +97,26 @@ export function parseGateConfig(value: unknown): GateConfig {
 	return value;
 }
 
+const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
+
 /** A pinned case's digest: its JSON as the fixture file holds it. */
-export const caseDigest = (value: unknown) =>
-	createHash("sha256").update(JSON.stringify(value)).digest("hex");
+export const caseDigest = (value: unknown) => sha256(JSON.stringify(value));
 
 /** Prompt files wrap lines anywhere, so a clause matches on its words, not on its line breaks. */
 const words = (text: string) => text.replaceAll(/\s+/gu, " ").trim();
+
+/**
+ * The paragraph of `source` that holds `clause`, as words. A substring check cannot judge meaning, so
+ * the gate pins the whole paragraph: any edit around a trust clause shows as a changed digest.
+ */
+export function clauseParagraph(source: string, clause: string): string | undefined {
+	return source
+		.split(/\n[ \t]*\n/u)
+		.map(words)
+		.find((paragraph) => paragraph.includes(words(clause)));
+}
+
+export const paragraphDigest = (paragraph: string) => sha256(paragraph);
 
 export interface Check {
 	id: string;
@@ -116,6 +131,28 @@ export interface CatalogPractice {
 	criteria: string;
 	appliesWhen: unknown;
 }
+
+/**
+ * Where a practice defines its occasion: its Applies when gate and the Applicability section of its
+ * criteria. The gate checks that one is there; whether its words are right is the panel's question.
+ */
+export function occasionStatement(practice: CatalogPractice): string {
+	const section = /^## Applicability\n(?<body>[\s\S]*?)(?=^## |(?![\s\S]))/mu.exec(
+		practice.criteria,
+	)?.groups?.body;
+	return [
+		practice.appliesWhen === null || practice.appliesWhen === undefined
+			? ""
+			: JSON.stringify(practice.appliesWhen),
+		words(section ?? ""),
+	]
+		.filter((part) => part !== "")
+		.join("\n");
+}
+
+/** A practice's pin: its whole criteria and Applies when, so an edit to either needs a new pin. */
+export const practiceDigest = (practice: CatalogPractice) =>
+	sha256(JSON.stringify([practice.criteria, practice.appliesWhen ?? null]));
 
 const validateCatalog = new Ajv2020().compile<{
 	groups: {
@@ -179,10 +216,14 @@ export function catalogPractices(value: unknown): CatalogPractice[] {
 
 export interface Inputs {
 	gate: GateConfig;
+	/** The manifest at the base as parsed JSON, when the run has one. Its schema can be older. */
+	base: unknown;
 	compositions: unknown;
 	claims: unknown;
 	catalog: CatalogPractice[];
 	read: (file: string) => string | undefined;
+	/** G6: what the practice-script corpus run reported, one problem for each program that differs. */
+	scripts: string[];
 }
 
 const parsed = <T>(parse: () => T): T | string => {
@@ -211,46 +252,44 @@ const pinned = (kind: string, pinsOf: Record<string, string>, found: Map<string,
 			: [`${kind} ${id} changed (now ${actual}); pin it again under a new gate version`];
 	});
 
-/** G1–G5: the checks that need no model. Each must pass exactly. */
+/** G1–G6: the checks that need no model. Each must pass exactly. */
 export function deterministic(inputs: Inputs): Check[] {
 	const { gate, catalog, read } = inputs;
 	const compositions = parsed(() => parseCompositions(inputs.compositions));
 	const claims = parsed(() => parseCorpus(inputs.claims));
 	const invalid = [compositions, claims].filter((each) => typeof each === "string");
-	const fixtures = { id: "G2", name: "The fixtures are valid", problems: invalid };
-	const clauseCheck = {
-		id: "G4",
-		name: "The prompts carry every criterion clause",
-		problems: clauses(gate, read),
-	};
-	const occasionCheck = {
-		id: "G5",
-		name: "Each automated practice states its occasion",
-		problems: occasions(gate, catalog),
-	};
-	if (typeof compositions === "string" || typeof claims === "string") {
-		return [
-			unchecked("G1", "The fixed case set is unchanged"),
-			fixtures,
-			unchecked("G3", "The literal checks agree with the claim labels"),
-			clauseCheck,
-			occasionCheck,
-		];
-	}
+	const valid = typeof compositions !== "string" && typeof claims !== "string";
 	return [
+		valid
+			? {
+					id: "G1",
+					name: "The pinned cases match, and a changed manifest has a new version",
+					problems: [...pins(gate, compositions, claims), ...versioned(gate, inputs.base)],
+				}
+			: unchecked("G1", "The pinned cases match, and a changed manifest has a new version"),
+		{ id: "G2", name: "The fixtures are valid", problems: invalid },
+		valid
+			? {
+					id: "G3",
+					name: "The literal checks agree with the claim labels",
+					problems: literal(gate, claims),
+				}
+			: unchecked("G3", "The literal checks agree with the claim labels"),
 		{
-			id: "G1",
-			name: "The fixed case set is unchanged",
-			problems: pins(gate, compositions, claims),
+			id: "G4",
+			name: "Each criterion clause and its paragraph are unchanged",
+			problems: clauses(gate, read),
 		},
-		fixtures,
 		{
-			id: "G3",
-			name: "The literal checks agree with the claim labels",
-			problems: literal(gate, claims),
+			id: "G5",
+			name: "Each practice states its occasion, and its criteria are unchanged",
+			problems: occasions(gate, catalog),
 		},
-		clauseCheck,
-		occasionCheck,
+		{
+			id: "G6",
+			name: "Each practice script gives its recorded leads",
+			problems: inputs.scripts,
+		},
 	];
 }
 
@@ -263,6 +302,29 @@ function pins(gate: GateConfig, compositions: CompositionSet, claims: Corpus): s
 			new Map(compositions.cases.map((item) => [item.id, item])),
 		),
 	];
+}
+
+/** Every pin or floor change is a new manifest version, so the change cannot pass unnoticed. */
+function versioned(gate: GateConfig, base: unknown): string[] {
+	if (base === undefined) {
+		return [];
+	}
+	if (
+		typeof base !== "object" ||
+		base === null ||
+		!("version" in base) ||
+		typeof base.version !== "number"
+	) {
+		return ["the manifest at the base has no version"];
+	}
+	const { version: baseVersion, ...before } = base;
+	const { version, ...current } = gate;
+	if (version < baseVersion) {
+		return [`version ${version} is lower than ${baseVersion} at the base`];
+	}
+	return version === baseVersion && JSON.stringify(current) !== JSON.stringify(before)
+		? [`gate.json changed since the base, but its version is still ${version}`]
+		: [];
 }
 
 function literal(gate: GateConfig, claims: Corpus): string[] {
@@ -285,14 +347,21 @@ function literal(gate: GateConfig, claims: Corpus): string[] {
 }
 
 function clauses(gate: GateConfig, read: Inputs["read"]): string[] {
-	return gate.clauses.flatMap(({ criterion, file, text }) => {
+	return gate.clauses.flatMap(({ criterion, file, text, paragraphSha256 }) => {
 		const source = read(file);
 		if (source === undefined) {
 			return [`${criterion}: ${file} is missing`];
 		}
-		return words(source).includes(words(text))
+		const paragraph = clauseParagraph(source, text);
+		if (paragraph === undefined) {
+			return [`${criterion}: ${file} no longer says "${text}"`];
+		}
+		const actual = paragraphDigest(paragraph);
+		return actual === paragraphSha256
 			? []
-			: [`${criterion}: ${file} no longer says "${text}"`];
+			: [
+					`${criterion}: the paragraph around "${text}" in ${file} changed (now ${actual}); pin it again under a new gate version`,
+				];
 	});
 }
 
@@ -300,23 +369,29 @@ function occasions(gate: GateConfig, catalog: CatalogPractice[]): string[] {
 	const gaps = new Set(gate.occasionGaps);
 	const known = new Set(catalog.map((practice) => practice.slug));
 	return [
-		...catalog
-			.filter((practice) => practice.automated)
-			.flatMap((practice) => {
-				const stated =
-					(practice.appliesWhen !== null && practice.appliesWhen !== undefined) ||
-					/DOES_NOT_APPLY|does not apply/iu.test(practice.criteria);
-				if (!stated && !gaps.has(practice.slug)) {
-					return [`${practice.slug} states no occasion: say when it does not apply`];
-				}
-				if (stated && gaps.has(practice.slug)) {
-					return [`${practice.slug} now states its occasion: remove it from occasionGaps`];
-				}
-				return [];
-			}),
-		...gate.occasionGaps
+		...catalog.flatMap((practice) => {
+			const stated = occasionStatement(practice) !== "";
+			const problems: string[] = [];
+			if (practice.automated && !stated && !gaps.has(practice.slug)) {
+				problems.push(`${practice.slug} has no Applicability section and no Applies when gate`);
+			}
+			if (stated && gaps.has(practice.slug)) {
+				problems.push(`${practice.slug} now states its occasion: remove it from occasionGaps`);
+			}
+			const actual = practiceDigest(practice);
+			const pin = gate.practices[practice.slug];
+			if (pin === undefined) {
+				problems.push(`${practice.slug} has no pin (now ${actual})`);
+			} else if (pin !== actual) {
+				problems.push(
+					`${practice.slug}: its criteria or Applies when changed (now ${actual}); pin it again under a new gate version`,
+				);
+			}
+			return problems;
+		}),
+		...[...gaps, ...Object.keys(gate.practices)]
 			.filter((slug) => !known.has(slug))
-			.map((slug) => `occasionGaps names ${slug}, which the catalog does not have`),
+			.map((slug) => `gate.json names ${slug}, which the catalog does not have`),
 	];
 }
 
@@ -404,26 +479,23 @@ export function scorePanel(gate: GateConfig, compositions: CompositionSet, run: 
 	};
 }
 
-/** The job's verdict. A skipped panel passes only with the maintainer's acceptance label. */
-export function verdict(checks: Check[], panel: Panel, accepted: boolean) {
-	const deterministicFailed = checks.some((check) => check.problems.length > 0);
-	if (deterministicFailed) {
+/** The job's verdict. A skipped panel is not a pass: the run that asked for it fails with the reason. */
+export function verdict(checks: Check[], panel: Panel) {
+	if (checks.some((check) => check.problems.length > 0)) {
 		return { pass: false, reason: "A deterministic check failed." };
 	}
-	if (panel.status === "failed") {
-		return { pass: false, reason: "The model panel fell below a floor." };
+	switch (panel.status) {
+		case "failed": {
+			return { pass: false, reason: "The model panel fell below a floor." };
+		}
+		case "skipped": {
+			return { pass: false, reason: `The model panel was skipped. ${panel.reason}` };
+		}
+		case "passed": {
+			return { pass: true, reason: "Every check passed." };
+		}
+		case "not-run": {
+			return { pass: true, reason: "The deterministic checks passed." };
+		}
 	}
-	if (panel.status === "skipped") {
-		return accepted
-			? { pass: true, reason: "The model panel was skipped, and a maintainer accepted the skip." }
-			: {
-					pass: false,
-					reason:
-						"The model panel was skipped. A maintainer accepts the skip with the acceptance label, then re-runs this job.",
-				};
-	}
-	return {
-		pass: true,
-		reason: panel.status === "passed" ? "Every check passed." : "The deterministic checks passed.",
-	};
 }

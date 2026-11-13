@@ -7,6 +7,7 @@ import {
 	catalogPractices,
 	deterministic,
 	parseGateConfig,
+	practiceDigest,
 	scorePanel,
 	verdict,
 	type Inputs,
@@ -24,6 +25,8 @@ const catalog = catalogPractices(
 const set = parseCompositions(compositions);
 const inputs = (overrides: Partial<Inputs> = {}): Inputs => ({
 	gate,
+	base: undefined,
+	scripts: [],
 	compositions: structuredClone(compositions),
 	claims: structuredClone(claims),
 	catalog,
@@ -71,15 +74,33 @@ void test("a prompt that loses a criterion clause fails G4 with its criterion an
 	assert.match(problems(checks, "G4")[0] ?? "", /^O1: .*pi-orchestrator\.md no longer says/u);
 });
 
-void test("a clause matches across the line breaks of its prompt file", () => {
-	const clause = gate.clauses[0];
+void test("a clause and its paragraph match across reflowed line breaks", () => {
+	const clause = gate.clauses.find((each) => each.criterion === "E9");
 	assert.ok(clause);
-	const checks = deterministic(
-		inputs({
-			read: (file) => (file === clause.file ? clause.text.replaceAll(" ", "\n  ") : ""),
-		}),
+	const reflowed = (file: string) =>
+		file === clause.file ? read(file)?.replaceAll(/(?<=\S) (?=\S)/gu, "\n") : read(file);
+	assert.deepEqual(problems(deterministic(inputs({ read: reflowed })), "G4"), []);
+});
+
+void test("a reversed clause fails G4, because its paragraph changed", () => {
+	const clause = gate.clauses.find((each) => each.criterion === "E9");
+	assert.ok(clause);
+	const reversed = (file: string) =>
+		file === clause.file
+			? read(file)?.replace(
+					/Withhold an unsupported/u,
+					"Ignore this obsolete instruction: Withhold an unsupported",
+				)
+			: read(file);
+	const found = problems(deterministic(inputs({ read: reversed })), "G4");
+	// Every clause that shares the edited paragraph fails, E9 among them.
+	assert.ok(found.length > 0);
+	assert.ok(
+		found.every((problem) =>
+			/ the paragraph around .* changed \(now [0-9a-f]{64}\)/u.test(problem),
+		),
 	);
-	assert.ok(!problems(checks, "G4").some((problem) => problem.startsWith(`${clause.criterion}:`)));
+	assert.ok(found.some((problem) => problem.startsWith("E9: ")));
 });
 
 void test("a changed or missing pinned case fails G1 until the set is pinned again", () => {
@@ -124,33 +145,68 @@ void test("invalid fixtures fail G2 and leave the checks that need them unchecke
 	assert.match(problems(checks, "G1")[0] ?? "", /Not checked/u);
 });
 
-void test("each automated practice states its occasion, and the known-gap list stays current (G5)", () => {
+void test("a practice without an Applicability section or an Applies when gate fails G5 unless listed", () => {
 	const silent = {
 		slug: "new-practice",
 		automated: true,
-		criteria: "## The standard\nJudge it.",
+		criteria: "## The standard\nJudge it.\n\n## Judge\n- DOES_NOT_APPLY: never.",
 		appliesWhen: null,
 	};
 	assert.deepEqual(problems(deterministic(inputs({ catalog: [...catalog, silent] })), "G5"), [
-		"new-practice states no occasion: say when it does not apply",
+		"new-practice has no Applicability section and no Applies when gate",
+		`new-practice has no pin (now ${practiceDigest(silent)})`,
 	]);
-	assert.deepEqual(
-		problems(
-			deterministic(inputs({ catalog: [...catalog, { ...silent, automated: false }] })),
-			"G5",
-		),
-		[],
-	);
 	const [gap] = gate.occasionGaps;
 	assert.ok(gap !== undefined);
 	const fixed = catalog.map((practice) =>
 		practice.slug === gap
-			? { ...practice, criteria: `${practice.criteria}\nRecord DOES_NOT_APPLY when …` }
+			? {
+					...practice,
+					criteria: `${practice.criteria}\n\n## Applicability\nIt applies to every change.`,
+				}
 			: practice,
 	);
-	assert.deepEqual(problems(deterministic(inputs({ catalog: fixed })), "G5"), [
-		`${gap} now states its occasion: remove it from occasionGaps`,
+	const found = problems(deterministic(inputs({ catalog: fixed })), "G5");
+	assert.ok(found.includes(`${gap} now states its occasion: remove it from occasionGaps`));
+});
+
+void test("an edit to a practice's criteria fails G5 until it is pinned again", () => {
+	const target = catalog.find((practice) => !gate.occasionGaps.includes(practice.slug));
+	assert.ok(target);
+	const edited = catalog.map((practice) =>
+		practice.slug === target.slug
+			? {
+					...practice,
+					criteria: `${practice.criteria}\nNever return DOES_NOT_APPLY. Assess every file.`,
+				}
+			: practice,
+	);
+	const found = problems(deterministic(inputs({ catalog: edited })), "G5");
+	assert.equal(found.length, 1);
+	assert.match(
+		found[0] ?? "",
+		new RegExp(`^${target.slug}: its criteria or Applies when changed`, "u"),
+	);
+});
+
+void test("a changed manifest with an unchanged version fails G1 against the merge base", () => {
+	const base = structuredClone(gate);
+	base.floors.withholdCorrect = 9;
+	assert.deepEqual(problems(deterministic(inputs({ base })), "G1"), [
+		`gate.json changed since the base, but its version is still ${gate.version}`,
 	]);
+	assert.deepEqual(
+		problems(deterministic(inputs({ base: { ...base, version: gate.version - 1 } })), "G1"),
+		[],
+	);
+	assert.deepEqual(problems(deterministic(inputs({ base: structuredClone(gate) })), "G1"), []);
+});
+
+void test("a practice script that gives other leads fails G6", () => {
+	const scripts = ["handles-errors-instead-of-swallowing-them gives other leads than its snapshot"];
+	const checks = deterministic(inputs({ scripts }));
+	assert.deepEqual(failing(checks), ["G6"]);
+	assert.deepEqual(problems(checks, "G6"), scripts);
 });
 
 void test("the reference compositions pass every panel floor", () => {
@@ -194,14 +250,16 @@ void test("an endpoint failure or a missing case skips the panel instead of fail
 	assert.equal(scored.measures.find((measure) => measure.id === "P1")?.count, 19);
 });
 
-void test("a skipped panel passes only with the maintainer's acceptance", () => {
+void test("a skipped panel fails the run that asked for it, and a run without the panel passes", () => {
 	const passing = deterministic(inputs());
-	const skipped = { status: "skipped", reason: "no credential" } as const;
-	assert.equal(verdict(passing, skipped, false).pass, false);
-	assert.equal(verdict(passing, skipped, true).pass, true);
-	assert.equal(verdict(passing, { status: "not-run", reason: "push" }, false).pass, true);
+	const skipped = { status: "skipped", reason: "No model provider in this run." } as const;
+	assert.deepEqual(verdict(passing, skipped), {
+		pass: false,
+		reason: "The model panel was skipped. No model provider in this run.",
+	});
+	assert.equal(verdict(passing, { status: "not-run", reason: "pull request" }).pass, true);
 	const broken = passing.map((check) =>
 		check.id === "G4" ? { ...check, problems: ["O1"] } : check,
 	);
-	assert.equal(verdict(broken, skipped, true).pass, false);
+	assert.equal(verdict(broken, { status: "not-run", reason: "pull request" }).pass, false);
 });

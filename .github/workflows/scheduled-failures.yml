@@ -7,6 +7,7 @@ on:
       - "CI / Kubernetes nightly"
       - "Security / Rescan images"
       - "CI / Extension provider slots"
+      - "CI / Feedback eval panel"
       - "CI / Flaky test report"
       - "CI / Profile"
       - "CI / Server clean-build reference"
@@ -41,7 +42,7 @@ jobs:
           retries: 2
           script: |
             const run = context.payload.workflow_run;
-            if (['CI / Kubernetes nightly', 'Security / Rescan images'].includes(run.name)) {
+            if (['CI / Kubernetes nightly', 'CI / Feedback eval panel', 'Security / Rescan images'].includes(run.name)) {
               const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, {
                 ...context.repo, run_id: run.id, attempt_number: run.run_attempt, per_page: 100,
               });

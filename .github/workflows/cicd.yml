@@ -735,6 +735,8 @@ jobs:
               - 'docs/contributor/composition-label-rubric.md'
               - 'scripts/feedback-eval-gate.ts'
               - 'scripts/feedback-eval/**'
+              # G6 runs the practice-script corpus and its snapshots.
+              - 'docker/agents/practice-scripts/**'
 
   Changesets:
     name: "Release notes"
@@ -809,12 +811,11 @@ jobs:
           ZIZMOR_SARIF: ${{ steps.zizmor.outputs.output-file }}
         run: jq -e '[.runs[]?.results[]?] | length == 0' "$ZIZMOR_SARIF"
 
-  # Prompt regressions: docs/contributor/feedback-quality-evals.md § Feedback eval gate. The model
-  # panel runs only on a pull request, and only with the live-test credential, which no CI context
-  # has by default. Its skip is red until a maintainer accepts it with the label that gate.json names.
+  # Prompt regressions: docs/contributor/feedback-quality-evals.md § Feedback eval gate. These are
+  # the checks that need no model; feedback-eval-panel.yml composes the model panel.
   feedback-eval:
     name: Feedback eval gate
-    timeout-minutes: 40
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     needs: [detect-changes]
     if: |
@@ -827,11 +828,6 @@ jobs:
       )
     permissions:
       contents: read
-      pull-requests: read
-    env:
-      # A secret cannot appear in an `if:`, so the job carries only whether the credential exists.
-      MODEL_CREDENTIAL: ${{ secrets.HEPHAESTUS_LIVE_LLM_API_KEY != '' && secrets.HEPHAESTUS_LIVE_LLM_BASE_URL != '' && secrets.HEPHAESTUS_LIVE_LLM_MODEL != '' }}
-      MODEL_PANEL: ${{ github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -841,29 +837,22 @@ jobs:
         with:
           install: "frozen"
 
-      - name: Set up the Java build for the model panel
-        if: env.MODEL_PANEL == 'true' && env.MODEL_CREDENTIAL == 'true'
-        uses: ./.github/actions/setup-caches
-
-      # Read from the pull request rather than the event payload, so a re-run after the label was
-      # added sees it.
-      - name: Read the pull request labels
-        id: labels
-        if: env.MODEL_PANEL == 'true'
+      # G1 compares gate.json with the base, so a changed pin without a new version fails.
+      - name: Fetch the base commit
+        id: base
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
         env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: echo "names=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '[.labels[].name]')" >> "$GITHUB_OUTPUT"
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          echo "sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Run the feedback eval gate
         env:
-          PR_LABELS: ${{ steps.labels.outputs.names }}
-          HEPHAESTUS_LIVE_LLM_BASE_URL: ${{ env.MODEL_PANEL == 'true' && secrets.HEPHAESTUS_LIVE_LLM_BASE_URL || '' }}
-          HEPHAESTUS_LIVE_LLM_API_KEY: ${{ env.MODEL_PANEL == 'true' && secrets.HEPHAESTUS_LIVE_LLM_API_KEY || '' }}
-          HEPHAESTUS_LIVE_LLM_MODEL: ${{ env.MODEL_PANEL == 'true' && secrets.HEPHAESTUS_LIVE_LLM_MODEL || '' }}
+          BASE_SHA: ${{ steps.base.outputs.sha }}
         run: |
           args=(--output "$RUNNER_TEMP/feedback-eval-gate")
-          if [ "$MODEL_PANEL" = true ]; then args+=(--model); fi
+          if [ -n "$BASE_SHA" ]; then args+=(--base "$BASE_SHA"); fi
           node scripts/feedback-eval-gate.ts "${args[@]}"
 
       - name: Keep the gate result
