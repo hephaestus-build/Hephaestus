@@ -1,4 +1,6 @@
 import Link from "@docusaurus/Link";
+import { useLocation } from "@docusaurus/router";
+import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
 import Heading from "@theme/Heading";
 import type { Props } from "@theme/NotFound/Content";
 import SearchBar from "@theme/SearchBar";
@@ -20,7 +22,26 @@ const guides = [
 	},
 ];
 
+/** The same path in the other version: a page can exist in the release docs and not in the next ones, or the other way round. */
+function useOtherVersion(): { label: string; href: string } | undefined {
+	const { siteConfig } = useDocusaurusContext();
+	const { pathname } = useLocation();
+	const { docsChannel, siteUrl } = siteConfig.customFields ?? {};
+	if (typeof siteUrl !== "string") {
+		return undefined;
+	}
+	// GitHub Pages serves 404.html for every missing path. Before hydration, the path is that file.
+	const rest = pathname.startsWith(siteConfig.baseUrl)
+		? pathname.slice(siteConfig.baseUrl.length)
+		: "";
+	const path = rest === "404.html" ? "" : rest;
+	return docsChannel === "latest"
+		? { label: "Look for it in the docs of the next release", href: `${siteUrl}/next/${path}` }
+		: { label: "Look for it in the docs of the latest release", href: `${siteUrl}/${path}` };
+}
+
 export default function NotFoundContent({ className }: Props): ReactNode {
+	const otherVersion = useOtherVersion();
 	return (
 		<main className={["container margin-vert--xl", className].filter(Boolean).join(" ")}>
 			<div className="row">
@@ -34,6 +55,11 @@ export default function NotFoundContent({ className }: Props): ReactNode {
 					<div className={styles.search}>
 						<SearchBar />
 					</div>
+					{otherVersion === undefined ? null : (
+						<p>
+							<Link href={otherVersion.href}>{otherVersion.label}</Link>.
+						</p>
+					)}
 					<ul className={styles.guides}>
 						{guides.map((guide) => (
 							<li key={guide.to}>
