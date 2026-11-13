@@ -4,9 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
+import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
+import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -60,13 +63,65 @@ class AuditByDefaultGateDetectionTest {
         public void list() {}
     }
 
+    interface MutationPort {
+        void update(ConfigAuditEntry entry);
+
+        void update();
+    }
+
+    static class AuditedMutation implements MutationPort {
+        private final ConfigAuditPort audit;
+
+        AuditedMutation(ConfigAuditPort audit) {
+            this.audit = audit;
+        }
+
+        @Override
+        public void update(ConfigAuditEntry entry) {
+            audit.record(entry);
+        }
+
+        @Override
+        public void update() {}
+    }
+
+    interface MissingPort {
+        void update(ConfigAuditEntry entry);
+    }
+
+    static class PortCaller {
+        private final MutationPort mutations;
+        private final MissingPort missing;
+
+        PortCaller(MutationPort mutations, MissingPort missing) {
+            this.mutations = mutations;
+            this.missing = missing;
+        }
+
+        public void audited(ConfigAuditEntry entry) {
+            mutations.update(entry);
+        }
+
+        public void unrecorded() {
+            mutations.update();
+        }
+
+        public void missing(ConfigAuditEntry entry) {
+            missing.update(entry);
+        }
+    }
+
     private static final JavaClasses FIXTURES = new ClassFileImporter()
             .importClasses(
                     ClassGatedController.class,
                     MethodGatedController.class,
                     InstanceAdminGatedController.class,
                     UngatedController.class,
-                    ReadOnlyController.class);
+                    ReadOnlyController.class,
+                    MutationPort.class,
+                    AuditedMutation.class,
+                    MissingPort.class,
+                    PortCaller.class);
 
     static Stream<Arguments> endpoints() {
         return Stream.of(
@@ -90,6 +145,17 @@ class AuditByDefaultGateDetectionTest {
     @MethodSource("endpoints")
     void detectsAdminMutations(Class<?> controller, String method, boolean expected, String why) {
         assertThat(isAdminMutation(controller, method)).as(why).isEqualTo(expected);
+    }
+
+    @Test
+    void followsOnlyTheMatchingSpiImplementationToItsAuditRecorder() {
+        var caller = FIXTURES.get(PortCaller.class);
+        assertThat(AuditByDefaultArchTest.reachesRecorder(caller.getMethod("audited", ConfigAuditEntry.class)))
+                .isTrue();
+        assertThat(AuditByDefaultArchTest.reachesRecorder(caller.getMethod("unrecorded")))
+                .isFalse();
+        assertThat(AuditByDefaultArchTest.reachesRecorder(caller.getMethod("missing", ConfigAuditEntry.class)))
+                .isFalse();
     }
 
     private static boolean isAdminMutation(Class<?> controller, String method) {

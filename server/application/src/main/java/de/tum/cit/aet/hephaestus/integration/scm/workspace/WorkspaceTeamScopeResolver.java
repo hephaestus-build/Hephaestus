@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.workspace;
 
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries.OrganizationScope;
 import java.util.Objects;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
@@ -21,10 +22,20 @@ public class WorkspaceTeamScopeResolver {
         if (workspace == null || workspace.getId() == null || workspace.getAccountLogin() == null) {
             return Optional.empty();
         }
+        return resolveScope(new OrganizationScope(workspace.getOrganizationId(), workspace.getAccountLogin()));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<WorkspaceTeamScope> resolve(OrganizationScope scope) {
+        return resolveScope(scope);
+    }
+
+    private Optional<WorkspaceTeamScope> resolveScope(OrganizationScope scope) {
+        var login = scope.accountLogin();
+        if (login == null) return Optional.empty();
         return organizations
-                .find(workspace)
+                .find(scope.organizationId())
                 .map(organization -> new WorkspaceTeamScope(
-                        workspace.getAccountLogin(),
-                        Objects.requireNonNull(organization.getProvider().getId())));
+                        login, Objects.requireNonNull(organization.getProvider().getId())));
     }
 }

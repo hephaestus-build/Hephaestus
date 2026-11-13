@@ -4,7 +4,7 @@ import de.tum.cit.aet.hephaestus.activity.metrics.ActivityMetrics;
 import de.tum.cit.aet.hephaestus.activity.spi.ActivityRecorder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -28,7 +28,7 @@ public class ActivityEventService implements ActivityRecorder {
 
     private final ActivityEventRepository eventRepository;
     private final ActivityPersonWriteAdmission admission;
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceSummaryQuery workspaceQueries;
     private final Counter eventsRecordedCounter;
     private final Counter eventsDuplicateCounter;
     private final Counter eventsFailedCounter;
@@ -38,12 +38,12 @@ public class ActivityEventService implements ActivityRecorder {
 
     public ActivityEventService(
             ActivityEventRepository eventRepository,
-            WorkspaceRepository workspaceRepository,
+            WorkspaceSummaryQuery workspaceQueries,
             MeterRegistry meterRegistry,
             ActivityPersonWriteAdmission admission) {
         this.eventRepository = eventRepository;
         this.admission = admission;
-        this.workspaceRepository = workspaceRepository;
+        this.workspaceQueries = workspaceQueries;
         this.eventsRecordedCounter = Counter.builder(ActivityMetrics.ACTIVITY_EVENTS_RECORDED)
                 .description("Number of activity events recorded")
                 .register(meterRegistry);
@@ -127,7 +127,7 @@ public class ActivityEventService implements ActivityRecorder {
             Long targetId,
             @Nullable String sourceKey) {
         if (actor != null && !admission.hold(actor)) return false;
-        if (!workspaceRepository.existsById(workspaceId)) {
+        if (!workspaceQueries.exists(workspaceId)) {
             eventsFailedCounter.increment();
             log.warn(
                     "Failed to record event, workspace not found: scopeId={}, eventType={}, targetId={}",

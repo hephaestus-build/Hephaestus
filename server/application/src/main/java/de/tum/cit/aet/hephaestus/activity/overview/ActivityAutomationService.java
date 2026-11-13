@@ -10,8 +10,13 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,7 +24,11 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 class ActivityAutomationService {
     private final ActivityAutomationRepository automation;
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceQueries workspaces;
+
+    @PersistenceContext
+    private @Nullable EntityManager entityManager;
+
     private final UserRepository users;
     private final ActivityPeopleQueryRepository people;
     private final ConfigAuditPort audit;
@@ -46,7 +55,8 @@ class ActivityAutomationService {
         }
         if (treatAsAutomation) {
             var classification = new ActivityAutomation();
-            classification.setWorkspace(workspace);
+            classification.setWorkspace(
+                    Objects.requireNonNull(entityManager).getReference(Workspace.class, workspace.id()));
             classification.setUser(users.getReferenceById(userId));
             automation.save(classification);
         } else {

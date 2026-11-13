@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.workspace.spi;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewPolicy;
 import java.math.BigDecimal;
@@ -19,6 +20,19 @@ public interface WorkspaceQueries {
     List<RepositoryTarget> reviewRepositoryTargets(long workspaceId);
 
     Optional<LlmBudgets> llmBudgets(long workspaceId);
+
+    @Nullable
+    IdentityProviderType scmProviderType(long workspaceId);
+
+    Optional<PublishedWorkspace> publicActivityWorkspace(String slug);
+
+    Optional<OrganizationScope> organizationScope(long workspaceId);
+
+    record PublishedWorkspace(
+            long id, String displayName, boolean contributorsWithoutAccount, boolean allowSearchEngines) {}
+
+    record OrganizationScope(
+            @Nullable Long organizationId, @Nullable String accountLogin) {}
 
     record LlmBudgets(
             long workspaceId,

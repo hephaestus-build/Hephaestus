@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceSummaryFixtures;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
@@ -42,7 +43,8 @@ class ActivityEventServiceTest extends BaseUnitTest {
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
         Mockito.lenient().when(admission.holdActor(ArgumentMatchers.anyLong())).thenReturn(true);
-        service = new ActivityEventService(eventRepository, workspaceRepository, meterRegistry, admission);
+        service = new ActivityEventService(
+                eventRepository, WorkspaceSummaryFixtures.summaries(workspaceRepository), meterRegistry, admission);
     }
 
     @Test

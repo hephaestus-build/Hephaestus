@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.workspace.adapter;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceQueryService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryRepository;
@@ -10,6 +12,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +24,7 @@ public class WorkspaceQueriesAdapter implements WorkspaceQueries {
     private final WorkspaceRepository workspaces;
     private final RepositoryToMonitorRepository monitors;
     private final ReviewScopeRepositoryRepository targets;
+    private final WorkspaceQueryService metadata;
 
     @Override
     public Optional<ReviewWorkspace> findById(long workspaceId) {
@@ -53,6 +57,29 @@ public class WorkspaceQueriesAdapter implements WorkspaceQueries {
                 .findById(workspaceId)
                 .map(workspace -> new LlmBudgets(
                         workspace.getId(), workspace.getMonthlyLlmBudgetUsd(), workspace.getMonthlyByoLlmBudgetUsd()));
+    }
+
+    @Override
+    public @Nullable IdentityProviderType scmProviderType(long workspaceId) {
+        return workspaces.findById(workspaceId).map(metadata::scmProviderType).orElse(null);
+    }
+
+    @Override
+    public Optional<PublishedWorkspace> publicActivityWorkspace(String slug) {
+        return workspaces
+                .findPublicActivityWorkspace(slug)
+                .map(workspace -> new PublishedWorkspace(
+                        workspace.getId(),
+                        workspace.getDisplayName(),
+                        workspace.isPublicActivityContributorsWithoutAccount(),
+                        workspace.isPublicActivitySearchEngines()));
+    }
+
+    @Override
+    public Optional<OrganizationScope> organizationScope(long workspaceId) {
+        return workspaces
+                .findById(workspaceId)
+                .map(workspace -> new OrganizationScope(workspace.getOrganizationId(), workspace.getAccountLogin()));
     }
 
     private static ReviewWorkspace snapshot(Workspace workspace) {

@@ -5,8 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceCommands;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import java.math.BigDecimal;
+import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -103,6 +105,55 @@ class WorkspacePortsIntegrationTest extends BaseIntegrationTest {
         });
         assertThat(queries.llmBudgets(own.getId()).orElseThrow()).isEqualTo(stored);
         assertThat(queries.llmBudgets(other.getId()).orElseThrow()).isEqualTo(otherBefore);
+    }
+
+    @Autowired
+    WorkspaceMemberships members;
+
+    @Autowired
+    MembershipRepository memberships;
+
+    @Test
+    void shouldKeepActiveAndRetainedContributorChoicesScopedAndTransactional() {
+        var own = data.scenario();
+        var other = data.scenario();
+        long ownAccount = Objects.requireNonNull(own.account().getId());
+        long otherAccount = Objects.requireNonNull(other.account().getId());
+        var transaction = new TransactionTemplate(transactions);
+        transaction.executeWithoutResult(status -> {
+            members.setContributorHidden(own.workspace().getId(), ownAccount, true);
+            status.setRollbackOnly();
+        });
+        assertThat(memberships.findByWorkspace_IdAndId_AccountId(own.workspace().getId(), ownAccount))
+                .hasValueSatisfying(member -> {
+                    assertThat(member.isHidden()).isFalse();
+                    assertThat(member.getLeftAt()).isNull();
+                    assertThat(member.getRole()).isEqualTo(Membership.WorkspaceRole.OWNER);
+                });
+        transaction.executeWithoutResult(
+                status -> members.setContributorHidden(own.workspace().getId(), otherAccount, true));
+        var retained = memberships
+                .findByWorkspace_IdAndId_AccountId(own.workspace().getId(), otherAccount)
+                .orElseThrow();
+        assertThat(retained.isHidden()).isTrue();
+        assertThat(retained.getLeftAt()).isNotNull();
+        assertThat(retained.getRole()).isEqualTo(Membership.WorkspaceRole.MEMBER);
+        assertThat(members.activeRole(own.workspace().getId(), otherAccount)).isEmpty();
+        var leftAt = retained.getLeftAt();
+        transaction.executeWithoutResult(
+                status -> members.setContributorHidden(own.workspace().getId(), otherAccount, false));
+        assertThat(memberships.findByWorkspace_IdAndId_AccountId(own.workspace().getId(), otherAccount))
+                .hasValueSatisfying(member -> {
+                    assertThat(member.isHidden()).isFalse();
+                    assertThat(member.getLeftAt()).isEqualTo(leftAt);
+                });
+        assertThat(memberships.findByWorkspace_IdAndId_AccountId(
+                        other.workspace().getId(), otherAccount))
+                .hasValueSatisfying(member -> {
+                    assertThat(member.isHidden()).isFalse();
+                    assertThat(member.getLeftAt()).isNull();
+                    assertThat(member.getRole()).isEqualTo(Membership.WorkspaceRole.OWNER);
+                });
     }
 
     private long version(long workspaceId) {
