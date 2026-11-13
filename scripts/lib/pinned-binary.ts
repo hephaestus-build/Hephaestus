@@ -8,7 +8,7 @@ import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promise
 import path from "node:path";
 import { unzipSync } from "fflate";
 
-import { resolveCiTool } from "./ci-tool-resolver.ts";
+import { resolveCiTool, type ToolSource } from "./ci-tool-resolver.ts";
 import { environmentWithoutGitRepository } from "./git-environment.ts";
 import { CAPTURE_LIMIT_BYTES } from "./process.ts";
 import { PUSH_CHECK_ENV } from "./push-gates.ts";
@@ -78,6 +78,8 @@ export async function installPinnedBinary(options: {
 	allowDownload?: boolean;
 	/** An isolated source cache, such as a fixture's temporary directory. */
 	sourceCache?: string;
+	/** The sources to try, such as only a fixture's local server. The default is every release source. */
+	sources?: readonly ToolSource[];
 }): Promise<string> {
 	const { cache, version, asset, url, executable } = options;
 	const member = options.member ?? executable;
@@ -118,7 +120,7 @@ export async function installPinnedBinary(options: {
 				sha256: asset.sha256,
 				url: `${url}${asset.name}`,
 			},
-			{ cacheRoot: options.sourceCache, offline: !allowDownload },
+			{ cacheRoot: options.sourceCache, offline: !allowDownload, sources: options.sources },
 		));
 	} catch (error) {
 		if (!allowDownload) {

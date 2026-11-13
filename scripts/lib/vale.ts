@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { stringify } from "yaml";
 
+import type { ToolSource } from "./ci-tool-resolver.ts";
 import { asArray, asRecord, asString, parseJson } from "./json.ts";
 import { installPinnedBinary, toolCache } from "./pinned-binary.ts";
 import { CAPTURE_LIMIT_BYTES } from "./process.ts";
@@ -40,6 +41,7 @@ export async function installValeBinary(options: {
 	windows: boolean;
 	allowDownload?: boolean;
 	sourceCache?: string;
+	sources?: readonly ToolSource[];
 }): Promise<string> {
 	const { windows, ...pin } = options;
 	return installPinnedBinary({ ...pin, executable: windows ? "vale.exe" : "vale" });

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
 import {
@@ -16,6 +16,7 @@ import {
 import { createServer, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { createInterface } from "node:readline";
 import { test } from "node:test";
 import { zipSync } from "fflate";
 
@@ -27,9 +28,10 @@ import {
 	skillMetadataAlerts,
 	issueFormAlerts,
 } from "./check-prose.ts";
+import type { ToolSource } from "./lib/ci-tool-resolver.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { executableFromArchive, toolCache, verifyArchive } from "./lib/pinned-binary.ts";
-import { output } from "./lib/process.ts";
+import { fetchReleaseAssetDirect } from "./lib/release-asset.ts";
 import {
 	approvedWords,
 	contractions,
@@ -164,6 +166,43 @@ await test("every worktree of a clone reads one pinned-tool cache, so a new work
 	}
 });
 
+const fixtureSource: ToolSource = {
+	name: "direct",
+	read: async (subject) => fetchReleaseAssetDirect(subject.url),
+};
+
+/** An installer process: `ready` settles when it prints its first line, `finish` when it exits. */
+function startInstaller(command: string, args: string[]) {
+	const child = spawn(command, args, { stdio: ["pipe", "pipe", "inherit"] });
+	const lines: string[] = [];
+	createInterface({ input: child.stdout }).on("line", (line) => {
+		lines.push(line);
+	});
+	// `close` follows the end of stdout, so `lines` holds every line by then.
+	const closed = once(child, "close");
+	const failure = (code: unknown, signal: unknown) =>
+		new Error(`An installer exited (${String(code ?? signal)}): ${lines.join("\n")}`);
+	// Listens from the start: an installer prints `ready` once and then waits.
+	const ready = (async () => {
+		const first: unknown[] | undefined = await Promise.race([
+			once(child.stdout, "data").then(() => undefined),
+			closed,
+		]);
+		if (first !== undefined) {
+			throw failure(first[0], first[1]);
+		}
+	})();
+	const finish = async () => {
+		const exit: unknown[] = await closed;
+		const [code, signal] = exit;
+		if (code !== 0) {
+			throw failure(code, signal);
+		}
+		return lines;
+	};
+	return { child, ready, finish };
+}
+
 await test("concurrent Vale installers publish one verified binary and reuse it offline", async () => {
 	const cache = await mkdtemp(path.join(tmpdir(), "vale-cache-test-"));
 	const executable = new Uint8Array([1, 2, 3]);
@@ -175,6 +214,7 @@ await test("concurrent Vale installers publish one verified binary and reuse it 
 	const workers = 4;
 	let downloads = 0;
 	const responses: ServerResponse[] = [];
+	const children: ChildProcess[] = [];
 	const server = createServer((request, response) => {
 		// Another local process can probe a newly opened port. Only the installers' requests count.
 		if (request.url !== `/${asset.name}`) {
@@ -199,6 +239,7 @@ await test("concurrent Vale installers publish one verified binary and reuse it 
 		await once(server, "listening");
 		const address = server.address();
 		assert.ok(address !== null && typeof address !== "string");
+		// Every source but the fixture server would reach a real registry first.
 		const options = {
 			cache,
 			sourceCache: `${cache}-sources`,
@@ -207,35 +248,44 @@ await test("concurrent Vale installers publish one verified binary and reuse it 
 			asset,
 			url: `http://127.0.0.1:${address.port}/`,
 			windows: true,
+			sources: [fixtureSource],
 		};
+		// Each installer loads its modules, says so, and waits until the test closes its stdin. Thus,
+		// all of them check the empty cache together, however long a process takes to start.
 		const source = `
+			import { once } from "node:events";
 			import { installValeBinary } from ${JSON.stringify(new URL("lib/vale.ts", import.meta.url).href)};
+			import { fetchReleaseAssetDirect } from ${JSON.stringify(new URL("lib/release-asset.ts", import.meta.url).href)};
 			const [cache, version, name, sha256, url] = process.argv.slice(1);
-			console.log(await installValeBinary({ cache, sourceCache: cache + "-sources", version, asset: { name, sha256 }, url, windows: true, allowDownload: true }));
+			console.log("ready");
+			process.stdin.resume();
+			await once(process.stdin, "end");
+			const sources = [{ name: "direct", read: async (subject) => fetchReleaseAssetDirect(subject.url) }];
+			console.log(await installValeBinary({ cache, sourceCache: cache + "-sources", version, asset: { name, sha256 }, url, windows: true, allowDownload: true, sources }));
 		`;
 		await assert.rejects(installValeBinary({ ...options, allowDownload: false }), /is not cached/u);
 		assert.equal(downloads, 0);
-		const results = await Promise.all(
-			Array.from({ length: workers }, async () =>
-				output(
-					process.execPath,
-					[
-						"--input-type=module",
-						"-e",
-						source,
-						cache,
-						options.version,
-						asset.name,
-						asset.sha256,
-						options.url,
-					],
-					{ signal: AbortSignal.timeout(30_000) },
-				),
-			),
+		const installers = Array.from({ length: workers }, () =>
+			startInstaller(process.execPath, [
+				"--input-type=module",
+				"-e",
+				source,
+				cache,
+				options.version,
+				asset.name,
+				asset.sha256,
+				options.url,
+			]),
 		);
+		children.push(...installers.map(({ child }) => child));
+		await Promise.all(installers.map(async ({ ready }) => ready));
+		for (const { child } of installers) {
+			child.stdin.end();
+		}
+		const results = await Promise.all(installers.map(async ({ finish }) => finish()));
 		const binary = path.join(cache, `vale-test-${asset.sha256}`, "vale.exe");
 		assert.deepEqual(
-			results.map((stdout) => stdout.trim().split("\n").at(-1)),
+			results.map((lines) => lines.at(-1)),
 			Array.from({ length: workers }, () => binary),
 		);
 		assert.equal(downloads, workers);
@@ -274,6 +324,9 @@ await test("concurrent Vale installers publish one verified binary and reuse it 
 			asset.sha256,
 		);
 	} finally {
+		for (const child of children) {
+			child.kill();
+		}
 		server.closeAllConnections();
 		server.close();
 		await rm(cache, { recursive: true, force: true });
