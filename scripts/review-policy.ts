@@ -4,6 +4,8 @@
  * Only the default branch's copy runs, from pull-request-policy.yml on workflow_run; no pull-request code is executed.
  */
 
+import { asRecord, asString } from "./lib/json.ts";
+
 type ApiMethod<T> = (params: Record<string, unknown>) => Promise<{ data: T }>;
 
 export interface Review {
@@ -31,7 +33,7 @@ export interface CreateReviewRequest {
 }
 
 export interface GitHubApi {
-	readonly graphql: (query: string, variables: { subjectId: string }) => Promise<unknown>;
+	readonly graphql: (query: string, variables: Record<string, unknown>) => Promise<unknown>;
 	readonly paginate: (
 		endpoint: ApiMethod<Review[]>,
 		params: Record<string, unknown>,
@@ -134,7 +136,10 @@ export interface Decision {
 	readonly reason: string;
 }
 
+type ReviewDecision = "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;
+
 export interface DecisionInput {
+	readonly reviewDecision: ReviewDecision;
 	readonly author: string;
 	readonly headSha: string;
 	readonly maintainers: ReadonlySet<string>;
@@ -151,7 +156,7 @@ export const decide = (input: DecisionInput): Decision => {
 		};
 	}
 
-	if (approvalStands(input.reviews, input.headSha)) {
+	if (input.reviewDecision !== "REVIEW_REQUIRED" && approvalStands(input.reviews, input.headSha)) {
 		return {
 			kind: "standing",
 			reason: `This pull request is already approved for ${shortSha(input.headSha)}.`,
@@ -199,7 +204,36 @@ export const enforce = async ({ github, context, core }: EnforceInput): Promise<
 			per_page: 100,
 		});
 
+		// A stack can apply main's rules without dismissing an earlier review or moving the head.
+		// GitHub owns whether that review satisfies the current requirements.
+		const response = asRecord(
+			await github.graphql(
+				`query($owner:String!,$repo:String!,$number:Int!) {
+			repository(owner:$owner,name:$repo) { pullRequest(number:$number) { headRefOid reviewDecision } }
+		}`,
+				{ ...context.repo, number: pull.number },
+			),
+			"review response",
+		);
+		const current = asRecord(
+			asRecord(response.repository, "repository").pullRequest,
+			"pull request",
+		);
+		if (asString(current.headRefOid, "review head") !== pull.head.sha) {
+			core.info("The pull request head changed during review evaluation; a newer run decides.");
+			return;
+		}
+		const { reviewDecision } = current;
+		if (
+			reviewDecision !== null &&
+			reviewDecision !== "APPROVED" &&
+			reviewDecision !== "CHANGES_REQUESTED" &&
+			reviewDecision !== "REVIEW_REQUIRED"
+		) {
+			throw new Error("Unknown native review decision");
+		}
 		const decision = decide({
+			reviewDecision,
 			author: pull.user.login,
 			headSha: pull.head.sha,
 			maintainers,

@@ -65,6 +65,7 @@ void describe("pull request policy", () => {
 	void it("reads only a number and a known action from the record", () => {
 		assert.deepEqual(parseRecord("4142\nopened\n"), { number: 4142, action: "opened" });
 		assert.deepEqual(parseRecord("7\nsynchronize"), { number: 7, action: "synchronize" });
+		assert.deepEqual(parseRecord("4251\nstacked\n"), { number: 4251, action: "stacked" });
 		for (const forged of [
 			"",
 			"4142\n",
@@ -92,6 +93,15 @@ void describe("pull request policy", () => {
 				opened: true,
 			},
 		);
+		const stacked = await resolvePullRequest({
+			...current,
+			repo,
+			record: "12\nstacked\n",
+			headSha: head,
+		});
+		assert.ok(stacked);
+		assert.equal(stacked.number, 12);
+		assert.equal(stacked.opened, false);
 		const replaced = api({ headSha: "b".repeat(40) });
 		assert.equal(
 			await resolvePullRequest({ ...replaced, repo, record: "12\nsynchronize\n", headSha: head }),

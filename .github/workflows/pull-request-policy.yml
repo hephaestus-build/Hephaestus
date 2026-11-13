@@ -104,6 +104,7 @@ jobs:
             package.json
             scripts/pull-request-policy.ts
             scripts/review-policy.ts
+            scripts/lib/json.ts
             scripts/lib/model-attribution.ts
           sparse-checkout-cone-mode: false
 
