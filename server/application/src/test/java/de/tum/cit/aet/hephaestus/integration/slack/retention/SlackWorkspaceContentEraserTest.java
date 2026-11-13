@@ -4,6 +4,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 
+import de.tum.cit.aet.hephaestus.core.action.ActionKind;
+import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
@@ -12,6 +14,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.util.List;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -41,6 +44,9 @@ class SlackWorkspaceContentEraserTest extends BaseUnitTest {
     @Mock
     private ConversationFeedbackErasure conversationFeedbackErasure;
 
+    @Mock
+    private AgentActions actions;
+
     @InjectMocks
     private SlackWorkspaceContentEraser eraser;
 
@@ -48,6 +54,9 @@ class SlackWorkspaceContentEraserTest extends BaseUnitTest {
     void eraseWorkspace_dropsAllIngestedContentConsentAndDerivedFeedback() {
         eraser.eraseWorkspace(42L);
 
+        // The Slack notices, joins and consent announcements of the workspace.
+        verify(actions)
+                .eraseKinds(42L, List.of(ActionKind.SLACK_NOTICE, ActionKind.SLACK_JOIN, ActionKind.SLACK_CONSENT));
         // Derived CONVERSATION feedback first (before slack_thread, the artifact it points at).
         verify(conversationFeedbackErasure).eraseAllConversationForWorkspace(42L);
         // Ingested content.
