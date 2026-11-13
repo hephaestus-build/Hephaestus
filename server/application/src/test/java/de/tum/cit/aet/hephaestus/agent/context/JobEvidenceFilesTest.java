@@ -40,6 +40,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.ByteArrayOutputStream;
 import java.io.StringWriter;
+import java.lang.ref.Reference;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
@@ -152,24 +153,29 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         var meters = new SimpleMeterRegistry();
         var reconcile = new EvidenceReconciler(files, copies, inputs, clock, meters);
 
-        reconcile.reconcile();
-        assertThat(trace).exists();
-        assertThat(meters.get(AgentMetrics.EVIDENCE_RECONCILE_LAST_SUCCESS)
-                        .gauge()
-                        .value())
-                .isZero();
-        assertThat(meters.get(AgentMetrics.EVIDENCE_RECONCILE_FAILURES)
-                        .counter()
-                        .count())
-                .isEqualTo(1);
+        try {
+            reconcile.reconcile();
+            assertThat(trace).exists();
+            assertThat(meters.get(AgentMetrics.EVIDENCE_RECONCILE_LAST_SUCCESS)
+                            .gauge()
+                            .value())
+                    .isZero();
+            assertThat(meters.get(AgentMetrics.EVIDENCE_RECONCILE_FAILURES)
+                            .counter()
+                            .count())
+                    .isEqualTo(1);
 
-        Files.delete(obstruction);
-        reconcile.reconcile();
-        assertThat(trace).doesNotExist();
-        assertThat(meters.get(AgentMetrics.EVIDENCE_RECONCILE_LAST_SUCCESS)
-                        .gauge()
-                        .value())
-                .isEqualTo((double) clock.instant().getEpochSecond());
+            Files.delete(obstruction);
+            reconcile.reconcile();
+            assertThat(trace).doesNotExist();
+            assertThat(meters.get(AgentMetrics.EVIDENCE_RECONCILE_LAST_SUCCESS)
+                            .gauge()
+                            .value())
+                    .isEqualTo((double) clock.instant().getEpochSecond());
+        } finally {
+            // Micrometer holds a gauge's state by weak reference, and the reconciler owns that state.
+            Reference.reachabilityFence(reconcile);
+        }
     }
 
     @Test

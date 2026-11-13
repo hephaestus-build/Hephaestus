@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.lang.ref.Reference;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -130,6 +131,8 @@ class SandboxGatewayConfigurationTest extends BaseUnitTest {
             release.countDown();
             for (var socket : sockets) socket.close();
             server.stop();
+            // Micrometer holds a gauge's state by weak reference, and the gateway owns that state.
+            Reference.reachabilityFence(gateway);
         }
     }
 

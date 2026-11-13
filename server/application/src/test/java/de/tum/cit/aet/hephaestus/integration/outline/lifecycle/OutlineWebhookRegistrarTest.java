@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineWebhook
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineRouteCredential;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.lang.ref.Reference;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -210,11 +211,19 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         stubToken();
         stubCreateReturning("sub-99");
 
-        registrar(API_ORIGIN).healRoutes();
+        var registrar = registrar(API_ORIGIN);
+        try {
+            registrar.healRoutes();
 
-        verify(outlineApiClient).createWebhookSubscription(any(), any(), any(), any(), any(), any());
-        assertThat(meters.get("outline.webhook.subscription.unrouted").gauge().value())
-                .isEqualTo(1);
+            verify(outlineApiClient).createWebhookSubscription(any(), any(), any(), any(), any(), any());
+            assertThat(meters.get("outline.webhook.subscription.unrouted")
+                            .gauge()
+                            .value())
+                    .isEqualTo(1);
+        } finally {
+            // Micrometer holds a gauge's state by weak reference, and the registrar owns that state.
+            Reference.reachabilityFence(registrar);
+        }
     }
 
     @Test

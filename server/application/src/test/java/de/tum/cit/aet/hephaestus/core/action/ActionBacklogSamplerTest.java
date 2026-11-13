@@ -15,11 +15,12 @@ class ActionBacklogSamplerTest extends BaseUnitTest {
 
     private final AgentActionRepository repository = mock(AgentActionRepository.class);
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
+    // Micrometer gauges hold their state object by weak reference. The fixture keeps the sampler, which owns that
+    // state, for the meter's lifetime, as the Spring singleton does.
+    private final ActionBacklogSampler sampler = new ActionBacklogSampler(repository, meters);
 
     @Test
     void shouldStartWithAnEmptyBacklogForEveryKindAndOpenState() {
-        new ActionBacklogSampler(repository, meters);
-
         for (ActionKind kind : ActionKind.values()) {
             for (String state : List.of("PROPOSED", "ADMITTED", "EXECUTING"))
                 assertThat(backlog(kind, state)).isZero();
@@ -29,7 +30,6 @@ class ActionBacklogSamplerTest extends BaseUnitTest {
 
     @Test
     void shouldKeepTheLastValuesAndCountTheFailureWhenAPassFails() {
-        var sampler = new ActionBacklogSampler(repository, meters);
         when(repository.backlog()).thenReturn(List.of(row("EMAIL", "ADMITTED", 4, 900)));
         sampler.sample();
 
@@ -46,7 +46,6 @@ class ActionBacklogSamplerTest extends BaseUnitTest {
 
     @Test
     void shouldReadAKindWithNoOpenActionAsAnEmptyBacklogAgain() {
-        var sampler = new ActionBacklogSampler(repository, meters);
         when(repository.backlog()).thenReturn(List.of(row("EMAIL", "EXECUTING", 2, 0)));
         sampler.sample();
         when(repository.backlog()).thenReturn(List.of());
