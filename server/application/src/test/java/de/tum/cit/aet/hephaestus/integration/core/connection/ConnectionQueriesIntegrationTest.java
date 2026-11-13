@@ -8,8 +8,13 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.hibernate.Session;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +29,9 @@ class ConnectionQueriesIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ConnectionQueries queries;
+
+    @PersistenceContext
+    private @Nullable EntityManager entityManager;
 
     @Test
     void shouldReadWorkspaceMetadataAcrossStatesWithoutReadingAnotherWorkspace() {
@@ -55,6 +63,8 @@ class ConnectionQueriesIntegrationTest extends BaseIntegrationTest {
         foreign = connections.saveAndFlush(foreign);
 
         long foreignId = foreign.getId();
+        var session = Objects.requireNonNull(entityManager).unwrap(Session.class);
+        session.clear();
         assertThat(queries.findByWorkspaceId(mine.getId()))
                 .contains(
                         new ConnectionQueries.ConnectionView(
@@ -72,5 +82,6 @@ class ConnectionQueriesIntegrationTest extends BaseIntegrationTest {
                                 paused.getInstanceKey(),
                                 paused.getDisplayName()))
                 .noneMatch(row -> row.id() == foreignId);
+        assertThat(session.getStatistics().getEntityCount()).isZero();
     }
 }

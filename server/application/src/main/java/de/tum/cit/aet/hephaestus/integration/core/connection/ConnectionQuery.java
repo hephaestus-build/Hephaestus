@@ -28,34 +28,22 @@ public class ConnectionQuery implements ConnectionQueries {
 
     @Override
     public boolean hasActiveSourceInstance(long workspaceId, IntegrationKind kind, String origin) {
-        return connections.findByWorkspaceIdAndState(workspaceId, IntegrationState.ACTIVE).stream()
-                .filter(connection -> connection.getKind() == kind)
+        return connections.findActiveWorkspaceConfigs(List.of(workspaceId)).stream()
+                .filter(connection -> connection.kind() == kind)
                 .anyMatch(connection -> PersonSourceNamespace.from(
-                                kind.name(), SourceProviderNamespaces.configuredUrl(connection.getConfig()))
+                                kind.name(), SourceProviderNamespaces.configuredUrl(connection.config()))
                         .flatMap(namespace -> ScmOrigin.of(namespace.serverUrl()))
                         .equals(Optional.of(origin)));
     }
 
     @Override
     public List<ConnectionView> findByWorkspaceId(long workspaceId) {
-        return connections.findByWorkspaceId(workspaceId).stream()
-                .map(ConnectionQuery::view)
-                .toList();
+        return connections.findViewsByWorkspaceId(workspaceId);
     }
 
     @Override
     @WorkspaceAgnostic("Enumerates subscribed workspaces; each subscriber check binds its workspace")
     public List<Long> findWorkspaceIdsByKindAndState(IntegrationKind kind, IntegrationState state) {
         return connections.findWorkspaceIdsByKindAndState(kind, state);
-    }
-
-    private static ConnectionView view(Connection connection) {
-        return new ConnectionView(
-                connection.getId(),
-                connection.getKind(),
-                connection.getState(),
-                connection.getConfig(),
-                connection.getInstanceKey(),
-                connection.getDisplayName());
     }
 }
