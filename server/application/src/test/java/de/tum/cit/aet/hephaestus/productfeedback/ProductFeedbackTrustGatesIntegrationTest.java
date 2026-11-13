@@ -34,7 +34,9 @@ import de.tum.cit.aet.hephaestus.productfeedback.metrics.ProductFeedbackMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.Timestamp;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -46,10 +48,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
@@ -60,6 +65,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.AopTestUtils;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -171,6 +177,158 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
         return destinationRows
                 .findById(ProductFeedbackDestination.SINGLETON)
                 .orElseGet(ProductFeedbackDestination::new);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldAllowErasureDuringTheRepositoryLookup(boolean whileFiling) {
+        Account reporter = newReporter();
+        UUID id = send(reporter, false);
+        if (whileFiling) routing.routeAnswered();
+        dueForLookup(id, whileFiling);
+        var erased = new AtomicBoolean();
+        when(issues.repository(PRIVATE_REPOSITORY.fullName())).thenAnswer(call -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive())
+                    .isFalse();
+            if (erased.compareAndSet(false, true))
+                competingWriter(() -> feedbackErasure.eraseAccount(Objects.requireNonNull(reporter.getId())));
+            return Optional.of(PRIVATE_REPOSITORY);
+        });
+
+        if (whileFiling) filing.fileDue();
+        else routing.routeAnswered();
+
+        assertThat(erased).isTrue();
+        assertThat(filings.findById(id)).isEmpty();
+        assertThat(fileActions(id)).isZero();
+    }
+
+    @Test
+    void shouldKeepAReportPrivateWhenConsentIsWithdrawnDuringTheFilingLookup() {
+        Account reporter = newReporter();
+        UUID id = send(reporter, true);
+        heldForPublic(id);
+        dueForLookup(id, true);
+        var withdrawn = new AtomicBoolean();
+        when(issues.repository(PUBLIC_REPOSITORY.fullName())).thenAnswer(call -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive())
+                    .isFalse();
+            if (withdrawn.compareAndSet(false, true))
+                competingWriter(() -> reports.keepPrivate(Objects.requireNonNull(reporter.getId()), id));
+            return Optional.of(PUBLIC_REPOSITORY);
+        });
+
+        filing.fileDue();
+
+        var row = filings.findById(id).orElseThrow();
+        assertThat(withdrawn).isTrue();
+        assertThat(row.getState()).isEqualTo(FilingState.QUEUED);
+        assertThat(row.getRoute()).isEqualTo(FilingRoute.PRIVATE);
+        assertThat(row.isAllowPublic()).isFalse();
+        assertThat(row.getRepositoryId()).isNull();
+        assertThat(fileActions(id)).isZero();
+        filings.deleteById(id);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldApplyAnAdminDestinationChangeDuringTheFilingLookup(boolean pause) {
+        UUID id = privateReportDue();
+        dueForLookup(id, true);
+        var replacement = new ProductFeedbackIssues.Repository(99, "R_replacement", "acme/replacement", 7, true);
+        when(issues.repository(replacement.fullName())).thenReturn(Optional.of(replacement));
+        var changed = new AtomicBoolean();
+        when(issues.repository(PRIVATE_REPOSITORY.fullName())).thenAnswer(call -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive())
+                    .isFalse();
+            if (changed.compareAndSet(false, true))
+                competingWriter(() -> destinationService.update(
+                        new UpdateProductFeedbackDestinationsDTO(
+                                PUBLIC_REPOSITORY.fullName(),
+                                pause ? PRIVATE_REPOSITORY.fullName() : replacement.fullName(),
+                                null,
+                                50,
+                                pause,
+                                false),
+                        Objects.requireNonNull(admin.getId())));
+            return Optional.of(PRIVATE_REPOSITORY);
+        });
+
+        filing.fileDue();
+
+        assertThat(changed).isTrue();
+        var row = filings.findById(id).orElseThrow();
+        assertThat(row.getState()).isEqualTo(pause ? FilingState.SAVED : FilingState.QUEUED);
+        assertThat(row.getRepositoryId()).isNull();
+        assertThat(fileActions(id)).isZero();
+        filings.deleteById(id);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldRecoverAnExpiredLookupAndIgnoreItsLateAnswer(boolean whileFiling) throws Exception {
+        UUID id = whileFiling ? privateReportDue() : report();
+        dueForLookup(id, whileFiling);
+        Object service = AopTestUtils.getUltimateTargetObject(whileFiling ? filing : routing);
+        Clock previous = (Clock) Objects.requireNonNull(ReflectionTestUtils.getField(service, "clock"));
+        Instant now = previous.instant();
+        ReflectionTestUtils.setField(service, "clock", Clock.fixed(now, ZoneOffset.UTC));
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var first = new AtomicBoolean(true);
+        var replacement =
+                new ProductFeedbackIssues.Repository(99, "R_replacement", PRIVATE_REPOSITORY.fullName(), 7, true);
+        when(issues.repository(PRIVATE_REPOSITORY.fullName())).thenAnswer(call -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive())
+                    .isFalse();
+            if (first.compareAndSet(true, false)) {
+                entered.countDown();
+                if (!release.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("Lookup was not released");
+                return Optional.of(PRIVATE_REPOSITORY);
+            }
+            return Optional.of(replacement);
+        });
+        Runnable run = whileFiling ? filing::fileDue : routing::routeAnswered;
+        var pending = CompletableFuture.runAsync(run);
+        try {
+            assertThat(entered.await(10, TimeUnit.SECONDS)).isTrue();
+            competingWriter(run);
+            assertThat(filings.findById(id).orElseThrow().getRepositoryId()).isNull();
+            ReflectionTestUtils.setField(service, "clock", Clock.fixed(now.plusSeconds(180), ZoneOffset.UTC));
+            competingWriter(run);
+            assertThat(filings.findById(id).orElseThrow().getRepositoryId()).isEqualTo(replacement.id());
+        } finally {
+            release.countDown();
+            pending.get(10, TimeUnit.SECONDS);
+            ReflectionTestUtils.setField(service, "clock", previous);
+        }
+        var row = filings.findById(id).orElseThrow();
+        assertThat(row.getState()).isEqualTo(whileFiling ? FilingState.FILING : FilingState.QUEUED);
+        assertThat(row.getRepositoryId()).isEqualTo(replacement.id());
+        assertThat(fileActions(id)).isEqualTo(whileFiling ? 1 : 0);
+        filings.deleteById(id);
+    }
+
+    private void dueForLookup(UUID id, boolean whileFiling) {
+        transactionTemplate.executeWithoutResult(status -> {
+            var row = filings.lock(id).orElseThrow();
+            row.clearRecipient();
+            row.setNextAttemptAt(Instant.EPOCH.minusSeconds(1));
+            row.setFiledAfter(Instant.EPOCH);
+        });
+        if (whileFiling)
+            ReflectionTestUtils.setField(AopTestUtils.getUltimateTargetObject(filing), "lastWrite", Instant.EPOCH);
+    }
+
+    private long fileActions(UUID id) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT count(*) FROM agent_action WHERE lane_key=? AND kind='FILE_ISSUE'",
+                Long.class,
+                FileIssueAdapter.lane(id)));
+    }
+
+    private static void competingWriter(Runnable writer) throws Exception {
+        CompletableFuture.runAsync(writer).get(5, TimeUnit.SECONDS);
     }
 
     @Test
