@@ -175,5 +175,6 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0099](0099-aggregates-own-their-lifecycle-and-module-boundaries.md) | Each module owns its aggregates, declares its dependencies, and changes a lifecycle only through the aggregate | Accepted |
 | [0100](0100-the-server-serves-the-web-app.md) | The server serves the web app | Accepted |
 | [0101](0101-a-connection-cannot-adopt-an-upstream-resource-whose-removal-is-unresolved.md) | A connection cannot adopt an upstream resource whose removal is unresolved | Accepted |
+| [0103](0103-the-public-api-grows-only-by-addition-and-every-client-tolerates-what-it-does-not-know.md) | The public API grows only by addition, and every client tolerates what it does not know | Proposed |
 
 Template: [0000-template.md](0000-template.md).
