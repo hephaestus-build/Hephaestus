@@ -94,10 +94,9 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
-  # A night has no pull request to fail, so it keeps one tracking issue. A red or unfinished night
-  # comments on it with the commits since the last night whose panel measured and passed. The next
-  # such night closes it. A night without a provider runs no panel, so it never reaches this job.
-  # CI / Scheduled failures writes to the same issue if this job itself fails.
+  # A night has no pull request to fail, so it keeps one tracking issue (scripts/feedback-eval-night.ts).
+  # A night without a provider runs no panel, so it never reaches this job. CI / Scheduled failures
+  # calls the same script if this job itself fails or the night was cancelled before it ran.
   report:
     name: "Report a failure"
     needs: [panel]
@@ -106,8 +105,15 @@ jobs:
     timeout-minutes: 15
     permissions:
       actions: read
+      contents: read
       issues: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/feedback-eval-night.ts
+          sparse-checkout-cone-mode: false
+
       - name: Keep the tracking issue in step with the night
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
@@ -117,49 +123,13 @@ jobs:
         with:
           retries: 2
           script: |
-            const title = 'The nightly feedback eval panel is not green';
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const issues = await github.paginate(github.rest.issues.listForRepo, {
-              ...context.repo, creator: 'github-actions[bot]', state: 'open', per_page: 100,
+            const { reportNight } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/feedback-eval-night.ts`);
+            await reportNight(github, context.repo, {
+              runId: context.runId,
+              sha: context.sha,
+              serverUrl: context.serverUrl,
+              runUrl: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              result: process.env.RESULT,
+              status: process.env.STATUS,
+              artifactUrl: process.env.ARTIFACT_URL,
             });
-            const open = issues.find(issue => !issue.pull_request && issue.title === title);
-            if (process.env.RESULT === 'success' && process.env.STATUS === 'passed') {
-              if (open) {
-                await github.rest.issues.createComment({ ...context.repo, issue_number: open.number,
-                  body: `The panel measured and passed again on \`${context.sha}\`: ${runUrl}` });
-                await github.rest.issues.update({ ...context.repo, issue_number: open.number, state: 'closed' });
-              }
-              return;
-            }
-            // Only a night whose panel job succeeded measured and passed: a night without a provider
-            // succeeds with a skipped panel, so a successful run alone is not a green night.
-            const runs = await github.rest.actions.listWorkflowRuns({
-              ...context.repo, workflow_id: 'feedback-eval-panel.yml', event: 'schedule', per_page: 30,
-            });
-            let green = null;
-            for (const run of runs.data.workflow_runs) {
-              if (run.id === context.runId) continue;
-              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
-                ...context.repo, run_id: run.id, per_page: 100,
-              });
-              if (jobs.some(job => job.name === 'Model panel' && job.conclusion === 'success')) {
-                green = run.head_sha;
-                break;
-              }
-            }
-            const what = { failed: 'fell below a floor',
-              skipped: 'measured nothing, because the endpoint gave no composition for a panel case',
-              'ceiling-reached': 'stopped at its call ceiling' }[process.env.STATUS]
-              ?? `did not finish (${process.env.RESULT})`;
-            const range = green
-              ? `Commits since the last night that measured and passed: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/compare/${green}...${context.sha}`
-              : `No night of the last 30 measured and passed. This night ran on \`${context.sha}\`.`;
-            const body = [
-              `@hephaestus-build/maintainer: the nightly feedback eval panel ${what}.`, '',
-              range, `Run: ${runUrl}`, `Result: ${process.env.ARTIFACT_URL || 'no artifact was kept'}`,
-            ].join('\n');
-            if (open) {
-              await github.rest.issues.createComment({ ...context.repo, issue_number: open.number, body });
-            } else {
-              await github.rest.issues.create({ ...context.repo, title, body });
-            }

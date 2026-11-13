@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { glob, readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { runInNewContext } from "node:vm";
+import { constants, runInNewContext } from "node:vm";
 
 import { parse } from "yaml";
 
@@ -14,7 +14,12 @@ const observer = asRecord(
 const trigger = asRecord(asRecord(observer.on, "on").workflow_run, "workflow_run");
 const jobs = asRecord(observer.jobs, "jobs");
 const report = asRecord(jobs.report, "report");
-const step = asRecord(asArray(report.steps, "steps")[0], "step");
+const step = asRecord(
+	asArray(report.steps, "steps").find(
+		(each) => asRecord(each, "step").name === "Notify maintainers of a failed scheduled run",
+	),
+	"step",
+);
 const script = asString(asRecord(step.with, "with").script, "script");
 
 void test("every scheduled workflow has a notification owner", async () => {
@@ -133,26 +138,116 @@ void test("the shared reporter covers timeouts but leaves successful specific no
 });
 
 const PANEL = "CI / Feedback eval panel";
-const PANEL_TITLE = "The nightly feedback eval panel is not green";
 
-void test("the panel's fallback report and its own report keep one issue", async () => {
-	const panelWorkflow = await readFile(".github/workflows/feedback-eval-panel.yml", "utf8");
-	assert.ok(panelWorkflow.includes(`const title = '${PANEL_TITLE}';`));
-	assert.ok(script.includes(`'${PANEL_TITLE}'`));
+/** One page of earlier scheduled panel runs: run 41 measured and passed. */
+async function* greenNight() {
+	yield { data: [{ id: 41, head_sha: "a".repeat(40) }] };
+}
+
+/** Runs the shared reporter on a failed panel night, with the real report script it imports. */
+async function panelFallback(conclusion: string, runJobs: object[], open: object[] = []) {
+	const writes: { kind: string; input: Record<string, unknown> }[] = [];
+	const marks = new Map<unknown, string>();
+	const route = (name: string) => {
+		const call = async (input: Record<string, unknown>) => {
+			writes.push({ kind: name, input });
+			return {};
+		};
+		marks.set(call, name);
+		return call;
+	};
+	const rest = {
+		actions: {
+			listJobsForWorkflowRunAttempt: route("jobs"),
+			listWorkflowRuns: route("runs"),
+			listJobsForWorkflowRun: route("runJobs"),
+			listWorkflowRunArtifacts: route("artifacts"),
+		},
+		issues: {
+			listForRepo: route("issues"),
+			listComments: route("comments"),
+			create: route("create"),
+			createComment: route("comment"),
+			update: route("update"),
+		},
+	};
+	await runInNewContext(
+		`(async () => { ${script} })()`,
+		{
+			process: { env: { GITHUB_WORKSPACE: process.cwd() } },
+			context: {
+				repo: { owner: "owner", repo: "repo" },
+				serverUrl: "https://github.com",
+				payload: {
+					workflow_run: {
+						workflow_id: 9,
+						id: 42,
+						run_attempt: 1,
+						name: PANEL,
+						conclusion,
+						head_sha: "c".repeat(40),
+						html_url: "https://github.com/owner/repo/actions/runs/42",
+					},
+				},
+			},
+			github: {
+				rest,
+				paginate: Object.assign(
+					async (endpoint: unknown, input: Record<string, unknown>) => {
+						const name = marks.get(endpoint);
+						if (name === "jobs") {
+							return runJobs;
+						}
+						if (name === "issues") {
+							return open;
+						}
+						if (name === "runJobs") {
+							return input.run_id === 41 ? [{ name: "Model panel", conclusion: "success" }] : [];
+						}
+						return [];
+					},
+					{
+						iterator: (endpoint: unknown) => {
+							assert.equal(marks.get(endpoint), "runs");
+							return greenNight();
+						},
+					},
+				),
+			},
+		},
+		{ importModuleDynamically: constants.USE_MAIN_CONTEXT_DEFAULT_LOADER },
+	);
+	return writes.filter((write) => ["create", "comment", "update"].includes(write.kind));
+}
+
+void test("a cancelled night reaches the shared reporter only for the panel", () => {
+	const condition = asString(report.if, "report.if");
+	assert.match(
+		condition,
+		/github\.event\.workflow_run\.name == 'CI \/ Feedback eval panel' && github\.event\.workflow_run\.conclusion == 'cancelled'/u,
+	);
+	assert.equal(condition.match(/'cancelled'/gu)?.length, 1);
+});
+
+void test("the panel's fallback writes the panel's one issue with its commit range", async () => {
 	// The panel's own report succeeded: nothing to add.
 	assert.deepEqual(
-		await notify([], [], false, [{ name: "Report a failure", conclusion: "success" }], PANEL),
+		await panelFallback("failure", [{ name: "Report a failure", conclusion: "success" }]),
 		[],
 	);
-	// The report job timed out: the fallback opens the panel's issue, which the next green night closes.
-	const timedOut = [{ name: "Report a failure", conclusion: "timed_out", steps: [] }];
-	const [created] = await notify([], [], false, timedOut, PANEL);
+	// The report job died before writing: the fallback writes the issue with the same evidence.
+	const died = [{ name: "Report a failure", conclusion: "timed_out", steps: [] }];
+	const [created] = await panelFallback("cancelled", died);
 	assert.ok(created);
 	assert.equal(created.kind, "create");
-	assert.equal(created.input.title, PANEL_TITLE);
+	assert.equal(created.input.title, "The nightly feedback eval panel is not green");
+	const body = asString(created.input.body, "body");
+	assert.ok(body.includes(`compare/${"a".repeat(40)}...${"c".repeat(40)}`), body);
+	assert.match(body, /did not finish \(cancelled\)/u);
 	// With the panel's issue open, the fallback comments on it and opens no second issue.
-	const open = [{ number: 5, title: PANEL_TITLE, body: "the panel's own report" }];
-	const writes = await notify(open, [], false, timedOut, PANEL);
+	const writes = await panelFallback("failure", died, [
+		{ number: 5, title: "The nightly feedback eval panel is not green", body: "" },
+	]);
 	assert.deepEqual(
 		writes.map((write) => [write.kind, write.input.issue_number]),
 		[["comment", 5]],

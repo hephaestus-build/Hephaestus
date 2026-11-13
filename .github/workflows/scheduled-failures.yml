@@ -29,13 +29,25 @@ jobs:
     if: >-
       github.event.workflow_run.event == 'schedule' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
-      (github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'timed_out')
+      (
+        github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'timed_out' ||
+        (github.event.workflow_run.name == 'CI / Feedback eval panel' && github.event.workflow_run.conclusion == 'cancelled')
+      )
     runs-on: ubuntu-slim
     timeout-minutes: 15
     permissions:
       issues: write
       actions: read
+      contents: read
     steps:
+      # The default branch's own report script, never the failed run's code. Only the panel needs it.
+      - if: github.event.workflow_run.name == 'CI / Feedback eval panel'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/feedback-eval-night.ts
+          sparse-checkout-cone-mode: false
+
       - name: Notify maintainers of a failed scheduled run
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
@@ -55,17 +67,21 @@ jobs:
               // Keep the specific issue when its owner notified maintainers. Timeouts still need a reporter.
               if (handled) return;
             }
+            // The panel keeps one tracking issue with its commit range; its report script writes it.
+            if (run.name === 'CI / Feedback eval panel') {
+              const { reportNight } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/feedback-eval-night.ts`);
+              await reportNight(github, context.repo, {
+                runId: run.id, sha: run.head_sha, serverUrl: context.serverUrl, runUrl: run.html_url,
+                result: run.conclusion, status: '', artifactUrl: '',
+              });
+              return;
+            }
             const marker = `<!-- hephaestus:scheduled-failure:${run.workflow_id} -->`;
             const attempt = `<!-- run:${run.id}:${run.run_attempt} -->`;
             const issues = await github.paginate(github.rest.issues.listForRepo, {
               ...context.repo, creator: 'github-actions[bot]', state: 'open', per_page: 100,
             });
-            // The panel keeps one tracking issue by its title, and its next green night closes it, so its
-            // fallback report goes to that issue too.
-            const panelTitle = run.name === 'CI / Feedback eval panel'
-              ? 'The nightly feedback eval panel is not green' : null;
-            const existing = issues.find(issue => !issue.pull_request &&
-              (panelTitle ? issue.title === panelTitle : issue.body?.startsWith(marker)));
+            const existing = issues.find(issue => !issue.pull_request && issue.body?.startsWith(marker));
             const body = [
               marker, attempt,
               '@hephaestus-build/maintainer: a scheduled check needs attention.',
@@ -74,7 +90,7 @@ jobs:
               'Inspect the run logs. Close this issue after a successful run or a recorded decision.',
             ].join('\n');
             if (!existing) {
-              await github.rest.issues.create({ ...context.repo, title: panelTitle ?? `Scheduled check failed: ${run.name}`, body });
+              await github.rest.issues.create({ ...context.repo, title: `Scheduled check failed: ${run.name}`, body });
               return;
             }
             const comments = await github.paginate(github.rest.issues.listComments, {

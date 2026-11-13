@@ -320,7 +320,7 @@ A floor finds only a large regression. The [release eval](#release-feedback-eval
 
 Each case is one `CompositionEvalLiveTest` invocation, with 16,384 output tokens and medium reasoning effort.
 The composer loop sends at most 12 model calls for each case, and G7 keeps the pinned cases within 240 calls.
-The run also counts the calls that each case recorded. It stops before a case that could pass 240 calls, and after a case that passed its bound of 12.
+The run also counts the HTTP requests that each case recorded. The eval transport sends one request for each model call and never probes a second path. It stops before a case that could pass 240 calls, and after a case that passed its bound of 12.
 Such a run ends as "ceiling reached", not as a pass.
 
 The eval composer sends a failed model request once: a provider failure ends that case and is recorded as its failure.
@@ -349,10 +349,12 @@ The workflow opens the issue if it is not open.
 
 The comment links the run, the kept result and the commits since the last night whose panel measured and passed.
 A night counts as green only when its panel job succeeded. A successful run with a skipped panel does not count.
+The search pages through every successful scheduled run until it finds such a night. If there is none, the comment says so.
 The next night that measures and passes closes the issue with a link to its run.
 
 A pull request run and a manual run report in their job summary only.
-If the report job itself fails, `CI / Scheduled failures` writes to the same issue.
+If the report job itself fails, or the night is cancelled before it reports, `CI / Scheduled failures` writes to the same issue.
+Both call one script, `scripts/feedback-eval-night.ts`, so the fallback gives the same commit range and result link.
 
 The cicd job keeps `feedback-eval-gate.json` as the `feedback-eval-gate` artifact for 14 days. The panel keeps it as `feedback-eval-panel`.
 The file holds each check, each measure, the model name and the SHA-256 of the endpoint. It never holds the endpoint or the key.

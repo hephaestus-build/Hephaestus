@@ -146,14 +146,18 @@ function runPanel(): { panel: Panel; model: Model | null } {
 			typeof file === "object" && file !== null && "cases" in file && Array.isArray(file.cases)
 				? (file.cases as unknown[])
 				: [];
-		return cases.map((entry) =>
-			typeof entry === "object" &&
-			entry !== null &&
-			"calls" in entry &&
-			typeof entry.calls === "number"
+		// Every HTTP request counts: `requests` when the case recorded it, else its model calls.
+		return cases.map((entry) => {
+			if (typeof entry !== "object" || entry === null) {
+				return gate.panel.callsPerCase;
+			}
+			if ("requests" in entry && typeof entry.requests === "number") {
+				return entry.requests;
+			}
+			return "calls" in entry && typeof entry.calls === "number"
 				? entry.calls
-				: gate.panel.callsPerCase,
-		);
+				: gate.panel.callsPerCase;
+		});
 	};
 	// One invocation for each case keeps each under the live tier's own time limit. The composer sends a
 	// failed request once (CompositionEvalCases), and a failed case is never composed again.
