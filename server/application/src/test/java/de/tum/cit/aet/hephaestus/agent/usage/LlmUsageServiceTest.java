@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.usage.fx.FxRateLookup;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.math.BigDecimal;
@@ -60,7 +61,8 @@ class LlmUsageServiceTest extends BaseUnitTest {
         when(budgetService.decide(WORKSPACE_ID)).thenReturn(LlmBudgetDecision.ALLOWED);
         var service = new LlmUsageService(
                 usageRepository,
-                workspaceRepository,
+                WorkspacePortFixtures.queries(workspaceRepository),
+                WorkspacePortFixtures.commands(workspaceRepository),
                 budgetService,
                 mock(ConfigAuditPort.class),
                 mock(ReviewRunKind.class),

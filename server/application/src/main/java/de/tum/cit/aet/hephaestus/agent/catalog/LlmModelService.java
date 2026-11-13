@@ -6,8 +6,7 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.LlmModelAudit;
 import de.tum.cit.aet.hephaestus.core.exception.DataIntegrityViolationConstraints;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -37,7 +36,7 @@ public class LlmModelService {
     private final LlmConnectionRepository connectionRepository;
     private final LlmModelPriceRepository priceRepository;
     private final LlmModelWorkspaceGrantRepository grantRepository;
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceSummaryQuery workspaceSummaries;
     private final WorkspaceAgentBindingRepository agentBindingRepository;
     private final LlmModelAudit llmModelAudit;
 
@@ -311,9 +310,7 @@ public class LlmModelService {
         if (workspaceIds.isEmpty()) {
             return;
         }
-        Set<Long> found = workspaceRepository.findAllById(workspaceIds).stream()
-                .map(Workspace::getId)
-                .collect(Collectors.toSet());
+        Set<Long> found = workspaceSummaries.findAllByIds(workspaceIds).keySet();
         Set<Long> unknown = new LinkedHashSet<>(workspaceIds);
         unknown.removeAll(found);
         if (!unknown.isEmpty()) {

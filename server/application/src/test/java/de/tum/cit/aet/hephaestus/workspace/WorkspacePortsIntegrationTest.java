@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceCommands;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
+import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -65,6 +66,43 @@ class WorkspacePortsIntegrationTest extends BaseIntegrationTest {
         assertThat(queries.findById(own).orElseThrow().reviewSettings()).isEqualTo(before);
         assertThat(version(own)).isEqualTo(before.configVersion());
         assertThat(revision(own)).isEqualTo(before.rolloutRevision());
+    }
+
+    @Test
+    void shouldKeepBothBudgetCapsScopedAndRollThemBackWithTheCaller() {
+        var own = data.scenario().workspace();
+        var other = data.scenario().workspace();
+        var before = queries.llmBudgets(own.getId()).orElseThrow();
+        var otherBefore = queries.llmBudgets(other.getId()).orElseThrow();
+        var transaction = new TransactionTemplate(transactions);
+        transaction.executeWithoutResult(status -> {
+            var instance = commands.updateInstanceLlmBudget(own.getWorkspaceSlug(), new BigDecimal("12.00"));
+            var provider = commands.updateOwnProviderLlmBudget(own.getId(), new BigDecimal("3.50"));
+            assertThat(instance.workspaceId()).isEqualTo(own.getId());
+            assertThat(instance.previousLimit()).isEqualTo(before.instanceBudgetUsd());
+            assertThat(provider.workspaceId()).isEqualTo(own.getId());
+            assertThat(provider.previousLimit()).isEqualTo(before.ownProviderBudgetUsd());
+        });
+        var stored = queries.llmBudgets(own.getId()).orElseThrow();
+        assertThat(stored.instanceBudgetUsd()).isEqualByComparingTo("12.00");
+        assertThat(stored.ownProviderBudgetUsd()).isEqualByComparingTo("3.50");
+        assertThat(jdbc.sql("SELECT monthly_llm_budget_usd FROM workspace WHERE id = :workspace")
+                        .param("workspace", own.getId())
+                        .query(BigDecimal.class)
+                        .single())
+                .isEqualByComparingTo("12.00");
+        assertThat(jdbc.sql("SELECT monthly_byo_llm_budget_usd FROM workspace WHERE id = :workspace")
+                        .param("workspace", own.getId())
+                        .query(BigDecimal.class)
+                        .single())
+                .isEqualByComparingTo("3.50");
+        transaction.executeWithoutResult(status -> {
+            commands.updateInstanceLlmBudget(own.getWorkspaceSlug(), null);
+            commands.updateOwnProviderLlmBudget(own.getId(), null);
+            status.setRollbackOnly();
+        });
+        assertThat(queries.llmBudgets(own.getId()).orElseThrow()).isEqualTo(stored);
+        assertThat(queries.llmBudgets(other.getId()).orElseThrow()).isEqualTo(otherBefore);
     }
 
     private long version(long workspaceId) {

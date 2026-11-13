@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceSummaryFixtures;
 import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.math.BigDecimal;
@@ -34,7 +35,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.springframework.dao.DataIntegrityViolationException;
 
@@ -61,13 +61,20 @@ class LlmModelServiceTest extends BaseUnitTest {
     @Mock
     private LlmModelAudit llmModelAudit;
 
-    @InjectMocks
     private LlmModelService modelService;
 
     private LlmModel model;
 
     @BeforeEach
     void setUp() {
+        modelService = new LlmModelService(
+                modelRepository,
+                connectionRepository,
+                priceRepository,
+                grantRepository,
+                WorkspaceSummaryFixtures.summaries(workspaceRepository),
+                agentBindingRepository,
+                llmModelAudit);
         model = new LlmModel();
         model.setId(7L);
         model.setSlug("gpt-5");

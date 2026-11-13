@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.fx.FxRateRepository;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -66,8 +67,15 @@ class LlmUsageFxDisplayIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL));
         FxRateLookup rates = new FxRateLookup(fxRateRepository, clock, properties);
         usageService = new LlmUsageService(
-                usageRepository, workspaceRepository, budgetService, configAudit, reviewRuns, rates);
-        adminService = new LlmUsageAdminService(usageRepository, workspaceRepository, configAudit, reviewRuns, rates);
+                usageRepository,
+                WorkspacePortFixtures.queries(workspaceRepository),
+                WorkspacePortFixtures.commands(workspaceRepository),
+                budgetService,
+                configAudit,
+                reviewRuns,
+                rates);
+        adminService = new LlmUsageAdminService(
+                usageRepository, WorkspacePortFixtures.commands(workspaceRepository), configAudit, reviewRuns, rates);
     }
 
     @Test

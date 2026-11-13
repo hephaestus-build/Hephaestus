@@ -62,6 +62,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -874,7 +875,11 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         when(preferences.forDeveloper(workspace.getId(), 20L))
                 .thenReturn(new MemberAiPreferences.Decision(true, AiChoice.CLOUD));
         var routing = new MemberAiRoutingAdapter(
-                bindings, preferences, resolver, workspaces, mock(PersonProcessingSuppression.class));
+                bindings,
+                preferences,
+                resolver,
+                WorkspacePortFixtures.queries(workspaces),
+                mock(PersonProcessingSuppression.class));
 
         assertThat(routing.binding(workspace.getId(), AgentPurpose.PRACTICE_REVIEW, 20L))
                 .get()

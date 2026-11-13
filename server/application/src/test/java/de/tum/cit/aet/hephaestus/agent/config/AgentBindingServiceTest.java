@@ -3,6 +3,9 @@ package de.tum.cit.aet.hephaestus.agent.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -21,10 +24,12 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
+import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +38,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class AgentBindingServiceTest extends BaseUnitTest {
 
@@ -54,17 +60,28 @@ class AgentBindingServiceTest extends BaseUnitTest {
     @Mock
     private ConfigAuditPort configAudit;
 
+    @Mock
+    private EntityManager entityManager;
+
     private AgentBindingService service;
 
     @BeforeEach
     void setUp() {
         service = new AgentBindingService(
                 bindingRepository,
-                workspaceRepository,
+                WorkspacePortFixtures.queries(workspaceRepository),
                 llmModelRepository,
                 workspaceLlmModelRepository,
                 llmModelResolver,
                 configAudit);
+        ReflectionTestUtils.setField(service, "entityManager", entityManager);
+        lenient()
+                .when(entityManager.getReference(eq(Workspace.class), anyLong()))
+                .thenAnswer(invocation -> {
+                    var workspace = new Workspace();
+                    workspace.setId(invocation.getArgument(1));
+                    return workspace;
+                });
     }
 
     private WorkspaceContext context() {
@@ -132,6 +149,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
     void upsertBindsAnAvailableInstanceModel() {
         Workspace w = workspace();
         when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(w));
+        when(entityManager.getReference(Workspace.class, 1L)).thenReturn(w);
         when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
                         1L, AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED))
                 .thenReturn(Optional.empty());

@@ -47,6 +47,14 @@ public class WorkspaceQueriesAdapter implements WorkspaceQueries {
                 .toList();
     }
 
+    @Override
+    public Optional<LlmBudgets> llmBudgets(long workspaceId) {
+        return workspaces
+                .findById(workspaceId)
+                .map(workspace -> new LlmBudgets(
+                        workspace.getId(), workspace.getMonthlyLlmBudgetUsd(), workspace.getMonthlyByoLlmBudgetUsd()));
+    }
+
     private static ReviewWorkspace snapshot(Workspace workspace) {
         var features = workspace.getFeatures();
         var settings = workspace.getReviewSettings();

@@ -131,21 +131,6 @@ final class RepositoryOwnershipRatchet {
                     "practices::spi ResultEvidenceQuery",
                     Set.of("agent.adapter.EvidenceDeliveryAuthorization")),
             new Entry(
-                    "agent",
-                    "workspace.WorkspaceRepository",
-                    "DDD7",
-                    "workspace::spi WorkspaceQueries and WorkspaceCommands",
-                    Set.of(
-                            "agent.adapter.DefaultMentorReadinessQuery",
-                            "agent.catalog.LlmModelService",
-                            "agent.catalog.WorkspaceLlmConnectionService",
-                            "agent.config.AgentBindingService",
-                            "agent.config.MemberAiRoutingAdapter",
-                            "agent.context.providers.mentor.WorkspaceContentSource",
-                            "agent.usage.LlmBudgetService",
-                            "agent.usage.LlmUsageAdminService",
-                            "agent.usage.LlmUsageService")),
-            new Entry(
                     "integration",
                     "integration.core.connection.ConnectionRepository",
                     "DDD11 (integration.core)",

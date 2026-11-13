@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.workspace.spi;
 
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewPolicy;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -16,6 +17,13 @@ public interface WorkspaceQueries {
     List<RepositorySettings> repositorySettings(long workspaceId);
 
     List<RepositoryTarget> reviewRepositoryTargets(long workspaceId);
+
+    Optional<LlmBudgets> llmBudgets(long workspaceId);
+
+    record LlmBudgets(
+            long workspaceId,
+            @Nullable BigDecimal instanceBudgetUsd,
+            @Nullable BigDecimal ownProviderBudgetUsd) {}
 
     record ReviewWorkspace(
             WorkspaceContext context,

@@ -6,9 +6,12 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.AccessForbiddenException;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -26,11 +29,14 @@ public class WorkspaceLlmConnectionService {
 
     private final WorkspaceLlmConnectionRepository connectionRepository;
     private final WorkspaceLlmModelRepository modelRepository;
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceSummaryQuery workspaceSummaries;
     private final EgressPolicy egressPolicy;
     private final InstanceLlmSettingsService instanceLlmSettingsService;
     private final LlmModelLimitDiscovery limitDiscovery;
     private final ConfigAuditPort configAudit;
+
+    @PersistenceContext
+    private @Nullable EntityManager entityManager;
 
     @Transactional(readOnly = true)
     public List<WorkspaceLlmConnection> list(WorkspaceContext workspaceContext) {
@@ -57,12 +63,11 @@ public class WorkspaceLlmConnectionService {
         }
         egressPolicy.validate(request.baseUrl());
 
-        Workspace workspace = workspaceRepository
-                .findById(workspaceId)
-                .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceContext.slug()));
+        if (workspaceSummaries.findById(workspaceId).isEmpty())
+            throw new EntityNotFoundException("Workspace", workspaceContext.slug());
 
         WorkspaceLlmConnection connection = new WorkspaceLlmConnection();
-        connection.setWorkspace(workspace);
+        connection.setWorkspace(Objects.requireNonNull(entityManager).getReference(Workspace.class, workspaceId));
         connection.setSlug(slug);
         connection.setDisplayName(request.displayName());
         connection.setConnectionPlatform(request.connectionPlatform());

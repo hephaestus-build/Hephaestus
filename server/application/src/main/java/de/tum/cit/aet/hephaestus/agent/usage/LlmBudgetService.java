@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.usage;
 
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.YearMonth;
@@ -29,11 +28,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class LlmBudgetService {
 
     private final LlmUsageEventRepository usageRepository;
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceQueries workspaceQueries;
 
-    public LlmBudgetService(LlmUsageEventRepository usageRepository, WorkspaceRepository workspaceRepository) {
+    public LlmBudgetService(LlmUsageEventRepository usageRepository, WorkspaceQueries workspaceQueries) {
         this.usageRepository = usageRepository;
-        this.workspaceRepository = workspaceRepository;
+        this.workspaceQueries = workspaceQueries;
     }
 
     @Transactional(readOnly = true)
@@ -55,9 +54,9 @@ public class LlmBudgetService {
      */
     @Transactional(readOnly = true)
     public @Nullable MeasuredSpend measuredInstanceSpend(Long workspaceId) {
-        BigDecimal budgetUsd = workspaceRepository
-                .findById(workspaceId)
-                .map(Workspace::getMonthlyLlmBudgetUsd)
+        BigDecimal budgetUsd = workspaceQueries
+                .llmBudgets(workspaceId)
+                .map(WorkspaceQueries.LlmBudgets::instanceBudgetUsd)
                 .orElse(null);
         if (budgetUsd == null) return null;
         MonthWindow window = MonthWindow.of(YearMonth.now(ZoneOffset.UTC));
@@ -68,11 +67,11 @@ public class LlmBudgetService {
     public record MeasuredSpend(BigDecimal spentUsd, BigDecimal budgetUsd) {}
 
     private LlmBudgetHeadroom loadHeadroom(Long workspaceId) {
-        return workspaceRepository.findById(workspaceId).map(this::headroom).orElse(LlmBudgetHeadroom.UNCAPPED);
+        return workspaceQueries.llmBudgets(workspaceId).map(this::headroom).orElse(LlmBudgetHeadroom.UNCAPPED);
     }
 
-    private LlmBudgetHeadroom headroom(Workspace workspace) {
-        return headroom(workspace.getId(), workspace.getMonthlyLlmBudgetUsd(), workspace.getMonthlyByoLlmBudgetUsd());
+    private LlmBudgetHeadroom headroom(WorkspaceQueries.LlmBudgets workspace) {
+        return headroom(workspace.workspaceId(), workspace.instanceBudgetUsd(), workspace.ownProviderBudgetUsd());
     }
 
     private LlmBudgetHeadroom headroom(

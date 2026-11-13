@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.workspace.adapter;
 
+import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewPolicy;
@@ -7,11 +8,13 @@ import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepository;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceCommands;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -62,5 +65,27 @@ public class WorkspaceCommandsAdapter implements WorkspaceCommands {
             var patterns = paths.get(monitor.getId());
             if (patterns != null) monitor.setGeneratedPaths(patterns);
         }
+    }
+    // Both caps share one row. Its lock prevents Hibernate's all-column UPDATE from reverting the other cap.
+    @Override
+    public BudgetChange updateInstanceLlmBudget(String workspaceSlug, @Nullable BigDecimal monthlyBudgetUsd) {
+        var workspace = workspaces
+                .findByWorkspaceSlugForUpdate(workspaceSlug)
+                .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceSlug));
+        var before = workspace.getMonthlyLlmBudgetUsd();
+        workspace.setMonthlyLlmBudgetUsd(monthlyBudgetUsd);
+        workspaces.save(workspace);
+        return new BudgetChange(workspace.getId(), before);
+    }
+
+    @Override
+    public BudgetChange updateOwnProviderLlmBudget(long workspaceId, @Nullable BigDecimal monthlyBudgetUsd) {
+        var workspace = workspaces
+                .findByIdForUpdate(workspaceId)
+                .orElseThrow(() -> new EntityNotFoundException("Workspace", Long.toString(workspaceId)));
+        var before = workspace.getMonthlyByoLlmBudgetUsd();
+        workspace.setMonthlyByoLlmBudgetUsd(monthlyBudgetUsd);
+        workspaces.save(workspace);
+        return new BudgetChange(workspace.getId(), before);
     }
 }
