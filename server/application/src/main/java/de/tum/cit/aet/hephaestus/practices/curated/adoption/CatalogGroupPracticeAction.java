@@ -1,6 +1,10 @@
 package de.tum.cit.aet.hephaestus.practices.curated.adoption;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /** What adopting a whole catalog group would do to one practice in it. */
+// The DTO that carries it already publishes this class name.
+@Schema(name = "CatalogAdoptionAction")
 public enum CatalogGroupPracticeAction {
     /** Not in the workspace yet: adoption copies it in. */
     ADD,

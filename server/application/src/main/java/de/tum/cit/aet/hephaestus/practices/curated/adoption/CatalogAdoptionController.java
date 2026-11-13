@@ -66,7 +66,11 @@ public class CatalogAdoptionController {
     @ApiResponse(
             responseCode = "200",
             description = "Adoption preview returned",
-            headers = @Header(name = HttpHeaders.ETAG, description = "Strong validator for If-Match"))
+            headers =
+                    @Header(
+                            name = HttpHeaders.ETAG,
+                            description = "Strong validator for If-Match",
+                            schema = @Schema(type = "string")))
     @ApiResponse(
             responseCode = "404",
             description = "Practice is not offered",

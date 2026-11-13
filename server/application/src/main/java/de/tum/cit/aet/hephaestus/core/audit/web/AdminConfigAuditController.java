@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnServerRole
 @RestController
 @RequestMapping("/admin/config-audit")
-@Tag(name = "Admin", description = "Instance-admin account management")
+@Tag(name = "Admin")
 @RequireInstanceAdmin
 @RequiredArgsConstructor
 public class AdminConfigAuditController {

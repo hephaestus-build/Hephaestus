@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspace
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 @ConditionalOnServerRole
 @WorkspaceScopedController
 @RequestMapping("/practices/items")
+@Tag(name = "Practice review trace")
 @RequiredArgsConstructor
 public class ItemTraceController {
     private final ItemTraceQueryService query;

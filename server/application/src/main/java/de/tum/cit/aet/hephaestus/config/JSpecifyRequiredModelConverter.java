@@ -135,7 +135,8 @@ public class JSpecifyRequiredModelConverter implements ModelConverter {
         return context.getDefinedModels().get(ref.substring(ref.lastIndexOf('/') + 1));
     }
 
-    private static @Nullable Class<?> rawClass(Type type) {
+    /** The class behind a type that swagger-core passes, which can be a Jackson 2 {@code JavaType}. */
+    static @Nullable Class<?> rawClass(Type type) {
         if (type instanceof Class<?> c) {
             return c;
         }

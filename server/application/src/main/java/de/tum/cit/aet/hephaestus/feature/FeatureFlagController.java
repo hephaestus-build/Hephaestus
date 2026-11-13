@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/user")
-@Tag(name = "Account", description = "User account management (settings, deletion)")
+@Tag(name = "Account")
 @PreAuthorize("isAuthenticated()")
 public class FeatureFlagController {
 

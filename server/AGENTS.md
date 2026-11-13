@@ -160,9 +160,11 @@ Never write cleanup that another test depends on having run.
 - Every error is an RFC-7807 `ProblemDetail` produced by a `@RestControllerAdvice` — the rules are in
   `docs/contributor/api-error-handling.md`.
 - **A schema type without a `DTO` suffix is dropped from the generated spec** unless it is listed in
-  `OpenAPIConfiguration.ALLOWED_DOMAIN_OBJECTS`. The webapp client then simply has no type for it, with
-  no error anywhere. Domain types the API deliberately exposes (`ProblemDetail`, `PracticeDefinition`, …)
-  are there for this reason.
+  `OpenAPIConfiguration.ALLOWED_DOMAIN_OBJECTS`. A reference from a published type also keeps it.
+  Otherwise the webapp client simply has no type for it, with no error anywhere.
+- **Each Java enum is one named schema.** The spec build fails on a name that two enums, or an enum and a DTO,
+  share: give the enum `@Schema(name = …)`. It also fails on a tag with two descriptions: describe a shared tag once
+  in `OpenAPIConfiguration`.
 - DTOs are records. All bare components are non-null under `@NullMarked`. Add JSpecify `@NonNull` when
   that component must also appear in the generated schema's `required` list. A primitive takes
   `@Schema(requiredMode = RequiredMode.REQUIRED)` instead, since a nullness annotation on it fails the

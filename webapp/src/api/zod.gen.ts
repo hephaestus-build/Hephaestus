@@ -2,43 +2,13 @@
 
 import * as z from "zod";
 
-export const zAcceptPracticeReleaseRequest = z.object({
-	choices: z.record(z.string(), z.enum(["CURRENT", "OFFERED"])),
-});
+export const zAboutRole = z.enum(["AUTHOR", "REVIEWER", "ASSIGNEE", "MERGER"]);
 
-/**
- * One account-wide answer; model names belong only to workspace-specific views.
- */
-export const zAccountAiChoice = z.object({
-	choice: z.enum(["NO_AI", "IN_HOUSE_ONLY", "CLOUD"]).nullable(),
-	updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-});
+export const zAccountAppRole = z.enum(["USER", "APP_ADMIN"]);
 
-export const zAccountAiChoiceRequest = z.object({
-	choice: z.enum(["NO_AI", "IN_HOUSE_ONLY", "CLOUD"]),
-});
+export const zAccountStatus = z.enum(["UNCLAIMED", "ACTIVE", "BLOCKED", "DELETING", "DELETED"]);
 
-/**
- * How often one kind of activity happened on a piece of work
- */
-export const zActivityAction = z.object({
-	count: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	kind: z.enum([
-		"PULL_REQUEST_OPENED",
-		"PULL_REQUEST_MERGED",
-		"PULL_REQUEST_CLOSED",
-		"REVIEW_APPROVED",
-		"REVIEW_CHANGES_REQUESTED",
-		"REVIEW_COMMENTED",
-		"COMMENTED",
-		"CODE_COMMENTED",
-		"ISSUE_OPENED",
-		"ISSUE_CLOSED",
-	]),
-});
+export const zAccountType = z.enum(["ORG", "USER"]);
 
 export const zActivityBreakdown = z.object({
 	approvals: z
@@ -71,6 +41,8 @@ export const zActivityBreakdown = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
+export const zActivityContributorKind = z.enum(["PERSON", "BOT", "AUTOMATION"]);
+
 export const zActivityCounts = z.object({
 	activeWeeks: z.int(),
 	comments: z.int(),
@@ -96,6 +68,30 @@ export const zActivityCoverage = z.object({
  */
 export const zActivityHighlights = z.object({
 	firstContributors: z.array(z.int()),
+});
+
+export const zActivityKind = z.enum([
+	"PULL_REQUEST_OPENED",
+	"PULL_REQUEST_MERGED",
+	"PULL_REQUEST_CLOSED",
+	"REVIEW_APPROVED",
+	"REVIEW_CHANGES_REQUESTED",
+	"REVIEW_COMMENTED",
+	"COMMENTED",
+	"CODE_COMMENTED",
+	"ISSUE_OPENED",
+	"ISSUE_CLOSED",
+]);
+
+/**
+ * How often one kind of activity happened on a piece of work
+ */
+export const zActivityAction = z.object({
+	count: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	kind: zActivityKind,
 });
 
 /**
@@ -140,44 +136,11 @@ export const zActivityWeek = z.object({
 });
 
 export const zAdminAccountView = z.object({
-	appRole: z.enum(["USER", "APP_ADMIN"]),
+	appRole: zAccountAppRole,
 	displayName: z.string().optional(),
 	id: z.int().optional(),
 	primaryEmail: z.string().optional(),
-	status: z.enum(["UNCLAIMED", "ACTIVE", "BLOCKED", "DELETING", "DELETED"]),
-});
-
-/**
- * Metadata-only workspace summary for the instance-admin overview
- */
-export const zAdminWorkspaceView = z.object({
-	accountLogin: z.string(),
-	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	displayName: z.string(),
-	id: z.int(),
-	memberCount: z.int(),
-	ownerLogin: z.string().optional(),
-	providerType: z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]).optional(),
-	status: z.enum(["ACTIVE", "SUSPENDED", "PURGED"]),
-	workspaceSlug: z.string(),
-});
-
-/**
- * A workspace's agent binding for one purpose
- */
-export const zAgentBinding = z.object({
-	dataHandlingTier: z.enum(["IN_HOUSE", "CLOUD", "UNDECLARED"]),
-	enabled: z.boolean(),
-	instanceModelId: z.int().optional(),
-	purpose: z.enum(["PRACTICE_REVIEW", "MENTOR"]),
-	ready: z.boolean(),
-	servedTiers: z.array(z.enum(["IN_HOUSE", "CLOUD", "UNDECLARED"])),
-	timeoutSeconds: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	workspaceModelId: z.int().optional(),
+	status: zAccountStatus,
 });
 
 /**
@@ -190,13 +153,58 @@ export const zAgentBindingRequest = z.object({
 	workspaceModelId: z.int().optional(),
 });
 
-export const zAiChoiceRequest = z.object({
-	choice: z.enum(["NO_AI", "IN_HOUSE_ONLY", "CLOUD"]),
+export const zAgentPurpose = z.enum(["PRACTICE_REVIEW", "MENTOR"]);
+
+export const zAiChoice = z.enum(["NO_AI", "IN_HOUSE_ONLY", "CLOUD"]);
+
+/**
+ * One account-wide answer; model names belong only to workspace-specific views.
+ */
+export const zAccountAiChoice = z.object({
+	choice: zAiChoice.nullable(),
+	updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 });
+
+export const zAccountAiChoiceRequest = z.object({
+	choice: zAiChoice,
+});
+
+export const zAiChoiceRequest = z.object({
+	choice: zAiChoice,
+});
+
+export const zAiModelBrand = z.enum([
+	"OPENAI",
+	"ANTHROPIC",
+	"GEMINI",
+	"GEMMA",
+	"META",
+	"MISTRAL",
+	"QWEN",
+	"DEEPSEEK",
+	"XAI",
+	"COHERE",
+	"Z_AI",
+	"MOONSHOT",
+]);
+
+export const zAiRefusalReason = z.enum([
+	"PERSON_ERASED",
+	"NO_AI",
+	"CHOICE_REQUIRED",
+	"UNAVAILABLE",
+]);
 
 export const zAllowPublic = z.object({
 	allowPublic: z.boolean(),
 });
+
+export const zApplicabilityClauseKind = z.enum([
+	"CHANGED_PATH",
+	"DIFF_CONTAINS",
+	"HAS_ITEMS",
+	"MERGED",
+]);
 
 export const zAppliesWhenClause = z.object({
 	changedPath: z.array(z.string()).optional(),
@@ -210,11 +218,6 @@ export const zAppliesWhen = z.object({
 	otherwise: z.string(),
 });
 
-export const zAssignRoleRequest = z.object({
-	accountId: z.string().regex(/^[1-9][0-9]*$/),
-	role: z.enum(["OWNER", "ADMIN", "MEMBER"]),
-});
-
 /**
  * A human-readable account identity. <code>displayName</code>/<code>email</code> are null for deleted
  * accounts.
@@ -224,6 +227,57 @@ export const zAuthAuditAccount = z.object({
 	email: z.string().optional(),
 	id: z.int(),
 });
+
+export const zAuthEventEventType = z.enum([
+	"USER_VIEW",
+	"LOGIN",
+	"PASSKEY_CHANGED",
+	"PASSKEY_VERIFIED",
+	"LOGIN_FAILED",
+	"LOGOUT",
+	"TOKEN_REFRESH",
+	"JWT_REVOKED",
+	"IDENTITY_LINKED",
+	"IDENTITY_UNLINKED",
+	"IMPERSONATION_BEGIN",
+	"IMPERSONATION_END",
+	"ACCOUNT_DELETED",
+	"EXPORT_REQUESTED",
+	"PERSON_DATA_PREVIEWED",
+	"PERSON_DATA_EXPORTED",
+	"PERSON_DATA_ERASURE_REQUESTED",
+	"APP_ROLE_CHANGED",
+	"ACCOUNT_STATUS_CHANGED",
+	"RESEARCH_CONSENT_REVOKED",
+	"WORKSPACE_ELEVATION",
+	"INSTALLATION_EVENT_REPLAYED",
+	"GITHUB_INSTALLATION_ADOPTED",
+	"GITHUB_INSTALLATION_DECLINED",
+	"WORKSPACE_OWNER_CHANGE",
+	"WORKSPACE_DELETION",
+	"PROVIDER_RESOURCE_RELEASE",
+	"LLM_CONNECTION_CREATED",
+	"LLM_CONNECTION_UPDATED",
+	"LLM_CONNECTION_DELETED",
+	"LLM_MODEL_CREATED",
+	"LLM_MODEL_UPDATED",
+	"LLM_MODEL_DELETED",
+	"LLM_MODEL_PRICE_CHANGED",
+	"LLM_MODEL_SHARING_CHANGED",
+	"LLM_SETTINGS_CHANGED",
+	"LOGIN_PROVIDER_CREATED",
+	"LOGIN_PROVIDER_UPDATED",
+	"LOGIN_PROVIDER_DELETED",
+	"SILENT_MODE_CHANGED",
+	"PUBLIC_ACTIVITY_CHANGED",
+	"PRODUCT_FEEDBACK_DESTINATIONS_CHANGED",
+	"PRODUCT_FEEDBACK_CLEANUP_CONFIRMED",
+	"PRODUCT_FEEDBACK_FILED_BY_ADMIN",
+	"RESEARCH_DATASET_RELEASED",
+	"RESEARCH_REMOVAL_RECORDED",
+]);
+
+export const zAuthEventResult = z.enum(["SUCCESS", "FAILURE"]);
 
 /**
  * One audit row, flattened for the admin viewer.
@@ -248,40 +302,6 @@ export const zAuthEventView = z.object({
 });
 
 /**
- * A model available for this workspace to bind a Task to
- */
-export const zAvailableLlmModel = z.object({
-	brand: z
-		.enum([
-			"OPENAI",
-			"ANTHROPIC",
-			"GEMINI",
-			"GEMMA",
-			"META",
-			"MISTRAL",
-			"QWEN",
-			"DEEPSEEK",
-			"XAI",
-			"COHERE",
-			"Z_AI",
-			"MOONSHOT",
-		])
-		.optional(),
-	connectionDisplayName: z.string(),
-	dataHandlingTier: z.enum(["IN_HOUSE", "CLOUD", "UNDECLARED"]),
-	displayName: z.string(),
-	id: z.int(),
-	per1mCacheReadUsd: z.number().optional(),
-	per1mCacheWriteUsd: z.number().optional(),
-	per1mInputUsd: z.number().optional(),
-	per1mOutputUsd: z.number().optional(),
-	pricingMode: z.enum(["PRICED", "NO_CHARGE", "UNPRICED"]),
-	purposes: z.array(z.enum(["PRACTICE_REVIEW", "MENTOR"])),
-	reasoningEffort: z.enum(["NONE", "MINIMAL", "LOW", "MEDIUM", "HIGH", "XHIGH", "MAX"]).optional(),
-	scope: z.enum(["SHARED", "WORKSPACE"]),
-});
-
-/**
  * Connection-level backfill rollup
  */
 export const zBackfillSummary = z.object({
@@ -297,9 +317,49 @@ export const zBindPracticeGroupRequest = z.object({
 	groupSlug: z.string().nullable(),
 });
 
+export const zBrowserFaultsErrorType = z.enum([
+	"TYPE_ERROR",
+	"REFERENCE_ERROR",
+	"SYNTAX_ERROR",
+	"RANGE_ERROR",
+	"OTHER",
+	"CHUNK",
+	"HTTP_5XX",
+	"NETWORK",
+]);
+
+export const zBrowserFaultsKind = z.enum([
+	"UNCAUGHT_ERROR",
+	"UNHANDLED_REJECTION",
+	"RENDER_ERROR",
+	"RECOVERED_ERROR",
+	"CHUNK_LOAD_FAILED",
+	"REQUEST_FAILED",
+]);
+
 export const zCancelScanRequest = z.object({
 	status: z.enum(["CANCELLED"]),
 });
+
+export const zCatalogAdoptionAction = z.enum(["ADD", "MOVE_TO_GROUP", "KEEP", "BLOCKED"]);
+
+export const zCatalogAdoptionAvailability = z.enum(["AVAILABLE", "ADOPTED", "SLUG_CONFLICT"]);
+
+export const zCatalogChangeKind = z.enum(["NONE", "WORDING", "PRESENTATION", "REVIEW"]);
+
+export const zCatalogEntryState = z.enum([
+	"FROM_HEPHAESTUS",
+	"EDITED_HERE",
+	"UPDATE_WAITING",
+	"YOURS",
+	"NO_LONGER_SHIPPED",
+]);
+
+export const zCatalogGroupDisposition = z.enum([
+	"UNASSIGNED",
+	"REUSE_EXISTING_GROUP",
+	"CREATE_CATALOG_GROUP",
+]);
 
 export const zCatalogGroupInput = z.object({
 	color: z.string().min(0).max(32).nullable(),
@@ -319,7 +379,7 @@ export const zCatalogGroupInput = z.object({
 });
 
 export const zCatalogGroupPracticeAction = z.object({
-	action: z.enum(["ADD", "MOVE_TO_GROUP", "KEEP", "BLOCKED"]),
+	action: zCatalogAdoptionAction,
 	slug: z.string(),
 });
 
@@ -335,37 +395,30 @@ export const zCatalogGroupUpdate = z.object({
 		.nullable(),
 });
 
-export const zCatalogOrigin = z.object({
-	catalogSlug: z.string().nullable(),
-	localEdits: z.array(
-		z.enum([
-			"NAME",
-			"REVIEW_ON",
-			"APPLIES_WHEN",
-			"ABOUT",
-			"READS",
-			"REVIEWED_BY",
-			"CRITERIA",
-			"SCRIPT",
-			"SCAN",
-			"LINE_NOTES",
-			"GUIDANCE",
-		]),
-	),
-	offeredDigest: z.string().nullable(),
-	state: z.enum(["FROM_HEPHAESTUS", "EDITED_HERE", "UPDATE_WAITING", "YOURS", "NO_LONGER_SHIPPED"]),
-});
-
-export const zCitationCapabilities = z.object({
-	commit: z.enum(["REQUIRED", "OPTIONAL", "FORBIDDEN"]).optional(),
-	side: z.enum(["REQUIRED", "OPTIONAL", "FORBIDDEN"]).optional(),
-});
+export const zCheckState = z.enum([
+	"SUCCESS",
+	"FAILURE",
+	"PENDING",
+	"CANCELLED",
+	"NONE",
+	"NO_PIPELINE",
+	"SKIPPED",
+]);
 
 export const zCitationProof = z.object({
 	itemSha256: z.string(),
 	quoteSha256: z.string(),
 	status: z.enum(["VERIFIED"]),
 });
+
+export const zCitationRequirement = z.enum(["REQUIRED", "OPTIONAL", "FORBIDDEN"]);
+
+export const zCitationCapabilities = z.object({
+	commit: zCitationRequirement.optional(),
+	side: zCitationRequirement.optional(),
+});
+
+export const zCitationSide = z.enum(["OLD", "NEW"]);
 
 export const zClaimBasis = z.object({
 	type: z.string(),
@@ -393,9 +446,18 @@ export const zClientTokenRequest = z.object({
 	redirectUri: z.string().min(0).max(200),
 });
 
-export const zCloseResearchDisclosure = z.object({
-	closure: z.enum(["DESTROYED", "ANONYMIZED"]),
-});
+export const zComparison = z.enum([
+	"COMPARABLE",
+	"FIRST_SCAN",
+	"METHOD_CHANGED",
+	"STANDARD_CHANGED",
+	"INCOMPLETE",
+	"MIXED",
+]);
+
+export const zConfigAuditAction = z.enum(["CREATED", "UPDATED", "DELETED"]);
+
+export const zConfigAuditActorKind = z.enum(["USER", "SYSTEM", "IMPERSONATED"]);
 
 /**
  * A human-readable actor identity on an audit row. Resolved at read time, so an erased account
@@ -412,49 +474,49 @@ export const zConfigAuditActorRef = z.object({
 	id: z.int(),
 });
 
+export const zConfigAuditEntityType = z.enum([
+	"PROVIDER_RESOURCE_RELEASE",
+	"PRACTICE_REVIEW_SETTINGS",
+	"AGENT_BINDING",
+	"AGENT_CONFIG",
+	"AI_CONFIG_BINDING",
+	"WORKSPACE_ROLE",
+	"ACTIVITY_AUTOMATION",
+	"WORKSPACE_FEATURES",
+	"WORKSPACE_STATUS",
+	"WORKSPACE_TOKEN",
+	"WORKSPACE_VISIBILITY",
+	"PRACTICE_ACTIVE",
+	"PRACTICE_USAGE",
+	"PRACTICE_DEFINITION",
+	"PRACTICE_GROUP",
+	"CATALOG_PRACTICE",
+	"CATALOG_GROUP",
+	"WORKSPACE_INSTANCE_LLM_BUDGET",
+	"WORKSPACE_OWN_PROVIDER_LLM_BUDGET",
+	"WORKSPACE_LLM_BUDGET",
+	"WORKSPACE_BYO_LLM_BUDGET",
+	"REVIEW_BATCH",
+	"REVIEW_SCHEDULE",
+	"FEEDBACK_DELIVERY_RECHECK",
+	"WORKSPACE_LLM_CONNECTION",
+	"WORKSPACE_LLM_MODEL",
+]);
+
 /**
  * One audit row, flattened for a viewer. Crosses the module boundary, so it carries no entity.
  */
 export const zConfigAuditEntryView = z.object({
 	actingAccountId: z.int().optional(),
 	actingActor: zConfigAuditActorRef.optional(),
-	action: z.enum(["CREATED", "UPDATED", "DELETED"]).optional(),
+	action: zConfigAuditAction.optional(),
 	actor: zConfigAuditActorRef.optional(),
 	actorAccountId: z.int().optional(),
-	actorKind: z.enum(["USER", "SYSTEM", "IMPERSONATED"]).optional(),
+	actorKind: zConfigAuditActorKind.optional(),
 	changedKeys: z.array(z.string()).optional(),
 	elevatedViaInstanceAdmin: z.boolean(),
 	entityId: z.string().optional(),
-	entityType: z
-		.enum([
-			"PROVIDER_RESOURCE_RELEASE",
-			"PRACTICE_REVIEW_SETTINGS",
-			"AGENT_BINDING",
-			"AGENT_CONFIG",
-			"AI_CONFIG_BINDING",
-			"WORKSPACE_ROLE",
-			"ACTIVITY_AUTOMATION",
-			"WORKSPACE_FEATURES",
-			"WORKSPACE_STATUS",
-			"WORKSPACE_TOKEN",
-			"WORKSPACE_VISIBILITY",
-			"PRACTICE_ACTIVE",
-			"PRACTICE_USAGE",
-			"PRACTICE_DEFINITION",
-			"PRACTICE_GROUP",
-			"CATALOG_PRACTICE",
-			"CATALOG_GROUP",
-			"WORKSPACE_INSTANCE_LLM_BUDGET",
-			"WORKSPACE_OWN_PROVIDER_LLM_BUDGET",
-			"WORKSPACE_LLM_BUDGET",
-			"WORKSPACE_BYO_LLM_BUDGET",
-			"REVIEW_BATCH",
-			"REVIEW_SCHEDULE",
-			"FEEDBACK_DELIVERY_RECHECK",
-			"WORKSPACE_LLM_CONNECTION",
-			"WORKSPACE_LLM_MODEL",
-		])
-		.optional(),
+	entityType: zConfigAuditEntityType.optional(),
 	id: z.int().optional(),
 	newValue: z.string().optional(),
 	occurredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
@@ -462,80 +524,16 @@ export const zConfigAuditEntryView = z.object({
 	workspaceId: z.int().optional(),
 });
 
-export const zConfigurationFact = z.object({
-	documentationUrl: z.string(),
-	explanation: z.string(),
-	id: z.string(),
-	requirement: z.enum(["REQUIRED", "RECOMMENDED", "OPTIONAL"]),
-	roles: z.array(z.enum(["SERVER"])),
-	status: z.enum(["SATISFIED", "ACTION_REQUIRED", "NOT_CONFIGURED", "NOT_APPLICABLE"]),
-	subject: z.string(),
-});
+export const zConfigurationRequirement = z.enum(["REQUIRED", "RECOMMENDED", "OPTIONAL"]);
 
-/**
- * Detailed view of a single Connection — extends {@link ConnectionSummaryDTO ConnectionSummaryDTO} with the
- * sealed config serialized to a free-form JSON object (<code>Map&lt;String, Object&gt;</code> →
- * <code>type: object, additionalProperties: true</code> in the spec, so it round-trips through
- * client codegen). NEVER carries credentials: the encrypted credential blob stays inside the
- * entity, and every secret-bearing key of the config itself is stripped by
- * <code>redactSensitive</code> before serialization.
- *
- * <p><b>Why redact here and not with <code>@JsonIgnore</code> on the record component?</b> The very
- * same <code>ObjectMapper</code> bean serializes <code>ConnectionConfig</code> into the JSONB
- * <code>connection.config</code> column (Hibernate's <code>json_format_mapper</code> is wired to it in
- * <code>HibernateJacksonFormatMapperConfig</code>). Annotating the component would therefore drop the
- * secret on write and destroy the stored value — the API-boundary filter below is the only place
- * the two concerns can be separated.
- *
- * <p>Mirroring the summary fields (rather than embedding the summary record) keeps
- * the JSON shape flat — the API consumer sees one record, not a nested <code>summary</code>
- * object.
- */
-export const zConnectionDetail = z.object({
-	attentionProblem: z
-		.enum([
-			"CREDENTIAL_EXPIRING",
-			"CREDENTIAL_REVOKED",
-			"PROVIDER_SUSPENDED",
-			"PROVIDER_CLEANUP_UNCONFIRMED",
-		])
-		.optional(),
-	config: z.record(z.string(), z.unknown()).optional(),
-	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-	credentialsUnreadableSince: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-	displayName: z.string().optional(),
-	family: z.enum(["SCM", "MESSAGING", "DOCUMENTATION"]).optional(),
-	id: z.int().optional(),
-	kind: z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]).optional(),
-	state: z.enum(["PENDING", "ACTIVE", "SUSPENDED", "UNINSTALLED"]).optional(),
-	tokenExpiresAt: z.iso.date().pipe(z.coerce.date()).optional(),
-	tokenExpiryCheckedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-	updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-});
+export const zConfigurationStatus = z.enum([
+	"SATISFIED",
+	"ACTION_REQUIRED",
+	"NOT_CONFIGURED",
+	"NOT_APPLICABLE",
+]);
 
-/**
- * Wire shape returned by the <code>GET /workspaces/{workspaceSlug</code>/connections}
- * list + by lifecycle endpoints (suspend, reactivate). Lightweight — no config, no
- * credentials, no audit.
- */
-export const zConnectionSummary = z.object({
-	attentionProblem: z
-		.enum([
-			"CREDENTIAL_EXPIRING",
-			"CREDENTIAL_REVOKED",
-			"PROVIDER_SUSPENDED",
-			"PROVIDER_CLEANUP_UNCONFIRMED",
-		])
-		.optional(),
-	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-	credentialsUnreadableSince: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-	displayName: z.string().optional(),
-	family: z.enum(["SCM", "MESSAGING", "DOCUMENTATION"]).optional(),
-	id: z.int().optional(),
-	kind: z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]).optional(),
-	state: z.enum(["PENDING", "ACTIVE", "SUSPENDED", "UNINSTALLED"]).optional(),
-	updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-});
+export const zConnectionHealth = z.enum(["PENDING", "HEALTHY", "DEGRADED", "FAILED", "SUSPENDED"]);
 
 export const zConsentStatus = z.object({
 	completed: z.boolean(),
@@ -573,132 +571,6 @@ export const zContributor = z.object({
 	name: z.string(),
 });
 
-export const zCoverageOmission = z.object({
-	count: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	items: z.array(z.string()).optional(),
-	reason: z
-		.enum([
-			"selection",
-			"truncated",
-			"unavailable",
-			"budget",
-			"deadline",
-			"too-large",
-			"off-format",
-			"refused",
-			"error",
-			"cancelled",
-		])
-		.optional(),
-	what: z.string().optional(),
-});
-
-export const zCreateFeedbackDecisionRequest = z.object({
-	action: z.enum(["APPROVE", "REJECT", "WITHDRAW", "RESTORE"]),
-	contentDigest: z
-		.string()
-		.regex(/^[0-9a-f]{64}$/)
-		.optional(),
-	note: z.string().min(0).max(500).optional(),
-	reasonCode: z
-		.enum([
-			"INCORRECT",
-			"MISSING_CONTEXT",
-			"UNHELPFUL",
-			"DUPLICATE",
-			"INAPPROPRIATE_LOCATION",
-			"OTHER",
-		])
-		.optional(),
-});
-
-/**
- * Create an instance LLM provider connection
- */
-export const zCreateLlmConnectionRequest = z.object({
-	apiKey: z.string().optional(),
-	apiProtocol: z.enum(["anthropic-messages", "openai-completions", "openai-responses"]),
-	authMode: z.enum(["BEARER", "API_KEY"]).optional(),
-	baseUrl: z.string().min(0).max(2048),
-	connectionPlatform: z
-		.enum([
-			"LOGOS",
-			"VLLM",
-			"OLLAMA",
-			"AZURE",
-			"AWS_BEDROCK",
-			"GOOGLE_VERTEX",
-			"OPENAI",
-			"GOOGLE_AI_STUDIO",
-			"ALIBABA_CLOUD",
-			"GROQ",
-			"FIREWORKS",
-			"TOGETHER_AI",
-			"DEEPINFRA",
-			"NEBIUS",
-			"OPENROUTER",
-			"CLOUDFLARE_AI_GATEWAY",
-			"VERCEL_AI_GATEWAY",
-		])
-		.optional(),
-	displayName: z.string().min(0).max(128),
-	enabled: z.boolean().optional(),
-	slug: z.string().min(0).max(63).optional(),
-});
-
-/**
- * Create a model on an instance LLM connection
- */
-export const zCreateLlmModelRequest = z.object({
-	brand: z
-		.enum([
-			"OPENAI",
-			"ANTHROPIC",
-			"GEMINI",
-			"GEMMA",
-			"META",
-			"MISTRAL",
-			"QWEN",
-			"DEEPSEEK",
-			"XAI",
-			"COHERE",
-			"Z_AI",
-			"MOONSHOT",
-		])
-		.optional(),
-	contextWindow: z
-		.int()
-		.gte(1)
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	dataHandlingNote: z.string().min(0).max(200).optional(),
-	displayName: z.string().min(0).max(128),
-	enabled: z.boolean().optional(),
-	maxOutputTokens: z
-		.int()
-		.gte(1)
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	operatedBy: z.enum(["OWN_ORGANISATION", "PROVIDER"]).optional(),
-	reasoningEffort: z.enum(["NONE", "MINIMAL", "LOW", "MEDIUM", "HIGH", "XHIGH", "MAX"]).optional(),
-	slug: z.string().min(0).max(63).optional(),
-	upstreamModelId: z.string().min(0).max(256),
-});
-
-export const zCreateLoginProviderRequest = z.object({
-	baseUrl: z.string().optional(),
-	clientId: z.string().min(1),
-	clientSecret: z.string().min(1),
-	displayName: z.string().optional(),
-	registrationId: z.string().min(1),
-	scopes: z.string().optional(),
-	type: z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]),
-});
-
 export const zCreatePracticeGroupRequest = z.object({
 	color: z.string().min(0).max(32).nullable(),
 	description: z.string().min(0).max(2000).nullable(),
@@ -717,11 +589,6 @@ export const zCreatePracticeGroupRequest = z.object({
 		.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*(?![\s\S])/),
 });
 
-export const zCreateResultMarkRequest = z.object({
-	kind: z.enum(["INCORRECT", "ACCEPTED"]),
-	reason: z.string(),
-});
-
 export const zCreateReviewBatchRequest = z.object({
 	budgetUsd: z.string().nullable(),
 	from: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
@@ -733,108 +600,12 @@ export const zCreateReviewRequest = z.object({
 	itemId: z.string().regex(/^[1-9][0-9]*$/),
 });
 
-/**
- * Connect your own AI provider
- */
-export const zCreateWorkspaceLlmConnectionRequest = z.object({
-	apiKey: z.string().optional(),
-	apiProtocol: z.enum(["anthropic-messages", "openai-completions", "openai-responses"]),
-	authMode: z.enum(["BEARER", "API_KEY"]).optional(),
-	baseUrl: z.string().min(0).max(2048),
-	connectionPlatform: z
-		.enum([
-			"LOGOS",
-			"VLLM",
-			"OLLAMA",
-			"AZURE",
-			"AWS_BEDROCK",
-			"GOOGLE_VERTEX",
-			"OPENAI",
-			"GOOGLE_AI_STUDIO",
-			"ALIBABA_CLOUD",
-			"GROQ",
-			"FIREWORKS",
-			"TOGETHER_AI",
-			"DEEPINFRA",
-			"NEBIUS",
-			"OPENROUTER",
-			"CLOUDFLARE_AI_GATEWAY",
-			"VERCEL_AI_GATEWAY",
-		])
-		.optional(),
-	displayName: z.string().min(0).max(128),
-	enabled: z.boolean().optional(),
-	slug: z.string().min(0).max(63).optional(),
-});
-
-/**
- * Create a model on your AI provider
- */
-export const zCreateWorkspaceLlmModelRequest = z.object({
-	brand: z
-		.enum([
-			"OPENAI",
-			"ANTHROPIC",
-			"GEMINI",
-			"GEMMA",
-			"META",
-			"MISTRAL",
-			"QWEN",
-			"DEEPSEEK",
-			"XAI",
-			"COHERE",
-			"Z_AI",
-			"MOONSHOT",
-		])
-		.optional(),
-	contextWindow: z
-		.int()
-		.gte(1)
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	dataHandlingNote: z.string().min(0).max(200).optional(),
-	displayName: z.string().min(0).max(128),
-	enabled: z.boolean().optional(),
-	maxOutputTokens: z
-		.int()
-		.gte(1)
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	operatedBy: z.enum(["OWN_ORGANISATION", "PROVIDER"]).optional(),
-	per1mCacheReadUsd: z.number().optional(),
-	per1mCacheWriteUsd: z.number().optional(),
-	per1mInputUsd: z.number().optional(),
-	per1mOutputUsd: z.number().optional(),
-	priceNote: z.string().min(0).max(500).optional(),
-	pricingMode: z.enum(["PRICED", "NO_CHARGE", "UNPRICED"]).optional(),
-	reasoningEffort: z.enum(["NONE", "MINIMAL", "LOW", "MEDIUM", "HIGH", "XHIGH", "MAX"]).optional(),
-	slug: z.string().min(0).max(63).optional(),
-	upstreamModelId: z.string().min(0).max(256),
-});
-
-/**
- * Request to create a new workspace
- */
-export const zCreateWorkspaceRequest = z.object({
-	accountLogin: z.string().min(0).max(255),
-	accountType: z.enum(["ORG", "USER"]),
-	displayName: z.string().min(0).max(120),
-	kind: z.enum(["GITHUB", "GITLAB"]),
-	personalAccessToken: z.string().min(0).max(512).optional(),
-	repositorySelection: z.enum(["ALL", "SELECTED"]).optional(),
-	selectedProjectIds: z.array(z.int()).optional(),
-	serverUrl: z.string().optional(),
-	workspaceSlug: z
-		.string()
-		.min(3)
-		.max(51)
-		.regex(/^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$/),
-});
-
 export const zCsrfToken = z.object({
 	headerName: z.string(),
 	token: z.string(),
 });
+
+export const zCurrentness = z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]);
 
 /**
  * One page of a list that a client reads forward with a cursor
@@ -860,36 +631,29 @@ export const zCursorPageDtoConsumerDeadLetter = z.object({
 	nextCursor: z.string().optional(),
 });
 
+export const zDataHandlingTier = z.enum(["IN_HOUSE", "CLOUD", "UNDECLARED"]);
+
+/**
+ * A workspace's agent binding for one purpose
+ */
+export const zAgentBinding = z.object({
+	dataHandlingTier: zDataHandlingTier,
+	enabled: z.boolean(),
+	instanceModelId: z.int().optional(),
+	purpose: zAgentPurpose,
+	ready: z.boolean(),
+	servedTiers: z.array(zDataHandlingTier),
+	timeoutSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	workspaceModelId: z.int().optional(),
+});
+
 export const zDeliveredFeedbackPractice = z.object({
 	name: z.string(),
 	slug: z.string(),
-});
-
-export const zDeliveredWorkFeedbackCopy = z.object({
-	endLine: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullable(),
-	externalRef: z.string().nullable(),
-	externalUrl: z.string().nullable(),
-	id: z.uuid(),
-	kind: z.enum(["SUMMARY", "LINE_NOTE", "FILE_NOTE", "CHAT_TURN"]),
-	path: z.string().nullable(),
-	postedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	side: z.enum(["OLD", "NEW"]).nullable(),
-	startLine: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullable(),
-});
-
-export const zDeliveredWorkFeedbackItem = z.object({
-	copies: z.array(zDeliveredWorkFeedbackCopy),
-	deliveredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	id: z.uuid(),
-	practices: z.array(zDeliveredFeedbackPractice),
 });
 
 export const zDutyBasis = zClaimBasis.and(
@@ -910,6 +674,20 @@ export const zEditProductFeedbackDraft = z.object({
 	title: z.string().min(0).max(80),
 });
 
+export const zEmailDeliveryResultOutcome = z.enum([
+	"SENT",
+	"EXPIRED",
+	"NOT_CONFIGURED",
+	"SILENT_MODE",
+	"NO_RECIPIENT",
+	"UNSUBSCRIBED",
+	"INVALID_ADDRESS",
+	"REJECTED",
+	"UNAVAILABLE",
+	"RATE_LIMITED",
+	"UNCONFIRMED",
+]);
+
 export const zEmailStatus = z.object({
 	configured: z.boolean(),
 });
@@ -920,19 +698,7 @@ export const zEmailTestRequest = z.object({
 
 export const zEmailTestResponse = z.object({
 	messageId: z.string().optional(),
-	outcome: z.enum([
-		"SENT",
-		"EXPIRED",
-		"NOT_CONFIGURED",
-		"SILENT_MODE",
-		"NO_RECIPIENT",
-		"UNSUBSCRIBED",
-		"INVALID_ADDRESS",
-		"REJECTED",
-		"UNAVAILABLE",
-		"RATE_LIMITED",
-		"UNCONFIRMED",
-	]),
+	outcome: zEmailDeliveryResultOutcome,
 	to: z.string().optional(),
 });
 
@@ -949,7 +715,7 @@ export const zEvidenceCitation = z.object({
 		.nullable(),
 	path: z.string().nullable(),
 	quote: z.string().nullable(),
-	side: z.enum(["OLD", "NEW"]).nullable(),
+	side: zCitationSide.nullable(),
 	sourceKind: z.string(),
 	sourcePath: z.string().nullable(),
 	startLine: z
@@ -1001,15 +767,6 @@ export const zFeedbackAccountRef = z.object({
 	id: z.int(),
 });
 
-/**
- * A developer's answer to feedback: the resolution, and the explanation only for a disagreement
- */
-export const zFeedbackAnswer = z.object({
-	comment: z.string().nullable(),
-	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	resolution: z.enum(["ADDRESSED", "DISAGREE", "NOT_APPLICABLE"]),
-});
-
 export const zFeedbackCheckFacts = z.object({
 	admittedRolloutRevision: z.string(),
 	approvalCurrent: z.boolean(),
@@ -1023,128 +780,9 @@ export const zFeedbackCheckFacts = z.object({
 	writeStarted: z.boolean(),
 });
 
-export const zFeedbackCheck = z.object({
-	allowed: z.boolean(),
-	checkedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	facts: zFeedbackCheckFacts,
-	reason: z
-		.enum([
-			"VOLUME_CAPPED",
-			"COMPOSER_WITHHELD",
-			"NOTHING_NEW",
-			"REPEATS_DELIVERED_NOTE",
-			"REACTED_DISAGREE",
-			"REACTED_NOT_APPLICABLE",
-			"CONVERSATION_EXPIRED",
-			"DELIVERY_UNCONFIRMED",
-			"ITEM_GONE",
-			"ITEM_CLOSED",
-			"ITEM_MERGED",
-			"ITEM_STATE_INELIGIBLE",
-			"ISSUE_SNAPSHOT_CHANGED",
-			"PUBLIC_SUBJECT_INELIGIBLE",
-			"NO_AI",
-			"DELIVERY_OFF",
-			"PERSON_SUPPRESSED",
-			"RECIPIENT_UNAVAILABLE",
-			"EMPTY_AFTER_SANITIZE",
-			"INSTANCE_SILENCED",
-			"FEEDBACK_OFF",
-			"WORKSPACE_DISABLED",
-			"WORKSPACE_DELIVERY_PAUSED",
-			"STALE_ROLLOUT_REVISION",
-			"OUTSIDE_CURRENT_SCOPE",
-			"APPROVAL_STALE",
-			"APPROVAL_NO_LONGER_ELIGIBLE",
-			"PRACTICE_REQUIRES_APPROVAL",
-			"BACKFILL_QUIET",
-			"RESULT_MARKED_INCORRECT",
-			"REVIEWED_VERSION_CHANGED",
-			"REVIEW_CANCELLED",
-			"EVIDENCE_NOT_PERMITTED",
-			"NO_EVIDENCE",
-			"UNCORROBORATED",
-			"PUBLIC_HISTORY_CHANGED",
-			"PUBLIC_DELIVERY_UNRESOLVED",
-			"STEP_LIMIT",
-			"NOT_COMPOSED",
-		])
-		.nullable(),
-	stage: z.enum(["COMPOSITION", "AUTOMATIC", "APPROVED", "EGRESS"]),
-});
+export const zFeedbackCheckStage = z.enum(["COMPOSITION", "AUTOMATIC", "APPROVED", "EGRESS"]);
 
-export const zFeedbackCopy = z.object({
-	body: z.string().nullable(),
-	endLine: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullable(),
-	externalRef: z.string().nullable(),
-	externalUrl: z.string().nullable(),
-	id: z.uuid(),
-	kind: z.enum(["SUMMARY", "LINE_NOTE", "FILE_NOTE", "CHAT_TURN"]),
-	lastError: z.string().nullable(),
-	mentorEntryId: z.uuid().nullable(),
-	path: z.string().nullable(),
-	position: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	postedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	readback: z.enum(["ABSENT", "TRANSIENT", "UNKNOWN"]).nullable(),
-	side: z.enum(["OLD", "NEW"]).nullable(),
-	startLine: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullable(),
-	state: z.enum(["PLANNED", "WRITE_STARTED", "POSTED", "FAILED", "WITHHELD", "RETRACTED"]),
-	stopReason: z
-		.enum([
-			"VOLUME_CAPPED",
-			"COMPOSER_WITHHELD",
-			"NOTHING_NEW",
-			"REPEATS_DELIVERED_NOTE",
-			"REACTED_DISAGREE",
-			"REACTED_NOT_APPLICABLE",
-			"CONVERSATION_EXPIRED",
-			"DELIVERY_UNCONFIRMED",
-			"ITEM_GONE",
-			"ITEM_CLOSED",
-			"ITEM_MERGED",
-			"ITEM_STATE_INELIGIBLE",
-			"ISSUE_SNAPSHOT_CHANGED",
-			"PUBLIC_SUBJECT_INELIGIBLE",
-			"NO_AI",
-			"DELIVERY_OFF",
-			"PERSON_SUPPRESSED",
-			"RECIPIENT_UNAVAILABLE",
-			"EMPTY_AFTER_SANITIZE",
-			"INSTANCE_SILENCED",
-			"FEEDBACK_OFF",
-			"WORKSPACE_DISABLED",
-			"WORKSPACE_DELIVERY_PAUSED",
-			"STALE_ROLLOUT_REVISION",
-			"OUTSIDE_CURRENT_SCOPE",
-			"APPROVAL_STALE",
-			"APPROVAL_NO_LONGER_ELIGIBLE",
-			"PRACTICE_REQUIRES_APPROVAL",
-			"BACKFILL_QUIET",
-			"RESULT_MARKED_INCORRECT",
-			"REVIEWED_VERSION_CHANGED",
-			"REVIEW_CANCELLED",
-			"EVIDENCE_NOT_PERMITTED",
-			"NO_EVIDENCE",
-			"UNCORROBORATED",
-			"PUBLIC_HISTORY_CHANGED",
-			"PUBLIC_DELIVERY_UNRESOLVED",
-			"STEP_LIMIT",
-			"NOT_COMPOSED",
-		])
-		.nullable(),
-	writeStartedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-});
+export const zFeedbackClosedBy = z.enum(["WORK", "DEVELOPER", "PRACTICE_CHANGED"]);
 
 export const zFeedbackCopyCounts = z.object({
 	failed: z
@@ -1173,18 +811,89 @@ export const zFeedbackCopyCounts = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
+export const zFeedbackCopyKind = z.enum(["SUMMARY", "LINE_NOTE", "FILE_NOTE", "CHAT_TURN"]);
+
+export const zDeliveredWorkFeedbackCopy = z.object({
+	endLine: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullable(),
+	externalRef: z.string().nullable(),
+	externalUrl: z.string().nullable(),
+	id: z.uuid(),
+	kind: zFeedbackCopyKind,
+	path: z.string().nullable(),
+	postedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	side: zCitationSide.nullable(),
+	startLine: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullable(),
+});
+
+export const zDeliveredWorkFeedbackItem = z.object({
+	copies: z.array(zDeliveredWorkFeedbackCopy),
+	deliveredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	id: z.uuid(),
+	practices: z.array(zDeliveredFeedbackPractice),
+});
+
+export const zFeedbackCopyReadback = z.enum(["ABSENT", "TRANSIENT", "UNKNOWN"]);
+
+export const zFeedbackCopyState = z.enum([
+	"PLANNED",
+	"WRITE_STARTED",
+	"POSTED",
+	"FAILED",
+	"WITHHELD",
+	"RETRACTED",
+]);
+
+export const zFeedbackDecisionAction = z.enum(["APPROVE", "REJECT", "WITHDRAW", "RESTORE"]);
+
+export const zFeedbackDecisionReason = z.enum([
+	"INCORRECT",
+	"MISSING_CONTEXT",
+	"UNHELPFUL",
+	"DUPLICATE",
+	"INAPPROPRIATE_LOCATION",
+	"OTHER",
+]);
+
+export const zCreateFeedbackDecisionRequest = z.object({
+	action: zFeedbackDecisionAction,
+	contentDigest: z
+		.string()
+		.regex(/^[0-9a-f]{64}$/)
+		.optional(),
+	note: z.string().min(0).max(500).optional(),
+	reasonCode: zFeedbackDecisionReason.optional(),
+});
+
+export const zFeedbackDestination = z.enum(["ON_WORK", "PRACTICE_PAGE", "CONVERSATION"]);
+
 export const zFeedbackDisagreement = z.object({
 	comment: z.string(),
-	destination: z.enum(["ON_WORK", "PRACTICE_PAGE", "CONVERSATION"]),
+	destination: zFeedbackDestination,
 	feedbackId: z.uuid(),
 	respondedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 });
 
-export const zFeedbackModeAssignment = z.object({
-	effective: z.enum(["OFF", "APPROVE_FIRST", "AUTOMATIC"]),
-	override: z.enum(["OFF", "APPROVE_FIRST", "AUTOMATIC"]).nullable(),
-	source: z.enum(["PRACTICE", "GROUP", "WORKSPACE", "INSTANCE"]),
-});
+export const zFeedbackFilter = z.enum(["OPEN", "RESOLVED", "ALL"]);
+
+export const zFeedbackLocation = z.enum([
+	"GITHUB",
+	"GITLAB",
+	"OTHER_WORK",
+	"HEPH",
+	"SLACK",
+	"NEXT_CONVERSATION",
+	"PRACTICE_PAGES",
+]);
+
+export const zFeedbackMode = z.enum(["OFF", "APPROVE_FIRST", "AUTOMATIC"]);
 
 export const zFeedbackModeRollup = z.object({
 	approveFirst: z
@@ -1195,56 +904,38 @@ export const zFeedbackModeRollup = z.object({
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	defaultMode: z.enum(["OFF", "APPROVE_FIRST", "AUTOMATIC"]),
+	defaultMode: zFeedbackMode,
 	off: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
-export const zFeedbackReceipt = z.object({
-	filedAfter: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-	id: z.uuid(),
-	route: z.enum(["PUBLIC", "PRIVATE", "ADMINS"]),
-	state: z.enum(["SAVED_FOR_ADMINS", "DRAFTING", "HELD", "FILING", "FILED", "STOPPED"]),
+export const zFeedbackModeSource = z.enum(["PRACTICE", "GROUP", "WORKSPACE", "INSTANCE"]);
+
+export const zFeedbackModeAssignment = z.object({
+	effective: zFeedbackMode,
+	override: zFeedbackMode.nullable(),
+	source: zFeedbackModeSource,
 });
 
-export const zFeedbackRequest = z.object({
-	kind: z.enum(["IDEA", "BUG", "FEEDBACK"]),
-	message: z.string().min(0).max(5000),
-	pagePath: z
-		.string()
-		.min(0)
-		.max(500)
-		.regex(/\/|(\/(?:[a-z0-9][a-z0-9-]*|\$[A-Za-z]*))+/)
-		.optional(),
-	share: z.boolean().optional(),
-	userAgent: z
-		.string()
-		.min(0)
-		.max(500)
-		.regex(/[^\p{Cc}]*/u)
-		.optional(),
-});
-
-export const zFeedbackResponse = z.object({
-	comment: z.string().nullable(),
-	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	resolution: z.enum(["ADDRESSED", "DISAGREE", "NOT_APPLICABLE"]).nullable(),
-	usefulness: z.enum(["HELPFUL", "UNHELPFUL"]).nullable(),
-});
+export const zFeedbackResolution = z.enum(["ADDRESSED", "DISAGREE", "NOT_APPLICABLE"]);
 
 /**
- * The complete response to delivered feedback
+ * A developer's answer to feedback: the resolution, and the explanation only for a disagreement
  */
-export const zFeedbackResponseRequest = z.object({
-	comment: z.string().min(0).max(2000).optional(),
-	resolution: z.enum(["ADDRESSED", "DISAGREE", "NOT_APPLICABLE"]).optional(),
-	usefulness: z.enum(["HELPFUL", "UNHELPFUL"]).optional(),
+export const zFeedbackAnswer = z.object({
+	comment: z.string().nullable(),
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	resolution: zFeedbackResolution,
 });
 
+export const zFeedbackSendAction = z.enum(["POST", "EDIT", "READBACK", "RETRACT"]);
+
+export const zFeedbackSendState = z.enum(["PENDING", "SENDING", "UNCERTAIN", "DONE"]);
+
 export const zFeedbackSend = z.object({
-	action: z.enum(["POST", "EDIT", "READBACK", "RETRACT"]),
+	action: zFeedbackSendAction,
 	attemptCount: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -1253,7 +944,7 @@ export const zFeedbackSend = z.object({
 	feedbackId: z.uuid(),
 	lastError: z.string().nullable(),
 	nextAttemptAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	state: z.enum(["PENDING", "SENDING", "UNCERTAIN", "DONE"]),
+	state: zFeedbackSendState,
 	updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 });
 
@@ -1262,8 +953,118 @@ export const zFeedbackSourceCount = z.object({
 	itemKind: z.string(),
 });
 
+export const zFeedbackState = z.enum([
+	"AWAITING_APPROVAL",
+	"READY",
+	"DELIVERED",
+	"UNCONFIRMED",
+	"WITHHELD",
+	"REJECTED",
+	"REPLACED",
+	"FAILED",
+]);
+
+export const zFeedbackStopReason = z.enum([
+	"VOLUME_CAPPED",
+	"COMPOSER_WITHHELD",
+	"NOTHING_NEW",
+	"REPEATS_DELIVERED_NOTE",
+	"REACTED_DISAGREE",
+	"REACTED_NOT_APPLICABLE",
+	"CONVERSATION_EXPIRED",
+	"DELIVERY_UNCONFIRMED",
+	"ITEM_GONE",
+	"ITEM_CLOSED",
+	"ITEM_MERGED",
+	"ITEM_STATE_INELIGIBLE",
+	"ISSUE_SNAPSHOT_CHANGED",
+	"PUBLIC_SUBJECT_INELIGIBLE",
+	"NO_AI",
+	"DELIVERY_OFF",
+	"PERSON_SUPPRESSED",
+	"RECIPIENT_UNAVAILABLE",
+	"EMPTY_AFTER_SANITIZE",
+	"INSTANCE_SILENCED",
+	"FEEDBACK_OFF",
+	"WORKSPACE_DISABLED",
+	"WORKSPACE_DELIVERY_PAUSED",
+	"STALE_ROLLOUT_REVISION",
+	"OUTSIDE_CURRENT_SCOPE",
+	"APPROVAL_STALE",
+	"APPROVAL_NO_LONGER_ELIGIBLE",
+	"PRACTICE_REQUIRES_APPROVAL",
+	"BACKFILL_QUIET",
+	"RESULT_MARKED_INCORRECT",
+	"REVIEWED_VERSION_CHANGED",
+	"REVIEW_CANCELLED",
+	"EVIDENCE_NOT_PERMITTED",
+	"NO_EVIDENCE",
+	"UNCORROBORATED",
+	"PUBLIC_HISTORY_CHANGED",
+	"PUBLIC_DELIVERY_UNRESOLVED",
+	"STEP_LIMIT",
+	"NOT_COMPOSED",
+]);
+
+export const zFeedbackCheck = z.object({
+	allowed: z.boolean(),
+	checkedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	facts: zFeedbackCheckFacts,
+	reason: zFeedbackStopReason.nullable(),
+	stage: zFeedbackCheckStage,
+});
+
+export const zFeedbackCopy = z.object({
+	body: z.string().nullable(),
+	endLine: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullable(),
+	externalRef: z.string().nullable(),
+	externalUrl: z.string().nullable(),
+	id: z.uuid(),
+	kind: zFeedbackCopyKind,
+	lastError: z.string().nullable(),
+	mentorEntryId: z.uuid().nullable(),
+	path: z.string().nullable(),
+	position: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	postedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	readback: zFeedbackCopyReadback.nullable(),
+	side: zCitationSide.nullable(),
+	startLine: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullable(),
+	state: zFeedbackCopyState,
+	stopReason: zFeedbackStopReason.nullable(),
+	writeStartedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+});
+
 export const zFeedbackTriage = z.object({
 	resolved: z.boolean(),
+});
+
+export const zFeedbackUsefulness = z.enum(["HELPFUL", "UNHELPFUL"]);
+
+export const zFeedbackResponse = z.object({
+	comment: z.string().nullable(),
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	resolution: zFeedbackResolution.nullable(),
+	usefulness: zFeedbackUsefulness.nullable(),
+});
+
+/**
+ * The complete response to delivered feedback
+ */
+export const zFeedbackResponseRequest = z.object({
+	comment: z.string().min(0).max(2000).optional(),
+	resolution: zFeedbackResolution.optional(),
+	usefulness: zFeedbackUsefulness.optional(),
 });
 
 /**
@@ -1275,21 +1076,32 @@ export const zFeedbackWorkspaceRef = z.object({
 	slug: z.string(),
 });
 
-export const zFeedbackItem = z.object({
-	account: zFeedbackAccountRef.optional(),
-	appVersion: z.string().optional(),
-	canFile: z.boolean(),
-	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+export const zFilingReportRoute = z.enum(["PUBLIC", "PRIVATE", "ADMINS"]);
+
+export const zFilingReportState = z.enum([
+	"SAVED_FOR_ADMINS",
+	"DRAFTING",
+	"HELD",
+	"FILING",
+	"FILED",
+	"STOPPED",
+]);
+
+export const zFeedbackReceipt = z.object({
+	filedAfter: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	id: z.uuid(),
-	kind: z.enum(["IDEA", "BUG", "FEEDBACK"]),
-	message: z.string(),
-	pagePath: z.string().optional(),
-	resolvedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-	resolvedBy: zFeedbackAccountRef.optional(),
-	savedBeforeDisclosure: z.boolean(),
-	userAgent: z.string().optional(),
-	workspace: zFeedbackWorkspaceRef.optional(),
+	route: zFilingReportRoute,
+	state: zFilingReportState,
 });
+
+export const zFilingRepositoryCheck = z.enum([
+	"UNSET",
+	"INSTALLED",
+	"MISSING",
+	"NOT_PRIVATE",
+	"NOT_PUBLIC",
+	"DIFFERENT_OWNER",
+]);
 
 export const zFirstLoginConsent = z.object({
 	noticeVersion: z.string(),
@@ -1298,6 +1110,8 @@ export const zFirstLoginConsent = z.object({
 	termsAccepted: z.boolean(),
 });
 
+export const zFoundBy = z.enum(["WEBHOOK", "SYNC", "REQUEST", "BACKFILL", "SCHEDULE"]);
+
 /**
  * One frame of the stack, in a script that the server's own web app ships
  */
@@ -1305,55 +1119,6 @@ export const zFrame = z.object({
 	chunk: z.string().regex(/[A-Za-z0-9_-]{8}/),
 	column: z.int().gte(1).lte(10000000),
 	line: z.int().gte(1).lte(10000000),
-});
-
-/**
- * One failure that a reader met, counted while its page stayed open
- */
-export const zBrowserFault = z.object({
-	count: z.int().gte(1).lte(100),
-	errorType: z.enum([
-		"TYPE_ERROR",
-		"REFERENCE_ERROR",
-		"SYNTAX_ERROR",
-		"RANGE_ERROR",
-		"OTHER",
-		"CHUNK",
-		"HTTP_5XX",
-		"NETWORK",
-	]),
-	frames: z.array(zFrame).min(0).max(10),
-	kind: z.enum([
-		"UNCAUGHT_ERROR",
-		"UNHANDLED_REJECTION",
-		"RENDER_ERROR",
-		"RECOVERED_ERROR",
-		"CHUNK_LOAD_FAILED",
-		"REQUEST_FAILED",
-	]),
-	page: z.enum([
-		"PRACTICE_PROFILE",
-		"ASK_HEPHAESTUS",
-		"FEEDBACK",
-		"FEEDBACK_APPROVAL",
-		"ACTIVITY",
-		"OTHER",
-	]),
-	release: z
-		.string()
-		.regex(/[0-9a-f]{7,40}|\d{1,4}\.\d{1,4}\.\d{1,4}(-(alpha|beta|rc)\.\d{1,4})?|DEV/),
-	status: z.int().gte(500).lte(599).optional(),
-	traceId: z
-		.string()
-		.regex(/[0-9a-f]{32}/)
-		.optional(),
-});
-
-/**
- * The failures that one page met since its last report
- */
-export const zBrowserFaultsReport = z.object({
-	faults: z.array(zBrowserFault).min(1).max(20),
 });
 
 export const zFrozenModel = z.object({
@@ -1375,12 +1140,6 @@ export const zFrozenModel = z.object({
 	reasoningEffort: z.string().nullable(),
 });
 
-export const zBoundModelSlot = z.object({
-	kind: z.enum(["CHAT", "DECISION", "EMBEDDING", "RERANKING"]),
-	model: zFrozenModel.nullable(),
-	slot: z.string(),
-});
-
 /**
  * Display-only currency conversion for the USD amounts in this response. Multiply a USD amount by ratePerUsd to get the display-currency estimate; always label it as an estimate and show rateDate, which is the date the rate was actually published on (not necessarily today), and attribute it to source.
  */
@@ -1398,11 +1157,15 @@ export const zGeneratedPathReview = z.object({
 	withheld: z.boolean(),
 });
 
+export const zGitHubInstallationAccountKind = z.enum(["USER", "ORGANIZATION"]);
+
+export const zGitHubInstallationClaimOutcome = z.enum(["READY", "AWAITING_APPROVAL", "SETTING_UP"]);
+
 /**
  * What happens next with the GitHub App installation that the signed-in person set up
  */
 export const zGitHubInstallationClaim = z.object({
-	outcome: z.enum(["READY", "AWAITING_APPROVAL", "SETTING_UP"]),
+	outcome: zGitHubInstallationClaimOutcome,
 	workspaceSlug: z.string().optional(),
 });
 
@@ -1410,16 +1173,18 @@ export const zGitHubInstallationClaimRequest = z.object({
 	code: z.string().min(0).max(255),
 });
 
+export const zGitHubInstallationRequestStatus = z.enum(["PENDING", "DECLINED", "ADOPTED"]);
+
 /**
  * A GitHub App installation and an instance admin's decision on it
  */
 export const zGitHubInstallationRequest = z.object({
-	accountKind: z.enum(["USER", "ORGANIZATION"]),
+	accountKind: zGitHubInstallationAccountKind,
 	accountLogin: z.string(),
 	decidedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	installationId: z.int(),
 	receivedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	status: z.enum(["PENDING", "DECLINED", "ADOPTED"]),
+	status: zGitHubInstallationRequestStatus,
 	workspaceSlug: z.string().optional(),
 });
 
@@ -1487,13 +1252,6 @@ export const zGitLabProvider = z.object({
 });
 
 /**
- * Whether a GitLab workspace follows every project of its group or only the projects it monitors
- */
-export const zGitLabRepositorySelection = z.object({
-	repositorySelection: z.enum(["ALL", "SELECTED"]),
-});
-
-/**
  * A stopped GitLab project whose synced work the workspace still keeps
  */
 export const zGitLabStoppedProject = z.object({
@@ -1511,12 +1269,12 @@ export const zGroupDefinition = z.object({
 
 export const zCatalogAdoptionGroup = z.object({
 	definition: zGroupDefinition.optional(),
-	disposition: z.enum(["UNASSIGNED", "REUSE_EXISTING_GROUP", "CREATE_CATALOG_GROUP"]).optional(),
+	disposition: zCatalogGroupDisposition.optional(),
 	slug: z.string().optional(),
 });
 
 export const zCatalogGroup = z.object({
-	changeKind: z.enum(["NONE", "WORDING", "PRESENTATION", "REVIEW"]),
+	changeKind: zCatalogChangeKind,
 	color: z.string().nullable(),
 	description: z.string().nullable(),
 	etag: z.string(),
@@ -1530,7 +1288,7 @@ export const zCatalogGroup = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	shipped: zGroupDefinition.nullable(),
 	slug: z.string(),
-	state: z.enum(["FROM_HEPHAESTUS", "EDITED_HERE", "UPDATE_WAITING", "YOURS", "NO_LONGER_SHIPPED"]),
+	state: zCatalogEntryState,
 });
 
 export const zGroupRef = z.object({
@@ -1540,11 +1298,15 @@ export const zGroupRef = z.object({
 	slug: z.string(),
 });
 
+export const zGuidanceSource = z.enum(["RULE_BASED"]);
+
 export const zIdentity = z.object({
 	providerId: z.int(),
 	subject: z.string().min(1).max(255),
 	teamId: z.string().min(1).max(255).optional(),
 });
+
+export const zIdentityProviderType = z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]);
 
 /**
  * One row per sign-in option. <code>providerType</code> drives the SPA's icon choice; <code>baseUrl</code> is
@@ -1581,17 +1343,7 @@ export const zInapplicabilityWarrant = z.object({
 	ruledOutBy: z.string().optional(),
 });
 
-/**
- * Inbound payload for <code>POST /workspaces/{workspaceSlug</code>/connections}.
- *
- * <p><code>userInput</code> is intentionally a free-form map so per-kind ConnectionStrategy
- * implementations can dictate their own field schema (e.g. Outline needs <code>server_url</code>; GitHub
- * needs nothing because the install URL is server-configured).
- */
-export const zInitiateConnectionRequest = z.object({
-	kind: z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]),
-	userInput: z.record(z.string(), z.string()).optional(),
-});
+export const zInitiateConnectionResponseType = z.enum(["REDIRECT", "LINKED"]);
 
 /**
  * Flat response for <code>POST /workspaces/{workspaceSlug</code>/connections}.
@@ -1612,7 +1364,7 @@ export const zInitiateConnectionRequest = z.object({
  */
 export const zInitiateConnectionResponse = z.object({
 	connectionId: z.int().optional(),
-	type: z.enum(["REDIRECT", "LINKED"]),
+	type: zInitiateConnectionResponseType,
 	vendorUrl: z.url().optional(),
 });
 
@@ -1632,24 +1384,93 @@ export const zInstanceSettings = z.object({
 	silentModeReason: z.string().optional(),
 });
 
+export const zIntegrationAttentionChangedEventProblem = z.enum([
+	"CREDENTIAL_EXPIRING",
+	"CREDENTIAL_REVOKED",
+	"PROVIDER_SUSPENDED",
+	"PROVIDER_CLEANUP_UNCONFIRMED",
+]);
+
+export const zIntegrationFamily = z.enum(["SCM", "MESSAGING", "DOCUMENTATION"]);
+
+export const zIntegrationKind = z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]);
+
+/**
+ * Inbound payload for <code>POST /workspaces/{workspaceSlug</code>/connections}.
+ *
+ * <p><code>userInput</code> is intentionally a free-form map so per-kind ConnectionStrategy
+ * implementations can dictate their own field schema (e.g. Outline needs <code>server_url</code>; GitHub
+ * needs nothing because the install URL is server-configured).
+ */
+export const zInitiateConnectionRequest = z.object({
+	kind: zIntegrationKind,
+	userInput: z.record(z.string(), z.string()).optional(),
+});
+
+export const zIntegrationState = z.enum(["PENDING", "ACTIVE", "SUSPENDED", "UNINSTALLED"]);
+
+/**
+ * Detailed view of a single Connection — extends {@link ConnectionSummaryDTO ConnectionSummaryDTO} with the
+ * sealed config serialized to a free-form JSON object (<code>Map&lt;String, Object&gt;</code> →
+ * <code>type: object, additionalProperties: true</code> in the spec, so it round-trips through
+ * client codegen). NEVER carries credentials: the encrypted credential blob stays inside the
+ * entity, and every secret-bearing key of the config itself is stripped by
+ * <code>redactSensitive</code> before serialization.
+ *
+ * <p><b>Why redact here and not with <code>@JsonIgnore</code> on the record component?</b> The very
+ * same <code>ObjectMapper</code> bean serializes <code>ConnectionConfig</code> into the JSONB
+ * <code>connection.config</code> column (Hibernate's <code>json_format_mapper</code> is wired to it in
+ * <code>HibernateJacksonFormatMapperConfig</code>). Annotating the component would therefore drop the
+ * secret on write and destroy the stored value — the API-boundary filter below is the only place
+ * the two concerns can be separated.
+ *
+ * <p>Mirroring the summary fields (rather than embedding the summary record) keeps
+ * the JSON shape flat — the API consumer sees one record, not a nested <code>summary</code>
+ * object.
+ */
+export const zConnectionDetail = z.object({
+	attentionProblem: zIntegrationAttentionChangedEventProblem.optional(),
+	config: z.record(z.string(), z.unknown()).optional(),
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	credentialsUnreadableSince: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	displayName: z.string().optional(),
+	family: zIntegrationFamily.optional(),
+	id: z.int().optional(),
+	kind: zIntegrationKind.optional(),
+	state: zIntegrationState.optional(),
+	tokenExpiresAt: z.iso.date().pipe(z.coerce.date()).optional(),
+	tokenExpiryCheckedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+});
+
+/**
+ * Wire shape returned by the <code>GET /workspaces/{workspaceSlug</code>/connections}
+ * list + by lifecycle endpoints (suspend, reactivate). Lightweight — no config, no
+ * credentials, no audit.
+ */
+export const zConnectionSummary = z.object({
+	attentionProblem: zIntegrationAttentionChangedEventProblem.optional(),
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	credentialsUnreadableSince: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	displayName: z.string().optional(),
+	family: zIntegrationFamily.optional(),
+	id: z.int().optional(),
+	kind: zIntegrationKind.optional(),
+	state: zIntegrationState.optional(),
+	updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+});
+
 /**
  * Integration kind availability + connection status for this workspace
  */
 export const zIntegrationCatalogEntry = z.object({
-	attentionProblem: z
-		.enum([
-			"CREDENTIAL_EXPIRING",
-			"CREDENTIAL_REVOKED",
-			"PROVIDER_SUSPENDED",
-			"PROVIDER_CLEANUP_UNCONFIRMED",
-		])
-		.optional(),
+	attentionProblem: zIntegrationAttentionChangedEventProblem.optional(),
 	connected: z.boolean(),
 	connectionId: z.int().optional(),
-	connectionState: z.enum(["PENDING", "ACTIVE", "SUSPENDED", "UNINSTALLED"]).optional(),
+	connectionState: zIntegrationState.optional(),
 	credentialsUnreadableSince: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	displayName: z.string(),
-	kind: z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]),
+	kind: zIntegrationKind,
 });
 
 export const zIntroducedBasis = zClaimBasis.and(
@@ -1664,59 +1485,19 @@ export const zIntroducedBasis = zClaimBasis.and(
 	}),
 );
 
-export const zItemEvent = z.object({
-	decidedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	foundBy: z.enum(["WEBHOOK", "SYNC", "REQUEST", "BACKFILL", "SCHEDULE"]),
-	id: z.uuid(),
-	itemId: z.string().regex(/^[1-9][0-9]*$/),
-	itemVersion: z.string().nullable(),
-	name: z.string(),
-	occurredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	reason: z
-		.enum([
-			"GATE_WITHHELD",
-			"COOLDOWN_ACTIVE",
-			"REQUEST_COOLDOWN_ACTIVE",
-			"REQUESTER_QUOTA_EXHAUSTED",
-			"CONCURRENT_DUPLICATE",
-			"COALESCED",
-			"OUT_OF_REVIEW_SCOPE",
-			"BOT_AUTHOR",
-			"BOT_REVIEWER",
-			"STALE_ROLLOUT_REVISION",
-			"WORKSPACE_INACTIVE",
-			"PRACTICES_DISABLED",
-			"NO_ACTIVE_PRACTICE",
-			"REVIEW_MODEL_UNBOUND",
-			"MEMBER_AI_DECLINED",
-			"PERSON_DATA_ERASED",
-			"FEEDBACK_MODE_OFF",
-			"SUBJECT_UNLINKED",
-			"MERGE_ACTOR_UNAVAILABLE",
-			"MODEL_UNAVAILABLE",
-			"BUDGET_EXHAUSTED",
-			"ITEM_NOT_VISIBLE",
-			"VERSION_SUPERSEDED",
-			"PENDING_DEADLINE_EXCEEDED",
-			"ITEM_GONE",
-			"LEGACY_REVIEW_UNBOUND",
-			"OCCASION_EVIDENCE_UNAVAILABLE",
-			"QUIET_WINDOW",
-			"REVIEW_IN_PROGRESS",
-			"ALREADY_CURRENT",
-		])
-		.nullable(),
-	reviewId: z.uuid().nullable(),
-	state: z.enum(["RECORDED", "WAITING", "STARTED", "WITHHELD", "EXPIRED"]),
-});
+export const zIssueState = z.enum(["OPEN", "CLOSED", "MERGED"]);
 
 export const zItemEventOption = z.object({
 	connected: z.boolean(),
 	label: z.string(),
 	name: z.string(),
-	raisedBy: z.array(z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"])),
+	raisedBy: z.array(zIntegrationKind),
 	recommended: z.boolean(),
 });
+
+export const zItemEventState = z.enum(["RECORDED", "WAITING", "STARTED", "WITHHELD", "EXPIRED"]);
+
+export const zItemExclusionReason = z.enum(["FILE_TOO_LARGE", "BINARY_FILE"]);
 
 export const zItemFact = z.object({
 	name: z.string(),
@@ -1734,7 +1515,7 @@ export const zItemRef = z.object({
 		.regex(/^[1-9][0-9]*$/)
 		.nullable(),
 	path: z.string().nullable(),
-	provider: z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]).nullable(),
+	provider: zIntegrationKind.nullable(),
 	removedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	title: z.string().nullable(),
 	url: z.string().nullable(),
@@ -1750,25 +1531,6 @@ export const zItemFacts = z.object({
 	item: zItemRef,
 });
 
-export const zJudgedScanReportItem = z.object({
-	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
-	item: zItemRef,
-	itemVersion: z.string(),
-	outcome: z.enum(["MET", "NOT_MET", "DOES_NOT_APPLY", "COULD_NOT_DETERMINE"]),
-	practiceName: z.string(),
-	practiceSlug: z.string(),
-	problemCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	recordedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	resultId: z.uuid(),
-	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]).nullable(),
-	sourceReviewId: z.uuid(),
-	status: z.enum(["JUDGED"]),
-	summary: z.string().nullable(),
-});
-
 /**
  * A published release. <code>schemaMigrations</code> is the flag the release workflow publishes for
  * that one release and is absent when the notes carry none; it says nothing about releases
@@ -1780,6 +1542,8 @@ export const zLatestRelease = z.object({
 	schemaMigrations: z.boolean().optional(),
 	version: z.string(),
 });
+
+export const zLineageKind = z.enum(["ITEM", "REVIEW", "RESULT", "PROBLEM", "FEEDBACK"]);
 
 /**
  * A provider instance the current user is linked to: its type + server-url origin.
@@ -1805,6 +1569,16 @@ export const zCurrentUserView = z.object({
 	status: z.string().optional(),
 	username: z.string().optional(),
 });
+
+export const zLlmApiProtocol = z.enum([
+	"anthropic-messages",
+	"openai-completions",
+	"openai-responses",
+]);
+
+export const zLlmAuthMode = z.enum(["BEARER", "API_KEY"]);
+
+export const zLlmBudgetVerdict = z.enum(["WITHIN", "EXHAUSTED", "UNVERIFIABLE"]);
 
 /**
  * Provider capacity that the models in it share
@@ -1863,17 +1637,52 @@ export const zLlmCallPoolMembership = z.object({
 	slug: z.string(),
 });
 
+export const zLlmConnectionPlatform = z.enum([
+	"LOGOS",
+	"VLLM",
+	"OLLAMA",
+	"AZURE",
+	"AWS_BEDROCK",
+	"GOOGLE_VERTEX",
+	"OPENAI",
+	"GOOGLE_AI_STUDIO",
+	"ALIBABA_CLOUD",
+	"GROQ",
+	"FIREWORKS",
+	"TOGETHER_AI",
+	"DEEPINFRA",
+	"NEBIUS",
+	"OPENROUTER",
+	"CLOUDFLARE_AI_GATEWAY",
+	"VERCEL_AI_GATEWAY",
+]);
+
 /**
- * A model and the pool its calls share
+ * Create an instance LLM provider connection
  */
-export const zLlmCallPoolModel = z.object({
-	callPoolId: z.int(),
-	connectionDisplayName: z.string(),
-	displayName: z.string(),
-	host: z.string().optional(),
-	modelId: z.int(),
-	scope: z.enum(["INSTANCE", "WORKSPACE"]),
-	workspaceSlug: z.string().optional(),
+export const zCreateLlmConnectionRequest = z.object({
+	apiKey: z.string().optional(),
+	apiProtocol: zLlmApiProtocol,
+	authMode: zLlmAuthMode.optional(),
+	baseUrl: z.string().min(0).max(2048),
+	connectionPlatform: zLlmConnectionPlatform.optional(),
+	displayName: z.string().min(0).max(128),
+	enabled: z.boolean().optional(),
+	slug: z.string().min(0).max(63).optional(),
+});
+
+/**
+ * Connect your own AI provider
+ */
+export const zCreateWorkspaceLlmConnectionRequest = z.object({
+	apiKey: z.string().optional(),
+	apiProtocol: zLlmApiProtocol,
+	authMode: zLlmAuthMode.optional(),
+	baseUrl: z.string().min(0).max(2048),
+	connectionPlatform: zLlmConnectionPlatform.optional(),
+	displayName: z.string().min(0).max(128),
+	enabled: z.boolean().optional(),
+	slug: z.string().min(0).max(63).optional(),
 });
 
 /**
@@ -1881,39 +1690,23 @@ export const zLlmCallPoolModel = z.object({
  */
 export const zLlmConnection = z.object({
 	apiKeyLast4: z.string().optional(),
-	apiProtocol: z.enum(["anthropic-messages", "openai-completions", "openai-responses"]),
-	authMode: z.enum(["BEARER", "API_KEY"]),
+	apiProtocol: zLlmApiProtocol,
+	authMode: zLlmAuthMode,
 	baseUrl: z.string(),
-	connectionPlatform: z
-		.enum([
-			"LOGOS",
-			"VLLM",
-			"OLLAMA",
-			"AZURE",
-			"AWS_BEDROCK",
-			"GOOGLE_VERTEX",
-			"OPENAI",
-			"GOOGLE_AI_STUDIO",
-			"ALIBABA_CLOUD",
-			"GROQ",
-			"FIREWORKS",
-			"TOGETHER_AI",
-			"DEEPINFRA",
-			"NEBIUS",
-			"OPENROUTER",
-			"CLOUDFLARE_AI_GATEWAY",
-			"VERCEL_AI_GATEWAY",
-		])
-		.optional(),
+	connectionPlatform: zLlmConnectionPlatform.optional(),
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	displayName: z.string(),
 	enabled: z.boolean(),
 	hasApiKey: z.boolean(),
 	id: z.int(),
-	purposes: z.array(z.enum(["PRACTICE_REVIEW", "MENTOR"])),
+	purposes: z.array(zAgentPurpose),
 	slug: z.string(),
 	updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 });
+
+export const zLlmDataOperator = z.enum(["OWN_ORGANISATION", "PROVIDER"]);
+
+export const zLlmLimitSource = z.enum(["ADMIN", "DISCOVERED", "CATALOG", "DERIVED"]);
 
 /**
  * A synthetic probe result, not a claim about the quality of the model's answers.
@@ -1932,81 +1725,16 @@ export const zLlmModelLimits = z.object({
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
-	contextWindowSource: z.enum(["ADMIN", "DISCOVERED", "CATALOG", "DERIVED"]).optional(),
+	contextWindowSource: zLlmLimitSource.optional(),
 	maxOutputTokens: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
-	maxOutputTokensSource: z.enum(["ADMIN", "DISCOVERED", "CATALOG", "DERIVED"]).optional(),
+	maxOutputTokensSource: zLlmLimitSource.optional(),
 });
 
-/**
- * A model's price, per 1M tokens
- */
-export const zLlmModelPrice = z.object({
-	currency: z.string(),
-	effectiveFrom: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	effectiveTo: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-	id: z.int(),
-	note: z.string().optional(),
-	per1mCacheReadUsd: z.number().optional(),
-	per1mCacheWriteUsd: z.number().optional(),
-	per1mInputUsd: z.number().optional(),
-	per1mOutputUsd: z.number().optional(),
-	pricingMode: z.enum(["PRICED", "NO_CHARGE", "UNPRICED"]),
-});
-
-/**
- * Instance catalog model
- */
-export const zLlmModel = z.object({
-	brand: z
-		.enum([
-			"OPENAI",
-			"ANTHROPIC",
-			"GEMINI",
-			"GEMMA",
-			"META",
-			"MISTRAL",
-			"QWEN",
-			"DEEPSEEK",
-			"XAI",
-			"COHERE",
-			"Z_AI",
-			"MOONSHOT",
-		])
-		.optional(),
-	callPoolId: z.int().optional(),
-	connectionDisplayName: z.string(),
-	connectionId: z.int(),
-	contextWindow: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	currentPrice: zLlmModelPrice.optional(),
-	dataHandlingNote: z.string().optional(),
-	dataHandlingTier: z.enum(["IN_HOUSE", "CLOUD", "UNDECLARED"]),
-	displayName: z.string(),
-	enabled: z.boolean(),
-	forcedToolChoice: z.boolean().optional(),
-	grantedWorkspaceIds: z.array(z.int()),
-	id: z.int(),
-	limits: zLlmModelLimits,
-	maxOutputTokens: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	operatedBy: z.enum(["OWN_ORGANISATION", "PROVIDER"]).optional(),
-	reasoningEffort: z.enum(["NONE", "MINIMAL", "LOW", "MEDIUM", "HIGH", "XHIGH", "MAX"]).optional(),
-	slug: z.string(),
-	updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-	upstreamModelId: z.string(),
-	visibility: z.enum(["PUBLIC", "GRANTED"]),
-});
+export const zLlmModelScope = z.enum(["SHARED", "WORKSPACE"]);
 
 /**
  * Result of testing an LLM connection's /models endpoint
@@ -2036,12 +1764,12 @@ export const zLlmUnmeasuredUsage = z.object({
 export const zAdminWorkspaceLlmUsage = z.object({
 	displayName: z.string(),
 	events: z.int(),
-	instanceBudgetVerdict: z.enum(["WITHIN", "EXHAUSTED", "UNVERIFIABLE"]),
+	instanceBudgetVerdict: zLlmBudgetVerdict,
 	instanceMonthlyBudgetUsd: z.number().optional(),
 	instancePaused: z.boolean(),
 	instanceTotalCostUsd: z.number(),
 	instanceUnmeasured: zLlmUnmeasuredUsage,
-	ownProviderBudgetVerdict: z.enum(["WITHIN", "EXHAUSTED", "UNVERIFIABLE"]),
+	ownProviderBudgetVerdict: zLlmBudgetVerdict,
 	ownProviderInUse: z.boolean(),
 	ownProviderMonthlyBudgetUsd: z.number().optional(),
 	ownProviderPaused: z.boolean(),
@@ -2086,6 +1814,18 @@ export const zLlmUsageByJobType = z.object({
 	unpricedEventCount: z.int(),
 });
 
+export const zLoginProviderProviderType = z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]);
+
+export const zCreateLoginProviderRequest = z.object({
+	baseUrl: z.string().optional(),
+	clientId: z.string().min(1),
+	clientSecret: z.string().min(1),
+	displayName: z.string().optional(),
+	registrationId: z.string().min(1),
+	scopes: z.string().optional(),
+	type: zLoginProviderProviderType,
+});
+
 /**
  * Admin view of a login provider. The client secret is never included.
  */
@@ -2102,27 +1842,24 @@ export const zLoginProviderView = z.object({
 	updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 });
 
-/**
- * Whether and how the workspace reviews one member's work, from the rules that start and admit a review.
- */
-export const zMemberReviewReadiness = z.object({
-	approvalBeforePosting: z.boolean(),
-	blocker: z
-		.enum([
-			"WORKSPACE_INACTIVE",
-			"REVIEWS_OFF",
-			"PERSON_ERASED",
-			"NO_AI",
-			"OUTSIDE_REVIEW_SCOPE",
-			"NOT_ELIGIBLE",
-			"CHOICE_REQUIRED",
-			"NO_MODEL",
-			"NO_PRACTICE",
-			"ON_REQUEST_ONLY",
-		])
-		.nullable(),
-	events: z.array(z.string()),
+export const zMembershipRoleSource = z.enum(["PROVIDER", "PERSON"]);
+
+export const zMembershipWorkspaceRole = z.enum(["OWNER", "ADMIN", "MEMBER"]);
+
+export const zAssignRoleRequest = z.object({
+	accountId: z.string().regex(/^[1-9][0-9]*$/),
+	role: zMembershipWorkspaceRole,
 });
+
+export const zMentorEntryKind = z.enum(["USER", "HEPH", "DIGEST"]);
+
+export const zMentorEntrySlackDelivery = z.enum(["PENDING", "DELIVERED", "UNCERTAIN", "FAILED"]);
+
+export const zMentorEntrySurface = z.enum(["APP", "SLACK", "SYSTEM"]);
+
+export const zMentorEntryVote = z.enum(["HELPFUL", "NOT_HELPFUL"]);
+
+export const zMentorLinkKind = z.enum(["RESULT", "PROBLEM", "FEEDBACK"]);
 
 /**
  * A practice result, problem or prepared feedback Hephaestus showed in a message
@@ -2130,7 +1867,7 @@ export const zMemberReviewReadiness = z.object({
 export const zMentorLink = z.object({
 	id: z.uuid(),
 	itemId: z.int().optional(),
-	kind: z.enum(["RESULT", "PROBLEM", "FEEDBACK"]),
+	kind: zMentorLinkKind,
 	practiceSlug: z.string().optional(),
 	text: z.string(),
 });
@@ -2160,15 +1897,40 @@ export const zMentorThreadSummary = z.object({
 	replyCount: z.int(),
 });
 
+export const zMentorTurnPartialActivity = z.enum(["THINKING", "WRITING", "TOOL"]);
+
 /**
  * What Hephaestus is doing in a running turn
  */
 export const zMentorTurnPartial = z.object({
-	activity: z.enum(["THINKING", "WRITING", "TOOL"]),
+	activity: zMentorTurnPartialActivity,
 	stage: z.string(),
 	text: z.string(),
 	tool: z.string().optional(),
 });
+
+/**
+ * A question to Hephaestus from the app
+ */
+export const zMentorTurnRequest = z.object({
+	pageContext: z.string().min(0).max(500).optional(),
+	parentEntryId: z.uuid().optional(),
+	requestId: z.uuid(),
+	text: z.string().min(1),
+});
+
+export const zMentorTurnStatus = z.enum(["QUEUED", "RUNNING", "DONE", "FAILED", "STOPPED"]);
+
+/**
+ * A status change the developer asks for on a turn
+ */
+export const zMentorTurnStatusRequest = z.object({
+	status: zMentorTurnStatus,
+});
+
+export const zMentorTurnSurface = z.enum(["APP", "SLACK", "SYSTEM"]);
+
+export const zMentorTurnWaitingFor = z.enum(["FREE_HEPH"]);
 
 /**
  * One conversation turn: a requested answer or an opted-in proactive digest
@@ -2186,9 +1948,9 @@ export const zMentorTurn = z.object({
 	parentEntryId: z.uuid().optional(),
 	partial: zMentorTurnPartial.optional(),
 	requestId: z.string(),
-	status: z.enum(["QUEUED", "RUNNING", "DONE", "FAILED", "STOPPED"]),
-	surface: z.enum(["APP", "SLACK", "SYSTEM"]),
-	waitingFor: z.enum(["FREE_HEPH"]).optional(),
+	status: zMentorTurnStatus,
+	surface: zMentorTurnSurface,
+	waitingFor: zMentorTurnWaitingFor.optional(),
 });
 
 /**
@@ -2204,28 +1966,21 @@ export const zMentorConversation = z.object({
 });
 
 /**
- * A question to Hephaestus from the app
- */
-export const zMentorTurnRequest = z.object({
-	pageContext: z.string().min(0).max(500).optional(),
-	parentEntryId: z.uuid().optional(),
-	requestId: z.uuid(),
-	text: z.string().min(1),
-});
-
-/**
- * A status change the developer asks for on a turn
- */
-export const zMentorTurnStatusRequest = z.object({
-	status: z.enum(["STOPPED"]),
-});
-
-/**
  * The developer's vote on one of Hephaestus's messages
  */
 export const zMentorVoteRequest = z.object({
-	vote: z.enum(["HELPFUL", "NOT_HELPFUL"]),
+	vote: zMentorEntryVote,
 });
+
+export const zModelKind = z.enum(["CHAT", "DECISION", "EMBEDDING", "RERANKING"]);
+
+export const zBoundModelSlot = z.object({
+	kind: zModelKind,
+	model: zFrozenModel.nullable(),
+	slot: z.string(),
+});
+
+export const zModelVisibility = z.enum(["PUBLIC", "GRANTED"]);
 
 export const zMovePracticeRequest = z.object({
 	groupSlug: z.string().nullable(),
@@ -2233,31 +1988,6 @@ export const zMovePracticeRequest = z.object({
 		.int()
 		.gte(0)
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-});
-
-/**
- * One of the person's own reports.
- */
-export const zMyProductFeedback = z.object({
-	allowPublic: z.boolean(),
-	canAllowPublic: z.boolean(),
-	canEdit: z.boolean(),
-	canKeepPrivate: z.boolean(),
-	canMakePrivate: z.boolean(),
-	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	draftDescription: z.string().optional(),
-	draftTitle: z.string().optional(),
-	excerpt: z.string(),
-	filedAfter: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-	id: z.uuid(),
-	issueClosedAs: z.string().optional(),
-	issueNumber: z.int().optional(),
-	issueUrl: z.string().optional(),
-	kind: z.enum(["IDEA", "BUG", "FEEDBACK"]),
-	reason: z.string().optional(),
-	removed: z.string().optional(),
-	route: z.enum(["PUBLIC", "PRIVATE", "ADMINS"]),
-	state: z.enum(["SAVED_FOR_ADMINS", "DRAFTING", "HELD", "FILING", "FILED", "STOPPED"]),
 });
 
 export const zNotificationPreferences = z.object({
@@ -2294,26 +2024,6 @@ export const zOffsetPageDtoAdminAccountView = z.object({
 /**
  * One numbered page of a list
  */
-export const zOffsetPageDtoFeedbackItem = z.object({
-	content: z.array(zFeedbackItem),
-	page: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	size: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	totalElements: z.int(),
-	totalPages: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-});
-
-/**
- * One numbered page of a list
- */
 export const zOffsetPageDtoItemRef = z.object({
 	content: z.array(zItemRef),
 	page: z
@@ -2329,6 +2039,30 @@ export const zOffsetPageDtoItemRef = z.object({
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zOmissionReason = z.enum([
+	"selection",
+	"truncated",
+	"unavailable",
+	"budget",
+	"deadline",
+	"too-large",
+	"off-format",
+	"refused",
+	"error",
+	"cancelled",
+]);
+
+export const zCoverageOmission = z.object({
+	count: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	items: z.array(z.string()).optional(),
+	reason: zOmissionReason.optional(),
+	what: z.string().optional(),
 });
 
 export const zOpenQuestion = z.object({
@@ -2357,6 +2091,23 @@ export const zOutcomeVector = z.object({
 });
 
 /**
+ * An Outline collection the token can see, offered in the add-collection picker
+ */
+export const zOutlineCollectionCandidate = z.object({
+	alreadyMirrored: z.boolean(),
+	collectionId: z.string(),
+	color: z.string().optional(),
+	description: z.string().optional(),
+	icon: z.string().optional(),
+	name: z.string().optional(),
+	urlId: z.string().optional(),
+});
+
+export const zOutlineCollectionMirrorState = z.enum(["ENABLED", "PAUSED"]);
+
+export const zOutlineCollectionSyncStatus = z.enum(["PENDING", "COMPLETE"]);
+
+/**
  * A mirrored Outline collection with its sync state and live document count
  */
 export const zOutlineCollection = z.object({
@@ -2380,22 +2131,9 @@ export const zOutlineCollection = z.object({
 	lastSyncError: z.string().nullable(),
 	lastSyncedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	name: z.string().nullable(),
-	state: z.enum(["ENABLED", "PAUSED"]),
-	syncStatus: z.enum(["PENDING", "COMPLETE"]),
+	state: zOutlineCollectionMirrorState,
+	syncStatus: zOutlineCollectionSyncStatus,
 	urlId: z.string().nullable(),
-});
-
-/**
- * An Outline collection the token can see, offered in the add-collection picker
- */
-export const zOutlineCollectionCandidate = z.object({
-	alreadyMirrored: z.boolean(),
-	collectionId: z.string(),
-	color: z.string().optional(),
-	description: z.string().optional(),
-	icon: z.string().optional(),
-	name: z.string().optional(),
-	urlId: z.string().optional(),
 });
 
 /**
@@ -2417,26 +2155,17 @@ export const zOverviewWindow = z.object({
 export const zOwnFeedbackCopyRef = z.object({
 	externalUrl: z.string().nullable(),
 	id: z.uuid(),
-	kind: z.enum(["SUMMARY", "LINE_NOTE", "FILE_NOTE", "CHAT_TURN"]),
+	kind: zFeedbackCopyKind,
 	postedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 });
 
 export const zOwnFeedbackRef = z.object({
 	copies: z.array(zOwnFeedbackCopyRef),
 	deliveredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	destination: z.enum(["ON_WORK", "PRACTICE_PAGE", "CONVERSATION"]),
+	destination: zFeedbackDestination,
 	id: z.uuid(),
 	response: zFeedbackResponse.nullable(),
-	state: z.enum([
-		"AWAITING_APPROVAL",
-		"READY",
-		"DELIVERED",
-		"UNCONFIRMED",
-		"WITHHELD",
-		"REJECTED",
-		"REPLACED",
-		"FAILED",
-	]),
+	state: zFeedbackState,
 });
 
 export const zOwnItemEvent = z.object({
@@ -2486,6 +2215,14 @@ export const zPersonDataProvider = z.object({
 	type: z.string(),
 });
 
+export const zPersonDataRequestState = z.enum([
+	"PREVIEW",
+	"ERASING",
+	"FAILED",
+	"COMPLETE",
+	"EXPIRED",
+]);
+
 export const zPersonDataScope = z.object({
 	accountId: z.int().optional(),
 	identities: z.array(zIdentity),
@@ -2499,8 +2236,31 @@ export const zPersonDataRequest = z.object({
 	failureCode: z.string().optional(),
 	id: z.uuid(),
 	scope: zPersonDataScope.optional(),
-	state: z.enum(["PREVIEW", "ERASING", "FAILED", "COMPLETE", "EXPIRED"]),
+	state: zPersonDataRequestState,
 });
+
+export const zPracticeDefinitionField = z.enum([
+	"NAME",
+	"REVIEW_ON",
+	"APPLIES_WHEN",
+	"ABOUT",
+	"READS",
+	"REVIEWED_BY",
+	"CRITERIA",
+	"SCRIPT",
+	"SCAN",
+	"LINE_NOTES",
+	"GUIDANCE",
+]);
+
+export const zCatalogOrigin = z.object({
+	catalogSlug: z.string().nullable(),
+	localEdits: z.array(zPracticeDefinitionField),
+	offeredDigest: z.string().nullable(),
+	state: zCatalogEntryState,
+});
+
+export const zPracticeDeliveryStatus = z.enum(["ACTIVE", "PAUSED"]);
 
 export const zPracticeGroup = z.object({
 	catalogOrigin: zCatalogOrigin,
@@ -2551,7 +2311,7 @@ export const zPracticePageFeedback = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	cleanWork: z.array(zPracticePageCleanWork),
 	closedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	closedBy: z.enum(["WORK", "DEVELOPER", "PRACTICE_CHANGED"]).nullable(),
+	closedBy: zFeedbackClosedBy.nullable(),
 	evidence: z.array(zPracticePageEvidence),
 	groupName: z.string().nullable(),
 	groupSlug: z.string().nullable(),
@@ -2569,34 +2329,25 @@ export const zPracticePageFeedback = z.object({
 	withdrawn: z.boolean(),
 });
 
-export const zPracticeReadSource = z.object({
-	need: z.enum(["REQUIRED", "COMPLETE", "OPTIONAL"]),
-	source: z.string(),
-});
+export const zPracticeReleaseChoice = z.enum(["CURRENT", "OFFERED"]);
 
-export const zPracticeReads = z.object({
-	contract: z.string(),
-	sources: z.array(zPracticeReadSource),
+export const zAcceptPracticeReleaseRequest = z.object({
+	choices: z.record(z.string(), zPracticeReleaseChoice),
 });
 
 export const zPracticeReleaseField = z.object({
 	changedLocally: z.boolean(),
 	conflict: z.boolean(),
-	field: z.enum([
-		"NAME",
-		"REVIEW_ON",
-		"APPLIES_WHEN",
-		"ABOUT",
-		"READS",
-		"REVIEWED_BY",
-		"CRITERIA",
-		"SCRIPT",
-		"SCAN",
-		"LINE_NOTES",
-		"GUIDANCE",
-	]),
+	field: zPracticeDefinitionField,
 	offeredChanged: z.boolean(),
 });
+
+export const zPracticeReviewField = z.enum([
+	"DELIVER_TO_MERGED",
+	"COOLDOWN_MINUTES",
+	"REVIEW_SCOPE",
+	"DEFAULT_FEEDBACK_MODE",
+]);
 
 export const zPracticeReviewScopeSummary = z.object({
 	eligiblePeople: z
@@ -2631,52 +2382,6 @@ export const zPracticeReviewScopePreview = z.object({
 	widens: z.boolean(),
 });
 
-export const zPracticeScriptRun = z.object({
-	attempt: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	durationMs: z.int().nullable(),
-	error: z.string().nullable(),
-	finishedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	jobId: z.uuid(),
-	noResultCause: z.enum(["EVIDENCE_NOT_READ", "SESSION_ENDED"]).nullable(),
-	practiceId: z.string().regex(/^[1-9][0-9]*$/),
-	practiceVersionId: z.string().regex(/^[1-9][0-9]*$/),
-	reviewModelCalls: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullable(),
-	scriptKind: z.enum(["BUILTIN", "CUSTOM"]),
-	status: z.enum(["OK", "WITHHELD", "FAILED", "NOT_REACHED", "NOT_FINISHED"]),
-	stopReason: z
-		.enum([
-			"UNAVAILABLE",
-			"BUDGET",
-			"DEADLINE",
-			"TOO_LARGE",
-			"OFF_FORMAT",
-			"REFUSED",
-			"ERROR",
-			"CANCELLED",
-			"INVALID_SCRIPT",
-			"INVALID_CANDIDATE",
-			"UNREAD_EVIDENCE",
-		])
-		.nullable(),
-});
-
-export const zPracticeStandingResult = z.object({
-	deliveredFeedback: z.string().nullable(),
-	item: zItemRef,
-	origin: z.enum(["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]),
-	outcome: z.enum(["MET", "NOT_MET", "DOES_NOT_APPLY", "COULD_NOT_DETERMINE"]),
-	resultId: z.uuid(),
-	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]).nullable(),
-	title: z.string(),
-});
-
 /**
  * Developer guidance: one picture of the practice and what it shows. Never changes how the practice is reviewed
  */
@@ -2699,9 +2404,29 @@ export const zPracticeGuidanceDto = z.object({
 	visual: zPracticeVisual.nullable(),
 });
 
+export const zPracticesAcrossWorkspaceWindow = z.enum(["ALL_TIME", "DAYS_7", "DAYS_30", "DAYS_90"]);
+
 export const zPreviewRequest = z.object({
 	accountId: z.int().optional(),
 	identities: z.array(zIdentity).min(0).max(32),
+});
+
+export const zPricingMode = z.enum(["PRICED", "NO_CHARGE", "UNPRICED"]);
+
+/**
+ * A model's price, per 1M tokens
+ */
+export const zLlmModelPrice = z.object({
+	currency: z.string(),
+	effectiveFrom: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	effectiveTo: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	id: z.int(),
+	note: z.string().optional(),
+	per1mCacheReadUsd: z.number().optional(),
+	per1mCacheWriteUsd: z.number().optional(),
+	per1mInputUsd: z.number().optional(),
+	per1mOutputUsd: z.number().optional(),
+	pricingMode: zPricingMode,
 });
 
 /**
@@ -2709,10 +2434,12 @@ export const zPreviewRequest = z.object({
  */
 export const zProbeLlmConnectionRequest = z.object({
 	apiKey: z.string().optional(),
-	apiProtocol: z.enum(["anthropic-messages", "openai-completions", "openai-responses"]),
-	authMode: z.enum(["BEARER", "API_KEY"]).optional(),
+	apiProtocol: zLlmApiProtocol,
+	authMode: zLlmAuthMode.optional(),
 	baseUrl: z.string().min(1),
 });
+
+export const zProblemBaselineState = z.enum(["NEW", "UNCHANGED", "UPDATED", "ABSENT"]);
 
 export const zProblemChanges = z.object({
 	absent: z
@@ -2734,29 +2461,43 @@ export const zProblemChanges = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
-export const zProblemDetail = z
-	.object({
-		detail: z.string().optional(),
-		instance: z.string().optional(),
-		requestId: z
-			.string()
-			.regex(/^[0-9a-f]{32}$/)
-			.optional(),
-		status: z
-			.int()
-			.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-			.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-			.optional(),
-		title: z.string().optional(),
-		type: z.string().optional(),
-	})
-	.catchall(z.unknown());
-
-export const zProblemSummary = z.object({
-	id: z.uuid(),
-	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]),
-	summary: z.string(),
+export const zProblemDetail = z.object({
+	activeScanId: z.uuid().optional(),
+	callbackError: z.string().optional(),
+	connectionId: z.int().optional(),
+	currentVersion: z.string().optional(),
+	currentVersionId: z.string().optional(),
+	declaredTier: z.string().optional(),
+	detail: z.string().optional(),
+	errors: z.record(z.string(), z.array(z.string())).optional(),
+	instance: z.string().optional(),
+	jobId: z.int().optional(),
+	maxAgeSeconds: z.int().optional(),
+	requestId: z
+		.string()
+		.regex(/^[0-9a-f]{32}$/)
+		.optional(),
+	retryAfterSeconds: z.int().optional(),
+	scanId: z.uuid().optional(),
+	slackError: z.string().optional(),
+	state: z.string().optional(),
+	status: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	stop: z.string().optional(),
+	supportedRef: z.string().optional(),
+	title: z.string().optional(),
+	type: z.string().optional(),
+	withholdingReason: z.string().optional(),
+	workspaceByteBudget: z.int().optional(),
+	workspaceBytes: z.int().optional(),
 });
+
+export const zProcessingStatus = z.enum(["NONE", "PENDING", "DONE", "FAILED"]);
+
+export const zProductFeedbackCleanupManualStep = z.enum(["EDIT_HISTORY", "UNFINISHED"]);
 
 /**
  * An erased report's GitHub issue that only a maintainer can finish removing.
@@ -2769,7 +2510,7 @@ export const zProductFeedbackCleanupAction = z.object({
 	marker: z.string(),
 	repository: z.string(),
 	since: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	step: z.enum(["EDIT_HISTORY", "UNFINISHED"]),
+	step: zProductFeedbackCleanupManualStep,
 });
 
 /**
@@ -2790,26 +2531,93 @@ export const zProductFeedbackDestinations = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	oldestWaitingSince: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	paused: z.boolean(),
-	privateCheck: z.enum([
-		"UNSET",
-		"INSTALLED",
-		"MISSING",
-		"NOT_PRIVATE",
-		"NOT_PUBLIC",
-		"DIFFERENT_OWNER",
-	]),
+	privateCheck: zFilingRepositoryCheck,
 	privateRepository: z.string().optional(),
-	publicCheck: z.enum([
-		"UNSET",
-		"INSTALLED",
-		"MISSING",
-		"NOT_PRIVATE",
-		"NOT_PUBLIC",
-		"DIFFERENT_OWNER",
-	]),
+	publicCheck: zFilingRepositoryCheck,
 	publicRepository: z.string().optional(),
 	reportsToMove: z.int(),
 	snapshotAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+});
+
+export const zProductFeedbackKind = z.enum(["IDEA", "BUG", "FEEDBACK"]);
+
+export const zFeedbackItem = z.object({
+	account: zFeedbackAccountRef.optional(),
+	appVersion: z.string().optional(),
+	canFile: z.boolean(),
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	id: z.uuid(),
+	kind: zProductFeedbackKind,
+	message: z.string(),
+	pagePath: z.string().optional(),
+	resolvedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	resolvedBy: zFeedbackAccountRef.optional(),
+	savedBeforeDisclosure: z.boolean(),
+	userAgent: z.string().optional(),
+	workspace: zFeedbackWorkspaceRef.optional(),
+});
+
+export const zFeedbackRequest = z.object({
+	kind: zProductFeedbackKind,
+	message: z.string().min(0).max(5000),
+	pagePath: z
+		.string()
+		.min(0)
+		.max(500)
+		.regex(/\/|(\/(?:[a-z0-9][a-z0-9-]*|\$[A-Za-z]*))+/)
+		.optional(),
+	share: z.boolean().optional(),
+	userAgent: z
+		.string()
+		.min(0)
+		.max(500)
+		.regex(/[^\p{Cc}]*/u)
+		.optional(),
+});
+
+/**
+ * One of the person's own reports.
+ */
+export const zMyProductFeedback = z.object({
+	allowPublic: z.boolean(),
+	canAllowPublic: z.boolean(),
+	canEdit: z.boolean(),
+	canKeepPrivate: z.boolean(),
+	canMakePrivate: z.boolean(),
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	draftDescription: z.string().optional(),
+	draftTitle: z.string().optional(),
+	excerpt: z.string(),
+	filedAfter: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	id: z.uuid(),
+	issueClosedAs: z.string().optional(),
+	issueNumber: z.int().optional(),
+	issueUrl: z.string().optional(),
+	kind: zProductFeedbackKind,
+	reason: z.string().optional(),
+	removed: z.string().optional(),
+	route: zFilingReportRoute,
+	state: zFilingReportState,
+});
+
+/**
+ * One numbered page of a list
+ */
+export const zOffsetPageDtoFeedbackItem = z.object({
+	content: z.array(zFeedbackItem),
+	page: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	size: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	totalElements: z.int(),
+	totalPages: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
 export const zProductFeedbackMove = z.object({
@@ -2825,10 +2633,10 @@ export const zProductFeedbackMove = z.object({
 export const zProductFeedbackNeedsAction = z.object({
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	id: z.uuid(),
-	kind: z.enum(["IDEA", "BUG", "FEEDBACK"]),
+	kind: zProductFeedbackKind,
 	reason: z.string(),
 	repository: z.string().optional(),
-	route: z.enum(["PUBLIC", "PRIVATE", "ADMINS"]),
+	route: zFilingReportRoute,
 	stoppedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 });
 
@@ -2852,6 +2660,20 @@ export const zProductFeedbackSharing = z.object({
 	publicRepository: z.string().optional(),
 });
 
+export const zProfileChangeDirection = z.enum(["UP", "DOWN"]);
+
+export const zProfileChangeResolvedBy = z.enum(["WORK", "DEVELOPER"]);
+
+export const zProfileChangeType = z.enum([
+	"FEEDBACK_NEW",
+	"FEEDBACK_RESOLVED",
+	"FEEDBACK_RESET",
+	"STANDING_MOVED",
+	"TREND_TURNED",
+	"GROUP_MOVED",
+	"FIRST_RECORDED",
+]);
+
 export const zProfileChange = z.object({
 	at: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	cleanNeeded: z
@@ -2859,7 +2681,7 @@ export const zProfileChange = z.object({
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullable(),
-	direction: z.enum(["UP", "DOWN"]).nullable(),
+	direction: zProfileChangeDirection.nullable(),
 	evidence: z.array(zItemRef),
 	feedbackId: z.uuid().nullable(),
 	from: z.string().nullable(),
@@ -2867,17 +2689,9 @@ export const zProfileChange = z.object({
 	groupSlug: z.string().nullable(),
 	practiceName: z.string().nullable(),
 	practiceSlug: z.string().nullable(),
-	resolvedBy: z.enum(["WORK", "DEVELOPER"]).nullable(),
+	resolvedBy: zProfileChangeResolvedBy.nullable(),
 	to: z.string().nullable(),
-	type: z.enum([
-		"FEEDBACK_NEW",
-		"FEEDBACK_RESOLVED",
-		"FEEDBACK_RESET",
-		"STANDING_MOVED",
-		"TREND_TURNED",
-		"GROUP_MOVED",
-		"FIRST_RECORDED",
-	]),
+	type: zProfileChangeType,
 });
 
 export const zProviderIdentityRef = z.object({
@@ -2892,28 +2706,39 @@ export const zAccountRef = z.object({
 	displayName: z.string().nullable(),
 	id: z.string().regex(/^[1-9][0-9]*$/),
 	identities: z.array(zProviderIdentityRef),
-	status: z.enum(["UNCLAIMED", "ACTIVE", "BLOCKED", "DELETING", "DELETED"]),
+	status: zAccountStatus,
 });
 
 export const zFeedbackDecision = z.object({
-	action: z.enum(["APPROVE", "REJECT", "WITHDRAW", "RESTORE"]),
+	action: zFeedbackDecisionAction,
 	actor: zAccountRef.nullable(),
 	contentDigest: z.string().nullable(),
 	decidedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	feedbackId: z.uuid(),
 	id: z.uuid(),
 	note: z.string().nullable(),
-	reasonCode: z
-		.enum([
-			"INCORRECT",
-			"MISSING_CONTEXT",
-			"UNHELPFUL",
-			"DUPLICATE",
-			"INAPPROPRIATE_LOCATION",
-			"OTHER",
-		])
-		.nullable(),
+	reasonCode: zFeedbackDecisionReason.nullable(),
 });
+
+export const zProviderResourceAdapterResourceType = z.enum([
+	"INSTALLATION",
+	"GROUP_HOOK",
+	"BOT_TOKEN",
+	"BOT_USER",
+	"SUBSCRIPTION",
+	"REGISTRATION",
+	"OAUTH_EXCHANGE",
+]);
+
+export const zProviderResourceRepairState = z.enum([
+	"REGISTERING",
+	"PENDING",
+	"CHECKING",
+	"DISPATCHING",
+	"AWAITING_CONFIRMATION",
+	"NEEDS_AUTHORIZATION",
+	"CONFIRMATION_REQUIRED",
+]);
 
 /**
  * A repair's provider identity is pseudonymous security data, never an authorization credential.
@@ -2922,30 +2747,14 @@ export const zProviderResourceRepair = z.object({
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	id: z.uuid(),
 	identityHash: z.string(),
-	kind: z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]),
+	kind: zIntegrationKind,
 	origin: z.string(),
 	owners: z.array(zOwner),
 	parentId: z.string(),
 	replacementInUse: z.boolean(),
 	resourceId: z.string().optional(),
-	resourceType: z.enum([
-		"INSTALLATION",
-		"GROUP_HOOK",
-		"BOT_TOKEN",
-		"BOT_USER",
-		"SUBSCRIPTION",
-		"REGISTRATION",
-		"OAUTH_EXCHANGE",
-	]),
-	state: z.enum([
-		"REGISTERING",
-		"PENDING",
-		"CHECKING",
-		"DISPATCHING",
-		"AWAITING_CONFIRMATION",
-		"NEEDS_AUTHORIZATION",
-		"CONFIRMATION_REQUIRED",
-	]),
+	resourceType: zProviderResourceAdapterResourceType,
+	state: zProviderResourceRepairState,
 });
 
 /**
@@ -3034,7 +2843,7 @@ export const zPublicActivity = z.object({
 	from: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	highlights: zPublicActivityHighlights,
 	people: z.array(zPublicActivityPerson),
-	providerType: z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]).optional(),
+	providerType: zIdentityProviderType.optional(),
 	repositories: z.array(zPublicActivityRepository),
 	to: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	unlistedContributors: z
@@ -3072,53 +2881,9 @@ export const zPublicActivityPersonDetail = z.object({
 	from: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	person: zPublicActivityPersonIdentity,
 	repositories: z.array(zPublicActivityPersonRepository),
-	supportedKinds: z.array(
-		z.enum([
-			"PULL_REQUEST_OPENED",
-			"PULL_REQUEST_MERGED",
-			"PULL_REQUEST_CLOSED",
-			"REVIEW_APPROVED",
-			"REVIEW_CHANGES_REQUESTED",
-			"REVIEW_COMMENTED",
-			"COMMENTED",
-			"CODE_COMMENTED",
-			"ISSUE_OPENED",
-			"ISSUE_CLOSED",
-		]),
-	),
+	supportedKinds: z.array(zActivityKind),
 	to: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	weeks: z.array(zPublicActivityPersonWeek),
-});
-
-export const zPublicActivityWorkSummary = z.object({
-	htmlUrl: z.string(),
-	isDraft: z.boolean(),
-	number: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	repository: zPublicActivityRepository,
-	state: z.enum(["OPEN", "CLOSED", "MERGED"]),
-	title: z.string(),
-	type: z.enum(["PULL_REQUEST", "ISSUE"]),
-});
-
-/**
- * One piece of the selected person's published work; no account, author or other participant data.
- */
-export const zPublicActivityWork = z.object({
-	actions: z.array(zActivityAction),
-	id: z.string(),
-	lastOccurredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	work: zPublicActivityWorkSummary,
-});
-
-/**
- * One page of a list that a client reads forward with a cursor
- */
-export const zCursorPageDtoPublicActivityWork = z.object({
-	content: z.array(zPublicActivityWork),
-	nextCursor: z.string().optional(),
 });
 
 export const zPublicActivityWorkspaceSettings = z.object({
@@ -3146,6 +2911,27 @@ export const zRateLimitSnapshot = z.object({
 	throttledUntil: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 });
 
+export const zReadNeed = z.enum(["REQUIRED", "COMPLETE", "OPTIONAL"]);
+
+export const zPracticeReadSource = z.object({
+	need: zReadNeed,
+	source: z.string(),
+});
+
+export const zPracticeReads = z.object({
+	contract: z.string(),
+	sources: z.array(zPracticeReadSource),
+});
+
+export const zReadReceiptStatus = z.enum([
+	"COMPLETE",
+	"TRUNCATED",
+	"FAILED",
+	"BINARY",
+	"ABSENT",
+	"SEARCHED",
+]);
+
 export const zReadReceipt = z.object({
 	contentDigest: z.string().optional(),
 	endLine: z
@@ -3167,14 +2953,14 @@ export const zReadReceipt = z.object({
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
-	status: z.enum(["COMPLETE", "TRUNCATED", "FAILED", "BINARY", "ABSENT", "SEARCHED"]).optional(),
+	status: zReadReceiptStatus.optional(),
 	version: z.string().optional(),
 });
 
 export const zReadSourceOption = z.object({
 	citation: zCitationCapabilities,
 	label: z.string(),
-	needs: z.array(z.enum(["REQUIRED", "COMPLETE", "OPTIONAL"])),
+	needs: z.array(zReadNeed),
 	source: z.string(),
 });
 
@@ -3185,6 +2971,125 @@ export const zReasonCount = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	description: z.string(),
 	reason: z.string(),
+});
+
+export const zReasoningEffort = z.enum([
+	"NONE",
+	"MINIMAL",
+	"LOW",
+	"MEDIUM",
+	"HIGH",
+	"XHIGH",
+	"MAX",
+]);
+
+/**
+ * A model available for this workspace to bind a Task to
+ */
+export const zAvailableLlmModel = z.object({
+	brand: zAiModelBrand.optional(),
+	connectionDisplayName: z.string(),
+	dataHandlingTier: zDataHandlingTier,
+	displayName: z.string(),
+	id: z.int(),
+	per1mCacheReadUsd: z.number().optional(),
+	per1mCacheWriteUsd: z.number().optional(),
+	per1mInputUsd: z.number().optional(),
+	per1mOutputUsd: z.number().optional(),
+	pricingMode: zPricingMode,
+	purposes: z.array(zAgentPurpose),
+	reasoningEffort: zReasoningEffort.optional(),
+	scope: zLlmModelScope,
+});
+
+/**
+ * Create a model on an instance LLM connection
+ */
+export const zCreateLlmModelRequest = z.object({
+	brand: zAiModelBrand.optional(),
+	contextWindow: z
+		.int()
+		.gte(1)
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	dataHandlingNote: z.string().min(0).max(200).optional(),
+	displayName: z.string().min(0).max(128),
+	enabled: z.boolean().optional(),
+	maxOutputTokens: z
+		.int()
+		.gte(1)
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	operatedBy: zLlmDataOperator.optional(),
+	reasoningEffort: zReasoningEffort.optional(),
+	slug: z.string().min(0).max(63).optional(),
+	upstreamModelId: z.string().min(0).max(256),
+});
+
+/**
+ * Create a model on your AI provider
+ */
+export const zCreateWorkspaceLlmModelRequest = z.object({
+	brand: zAiModelBrand.optional(),
+	contextWindow: z
+		.int()
+		.gte(1)
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	dataHandlingNote: z.string().min(0).max(200).optional(),
+	displayName: z.string().min(0).max(128),
+	enabled: z.boolean().optional(),
+	maxOutputTokens: z
+		.int()
+		.gte(1)
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	operatedBy: zLlmDataOperator.optional(),
+	per1mCacheReadUsd: z.number().optional(),
+	per1mCacheWriteUsd: z.number().optional(),
+	per1mInputUsd: z.number().optional(),
+	per1mOutputUsd: z.number().optional(),
+	priceNote: z.string().min(0).max(500).optional(),
+	pricingMode: zPricingMode.optional(),
+	reasoningEffort: zReasoningEffort.optional(),
+	slug: z.string().min(0).max(63).optional(),
+	upstreamModelId: z.string().min(0).max(256),
+});
+
+/**
+ * Instance catalog model
+ */
+export const zLlmModel = z.object({
+	brand: zAiModelBrand.optional(),
+	callPoolId: z.int().optional(),
+	connectionDisplayName: z.string(),
+	connectionId: z.int(),
+	contextWindow: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	currentPrice: zLlmModelPrice.optional(),
+	dataHandlingNote: z.string().optional(),
+	dataHandlingTier: zDataHandlingTier,
+	displayName: z.string(),
+	enabled: z.boolean(),
+	forcedToolChoice: z.boolean().optional(),
+	grantedWorkspaceIds: z.array(z.int()),
+	id: z.int(),
+	limits: zLlmModelLimits,
+	maxOutputTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	operatedBy: zLlmDataOperator.optional(),
+	reasoningEffort: zReasoningEffort.optional(),
+	slug: z.string(),
+	updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	upstreamModelId: z.string(),
+	visibility: zModelVisibility,
 });
 
 export const zRecordResearchRemovals = z.object({
@@ -3220,6 +3125,19 @@ export const zRegisterSlackChannelRequest = z.object({
 		.regex(/^[CG][A-Z0-9]{8,}$/),
 });
 
+export const zReleaseChannel = z.enum(["RELEASE", "COMMIT", "DEVELOPMENT"]);
+
+export const zReleaseCheckFailure = z.enum(["RATE_LIMITED", "UNAVAILABLE", "MALFORMED"]);
+
+export const zReleaseCheckStatus = z.enum([
+	"DISABLED",
+	"NOT_APPLICABLE",
+	"NEVER_CHECKED",
+	"CURRENT",
+	"UPDATE_AVAILABLE",
+	"FAILED",
+]);
+
 export const zReleaseProviderResourceRepairRequest = z.object({
 	confirmedGone: z.boolean(),
 	identityHash: z.string().regex(/[a-f0-9]{64}/),
@@ -3239,7 +3157,7 @@ export const zReleaseResearchDataset = z.object({
  * A release the server role started on this instance.
  */
 export const zReleaseStart = z.object({
-	channel: z.enum(["RELEASE", "COMMIT", "DEVELOPMENT"]),
+	channel: zReleaseChannel,
 	commit: z.string().optional(),
 	environment: z.string(),
 	image: z.string().optional(),
@@ -3247,12 +3165,19 @@ export const zReleaseStart = z.object({
 	version: z.string(),
 });
 
+export const zRemovalGuardState = z.enum([
+	"APPLIED",
+	"NOT_NEEDED",
+	"INCOMPLETE_LISTING",
+	"SUSPECT_LISTING",
+]);
+
 export const zRemovalGuard = z.object({
 	previousFiles: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	state: z.enum(["APPLIED", "NOT_NEEDED", "INCOMPLETE_LISTING", "SUSPECT_LISTING"]),
+	state: zRemovalGuardState,
 	wouldRemove: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -3276,15 +3201,56 @@ export const zReorderRequest = z.object({
 		.max(10000),
 });
 
+export const zRepositorySelection = z.enum(["ALL", "SELECTED"]);
+
+/**
+ * Request to create a new workspace
+ */
+export const zCreateWorkspaceRequest = z.object({
+	accountLogin: z.string().min(0).max(255),
+	accountType: zAccountType,
+	displayName: z.string().min(0).max(120),
+	kind: zIntegrationKind,
+	personalAccessToken: z.string().min(0).max(512).optional(),
+	repositorySelection: zRepositorySelection.optional(),
+	selectedProjectIds: z.array(z.int()).optional(),
+	serverUrl: z.string().optional(),
+	workspaceSlug: z
+		.string()
+		.min(3)
+		.max(51)
+		.regex(/^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$/),
+});
+
+/**
+ * Whether a GitLab workspace follows every project of its group or only the projects it monitors
+ */
+export const zGitLabRepositorySelection = z.object({
+	repositorySelection: zRepositorySelection,
+});
+
 export const zResearchConsent = z.object({
 	granted: z.boolean(),
 	noticeVersion: z.string(),
 	researchOrganization: z.string().optional(),
 });
 
+export const zResearchDisclosureClosure = z.enum(["DESTROYED", "ANONYMIZED"]);
+
+export const zCloseResearchDisclosure = z.object({
+	closure: zResearchDisclosureClosure,
+});
+
+export const zResearchDisclosureSubjectRemovalReason = z.enum([
+	"CONSENT_WITHDRAWN",
+	"CONSENT_SUPERSEDED",
+	"QUESTION_CHANGED",
+	"ACCOUNT_ERASED",
+]);
+
 export const zResearchRemovalObligation = z.object({
 	participantKey: z.string(),
-	reason: z.enum(["CONSENT_WITHDRAWN", "CONSENT_SUPERSEDED", "QUESTION_CHANGED", "ACCOUNT_ERASED"]),
+	reason: zResearchDisclosureSubjectRemovalReason,
 	requiredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 });
 
@@ -3342,73 +3308,31 @@ export const zHostCoverage = zResultCoverage.and(
 	}),
 );
 
+export const zResultEndReason = z.enum([
+	"REPLACED",
+	"OUTRANKED",
+	"WORK_CHANGED",
+	"REPAIRED",
+	"REMOVED",
+]);
+
 export const zResultExample = z.object({
 	citation: zEvidenceCitation,
 	note: z.string(),
 });
 
-export const zResultList = z.object({
-	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
-	id: z.uuid(),
-	item: zItemRef,
-	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	origin: z.enum(["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]),
-	outcome: z.enum(["MET", "NOT_MET", "DOES_NOT_APPLY", "COULD_NOT_DETERMINE"]),
-	practiceName: z.string(),
-	practiceSlug: z.string(),
-	problems: z.array(zProblemSummary),
-	recordedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	reviewId: z.uuid(),
-	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]).nullable(),
-	summary: z.string().nullable(),
-});
+export const zResultMarkKind = z.enum(["INCORRECT", "ACCEPTED"]);
 
-export const zListedScanReportItem = z.object({
-	item: zItemRef,
-	itemVersion: z.string(),
-	lastResult: zResultList.nullable(),
-	practiceName: z.string(),
-	practiceSlug: z.string(),
-	reason: z.string().nullable(),
-	status: z.enum(["LISTED"]),
-});
-
-export const zNotReviewedScanReportItem = z.object({
-	item: zItemRef,
-	itemVersion: z.string(),
-	lastResult: zResultList.nullable(),
-	practiceName: z.string(),
-	practiceSlug: z.string(),
-	reason: z.string().nullable(),
-	status: z.enum(["NOT_REVIEWED"]),
-});
-
-/**
- * One numbered page of a list
- */
-export const zOffsetPageDtoResultList = z.object({
-	content: z.array(zResultList),
-	page: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	size: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	totalElements: z.int(),
-	totalPages: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+export const zCreateResultMarkRequest = z.object({
+	kind: zResultMarkKind,
+	reason: z.string(),
 });
 
 export const zResultMark = z.object({
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	createdBy: zAccountRef.nullable(),
 	id: z.uuid(),
-	kind: z.enum(["INCORRECT", "ACCEPTED"]),
+	kind: zResultMarkKind,
 	reason: z.string(),
 	removalReason: z.string().nullable(),
 	removedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
@@ -3416,24 +3340,27 @@ export const zResultMark = z.object({
 	resultId: z.uuid(),
 });
 
-export const zReusedScanReportItem = z.object({
-	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
-	item: zItemRef,
-	itemVersion: z.string(),
-	outcome: z.enum(["MET", "NOT_MET", "DOES_NOT_APPLY", "COULD_NOT_DETERMINE"]),
-	practiceName: z.string(),
-	practiceSlug: z.string(),
-	problemCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	recordedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	resultId: z.uuid(),
-	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]).nullable(),
-	sourceReviewId: z.uuid(),
-	status: z.enum(["REUSED"]),
-	summary: z.string().nullable(),
-});
+export const zResultOutcome = z.enum(["MET", "NOT_MET", "DOES_NOT_APPLY", "COULD_NOT_DETERMINE"]);
+
+export const zResultSort = z.enum(["NEWEST", "OLDEST", "ACTIONABILITY"]);
+
+export const zReviewBatchOrigin = z.enum(["BACKFILL", "SCHEDULE"]);
+
+export const zReviewBatchPauseReason = z.enum([
+	"BUDGET_EXHAUSTED",
+	"REVIEW_MODEL_UNBOUND",
+	"WORKSPACE_UNAVAILABLE",
+	"PAUSED_BY_ADMIN",
+]);
+
+export const zReviewBatchStatus = z.enum([
+	"AWAITING_CONFIRMATION",
+	"RUNNING",
+	"PAUSED",
+	"COMPLETED",
+	"CANCELLED",
+	"BUDGET_EXHAUSTED",
+]);
 
 export const zReviewBatch = z.object({
 	budgetUsd: z.string().nullable(),
@@ -3453,10 +3380,8 @@ export const zReviewBatch = z.object({
 	from: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	id: z.uuid(),
 	itemKind: z.string(),
-	origin: z.enum(["BACKFILL", "SCHEDULE"]),
-	pauseReason: z
-		.enum(["BUDGET_EXHAUSTED", "REVIEW_MODEL_UNBOUND", "WORKSPACE_UNAVAILABLE", "PAUSED_BY_ADMIN"])
-		.nullable(),
+	origin: zReviewBatchOrigin,
+	pauseReason: zReviewBatchPauseReason.nullable(),
 	requestedBy: zAccountRef.nullable(),
 	reviewIds: z.array(z.uuid()),
 	scheduleId: z.uuid().nullable(),
@@ -3465,14 +3390,7 @@ export const zReviewBatch = z.object({
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	startedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	status: z.enum([
-		"AWAITING_CONFIRMATION",
-		"RUNNING",
-		"PAUSED",
-		"COMPLETED",
-		"CANCELLED",
-		"BUDGET_EXHAUSTED",
-	]),
+	status: zReviewBatchStatus,
 	submittedCount: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -3504,18 +3422,9 @@ export const zOffsetPageDtoReviewBatch = z.object({
 
 export const zReviewBoundFeedback = z.object({
 	deliveredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	destination: z.enum(["ON_WORK", "PRACTICE_PAGE", "CONVERSATION"]),
+	destination: zFeedbackDestination,
 	id: z.uuid(),
-	state: z.enum([
-		"AWAITING_APPROVAL",
-		"READY",
-		"DELIVERED",
-		"UNCONFIRMED",
-		"WITHHELD",
-		"REJECTED",
-		"REPLACED",
-		"FAILED",
-	]),
+	state: zFeedbackState,
 	withdrawn: z.boolean(),
 });
 
@@ -3535,6 +3444,8 @@ export const zReviewBucket = z.object({
 	start: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 });
 
+export const zReviewCadence = z.enum(["DAILY", "WEEKLY"]);
+
 export const zReviewContext = z.object({
 	canInspectReviewDetails: z.boolean(),
 	item: zItemRef.nullable(),
@@ -3544,35 +3455,13 @@ export const zReviewContext = z.object({
 	workspaceSlug: z.string(),
 });
 
+export const zReviewDecision = z.enum(["APPROVED", "CHANGES_REQUESTED", "REVIEW_REQUIRED"]);
+
 export const zReviewDeveloper = z.object({
 	accountId: z.string().regex(/^[1-9][0-9]*$/),
 	avatarUrl: z.string().nullable(),
 	displayName: z.string().nullable(),
 	providerLogin: z.string().nullable(),
-});
-
-export const zReviewBoundResult = z.object({
-	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
-	developer: zReviewDeveloper.nullable(),
-	id: z.uuid(),
-	item: zItemRef,
-	outcome: z.enum(["MET", "NOT_MET", "DOES_NOT_APPLY", "COULD_NOT_DETERMINE"]),
-	practiceName: z.string(),
-	practiceSlug: z.string(),
-	recordedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	reviewId: z.uuid(),
-	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]).nullable(),
-	summary: z.string().nullable(),
-});
-
-export const zFeedbackBasis = z.object({
-	ordinal: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	problemId: z.uuid().nullable(),
-	result: zReviewBoundResult,
-	resultId: z.uuid(),
 });
 
 export const zReviewFeedback = z.object({
@@ -3581,79 +3470,20 @@ export const zReviewFeedback = z.object({
 	copyCounts: zFeedbackCopyCounts,
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	deliveredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	destination: z.enum(["ON_WORK", "PRACTICE_PAGE", "CONVERSATION"]),
+	destination: zFeedbackDestination,
 	developer: zReviewDeveloper,
 	disagreedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	id: z.uuid(),
 	item: zItemRef.nullable(),
-	location: z.enum([
-		"GITHUB",
-		"GITLAB",
-		"OTHER_WORK",
-		"HEPH",
-		"SLACK",
-		"NEXT_CONVERSATION",
-		"PRACTICE_PAGES",
-	]),
+	location: zFeedbackLocation,
 	replacesId: z.uuid().nullable(),
 	resultCount: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	reviewId: z.uuid(),
-	state: z.enum([
-		"AWAITING_APPROVAL",
-		"READY",
-		"DELIVERED",
-		"UNCONFIRMED",
-		"WITHHELD",
-		"REJECTED",
-		"REPLACED",
-		"FAILED",
-	]),
-	stopReason: z
-		.enum([
-			"VOLUME_CAPPED",
-			"COMPOSER_WITHHELD",
-			"NOTHING_NEW",
-			"REPEATS_DELIVERED_NOTE",
-			"REACTED_DISAGREE",
-			"REACTED_NOT_APPLICABLE",
-			"CONVERSATION_EXPIRED",
-			"DELIVERY_UNCONFIRMED",
-			"ITEM_GONE",
-			"ITEM_CLOSED",
-			"ITEM_MERGED",
-			"ITEM_STATE_INELIGIBLE",
-			"ISSUE_SNAPSHOT_CHANGED",
-			"PUBLIC_SUBJECT_INELIGIBLE",
-			"NO_AI",
-			"DELIVERY_OFF",
-			"PERSON_SUPPRESSED",
-			"RECIPIENT_UNAVAILABLE",
-			"EMPTY_AFTER_SANITIZE",
-			"INSTANCE_SILENCED",
-			"FEEDBACK_OFF",
-			"WORKSPACE_DISABLED",
-			"WORKSPACE_DELIVERY_PAUSED",
-			"STALE_ROLLOUT_REVISION",
-			"OUTSIDE_CURRENT_SCOPE",
-			"APPROVAL_STALE",
-			"APPROVAL_NO_LONGER_ELIGIBLE",
-			"PRACTICE_REQUIRES_APPROVAL",
-			"BACKFILL_QUIET",
-			"RESULT_MARKED_INCORRECT",
-			"REVIEWED_VERSION_CHANGED",
-			"REVIEW_CANCELLED",
-			"EVIDENCE_NOT_PERMITTED",
-			"NO_EVIDENCE",
-			"UNCORROBORATED",
-			"PUBLIC_HISTORY_CHANGED",
-			"PUBLIC_DELIVERY_UNRESOLVED",
-			"STEP_LIMIT",
-			"NOT_COMPOSED",
-		])
-		.nullable(),
+	state: zFeedbackState,
+	stopReason: zFeedbackStopReason.nullable(),
 	textHidden: z.boolean(),
 	unverifiedHistory: z.boolean(),
 	withdrawn: z.boolean(),
@@ -3714,97 +3544,7 @@ export const zReviewFeedbackCounts = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
-export const zReviewFeedbackDetail = z.object({
-	answer: zFeedbackAnswer.nullable(),
-	basis: z.array(zFeedbackBasis),
-	body: z.string().nullable(),
-	bodyPreview: z.string().nullable(),
-	bodyTruncated: z.boolean(),
-	checks: z.array(zFeedbackCheck),
-	contentDigest: z.string().nullable(),
-	copies: z.array(zFeedbackCopy),
-	copyCounts: zFeedbackCopyCounts,
-	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	decisions: z.array(zFeedbackDecision),
-	deliveredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	destination: z.enum(["ON_WORK", "PRACTICE_PAGE", "CONVERSATION"]),
-	developer: zReviewDeveloper,
-	disagreedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	id: z.uuid(),
-	item: zItemRef.nullable(),
-	location: z.enum([
-		"GITHUB",
-		"GITLAB",
-		"OTHER_WORK",
-		"HEPH",
-		"SLACK",
-		"NEXT_CONVERSATION",
-		"PRACTICE_PAGES",
-	]),
-	replacesId: z.uuid().nullable(),
-	resultCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	reviewId: z.uuid(),
-	sends: z.array(zFeedbackSend),
-	state: z.enum([
-		"AWAITING_APPROVAL",
-		"READY",
-		"DELIVERED",
-		"UNCONFIRMED",
-		"WITHHELD",
-		"REJECTED",
-		"REPLACED",
-		"FAILED",
-	]),
-	stopReason: z
-		.enum([
-			"VOLUME_CAPPED",
-			"COMPOSER_WITHHELD",
-			"NOTHING_NEW",
-			"REPEATS_DELIVERED_NOTE",
-			"REACTED_DISAGREE",
-			"REACTED_NOT_APPLICABLE",
-			"CONVERSATION_EXPIRED",
-			"DELIVERY_UNCONFIRMED",
-			"ITEM_GONE",
-			"ITEM_CLOSED",
-			"ITEM_MERGED",
-			"ITEM_STATE_INELIGIBLE",
-			"ISSUE_SNAPSHOT_CHANGED",
-			"PUBLIC_SUBJECT_INELIGIBLE",
-			"NO_AI",
-			"DELIVERY_OFF",
-			"PERSON_SUPPRESSED",
-			"RECIPIENT_UNAVAILABLE",
-			"EMPTY_AFTER_SANITIZE",
-			"INSTANCE_SILENCED",
-			"FEEDBACK_OFF",
-			"WORKSPACE_DISABLED",
-			"WORKSPACE_DELIVERY_PAUSED",
-			"STALE_ROLLOUT_REVISION",
-			"OUTSIDE_CURRENT_SCOPE",
-			"APPROVAL_STALE",
-			"APPROVAL_NO_LONGER_ELIGIBLE",
-			"PRACTICE_REQUIRES_APPROVAL",
-			"BACKFILL_QUIET",
-			"RESULT_MARKED_INCORRECT",
-			"REVIEWED_VERSION_CHANGED",
-			"REVIEW_CANCELLED",
-			"EVIDENCE_NOT_PERMITTED",
-			"NO_EVIDENCE",
-			"UNCORROBORATED",
-			"PUBLIC_HISTORY_CHANGED",
-			"PUBLIC_DELIVERY_UNRESOLVED",
-			"STEP_LIMIT",
-			"NOT_COMPOSED",
-		])
-		.nullable(),
-	textHidden: z.boolean(),
-	unverifiedHistory: z.boolean(),
-	withdrawn: z.boolean(),
-});
+export const zReviewFeedbackSort = z.enum(["NEWEST", "OLDEST"]);
 
 export const zReviewItemCounts = z.object({
 	listed: z
@@ -3829,6 +3569,15 @@ export const zReviewItemCounts = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
+export const zReviewJobStatus = z.enum([
+	"QUEUED",
+	"RUNNING",
+	"COMPLETED",
+	"FAILED",
+	"TIMED_OUT",
+	"CANCELLED",
+]);
+
 export const zReviewJob = z.object({
 	attempt: z
 		.int()
@@ -3843,11 +3592,13 @@ export const zReviewJob = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullable(),
 	id: z.uuid(),
-	processingStatus: z.enum(["NONE", "PENDING", "DONE", "FAILED"]),
+	processingStatus: zProcessingStatus,
 	startedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	status: z.enum(["QUEUED", "RUNNING", "COMPLETED", "FAILED", "TIMED_OUT", "CANCELLED"]),
+	status: zReviewJobStatus,
 	traceId: z.string(),
 });
+
+export const zReviewKind = z.enum(["ITEM", "SCAN"]);
 
 export const zReviewLimit = z.object({
 	code: z.string(),
@@ -3865,6 +3616,10 @@ export const zReviewLineageEdge = z.object({
 	to: z.string(),
 });
 
+export const zReviewListOrder = z.enum(["NEWEST", "OLDEST"]);
+
+export const zReviewListSort = z.enum(["NEWEST", "OLDEST"]);
+
 export const zReviewMethod = z.object({
 	epoch: z
 		.int()
@@ -3879,57 +3634,16 @@ export const zReviewOn = z.object({
 	state: z.record(z.string(), z.array(z.string())),
 });
 
-export const zReviewProblem = z.object({
-	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
-	developer: zReviewDeveloper.nullable(),
-	disagreedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	endLine: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullable(),
-	evidenceHidden: z.boolean(),
-	group: zGroupRef.nullable(),
-	id: z.uuid(),
-	item: zItemRef,
-	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	path: z.string().nullable(),
-	practiceName: z.string(),
-	practiceSlug: z.string(),
-	recordedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	resultId: z.uuid(),
-	reviewId: z.uuid(),
-	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]),
-	side: z.enum(["OLD", "NEW"]).nullable(),
-	sourceKind: z.string().nullable(),
-	startLine: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullable(),
-	summary: z.string(),
-});
+export const zReviewOrigin = z.enum(["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]);
 
-/**
- * One numbered page of a list
- */
-export const zOffsetPageDtoReviewProblem = z.object({
-	content: z.array(zReviewProblem),
-	page: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	size: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	totalElements: z.int(),
-	totalPages: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-});
+export const zReviewPracticeStatus = z.enum([
+	"QUEUED",
+	"READY",
+	"RUNNING",
+	"DONE",
+	"WITHHELD",
+	"FAILED",
+]);
 
 /**
  * How far an active item review got; absent for a scan, which lists its items in pages
@@ -3946,23 +3660,6 @@ export const zReviewProgress = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
-export const zProfileReviewRef = z.object({
-	at: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	item: zItemRef,
-	progress: zReviewProgress.nullable(),
-	reviewId: z.uuid(),
-	status: z.enum(["QUEUED", "RUNNING", "COMPLETE", "PARTIAL", "FAILED", "CANCELLED"]).nullable(),
-});
-
-export const zPracticeProfileOverview = z.object({
-	activeReview: zProfileReviewRef.nullable(),
-	changes: z.array(zProfileChange),
-	latestReview: zProfileReviewRef.nullable(),
-	reviewReadiness: zMemberReviewReadiness.nullable(),
-	reviewedItems: z.array(zItemRef),
-	window: zOverviewWindow,
-});
-
 export const zReviewQueueItem = z.object({
 	developer: zReviewDeveloper.nullable(),
 	heldForBudget: z.boolean(),
@@ -3971,7 +3668,7 @@ export const zReviewQueueItem = z.object({
 	progress: zReviewProgress.nullable(),
 	reviewId: z.uuid(),
 	since: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	status: z.enum(["QUEUED", "RUNNING", "COMPLETED", "FAILED", "TIMED_OUT", "CANCELLED"]),
+	status: zReviewJobStatus,
 });
 
 export const zReviewQueue = z.object({
@@ -3986,162 +3683,82 @@ export const zReviewQueue = z.object({
 	waiting: z.int(),
 });
 
-export const zReviewRef = z.object({
-	completedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	id: z.uuid(),
-	item: zItemRef,
-	itemVersion: z.string().nullable(),
-	kind: z.enum(["ITEM", "SCAN"]),
-	origin: z.enum(["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]),
-	status: z.enum(["QUEUED", "RUNNING", "COMPLETE", "PARTIAL", "FAILED", "CANCELLED"]),
-});
+export const zReviewQueueState = z.enum(["WAITING", "HELD", "RUNNING"]);
 
-export const zOwnItemTrace = z.object({
-	events: z.array(zOwnItemEvent),
-	item: zItemRef,
-	results: z.array(zResultList),
-	review: zReviewRef,
-});
-
-export const zProfileReview = z.object({
-	feedback: z.array(zOwnFeedbackRef),
-	positionOnWork: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	results: z.array(zResultList),
-	review: zReviewRef,
-	totalOnWork: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-});
+export const zReviewReadinessBlocker = z.enum([
+	"WORKSPACE_INACTIVE",
+	"REVIEWS_OFF",
+	"PERSON_ERASED",
+	"NO_AI",
+	"OUTSIDE_REVIEW_SCOPE",
+	"NOT_ELIGIBLE",
+	"CHOICE_REQUIRED",
+	"NO_MODEL",
+	"NO_PRACTICE",
+	"ON_REQUEST_ONLY",
+]);
 
 /**
- * One numbered page of a list
+ * Whether and how the workspace reviews one member's work, from the rules that start and admit a review.
  */
-export const zOffsetPageDtoProfileReview = z.object({
-	content: z.array(zProfileReview),
-	page: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	size: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	totalElements: z.int(),
-	totalPages: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+export const zMemberReviewReadiness = z.object({
+	approvalBeforePosting: z.boolean(),
+	blocker: zReviewReadinessBlocker.nullable(),
+	events: z.array(z.string()),
 });
 
-export const zProfileReviewDetail = z.object({
-	feedback: z.array(zOwnFeedbackRef),
-	practiceOutcomes: zOutcomeVector,
-	results: z.array(zResultList),
-	review: zReviewRef,
-	trace: zOwnItemTrace,
+export const zReviewRequestReason = z.enum([
+	"GATE_WITHHELD",
+	"COOLDOWN_ACTIVE",
+	"REQUEST_COOLDOWN_ACTIVE",
+	"REQUESTER_QUOTA_EXHAUSTED",
+	"CONCURRENT_DUPLICATE",
+	"COALESCED",
+	"OUT_OF_REVIEW_SCOPE",
+	"BOT_AUTHOR",
+	"BOT_REVIEWER",
+	"STALE_ROLLOUT_REVISION",
+	"WORKSPACE_INACTIVE",
+	"PRACTICES_DISABLED",
+	"NO_ACTIVE_PRACTICE",
+	"REVIEW_MODEL_UNBOUND",
+	"MEMBER_AI_DECLINED",
+	"PERSON_DATA_ERASED",
+	"FEEDBACK_MODE_OFF",
+	"SUBJECT_UNLINKED",
+	"MERGE_ACTOR_UNAVAILABLE",
+	"MODEL_UNAVAILABLE",
+	"BUDGET_EXHAUSTED",
+	"ITEM_NOT_VISIBLE",
+	"VERSION_SUPERSEDED",
+	"PENDING_DEADLINE_EXCEEDED",
+	"ITEM_GONE",
+	"LEGACY_REVIEW_UNBOUND",
+	"OCCASION_EVIDENCE_UNAVAILABLE",
+	"QUIET_WINDOW",
+	"REVIEW_IN_PROGRESS",
+	"ALREADY_CURRENT",
+]);
+
+export const zItemEvent = z.object({
+	decidedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	foundBy: zFoundBy,
+	id: z.uuid(),
+	itemId: z.string().regex(/^[1-9][0-9]*$/),
+	itemVersion: z.string().nullable(),
+	name: z.string(),
+	occurredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	reason: zReviewRequestReason.nullable(),
+	reviewId: z.uuid().nullable(),
+	state: zItemEventState,
 });
 
-export const zReviewLineageNode = z.object({
-	feedback: zReviewBoundFeedback.nullable(),
-	id: z.string(),
-	item: zItemRef.nullable(),
-	kind: z.enum(["ITEM", "REVIEW", "RESULT", "PROBLEM", "FEEDBACK"]),
-	problem: zProblemSummary.nullable(),
-	result: zReviewBoundResult.nullable(),
-	review: zReviewRef.nullable(),
-});
-
-export const zReviewLineage = z.object({
-	edges: z.array(zReviewLineageEdge),
-	nodes: z.array(zReviewLineageNode),
-	rootId: z.string(),
-});
+export const zReviewRequestStatus = z.enum(["SUBMITTED", "REFUSED"]);
 
 export const zReviewRequestOutcome = z.object({
-	reason: z
-		.enum([
-			"GATE_WITHHELD",
-			"COOLDOWN_ACTIVE",
-			"REQUEST_COOLDOWN_ACTIVE",
-			"REQUESTER_QUOTA_EXHAUSTED",
-			"CONCURRENT_DUPLICATE",
-			"COALESCED",
-			"OUT_OF_REVIEW_SCOPE",
-			"BOT_AUTHOR",
-			"BOT_REVIEWER",
-			"STALE_ROLLOUT_REVISION",
-			"WORKSPACE_INACTIVE",
-			"PRACTICES_DISABLED",
-			"NO_ACTIVE_PRACTICE",
-			"REVIEW_MODEL_UNBOUND",
-			"MEMBER_AI_DECLINED",
-			"PERSON_DATA_ERASED",
-			"FEEDBACK_MODE_OFF",
-			"SUBJECT_UNLINKED",
-			"MERGE_ACTOR_UNAVAILABLE",
-			"MODEL_UNAVAILABLE",
-			"BUDGET_EXHAUSTED",
-			"ITEM_NOT_VISIBLE",
-			"VERSION_SUPERSEDED",
-			"PENDING_DEADLINE_EXCEEDED",
-			"ITEM_GONE",
-			"LEGACY_REVIEW_UNBOUND",
-			"OCCASION_EVIDENCE_UNAVAILABLE",
-			"QUIET_WINDOW",
-			"REVIEW_IN_PROGRESS",
-			"ALREADY_CURRENT",
-		])
-		.nullable(),
+	reason: zReviewRequestReason.nullable(),
 	reviewId: z.uuid().nullable(),
-	status: z.enum(["SUBMITTED", "REFUSED"]),
-});
-
-export const zReviewResult = z.object({
-	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
-	developer: zReviewDeveloper.nullable(),
-	feedback: zReviewFeedbackCounts,
-	id: z.uuid(),
-	item: zItemRef,
-	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	origin: z.enum(["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]),
-	outcome: z.enum(["MET", "NOT_MET", "DOES_NOT_APPLY", "COULD_NOT_DETERMINE"]),
-	practiceName: z.string(),
-	practiceSlug: z.string(),
-	problemCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	problems: z.array(zProblemSummary),
-	recordedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	reviewId: z.uuid(),
-	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]).nullable(),
-	summary: z.string().nullable(),
-});
-
-/**
- * One numbered page of a list
- */
-export const zOffsetPageDtoReviewResult = z.object({
-	content: z.array(zReviewResult),
-	page: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	size: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	totalElements: z.int(),
-	totalPages: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	status: zReviewRequestStatus,
 });
 
 export const zReviewResultCounts = z.object({
@@ -4163,101 +3780,6 @@ export const zReviewResultCounts = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
-export const zPracticeTraceEntry = z.object({
-	about: z.enum(["AUTHOR", "REVIEWER", "ASSIGNEE", "MERGER"]).nullable(),
-	feedbackMode: z.enum(["OFF", "APPROVE_FIRST", "AUTOMATIC"]),
-	practiceSlug: z.string(),
-	results: zReviewResultCounts,
-	review: zReviewRef.nullable(),
-	reviewOn: zReviewOn,
-	withheldReasons: z.array(zReasonCount),
-});
-
-export const zItemTrace = z.object({
-	events: z.array(zItemEvent),
-	item: zItemRef,
-	practices: z.array(zPracticeTraceEntry),
-	reviews: z.array(zReviewRef),
-});
-
-export const zReviewPractice = z.object({
-	itemCounts: zReviewItemCounts,
-	number: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullable(),
-	practiceName: z.string(),
-	practiceSlug: z.string(),
-	practiceVersionId: z
-		.string()
-		.regex(/^[1-9][0-9]*$/)
-		.nullable(),
-	reason: z.string().nullable(),
-	results: zReviewResultCounts,
-	script: zPracticeScriptRun.nullable(),
-	status: z.enum(["QUEUED", "READY", "RUNNING", "DONE", "WITHHELD", "FAILED"]),
-});
-
-export const zReview = z.object({
-	activeJobCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	batchId: z.uuid().nullable(),
-	completedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	feedback: zReviewFeedbackCounts,
-	id: z.uuid(),
-	item: zItemRef,
-	itemVersion: z.string().nullable(),
-	jobCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	kind: z.enum(["ITEM", "SCAN"]),
-	model: z.string().nullable(),
-	orderedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	origin: z.enum(["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]),
-	practices: z.array(zReviewPractice),
-	progress: zReviewProgress.nullable(),
-	requestedBy: zAccountRef.nullable(),
-	results: zReviewResultCounts,
-	startedBy: zItemEvent.nullable(),
-	status: z.enum(["QUEUED", "RUNNING", "COMPLETE", "PARTIAL", "FAILED", "CANCELLED"]),
-	stopReason: z
-		.enum([
-			"TIMED_OUT",
-			"EXECUTION_FAILED",
-			"PREPARATION_FAILED",
-			"PROCESSING_FAILED",
-			"PERSON_DATA_ERASED",
-			"STALE_ROLLOUT_REVISION",
-			"CANCELLED_BY_ADMIN",
-			"REPLACED",
-			"LEGACY_FAILURE",
-			"EXECUTION_INCOMPLETE",
-			"RESULT_WITHHELD",
-			"READINESS_REFUSED",
-			"SUSPECT_LISTING",
-			"BUDGET",
-			"USAGE_UNVERIFIABLE",
-			"DEADLINE",
-			"CANCELLED",
-			"ENUMERATION_FAILED",
-			"ENUMERATION_LIMIT",
-			"NO_SCAN_PRACTICES",
-			"MODEL_CHANGED",
-			"MODEL_UNAVAILABLE",
-			"ERROR",
-			"LEGACY_SCOPE_UNKNOWN",
-			"CONTRACT_CHANGED",
-			"NO_SANDBOX_ROOM",
-			"COMPOSITION_UNCONFIRMED",
-		])
-		.nullable(),
-});
-
 export const zReviewPracticeCounts = z.object({
 	feedback: zReviewFeedbackCounts,
 	group: zGroupRef.nullable(),
@@ -4276,7 +3798,7 @@ export const zReviewRuntime = z.object({
 
 export const zReviewSchedule = z.object({
 	budgetUsd: z.string().nullable(),
-	cadence: z.enum(["DAILY", "WEEKLY"]),
+	cadence: zReviewCadence,
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	createdBy: zAccountRef.nullable(),
 	enabled: z.boolean(),
@@ -4295,7 +3817,7 @@ export const zReviewSchedule = z.object({
 
 export const zReviewScheduleInput = z.object({
 	budgetUsd: z.string().nullable(),
-	cadence: z.enum(["DAILY", "WEEKLY"]),
+	cadence: zReviewCadence,
 	enabled: z.boolean(),
 	itemKind: z.string(),
 	lookbackDays: z
@@ -4305,9 +3827,68 @@ export const zReviewScheduleInput = z.object({
 		.nullable(),
 });
 
+export const zReviewScopeMode = z.enum(["ALL", "SELECTED"]);
+
 export const zReviewScopeRepository = z.object({
 	baseBranches: z.array(z.string()),
 	repositoryItemId: z.string().regex(/[1-9][0-9]*/),
+});
+
+/**
+ * Where the review stands.
+ */
+export const zReviewStatus = z.enum([
+	"QUEUED",
+	"RUNNING",
+	"COMPLETE",
+	"PARTIAL",
+	"FAILED",
+	"CANCELLED",
+]);
+
+export const zProfileReviewRef = z.object({
+	at: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	item: zItemRef,
+	progress: zReviewProgress.nullable(),
+	reviewId: z.uuid(),
+	status: zReviewStatus.nullable(),
+});
+
+export const zPracticeProfileOverview = z.object({
+	activeReview: zProfileReviewRef.nullable(),
+	changes: z.array(zProfileChange),
+	latestReview: zProfileReviewRef.nullable(),
+	reviewReadiness: zMemberReviewReadiness.nullable(),
+	reviewedItems: z.array(zItemRef),
+	window: zOverviewWindow,
+});
+
+export const zReviewRef = z.object({
+	completedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	id: z.uuid(),
+	item: zItemRef,
+	itemVersion: z.string().nullable(),
+	kind: zReviewKind,
+	origin: zReviewOrigin,
+	status: zReviewStatus,
+});
+
+export const zPracticeTraceEntry = z.object({
+	about: zAboutRole.nullable(),
+	feedbackMode: zFeedbackMode,
+	practiceSlug: z.string(),
+	results: zReviewResultCounts,
+	review: zReviewRef.nullable(),
+	reviewOn: zReviewOn,
+	withheldReasons: z.array(zReasonCount),
+});
+
+export const zItemTrace = z.object({
+	events: z.array(zItemEvent),
+	item: zItemRef,
+	practices: z.array(zPracticeTraceEntry),
+	reviews: z.array(zReviewRef),
 });
 
 export const zReviewStatusCounts = z.object({
@@ -4337,99 +3918,35 @@ export const zReviewStatusCounts = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
-export const zReviewOverview = z.object({
-	bucket: z.enum(["DAY", "WEEK", "MONTH"]),
-	buckets: z.array(zReviewBucket),
-	feedback: zReviewFeedbackCounts,
-	from: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	practices: z.array(zReviewPracticeCounts),
-	results: zReviewResultCounts,
-	resultsMarkedIncorrect: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	reviews: zReviewStatusCounts,
-	to: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-});
-
-export const zReviewSummary = z.object({
-	activeJobCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	batchId: z.uuid().nullable(),
-	completedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	feedback: zReviewFeedbackCounts,
-	id: z.uuid(),
-	item: zItemRef,
-	itemVersion: z.string().nullable(),
-	jobCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	kind: z.enum(["ITEM", "SCAN"]),
-	model: z.string().nullable(),
-	orderedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	origin: z.enum(["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]),
-	practices: z.array(zReviewPractice),
-	progress: zReviewProgress.nullable(),
-	requestedBy: zAccountRef.nullable(),
-	results: zReviewResultCounts,
-	startedBy: zItemEvent.nullable(),
-	status: z.enum(["QUEUED", "RUNNING", "COMPLETE", "PARTIAL", "FAILED", "CANCELLED"]),
-	stopReason: z
-		.enum([
-			"TIMED_OUT",
-			"EXECUTION_FAILED",
-			"PREPARATION_FAILED",
-			"PROCESSING_FAILED",
-			"PERSON_DATA_ERASED",
-			"STALE_ROLLOUT_REVISION",
-			"CANCELLED_BY_ADMIN",
-			"REPLACED",
-			"LEGACY_FAILURE",
-			"EXECUTION_INCOMPLETE",
-			"RESULT_WITHHELD",
-			"READINESS_REFUSED",
-			"SUSPECT_LISTING",
-			"BUDGET",
-			"USAGE_UNVERIFIABLE",
-			"DEADLINE",
-			"CANCELLED",
-			"ENUMERATION_FAILED",
-			"ENUMERATION_LIMIT",
-			"NO_SCAN_PRACTICES",
-			"MODEL_CHANGED",
-			"MODEL_UNAVAILABLE",
-			"ERROR",
-			"LEGACY_SCOPE_UNKNOWN",
-			"CONTRACT_CHANGED",
-			"NO_SANDBOX_ROOM",
-			"COMPOSITION_UNCONFIRMED",
-		])
-		.nullable(),
-});
-
-/**
- * One numbered page of a list
- */
-export const zOffsetPageDtoReviewSummary = z.object({
-	content: z.array(zReviewSummary),
-	page: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	size: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	totalElements: z.int(),
-	totalPages: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-});
+export const zReviewStopReason = z.enum([
+	"TIMED_OUT",
+	"EXECUTION_FAILED",
+	"PREPARATION_FAILED",
+	"PROCESSING_FAILED",
+	"PERSON_DATA_ERASED",
+	"STALE_ROLLOUT_REVISION",
+	"CANCELLED_BY_ADMIN",
+	"REPLACED",
+	"LEGACY_FAILURE",
+	"EXECUTION_INCOMPLETE",
+	"RESULT_WITHHELD",
+	"READINESS_REFUSED",
+	"SUSPECT_LISTING",
+	"BUDGET",
+	"USAGE_UNVERIFIABLE",
+	"DEADLINE",
+	"CANCELLED",
+	"ENUMERATION_FAILED",
+	"ENUMERATION_LIMIT",
+	"NO_SCAN_PRACTICES",
+	"MODEL_CHANGED",
+	"MODEL_UNAVAILABLE",
+	"ERROR",
+	"LEGACY_SCOPE_UNKNOWN",
+	"CONTRACT_CHANGED",
+	"NO_SANDBOX_ROOM",
+	"COMPOSITION_UNCONFIRMED",
+]);
 
 export const zReviewTimeShares = z.object({
 	asked: z.number(),
@@ -4465,103 +3982,16 @@ export const zReviewTiming = z.object({
 	waitingLong: z.int(),
 });
 
-export const zReviewUsageAttempt = z.object({
-	attempt: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	cacheReadTokens: z.int(),
-	cacheWriteTokens: z.int(),
-	calls: z.int(),
-	costUsd: z.string().nullable(),
-	includesUpperBound: z.boolean(),
-	inputTokens: z.int(),
-	jobId: z.uuid(),
-	outputTokens: z.int(),
-	pricingState: z.enum(["PRICED", "NO_CHARGE", "UNPRICED"]),
-	reasoningTokens: z.int(),
-});
-
-export const zReviewUsage = z.object({
-	attempts: z.array(zReviewUsageAttempt),
-	calls: z.int(),
-	costUsd: z.string().nullable(),
-	includesUpperBound: z.boolean(),
-	inputTokens: z.int(),
-	outputTokens: z.int(),
-	priced: z.boolean(),
-});
-
-export const zReviewDetail = z.object({
-	activeJobCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	batchId: z.uuid().nullable(),
-	completedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	feedback: zReviewFeedbackCounts,
-	generatedPaths: zGeneratedPathReview.nullable(),
-	id: z.uuid(),
-	item: zItemRef,
-	itemVersion: z.string().nullable(),
-	jobCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	kind: z.enum(["ITEM", "SCAN"]),
-	model: z.string().nullable(),
-	orderedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	origin: z.enum(["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]),
-	practices: z.array(zReviewPractice),
-	progress: zReviewProgress.nullable(),
-	requestedBy: zAccountRef.nullable(),
-	results: zReviewResultCounts,
-	runtime: zReviewRuntime.nullable(),
-	startedBy: zItemEvent.nullable(),
-	status: z.enum(["QUEUED", "RUNNING", "COMPLETE", "PARTIAL", "FAILED", "CANCELLED"]),
-	stopReason: z
-		.enum([
-			"TIMED_OUT",
-			"EXECUTION_FAILED",
-			"PREPARATION_FAILED",
-			"PROCESSING_FAILED",
-			"PERSON_DATA_ERASED",
-			"STALE_ROLLOUT_REVISION",
-			"CANCELLED_BY_ADMIN",
-			"REPLACED",
-			"LEGACY_FAILURE",
-			"EXECUTION_INCOMPLETE",
-			"RESULT_WITHHELD",
-			"READINESS_REFUSED",
-			"SUSPECT_LISTING",
-			"BUDGET",
-			"USAGE_UNVERIFIABLE",
-			"DEADLINE",
-			"CANCELLED",
-			"ENUMERATION_FAILED",
-			"ENUMERATION_LIMIT",
-			"NO_SCAN_PRACTICES",
-			"MODEL_CHANGED",
-			"MODEL_UNAVAILABLE",
-			"ERROR",
-			"LEGACY_SCOPE_UNKNOWN",
-			"CONTRACT_CHANGED",
-			"NO_SANDBOX_ROOM",
-			"COMPOSITION_UNCONFIRMED",
-		])
-		.nullable(),
-	usage: zReviewUsage,
-});
+export const zReviewedByKind = z.enum(["HEPHAESTUS", "PEOPLE", "NOBODY"]);
 
 export const zReviewedBy = z.object({
-	by: z.enum(["HEPHAESTUS", "PEOPLE", "NOBODY"]),
+	by: zReviewedByKind,
 	humanReason: zReviewLimit.nullable(),
 	limits: z.array(zReviewLimit),
 });
 
 export const zCatalogPracticeSummary = z.object({
-	availability: z.enum(["AVAILABLE", "ADOPTED", "SLUG_CONFLICT"]).optional(),
+	availability: zCatalogAdoptionAvailability.optional(),
 	groupName: z.string().optional(),
 	groupSlug: z.string().optional(),
 	kind: z.string().optional(),
@@ -4572,7 +4002,7 @@ export const zCatalogPracticeSummary = z.object({
 });
 
 export const zReviewedByInput = z.object({
-	by: z.enum(["HEPHAESTUS", "PEOPLE", "NOBODY"]),
+	by: zReviewedByKind,
 	humanReason: zReviewLimitInput.nullable(),
 	limits: z.array(zReviewLimitInput).min(0).max(100),
 });
@@ -4585,11 +4015,25 @@ export const zReviewedPractice = z.object({
 	whyItMatters: z.string().nullable(),
 });
 
+export const zReviewerState = z.enum(["CHANGES_REQUESTED", "APPROVED", "COMMENTED", "REQUESTED"]);
+
 export const zRevokeSessionsResult = z.object({
 	revoked: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zRuntimeRole = z.enum(["SERVER"]);
+
+export const zConfigurationFact = z.object({
+	documentationUrl: z.string(),
+	explanation: z.string(),
+	id: z.string(),
+	requirement: zConfigurationRequirement,
+	roles: z.array(zRuntimeRole),
+	status: zConfigurationStatus,
+	subject: z.string(),
 });
 
 /**
@@ -4598,11 +4042,11 @@ export const zRevokeSessionsResult = z.object({
  * deployment.
  */
 export const zRunningRelease = z.object({
-	channel: z.enum(["RELEASE", "COMMIT", "DEVELOPMENT"]),
+	channel: zReleaseChannel,
 	commit: z.string().optional(),
 	environment: z.string(),
 	image: z.string().optional(),
-	roles: z.array(z.enum(["SERVER"])),
+	roles: z.array(zRuntimeRole),
 	version: z.string(),
 });
 
@@ -4611,7 +4055,7 @@ export const zRunningRelease = z.object({
  * verifies an artifact or performs an upgrade.
  */
 export const zReleaseStatus = z.object({
-	failure: z.enum(["RATE_LIMITED", "UNAVAILABLE", "MALFORMED"]).optional(),
+	failure: zReleaseCheckFailure.optional(),
 	history: z.array(zReleaseStart),
 	lastAttempt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	lastSuccess: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
@@ -4620,14 +4064,7 @@ export const zReleaseStatus = z.object({
 	retryUntil: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	running: zRunningRelease,
 	runningSince: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-	status: z.enum([
-		"DISABLED",
-		"NOT_APPLICABLE",
-		"NEVER_CHECKED",
-		"CURRENT",
-		"UPDATE_AVAILABLE",
-		"FAILED",
-	]),
+	status: zReleaseCheckStatus,
 });
 
 /**
@@ -4731,7 +4168,7 @@ export const zScanDefinition = z.object({
 });
 
 export const zPracticeDefinition = z.object({
-	about: z.enum(["AUTHOR", "REVIEWER", "ASSIGNEE", "MERGER"]).nullable(),
+	about: zAboutRole.nullable(),
 	appliesWhen: zAppliesWhen.nullable(),
 	criteria: z.string(),
 	guidance: zPracticeGuidance,
@@ -4745,7 +4182,7 @@ export const zPracticeDefinition = z.object({
 });
 
 export const zCatalogPractice = z.object({
-	changeKind: z.enum(["NONE", "WORDING", "PRESENTATION", "REVIEW"]),
+	changeKind: zCatalogChangeKind,
 	definition: zPracticeDefinition,
 	etag: z.string(),
 	excluded: z.boolean(),
@@ -4758,7 +4195,7 @@ export const zCatalogPractice = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	shipped: zPracticeDefinition.nullable(),
 	slug: z.string(),
-	state: z.enum(["FROM_HEPHAESTUS", "EDITED_HERE", "UPDATE_WAITING", "YOURS", "NO_LONGER_SHIPPED"]),
+	state: zCatalogEntryState,
 });
 
 export const zCatalog = z.object({
@@ -4767,11 +4204,11 @@ export const zCatalog = z.object({
 });
 
 export const zCatalogPracticePreview = z.object({
-	availability: z.enum(["AVAILABLE", "ADOPTED", "SLUG_CONFLICT"]).optional(),
+	availability: zCatalogAdoptionAvailability.optional(),
 	definition: zPracticeDefinition.optional(),
 	etag: z.string().optional(),
 	group: zCatalogAdoptionGroup.optional(),
-	initialFeedbackMode: z.enum(["OFF", "APPROVE_FIRST", "AUTOMATIC"]).optional(),
+	initialFeedbackMode: zFeedbackMode.optional(),
 	kind: z.string().optional(),
 	offeredDigest: z.string().optional(),
 	slug: z.string().optional(),
@@ -4780,14 +4217,14 @@ export const zCatalogPracticePreview = z.object({
 export const zCatalogGroupAdoptionPreview = z.object({
 	actions: z.array(zCatalogGroupPracticeAction).optional(),
 	definition: zGroupDefinition.optional(),
-	disposition: z.enum(["UNASSIGNED", "REUSE_EXISTING_GROUP", "CREATE_CATALOG_GROUP"]).optional(),
+	disposition: zCatalogGroupDisposition.optional(),
 	etag: z.string().optional(),
 	practices: z.array(zCatalogPracticePreview).optional(),
 	slug: z.string().optional(),
 });
 
 export const zPracticeDefinitionInput = z.object({
-	about: z.enum(["AUTHOR", "REVIEWER", "ASSIGNEE", "MERGER"]).nullable(),
+	about: zAboutRole.nullable(),
 	appliesWhen: zAppliesWhen.nullable(),
 	criteria: z.string().min(1),
 	guidance: zPracticeGuidance,
@@ -4862,21 +4299,7 @@ export const zPracticeReleaseProposal = z.object({
 });
 
 export const zPracticeVersion = z.object({
-	changed: z.array(
-		z.enum([
-			"NAME",
-			"REVIEW_ON",
-			"APPLIES_WHEN",
-			"ABOUT",
-			"READS",
-			"REVIEWED_BY",
-			"CRITERIA",
-			"SCRIPT",
-			"SCAN",
-			"LINE_NOTES",
-			"GUIDANCE",
-		]),
-	),
+	changed: z.array(zPracticeDefinitionField),
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	createdBy: zAccountRef.nullable(),
 	definition: zPracticeDefinition.nullable(),
@@ -4914,7 +4337,7 @@ export const zCatalogGroupAdoptionResult = z.object({
 export const zScanExcludedFile = z.object({
 	itemId: z.string(),
 	path: z.string(),
-	reason: z.enum(["FILE_TOO_LARGE", "BINARY_FILE"]),
+	reason: zItemExclusionReason,
 	sizeBytes: z.int(),
 });
 
@@ -4931,14 +4354,7 @@ export const zScanPracticeRef = z.object({
 });
 
 export const zScanPracticeReport = z.object({
-	comparison: z.enum([
-		"COMPARABLE",
-		"FIRST_SCAN",
-		"METHOD_CHANGED",
-		"STANDARD_CHANGED",
-		"INCOMPLETE",
-		"MIXED",
-	]),
+	comparison: zComparison,
 	counts: zScanCounts,
 	listingComplete: z.boolean(),
 	method: zReviewMethod,
@@ -4952,7 +4368,7 @@ export const zScanPracticeReport = z.object({
 	practiceVersionId: z.string().regex(/^[1-9][0-9]*$/),
 	reason: z.string().nullable(),
 	reviewDigest: z.string(),
-	status: z.enum(["QUEUED", "READY", "RUNNING", "DONE", "WITHHELD", "FAILED"]),
+	status: zReviewPracticeStatus,
 });
 
 export const zScanProgress = z.object({
@@ -4984,7 +4400,7 @@ export const zScanDetail = z.object({
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	id: z.uuid(),
 	itemVersion: z.string(),
-	origin: z.enum(["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]),
+	origin: zReviewOrigin,
 	practiceCount: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -4995,38 +4411,8 @@ export const zScanDetail = z.object({
 	repository: zItemRef,
 	requestedBy: zAccountRef.nullable(),
 	startedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	status: z.enum(["QUEUED", "RUNNING", "COMPLETE", "PARTIAL", "FAILED", "CANCELLED"]),
-	stopReason: z
-		.enum([
-			"TIMED_OUT",
-			"EXECUTION_FAILED",
-			"PREPARATION_FAILED",
-			"PROCESSING_FAILED",
-			"PERSON_DATA_ERASED",
-			"STALE_ROLLOUT_REVISION",
-			"CANCELLED_BY_ADMIN",
-			"REPLACED",
-			"LEGACY_FAILURE",
-			"EXECUTION_INCOMPLETE",
-			"RESULT_WITHHELD",
-			"READINESS_REFUSED",
-			"SUSPECT_LISTING",
-			"BUDGET",
-			"USAGE_UNVERIFIABLE",
-			"DEADLINE",
-			"CANCELLED",
-			"ENUMERATION_FAILED",
-			"ENUMERATION_LIMIT",
-			"NO_SCAN_PRACTICES",
-			"MODEL_CHANGED",
-			"MODEL_UNAVAILABLE",
-			"ERROR",
-			"LEGACY_SCOPE_UNKNOWN",
-			"CONTRACT_CHANGED",
-			"NO_SANDBOX_ROOM",
-			"COMPOSITION_UNCONFIRMED",
-		])
-		.nullable(),
+	status: zReviewStatus,
+	stopReason: zReviewStopReason.nullable(),
 });
 
 export const zScanSummary = z.object({
@@ -5036,7 +4422,7 @@ export const zScanSummary = z.object({
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	id: z.uuid(),
 	itemVersion: z.string(),
-	origin: z.enum(["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]),
+	origin: zReviewOrigin,
 	practiceCount: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -5045,38 +4431,8 @@ export const zScanSummary = z.object({
 	repository: zItemRef,
 	requestedBy: zAccountRef.nullable(),
 	startedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	status: z.enum(["QUEUED", "RUNNING", "COMPLETE", "PARTIAL", "FAILED", "CANCELLED"]),
-	stopReason: z
-		.enum([
-			"TIMED_OUT",
-			"EXECUTION_FAILED",
-			"PREPARATION_FAILED",
-			"PROCESSING_FAILED",
-			"PERSON_DATA_ERASED",
-			"STALE_ROLLOUT_REVISION",
-			"CANCELLED_BY_ADMIN",
-			"REPLACED",
-			"LEGACY_FAILURE",
-			"EXECUTION_INCOMPLETE",
-			"RESULT_WITHHELD",
-			"READINESS_REFUSED",
-			"SUSPECT_LISTING",
-			"BUDGET",
-			"USAGE_UNVERIFIABLE",
-			"DEADLINE",
-			"CANCELLED",
-			"ENUMERATION_FAILED",
-			"ENUMERATION_LIMIT",
-			"NO_SCAN_PRACTICES",
-			"MODEL_CHANGED",
-			"MODEL_UNAVAILABLE",
-			"ERROR",
-			"LEGACY_SCOPE_UNKNOWN",
-			"CONTRACT_CHANGED",
-			"NO_SANDBOX_ROOM",
-			"COMPOSITION_UNCONFIRMED",
-		])
-		.nullable(),
+	status: zReviewStatus,
+	stopReason: zReviewStopReason.nullable(),
 });
 
 /**
@@ -5102,14 +4458,7 @@ export const zOffsetPageDtoScanSummary = z.object({
 export const zScanReport = z.object({
 	availability: zScanAvailability,
 	baselineScanId: z.uuid().nullable(),
-	comparison: z.enum([
-		"COMPARABLE",
-		"FIRST_SCAN",
-		"METHOD_CHANGED",
-		"STANDARD_CHANGED",
-		"INCOMPLETE",
-		"MIXED",
-	]),
+	comparison: zComparison,
 	complete: z.boolean(),
 	counts: zScanCounts,
 	exclusions: z.array(zScanExcludedFile).nullable(),
@@ -5121,6 +4470,145 @@ export const zScanReport = z.object({
 	removalGuard: zRemovalGuard,
 	scan: zScanSummary,
 	withheldReasons: z.array(zReasonCount),
+});
+
+export const zScriptKind = z.enum(["BUILTIN", "CUSTOM"]);
+
+export const zScriptNoResultCause = z.enum(["EVIDENCE_NOT_READ", "SESSION_ENDED"]);
+
+export const zScriptRunStatus = z.enum(["OK", "WITHHELD", "FAILED", "NOT_REACHED", "NOT_FINISHED"]);
+
+export const zScriptStopReason = z.enum([
+	"UNAVAILABLE",
+	"BUDGET",
+	"DEADLINE",
+	"TOO_LARGE",
+	"OFF_FORMAT",
+	"REFUSED",
+	"ERROR",
+	"CANCELLED",
+	"INVALID_SCRIPT",
+	"INVALID_CANDIDATE",
+	"UNREAD_EVIDENCE",
+]);
+
+export const zPracticeScriptRun = z.object({
+	attempt: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	durationMs: z.int().nullable(),
+	error: z.string().nullable(),
+	finishedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	jobId: z.uuid(),
+	noResultCause: zScriptNoResultCause.nullable(),
+	practiceId: z.string().regex(/^[1-9][0-9]*$/),
+	practiceVersionId: z.string().regex(/^[1-9][0-9]*$/),
+	reviewModelCalls: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullable(),
+	scriptKind: zScriptKind,
+	status: zScriptRunStatus,
+	stopReason: zScriptStopReason.nullable(),
+});
+
+export const zReviewPractice = z.object({
+	itemCounts: zReviewItemCounts,
+	number: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullable(),
+	practiceName: z.string(),
+	practiceSlug: z.string(),
+	practiceVersionId: z
+		.string()
+		.regex(/^[1-9][0-9]*$/)
+		.nullable(),
+	reason: z.string().nullable(),
+	results: zReviewResultCounts,
+	script: zPracticeScriptRun.nullable(),
+	status: zReviewPracticeStatus,
+});
+
+export const zReview = z.object({
+	activeJobCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	batchId: z.uuid().nullable(),
+	completedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	feedback: zReviewFeedbackCounts,
+	id: z.uuid(),
+	item: zItemRef,
+	itemVersion: z.string().nullable(),
+	jobCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	kind: zReviewKind,
+	model: z.string().nullable(),
+	orderedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	origin: zReviewOrigin,
+	practices: z.array(zReviewPractice),
+	progress: zReviewProgress.nullable(),
+	requestedBy: zAccountRef.nullable(),
+	results: zReviewResultCounts,
+	startedBy: zItemEvent.nullable(),
+	status: zReviewStatus,
+	stopReason: zReviewStopReason.nullable(),
+});
+
+export const zReviewSummary = z.object({
+	activeJobCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	batchId: z.uuid().nullable(),
+	completedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	feedback: zReviewFeedbackCounts,
+	id: z.uuid(),
+	item: zItemRef,
+	itemVersion: z.string().nullable(),
+	jobCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	kind: zReviewKind,
+	model: z.string().nullable(),
+	orderedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	origin: zReviewOrigin,
+	practices: z.array(zReviewPractice),
+	progress: zReviewProgress.nullable(),
+	requestedBy: zAccountRef.nullable(),
+	results: zReviewResultCounts,
+	startedBy: zItemEvent.nullable(),
+	status: zReviewStatus,
+	stopReason: zReviewStopReason.nullable(),
+});
+
+/**
+ * One numbered page of a list
+ */
+export const zOffsetPageDtoReviewSummary = z.object({
+	content: z.array(zReviewSummary),
+	page: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	size: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	totalElements: z.int(),
+	totalPages: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 });
 
 export const zSearchWarrant = z.object({
@@ -5137,8 +4625,10 @@ export const zResultEvidence = z.object({
 	search: zSearchWarrant.nullable(),
 });
 
+export const zSessionClient = z.enum(["WEB", "BROWSER_EXTENSION"]);
+
 export const zSessionView = z.object({
-	client: z.enum(["WEB", "BROWSER_EXTENSION"]),
+	client: zSessionClient,
 	current: z.boolean(),
 	expiresAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	ip: z.string().optional(),
@@ -5152,7 +4642,7 @@ export const zSetCatalogStatusRequest = z.object({
 });
 
 export const zSetFeedbackModeRequest = z.object({
-	feedbackMode: z.enum(["OFF", "APPROVE_FIRST", "AUTOMATIC"]).nullable(),
+	feedbackMode: zFeedbackMode.nullable(),
 });
 
 export const zSetMemberHiddenRequest = z.object({
@@ -5163,13 +4653,350 @@ export const zSetReviewScheduleEnabledRequest = z.object({
 	enabled: z.boolean().optional(),
 });
 
+export const zSeverity = z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]);
+
+export const zJudgedScanReportItem = z.object({
+	currentness: zCurrentness,
+	item: zItemRef,
+	itemVersion: z.string(),
+	outcome: zResultOutcome,
+	practiceName: z.string(),
+	practiceSlug: z.string(),
+	problemCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	recordedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	resultId: z.uuid(),
+	severity: zSeverity.nullable(),
+	sourceReviewId: z.uuid(),
+	status: z.enum(["JUDGED"]),
+	summary: z.string().nullable(),
+});
+
+export const zPracticeStandingResult = z.object({
+	deliveredFeedback: z.string().nullable(),
+	item: zItemRef,
+	origin: zReviewOrigin,
+	outcome: zResultOutcome,
+	resultId: z.uuid(),
+	severity: zSeverity.nullable(),
+	title: z.string(),
+});
+
+export const zProblemSummary = z.object({
+	id: z.uuid(),
+	severity: zSeverity,
+	summary: z.string(),
+});
+
+export const zResultList = z.object({
+	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	currentness: zCurrentness,
+	id: z.uuid(),
+	item: zItemRef,
+	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	origin: zReviewOrigin,
+	outcome: zResultOutcome,
+	practiceName: z.string(),
+	practiceSlug: z.string(),
+	problems: z.array(zProblemSummary),
+	recordedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	reviewId: z.uuid(),
+	severity: zSeverity.nullable(),
+	summary: z.string().nullable(),
+});
+
+export const zListedScanReportItem = z.object({
+	item: zItemRef,
+	itemVersion: z.string(),
+	lastResult: zResultList.nullable(),
+	practiceName: z.string(),
+	practiceSlug: z.string(),
+	reason: z.string().nullable(),
+	status: z.enum(["LISTED"]),
+});
+
+export const zNotReviewedScanReportItem = z.object({
+	item: zItemRef,
+	itemVersion: z.string(),
+	lastResult: zResultList.nullable(),
+	practiceName: z.string(),
+	practiceSlug: z.string(),
+	reason: z.string().nullable(),
+	status: z.enum(["NOT_REVIEWED"]),
+});
+
+/**
+ * One numbered page of a list
+ */
+export const zOffsetPageDtoResultList = z.object({
+	content: z.array(zResultList),
+	page: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	size: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	totalElements: z.int(),
+	totalPages: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zOwnItemTrace = z.object({
+	events: z.array(zOwnItemEvent),
+	item: zItemRef,
+	results: z.array(zResultList),
+	review: zReviewRef,
+});
+
+export const zProfileReview = z.object({
+	feedback: z.array(zOwnFeedbackRef),
+	positionOnWork: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	results: z.array(zResultList),
+	review: zReviewRef,
+	totalOnWork: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+/**
+ * One numbered page of a list
+ */
+export const zOffsetPageDtoProfileReview = z.object({
+	content: z.array(zProfileReview),
+	page: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	size: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	totalElements: z.int(),
+	totalPages: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zProfileReviewDetail = z.object({
+	feedback: z.array(zOwnFeedbackRef),
+	practiceOutcomes: zOutcomeVector,
+	results: z.array(zResultList),
+	review: zReviewRef,
+	trace: zOwnItemTrace,
+});
+
+export const zReusedScanReportItem = z.object({
+	currentness: zCurrentness,
+	item: zItemRef,
+	itemVersion: z.string(),
+	outcome: zResultOutcome,
+	practiceName: z.string(),
+	practiceSlug: z.string(),
+	problemCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	recordedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	resultId: z.uuid(),
+	severity: zSeverity.nullable(),
+	sourceReviewId: z.uuid(),
+	status: z.enum(["REUSED"]),
+	summary: z.string().nullable(),
+});
+
+export const zReviewBoundResult = z.object({
+	currentness: zCurrentness,
+	developer: zReviewDeveloper.nullable(),
+	id: z.uuid(),
+	item: zItemRef,
+	outcome: zResultOutcome,
+	practiceName: z.string(),
+	practiceSlug: z.string(),
+	recordedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	reviewId: z.uuid(),
+	severity: zSeverity.nullable(),
+	summary: z.string().nullable(),
+});
+
+export const zFeedbackBasis = z.object({
+	ordinal: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	problemId: z.uuid().nullable(),
+	result: zReviewBoundResult,
+	resultId: z.uuid(),
+});
+
+export const zReviewFeedbackDetail = z.object({
+	answer: zFeedbackAnswer.nullable(),
+	basis: z.array(zFeedbackBasis),
+	body: z.string().nullable(),
+	bodyPreview: z.string().nullable(),
+	bodyTruncated: z.boolean(),
+	checks: z.array(zFeedbackCheck),
+	contentDigest: z.string().nullable(),
+	copies: z.array(zFeedbackCopy),
+	copyCounts: zFeedbackCopyCounts,
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	decisions: z.array(zFeedbackDecision),
+	deliveredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	destination: zFeedbackDestination,
+	developer: zReviewDeveloper,
+	disagreedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	id: z.uuid(),
+	item: zItemRef.nullable(),
+	location: zFeedbackLocation,
+	replacesId: z.uuid().nullable(),
+	resultCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	reviewId: z.uuid(),
+	sends: z.array(zFeedbackSend),
+	state: zFeedbackState,
+	stopReason: zFeedbackStopReason.nullable(),
+	textHidden: z.boolean(),
+	unverifiedHistory: z.boolean(),
+	withdrawn: z.boolean(),
+});
+
+export const zReviewLineageNode = z.object({
+	feedback: zReviewBoundFeedback.nullable(),
+	id: z.string(),
+	item: zItemRef.nullable(),
+	kind: zLineageKind,
+	problem: zProblemSummary.nullable(),
+	result: zReviewBoundResult.nullable(),
+	review: zReviewRef.nullable(),
+});
+
+export const zReviewLineage = z.object({
+	edges: z.array(zReviewLineageEdge),
+	nodes: z.array(zReviewLineageNode),
+	rootId: z.string(),
+});
+
+export const zReviewProblem = z.object({
+	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	currentness: zCurrentness,
+	developer: zReviewDeveloper.nullable(),
+	disagreedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	endLine: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullable(),
+	evidenceHidden: z.boolean(),
+	group: zGroupRef.nullable(),
+	id: z.uuid(),
+	item: zItemRef,
+	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	path: z.string().nullable(),
+	practiceName: z.string(),
+	practiceSlug: z.string(),
+	recordedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	resultId: z.uuid(),
+	reviewId: z.uuid(),
+	severity: zSeverity,
+	side: zCitationSide.nullable(),
+	sourceKind: z.string().nullable(),
+	startLine: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullable(),
+	summary: z.string(),
+});
+
+/**
+ * One numbered page of a list
+ */
+export const zOffsetPageDtoReviewProblem = z.object({
+	content: z.array(zReviewProblem),
+	page: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	size: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	totalElements: z.int(),
+	totalPages: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zReviewResult = z.object({
+	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	currentness: zCurrentness,
+	developer: zReviewDeveloper.nullable(),
+	feedback: zReviewFeedbackCounts,
+	id: z.uuid(),
+	item: zItemRef,
+	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	origin: zReviewOrigin,
+	outcome: zResultOutcome,
+	practiceName: z.string(),
+	practiceSlug: z.string(),
+	problemCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	problems: z.array(zProblemSummary),
+	recordedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	reviewId: z.uuid(),
+	severity: zSeverity.nullable(),
+	summary: z.string().nullable(),
+});
+
+/**
+ * One numbered page of a list
+ */
+export const zOffsetPageDtoReviewResult = z.object({
+	content: z.array(zReviewResult),
+	page: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	size: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	totalElements: z.int(),
+	totalPages: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zSlackMonitoredChannelConsentState = z.enum([
+	"PENDING",
+	"ACTIVE",
+	"PAUSED",
+	"REVOKED",
+]);
+
 /**
  * A Slack channel the app can offer in the workspace channel picker
  */
 export const zSlackChannelCandidate = z.object({
 	archived: z.boolean().optional(),
 	channelName: z.string(),
-	consentState: z.enum(["PENDING", "ACTIVE", "PAUSED", "REVOKED"]).optional(),
+	consentState: zSlackMonitoredChannelConsentState.optional(),
 	member: z.boolean().optional(),
 	privateChannel: z.boolean().optional(),
 	slackChannelId: z.string(),
@@ -5184,11 +5011,11 @@ export const zSlackChannelConsentEvent = z.object({
 		.regex(/^[1-9][0-9]*$/)
 		.nullable(),
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	fromState: z.enum(["PENDING", "ACTIVE", "PAUSED", "REVOKED"]).nullable(),
+	fromState: zSlackMonitoredChannelConsentState.nullable(),
 	id: z.string().regex(/^[1-9][0-9]*$/),
 	reason: z.string().nullable(),
 	slackChannelId: z.string(),
-	toState: z.enum(["PENDING", "ACTIVE", "PAUSED", "REVOKED"]),
+	toState: zSlackMonitoredChannelConsentState,
 });
 
 /**
@@ -5197,7 +5024,7 @@ export const zSlackChannelConsentEvent = z.object({
 export const zSlackMonitoredChannel = z.object({
 	channelName: z.string().nullable(),
 	consentAnnouncedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	consentState: z.enum(["PENDING", "ACTIVE", "PAUSED", "REVOKED"]),
+	consentState: zSlackMonitoredChannelConsentState,
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	id: z.string().regex(/^[1-9][0-9]*$/),
 	optedOutMemberCount: z.int(),
@@ -5225,6 +5052,20 @@ export const zSlackUserPreferences = z.object({
 	workspaces: z.array(zSlackUserWorkspacePreferences),
 });
 
+export const zStanding = z.enum([
+	"DEVELOPING",
+	"STRENGTH",
+	"MIXED",
+	"NOT_OBSERVED",
+	"NO_OPPORTUNITY",
+]);
+
+export const zStandingBasis = z.enum([
+	"CURRENT_REVIEWS",
+	"EARLIER_REVIEWS",
+	"EARLIER_REVIEWS_CRITERIA_UNKNOWN",
+]);
+
 export const zStartScanRequest = z.object({
 	budgetUsd: z.string(),
 	expectedVersion: z.string().min(1).max(1024).nullable(),
@@ -5240,6 +5081,19 @@ export const zStateBasis = zClaimBasis.and(
 		type: z.literal("StateBasis"),
 	}),
 );
+
+export const zSyncJobStatus = z.enum([
+	"PENDING",
+	"RUNNING",
+	"SUCCEEDED",
+	"SUCCEEDED_WITH_WARNINGS",
+	"FAILED",
+	"CANCELLED",
+]);
+
+export const zSyncJobTrigger = z.enum(["SCHEDULED", "MANUAL", "LIFECYCLE", "SYSTEM"]);
+
+export const zSyncJobType = z.enum(["INITIAL", "RECONCILIATION", "BACKFILL"]);
 
 /**
  * One sync_job row — a single INITIAL/RECONCILIATION/BACKFILL pass for a connection
@@ -5262,17 +5116,10 @@ export const zSyncJob = z.object({
 		.optional(),
 	progress: z.record(z.string(), z.unknown()).optional(),
 	startedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-	status: z.enum([
-		"PENDING",
-		"RUNNING",
-		"SUCCEEDED",
-		"SUCCEEDED_WITH_WARNINGS",
-		"FAILED",
-		"CANCELLED",
-	]),
-	trigger: z.enum(["SCHEDULED", "MANUAL", "LIFECYCLE", "SYSTEM"]),
+	status: zSyncJobStatus,
+	trigger: zSyncJobTrigger,
 	triggeredByAccountId: z.int().optional(),
-	type: z.enum(["INITIAL", "RECONCILIATION", "BACKFILL"]),
+	type: zSyncJobType,
 });
 
 /**
@@ -5283,9 +5130,9 @@ export const zConnectionSyncStatus = z.object({
 	backfill: zBackfillSummary.optional(),
 	backfillSupported: z.boolean(),
 	connectionId: z.int(),
-	connectionState: z.enum(["PENDING", "ACTIVE", "SUSPENDED", "UNINSTALLED"]),
-	health: z.enum(["PENDING", "HEALTHY", "DEGRADED", "FAILED", "SUSPENDED"]),
-	kind: z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]),
+	connectionState: zIntegrationState,
+	health: zConnectionHealth,
+	kind: zIntegrationKind,
 	lastEventProcessedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	lastJob: zSyncJob.optional(),
 	lastSuccessfulSyncAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
@@ -5335,6 +5182,8 @@ export const zSyncResourceCount = z.object({
 	lastSyncedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 });
 
+export const zSyncResourceStateType = z.enum(["REPOSITORY", "CHANNEL", "COLLECTION"]);
+
 /**
  * One synced resource (repository / channel / collection) — unified read-model row
  */
@@ -5353,9 +5202,11 @@ export const zSyncResourceState = z.object({
 	lastSyncedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	name: z.string(),
 	state: z.string(),
-	type: z.enum(["REPOSITORY", "CHANNEL", "COLLECTION"]),
+	type: zSyncResourceStateType,
 	upstreamCount: z.int().optional(),
 });
+
+export const zTeamPrivacy = z.enum(["SECRET", "VISIBLE"]);
 
 /**
  * A team, by name
@@ -5376,7 +5227,24 @@ export const zTeamSummary = z.object({
 	name: z.string(),
 	organization: z.string().optional(),
 	parentId: z.int().optional(),
-	privacy: z.enum(["SECRET", "VISIBLE"]).optional(),
+	privacy: zTeamPrivacy.optional(),
+});
+
+export const zTimeBucketSize = z.enum(["DAY", "WEEK", "MONTH"]);
+
+export const zReviewOverview = z.object({
+	bucket: zTimeBucketSize,
+	buckets: z.array(zReviewBucket),
+	feedback: zReviewFeedbackCounts,
+	from: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	practices: z.array(zReviewPracticeCounts),
+	results: zReviewResultCounts,
+	resultsMarkedIncorrect: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	reviews: zReviewStatusCounts,
+	to: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 });
 
 /**
@@ -5385,6 +5253,13 @@ export const zTeamSummary = z.object({
 export const zTotalCount = z.object({
 	total: z.int(),
 });
+
+export const zTrendDirection = z.enum([
+	"IMPROVING",
+	"DECLINING",
+	"UNCERTAIN",
+	"INSUFFICIENT_EVIDENCE",
+]);
 
 export const zTrendSupport = z.object({
 	bundleSize: z
@@ -5438,10 +5313,8 @@ export const zTrendSupport = z.object({
 });
 
 export const zPracticeGroupStanding = z.object({
-	basis: z
-		.enum(["CURRENT_REVIEWS", "EARLIER_REVIEWS", "EARLIER_REVIEWS_CRITERIA_UNKNOWN"])
-		.nullable(),
-	direction: z.enum(["IMPROVING", "DECLINING", "UNCERTAIN", "INSUFFICIENT_EVIDENCE"]).nullable(),
+	basis: zStandingBasis.nullable(),
+	direction: zTrendDirection.nullable(),
 	feedbackSince: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	feedbackSpanDays: z
 		.int()
@@ -5454,24 +5327,22 @@ export const zPracticeGroupStanding = z.object({
 	groupName: z.string(),
 	groupSlug: z.string(),
 	guidance: z.string().nullable(),
-	guidanceSource: z.enum(["RULE_BASED"]).nullable(),
+	guidanceSource: zGuidanceSource.nullable(),
 	results: z.array(zPracticeStandingResult),
 	sources: z.array(zFeedbackSourceCount),
-	standing: z.enum(["DEVELOPING", "STRENGTH", "MIXED", "NOT_OBSERVED", "NO_OPPORTUNITY"]),
+	standing: zStanding,
 	trendSupport: zTrendSupport.nullable(),
 });
 
 export const zPracticeStanding = z.object({
-	basis: z
-		.enum(["CURRENT_REVIEWS", "EARLIER_REVIEWS", "EARLIER_REVIEWS_CRITERIA_UNKNOWN"])
-		.nullable(),
-	direction: z.enum(["IMPROVING", "DECLINING", "UNCERTAIN", "INSUFFICIENT_EVIDENCE"]).nullable(),
+	basis: zStandingBasis.nullable(),
+	direction: zTrendDirection.nullable(),
 	doesNotApplyOnly: z.boolean(),
 	groupName: z.string().nullable(),
 	groupSlug: z.string().nullable(),
 	name: z.string(),
 	slug: z.string(),
-	standing: z.enum(["DEVELOPING", "STRENGTH", "MIXED", "NOT_OBSERVED", "NO_OPPORTUNITY"]),
+	standing: zStanding,
 	strengths: z.array(zPracticeStandingResult),
 	toWorkOn: z.array(zPracticeStandingResult),
 	trendSupport: zTrendSupport.nullable(),
@@ -5483,18 +5354,20 @@ export const zPracticeStanding = z.object({
  * Manual sync trigger request body
  */
 export const zTriggerSyncJobRequest = z.object({
-	type: z.enum(["INITIAL", "RECONCILIATION", "BACKFILL"]),
+	type: zSyncJobType,
 });
 
 export const zUpdateAccountRequest = z.object({
 	appRole: z.string().optional(),
 });
 
+export const zUpdateAccountStatusRequestTargetStatus = z.enum(["ACTIVE", "BLOCKED"]);
+
 /**
  * <code>BLOCKED</code> blocks the account; <code>ACTIVE</code> unblocks it.
  */
 export const zUpdateAccountStatusRequest = z.object({
-	status: z.enum(["ACTIVE", "BLOCKED"]),
+	status: zUpdateAccountStatusRequestTargetStatus,
 });
 
 /**
@@ -5502,7 +5375,7 @@ export const zUpdateAccountStatusRequest = z.object({
  */
 export const zUpdateConnectionStatusRequest = z.object({
 	reason: z.string().optional(),
-	state: z.enum(["PENDING", "ACTIVE", "SUSPENDED", "UNINSTALLED"]),
+	state: zIntegrationState,
 });
 
 /**
@@ -5535,27 +5408,7 @@ export const zUpdateLlmConnectionRequest = z.object({
 	apiKey: z.string().optional(),
 	clearApiKey: z.boolean().optional(),
 	clearConnectionPlatform: z.boolean().optional(),
-	connectionPlatform: z
-		.enum([
-			"LOGOS",
-			"VLLM",
-			"OLLAMA",
-			"AZURE",
-			"AWS_BEDROCK",
-			"GOOGLE_VERTEX",
-			"OPENAI",
-			"GOOGLE_AI_STUDIO",
-			"ALIBABA_CLOUD",
-			"GROQ",
-			"FIREWORKS",
-			"TOGETHER_AI",
-			"DEEPINFRA",
-			"NEBIUS",
-			"OPENROUTER",
-			"CLOUDFLARE_AI_GATEWAY",
-			"VERCEL_AI_GATEWAY",
-		])
-		.optional(),
+	connectionPlatform: zLlmConnectionPlatform.optional(),
 	displayName: z.string().min(0).max(128).optional(),
 	enabled: z.boolean().optional(),
 });
@@ -5569,29 +5422,14 @@ export const zUpdateLlmModelPriceRequest = z.object({
 	per1mCacheWriteUsd: z.number().optional(),
 	per1mInputUsd: z.number().optional(),
 	per1mOutputUsd: z.number().optional(),
-	pricingMode: z.enum(["PRICED", "NO_CHARGE", "UNPRICED"]),
+	pricingMode: zPricingMode,
 });
 
 /**
  * Update a model's metadata (all fields optional; pricing and sharing are separate)
  */
 export const zUpdateLlmModelRequest = z.object({
-	brand: z
-		.enum([
-			"OPENAI",
-			"ANTHROPIC",
-			"GEMINI",
-			"GEMMA",
-			"META",
-			"MISTRAL",
-			"QWEN",
-			"DEEPSEEK",
-			"XAI",
-			"COHERE",
-			"Z_AI",
-			"MOONSHOT",
-		])
-		.optional(),
+	brand: zAiModelBrand.optional(),
 	clearBrand: z.boolean().optional(),
 	clearContextWindow: z.boolean().optional(),
 	clearDataHandling: z.boolean().optional(),
@@ -5610,15 +5448,15 @@ export const zUpdateLlmModelRequest = z.object({
 		.gte(1)
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
-	operatedBy: z.enum(["OWN_ORGANISATION", "PROVIDER"]).optional(),
-	reasoningEffort: z.enum(["NONE", "MINIMAL", "LOW", "MEDIUM", "HIGH", "XHIGH", "MAX"]).optional(),
+	operatedBy: zLlmDataOperator.optional(),
+	reasoningEffort: zReasoningEffort.optional(),
 });
 
 /**
  * Share with: all workspaces, or a selected set
  */
 export const zUpdateLlmModelSharingRequest = z.object({
-	visibility: z.enum(["PUBLIC", "GRANTED"]),
+	visibility: zModelVisibility,
 	workspaceIds: z.array(z.int()).optional(),
 });
 
@@ -5642,7 +5480,7 @@ export const zUpdateNotificationPreferences = z.object({
  * Transition a mirrored Outline collection to a target mirror state (pause / resume)
  */
 export const zUpdateOutlineCollectionStateRequest = z.object({
-	state: z.enum(["ENABLED", "PAUSED"]),
+	state: zOutlineCollectionMirrorState,
 });
 
 export const zUpdatePracticeGroupRequest = z.object({
@@ -5683,14 +5521,7 @@ export const zUpdateProductFeedbackSharing = z.object({
 });
 
 export const zUpdateReviewBatchStatusRequest = z.object({
-	status: z.enum([
-		"AWAITING_CONFIRMATION",
-		"RUNNING",
-		"PAUSED",
-		"COMPLETED",
-		"CANCELLED",
-		"BUDGET_EXHAUSTED",
-	]),
+	status: zReviewBatchStatus,
 });
 
 export const zUpdateSilentModeRequest = z.object({
@@ -5702,7 +5533,7 @@ export const zUpdateSilentModeRequest = z.object({
  * Transition a Slack channel to a target consent state
  */
 export const zUpdateSlackChannelConsentRequest = z.object({
-	consentState: z.enum(["PENDING", "ACTIVE", "PAUSED", "REVOKED"]),
+	consentState: zSlackMonitoredChannelConsentState,
 	reason: z.string().min(0).max(2000).optional(),
 });
 
@@ -5738,27 +5569,7 @@ export const zUpdateWorkspaceLlmConnectionRequest = z.object({
 	apiKey: z.string().optional(),
 	clearApiKey: z.boolean().optional(),
 	clearConnectionPlatform: z.boolean().optional(),
-	connectionPlatform: z
-		.enum([
-			"LOGOS",
-			"VLLM",
-			"OLLAMA",
-			"AZURE",
-			"AWS_BEDROCK",
-			"GOOGLE_VERTEX",
-			"OPENAI",
-			"GOOGLE_AI_STUDIO",
-			"ALIBABA_CLOUD",
-			"GROQ",
-			"FIREWORKS",
-			"TOGETHER_AI",
-			"DEEPINFRA",
-			"NEBIUS",
-			"OPENROUTER",
-			"CLOUDFLARE_AI_GATEWAY",
-			"VERCEL_AI_GATEWAY",
-		])
-		.optional(),
+	connectionPlatform: zLlmConnectionPlatform.optional(),
 	displayName: z.string().min(0).max(128).optional(),
 	enabled: z.boolean().optional(),
 });
@@ -5767,22 +5578,7 @@ export const zUpdateWorkspaceLlmConnectionRequest = z.object({
  * Update a model on your AI provider (all fields optional)
  */
 export const zUpdateWorkspaceLlmModelRequest = z.object({
-	brand: z
-		.enum([
-			"OPENAI",
-			"ANTHROPIC",
-			"GEMINI",
-			"GEMMA",
-			"META",
-			"MISTRAL",
-			"QWEN",
-			"DEEPSEEK",
-			"XAI",
-			"COHERE",
-			"Z_AI",
-			"MOONSHOT",
-		])
-		.optional(),
+	brand: zAiModelBrand.optional(),
 	clearBrand: z.boolean().optional(),
 	clearContextWindow: z.boolean().optional(),
 	clearDataHandling: z.boolean().optional(),
@@ -5801,14 +5597,14 @@ export const zUpdateWorkspaceLlmModelRequest = z.object({
 		.gte(1)
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
-	operatedBy: z.enum(["OWN_ORGANISATION", "PROVIDER"]).optional(),
+	operatedBy: zLlmDataOperator.optional(),
 	per1mCacheReadUsd: z.number().optional(),
 	per1mCacheWriteUsd: z.number().optional(),
 	per1mInputUsd: z.number().optional(),
 	per1mOutputUsd: z.number().optional(),
 	priceNote: z.string().min(0).max(500).optional(),
-	pricingMode: z.enum(["PRICED", "NO_CHARGE", "UNPRICED"]).optional(),
-	reasoningEffort: z.enum(["NONE", "MINIMAL", "LOW", "MEDIUM", "HIGH", "XHIGH", "MAX"]).optional(),
+	pricingMode: zPricingMode.optional(),
+	reasoningEffort: zReasoningEffort.optional(),
 });
 
 export const zUpdateWorkspacePasskeyPolicy = z.object({
@@ -5825,17 +5621,86 @@ export const zUpdateWorkspacePublicActivityRequest = z.object({
 });
 
 /**
- * Request to update the workspace lifecycle status
- */
-export const zUpdateWorkspaceStatusRequest = z.object({
-	status: z.enum(["ACTIVE", "SUSPENDED"]),
-});
-
-/**
  * Request to update the workspace's SCM Personal Access Token
  */
 export const zUpdateWorkspaceTokenRequest = z.object({
 	personalAccessToken: z.string().min(1),
+});
+
+export const zUsageFundingSource = z.enum(["INSTANCE", "WORKSPACE"]);
+
+/**
+ * A model and the pool its calls share
+ */
+export const zLlmCallPoolModel = z.object({
+	callPoolId: z.int(),
+	connectionDisplayName: z.string(),
+	displayName: z.string(),
+	host: z.string().optional(),
+	modelId: z.int(),
+	scope: zUsageFundingSource,
+	workspaceSlug: z.string().optional(),
+});
+
+export const zUsagePricingState = z.enum(["PRICED", "NO_CHARGE", "UNPRICED"]);
+
+export const zReviewUsageAttempt = z.object({
+	attempt: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	cacheReadTokens: z.int(),
+	cacheWriteTokens: z.int(),
+	calls: z.int(),
+	costUsd: z.string().nullable(),
+	includesUpperBound: z.boolean(),
+	inputTokens: z.int(),
+	jobId: z.uuid(),
+	outputTokens: z.int(),
+	pricingState: zUsagePricingState,
+	reasoningTokens: z.int(),
+});
+
+export const zReviewUsage = z.object({
+	attempts: z.array(zReviewUsageAttempt),
+	calls: z.int(),
+	costUsd: z.string().nullable(),
+	includesUpperBound: z.boolean(),
+	inputTokens: z.int(),
+	outputTokens: z.int(),
+	priced: z.boolean(),
+});
+
+export const zReviewDetail = z.object({
+	activeJobCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	batchId: z.uuid().nullable(),
+	completedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	feedback: zReviewFeedbackCounts,
+	generatedPaths: zGeneratedPathReview.nullable(),
+	id: z.uuid(),
+	item: zItemRef,
+	itemVersion: z.string().nullable(),
+	jobCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	kind: zReviewKind,
+	model: z.string().nullable(),
+	orderedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	origin: zReviewOrigin,
+	practices: z.array(zReviewPractice),
+	progress: zReviewProgress.nullable(),
+	requestedBy: zAccountRef.nullable(),
+	results: zReviewResultCounts,
+	runtime: zReviewRuntime.nullable(),
+	startedBy: zItemEvent.nullable(),
+	status: zReviewStatus,
+	stopReason: zReviewStopReason.nullable(),
+	usage: zReviewUsage,
 });
 
 /**
@@ -5853,7 +5718,7 @@ export const zUserInfo = z.object({
 export const zActivityPerson = z.object({
 	counts: zActivityCounts,
 	firstContributionAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-	kind: z.enum(["PERSON", "BOT", "AUTOMATION"]),
+	kind: zActivityContributorKind,
 	person: zUserInfo,
 	weeks: z.array(zActivitySparklineWeek),
 });
@@ -5874,7 +5739,7 @@ export const zActivityPersonDetail = z.object({
 	counts: zActivityCounts,
 	firstContributionAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	from: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	kind: z.enum(["PERSON", "BOT", "AUTOMATION"]),
+	kind: zActivityContributorKind,
 	person: zUserInfo,
 	repositories: z.array(zActivityRepositoryCounts),
 	to: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
@@ -5885,7 +5750,7 @@ export const zActivityPersonDetail = z.object({
  * Someone reviewing a pull request, and where their review stands
  */
 export const zReviewer = z.object({
-	state: z.enum(["CHANGES_REQUESTED", "APPROVED", "COMMENTED", "REQUESTED"]),
+	state: zReviewerState,
 	user: zUserInfo,
 });
 
@@ -5945,8 +5810,8 @@ export const zStateDimension = z.object({
 });
 
 export const zPracticeItemTypeOption = z.object({
-	aboutRoles: z.array(z.enum(["AUTHOR", "REVIEWER", "ASSIGNEE", "MERGER"])),
-	applicabilityClauses: z.array(z.enum(["CHANGED_PATH", "DIFF_CONTAINS", "HAS_ITEMS", "MERGED"])),
+	aboutRoles: z.array(zAboutRole),
+	applicabilityClauses: z.array(zApplicabilityClauseKind),
 	applicabilitySources: z.array(zReadSourceOption),
 	events: z.array(zItemEventOption),
 	kind: z.string(),
@@ -5974,22 +5839,56 @@ export const zVisibilityUpdate = z.object({
 	hidden: z.boolean(),
 });
 
+export const zWebVitalsNavigation = z.enum(["LOAD", "ROUTE"]);
+
+export const zWebVitalsPage = z.enum([
+	"PRACTICE_PROFILE",
+	"ASK_HEPHAESTUS",
+	"FEEDBACK",
+	"FEEDBACK_APPROVAL",
+	"ACTIVITY",
+	"OTHER",
+]);
+
+/**
+ * One failure that a reader met, counted while its page stayed open
+ */
+export const zBrowserFault = z.object({
+	count: z.int().gte(1).lte(100),
+	errorType: zBrowserFaultsErrorType,
+	frames: z.array(zFrame).min(0).max(10),
+	kind: zBrowserFaultsKind,
+	page: zWebVitalsPage,
+	release: z
+		.string()
+		.regex(/[0-9a-f]{7,40}|\d{1,4}\.\d{1,4}\.\d{1,4}(-(alpha|beta|rc)\.\d{1,4})?|DEV/),
+	status: z.int().gte(500).lte(599).optional(),
+	traceId: z
+		.string()
+		.regex(/[0-9a-f]{32}/)
+		.optional(),
+});
+
+/**
+ * The failures that one page met since its last report
+ */
+export const zBrowserFaultsReport = z.object({
+	faults: z.array(zBrowserFault).min(1).max(20),
+});
+
+export const zWebVitalsRegion = z.enum(["SIDEBAR", "HEADER", "PAGE", "OTHER"]);
+
+export const zWebVitalsVital = z.enum(["LCP", "INP", "CLS", "TTFB"]);
+
 /**
  * One measurement of a page visit
  */
 export const zWebVital = z.object({
-	navigation: z.enum(["LOAD", "ROUTE"]),
-	page: z.enum([
-		"PRACTICE_PROFILE",
-		"ASK_HEPHAESTUS",
-		"FEEDBACK",
-		"FEEDBACK_APPROVAL",
-		"ACTIVITY",
-		"OTHER",
-	]),
-	region: z.enum(["SIDEBAR", "HEADER", "PAGE", "OTHER"]),
+	navigation: zWebVitalsNavigation,
+	page: zWebVitalsPage,
+	region: zWebVitalsRegion,
 	value: z.number().gte(0).lte(600000),
-	vital: z.enum(["LCP", "INP", "CLS", "TTFB"]),
+	vital: zWebVitalsVital,
 });
 
 /**
@@ -6004,7 +5903,7 @@ export const zWebVitalsReport = z.object({
  */
 export const zWeeklyDigestFeedback = z.object({
 	deliveredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	destination: z.enum(["ON_WORK", "PRACTICE_PAGE", "CONVERSATION"]),
+	destination: zFeedbackDestination,
 	feedbackId: z.uuid(),
 	groupName: z.string().optional(),
 	groupSlug: z.string().optional(),
@@ -6043,19 +5942,19 @@ export const zMentorEntry = z.object({
 	digest: zWeeklyDigest.optional(),
 	editedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	id: z.uuid(),
-	kind: z.enum(["USER", "HEPH", "DIGEST"]),
+	kind: zMentorEntryKind,
 	links: z.array(zMentorLink),
 	parentEntryId: z.uuid().optional(),
 	requestId: z.string().optional(),
 	seq: z.int(),
-	slackDelivery: z.enum(["PENDING", "DELIVERED", "UNCERTAIN", "FAILED"]).optional(),
-	surface: z.enum(["APP", "SLACK", "SYSTEM"]),
+	slackDelivery: zMentorEntrySlackDelivery.optional(),
+	surface: zMentorEntrySurface,
 	text: z.string(),
 	thread: zMentorThreadSummary.optional(),
 	turnError: z.string().optional(),
 	turnId: z.uuid().optional(),
-	turnStatus: z.enum(["QUEUED", "RUNNING", "DONE", "FAILED", "STOPPED"]).optional(),
-	vote: z.enum(["HELPFUL", "NOT_HELPFUL"]).optional(),
+	turnStatus: zMentorTurnStatus.optional(),
+	vote: zMentorEntryVote.optional(),
 });
 
 /**
@@ -6113,100 +6012,54 @@ export const zCursorPageDtoScanReportItem = z.object({
 	nextCursor: z.string().optional(),
 });
 
+export const zWorkItemType = z.enum(["PULL_REQUEST", "ISSUE"]);
+
+export const zPublicActivityWorkSummary = z.object({
+	htmlUrl: z.string(),
+	isDraft: z.boolean(),
+	number: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	repository: zPublicActivityRepository,
+	state: zIssueState,
+	title: z.string(),
+	type: zWorkItemType,
+});
+
 /**
- * Complete workspace information including configuration and settings
+ * One piece of the selected person's published work; no account, author or other participant data.
  */
-export const zWorkspace = z.object({
-	accountLogin: z.string(),
-	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	displayName: z.string(),
-	gitlabWebhookRegistered: z.boolean(),
-	hasPersonalAccessToken: z.boolean(),
-	hasSlackToken: z.boolean(),
-	id: z.int(),
-	installationId: z.int().optional(),
-	installationLinkedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
-	kind: z.string().optional(),
-	practiceReviewAutoTriggerEnabled: z.boolean(),
-	practiceReviewManualTriggerEnabled: z.boolean(),
-	practicesEnabled: z.boolean(),
-	providerType: z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]).optional(),
-	publicActivityEnabled: z.boolean(),
-	serverUrl: z.string().optional(),
-	slackConnectionId: z.int().optional(),
-	status: z.enum(["ACTIVE", "SUSPENDED", "PURGED"]),
-	updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	workspaceAddress: z.string(),
-	workspaceSlug: z.string(),
+export const zPublicActivityWork = z.object({
+	actions: z.array(zActivityAction),
+	id: z.string(),
+	lastOccurredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	work: zPublicActivityWorkSummary,
+});
+
+/**
+ * One page of a list that a client reads forward with a cursor
+ */
+export const zCursorPageDtoPublicActivityWork = z.object({
+	content: z.array(zPublicActivityWork),
+	nextCursor: z.string().optional(),
 });
 
 /**
  * A model this answer would use here.
  */
 export const zWorkspaceAiModel = z.object({
-	brand: z
-		.enum([
-			"OPENAI",
-			"ANTHROPIC",
-			"GEMINI",
-			"GEMMA",
-			"META",
-			"MISTRAL",
-			"QWEN",
-			"DEEPSEEK",
-			"XAI",
-			"COHERE",
-			"Z_AI",
-			"MOONSHOT",
-		])
-		.optional(),
-	connectionPlatform: z
-		.enum([
-			"LOGOS",
-			"VLLM",
-			"OLLAMA",
-			"AZURE",
-			"AWS_BEDROCK",
-			"GOOGLE_VERTEX",
-			"OPENAI",
-			"GOOGLE_AI_STUDIO",
-			"ALIBABA_CLOUD",
-			"GROQ",
-			"FIREWORKS",
-			"TOGETHER_AI",
-			"DEEPINFRA",
-			"NEBIUS",
-			"OPENROUTER",
-			"CLOUDFLARE_AI_GATEWAY",
-			"VERCEL_AI_GATEWAY",
-		])
-		.optional(),
-	dataHandlingTier: z.enum(["IN_HOUSE", "CLOUD", "UNDECLARED"]),
+	brand: zAiModelBrand.optional(),
+	connectionPlatform: zLlmConnectionPlatform.optional(),
+	dataHandlingTier: zDataHandlingTier,
 	name: z.string(),
 });
 
 export const zWorkspaceAiOption = z.object({
-	choice: z.enum(["NO_AI", "IN_HOUSE_ONLY", "CLOUD"]),
+	choice: zAiChoice,
 	mentorReady: z.boolean(),
 	models: z.array(zWorkspaceAiModel),
 	practiceReviewsReady: z.boolean(),
-});
-
-/**
- * Summary information about a workspace for list views
- */
-export const zWorkspaceListItem = z.object({
-	accountLogin: z.string(),
-	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	displayName: z.string(),
-	id: z.int(),
-	linkHosts: z.array(z.string()),
-	practicesEnabled: z.boolean(),
-	providerType: z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]).optional(),
-	publishesPublicActivity: z.boolean(),
-	status: z.enum(["ACTIVE", "SUSPENDED", "PURGED"]),
-	workspaceAddress: z.string(),
-	workspaceSlug: z.string(),
 });
 
 /**
@@ -6214,36 +6067,16 @@ export const zWorkspaceListItem = z.object({
  */
 export const zWorkspaceLlmConnection = z.object({
 	apiKeyLast4: z.string().optional(),
-	apiProtocol: z.enum(["anthropic-messages", "openai-completions", "openai-responses"]),
-	authMode: z.enum(["BEARER", "API_KEY"]),
+	apiProtocol: zLlmApiProtocol,
+	authMode: zLlmAuthMode,
 	baseUrl: z.string(),
-	connectionPlatform: z
-		.enum([
-			"LOGOS",
-			"VLLM",
-			"OLLAMA",
-			"AZURE",
-			"AWS_BEDROCK",
-			"GOOGLE_VERTEX",
-			"OPENAI",
-			"GOOGLE_AI_STUDIO",
-			"ALIBABA_CLOUD",
-			"GROQ",
-			"FIREWORKS",
-			"TOGETHER_AI",
-			"DEEPINFRA",
-			"NEBIUS",
-			"OPENROUTER",
-			"CLOUDFLARE_AI_GATEWAY",
-			"VERCEL_AI_GATEWAY",
-		])
-		.optional(),
+	connectionPlatform: zLlmConnectionPlatform.optional(),
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	displayName: z.string(),
 	enabled: z.boolean(),
 	hasApiKey: z.boolean(),
 	id: z.int(),
-	purposes: z.array(z.enum(["PRACTICE_REVIEW", "MENTOR"])),
+	purposes: z.array(zAgentPurpose),
 	slug: z.string(),
 	updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 });
@@ -6252,22 +6085,7 @@ export const zWorkspaceLlmConnection = z.object({
  * A model on your AI provider
  */
 export const zWorkspaceLlmModel = z.object({
-	brand: z
-		.enum([
-			"OPENAI",
-			"ANTHROPIC",
-			"GEMINI",
-			"GEMMA",
-			"META",
-			"MISTRAL",
-			"QWEN",
-			"DEEPSEEK",
-			"XAI",
-			"COHERE",
-			"Z_AI",
-			"MOONSHOT",
-		])
-		.optional(),
+	brand: zAiModelBrand.optional(),
 	callPool: zLlmCallPoolMembership.optional(),
 	connectionDisplayName: z.string(),
 	connectionId: z.int(),
@@ -6279,7 +6097,7 @@ export const zWorkspaceLlmModel = z.object({
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	currency: z.string(),
 	dataHandlingNote: z.string().optional(),
-	dataHandlingTier: z.enum(["IN_HOUSE", "CLOUD", "UNDECLARED"]),
+	dataHandlingTier: zDataHandlingTier,
 	displayName: z.string(),
 	enabled: z.boolean(),
 	forcedToolChoice: z.boolean().optional(),
@@ -6290,14 +6108,14 @@ export const zWorkspaceLlmModel = z.object({
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
-	operatedBy: z.enum(["OWN_ORGANISATION", "PROVIDER"]).optional(),
+	operatedBy: zLlmDataOperator.optional(),
 	per1mCacheReadUsd: z.number().optional(),
 	per1mCacheWriteUsd: z.number().optional(),
 	per1mInputUsd: z.number().optional(),
 	per1mOutputUsd: z.number().optional(),
 	priceNote: z.string().optional(),
-	pricingMode: z.enum(["PRICED", "NO_CHARGE", "UNPRICED"]),
-	reasoningEffort: z.enum(["NONE", "MINIMAL", "LOW", "MEDIUM", "HIGH", "XHIGH", "MAX"]).optional(),
+	pricingMode: zPricingMode,
+	reasoningEffort: zReasoningEffort.optional(),
 	slug: z.string(),
 	updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	upstreamModelId: z.string(),
@@ -6334,13 +6152,13 @@ export const zWorkspaceLlmUsageReport = z.object({
 	byDay: z.array(zLlmUsageByDay),
 	byJobType: z.array(zLlmUsageByJobType),
 	fx: zFxRateInfo.optional(),
-	instanceBudgetVerdict: z.enum(["WITHIN", "EXHAUSTED", "UNVERIFIABLE"]),
+	instanceBudgetVerdict: zLlmBudgetVerdict,
 	instanceMonthlyBudgetUsd: z.number().optional(),
 	instancePaused: z.boolean(),
 	instanceTotalCostUsd: z.number(),
 	instanceUnmeasured: zLlmUnmeasuredUsage,
 	month: z.string(),
-	ownProviderBudgetVerdict: z.enum(["WITHIN", "EXHAUSTED", "UNVERIFIABLE"]),
+	ownProviderBudgetVerdict: zLlmBudgetVerdict,
 	ownProviderInUse: z.boolean(),
 	ownProviderMonthlyBudgetUsd: z.number().optional(),
 	ownProviderPaused: z.boolean(),
@@ -6357,8 +6175,8 @@ export const zWorkspaceMembership = z.object({
 	leftAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	publicActivityAnswered: z.boolean().nullable(),
 	reviewSelected: z.boolean(),
-	role: z.enum(["OWNER", "ADMIN", "MEMBER"]),
-	roleSource: z.enum(["PROVIDER", "PERSON"]),
+	role: zMembershipWorkspaceRole,
+	roleSource: zMembershipRoleSource,
 });
 
 /**
@@ -6398,12 +6216,12 @@ export const zWorkspaceOnboardingLink = z.object({
  * what differs between workspaces. <code>mentorRefusal</code> is this member's own answer from Hephaestus's admission.
  */
 export const zWorkspaceOnboarding = z.object({
-	aiChoice: z.enum(["NO_AI", "IN_HOUSE_ONLY", "CLOUD"]).optional(),
+	aiChoice: zAiChoice.optional(),
 	aiChoiceRequired: z.boolean(),
 	aiOptions: z.array(zWorkspaceAiOption),
 	enabled: z.boolean(),
 	links: z.array(zWorkspaceOnboardingLink),
-	mentorRefusal: z.enum(["PERSON_ERASED", "NO_AI", "CHOICE_REQUIRED", "UNAVAILABLE"]).optional(),
+	mentorRefusal: zAiRefusalReason.optional(),
 	needsSetup: z.boolean(),
 	workspaceName: z.string(),
 });
@@ -6425,11 +6243,13 @@ export const zWorkspacePasskeyPolicy = z.object({
 	required: z.boolean(),
 });
 
+export const zWorkspacePropertiesCreationPolicy = z.enum(["ADMIN_ONLY", "SELF_SERVICE"]);
+
 /**
  * Available workspace creation providers and their configuration
  */
 export const zWorkspaceProviders = z.object({
-	creationPolicy: z.enum(["ADMIN_ONLY", "SELF_SERVICE"]).optional(),
+	creationPolicy: zWorkspacePropertiesCreationPolicy.optional(),
 	github: zGitHubProvider.optional(),
 	gitlab: zGitLabProvider.optional(),
 });
@@ -6450,8 +6270,8 @@ export const zWorkspaceRange = z.object({
 
 export const zWorkspaceReviewScope = z.object({
 	accountIds: z.array(z.string().regex(/[1-9][0-9]*/)),
-	people: z.enum(["ALL", "SELECTED"]),
-	repositories: z.enum(["ALL", "SELECTED"]),
+	people: zReviewScopeMode,
+	repositories: zReviewScopeMode,
 	selectedRepositories: z.array(zReviewScopeRepository),
 });
 
@@ -6468,11 +6288,11 @@ export const zPracticeReviewSettings = z.object({
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullable(),
-	defaultFeedbackMode: z.enum(["OFF", "APPROVE_FIRST", "AUTOMATIC"]),
-	defaultFeedbackModeOverride: z.enum(["OFF", "APPROVE_FIRST", "AUTOMATIC"]).nullable(),
+	defaultFeedbackMode: zFeedbackMode,
+	defaultFeedbackModeOverride: zFeedbackMode.nullable(),
 	deliverToMerged: z.boolean(),
 	deliverToMergedOverride: z.boolean().nullable(),
-	deliveryStatus: z.enum(["ACTIVE", "PAUSED"]),
+	deliveryStatus: zPracticeDeliveryStatus,
 	etag: z.string(),
 	generatedPaths: z.record(z.string(), z.array(z.string())),
 	reviewScope: zWorkspaceReviewScope,
@@ -6485,17 +6305,15 @@ export const zPracticeReviewSettings = z.object({
  */
 export const zUpdatePracticeReviewSettingsRequest = z.object({
 	cooldownMinutes: z.int().gte(0).lte(1440).optional(),
-	defaultFeedbackMode: z.enum(["OFF", "APPROVE_FIRST", "AUTOMATIC"]).optional(),
+	defaultFeedbackMode: zFeedbackMode.optional(),
 	deliverToMerged: z.boolean().optional(),
-	deliveryStatus: z.enum(["ACTIVE", "PAUSED"]).optional(),
+	deliveryStatus: zPracticeDeliveryStatus.optional(),
 	generatedPaths: z.record(z.string(), z.array(z.string())).optional(),
-	reset: z
-		.array(
-			z.enum(["DELIVER_TO_MERGED", "COOLDOWN_MINUTES", "REVIEW_SCOPE", "DEFAULT_FEEDBACK_MODE"]),
-		)
-		.optional(),
+	reset: z.array(zPracticeReviewField).optional(),
 	reviewScope: zWorkspaceReviewScope.optional(),
 });
+
+export const zWorkspaceSplitsVerdict = z.enum(["DEVELOPING", "MIXED", "STRENGTH"]);
 
 /**
  * The developers at one verdict in a split
@@ -6505,7 +6323,7 @@ export const zWorkspaceSplitPart = z.object({
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	standing: z.enum(["DEVELOPING", "MIXED", "STRENGTH"]),
+	standing: zWorkspaceSplitsVerdict,
 });
 
 /**
@@ -6530,12 +6348,8 @@ export const zWorkspacePracticeSplit = z.object({
 	practiceName: z.string(),
 	practiceSlug: z.string(),
 	split: zWorkspaceSplit,
-	yourBasis: z
-		.enum(["CURRENT_REVIEWS", "EARLIER_REVIEWS", "EARLIER_REVIEWS_CRITERIA_UNKNOWN"])
-		.nullable(),
-	yourStanding: z
-		.enum(["DEVELOPING", "STRENGTH", "MIXED", "NOT_OBSERVED", "NO_OPPORTUNITY"])
-		.nullable(),
+	yourBasis: zStandingBasis.nullable(),
+	yourStanding: zStanding.nullable(),
 });
 
 /**
@@ -6548,12 +6362,76 @@ export const zWorkspaceGroupSplit = z.object({
 	groupSlug: z.string(),
 	practices: z.array(zWorkspacePracticeSplit),
 	split: zWorkspaceSplit,
-	yourBasis: z
-		.enum(["CURRENT_REVIEWS", "EARLIER_REVIEWS", "EARLIER_REVIEWS_CRITERIA_UNKNOWN"])
-		.nullable(),
-	yourStanding: z
-		.enum(["DEVELOPING", "STRENGTH", "MIXED", "NOT_OBSERVED", "NO_OPPORTUNITY"])
-		.nullable(),
+	yourBasis: zStandingBasis.nullable(),
+	yourStanding: zStanding.nullable(),
+});
+
+export const zWorkspaceStatus = z.enum(["ACTIVE", "SUSPENDED", "PURGED"]);
+
+/**
+ * Metadata-only workspace summary for the instance-admin overview
+ */
+export const zAdminWorkspaceView = z.object({
+	accountLogin: z.string(),
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	displayName: z.string(),
+	id: z.int(),
+	memberCount: z.int(),
+	ownerLogin: z.string().optional(),
+	providerType: zIdentityProviderType.optional(),
+	status: zWorkspaceStatus,
+	workspaceSlug: z.string(),
+});
+
+/**
+ * Request to update the workspace lifecycle status
+ */
+export const zUpdateWorkspaceStatusRequest = z.object({
+	status: zWorkspaceStatus,
+});
+
+/**
+ * Complete workspace information including configuration and settings
+ */
+export const zWorkspace = z.object({
+	accountLogin: z.string(),
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	displayName: z.string(),
+	gitlabWebhookRegistered: z.boolean(),
+	hasPersonalAccessToken: z.boolean(),
+	hasSlackToken: z.boolean(),
+	id: z.int(),
+	installationId: z.int().optional(),
+	installationLinkedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	kind: z.string().optional(),
+	practiceReviewAutoTriggerEnabled: z.boolean(),
+	practiceReviewManualTriggerEnabled: z.boolean(),
+	practicesEnabled: z.boolean(),
+	providerType: zIdentityProviderType.optional(),
+	publicActivityEnabled: z.boolean(),
+	serverUrl: z.string().optional(),
+	slackConnectionId: z.int().optional(),
+	status: zWorkspaceStatus,
+	updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	workspaceAddress: z.string(),
+	workspaceSlug: z.string(),
+});
+
+/**
+ * Summary information about a workspace for list views
+ */
+export const zWorkspaceListItem = z.object({
+	accountLogin: z.string(),
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
+	displayName: z.string(),
+	id: z.int(),
+	linkHosts: z.array(z.string()),
+	practicesEnabled: z.boolean(),
+	providerType: zIdentityProviderType.optional(),
+	publishesPublicActivity: z.boolean(),
+	status: zWorkspaceStatus,
+	workspaceAddress: z.string(),
+	workspaceSlug: z.string(),
 });
 
 /**
@@ -6595,7 +6473,7 @@ export const zPracticesAcrossWorkspaceTiles = z.object({
 	practicesGoingWell: zWorkspaceTile,
 	practicesNeedingAttention: zWorkspaceTile,
 	reviewedWork: zWorkspaceTile,
-	window: z.enum(["ALL_TIME", "DAYS_7", "DAYS_30", "DAYS_90"]),
+	window: zPracticesAcrossWorkspaceWindow,
 	yourPractices: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -6631,15 +6509,15 @@ export const zProblem = z.object({
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	resultId: z.uuid(),
-	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]),
+	severity: zSeverity,
 	summary: z.string(),
 });
 
 export const zResultDetail = z.object({
 	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	coverage: zHostCoverage.nullable(),
-	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
-	endReason: z.enum(["REPLACED", "OUTRANKED", "WORK_CHANGED", "REPAIRED", "REMOVED"]).nullable(),
+	currentness: zCurrentness,
+	endReason: zResultEndReason.nullable(),
 	endedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	evidence: zResultEvidence.nullable(),
 	example: zResultExample.nullable(),
@@ -6649,8 +6527,8 @@ export const zResultDetail = z.object({
 	item: zItemRef,
 	itemVersion: z.string().nullable(),
 	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	origin: z.enum(["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]),
-	outcome: z.enum(["MET", "NOT_MET", "DOES_NOT_APPLY", "COULD_NOT_DETERMINE"]),
+	origin: zReviewOrigin,
+	outcome: zResultOutcome,
 	practiceName: z.string(),
 	practiceSlug: z.string(),
 	practiceVersionId: z
@@ -6665,13 +6543,13 @@ export const zResultDetail = z.object({
 	problems: z.array(zProblem),
 	recordedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	reviewId: z.uuid(),
-	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]).nullable(),
+	severity: zSeverity.nullable(),
 	summary: z.string().nullable(),
 });
 
 export const zReviewProblemDetail = z.object({
 	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
+	currentness: zCurrentness,
 	developer: zReviewDeveloper.nullable(),
 	disagreedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	endLine: z
@@ -6692,8 +6570,8 @@ export const zReviewProblemDetail = z.object({
 	result: zReviewBoundResult,
 	resultId: z.uuid(),
 	reviewId: z.uuid(),
-	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]),
-	side: z.enum(["OLD", "NEW"]).nullable(),
+	severity: zSeverity,
+	side: zCitationSide.nullable(),
 	sourceKind: z.string().nullable(),
 	startLine: z
 		.int()
@@ -6706,10 +6584,10 @@ export const zReviewProblemDetail = z.object({
 export const zReviewResultDetail = z.object({
 	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	coverage: zHostCoverage.nullable(),
-	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
+	currentness: zCurrentness,
 	developer: zReviewDeveloper.nullable(),
 	disagreements: z.array(zFeedbackDisagreement),
-	endReason: z.enum(["REPLACED", "OUTRANKED", "WORK_CHANGED", "REPAIRED", "REMOVED"]).nullable(),
+	endReason: zResultEndReason.nullable(),
 	endedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	evidence: zResultEvidence.nullable(),
 	evidenceHidden: z.boolean(),
@@ -6725,8 +6603,8 @@ export const zReviewResultDetail = z.object({
 	itemVersion: z.string().nullable(),
 	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	marks: z.array(zResultMark),
-	origin: z.enum(["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]),
-	outcome: z.enum(["MET", "NOT_MET", "DOES_NOT_APPLY", "COULD_NOT_DETERMINE"]),
+	origin: zReviewOrigin,
+	outcome: zResultOutcome,
 	practiceName: z.string(),
 	practiceSlug: z.string(),
 	practiceVersionId: z
@@ -6741,13 +6619,13 @@ export const zReviewResultDetail = z.object({
 	problems: z.array(zProblem),
 	recordedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	reviewId: z.uuid(),
-	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]).nullable(),
+	severity: zSeverity.nullable(),
 	summary: z.string().nullable(),
 });
 
 export const zScanReportProblem = z.object({
 	absentReason: z.enum(["REPAIRED"]).nullable(),
-	baselineState: z.enum(["NEW", "UNCHANGED", "UPDATED", "ABSENT"]).nullable(),
+	baselineState: zProblemBaselineState.nullable(),
 	item: zItemRef,
 	practiceName: z.string(),
 	practiceSlug: z.string(),
@@ -6833,7 +6711,7 @@ export const zTeamInfo = z.object({
 	name: z.string(),
 	organization: z.string().optional(),
 	parentId: z.int().optional(),
-	privacy: z.enum(["SECRET", "VISIBLE"]).optional(),
+	privacy: zTeamPrivacy.optional(),
 	repoPermissionCount: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -6847,9 +6725,7 @@ export const zTeamInfo = z.object({
  */
 export const zWorkItem = z.object({
 	author: zUserInfo.optional(),
-	checks: z
-		.enum(["SUCCESS", "FAILURE", "PENDING", "CANCELLED", "NONE", "NO_PIPELINE", "SKIPPED"])
-		.optional(),
+	checks: zCheckState.optional(),
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	htmlUrl: z.string().optional(),
 	id: z.int(),
@@ -6860,11 +6736,11 @@ export const zWorkItem = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	repository: zRepositoryInfo.optional(),
 	requestedTeams: z.array(zTeamRef).optional(),
-	reviewDecision: z.enum(["APPROVED", "CHANGES_REQUESTED", "REVIEW_REQUIRED"]).optional(),
+	reviewDecision: zReviewDecision.optional(),
 	reviewers: z.array(zReviewer).optional(),
-	state: z.enum(["OPEN", "CLOSED", "MERGED"]),
+	state: zIssueState,
 	title: z.string(),
-	type: z.enum(["PULL_REQUEST", "ISSUE"]),
+	type: zWorkItemType,
 	updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 });
 

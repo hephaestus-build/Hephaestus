@@ -1,0 +1,3 @@
+# #4299: each enum is one named schema. A nullable enum moves from an inline enum with null to anyOf of
+# the named enum and null, which admits the same values; oasdiff reads it as a change.
+in API GET /workspaces/{workspaceSlug}/practices/scans/{scanId}/report/items response property `content/items/oneOf[#/components/schemas/JudgedScanReportItem]/allOf[subschema #1]/item/provider` list-of-types was widened by adding types `null` to media type `application/json` of response `200` (shared schema: `ItemRef`, also at `content/items/oneOf[#/components/schemas/ReusedScanReportItem]/allOf[subschema #1]/item/provider`, `content/items/oneOf[#/components/schemas/WithheldScanReportItem]/allOf[subschema #1]/item/provider` and 4 more)
