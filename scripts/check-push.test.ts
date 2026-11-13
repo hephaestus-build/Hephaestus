@@ -1,18 +1,19 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
+import { once } from "node:events";
 import { existsSync, readdirSync, realpathSync } from "node:fs";
 import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { test } from "node:test";
-import { setTimeout } from "node:timers/promises";
-import { pathToFileURL } from "node:url";
+import { test, type TestContext } from "node:test";
 
 import {
 	focusedTests,
 	frontendCommands,
 	pushScopes,
 	pushTasks,
+	runUnlessStalled,
 	skipsImportedTests,
 	toolingScopes,
 } from "./check-push.ts";
@@ -335,22 +336,58 @@ void test("a webapp change runs the build that enforces the bundle budget", () =
 	);
 });
 
-/** Runs `runUnlessStalled` on `script` in its own process, so its output stays out of this report. */
-function watched(script: string, stallLimitMs: number, command = [process.execPath, "-e", script]) {
-	const module = JSON.stringify(
-		pathToFileURL(path.join(import.meta.dirname, "check-push.ts")).href,
-	);
-	const [program, ...args] = command;
-	return spawnSync(
-		process.execPath,
-		[
-			"--input-type=module",
-			"--eval",
-			`import { runUnlessStalled } from ${module};
-process.exitCode = await runUnlessStalled(${JSON.stringify(program)}, ${JSON.stringify(args)}, ${stallLimitMs});`,
-		],
-		{ encoding: "utf8", timeout: 60_000 },
-	);
+/** Captures forwarded output while only the watchdog's clock advances under test control. */
+function watched(t: TestContext, program: string, args: string[]) {
+	const output = { stdout: "", stderr: "" };
+	const changed = new EventTarget();
+	for (const stream of ["stdout", "stderr"] as const) {
+		const write = process[stream].write.bind(process[stream]);
+		t.mock.method(process[stream], "write", (...writeArgs: Parameters<typeof write>) => {
+			output[stream] += String(writeArgs[0]);
+			changed.dispatchEvent(new Event("output"));
+			return write(...writeArgs);
+		});
+	}
+	t.mock.timers.enable({ apis: ["Date", "setInterval", "setTimeout"], now: 10_000 });
+	const result = runUnlessStalled(program, args, 1500);
+	t.after(async () => {
+		t.mock.timers.tick(6500);
+		await result;
+		const reports = /waited on: (?<directory>\S+)/u.exec(output.stderr)?.groups?.directory;
+		if (reports !== undefined) {
+			await rm(reports, { recursive: true, force: true });
+		}
+	});
+	return {
+		result,
+		output,
+		async until(condition: (seen: typeof output) => boolean) {
+			while (!condition(output)) {
+				await once(changed, "output");
+			}
+		},
+	};
+}
+
+/** A connection held by the actual worker, whose close proves that the worker stopped. */
+async function workerConnection(t: TestContext) {
+	const connected = Promise.withResolvers<Socket>();
+	let socket: Socket | undefined;
+	const server = createServer((connection) => {
+		socket = connection;
+		connected.resolve(connection);
+	});
+	server.listen(0, "127.0.0.1");
+	await once(server, "listening");
+	t.after(() => {
+		socket?.destroy();
+		server.close();
+	});
+	const address = server.address();
+	if (address === null || typeof address === "string") {
+		throw new Error("Missing fixture address");
+	}
+	return { port: address.port, connected: connected.promise };
 }
 
 void test("a frontend run that stops printing is stopped with its whole process tree, and fails", async (t) => {
@@ -358,20 +395,26 @@ void test("a frontend run that stops printing is stopped with its whole process 
 		t.skip("Windows has no process groups or report signal");
 		return;
 	}
+	const worker = await workerConnection(t);
 	// A parent that waits forever on a silent child: what a hung Vitest run looks like from outside.
 	const hung = `const { spawn } = require("node:child_process");
-const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1e6)"], { stdio: "ignore" });
-console.log("child " + child.pid);
+spawn(process.execPath, ["-e", "const connection = require('node:net').connect(${worker.port}, '127.0.0.1'); connection.on('connect', () => console.log('ready'));"], { stdio: "inherit" });
 setInterval(() => {}, 1e6);`;
-	const result = watched(hung, 1500);
-	assert.equal(result.status, 1, result.stderr);
-	assert.match(result.stderr, /printed nothing for 2 s, so the push check stopped it and failed/u);
-	const reports = /waited on: (?<directory>\S+)/u.exec(result.stderr)?.groups?.directory ?? "";
+	const run = watched(t, process.execPath, ["-e", hung]);
+	const connection = await worker.connected;
+	const stopped = once(connection, "close");
+	await run.until(({ stdout }) => stdout.includes("ready"));
+	t.mock.timers.tick(1500);
+	await run.until(({ stderr }) => stderr.split("Node.js report completed").length === 3);
+	t.mock.timers.tick(5000);
+	assert.equal(await run.result, 1, run.output.stderr);
+	await stopped;
+	assert.match(
+		run.output.stderr,
+		/printed nothing for 2 s, so the push check stopped it and failed/u,
+	);
+	const reports = /waited on: (?<directory>\S+)/u.exec(run.output.stderr)?.groups?.directory ?? "";
 	assert.equal(readdirSync(reports).filter((file) => file.endsWith(".json")).length, 2);
-	const grandchild = Number(/child (?<pid>\d+)/u.exec(result.stdout)?.groups?.pid);
-	assert.ok(grandchild > 0);
-	await setTimeout(6000);
-	assert.throws(() => process.kill(grandchild, 0), "the silent child is stopped too");
 });
 
 void test("a stalled run whose leader ends on the report signal leaves no worker behind", async (t) => {
@@ -379,20 +422,63 @@ void test("a stalled run whose leader ends on the report signal leaves no worker
 		t.skip("Windows has no process groups or report signal");
 		return;
 	}
+	const worker = await workerConnection(t);
 	// A shell leader ends on SIGUSR2; its Node worker writes a report and would keep running.
-	const leader = `"${process.execPath}" -e "setInterval(() => {}, 1e6)" & echo "child $!"; wait`;
-	const result = watched("", 1500, ["sh", "-c", leader]);
-	assert.equal(result.status, 1, result.stderr);
-	const grandchild = Number(/child (?<pid>\d+)/u.exec(result.stdout)?.groups?.pid);
-	assert.ok(grandchild > 0);
-	await setTimeout(500);
-	assert.throws(() => process.kill(grandchild, 0), "the worker is stopped before the hook returns");
+	const leader = `"${process.execPath}" -e "const connection = require('node:net').connect(${worker.port}, '127.0.0.1'); connection.on('connect', () => console.log('ready'));" & wait`;
+	const run = watched(t, "sh", ["-c", leader]);
+	const connection = await worker.connected;
+	const stopped = once(connection, "close");
+	await run.until(({ stdout }) => stdout.includes("ready"));
+	t.mock.timers.tick(1500);
+	await run.until(({ stderr }) => stderr.includes("Node.js report completed"));
+	t.mock.timers.tick(5000);
+	assert.equal(await run.result, 1, run.output.stderr);
+	await stopped;
 });
 
-void test("a frontend run that keeps printing may run longer than the stall limit", () => {
-	const steady = `let n = 0; const t = setInterval(() => { console.log(n); if (++n === 6) clearInterval(t); }, 400);`;
-	assert.equal(watched(steady, 1500).status, 0);
-	assert.equal(watched("process.exit(3)", 1500).status, 3);
+void test(
+	"a stalled run closes its output even when a detached worker retains the pipe",
+	{ timeout: 10_000 },
+	async (t) => {
+		if (process.platform === "win32") {
+			t.skip("Windows has no detached POSIX process groups");
+			return;
+		}
+		const worker = await workerConnection(t);
+		const detached = `const { spawn } = require('node:child_process');
+const worker = spawn(process.execPath, ['-e', "const connection = require('node:net').connect(${worker.port}, '127.0.0.1'); connection.on('connect', () => console.log('ready')); connection.on('close', () => process.exit(0));"], { detached: true, stdio: 'inherit' });
+worker.unref();`;
+		const run = watched(t, process.execPath, ["-e", detached]);
+		await worker.connected;
+		await run.until(({ stdout }) => stdout.includes("ready"));
+		t.mock.timers.tick(1500);
+		t.mock.timers.tick(5000);
+		assert.equal(await run.result, 1);
+	},
+);
+
+void test("a frontend run that keeps printing may run longer than the stall limit", async (t) => {
+	const worker = await workerConnection(t);
+	const steady = `const connection = require('node:net').connect(${worker.port}, '127.0.0.1');
+connection.on('connect', () => console.log('ready'));
+let beats = 0;
+connection.on('data', () => console.log('heartbeat ' + (++beats)));
+connection.on('end', () => connection.end());`;
+	const run = watched(t, process.execPath, ["-e", steady]);
+	const connection = await worker.connected;
+	await run.until(({ stdout }) => stdout.includes("ready"));
+	for (const beat of [1, 2, 3]) {
+		t.mock.timers.tick(1000);
+		connection.write("heartbeat");
+		await run.until(({ stdout }) => stdout.includes(`heartbeat ${beat}`));
+	}
+	connection.end();
+	assert.equal(await run.result, 0, run.output.stderr);
+});
+
+void test("a frontend run that ends before stalling keeps its own exit code", async (t) => {
+	const run = watched(t, process.execPath, ["-e", "process.exit(3)"]);
+	assert.equal(await run.result, 3, run.output.stderr);
 });
 
 void test("a push of shipped code without a changeset stops before any check runs", async () => {

@@ -5,7 +5,6 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { setTimeout as sleep } from "node:timers/promises";
 import { asArray } from "./lib/json.ts";
 
 import {
@@ -49,25 +48,42 @@ await test(
 		const root = await mkdtemp(path.join(os.tmpdir(), "capacity-signals-"));
 		const receipt = path.join(root, "summary.json");
 		const module = new URL("lib/capacity-child.ts", import.meta.url).href;
-		const source = `import { once } from 'node:events'; import { writeFile } from 'node:fs/promises'; const { installCapacitySignals } = await import(${JSON.stringify(module)}); const abort = new AbortController(); installCapacitySignals(abort); const finish = once(process,'message'); process.stdout.write('ready'); await once(abort.signal,'abort'); process.stdout.write('cleaning'); await finish; await writeFile(${JSON.stringify(receipt)},'cleanup complete'); process.disconnect();`;
+		const source = `import { once } from 'node:events';
+import { writeFile } from 'node:fs/promises';
+const { installCapacitySignals } = await import(${JSON.stringify(module)});
+const abort = new AbortController();
+const stop = abort.abort.bind(abort);
+let signals = 0;
+abort.abort = () => {
+  signals += 1;
+  stop();
+  if (signals === 2) process.send('second-signal');
+};
+installCapacitySignals(abort);
+const finish = once(process, 'message');
+process.send('ready');
+await once(abort.signal, 'abort');
+process.send('cleaning');
+await finish;
+await writeFile(${JSON.stringify(receipt)}, 'cleanup complete');
+process.disconnect();`;
 		const child = spawn(process.execPath, ["--input-type=module", "-e", source], {
-			stdio: ["ignore", "pipe", "ignore", "ipc"],
+			stdio: ["ignore", "ignore", "ignore", "ipc"],
 		});
 		const ended = once(child, "exit");
-		const { stdout } = child;
-		if (stdout === null) {
-			throw new Error("Child stdout missing");
-		}
 		try {
-			await once(stdout, "data");
-			const cleaning = once(stdout, "data");
+			const ready: unknown = await once(child, "message");
+			assert.equal(asArray(ready, "child ready")[0], "ready");
+			const cleaning = once(child, "message");
 			child.kill("SIGTERM");
-			await cleaning;
+			const cleaningMessage: unknown = await cleaning;
+			assert.equal(asArray(cleaningMessage, "child cleaning")[0], "cleaning");
+			const acknowledged = once(child, "message");
 			child.kill("SIGTERM");
-			await sleep(30);
-			if (child.connected) {
-				child.send("finish", () => undefined);
-			}
+			const secondSignal: unknown = await acknowledged;
+			assert.equal(asArray(secondSignal, "child second signal")[0], "second-signal");
+			// A failed send emits `error`, which rejects `ended`.
+			child.send("finish");
 			const result: unknown = await ended;
 			assert.equal(asArray(result, "child exit")[0], 0);
 			assert.equal(await readFile(receipt, "utf8"), "cleanup complete");

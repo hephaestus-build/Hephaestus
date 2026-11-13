@@ -107,13 +107,8 @@ export function annotation(message: string): string {
 	return message.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
 }
 
-async function main(): Promise<void> {
-	const [limit, program, ...args] = process.argv.slice(2);
-	const seconds = Number(limit);
-	// The command stays readable as `vp run <task>` in the workflow, where the CI contract finds it.
-	if (!Number.isInteger(seconds) || seconds <= 0 || program !== "vp" || args.length === 0) {
-		throw new Error("usage: node scripts/ci-deadline.ts <seconds> vp <arguments...>");
-	}
+/** Runs the repository command with a deadline that includes its startup. */
+export async function runWithDeadline(seconds: number, args: string[]): Promise<number> {
 	const posix = process.platform !== "win32";
 	const child = spawn(process.execPath, [repositoryCli(), ...args], {
 		stdio: "inherit",
@@ -138,6 +133,7 @@ async function main(): Promise<void> {
 	const onTerminate = () => stop("SIGTERM");
 	process.on("SIGINT", onInterrupt).on("SIGTERM", onTerminate);
 	const state = { late: false, listed: [] as number[] };
+	let force: ReturnType<typeof globalThis.setTimeout> | undefined;
 	const deadline = globalThis.setTimeout(() => {
 		state.late = true;
 		const running = child.pid === undefined ? [] : descendants(processTable(), child.pid);
@@ -158,23 +154,27 @@ async function main(): Promise<void> {
 		stop("SIGTERM");
 		signalEach(state.listed, "SIGTERM");
 		// A task that ignores SIGTERM must not hold the step until the job limit.
-		globalThis.setTimeout(() => {
+		force = globalThis.setTimeout(() => {
 			stop("SIGKILL");
 			signalEach(state.listed.filter(alive), "SIGKILL");
 		}, 10_000);
 	}, seconds * 1000);
-	await once(child, "exit");
-	clearTimeout(deadline);
-	process.off("SIGINT", onInterrupt).off("SIGTERM", onTerminate);
-	if (state.late) {
-		// Nothing of the task may outlive the step: what has not ended within 10 s is killed.
-		for (let waited = 0; waited < 10_000 && state.listed.some(alive); waited += 250) {
-			await setTimeout(250);
+	try {
+		await once(child, "close");
+		if (state.late) {
+			// Nothing of the task may outlive the step: what has not ended within 10 s is killed.
+			for (let waited = 0; waited < 10_000 && state.listed.some(alive); waited += 250) {
+				await setTimeout(250);
+			}
+			stop("SIGKILL");
+			signalEach(state.listed.filter(alive), "SIGKILL");
 		}
-		stop("SIGKILL");
-		signalEach(state.listed.filter(alive), "SIGKILL");
+		return state.late ? 124 : exitStatus(child.exitCode, child.signalCode);
+	} finally {
+		clearTimeout(deadline);
+		clearTimeout(force);
+		process.off("SIGINT", onInterrupt).off("SIGTERM", onTerminate);
 	}
-	process.exitCode = state.late ? 124 : exitStatus(child.exitCode, child.signalCode);
 }
 
 /** The status a shell reports: the exit code, or 128 plus the number of the signal that ended it. */
@@ -205,5 +205,11 @@ function signalEach(pids: readonly number[], name: NodeJS.Signals): void {
 }
 
 if (import.meta.main) {
-	await main();
+	const [limit, program, ...args] = process.argv.slice(2);
+	const seconds = Number(limit);
+	// The command stays readable as `vp run <task>` in the workflow, where the CI contract finds it.
+	if (!Number.isInteger(seconds) || seconds <= 0 || program !== "vp" || args.length === 0) {
+		throw new Error("usage: node scripts/ci-deadline.ts <seconds> vp <arguments...>");
+	}
+	process.exitCode = await runWithDeadline(seconds, args);
 }
