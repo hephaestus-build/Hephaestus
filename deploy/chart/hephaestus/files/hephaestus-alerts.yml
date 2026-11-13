@@ -849,6 +849,20 @@ groups:
         annotations:
           summary: A database's oldest unfrozen transaction ID is more than 1 billion old
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # PostgreSQL refuses a new connection of an ordinary role at max_connections minus its superuser_reserved_connections.
+      # The chart budgets the connections of every client at its rolling-update peak (docs/admin/sizing.mdx), so a
+      # sustained level above 90 % means that a client outside that budget holds connections.
+      - alert: HephaestusPostgresConnectionsHigh
+        expr: >-
+          sum by (namespace) (pg_stat_database_numbackends{job="postgresql"})
+          / max by (namespace) (pg_settings_max_connections{job="postgresql"})
+          > 0.9
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: PostgreSQL has used more than 90 % of max_connections for 15 minutes
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
   - name: hephaestus-kubernetes
     rules:
       # All namespaces: the cluster serves only this release, and a killed cert-manager or exporter also needs a person.
@@ -863,6 +877,16 @@ groups:
           severity: warning
         annotations:
           summary: The kernel killed a container for its memory
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # A container in a restart loop never stays up long enough to serve. The kubelet's backoff doubles from 10 s to 5 min,
+      # so three restarts in an hour are already a loop, and a rollout that replaces Pods adds none: a new Pod starts at 0.
+      - alert: HephaestusServerRestarting
+        expr: >-
+          increase(kube_pod_container_status_restarts_total{container="server",pod=~".+-server-.+"}[1h]) >= 3
+        labels:
+          severity: warning
+        annotations:
+          summary: A server container restarted three or more times in one hour
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusServerDown
         expr: >-
@@ -990,6 +1014,16 @@ groups:
           severity: warning
         annotations:
           summary: A node file system has less than 15 % free space
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # The kernel's MemAvailable counts the cache that it can reclaim, so a low value is memory that processes hold.
+      # The kubelet evicts Pods at its hard threshold of 100 MiB, and the kernel kills processes below that.
+      - alert: HephaestusNodeMemoryLow
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: A node has less than 10 % of its memory available
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusCertificateExpiring
         expr: certmanager_certificate_expiration_timestamp_seconds - time() < 7 * 24 * 3600
