@@ -29,7 +29,7 @@ The alert or the objective tells the operator when the answer needs work.
 | Do review attempts fail, and where? | `agent_job_total`, `agent_job_infra_retry_requeued_total`, `agent_run_reaped_total` | `HephaestusAgentJobsFailing` and the other review alerts |
 | How long does each stage of a review take? | `agent_job_stage_duration_seconds`, by `stage` and `outcome`. Admission: `http_server_requests_seconds` on the two [admission routes](./metrics#agent-job-metrics) | None |
 | Which statements take the most database time, and do tables collect dead rows? | `pg_stat_statements_seconds_total` by `queryid`, `pg_stat_user_tables_n_dead_tup`, `pg_long_running_transactions_oldest_timestamp_seconds`, with the [database metrics](./monitoring#turn-on-database-metrics) on | `HephaestusDatabaseDeadlocks`, `HephaestusDatabaseTransactionOpenLong`, `HephaestusDatabaseDeadRowsHigh`, `HephaestusDatabaseTransactionIdAgeHigh` |
-| Do the clients use up the connections of PostgreSQL? | `pg_stat_database_numbackends`, `pg_settings_max_connections`, with the [database metrics](./monitoring#turn-on-database-metrics) on | `HephaestusPostgresConnectionsHigh` |
+| Do the clients use up the connections of PostgreSQL? | `pg_stat_database_numbackends`, `pg_settings_max_connections`, `pg_settings_superuser_reserved_connections`, `pg_settings_reserved_connections`, with the [database metrics](./monitoring#turn-on-database-metrics) on | `HephaestusPostgresConnectionsHigh` |
 | How long does a provider event wait for its handling, and how long does the handling take? | `integration_message_lag_seconds`, `integration_message_process_duration_seconds`, by `kind`, with retries in `integration_consumer_retry_total` and dead letters in `integration_consumer_poison_total` | `HephaestusEventsDelayed` |
 | Does feedback earn trust? | `practice_result_recorded_total`, `practice_result_marked_total`, `practice_feedback_response_total`, and the [query by practice](./metrics#feedback-trust) | `HephaestusResultsMarkedIncorrect` |
 | Does work wait for a server? | `agent_run_oldest_due_age_seconds`, `agent_run_due`, `agent_run_runs`, `agent_run_claim_wait_seconds`, by `kind` and `band` | `HephaestusAgentQueueStalled`, `HephaestusInteractiveRunWaiting` |
@@ -37,8 +37,8 @@ The alert or the objective tells the operator when the answer needs work.
 | Did a server lose its model calls in flight? | `llm_pool_permits_expired_total`, `llm_pool_lease_renewal_failures_total` | `HephaestusModelPermitsExpired`, `HephaestusModelPermitRenewalFailing` |
 | Do erasure and retention run, and do they finish? | `privacy_job_completed_total`, by `exported_job` and `outcome` | `HephaestusPrivacyJobFailing`, `HephaestusPrivacyJobNotRunning` |
 | Did the kernel kill a container for its memory? | kube-state-metrics | `HephaestusContainerOomKilled` |
-| Does a server container restart in a loop? | `kube_pod_container_status_restarts_total` from kube-state-metrics | `HephaestusServerRestarting` |
-| Does a node run out of memory? | `node_memory_MemAvailable_bytes`, `node_memory_MemTotal_bytes` from node-exporter | `HephaestusNodeMemoryLow` |
+| Does a server container restart repeatedly? | `kube_pod_container_status_restarts_total` from kube-state-metrics | `HephaestusServerRestarting` |
+| Does a node run low on RAM? | `node_memory_MemAvailable_bytes`, `node_memory_MemTotal_bytes` from node-exporter | `HephaestusNodeMemoryLow` |
 | How long does a model call take, how many tokens does it use, and how does it end? | `gen_ai_client_operation_duration_seconds`, `gen_ai_client_tokens_total`, `gen_ai_client_calls_total` by `outcome` | None |
 | Which calls does the proxy refuse before a provider sees them? | `llm_proxy_refused_total`, by `refusal` | None |
 | Does the API answer without errors, and fast enough? | `http_server_requests_seconds` | The API objectives |

@@ -3185,26 +3185,76 @@ tests:
               summary: An outbox action ended uncertain, so its write may have reached the provider and nothing confirms it
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
-  - name: connections above 90 % of max_connections fire for 15 minutes, a busy database below it and a short peak do not
+  - name: connections above 90 % of the usable slots fire for 15 minutes per PostgreSQL instance, a busy one below it and a short peak do not
     interval: 1m
     input_series:
-      # 60 + 35 = 95 of 100: above the threshold for the whole test.
-      - series: 'pg_stat_database_numbackends{job="postgresql",instance="postgresql-exporter:9187",namespace="busy",datid="16384",datname="hephaestus"}'
+      # busy: 95 of 100 slots, 97 usable with 3 superuser-reserved slots, and no reserved_connections series, as before PostgreSQL 16.
+      - series: 'pg_stat_database_numbackends{job="postgresql",instance="exporter-a:9187",namespace="busy",datid="16384",datname="hephaestus"}'
         values: "60x40"
-      - series: 'pg_stat_database_numbackends{job="postgresql",instance="postgresql-exporter:9187",namespace="busy",datid="1",datname="postgres"}'
+      - series: 'pg_stat_database_numbackends{job="postgresql",instance="exporter-a:9187",namespace="busy",datid="1",datname="template1"}'
         values: "35x40"
-      - series: 'pg_settings_max_connections{job="postgresql",instance="postgresql-exporter:9187",namespace="busy"}'
+      - series: 'pg_settings_max_connections{job="postgresql",instance="exporter-a:9187",namespace="busy"}'
         values: "100x40"
-      # 89 of 100: the chart's budget at a rolling-update peak stays below the threshold.
-      - series: 'pg_stat_database_numbackends{job="postgresql",instance="postgresql-exporter:9187",namespace="below",datid="16384",datname="hephaestus"}'
+      - series: 'pg_settings_superuser_reserved_connections{job="postgresql",instance="exporter-a:9187",namespace="busy"}'
+        values: "3x40"
+      # below: the chart's small profile at a rolling-update peak, 89 of 117 usable slots.
+      - series: 'pg_stat_database_numbackends{job="postgresql",instance="exporter-a:9187",namespace="below",datid="16384",datname="hephaestus"}'
         values: "89x40"
-      - series: 'pg_settings_max_connections{job="postgresql",instance="postgresql-exporter:9187",namespace="below"}'
+      - series: 'pg_settings_max_connections{job="postgresql",instance="exporter-a:9187",namespace="below"}'
+        values: "120x40"
+      - series: 'pg_settings_superuser_reserved_connections{job="postgresql",instance="exporter-a:9187",namespace="below"}'
+        values: "3x40"
+      # peak: 118 of 117 usable slots for ten minutes only.
+      - series: 'pg_stat_database_numbackends{job="postgresql",instance="exporter-a:9187",namespace="peak",datid="16384",datname="hephaestus"}'
+        values: "50x5 118x10 50x25"
+      - series: 'pg_settings_max_connections{job="postgresql",instance="exporter-a:9187",namespace="peak"}'
+        values: "120x40"
+      - series: 'pg_settings_superuser_reserved_connections{job="postgresql",instance="exporter-a:9187",namespace="peak"}'
+        values: "3x40"
+      # pair: two instances in one namespace with 60 of 120 each. Summed, they would show 120 of 120.
+      - series: 'pg_stat_database_numbackends{job="postgresql",instance="exporter-a:9187",namespace="pair",datid="16384",datname="hephaestus"}'
+        values: "60x40"
+      - series: 'pg_stat_database_numbackends{job="postgresql",instance="exporter-b:9187",namespace="pair",datid="16384",datname="hephaestus"}'
+        values: "60x40"
+      - series: 'pg_settings_max_connections{job="postgresql",instance="exporter-a:9187",namespace="pair"}'
+        values: "120x40"
+      - series: 'pg_settings_max_connections{job="postgresql",instance="exporter-b:9187",namespace="pair"}'
+        values: "120x40"
+      - series: 'pg_settings_superuser_reserved_connections{job="postgresql",instance="exporter-a:9187",namespace="pair"}'
+        values: "3x40"
+      - series: 'pg_settings_superuser_reserved_connections{job="postgresql",instance="exporter-b:9187",namespace="pair"}'
+        values: "3x40"
+      # mixed: a nearly full instance next to an idle one with a large limit. Pooled, they would show 122 of 1000.
+      - series: 'pg_stat_database_numbackends{job="postgresql",instance="exporter-a:9187",namespace="mixed",datid="16384",datname="hephaestus"}'
+        values: "112x40"
+      - series: 'pg_stat_database_numbackends{job="postgresql",instance="exporter-b:9187",namespace="mixed",datid="16384",datname="hephaestus"}'
+        values: "10x40"
+      - series: 'pg_settings_max_connections{job="postgresql",instance="exporter-a:9187",namespace="mixed"}'
+        values: "120x40"
+      - series: 'pg_settings_max_connections{job="postgresql",instance="exporter-b:9187",namespace="mixed"}'
+        values: "1000x40"
+      - series: 'pg_settings_superuser_reserved_connections{job="postgresql",instance="exporter-a:9187",namespace="mixed"}'
+        values: "3x40"
+      - series: 'pg_settings_superuser_reserved_connections{job="postgresql",instance="exporter-b:9187",namespace="mixed"}'
+        values: "3x40"
+      # reserved: 100 of 120, with 3 superuser and 12 reserved slots. 105 are usable, so the instance is at 95 %, not 83 %.
+      - series: 'pg_stat_database_numbackends{job="postgresql",instance="exporter-a:9187",namespace="reserved",datid="16384",datname="hephaestus"}'
         values: "100x40"
-      # A rolling update's peak of ten minutes.
-      - series: 'pg_stat_database_numbackends{job="postgresql",instance="postgresql-exporter:9187",namespace="peak",datid="16384",datname="hephaestus"}'
-        values: "50x5 95x10 50x25"
-      - series: 'pg_settings_max_connections{job="postgresql",instance="postgresql-exporter:9187",namespace="peak"}'
-        values: "100x40"
+      - series: 'pg_settings_max_connections{job="postgresql",instance="exporter-a:9187",namespace="reserved"}'
+        values: "120x40"
+      - series: 'pg_settings_superuser_reserved_connections{job="postgresql",instance="exporter-a:9187",namespace="reserved"}'
+        values: "3x40"
+      - series: 'pg_settings_reserved_connections{job="postgresql",instance="exporter-a:9187",namespace="reserved"}'
+        values: "12x40"
+      # reserved-quiet: the same reserve with 80 backends, 76 % of the usable slots.
+      - series: 'pg_stat_database_numbackends{job="postgresql",instance="exporter-a:9187",namespace="reserved-quiet",datid="16384",datname="hephaestus"}'
+        values: "80x40"
+      - series: 'pg_settings_max_connections{job="postgresql",instance="exporter-a:9187",namespace="reserved-quiet"}'
+        values: "120x40"
+      - series: 'pg_settings_superuser_reserved_connections{job="postgresql",instance="exporter-a:9187",namespace="reserved-quiet"}'
+        values: "3x40"
+      - series: 'pg_settings_reserved_connections{job="postgresql",instance="exporter-a:9187",namespace="reserved-quiet"}'
+        values: "12x40"
     alert_rule_test:
       - eval_time: 10m
         alertname: HephaestusPostgresConnectionsHigh
@@ -3215,23 +3265,38 @@ tests:
           - exp_labels:
               severity: warning
               namespace: busy
+              instance: exporter-a:9187
             exp_annotations:
-              summary: PostgreSQL has used more than 90 % of max_connections for 15 minutes
+              summary: PostgreSQL has used more than 90 % of the connections that ordinary roles can use for 15 minutes
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+          - exp_labels:
+              severity: warning
+              namespace: mixed
+              instance: exporter-a:9187
+            exp_annotations:
+              summary: PostgreSQL has used more than 90 % of the connections that ordinary roles can use for 15 minutes
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+          - exp_labels:
+              severity: warning
+              namespace: reserved
+              instance: exporter-a:9187
+            exp_annotations:
+              summary: PostgreSQL has used more than 90 % of the connections that ordinary roles can use for 15 minutes
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
-  - name: a server container with three restarts in an hour fires, a single restart, another container and a new Pod do not
+  - name: a server container with three restarts in an hour fires whatever its Pod is called, a single restart, another container and a new Pod do not
     interval: 1m
     input_series:
       - series: 'kube_pod_container_status_restarts_total{namespace="hephaestus",pod="hephaestus-server-7d9f-aaaaa",container="server"}'
+        values: "0x5 1 1 2 2 3 3x30"
+      # A release name over 52 characters drops "-server" from the Pod name.
+      - series: 'kube_pod_container_status_restarts_total{namespace="hephaestus",pod="a-release-with-a-very-long-name-9c3b1d-6d8f7b5c9-x2k4q",container="server"}'
         values: "0x5 1 1 2 2 3 3x30"
       - series: 'kube_pod_container_status_restarts_total{namespace="hephaestus",pod="hephaestus-server-7d9f-bbbbb",container="server"}'
         values: "0x10 1x30"
       - series: 'kube_pod_container_status_restarts_total{namespace="hephaestus",pod="hephaestus-postgresql-0",container="postgresql"}'
         values: "0 1 2 3 4 5 6 7 8 9 10x30"
-      # Another release's container that is called server runs in a Pod that the chart did not name.
-      - series: 'kube_pod_container_status_restarts_total{namespace="other",pod="billing-api-5c7d-ccccc",container="server"}'
-        values: "0 1 2 3 4 5 6 7 8 9 10x30"
-      # A Pod of a rollout starts its counter at 0, so no restart is counted.
+      # A replacement Pod starts its counter at 0, so no restart is counted.
       - series: 'kube_pod_container_status_restarts_total{namespace="hephaestus",pod="hephaestus-server-8a1c-ddddd",container="server"}'
         values: "_x15 0x25"
     alert_rule_test:
@@ -3249,6 +3314,14 @@ tests:
             exp_annotations:
               summary: A server container restarted three or more times in one hour
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+          - exp_labels:
+              severity: warning
+              namespace: hephaestus
+              pod: a-release-with-a-very-long-name-9c3b1d-6d8f7b5c9-x2k4q
+              container: server
+            exp_annotations:
+              summary: A server container restarted three or more times in one hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - eval_time: 35m
         alertname: HephaestusServerRestarting
         exp_alerts:
@@ -3256,6 +3329,14 @@ tests:
               severity: warning
               namespace: hephaestus
               pod: hephaestus-server-7d9f-aaaaa
+              container: server
+            exp_annotations:
+              summary: A server container restarted three or more times in one hour
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+          - exp_labels:
+              severity: warning
+              namespace: hephaestus
+              pod: a-release-with-a-very-long-name-9c3b1d-6d8f7b5c9-x2k4q
               container: server
             exp_annotations:
               summary: A server container restarted three or more times in one hour

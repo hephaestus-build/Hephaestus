@@ -849,19 +849,28 @@ groups:
         annotations:
           summary: A database's oldest unfrozen transaction ID is more than 1 billion old
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      # PostgreSQL refuses a new connection of an ordinary role at max_connections minus its superuser_reserved_connections.
+      # PostgreSQL refuses a new connection of an ordinary role at max_connections minus superuser_reserved_connections
+      # and, from PostgreSQL 16, reserved_connections. Each exporter target is one PostgreSQL instance, so the ratio keeps
+      # its namespace and instance. A server before 16 has no reserved_connections series: it counts as 0.
       # The chart budgets the connections of every client at its rolling-update peak (docs/admin/sizing.mdx), so a
-      # sustained level above 90 % means that a client outside that budget holds connections.
+      # sustained level above 90 % of the usable slots means that a client outside that budget holds connections.
       - alert: HephaestusPostgresConnectionsHigh
         expr: >-
-          sum by (namespace) (pg_stat_database_numbackends{job="postgresql"})
-          / max by (namespace) (pg_settings_max_connections{job="postgresql"})
+          sum by (namespace, instance) (pg_stat_database_numbackends{job="postgresql"})
+          / on (namespace, instance) (
+            max by (namespace, instance) (pg_settings_max_connections{job="postgresql"})
+            - max by (namespace, instance) (pg_settings_superuser_reserved_connections{job="postgresql"})
+            - (
+              max by (namespace, instance) (pg_settings_reserved_connections{job="postgresql"})
+              or max by (namespace, instance) (pg_settings_max_connections{job="postgresql"}) * 0
+            )
+          )
           > 0.9
         for: 15m
         labels:
           severity: warning
         annotations:
-          summary: PostgreSQL has used more than 90 % of max_connections for 15 minutes
+          summary: PostgreSQL has used more than 90 % of the connections that ordinary roles can use for 15 minutes
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
   - name: hephaestus-kubernetes
     rules:
@@ -878,11 +887,13 @@ groups:
         annotations:
           summary: The kernel killed a container for its memory
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      # A container in a restart loop never stays up long enough to serve. The kubelet's backoff doubles from 10 s to 5 min,
-      # so three restarts in an hour are already a loop, and a rollout that replaces Pods adds none: a new Pod starts at 0.
+      # Three restarts of a container in an hour show repeated instability, mostly a loop: the kubelet's backoff doubles from
+      # 10 s to 5 min. The container name selects the server, because the chart shortens a long release name and drops
+      # "-server" from the Pod name. Like HephaestusContainerOomKilled, the rule reads every namespace. A replacement Pod
+      # starts a new series at 0, so eviction and recreation churn is outside it.
       - alert: HephaestusServerRestarting
         expr: >-
-          increase(kube_pod_container_status_restarts_total{container="server",pod=~".+-server-.+"}[1h]) >= 3
+          increase(kube_pod_container_status_restarts_total{container="server"}[1h]) >= 3
         labels:
           severity: warning
         annotations:
@@ -1015,8 +1026,8 @@ groups:
         annotations:
           summary: A node file system has less than 15 % free space
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
-      # The kernel's MemAvailable counts the cache that it can reclaim, so a low value is memory that processes hold.
-      # The kubelet evicts Pods at its hard threshold of 100 MiB, and the kernel kills processes below that.
+      # MemAvailable counts the cache that the kernel can reclaim, so a low value is memory that processes hold. It is the
+      # host's view: the kubelet's eviction reads its own memory.available, and swap is a separate count.
       - alert: HephaestusNodeMemoryLow
         expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
         for: 15m
