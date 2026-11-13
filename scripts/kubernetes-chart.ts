@@ -116,7 +116,7 @@ export function commitChartValues(
 	inventory: ImageInventory,
 	commit: string,
 ): ChartValues {
-	const reference = (name: ChartImage): string => {
+	const reference = (name: string): string => {
 		const locked = images[environmentKey(name)];
 		if (locked === undefined || !/^[^\s@]+@sha256:[0-9a-f]{64}$/u.test(locked)) {
 			throw new Error(`the commit lock names no ${name} digest, which the chart runs`);
@@ -125,24 +125,15 @@ export function commitChartValues(
 		if (upstream !== undefined && locked !== `${upstream.repository}@${upstream.digest}`) {
 			throw new Error(`${name} is locked at ${locked}, not the inventory pin ${upstream.digest}`);
 		}
-		if (upstream === undefined && !inventory.images.includes(name)) {
-			throw new Error(`the release image inventory has no ${name}, which the chart runs`);
-		}
 		return locked;
 	};
 	return {
 		release: { version: commit, commit },
-		images: {
-			"agent-pi": reference("agent-pi"),
-			alertmanager: reference("alertmanager"),
-			"application-server": reference("application-server"),
-			nats: reference("nats"),
-			postgres: reference("postgres"),
-			"postgres-exporter": reference("postgres-exporter"),
-			"victoria-metrics": reference("victoria-metrics"),
-			vmalert: reference("vmalert"),
-			webapp: reference("webapp"),
-		},
+		images: Object.fromEntries(
+			[...inventory.images, ...inventory.upstream.map((entry) => entry.name)]
+				.toSorted()
+				.map((name) => [name, reference(name)]),
+		),
 	};
 }
 

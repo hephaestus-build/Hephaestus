@@ -9,12 +9,9 @@ Type=oneshot
 EnvironmentFile=/etc/hephaestus/reconcile.env
 StateDirectory=hephaestus
 StateDirectoryMode=0750
-# The reconciler runs the tooling of the release this host last applied: `tooling` is a link the
-# reconciler moves only after it has verified and applied a release, so a release never supplies
-# its own verifier. The tooling this host runs is what a signed channel named, except for what an
-# operator installed or upgraded by hand until the first apply after it, and except that a release
-# older than this link keeps the tooling the host has. The reconciler also keeps this unit and its
-# timer in /etc/systemd/system at that release and reloads systemd itself.
+# The tooling link names the installed verifier. After a verified apply, the reconciler advances
+# it and these units only to a descendant source commit. Runtime rollback and startup recovery
+# retain newer tooling, including a version the operator installed before the runtime upgrade.
 ExecStart=/usr/bin/env node /var/lib/hephaestus/tooling/scripts/reconcile-deployment.ts
 TimeoutStartSec=2h
 # Helm keeps its cache, configuration and data in the state directory: ProtectHome hides /root.

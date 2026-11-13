@@ -28,7 +28,7 @@ import { chartPackageName } from "./release-chart.ts";
  */
 const FETCH_TIMEOUT_MS = 5 * 60_000;
 
-/** The units this host runs, kept at the applied release by `syncUnits`. */
+/** The units this host runs, kept with its reconciler tooling by `syncUnits`. */
 const UNIT_FILES = ["hephaestus-reconcile.service", "hephaestus-reconcile.timer"] as const;
 const SYSTEMD_UNITS = "/etc/systemd/system";
 
@@ -538,7 +538,7 @@ interface HostConfig {
 	channel: string;
 	chart: ChartSettings;
 	checkout: string;
-	/** A link to the tree whose tooling this host runs: the checkout until the first apply. */
+	/** The installed verifier tree: advances after an apply, and can be advanced by the operator. */
 	tooling: string;
 	stateDirectory: string;
 	secretsDirectory: string;
@@ -644,12 +644,13 @@ async function revision(checkout: string, ref: string): Promise<string> {
 }
 
 /**
- * Whether this tick handed over to the recorded release's tooling. Runs before anything else, and in
+ * Whether this tick handed over to newer recorded-release tooling. Runs before anything else, and in
  * particular before the channel is parsed: a tick that stopped between recording a release and
  * adopting its tooling would otherwise read the next channel with the tooling that release
  * replaced. The recorded release's tree is rebuilt at the commit the signed lock named if it is gone
  * and checked either way, so what is adopted is that release and nothing that happens to sit at its
- * path. Node keeps running the module it loaded, so when the link moved, this tick ends here and the
+ * path. A newer installed verifier is retained, including one an operator installed by hand.
+ * Node keeps running the module it loaded, so when the link moved, this tick ends here and the
  * next one runs the adopted tooling.
  */
 async function adoptedAppliedTooling(
@@ -1478,10 +1479,9 @@ export async function commitImages(
 }
 
 /**
- * The host runs the tooling of the tree it applied: its reconciler through the `tooling` link and its
- * units in systemd. A tree that predates the link is never adopted — its unit would run the checkout
- * and its reconciler could not read a current channel — so a rollback to one keeps the tooling the
- * host has. Every step is idempotent, because a tick can stop between any two of them.
+ * Advance the verifier and its units only along their source history. Runtime rollback and recovery
+ * from applied.json cannot undo a newer verifier that knows the next image contract. A tree that
+ * predates the tooling link is never adopted. Each step is idempotent after an interrupted apply.
  */
 async function followTooling(
 	config: HostConfig,
@@ -1490,6 +1490,20 @@ async function followTooling(
 ): Promise<boolean> {
 	if (!(await carriesToolingLink(tree))) {
 		console.log(`Keeping the current tooling: ${tree} predates the tooling link`);
+		return false;
+	}
+	const installedTree = await realpath(config.tooling);
+	const installedCommit = await revision(installedTree, "HEAD");
+	const candidateCommit = await revision(tree, "HEAD");
+	if (
+		installedCommit !== candidateCommit &&
+		!(await succeeds("git", ["merge-base", "--is-ancestor", installedCommit, candidateCommit], {
+			cwd: config.checkout,
+		}))
+	) {
+		console.log(
+			`Keeping reconciler tooling at ${installedCommit}: ${candidateCommit} does not advance it`,
+		);
 		return false;
 	}
 	const changed = await syncUnits(tree, unitsDirectory);

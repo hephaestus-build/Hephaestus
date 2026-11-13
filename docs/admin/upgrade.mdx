@@ -334,7 +334,7 @@ The [database migration instructions](./compatibility-policy#database-migrations
 
 Do this procedure once, on a host with [pull-based deployment](./pull-based-deployment).
 
-The reconciler verifies a release with the tooling of the release before it.
+The reconciler verifies a release with the installed tooling before it adopts newer tooling.
 Tooling from before 1.0.0-rc.4 expects five chart images, and 1.0.0-rc.4 has nine.
 Thus, the old verifier stops each run with `does not pin the v1.0.0-rc.4 images`.
 The running release is not affected.

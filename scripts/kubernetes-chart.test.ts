@@ -252,6 +252,53 @@ await test("a commit lock names the chart images by digest, its upstream images 
 	);
 });
 
+await test("commit chart values follow the applied inventory across image contract changes", () => {
+	const commit = "d".repeat(40);
+	const engine = `ghcr.io/example/custom-service@${digest("a")}`;
+	const executor = `ghcr.io/another-team/runtime@${digest("b")}`;
+	const broker = `docker.io/example/message-bus@${digest("c")}`;
+	const candidate = parseInventory({
+		images: ["engine", "executor"],
+		upstream: [
+			{ name: "broker", repository: "docker.io/example/message-bus", digest: digest("c") },
+		],
+	});
+	assert.deepEqual(
+		commitChartValues(
+			{
+				HEPHAESTUS_IMAGE_ENGINE: engine,
+				HEPHAESTUS_IMAGE_EXECUTOR: executor,
+				HEPHAESTUS_IMAGE_BROKER: broker,
+			},
+			candidate,
+			commit,
+		),
+		{ release: { version: commit, commit }, images: { broker, engine, executor } },
+	);
+	assert.throws(
+		() =>
+			commitChartValues(
+				{ HEPHAESTUS_IMAGE_ENGINE: engine, HEPHAESTUS_IMAGE_BROKER: broker },
+				candidate,
+				commit,
+			),
+		/no executor digest/u,
+	);
+	assert.throws(
+		() =>
+			commitChartValues(
+				{
+					HEPHAESTUS_IMAGE_ENGINE: engine,
+					HEPHAESTUS_IMAGE_EXECUTOR: executor,
+					HEPHAESTUS_IMAGE_BROKER: `docker.io/example/message-bus@${digest("d")}`,
+				},
+				candidate,
+				commit,
+			),
+		/not the inventory pin/u,
+	);
+});
+
 await test("the chart ships no image, tag or release identity of its own", () => {
 	assert.deepEqual(defaults.images, {});
 	assert.deepEqual(defaults.release, { version: "", commit: "" });
