@@ -538,6 +538,8 @@ If a publication reply is lost, a direct database read resolves the outcome.
 A committed Program returns HTTP 503 so the same claim can restore it.
 A confirmed rollback records the stage and cause.
 An unreadable outcome returns HTTP 503 without a terminal write.
+If completion without execution fails after provenance publishes, the same checkpoint read confirms the publication.
+The failure records one preparation stop with its cause; it does not repeat on HTTP 503.
 The published checkpoint also keeps the ended-practice count from before execution.
 A result that reaches a cold replica uses that baseline and the normal result-admission guards.
 It does not prepare a workspace or capture inputs again.

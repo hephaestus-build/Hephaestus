@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRun;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService.AdmissionIdentity;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAttempt;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
@@ -385,7 +386,9 @@ public class ReviewSandboxRuns implements SandboxRunKind {
                 return preparationUnavailable(unreadable);
             }
             if (published.isEmpty()) return new StaleRunException(run.fence(), failure);
-            if (stage == PreparationFailure.Stage.PROVENANCE && published.get()) return preparationUnavailable(failure);
+            if (stage == PreparationFailure.Stage.PROVENANCE
+                    && published.get()
+                    && !(failure instanceof JobPreparationException)) return preparationUnavailable(failure);
             var recorded = PreparationFailure.of(stage, failure);
             transferred = true;
             results.unprepared(job, run.fence(), recorded, failure);

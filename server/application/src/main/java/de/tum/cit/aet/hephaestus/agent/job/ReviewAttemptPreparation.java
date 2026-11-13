@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.metrics.ReviewStageTelemetry;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeAgentRequest;
@@ -113,7 +114,7 @@ public class ReviewAttemptPreparation {
 
         // Keeping a result commits at capture. If that attempt then failed, this one has nothing left to capture.
         if (handler.keptEveryResult(owned(jobId, fence))) {
-            handler.completeWithoutExecution(owned(jobId, fence));
+            completeWithoutExecution(owned(jobId, fence));
             return new PreparedSandbox(null, new PreparedJobInputs(Map.of(), List.of(), List.of(), null, null));
         }
         var capture = jobTelemetry.stage(ReviewStageTelemetry.Stage.CAPTURE);
@@ -144,7 +145,7 @@ public class ReviewAttemptPreparation {
             if (report != null && report.decisions().stream().noneMatch(report::runs)) {
                 stage.set(PreparationFailure.Stage.PROVENANCE);
                 persistPreparedEvidence(jobId, fence, job.getWorkspaceId(), job.getAttempt(), preparedInputs);
-                handler.completeWithoutExecution(owned(jobId, fence));
+                completeWithoutExecution(owned(jobId, fence));
                 return new PreparedSandbox(null, preparedInputs);
             }
             stage.set(PreparationFailure.Stage.CREDENTIAL);
@@ -212,6 +213,15 @@ public class ReviewAttemptPreparation {
         } catch (RuntimeException exception) {
             preparedInputs.close();
             throw exception;
+        }
+    }
+
+    /** Input publication is decided before completion; a failure here is an ordinary preparation stop. */
+    private void completeWithoutExecution(ReviewJob job) {
+        try {
+            handler.completeWithoutExecution(job);
+        } catch (RuntimeException failure) {
+            throw new JobPreparationException("Could not complete the prepared review inputs", failure);
         }
     }
 

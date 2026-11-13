@@ -50,6 +50,9 @@ import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessDecision;
+import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReason;
+import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureContribution;
@@ -111,6 +114,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.transaction.TransactionSystemException;
@@ -320,6 +324,32 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldRecordOneStopWhenCompletionFailsAfterProvenancePublishes() throws Exception {
+        try (var replica = replica(folders.resolve("completion-failure"), Publication.COMPLETION_FAILED)) {
+            assertThat(call(replica, "/context", null, fence.epoch()).statusCode())
+                    .isEqualTo(409);
+            var stopped = jobs.findById(job.getId()).orElseThrow();
+            assertThat(stopped.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
+            assertThat(stopped.getExecutionStartedAt()).isNull();
+            var capture = Objects.requireNonNull(stopped.getCapture());
+            assertThat(capture.path("program").isObject()).isTrue();
+            assertThat(capture.path("programDigest").asString()).hasSize(64);
+            assertThat(capture.path("preparationFailure").path("stage").asString())
+                    .isEqualTo("PROVENANCE");
+            assertThat(capture.path("preparationFailure").path("kind").asString())
+                    .isEqualTo("DATABASE");
+            Instant stoppedAt = Objects.requireNonNull(stopped.getCompletedAt());
+            assertThat(call(replica, "/context", null, fence.epoch()).statusCode())
+                    .isEqualTo(409);
+            var unchanged = jobs.findById(job.getId()).orElseThrow();
+            assertThat(unchanged.getCompletedAt()).isEqualTo(stoppedAt);
+            assertThat(unchanged.spentAttempts()).isEqualTo(job.spentAttempts());
+            assertThat(completions).hasValue(1);
+            assertThat(captures).hasValue(1);
+        }
+    }
+
+    @Test
     void shouldKeepTheClaimWhileThePublicationOutcomeCannotBeRead() throws Exception {
         try (var first = replica(folders.resolve("unreadable"), Publication.UNREADABLE);
                 var second = replica(folders.resolve("healthy"), Publication.NORMAL)) {
@@ -369,10 +399,12 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
         NORMAL,
         LOST_REPLY,
         ROLLED_BACK,
-        UNREADABLE
+        UNREADABLE,
+        COMPLETION_FAILED
     }
 
     private final AtomicInteger captures = new AtomicInteger();
+    private final AtomicInteger completions = new AtomicInteger();
 
     private Replica replica(Path root, boolean lostCommitReply) throws Exception {
         return replica(root, lostCommitReply ? Publication.LOST_REPLY : Publication.NORMAL);
@@ -396,6 +428,11 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
         var files = new JobEvidenceFiles(
                 layout, jobs, beans.getBean(Clock.class), catalog, beans.getBean(AttemptInputs.class));
         var handler = mock(DefaultReviewExecutionHandler.class, invocation -> {
+            if (invocation.getMethod().getName().equals("completeWithoutExecution")
+                    && publication == Publication.COMPLETION_FAILED) {
+                completions.incrementAndGet();
+                throw new DataIntegrityViolationException("Prepared input completion failed");
+            }
             if (!invocation.getMethod().getName().equals("prepareInputs"))
                 return Answers.RETURNS_DEFAULTS.answer(invocation);
             ReviewJob current = invocation.getArgument(0);
@@ -409,6 +446,23 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
                             new ItemKind("scm.pull_request"),
                             Map.of(new SourceKind("scm.repository.tree"), CaptureContribution.empty()))
                     .manifest());
+            AutomatedReviewReadinessReport readiness = null;
+            if (publication == Publication.COMPLETION_FAILED) {
+                Instant decided = manifest.capturedAt();
+                readiness = new AutomatedReviewReadinessReport(
+                        manifest.contractVersion(),
+                        manifest.catalogDigest(),
+                        manifest.itemKind(),
+                        manifest.capturedAt(),
+                        decided,
+                        List.of(new AutomatedReviewReadinessDecision(
+                                "test-practice",
+                                decided,
+                                false,
+                                List.of(AutomatedReviewReadinessReason.NO_AUTOMATED_REVIEW),
+                                List.of())),
+                        Map.of());
+            }
             files.beginPersonCapture(current);
             return files.prepare(
                     current,
@@ -419,7 +473,7 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
                                     "context/input.txt",
                                     CAPTURED),
                             manifest),
-                    null);
+                    readiness);
         });
         var adapter = mock(PracticePiAdapter.class, invocation -> switch (invocation
                 .getMethod()
@@ -489,7 +543,9 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
 
     /** Adapted from SBX's after-commit injector: the failure is after the real outer commit. */
     private TransactionTemplate publicationTransactions(Publication publication) {
-        var fail = new AtomicBoolean(publication != Publication.NORMAL);
+        var fail = new AtomicBoolean(publication == Publication.LOST_REPLY
+                || publication == Publication.ROLLED_BACK
+                || publication == Publication.UNREADABLE);
         return new TransactionTemplate(Objects.requireNonNull(transactions.getTransactionManager())) {
             @Override
             public <T extends @Nullable Object> T execute(TransactionCallback<T> action) {
