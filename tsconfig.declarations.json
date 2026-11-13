@@ -1,0 +1,28 @@
+// Application and tooling projects use `skipLibCheck: true`, which also skips the
+// handwritten declarations in this repository. This project checks those and their imports with
+// `skipLibCheck: false`. `types: []` keeps unrelated ambient packages out. The k6 declarations
+// redeclare globals that DOM also declares, so they have their own project: `tsconfig.declarations.k6.json`.
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ESNext",
+		"moduleResolution": "Bundler",
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"types": [],
+		"strict": true,
+		"skipLibCheck": false,
+		"noEmit": true
+	},
+	"include": [
+		"scripts/**/*.d.ts",
+		"webapp/**/*.d.ts",
+		"webapp/.storybook/**/*.d.ts",
+		"extension/**/*.d.ts",
+		"extension/.storybook/**/*.d.ts",
+		"docs/**/*.d.ts",
+		"docker/agents/**/*.d.ts",
+		"server/application/src/*/resources/agent/**/*.d.ts",
+		"server/application/src/test/resources/integration/scm/sarif/**/*.d.ts",
+		"server/application/src/main/resources/practices/scripts/**/*.d.ts"
+	]
+}
