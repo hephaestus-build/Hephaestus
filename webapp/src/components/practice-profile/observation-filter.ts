@@ -1,4 +1,4 @@
-import type { ResultList } from "@/api/types.gen";
+import type { ResultDetail, ResultList } from "@/api/types.gen";
 import type { PanelState } from "@/components/common/panel-state";
 import type { Outcome } from "@/components/practice-vocabulary/outcome-defs";
 import type { ReviewEntry } from "@/components/profile/reviews";
@@ -127,6 +127,20 @@ export function carriesObservation(reviews: readonly ReviewEntry[], id: string):
  * practice, which this level never shows under its own name.
  */
 export type SelectedObservationState = PanelState<{ result: ResultList }> | { status: "elsewhere" };
+
+/**
+ * An observation read on its own, as the feed lists it. The detail read still sends null for a
+ * missing value; the listed result leaves it out.
+ */
+export function listedResultOf(detail: ResultDetail): ResultList {
+	return {
+		...detail,
+		acceptedAt: detail.acceptedAt ?? undefined,
+		markedIncorrectAt: detail.markedIncorrectAt ?? undefined,
+		severity: detail.severity ?? undefined,
+		summary: detail.summary ?? undefined,
+	};
+}
 
 /**
  * The asked observation as a review entry of its own, for the history while its review's page is

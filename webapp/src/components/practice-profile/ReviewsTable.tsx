@@ -201,7 +201,7 @@ function controlNames(
 	for (const [name, items] of worksPerName) {
 		if (items.length > 1) {
 			for (const [index, item] of items.entries()) {
-				const provider = item.provider === null ? undefined : PROVIDER_NAMES[item.provider];
+				const provider = item.provider === undefined ? undefined : PROVIDER_NAMES[item.provider];
 				work.set(
 					item.id,
 					`${name}${provider === undefined ? "" : ` at ${provider}`} (${index + 1})`,

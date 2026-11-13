@@ -32,7 +32,7 @@ export function countedNothing(scan: Pick<ScanSummary, "status" | "counts">): bo
 }
 
 export function scanStartedBy(scan: Pick<ScanSummary, "requestedBy" | "origin">): string {
-	return scan.requestedBy === null
+	return scan.requestedBy === undefined
 		? definitionFor(REVIEW_ORIGIN_DEFS, scan.origin).label
 		: accountName(scan.requestedBy);
 }
@@ -45,8 +45,8 @@ export function shortVersion(version: string): string {
 	return /^[0-9a-f]{12,}$/iu.test(version) ? version.slice(0, 7) : version;
 }
 
-export function ofTotal(count: number, total: number | null): string {
-	return total === null ? String(count) : `${count} of ${total}`;
+export function ofTotal(count: number, total: number | undefined): string {
+	return total === undefined ? String(count) : `${count} of ${total}`;
 }
 
 const WITHHELD_FALLBACK = "Withheld for a recorded reason that this page cannot describe yet.";

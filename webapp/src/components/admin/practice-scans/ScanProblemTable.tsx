@@ -73,7 +73,7 @@ function citationText(entry: ScanReportProblem): string {
 	const located =
 		citation === undefined
 			? undefined
-			: citationLocation({ ...citation, path: citation.path ?? entry.item.path });
+			: citationLocation({ ...citation, path: citation.path ?? entry.item.path ?? null });
 	return located ?? entry.item.path ?? itemName(entry.item);
 }
 

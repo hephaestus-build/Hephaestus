@@ -818,19 +818,19 @@ export const zDeliveredWorkFeedbackCopy = z.object({
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullable(),
-	externalRef: z.string().nullable(),
-	externalUrl: z.string().nullable(),
+		.optional(),
+	externalRef: z.string().optional(),
+	externalUrl: z.string().optional(),
 	id: z.uuid(),
 	kind: zFeedbackCopyKind,
-	path: z.string().nullable(),
+	path: z.string().optional(),
 	postedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
-	side: zCitationSide.nullable(),
+	side: zCitationSide.optional(),
 	startLine: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullable(),
+		.optional(),
 });
 
 export const zDeliveredWorkFeedbackItem = z.object({
@@ -1052,10 +1052,10 @@ export const zFeedbackTriage = z.object({
 export const zFeedbackUsefulness = z.enum(["HELPFUL", "UNHELPFUL"]);
 
 export const zFeedbackResponse = z.object({
-	comment: z.string().nullable(),
-	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	resolution: zFeedbackResolution.nullable(),
-	usefulness: zFeedbackUsefulness.nullable(),
+	comment: z.string().optional(),
+	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	resolution: zFeedbackResolution.optional(),
+	usefulness: zFeedbackUsefulness.optional(),
 });
 
 /**
@@ -1506,24 +1506,24 @@ export const zItemFact = z.object({
 });
 
 export const zItemRef = z.object({
-	container: z.string().nullable(),
+	container: z.string().optional(),
 	id: z.string().regex(/^[1-9][0-9]*$/),
 	kind: z.string(),
 	label: z.string(),
 	parentId: z
 		.string()
 		.regex(/^[1-9][0-9]*$/)
-		.nullable(),
-	path: z.string().nullable(),
-	provider: zIntegrationKind.nullable(),
-	removedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
-	title: z.string().nullable(),
-	url: z.string().nullable(),
+		.optional(),
+	path: z.string().optional(),
+	provider: zIntegrationKind.optional(),
+	removedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+	title: z.string().optional(),
+	url: z.string().optional(),
 });
 
 export const zDeliveredWorkFeedback = z.object({
 	feedback: z.array(zDeliveredWorkFeedbackItem),
-	item: zItemRef.nullable(),
+	item: zItemRef.optional(),
 });
 
 export const zItemFacts = z.object({
@@ -2153,7 +2153,7 @@ export const zOverviewWindow = z.object({
 });
 
 export const zOwnFeedbackCopyRef = z.object({
-	externalUrl: z.string().nullable(),
+	externalUrl: z.string().optional(),
 	id: z.uuid(),
 	kind: zFeedbackCopyKind,
 	postedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
@@ -2161,10 +2161,10 @@ export const zOwnFeedbackCopyRef = z.object({
 
 export const zOwnFeedbackRef = z.object({
 	copies: z.array(zOwnFeedbackCopyRef),
-	deliveredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	deliveredAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	destination: zFeedbackDestination,
 	id: z.uuid(),
-	response: zFeedbackResponse.nullable(),
+	response: zFeedbackResponse.optional(),
 	state: zFeedbackState,
 });
 
@@ -2680,30 +2680,30 @@ export const zProfileChange = z.object({
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullable(),
-	direction: zProfileChangeDirection.nullable(),
+		.optional(),
+	direction: zProfileChangeDirection.optional(),
 	evidence: z.array(zItemRef),
-	feedbackId: z.uuid().nullable(),
-	from: z.string().nullable(),
-	groupName: z.string().nullable(),
-	groupSlug: z.string().nullable(),
-	practiceName: z.string().nullable(),
-	practiceSlug: z.string().nullable(),
-	resolvedBy: zProfileChangeResolvedBy.nullable(),
-	to: z.string().nullable(),
+	feedbackId: z.uuid().optional(),
+	from: z.string().optional(),
+	groupName: z.string().optional(),
+	groupSlug: z.string().optional(),
+	practiceName: z.string().optional(),
+	practiceSlug: z.string().optional(),
+	resolvedBy: zProfileChangeResolvedBy.optional(),
+	to: z.string().optional(),
 	type: zProfileChangeType,
 });
 
 export const zProviderIdentityRef = z.object({
-	avatarUrl: z.string().nullable(),
-	displayName: z.string().nullable(),
-	login: z.string().nullable(),
+	avatarUrl: z.string().optional(),
+	displayName: z.string().optional(),
+	login: z.string().optional(),
 	provider: z.enum(["GITHUB", "GITLAB", "SLACK", "OUTLINE"]),
 });
 
 export const zAccountRef = z.object({
-	avatarUrl: z.string().nullable(),
-	displayName: z.string().nullable(),
+	avatarUrl: z.string().optional(),
+	displayName: z.string().optional(),
 	id: z.string().regex(/^[1-9][0-9]*$/),
 	identities: z.array(zProviderIdentityRef),
 	status: zAccountStatus,
@@ -3448,8 +3448,8 @@ export const zReviewCadence = z.enum(["DAILY", "WEEKLY"]);
 
 export const zReviewContext = z.object({
 	canInspectReviewDetails: z.boolean(),
-	item: zItemRef.nullable(),
-	reasonDescription: z.string().nullable(),
+	item: zItemRef.optional(),
+	reasonDescription: z.string().optional(),
 	requestAllowed: z.boolean(),
 	workspaceId: z.string().regex(/^[1-9][0-9]*$/),
 	workspaceSlug: z.string(),
@@ -3756,8 +3756,8 @@ export const zItemEvent = z.object({
 export const zReviewRequestStatus = z.enum(["SUBMITTED", "REFUSED"]);
 
 export const zReviewRequestOutcome = z.object({
-	reason: zReviewRequestReason.nullable(),
-	reviewId: z.uuid().nullable(),
+	reason: zReviewRequestReason.optional(),
+	reviewId: z.uuid().optional(),
 	status: zReviewRequestStatus,
 });
 
@@ -3864,11 +3864,11 @@ export const zPracticeProfileOverview = z.object({
 });
 
 export const zReviewRef = z.object({
-	completedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	completedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	id: z.uuid(),
 	item: zItemRef,
-	itemVersion: z.string().nullable(),
+	itemVersion: z.string().optional(),
 	kind: zReviewKind,
 	origin: zReviewOrigin,
 	status: zReviewStatus,
@@ -4119,7 +4119,7 @@ export const zScanCounts = z.object({
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullable(),
+		.optional(),
 	met: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -4140,7 +4140,7 @@ export const zScanCounts = z.object({
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullable(),
+		.optional(),
 	problems: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -4392,10 +4392,10 @@ export const zScanProgress = z.object({
 });
 
 export const zScanDetail = z.object({
-	baselineScanId: z.uuid().nullable(),
+	baselineScanId: z.uuid().optional(),
 	budgetUsd: z.string(),
 	chargedCostUsd: z.string().nullable(),
-	completedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	completedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	counts: zScanCounts,
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	id: z.uuid(),
@@ -4409,15 +4409,15 @@ export const zScanDetail = z.object({
 	progress: zScanProgress,
 	ref: z.string(),
 	repository: zItemRef,
-	requestedBy: zAccountRef.nullable(),
-	startedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	requestedBy: zAccountRef.optional(),
+	startedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	status: zReviewStatus,
-	stopReason: zReviewStopReason.nullable(),
+	stopReason: zReviewStopReason.optional(),
 });
 
 export const zScanSummary = z.object({
-	baselineScanId: z.uuid().nullable(),
-	completedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	baselineScanId: z.uuid().optional(),
+	completedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	counts: zScanCounts,
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	id: z.uuid(),
@@ -4429,10 +4429,10 @@ export const zScanSummary = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	ref: z.string(),
 	repository: zItemRef,
-	requestedBy: zAccountRef.nullable(),
-	startedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	requestedBy: zAccountRef.optional(),
+	startedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	status: zReviewStatus,
-	stopReason: zReviewStopReason.nullable(),
+	stopReason: zReviewStopReason.optional(),
 });
 
 /**
@@ -4691,11 +4691,11 @@ export const zProblemSummary = z.object({
 });
 
 export const zResultList = z.object({
-	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	currentness: zCurrentness,
 	id: z.uuid(),
 	item: zItemRef,
-	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	origin: zReviewOrigin,
 	outcome: zResultOutcome,
 	practiceName: z.string(),
@@ -4703,8 +4703,8 @@ export const zResultList = z.object({
 	problems: z.array(zProblemSummary),
 	recordedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	reviewId: z.uuid(),
-	severity: zSeverity.nullable(),
-	summary: z.string().nullable(),
+	severity: zSeverity.optional(),
+	summary: z.string().optional(),
 });
 
 export const zListedScanReportItem = z.object({

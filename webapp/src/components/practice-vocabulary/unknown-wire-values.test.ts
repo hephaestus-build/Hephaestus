@@ -19,7 +19,7 @@ describe("a value this build has no words for", () => {
 		expect(itemKindLabel(unknownKind, 2)).toBe("Other work");
 		expect(itemKindNoun(unknownKind, 1)).toBe("piece of work");
 		expect(itemKindNoun(unknownKind, 3)).toBe("pieces of work");
-		expect(itemName({ kind: unknownKind, label: "T-88", provider: null })).toBe("Other work");
+		expect(itemName({ kind: unknownKind, label: "T-88" })).toBe("Other work");
 	});
 
 	it("names an event generically", () => {

@@ -239,7 +239,7 @@ function ReviewHead({ path, detail, positionOnWork, totalOnWork }: ReviewHeadPro
 			<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground">
 				{at && (
 					<span>
-						{review?.completedAt === null ? "Created" : "Reviewed"}{" "}
+						{review !== undefined && review.completedAt === undefined ? "Created" : "Reviewed"}{" "}
 						<time dateTime={at.toISOString()} className="text-foreground">
 							{formatDayTime(at, today)}
 						</time>

@@ -199,7 +199,7 @@ export const SomeObservationsKept: Story = {
 export const RunningWithNothingRecorded: Story = {
 	args: {
 		state: readyWith({
-			review: { ...review, status: "RUNNING", completedAt: null },
+			review: { ...review, status: "RUNNING", completedAt: undefined },
 			results: [],
 			feedback: [],
 		}),
@@ -283,7 +283,7 @@ export const MergeRequestNumber: Story = {
 };
 
 export const UntitledItem: Story = {
-	args: { state: readyWith({ review: { ...review, item: { ...review.item, title: null } } }) },
+	args: { state: readyWith({ review: { ...review, item: { ...review.item, title: undefined } } }) },
 	play: async () => {
 		await settledReviewPanel();
 		await expect(
@@ -333,7 +333,7 @@ export const DocumentLink: Story = {
 					label: "Architecture notes",
 					title: "Architecture notes",
 					url: "https://example.com/documents/architecture",
-					container: null,
+					container: undefined,
 				},
 			},
 		}),

@@ -209,16 +209,12 @@ const withheldPractice: ReviewPractice = {
 };
 
 const reviewCases: LineageStateCase[] = [
-	withCase(
-		"queued",
-		"Queued",
-		chain({ review: { status: "QUEUED", completedAt: null }, results: [], feedback: [] }),
-	),
+	withCase("queued", "Queued", chain({ review: { status: "QUEUED" }, results: [], feedback: [] })),
 	withCase(
 		"running",
 		"Running, two observations so far",
 		chain({
-			review: { status: "RUNNING", completedAt: null },
+			review: { status: "RUNNING" },
 			results: threeResults().slice(0, 2),
 			feedback: [],
 		}),
@@ -270,7 +266,6 @@ const reviewCases: LineageStateCase[] = [
 				kind: "SCAN",
 				status: "PARTIAL",
 				origin: "REQUEST",
-				itemVersion: null,
 			},
 			results: scannedFiles.map((file, index) =>
 				stateResult(id(3, index + 1), {

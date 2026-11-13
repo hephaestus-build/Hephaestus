@@ -72,7 +72,9 @@ export function useRequestPracticeReview(
 				} else {
 					toast.warning("Review request declined", {
 						description:
-							outcome.reason === null ? undefined : ITEM_EVENT_REASON_SENTENCES[outcome.reason],
+							outcome.reason === undefined
+								? undefined
+								: ITEM_EVENT_REASON_SENTENCES[outcome.reason],
 					});
 				}
 				return;
@@ -91,7 +93,7 @@ export function useRequestPracticeReview(
 	const { data, variables } = mutation;
 	const asked = variables?.path.workspaceSlug === workspaceSlug ? variables.body.itemId : undefined;
 	const accepted: AcceptedReviewRequest | undefined =
-		asked !== undefined && data?.status === "SUBMITTED" && data.reviewId !== null
+		asked !== undefined && data?.status === "SUBMITTED" && data.reviewId !== undefined
 			? { itemId: asked, reviewId: data.reviewId }
 			: undefined;
 	const submission = (itemId: string) => {

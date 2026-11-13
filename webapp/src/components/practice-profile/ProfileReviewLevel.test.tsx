@@ -28,12 +28,13 @@ function reviewOf(
 			item: {
 				...openProfileReviewDetail.review.item,
 				kind,
-				provider: providers.get(kind) ?? null,
+				provider: providers.get(kind),
 				container:
-					kind === "scm.pull_request" ? openProfileReviewDetail.review.item.container : null,
+					kind === "scm.pull_request" ? openProfileReviewDetail.review.item.container : undefined,
 				label,
-				title,
-				url,
+				// The wire leaves out a missing title or link.
+				title: title ?? undefined,
+				url: url ?? undefined,
 			},
 		},
 	} satisfies ProfileReviewDetail;

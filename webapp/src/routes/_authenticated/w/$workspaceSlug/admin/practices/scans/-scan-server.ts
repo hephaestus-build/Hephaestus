@@ -40,7 +40,7 @@ export function wireRepository(id = "300", name = "hephaestus") {
 	return toWire(repositoryRef(id, name));
 }
 export function wireFile(id: string, path: string, removedAt: string | null = null) {
-	return toWire(fileRef(id, path, asDate(removedAt) ?? null));
+	return toWire(fileRef(id, path, asDate(removedAt)));
 }
 export function wireScan(overrides: Partial<Wire<ScanSummary>> = {}): Wire<ScanSummary> {
 	return {
@@ -59,9 +59,9 @@ function scanFromWire(scan: Wire<ScanSummary>): ScanSummary {
 	return {
 		...scan,
 		createdAt: new Date(scan.createdAt),
-		startedAt: asDate(scan.startedAt) ?? null,
-		completedAt: asDate(scan.completedAt) ?? null,
-		repository: { ...scan.repository, removedAt: asDate(scan.repository.removedAt) ?? null },
+		startedAt: asDate(scan.startedAt),
+		completedAt: asDate(scan.completedAt),
+		repository: { ...scan.repository, removedAt: asDate(scan.repository.removedAt) },
 	};
 }
 export function wireDetail(scan: Wire<ScanSummary>): Wire<ScanDetail> {
@@ -229,6 +229,6 @@ export function wireScanIn(
 	overrides: Partial<Wire<ScanSummary>> = {},
 ): Wire<ScanSummary> {
 	return status === "QUEUED" || status === "RUNNING"
-		? wireScan({ status, completedAt: null, counts: RUNNING_COUNTS, ...overrides })
+		? wireScan({ status, completedAt: undefined, counts: RUNNING_COUNTS, ...overrides })
 		: wireScan({ status, ...overrides });
 }

@@ -191,7 +191,7 @@ export function ReviewResultRow({
 	const outcome = definitionFor(OUTCOME_DEFS, result.outcome);
 	const OutcomeIcon = outcome.icon;
 	const note = claimCurrentnessNote(result.currentness);
-	const markedIncorrect = result.markedIncorrectAt !== null;
+	const markedIncorrect = result.markedIncorrectAt != null;
 	const reasons = reasonsOf(result);
 	const feedback = deliveredFeedback(result);
 	const hasWorkLine = rendersContent(work);
@@ -212,7 +212,7 @@ export function ReviewResultRow({
 		<>
 			<span className="flex min-w-0 basis-full flex-col items-start gap-1 text-sm sm:flex-1 sm:basis-0">
 				<span className="font-medium text-foreground">{summary}</span>
-				{result.summary === null && (
+				{result.summary == null && (
 					<span className="text-xs text-muted-foreground">Observation text unavailable</span>
 				)}
 				{showPill && <PracticePill name={result.practiceName} />}
@@ -320,7 +320,7 @@ export function ReviewResultDetails({
 	/** Where feedback that lives in Hephaestus opens; see `ObservationFeedback`. */
 	feedbackLinks?: ObservationFeedbackLinks;
 }) {
-	const markedIncorrect = result.markedIncorrectAt !== null;
+	const markedIncorrect = result.markedIncorrectAt != null;
 	const note = claimCurrentnessNote(result.currentness);
 	const reasons = reasonsOf(result);
 	const feedback = deliveredFeedback(result);

@@ -13,14 +13,9 @@ import {
 const ITEM = {
 	id: "1",
 	kind: "scm.pull_request",
-	parentId: null,
 	provider: "GITLAB",
 	label: "!1",
 	title: "t",
-	url: null,
-	container: null,
-	path: null,
-	removedAt: null,
 } as const;
 
 function ready(status: ReviewRef["status"] | undefined): ReadyContext {
@@ -45,7 +40,6 @@ function ready(status: ReviewRef["status"] | undefined): ReadyContext {
 							origin: "REQUEST",
 							status,
 							createdAt: "2026-09-26T11:59:00Z",
-							completedAt: null,
 						},
 						events: [],
 						results: [],

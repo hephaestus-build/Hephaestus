@@ -72,19 +72,22 @@ export const Delivered: Story = {
 export const NotDelivered: Story = {
 	args: {
 		feedback: [
-			{ ...onPage, state: "READY", deliveredAt: null },
-			{ ...inConversation, state: "WITHHELD", deliveredAt: null },
+			{ ...onPage, state: "READY", deliveredAt: undefined },
+			{ ...inConversation, state: "WITHHELD", deliveredAt: undefined },
 			ownFeedback("00000000-0000-4000-8000-0000000005a4", {
 				destination: "PRACTICE_PAGE",
 				state: "UNCONFIRMED",
-				deliveredAt: null,
+				deliveredAt: undefined,
 			}),
-			ownFeedback("00000000-0000-4000-8000-0000000005a5", { state: "FAILED", deliveredAt: null }),
+			ownFeedback("00000000-0000-4000-8000-0000000005a5", {
+				state: "FAILED",
+				deliveredAt: undefined,
+			}),
 			{
 				...onWork,
 				id: "00000000-0000-4000-8000-0000000005a6",
 				state: "REPLACED",
-				deliveredAt: null,
+				deliveredAt: undefined,
 			},
 		],
 	},

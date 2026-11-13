@@ -14,9 +14,8 @@ import { daysBefore, hoursBefore, minutesBefore } from "@/stories/story-clock";
 export const ADA: AccountRef = {
 	id: "7",
 	displayName: "Ada Lovelace",
-	avatarUrl: null,
 	status: "ACTIVE",
-	identities: [{ provider: "GITHUB", login: "ada", displayName: "Ada Lovelace", avatarUrl: null }],
+	identities: [{ provider: "GITHUB", login: "ada", displayName: "Ada Lovelace" }],
 };
 
 export function repositoryRef(id = "300", name = "hephaestus"): ItemRef {
@@ -25,16 +24,13 @@ export function repositoryRef(id = "300", name = "hephaestus"): ItemRef {
 		kind: "scm.repository",
 		label: `ls1intum/${name}`,
 		container: "ls1intum",
-		parentId: null,
-		path: null,
 		provider: "GITHUB",
-		removedAt: null,
 		title: name,
 		url: `https://github.com/ls1intum/${name}`,
 	};
 }
 
-export function fileRef(id: string, path: string, removedAt: Date | null = null): ItemRef {
+export function fileRef(id: string, path: string, removedAt?: Date): ItemRef {
 	return {
 		id,
 		kind: "scm.file",
@@ -68,8 +64,8 @@ export const COMPLETE_COUNTS: ScanCounts = {
 
 export const RUNNING_COUNTS: ScanCounts = {
 	...COMPLETE_COUNTS,
-	files: null,
-	practiceItemPairs: null,
+	files: undefined,
+	practiceItemPairs: undefined,
 	reviewed: 2,
 	reused: 0,
 	met: 1,
@@ -82,8 +78,6 @@ export const RUNNING_COUNTS: ScanCounts = {
 };
 
 export const EMPTY_COUNTS: ScanCounts = {
-	files: null,
-	practiceItemPairs: null,
 	reviewed: 0,
 	reused: 0,
 	met: 0,
@@ -113,7 +107,6 @@ export function scanSummary(overrides: Partial<ScanSummary> = {}): ScanSummary {
 		practiceCount: 2,
 		counts: COMPLETE_COUNTS,
 		baselineScanId: "0b0b0b0b-1111-4222-8333-444455556666",
-		stopReason: null,
 		...overrides,
 	};
 }
@@ -121,15 +114,15 @@ export function scanSummary(overrides: Partial<ScanSummary> = {}): ScanSummary {
 export const QUEUED_SCAN = scanSummary({
 	id: "a0000000-0000-4000-8000-000000000001",
 	status: "QUEUED",
-	startedAt: null,
-	completedAt: null,
+	completedAt: undefined,
+	startedAt: undefined,
 	createdAt: minutesBefore(1),
 	counts: EMPTY_COUNTS,
 });
 export const RUNNING_SCAN = scanSummary({
 	id: "a0000000-0000-4000-8000-000000000002",
 	status: "RUNNING",
-	completedAt: null,
+	completedAt: undefined,
 	createdAt: minutesBefore(12),
 	startedAt: minutesBefore(11),
 	counts: RUNNING_COUNTS,
@@ -147,7 +140,7 @@ export const CANCELLED_SCAN = scanSummary({
 	id: "a0000000-0000-4000-8000-000000000005",
 	status: "CANCELLED",
 	stopReason: "CANCELLED_BY_ADMIN",
-	requestedBy: null,
+	requestedBy: undefined,
 	origin: "SCHEDULE",
 	repository: repositoryRef("301", "artemis"),
 	createdAt: daysBefore(5),
@@ -158,7 +151,7 @@ export const FAILED_SCAN = scanSummary({
 	id: "a0000000-0000-4000-8000-000000000006",
 	status: "FAILED",
 	stopReason: "ENUMERATION_FAILED",
-	baselineScanId: null,
+	baselineScanId: undefined,
 	practiceCount: 0,
 	counts: EMPTY_COUNTS,
 });
@@ -190,7 +183,7 @@ export function scanDetail(scan: ScanSummary, overrides: Partial<ScanDetail> = {
 		budgetUsd: "10",
 		chargedCostUsd: active ? null : "1.42",
 		progress: {
-			listedPairs: scan.counts.practiceItemPairs,
+			listedPairs: scan.counts.practiceItemPairs ?? null,
 			terminalPairs: scan.counts.reviewed + scan.counts.withheld + scan.counts.notReviewed,
 			activeJobs: active ? 2 : 0,
 			queuedJobs: scan.status === "QUEUED" ? 1 : 0,
@@ -227,8 +220,8 @@ export function scanReport(scan: ScanSummary, overrides: Partial<ScanReport> = {
 	return {
 		scan,
 		complete: scan.status === "COMPLETE",
-		listingComplete: scan.counts.files !== null,
-		baselineScanId: scan.baselineScanId,
+		listingComplete: scan.counts.files !== undefined,
+		baselineScanId: scan.baselineScanId ?? null,
 		comparison: "COMPARABLE",
 		counts: scan.counts,
 		recordedCounts: terminal ? scan.counts : null,
@@ -287,7 +280,7 @@ export function scanReport(scan: ScanSummary, overrides: Partial<ScanReport> = {
 
 export const COMPLETE_REPORT = scanReport(COMPLETE_SCAN);
 
-export const FIRST_BASELINE_REPORT = scanReport(scanSummary({ baselineScanId: null }), {
+export const FIRST_BASELINE_REPORT = scanReport(scanSummary({ baselineScanId: undefined }), {
 	baselineScanId: null,
 	comparison: "FIRST_SCAN",
 	problemChanges: { new: 3, unchanged: 0, updated: 0, absent: 0 },
@@ -405,12 +398,9 @@ export const NOT_REVIEWED_ENTRY: ScanReportItem = {
 		practiceName: "Comments explain why",
 		origin: "SCHEDULE",
 		outcome: "MET",
-		severity: null,
 		summary: "Comments say why the retry waits.",
 		problems: [],
 		currentness: "STALE",
-		markedIncorrectAt: null,
-		acceptedAt: null,
 		recordedAt: daysBefore(14),
 	},
 };

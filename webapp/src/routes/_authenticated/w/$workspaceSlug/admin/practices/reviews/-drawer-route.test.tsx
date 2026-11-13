@@ -748,7 +748,7 @@ describe("a review's trace while the review runs", () => {
 			const secondId = "6f2b6c1e-8a4d-4f0b-9c7e-2d5a1b0c9e84";
 			const first = reviewAs(RUNNING_ID, "RUNNING");
 			const second = reviewAs(secondId, "COMPLETE");
-			const secondItem = { ...second.item, label: "Second selected work", title: null };
+			const secondItem = { ...second.item, label: "Second selected work", title: undefined };
 			const lineages = new Map([
 				[RUNNING_ID, async () => HttpResponse.json(lineageOf(first))],
 				[secondId, async () => HttpResponse.json(lineageOf(second, secondItem))],
@@ -1073,7 +1073,6 @@ describe("the way to a review an accepted ask created", () => {
 	const accepted = {
 		status: "SUBMITTED",
 		reviewId: NEW_ID,
-		reason: null,
 	} satisfies ReviewRequestOutcome;
 
 	function reviewAs(id: string, status: ReviewDetail["status"]): ReviewDetail {
@@ -1230,7 +1229,6 @@ describe("the way to a review an accepted ask created", () => {
 				await refusing.promise;
 				return HttpResponse.json({
 					status: "REFUSED",
-					reviewId: null,
 					reason: "REQUEST_COOLDOWN_ACTIVE",
 				} satisfies ReviewRequestOutcome);
 			},
@@ -1276,7 +1274,6 @@ describe("the way to a review an accepted ask created", () => {
 				await answer.promise;
 				return HttpResponse.json({
 					status: "REFUSED",
-					reviewId: null,
 					reason: "REQUEST_COOLDOWN_ACTIVE",
 				} satisfies ReviewRequestOutcome);
 			},
@@ -1350,7 +1347,6 @@ describe("the way to a review an accepted ask created", () => {
 			await answer.promise;
 			return HttpResponse.json({
 				status: "REFUSED",
-				reviewId: null,
 				reason: "GATE_WITHHELD",
 			} satisfies ReviewRequestOutcome);
 		});

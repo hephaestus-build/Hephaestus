@@ -47,7 +47,7 @@ export function OwnFeedbackList({ feedback: given, responses }: OwnFeedbackListP
 				<li key={piece.id} className="flex min-w-0 flex-col gap-2.5">
 					<p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
 						<StatusBadge def={definitionFor(FEEDBACK_DESTINATION_DEFS, piece.destination)} />
-						{piece.deliveredAt !== null && (
+						{piece.deliveredAt !== undefined && (
 							<span>
 								{isPartialDelivery(piece) ? "First appeared" : "Delivered"}{" "}
 								{formatShortDay(piece.deliveredAt)}
@@ -58,7 +58,7 @@ export function OwnFeedbackList({ feedback: given, responses }: OwnFeedbackListP
 						<p className="text-sm">{partialDeliveryDescription(piece)}</p>
 					)}
 					<CopyLinks feedback={piece} />
-					{responses !== undefined && piece.deliveredAt !== null && (
+					{responses !== undefined && piece.deliveredAt !== undefined && (
 						<FeedbackResponse feedback={piece} responses={responses} />
 					)}
 				</li>

@@ -26,14 +26,11 @@ const WINDOW_TAB = 20;
 const ITEM: ItemRef = {
 	id: "16",
 	kind: "scm.pull_request",
-	parentId: null,
 	provider: "GITHUB",
 	label: "#1",
 	title: "Fixture",
 	url: PAGE,
 	container: "acme/project",
-	path: null,
-	removedAt: null,
 };
 const OTHER_ITEM: ItemRef = { ...ITEM, id: "99", label: "#9" };
 const ANSWER: ReviewContextDTO = {
@@ -42,7 +39,6 @@ const ANSWER: ReviewContextDTO = {
 	item: ITEM,
 	requestAllowed: true,
 	canInspectReviewDetails: false,
-	reasonDescription: null,
 };
 const TRACE: OwnItemTrace = {
 	item: ITEM,
@@ -54,7 +50,6 @@ const TRACE: OwnItemTrace = {
 		origin: "REQUEST",
 		status: "QUEUED",
 		createdAt: "2026-09-26T11:00:00Z",
-		completedAt: null,
 	},
 	events: [
 		{
@@ -68,7 +63,6 @@ const TRACE: OwnItemTrace = {
 const SUBMITTED: ReviewRequestOutcome = {
 	status: "SUBMITTED",
 	reviewId: TRACE.review.id,
-	reason: null,
 };
 
 /** A worker's view of one GitHub pull request, with a store that can hold a read mid-way. */
@@ -241,7 +235,6 @@ describe("one pending action, confirmed once", () => {
 		const id = await h.launch();
 		h.api.requestReview.mockResolvedValueOnce({
 			status: "REFUSED",
-			reviewId: null,
 			reason: "COOLDOWN_ACTIVE",
 		});
 		await expect(confirmAction(h.env, h.deps, id, WINDOW_TAB)).resolves.toStrictEqual({
@@ -256,8 +249,6 @@ describe("one pending action, confirmed once", () => {
 		const id = await h.launch();
 		h.api.requestReview.mockResolvedValueOnce({
 			status: "REFUSED",
-			reviewId: null,
-			reason: null,
 		});
 		await expect(confirmAction(h.env, h.deps, id, WINDOW_TAB)).resolves.toStrictEqual({
 			kind: "request-review",
@@ -443,7 +434,7 @@ describe("what an intent is bound to", () => {
 	it("discards it when the server no longer knows the item, and sends nothing", async () => {
 		const h = harness();
 		const id = await h.launch();
-		h.answer({ item: null });
+		h.answer({ item: undefined });
 		await expect(confirmAction(h.env, h.deps, id, WINDOW_TAB)).rejects.toMatchObject({
 			code: "stale",
 		});

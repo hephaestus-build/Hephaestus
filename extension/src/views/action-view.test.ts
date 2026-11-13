@@ -42,14 +42,11 @@ const PREVIEW: ActionPreview = {
 	item: {
 		id: "16",
 		kind: "scm.pull_request",
-		parentId: null,
 		provider: "GITHUB",
 		label: "#1",
 		title: "Private work title",
 		url: "https://github.com/acme/project/pull/1",
 		container: "acme/project",
-		path: null,
-		removedAt: null,
 	},
 };
 let container: HTMLDivElement;

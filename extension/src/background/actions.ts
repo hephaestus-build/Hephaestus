@@ -310,7 +310,7 @@ async function send(
 				kind: "request-review",
 				status: "REFUSED",
 				reasonDescription:
-					outcome.reason === null ? undefined : ITEM_EVENT_REASON_SENTENCES[outcome.reason],
+					outcome.reason == null ? undefined : ITEM_EVENT_REASON_SENTENCES[outcome.reason],
 			};
 }
 

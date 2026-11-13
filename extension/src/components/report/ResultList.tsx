@@ -28,7 +28,7 @@ function outcomeLine(row: ResultRow) {
 		label: row.outcome === "NOT_MET" ? outcomeLabel(row.outcome, row.problems.length) : def.label,
 		tone,
 		severity:
-			row.outcome === "NOT_MET" && row.severity !== null
+			row.outcome === "NOT_MET" && row.severity != null
 				? statusDefOr(SEVERITY_DEFS, row.severity).label
 				: undefined,
 	};
@@ -50,7 +50,7 @@ function Result({ row }: { row: ResultRow }) {
 						{currentnessNote === undefined ? null : ` · ${currentnessNote}`}
 					</span>
 				</span>
-				{row.summary === null ? null : (
+				{row.summary == null ? null : (
 					<span className="break-words text-muted-foreground">{row.summary}</span>
 				)}
 				{row.outcome === "NOT_MET" && row.problems.length > 0 ? (

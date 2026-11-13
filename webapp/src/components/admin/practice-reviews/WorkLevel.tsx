@@ -98,7 +98,8 @@ export function WorkLevel({
 								</InlineLink>
 							}
 							at={{
-								label: latestReview.completedAt === null ? "review created" : "review completed",
+								label:
+									latestReview.completedAt === undefined ? "review created" : "review completed",
 								date: latestReview.completedAt ?? latestReview.createdAt,
 							}}
 						/>
@@ -141,7 +142,7 @@ export function WorkLevel({
 	const history: SheetEvent[] = [
 		...reviews.map((review) => reviewEvent(review)),
 		...events.map((event) => itemEvent(event, eventLabel, workspaceSlug)),
-		...(item.removedAt === null
+		...(item.removedAt === undefined
 			? []
 			: [{ key: "removed", at: item.removedAt, title: "Removed from the provider" }]),
 	];

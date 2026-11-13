@@ -407,7 +407,7 @@ function AutomatedReviewSection({ workspaceSlug }: { workspaceSlug: string }) {
 				itemId: repository.id,
 				name: repository.label,
 				removedAt: repository.removedAt,
-				nameKnown: repository.provider !== null,
+				nameKnown: repository.provider !== undefined,
 			})),
 			total,
 			more,

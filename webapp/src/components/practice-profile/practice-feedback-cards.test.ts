@@ -26,14 +26,9 @@ const group: GroupRef = {
 const pullRequest = (n: number): ItemRef => ({
 	id: String(n),
 	kind: "scm.pull_request",
-	parentId: null,
 	provider: "GITHUB",
 	label: `#${n}`,
-	title: null,
 	url: `https://github.example/pr/${n}`,
-	container: null,
-	path: null,
-	removedAt: null,
 });
 
 const recorded = (n: number) => ({
@@ -88,8 +83,7 @@ const answered = (resolution: NonNullable<FeedbackResponse["resolution"]>) => ({
 	readAt: new Date("2026-08-21"),
 	response: {
 		resolution,
-		usefulness: null,
-		comment: resolution === "DISAGREE" ? "The change was one concern." : null,
+		comment: resolution === "DISAGREE" ? "The change was one concern." : undefined,
 		createdAt: new Date("2026-09-09T14:10:00Z"),
 	} satisfies FeedbackResponse,
 });

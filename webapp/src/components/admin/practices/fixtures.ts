@@ -16,9 +16,8 @@ import type { FeedbackMode } from "@/lib/practice-feedback-mode";
 export const mockAdmin: AccountRef = {
 	id: "7",
 	displayName: "Ada Lovelace",
-	avatarUrl: null,
 	status: "ACTIVE",
-	identities: [{ provider: "GITHUB", login: "ada", displayName: "Ada Lovelace", avatarUrl: null }],
+	identities: [{ provider: "GITHUB", login: "ada", displayName: "Ada Lovelace" }],
 };
 
 export function inheritedFeedbackMode(

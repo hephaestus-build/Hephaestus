@@ -17,8 +17,6 @@ function viewable(
 		account: {
 			id: accountId,
 			status: "ACTIVE",
-			displayName: null,
-			avatarUrl: null,
 			identities: [],
 			...account,
 		},
@@ -28,13 +26,13 @@ function viewable(
 const linked = viewable("10", "alex", {
 	displayName: "Alex Rivera",
 	identities: [
-		{ provider: "GITHUB", login: "alex", displayName: "Alex Rivera", avatarUrl: null },
-		{ provider: "GITLAB", login: "arivera", displayName: null, avatarUrl: null },
+		{ provider: "GITHUB", login: "alex", displayName: "Alex Rivera" },
+		{ provider: "GITLAB", login: "arivera" },
 	],
 });
 const unclaimed = viewable("11", "sam", {
 	status: "UNCLAIMED",
-	identities: [{ provider: "GITHUB", login: "sam", displayName: "Sam", avatarUrl: null }],
+	identities: [{ provider: "GITHUB", login: "sam", displayName: "Sam" }],
 });
 const blocked = viewable("12", "kim", { status: "BLOCKED", displayName: "Kim Park" });
 
