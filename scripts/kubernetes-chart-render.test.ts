@@ -4047,10 +4047,15 @@ await test("the small database holds its bounded holders, overlap, reserved slot
 		{ change: {}, expectedMaximum: 120 },
 		{ change: { server: { inboxClaimers: 12 } }, expectedMaximum: 120 },
 		{ change: { sandbox: { reviewMemory: memoryFor(8) } }, expectedMaximum: 140 },
-		{ change: { server: { replicas: 2 } }, expectedMaximum: 220 },
+		{
+			change: { server: { replicas: 2 }, sandbox: { budget: { cpu: "8", memory: "32Gi" } } },
+			expectedMaximum: 220,
+		},
 	]) {
 		const layers = [...base, change];
-		const resources = rendered(layers);
+		const result = render(layers);
+		assert.ok(result.ok, `${JSON.stringify(change)}: ${result.stderr}`);
+		const resources = result.resources;
 		const server = workload(resources, "server");
 		const pool = Number(envValue(server, "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE"));
 		const handlers = Number(envValue(server, "HEPHAESTUS_INTEGRATION_CONSUMER_CLAIMERS"));
