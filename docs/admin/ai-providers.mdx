@@ -417,7 +417,8 @@ For each of the two, Hephaestus uses the first value that it has, from these sou
 2. **Provider**: the value that the provider's model metadata reports.
 3. **Documentation**: the value on the model's page at OpenAI. OpenAI's listing has no limits, so Hephaestus ships these values.
 4. **Derived**, for **Max output tokens** only: a quarter of the context window, at most 16 384 tokens.
-   Hephaestus also derives it when you set only the context window, and when a reported output does not fit in the window.
+   Hephaestus also derives it when you set only the context window.
+   It derives it when a reported output does not fit in the window, too.
    The prompt keeps the rest of the window. vLLM, for example, refuses a request whose prompt and output limit exceed the window.
 
 The model form shows each value and its source.
