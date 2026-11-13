@@ -6,17 +6,23 @@
  *
  *   node scripts/previous-verifier-probe.ts <verifier tree> <release> <lock.json> <manifest.json> <inventory.json>
  *
- * The lock is the one this release would sign, without the chart that only the release pushes. The
- * probe skips what needs release assets: the download, the signature checks, and the chart pull. The
- * image set, the lock's image identities and the evidence manifest are what it decides; those are
- * what a code change breaks between releases (docs/contributor/release-management.mdx § Joint lock
- * with the chart).
+ * The lock is the joint lock that this release would sign, whose chart digest exists only after the
+ * release pushes the chart. The probe skips what needs release assets: the download, the signature
+ * checks, and the chart pull. In
+ * place of the pulled chart's values, it compares the earlier verifier's chart values with the ones
+ * that this tree packages, as that verifier's inspectValues does. The image set, the lock's image
+ * identities and the evidence manifest are what it decides; those are what a code change breaks
+ * between releases (docs/contributor/release-management.mdx § Joint lock with the chart).
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 
+import { readInventory } from "./commit-image-lock.ts";
+import { chartValues } from "./kubernetes-chart.ts";
 import { isRecord, parseJson } from "./lib/json.ts";
+import { parseReleaseImageLock } from "./release-image-lock.ts";
 
 /**
  * The functions of an earlier verifier that its prepare-release-chart.ts imports, by module. Their
@@ -69,11 +75,30 @@ export async function probeVerifier(
 	inventoryFile: string,
 ): Promise<void> {
 	const verifier = await loadVerifier(tree);
-	const lock = verifier.parseReleaseImageLock(parseJson(await readFile(lockFile, "utf8")), release);
+	const lockValue = parseJson(await readFile(lockFile, "utf8"));
+	const lock = verifier.parseReleaseImageLock(lockValue, release);
 	verifier.verifyLockAgainstEvidence(lock, parseJson(await readFile(manifestFile, "utf8")));
 	const inventory: unknown = await verifier.readInventory(inventoryFile);
-	verifier.chartValues(lock, inventory);
+	const expected: unknown = verifier.chartValues(lock, inventory);
+	// The chart that this release packages carries this tree's values (release-chart.ts). The earlier
+	// verifier refuses a pulled chart whose release or images differ from its own (inspectValues).
+	const packaged = chartValues(
+		parseReleaseImageLock(lockValue, release),
+		await readInventory(inventoryFile),
+	);
+	if (
+		!isRecord(expected) ||
+		!isDeepStrictEqual(expected.release, packaged.release) ||
+		!isDeepStrictEqual(expected.images, packaged.images)
+	) {
+		throw new Error(
+			`the chart of ${release} does not pin the images that the earlier verifier expects (expected: ${imageNames(expected).join(", ")}; packaged: ${imageNames(packaged).join(", ")})`,
+		);
+	}
 }
+
+const imageNames = (values: unknown): string[] =>
+	isRecord(values) && isRecord(values.images) ? Object.keys(values.images).toSorted() : [];
 
 if (import.meta.main) {
 	const [tree = "", release = "", lock = "", manifest = "", inventory = ""] = process.argv.slice(2);

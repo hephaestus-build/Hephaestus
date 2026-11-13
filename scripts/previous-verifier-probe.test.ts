@@ -6,12 +6,58 @@ import { test } from "node:test";
 
 import { probeVerifier } from "./previous-verifier-probe.ts";
 
+const release = "v1.1.0";
+const commit = "c".repeat(40);
+const digest = (seed: number) => `sha256:${seed.toString(16).padStart(64, "0")}`;
+const firstParty = ["agent-pi", "application-server", "postgres", "webapp"];
+const upstream = [{ name: "vmalert", repository: "docker.io/victoriametrics/vmalert" }];
+
+/** A schema 1 lock and an inventory that this tree accepts, for these first-party images. */
+async function release1(directory: string, images: readonly string[]) {
+	const inventory = {
+		schemaVersion: 1,
+		images,
+		upstream: upstream.map((entry, index) => ({ ...entry, digest: digest(900 + index) })),
+	};
+	const lock = {
+		schemaVersion: 1,
+		release,
+		commit,
+		images: [
+			...images.map((image, index) => ({
+				image,
+				repository: `ghcr.io/hephaestus-build/${image}`,
+				provenance: "first-party",
+				indexDigest: digest(100 + index),
+				platforms: { "linux/amd64": digest(200 + index), "linux/arm64": digest(300 + index) },
+			})),
+			...inventory.upstream.map((entry, index) => ({
+				image: entry.name,
+				repository: entry.repository,
+				provenance: "upstream",
+				indexDigest: entry.digest,
+				platforms: { "linux/amd64": digest(400 + index), "linux/arm64": digest(500 + index) },
+			})),
+		],
+	};
+	const files = {
+		lock: path.join(directory, "lock.json"),
+		manifest: path.join(directory, "manifest.json"),
+		inventory: path.join(directory, "inventory.json"),
+	};
+	await writeFile(files.lock, JSON.stringify(lock));
+	await writeFile(files.manifest, JSON.stringify({ release }));
+	await writeFile(files.inventory, JSON.stringify(inventory));
+	return files;
+}
+
 /**
- * A verifier tree whose modules record each call in `calls.json` beside them. `chartValues` refuses a
- * lock without `nats`, as the verifier of 1.0.0-rc.4 does.
+ * An earlier verifier whose chart runs a fixed list of images, as the verifier of 1.0.0-rc.4 does.
+ * Its modules record each call in `calls` beside the tree.
  */
-async function verifierTree(
+async function fixedListVerifier(
 	t: { after: (callback: () => Promise<void>) => void },
+	runs: readonly string[],
 	withChart = true,
 ) {
 	const root = await mkdtemp(path.join(tmpdir(), "probe-test-"));
@@ -38,53 +84,66 @@ export async function readInventory(file) { note("inventory"); return JSON.parse
 		path.join(scripts, "kubernetes-chart.ts"),
 		withChart
 			? `${record}
+const RUNS = ${JSON.stringify(runs)};
 export function chartValues(lock) {
 	note("chart");
-	if (!lock.images.some((image) => image.image === "nats")) {
-		throw new Error("the release image inventory has no nats, which the chart runs");
+	const images = {};
+	for (const name of RUNS) {
+		const image = lock.images.find((candidate) => candidate.image === name);
+		if (image === undefined) {
+			throw new Error("the release image inventory has no " + name + ", which the chart runs");
+		}
+		images[name] = image.repository + "@" + image.indexDigest;
 	}
-	return {};
+	return { release: { version: lock.release, commit: lock.commit }, images };
 }
 `
 			: "export const nothing = 1;\n",
 	);
-	const files = {
-		lock: path.join(root, "lock.json"),
-		manifest: path.join(root, "manifest.json"),
-		inventory: path.join(root, "inventory.json"),
-	};
-	await writeFile(files.manifest, JSON.stringify({ release: "v1.1.0" }));
-	await writeFile(files.inventory, JSON.stringify({ images: [] }));
-	const lockWith = async (images: string[]) =>
-		writeFile(files.lock, JSON.stringify({ images: images.map((image) => ({ image })) }));
 	const calls = async () => {
 		const recorded = await readFile(path.join(root, "calls"), "utf8");
 		return recorded.trim().split("\n");
 	};
-	return { tree: path.join(root, "tree"), files, lockWith, calls };
+	return { root, tree: path.join(root, "tree"), calls };
 }
 
-await test("the probe runs the earlier verifier's own lock, evidence and chart checks in order", async (t) => {
-	const { tree, files, lockWith, calls } = await verifierTree(t);
-	await lockWith(["application-server", "nats"]);
-	await probeVerifier(tree, "v1.1.0", files.lock, files.manifest, files.inventory);
-	assert.deepEqual(await calls(), ["parse v1.1.0", "evidence v1.1.0", "inventory", "chart"]);
+const all = [...firstParty, ...upstream.map((entry) => entry.name)];
+
+await test("the probe runs the earlier verifier's own checks, and its chart values match this tree's", async (t) => {
+	const verifier = await fixedListVerifier(t, all);
+	const files = await release1(verifier.root, firstParty);
+	await probeVerifier(verifier.tree, release, files.lock, files.manifest, files.inventory);
+	assert.deepEqual(await verifier.calls(), [
+		"parse v1.1.0",
+		"evidence v1.1.0",
+		"inventory",
+		"chart",
+	]);
 });
 
-await test("a refusal by the earlier verifier fails the probe with that verifier's own error", async (t) => {
-	const { tree, files, lockWith } = await verifierTree(t);
-	await lockWith(["application-server"]);
+await test("a removed image fails with the earlier verifier's own error", async (t) => {
+	const verifier = await fixedListVerifier(t, [...all, "nats"]);
+	const files = await release1(verifier.root, firstParty);
 	await assert.rejects(
-		probeVerifier(tree, "v1.1.0", files.lock, files.manifest, files.inventory),
+		probeVerifier(verifier.tree, release, files.lock, files.manifest, files.inventory),
 		/the release image inventory has no nats, which the chart runs/u,
 	);
 });
 
-await test("a verifier tree without the expected functions is a failure, never a pass", async (t) => {
-	const { tree, files, lockWith } = await verifierTree(t, false);
-	await lockWith(["nats"]);
+await test("an added image fails: the packaged chart pins an image the earlier verifier leaves out", async (t) => {
+	const verifier = await fixedListVerifier(t, all);
+	const files = await release1(verifier.root, [...firstParty, "extra"]);
 	await assert.rejects(
-		probeVerifier(tree, "v1.1.0", files.lock, files.manifest, files.inventory),
+		probeVerifier(verifier.tree, release, files.lock, files.manifest, files.inventory),
+		/does not pin the images that the earlier verifier expects .*packaged: .*extra/u,
+	);
+});
+
+await test("a verifier tree without the expected functions is a failure, never a pass", async (t) => {
+	const verifier = await fixedListVerifier(t, all, false);
+	const files = await release1(verifier.root, firstParty);
+	await assert.rejects(
+		probeVerifier(verifier.tree, release, files.lock, files.manifest, files.inventory),
 		/has no chartValues/u,
 	);
 });

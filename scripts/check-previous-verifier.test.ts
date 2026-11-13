@@ -8,6 +8,7 @@ import {
 	checkPreviousVerifiers,
 	checkPreviousVerifiersBeforeRelease,
 	parseAcceptedBreaks,
+	preflightJointLock,
 	verifiersOf,
 } from "./check-previous-verifier.ts";
 import { readJsonFile } from "./lib/json.ts";
@@ -287,6 +288,33 @@ await test("before a release, the same accepted breaks decide", async () => {
 		["v1.0.0"],
 	);
 	await assert.rejects(check([]), /verifier of v1\.0\.0 did not accept v1\.0\.1/u);
+});
+
+const digest = (seed: number) => `sha256:${seed.toString(16).padStart(64, "0")}`;
+
+await test("before a release, the verifiers read a joint lock with the chart that the release pushes", () => {
+	const evidence = {
+		schemaVersion: 1,
+		release: "v1.1.0",
+		commit,
+		subjects: ["linux/amd64", "linux/arm64"].map((platform, index) => ({
+			image: "webapp",
+			repository: "ghcr.io/hephaestus-build/webapp",
+			provenance: "first-party",
+			indexDigest: digest(1),
+			platform,
+			digest: digest(2 + index),
+		})),
+	};
+	const lock = preflightJointLock(evidence, "v1.1.0");
+	assert.equal(lock.schemaVersion, 2);
+	assert.equal(lock.chart.version, "1.1.0");
+	assert.match(lock.chart.repository, /\/charts\/hephaestus$/u);
+	assert.equal(lock.chart.digest, `sha256:${"0".repeat(64)}`);
+	assert.deepEqual(
+		lock.images.map(({ image }) => image),
+		["webapp"],
+	);
 });
 
 await test("the Version PR's preflight runs the older verifiers too", async () => {

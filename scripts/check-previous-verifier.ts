@@ -17,7 +17,12 @@ import { output } from "./lib/process.ts";
 import { releaseRepository } from "./lib/release-identities.ts";
 import { compareVersions, parseVersion } from "./lib/release-version.ts";
 import { listReleases } from "./plan-release.ts";
-import { lockFromEvidence } from "./release-image-lock.ts";
+import { chartRepository } from "./release-chart.ts";
+import {
+	chartVersion,
+	jointLockFromEvidence,
+	type ReleaseImageLockV2,
+} from "./release-image-lock.ts";
 
 const versionOf = (tag: string) => (tag.startsWith("v") ? parseVersion(tag.slice(1)) : undefined);
 
@@ -255,6 +260,23 @@ export async function checkPreviousVerifiersBeforeRelease(
 	);
 }
 
+/**
+ * The joint lock that this release would sign, from its evidence manifest. Its chart has the
+ * repository and version that the release pushes; the digest exists only after that push, so it is
+ * zeros here.
+ */
+export function preflightJointLock(evidence: unknown, release: string): ReleaseImageLockV2 {
+	return jointLockFromEvidence(
+		evidence,
+		{
+			repository: chartRepository(release),
+			version: chartVersion(release),
+			digest: `sha256:${"0".repeat(64)}`,
+		},
+		release,
+	);
+}
+
 function report(release: string, { verifiers, breaks }: Outcome): void {
 	for (const { verifier, reason, failure } of breaks) {
 		process.stdout.write(
@@ -271,14 +293,11 @@ if (import.meta.main && process.argv[2] === "--preflight") {
 			"usage: check-previous-verifier --preflight <release> <manifest.json> <inventory.json>",
 		);
 	}
-	// The lock that this release would sign, without the chart that only the release pushes.
 	const scratch = await mkdtemp(path.join(tmpdir(), "preflight-lock-"));
 	try {
 		const lock = path.join(scratch, "lock.json");
-		await writeFile(
-			lock,
-			`${JSON.stringify(lockFromEvidence(await readJsonFile(manifest), release), null, 2)}\n`,
-		);
+		const joint = preflightJointLock(await readJsonFile(manifest), release);
+		await writeFile(lock, `${JSON.stringify(joint, null, 2)}\n`);
 		report(release, await checkPreviousVerifiersBeforeRelease(release, lock, manifest, inventory));
 	} finally {
 		await rm(scratch, { recursive: true, force: true });
