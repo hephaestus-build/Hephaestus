@@ -7,14 +7,18 @@
 
 import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync, symlinkSync } from "node:fs";
+import { chmod, lstat, readdir, rm } from "node:fs/promises";
+import path from "node:path";
 
 import type { KindRunner, RunContext, RunOutcome } from "./driver.ts";
 
 /** Where the image keeps the review programs (docker/agents/pi). */
 const SDK = "/opt/pi-sdk";
+/** The sandbox's /workspace volume, over the image's read-only root. */
+const WORKSPACE = "/workspace";
 /**
- * The runner at /workspace/.run-pi.js resolves the Pi SDK through this link. /workspace is an empty volume over the
- * image's read-only root, so the kind makes the link before the workspace fills.
+ * The runner at /workspace/.run-pi.js resolves the Pi SDK through this link, so the kind makes it before the workspace
+ * fills.
  */
 const SDK_LINK = "/workspace/node_modules";
 /** gateway-run.ts's exit after it could not upload the result. */
@@ -118,6 +122,25 @@ async function runToEnd(
 	}
 }
 
+/**
+ * Empties a directory. Its captured tree has read-only directories, which neither tar nor a removal can write into, so
+ * each directory is made writable before its entries go.
+ */
+export async function emptyDirectory(directory: string): Promise<void> {
+	for (const entry of await readdir(directory)) {
+		await removeTree(path.join(directory, entry));
+	}
+}
+
+async function removeTree(target: string): Promise<void> {
+	const entry = await lstat(target);
+	if (entry.isDirectory()) {
+		await chmod(target, 0o700);
+		await emptyDirectory(target);
+	}
+	await rm(target, { recursive: true, force: true });
+}
+
 /** The REVIEW kind: it measures the review, and the server admits what the upload brings. */
 export const measureReview: KindRunner = async (run): Promise<RunOutcome> => {
 	const { signal } = run;
@@ -129,6 +152,9 @@ export const measureReview: KindRunner = async (run): Promise<RunOutcome> => {
 	}
 	const context = parseMeasureContext(await answer.json());
 	const env = measureEnvironment(run, context);
+	// A sandbox also serves its review's next attempt. Each attempt's /workspace starts from its own captured workspace,
+	// as each review Job's empty volume did, never from what an earlier attempt extracted or wrote there.
+	await emptyDirectory(WORKSPACE);
 	if (!existsSync(SDK_LINK)) {
 		symlinkSync(`${SDK}/node_modules`, SDK_LINK);
 	}
