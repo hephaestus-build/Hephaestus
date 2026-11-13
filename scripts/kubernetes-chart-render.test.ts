@@ -3945,7 +3945,7 @@ await test("small PostgreSQL overrides the image calculator and gives each datab
 	);
 	assert.ok(migration);
 	for (const [role, maximum, minimum] of [
-		[workload(resources, "server"), "41", "2"],
+		[workload(resources, "server"), "42", "2"],
 		[migration, "2", "1"],
 	] as const) {
 		assert.equal(envValue(role, "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE"), maximum);
@@ -3960,12 +3960,12 @@ const maxConnections = (layers: readonly Layer[]) => {
 
 await test("without an explicit max_connections the database gets what the role pools need", () => {
 	const base = [prepared, operator, reviews, { sandbox: { enabled: true } }];
-	// Two old servers and two replacements: pool, five listeners and one startup session each,
+	// Two old servers and two replacements, each with boot inside its pool and five listeners,
 	// then migration and reserves.
 	assert.equal(maxConnections(base), "max_connections=240");
 	const server = workload(rendered(base), "server");
-	assert.equal(envValue(server, "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE"), "47");
-	const required = 4 * (47 + 5 + 1) + (2 + 2 + 2 + 3 + 3 + 4);
+	assert.equal(envValue(server, "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE"), "48");
+	const required = 4 * (48 + 5) + (2 + 2 + 2 + 3 + 3 + 4);
 	assert.equal(required, 228);
 	const short = render([
 		...base,
@@ -3974,7 +3974,7 @@ await test("without an explicit max_connections the database gets what the role 
 	assert.equal(short.ok, false);
 	assert.match(
 		short.stderr,
-		/max_connections needs at least 228: 4 servers x pool 47=188, LISTEN=20, startup=4,/u,
+		/max_connections needs at least 228: 4 servers x pool 48=192, LISTEN=20,/u,
 	);
 	assert.equal(
 		maxConnections([...base, { postgresql: { parameters: { max_connections: required } } }]),
@@ -4047,6 +4047,7 @@ await test("the small database holds its bounded holders, overlap, reserved slot
 		{ change: {}, expectedMaximum: 120 },
 		{ change: { server: { inboxClaimers: 12 } }, expectedMaximum: 120 },
 		{ change: { sandbox: { reviewMemory: memoryFor(8) } }, expectedMaximum: 140 },
+		{ change: { server: { replicas: 2 } }, expectedMaximum: 220 },
 	]) {
 		const layers = [...base, change];
 		const resources = rendered(layers);
@@ -4054,7 +4055,8 @@ await test("the small database holds its bounded holders, overlap, reserved slot
 		const pool = Number(envValue(server, "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE"));
 		const handlers = Number(envValue(server, "HEPHAESTUS_INTEGRATION_CONSUMER_CLAIMERS"));
 		const captures = Number(envValue(server, "SANDBOX_MAX_CONCURRENT"));
-		const bounded = handlers + 3 * captures + 2 * loads + permits;
+		const boot = 1;
+		const bounded = handlers + 3 * captures + 2 * loads + permits + boot;
 		const syncReserve = 4 * 2;
 		const httpReserve = 4;
 		assert.equal(
@@ -4069,10 +4071,8 @@ await test("the small database holds its bounded holders, overlap, reserved slot
 		const peakServers = 2 * Number(get(server, "spec", "replicas"));
 		const backupSessions = 2;
 		const probeAndSetupSessions = 3;
-		const startupSessions = peakServers;
 		const ordinary =
 			peakServers * (pool + 5) +
-			startupSessions +
 			Number(envValue(migration, "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE")) +
 			Number(monitor) +
 			backupSessions +
@@ -4102,7 +4102,7 @@ await test("the small database holds its bounded holders, overlap, reserved slot
 		assert.equal(tooSmall.ok, false);
 		assert.match(
 			tooSmall.stderr,
-			/max_connections needs at least.*startup=.*exporter=.*operator margin=/u,
+			/max_connections needs at least.*exporter=.*operator margin=/u,
 		);
 		const shortPool = render([
 			...layers,
