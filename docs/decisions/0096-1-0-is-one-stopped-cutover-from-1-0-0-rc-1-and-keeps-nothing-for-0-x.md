@@ -50,7 +50,7 @@ This ADR states the cutover at 1.0 as rules, and it holds the one list of breaki
    Enforced by: `release.yml:76-78`, which refuses a commit that is not on `main`.
 
 7. **1.0 keeps nothing for 0.x or for an earlier candidate.** No shim, alias, flag, second path or "for one release" value. The pull request that replaces a thing deletes it. The chart schema refuses a removed value. It never ignores it.
-   Enforced by: `verify-changesets.ts --removed-chart-values` in `verify-changesets.yml`, which requires the changeset or note to name each removed chart value. Review catches a fallback path in code.
+   Enforced by: `verify-changesets.ts --removed-chart-values` in `verify-changesets.yml`, which requires the changeset or note to name each removed chart value. [The retired-path gate](../contributor/local-verification.mdx#retired-paths) checks source, configuration, routes and docs.
 8. **From 1.0.0 on, the rolling rules apply again.** Release N runs on the schema of release N+1. An upgrade that skips a 1.x release stops every role (F-16). A break of the public contract needs a major release.
    Enforced by: `scripts/check-changelog-compatibility.ts`, `release-upgrade.yml`, and `gate:public-contract`, which reads nothing below 1.0.0.
 
