@@ -6,9 +6,8 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.core.web.RequestReference;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContextFilter;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -78,7 +77,7 @@ public class UserViewSessionFilter extends OncePerRequestFilter {
             .map(PATHS::parse)
             .toList();
 
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceSummaryQuery workspaces;
     private final ViewedAccountService users;
     private final UserViewAccess access;
     private final ObjectMapper mapper;
@@ -119,15 +118,14 @@ public class UserViewSessionFilter extends OncePerRequestFilter {
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST, "The viewed account ID is not valid.", invalidId);
             }
-            Workspace workspace = workspaces
-                    .findByWorkspaceSlug(workspaceSlug)
-                    .filter(candidate -> candidate.getStatus() == Workspace.WorkspaceStatus.ACTIVE)
+            long workspaceId = workspaces
+                    .findActiveIdBySlug(workspaceSlug)
                     .orElseThrow(
                             () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "The workspace was not found."));
-            users.requireAccount(workspace.getId(), viewedAccountId);
+            users.requireAccount(workspaceId, viewedAccountId);
             String query = request.getQueryString();
-            access.record(workspace.getId(), null, viewedAccountId, reason, query == null ? path : path + "?" + query);
-            UserViewContextHolder.set(new UserViewContextHolder.View(workspace.getId(), viewedAccountId));
+            access.record(workspaceId, null, viewedAccountId, reason, query == null ? path : path + "?" + query);
+            UserViewContextHolder.set(new UserViewContextHolder.View(workspaceId, viewedAccountId));
             response.setHeader("Cache-Control", "no-store");
         } catch (RuntimeException error) {
             writeFailure(response, error);

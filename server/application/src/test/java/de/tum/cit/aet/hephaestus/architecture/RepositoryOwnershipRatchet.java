@@ -28,12 +28,6 @@ final class RepositoryOwnershipRatchet {
 
     static final List<Entry> ENTRIES = List.of(
             new Entry(
-                    "account",
-                    "workspace.WorkspaceRepository",
-                    "DDD9",
-                    "workspace::spi WorkspaceQueries and WorkspaceCommands",
-                    Set.of("account.userview.UserViewSessionFilter")),
-            new Entry(
                     "activity",
                     "integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository",
                     "DDD13 (activity/SCM)",

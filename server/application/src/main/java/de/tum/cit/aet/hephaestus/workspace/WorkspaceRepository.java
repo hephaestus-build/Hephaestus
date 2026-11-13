@@ -49,6 +49,14 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
     List<WorkspaceListData> findListDataByIds(
             @Param("ids") Collection<Long> ids, @Param("includeInactive") boolean includeInactive);
 
+    @Query("""
+        SELECT new de.tum.cit.aet.hephaestus.workspace.WorkspaceIdData(w.id)
+        FROM Workspace w
+        WHERE w.workspaceSlug = :slug
+          AND w.status = de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus.ACTIVE
+        """)
+    Optional<WorkspaceIdData> findActiveIdBySlug(@Param("slug") String slug);
+
     /** Serialize the before-snapshot and update so concurrent admin changes cannot revert fields or misstate the audit trail. */
     @WorkspaceAgnostic("Locking read of the tenant root itself, by its own id")
     @Lock(LockModeType.PESSIMISTIC_WRITE)
