@@ -55,7 +55,12 @@ import { readInventory } from "./commit-image-lock.ts";
 import type { ChartImage } from "./kubernetes-chart.ts";
 import { submitTurn } from "./lib/capacity-chat.ts";
 import { rollOutput } from "./lib/capacity-replay.ts";
-import { bindReplayModel, syntheticApi, syntheticSession } from "./lib/capacity-seed.ts";
+import {
+	bindReplayModel,
+	releaseSilentMode,
+	syntheticApi,
+	syntheticSession,
+} from "./lib/capacity-seed.ts";
 import { ciToolPin } from "./lib/ci-tool-catalog.ts";
 import { resolveCiTool } from "./lib/ci-tool-resolver.ts";
 import { claimDevNamespace, DEV_OWNER, ownsDevNamespace } from "./lib/dev-namespace.ts";
@@ -2194,6 +2199,17 @@ export function slackTurnChecks(reply: ReceivedCall, turn: SlackTurnState | null
  * request, so the server verifies what it verifies for Slack. The turn runs in the member's conversation sandbox.
  */
 async function slackTurn(base: string, token: string, signingSecret: string): Promise<void> {
+	// A release starts with Silent Mode on, which suppresses every outbound post. The instance admin releases it through
+	// the API, as an operator does. This release has no real provider: its only outbound targets are the two fakes.
+	// Silent Mode stays on for the app turn, which posts nothing outward, and a regression that silences the reply
+	// again still ends the wait at once (`CANCELLED:SILENCED`).
+	const engaged = await releaseSilentMode(base, token);
+	report([
+		{
+			claim: "Silent Mode is released before the Slack message",
+			failure: engaged ? "the instance settings still show it engaged" : undefined,
+		},
+	]);
 	await installSlack(base, token);
 	const ts = await sendSlackMessage(base, signingSecret);
 	const { reply, turn } = await awaitSlackReply(Date.now() + SLACK_REPLY_MINUTES * 60_000, {

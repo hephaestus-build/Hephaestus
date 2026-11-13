@@ -53,6 +53,42 @@ export async function syntheticSession(
 }
 
 /**
+ * Releases Silent Mode through the instance-admin API, as an operator does, and returns whether it is still engaged.
+ * A new release starts with Silent Mode on, and it suppresses every outbound post.
+ */
+export async function releaseSilentMode(base: string, token: string): Promise<boolean> {
+	const settings = async (
+		path: string,
+		method: string,
+		extra: Record<string, string> = {},
+		body?: string,
+	) => {
+		const response = await fetch(`${base}/admin/settings${path}`, {
+			method,
+			headers: { authorization: `Bearer ${token}`, "content-type": "application/json", ...extra },
+			...(body === undefined ? {} : { body }),
+		});
+		const raw = await response.text();
+		if (!response.ok) {
+			throw new Error(`Silent Mode ${method}: HTTP ${response.status}`);
+		}
+		return asRecord(parseJson(raw), "instance settings");
+	};
+	const current = await settings("", "GET");
+	if (current.silentModeEngaged !== false) {
+		// Releasing needs the current ETag, so that it cannot overwrite a change that it has not seen.
+		await settings(
+			"/silent-mode",
+			"PATCH",
+			{ "if-match": asString(current.etag, "settings etag") },
+			JSON.stringify({ engaged: false }),
+		);
+	}
+	const released = await settings("", "GET");
+	return released.silentModeEngaged !== false;
+}
+
+/**
  * Binds the fake provider at `baseUrl` to conversations and reviews in `workspace`, as the
  * workspace's own model: no instance model and no real provider credential.
  */

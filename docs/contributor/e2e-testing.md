@@ -15,14 +15,14 @@ This setup runs the complete local path:
 
 The opt-in `e2e` profile enables these local-only capabilities:
 
-| Affordance | Property |
-| --- | --- |
-| Passwordless dev sign-in | `hephaestus.auth.dev-login-enabled=true` |
-| Plain-http cookies (drops `Secure` + `__Host-`) | `hephaestus.auth.cookie-secure=false` |
-| Self-service GitLab/GitHub workspace creation | `hephaestus.workspace.creation-policy=SELF_SERVICE` |
-| Persistable Connection credentials (PATs) | `hephaestus.security.encryption-key` (a fixed local dev key) |
-| Dev review trigger | `hephaestus.dev.trigger-enabled=true` |
-| Agent runtime | `hephaestus.agent.enabled=true`, unless `AGENT_ENABLED=false` |
+| Affordance                                      | Property                                                      |
+| ----------------------------------------------- | ------------------------------------------------------------- |
+| Passwordless dev sign-in                        | `hephaestus.auth.dev-login-enabled=true`                      |
+| Plain-http cookies (drops `Secure` + `__Host-`) | `hephaestus.auth.cookie-secure=false`                         |
+| Self-service GitLab/GitHub workspace creation   | `hephaestus.workspace.creation-policy=SELF_SERVICE`           |
+| Persistable Connection credentials (PATs)       | `hephaestus.security.encryption-key` (a fixed local dev key)  |
+| Dev review trigger                              | `hephaestus.dev.trigger-enabled=true`                         |
+| Agent runtime                                   | `hephaestus.agent.enabled=true`, unless `AGENT_ENABLED=false` |
 
 `vp run dev:server:e2e` starts PostgreSQL before activating the profile.
 
@@ -131,11 +131,11 @@ A turn runs in a conversation sandbox, so it needs the sandbox runtime.
 The packaged browser suite has none (`hephaestus.agent.enabled=false`): a question stays queued there.
 Three tests cover a turn:
 
-| Test | Where it runs | What it proves |
-| --- | --- | --- |
+| Test                                                  | Where it runs                                            | What it proves                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `kubernetes-cluster.ts turn-roll`, the k3d turn drill | The drills job of the merge queue and of the nightly run | A seeded member's question in the app runs in a conversation sandbox through a server roll. The turn ends `DONE` on its first attempt, and its answer holds the output of each `bash` call. Then a signed Slack message from the member's linked Slack identity reaches a turn in the same sandbox. The turn ends `DONE`, the Slack fake receives the answer as `chat.postMessage` in the member's DM, and the answer holds the reply's `ts`. |
-| `conversation.live.spec.ts` | By hand, with a real model | The page shows a real model's answer, and a stop request ends a turn. |
-| `conversation.spec.ts` | The packaged browser suite | The page around a turn: the queue, a thread, a deleted question, a rating. |
+| `conversation.live.spec.ts`                           | By hand, with a real model                               | The page shows a real model's answer, and a stop request ends a turn.                                                                                                                                                                                                                                                                                                                                                                         |
+| `conversation.spec.ts`                                | The packaged browser suite                               | The page around a turn: the queue, a thread, a deleted question, a rating.                                                                                                                                                                                                                                                                                                                                                                    |
 
 The drill reads the database. No CI test shows an answered turn in the page.
 
@@ -144,6 +144,8 @@ The drill uses two stand-ins in the pod network, and it runs the product's own p
 - The capacity benchmark's fake model provider (`scripts/capacity-provider.ts`) answers the model calls.
 - `scripts/slack-fake.ts` is a Slack Web API. The server installs the app through its own OAuth callback against it, and it takes the posted messages.
   The server reaches it through `hephaestus.integration.slack.api-base`.
+- The drill releases Silent Mode through the instance-admin API before the Slack message, because a release starts with it on.
+  The release has no real provider, so only the fakes receive what it posts.
 - The drill signs the Events API request.
   It generates the signing secret for each run in the release's Secret.
   The fake issues a new bot token each time it starts.
