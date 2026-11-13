@@ -175,6 +175,9 @@ const config: Config = {
 	customFields: {
 		productUrl: "https://hephaestus.build",
 		repoUrl: REPO_URL,
+		// The 404 page offers the same path in the other version.
+		docsChannel: channel,
+		siteUrl: SITE_URL,
 	},
 
 	markdown: {
