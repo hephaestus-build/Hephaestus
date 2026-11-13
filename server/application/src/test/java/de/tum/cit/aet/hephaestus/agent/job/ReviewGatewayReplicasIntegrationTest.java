@@ -122,6 +122,7 @@ import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Two gateway processes share PostgreSQL, with separate sessions, custody and evidence folders. Capture and judgement
@@ -400,7 +401,8 @@ class ReviewGatewayReplicasIntegrationTest extends BaseIntegrationTest {
             ReviewJob current = invocation.getArgument(0);
             captures.incrementAndGet();
             var manifest = Objects.requireNonNull(new JobFolderIndexBuilder(
-                            new ClasspathSourceCatalogRegistry(mapper, beans.getBean(Clock.class)),
+                            new ClasspathSourceCatalogRegistry(
+                                    beans.getBean(JsonMapper.class), beans.getBean(Clock.class)),
                             mapper,
                             beans.getBean(Clock.class))
                     .build(

@@ -182,7 +182,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
         return context;
     }
 
-    /** The attempt's gateway session, which serves its workspace and takes its result. */
+    /** The attempt's local archive, held while the replica serves its workspace. */
     SandboxGatewaySessions.Session session(SandboxRun run) {
         return measurement(run).session();
     }
