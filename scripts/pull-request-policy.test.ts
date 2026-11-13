@@ -99,8 +99,9 @@ void describe("pull request policy", () => {
 			record: "12\nstacked\n",
 			headSha: head,
 		});
-		assert.equal(stacked?.number, 12);
-		assert.equal(stacked?.opened, false);
+		assert.ok(stacked);
+		assert.equal(stacked.number, 12);
+		assert.equal(stacked.opened, false);
 		const replaced = api({ headSha: "b".repeat(40) });
 		assert.equal(
 			await resolvePullRequest({ ...replaced, repo, record: "12\nsynchronize\n", headSha: head }),

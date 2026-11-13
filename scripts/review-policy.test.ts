@@ -92,7 +92,9 @@ const makeGitHub = (options: GitHubOptions = {}) => {
 					...context.repo,
 					number: (options.resolvedPull ?? pull).number,
 				});
-				if (options.reviewResponse !== undefined) return options.reviewResponse;
+				if (options.reviewResponse !== undefined) {
+					return options.reviewResponse;
+				}
 				return {
 					repository: {
 						pullRequest: {
@@ -290,7 +292,7 @@ void describe("review policy", () => {
 
 		void it("refreshes an exact-head approval when stacking makes GitHub require another review", async () => {
 			const { submitted, minimized, github } = makeGitHub({
-				reviews: [ours({ id: 5891029650 })],
+				reviews: [ours({ id: 5_891_029_650 })],
 				reviewDecision: "REVIEW_REQUIRED",
 			});
 			const core = makeCore();
