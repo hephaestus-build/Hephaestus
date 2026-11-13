@@ -10,6 +10,8 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -25,7 +27,10 @@ final class GitLabIdentityFixture implements AutoCloseable {
     private final ObjectMapper mapper;
     private final String server;
     private final String token;
-    private final String unique = "heph-db3-" + UUID.randomUUID().toString().substring(0, 8);
+    private final String unique =
+            "heph-identity-" + UUID.randomUUID().toString().substring(0, 8);
+    private String connectionToken = "";
+    private long groupTokenId;
     private long userId;
     private long parentId;
     private long sourceId;
@@ -37,8 +42,8 @@ final class GitLabIdentityFixture implements AutoCloseable {
 
     GitLabIdentityFixture(ObjectMapper mapper) throws IOException {
         this.mapper = mapper;
-        server = Objects.requireNonNull(System.getenv("DB3_GITLAB_URL"));
-        token = Files.readString(Path.of(Objects.requireNonNull(System.getenv("DB3_GITLAB_TOKEN_FILE"))))
+        server = Objects.requireNonNull(System.getenv("HEPHAESTUS_LIVE_GITLAB_URL"));
+        token = Files.readString(Path.of(Objects.requireNonNull(System.getenv("HEPHAESTUS_LIVE_GITLAB_TOKEN_FILE"))))
                 .trim();
     }
 
@@ -46,21 +51,37 @@ final class GitLabIdentityFixture implements AutoCloseable {
         userId = request(
                         "POST",
                         "/users",
-                        Map.of(
-                                "username",
-                                username,
-                                "name",
-                                "Identity proof",
-                                "email",
-                                email,
-                                "password",
-                                UUID.randomUUID() + "aA1!",
-                                "skip_confirmation",
-                                true),
+                        Map.ofEntries(
+                                Map.entry("username", username),
+                                Map.entry("name", "Identity proof"),
+                                Map.entry("email", email),
+                                Map.entry("password", UUID.randomUUID() + "aA1!"),
+                                Map.entry("skip_confirmation", true)),
                         201)
                 .path("id")
                 .asLong();
-        parentId = group(unique, null);
+        parentId = group(groupPath(), null);
+        var issued = request(
+                "POST",
+                "/groups/" + parentId + "/access_tokens",
+                Map.of(
+                        "name",
+                        "Identity proof",
+                        "scopes",
+                        List.of("api"),
+                        "access_level",
+                        40,
+                        "expires_at",
+                        LocalDate.now(ZoneOffset.UTC).plusDays(1).toString()),
+                201);
+        groupTokenId = issued.path("id").asLong();
+        connectionToken = issued.path("token").asString();
+        assertThat(connectionToken).isNotBlank();
+        assertThat(requestWithToken("GET", "/user", null, 200, connectionToken)
+                        .path("is_admin")
+                        .asBoolean())
+                .isFalse();
+        requestWithToken("GET", "/application/settings", null, 403, connectionToken);
         sourceId = group("before", parentId);
         targetId = group("after", parentId);
         var project = request(
@@ -146,9 +167,15 @@ final class GitLabIdentityFixture implements AutoCloseable {
 
     private JsonNode request(String method, String path, @Nullable Map<String, Object> body, int expected)
             throws IOException, InterruptedException {
+        return requestWithToken(method, path, body, expected, token);
+    }
+
+    private JsonNode requestWithToken(
+            String method, String path, @Nullable Map<String, Object> body, int expected, String credential)
+            throws IOException, InterruptedException {
         var request = HttpRequest.newBuilder(URI.create(server + "/api/v4" + path))
                 .timeout(Duration.ofSeconds(30))
-                .header("PRIVATE-TOKEN", token)
+                .header("PRIVATE-TOKEN", credential)
                 .header("Content-Type", "application/json")
                 .method(
                         method,
@@ -168,11 +195,11 @@ final class GitLabIdentityFixture implements AutoCloseable {
     }
 
     String token() {
-        return token;
+        return connectionToken;
     }
 
     String groupPath() {
-        return unique;
+        return unique + "-group";
     }
 
     long groupId() {
@@ -202,8 +229,16 @@ final class GitLabIdentityFixture implements AutoCloseable {
     @Override
     public void close() throws IOException {
         try {
-            if (parentId != 0) request("DELETE", "/groups/" + parentId, null, 202);
-            if (userId != 0) request("DELETE", "/users/" + userId + "?hard_delete=true", null, 204);
+            try {
+                try {
+                    if (groupTokenId != 0)
+                        request("DELETE", "/groups/" + parentId + "/access_tokens/" + groupTokenId, null, 204);
+                } finally {
+                    if (parentId != 0) request("DELETE", "/groups/" + parentId, null, 202);
+                }
+            } finally {
+                if (userId != 0) request("DELETE", "/users/" + userId + "?hard_delete=true", null, 204);
+            }
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new IOException("GitLab identity fixture cleanup was interrupted", interrupted);

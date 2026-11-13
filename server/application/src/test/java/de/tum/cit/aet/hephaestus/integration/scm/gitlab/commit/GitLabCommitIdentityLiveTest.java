@@ -19,17 +19,23 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionJob;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.identity.CommitIdentityResolutionRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabUserLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabProjectSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.LiveGitLabTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -42,16 +48,15 @@ import liquibase.database.core.PostgresDatabase;
 import liquibase.database.jvm.JdbcConnection;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
-/** Real GitLab contract and database proof. The test creates and deletes only its own group tree and users. */
-@Tag("live")
-@EnabledIfEnvironmentVariable(named = "DB3_GITLAB_URL", matches = "https://.+")
+/** Real GitLab contract and database proof, with disposable provider resources and non-admin connection tokens. */
+@LiveGitLabTest
 class GitLabCommitIdentityLiveTest extends BaseIntegrationTest {
     @Autowired
     private ObjectMapper mapper;
@@ -104,6 +109,18 @@ class GitLabCommitIdentityLiveTest extends BaseIntegrationTest {
     @Autowired
     private DataSource database;
 
+    @Autowired
+    private GitLabUserService gitlabUsers;
+
+    @Autowired
+    private CommitIdentityResolutionRepository resolutions;
+
+    @Autowired
+    private ApplicationEventPublisher events;
+
+    @Autowired
+    private TransactionTemplate transactions;
+
     private final List<Long> workspaceIds = new ArrayList<>();
     private final List<Long> repositoryIds = new ArrayList<>();
 
@@ -117,12 +134,24 @@ class GitLabCommitIdentityLiveTest extends BaseIntegrationTest {
             fixture.create();
             Scope scope = scope(fixture);
             Captured captured = capture(scope, fixture.commit("rename.txt"));
+            long mirrored = Objects.requireNonNull(gitlabUsers.findOrCreateUser(
+                            new GitLabUserLookup(
+                                    "gid://gitlab/User/" + fixture.userId(),
+                                    fixture.username(),
+                                    "Identity proof",
+                                    null,
+                                    null,
+                                    fixture.email(),
+                                    false),
+                            scope.providerId()))
+                    .getId();
             fixture.rename();
             seedAndRun(scope);
             long account = author(captured);
             User resolved = users.findById(account).orElseThrow();
             assertThat(resolved.getNativeId()).isEqualTo(fixture.userId());
             assertThat(resolved.getLogin()).isEqualTo(fixture.username());
+            assertThat(resolved.getId()).isEqualTo(mirrored);
             assertCorrection(scope, captured, account, "RESOLVED", "resolved");
             assertThat(fixture.version()).isNotBlank();
         }
@@ -155,8 +184,9 @@ class GitLabCommitIdentityLiveTest extends BaseIntegrationTest {
             Scope scope = scope(fixture);
             Captured captured = capture(scope, fixture.commit("transfer.txt"));
             fixture.transfer();
-            Repository moved = projects.syncProject(scope.workspaceId(), fixture.projectPath())
+            var discovered = projects.fetchProjectById(scope.workspaceId(), fixture.projectId())
                     .orElseThrow();
+            Repository moved = projects.persistProject(discovered).orElseThrow();
             assertThat(moved.getId()).isEqualTo(scope.repositoryId());
             assertThat(moved.getNativeId()).isEqualTo(fixture.projectId());
             targets.reconcileSyncTargetIdentity(scope.monitorId(), moved.getNativeId(), moved.getNameWithOwner());
@@ -236,21 +266,33 @@ class GitLabCommitIdentityLiveTest extends BaseIntegrationTest {
         long commitId = Objects.requireNonNull(commits.findByShaAndRepositoryId(sha, scope.repositoryId())
                 .orElseThrow()
                 .getId());
-        UUID event = UUID.randomUUID();
-        jdbc.update(
-                """
-                INSERT INTO activity_event(id,event_key,event_type,occurred_at,actor_id,workspace_id,
-                    repository_id,target_type,target_id,ingested_at)
-                VALUES (?,?,'COMMIT_CREATED',?,?,?,?, 'commit',?,now())
-                """,
-                event,
-                "db3." + event,
-                Timestamp.from(now),
-                scope.wrongUserId(),
+        transactions.executeWithoutResult(status -> events.publishEvent(new ScmDomainEvent.CommitCreated(
+                new ScmEventPayload.CommitData(
+                        commitId,
+                        sha,
+                        "Identity proof",
+                        now,
+                        0,
+                        0,
+                        0,
+                        null,
+                        scope.wrongUserId(),
+                        null,
+                        scope.repositoryId()),
+                EventContext.forSync(scope.workspaceId(), null, IdentityProviderType.GITLAB, now))));
+        await().atMost(Duration.ofSeconds(10))
+                .untilAsserted(() -> assertThat(jdbc.queryForObject(
+                                "SELECT count(*) FROM activity_event WHERE workspace_id=? AND target_type='commit' AND target_id=?",
+                                Long.class,
+                                scope.workspaceId(),
+                                commitId))
+                        .isEqualTo(1L));
+        UUID activityId = Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT id FROM activity_event WHERE workspace_id=? AND target_type='commit' AND target_id=?",
+                UUID.class,
                 scope.workspaceId(),
-                scope.repositoryId(),
-                commitId);
-        return new Captured(commitId, event);
+                commitId));
+        return new Captured(commitId, activityId);
     }
 
     private void seedAndRun(Scope scope) throws Exception {
@@ -266,6 +308,8 @@ class GitLabCommitIdentityLiveTest extends BaseIntegrationTest {
                         Long.class,
                         scope.repositoryId()))
                 .isPositive();
+        assertThat(resolutions.findNextRepository().orElseThrow().getRepositoryId())
+                .isEqualTo(scope.repositoryId());
         // Respect the production lock's one-minute minimum when these cases share a test context.
         await().atMost(Duration.ofSeconds(70))
                 .until(() -> Boolean.TRUE.equals(jdbc.queryForObject(
