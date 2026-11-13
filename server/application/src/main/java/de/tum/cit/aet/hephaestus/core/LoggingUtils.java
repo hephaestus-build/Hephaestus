@@ -36,7 +36,7 @@ public final class LoggingUtils {
                 // Strip ANSI escape sequences (ESC + '[' + params + final byte)
                 .replaceAll("\u001B\\[[0-9;]*[A-Za-z]", "_")
                 // Then strip remaining control characters
-                .replaceAll("[\\r\\n\\t\\u0000-\\u001F\\u007F\\u0085\\u2028\\u2029]", "_");
+                .replaceAll("[\\p{Cc}\\u061C\\u200E\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2066-\\u2069]", "_");
     }
 
     /** Truncate {@code value} to {@code limit} chars with an ellipsis when longer. */

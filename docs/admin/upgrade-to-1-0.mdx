@@ -143,6 +143,7 @@ These migration entries also apply to a host that upgrades to 1.0:
 - *Product feedback drafts use server egress*: allow the selected instance model's provider through the server firewall. Keep a verified pre-upgrade database backup.
 - *Stop every role for the conversation loop*. This earlier entry introduced the loop. The sandbox cutover below replaces it.
 - *Stop every role before moving conversation turns to sandboxes*. Stop the old loop before migration, remove the old workloads, and run the template isolation gate.
+- *Log records name their trace in `trace.id` and `span.id`*: update your log queries, saved searches and collector rules that read `context.traceId` or `context.spanId`.
 
 ## Cut over to 1.0.0
 

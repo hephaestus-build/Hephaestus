@@ -921,6 +921,12 @@ spring:
             "[mail.smtp.starttls.enable]": false
             "[mail.smtp.starttls.required]": false
 
+# The local formatter shares JSON's masking and bounded exception printer. Every other profile writes ECS JSON.
+logging:
+    structured:
+        format:
+            console: de.tum.cit.aet.hephaestus.observability.LocalLogFormatter
+
 hephaestus:
     email:
         from: hephaestus@localhost
