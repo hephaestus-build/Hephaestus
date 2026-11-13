@@ -42,22 +42,15 @@ describe("responseRequestOf", () => {
 	});
 
 	it("reads a cleared response as the empty one", () => {
-		const cleared = responseRequestOf({
-			usefulness: null,
-			resolution: null,
-			comment: null,
-			createdAt: null,
-		});
+		const cleared = responseRequestOf({});
 		expect(isEmptyFeedbackResponse(cleared)).toBe(true);
-		expect(isEmptyFeedbackResponse(responseRequestOf(null))).toBe(true);
+		expect(isEmptyFeedbackResponse(responseRequestOf(undefined))).toBe(true);
 	});
 });
 
 describe("resultSummary", () => {
 	it("names the practice when a met result has no summary", () => {
-		expect(resultSummary({ summary: null, practiceName: "Product language" })).toBe(
-			"Product language",
-		);
+		expect(resultSummary({ practiceName: "Product language" })).toBe("Product language");
 		expect(resultSummary({ summary: "  ", practiceName: "Product language" })).toBe(
 			"Product language",
 		);

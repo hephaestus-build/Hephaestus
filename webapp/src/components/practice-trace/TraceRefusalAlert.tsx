@@ -26,7 +26,7 @@ export function TraceRefusalAlert({ refusal, fix }: TraceRefusalAlertProps) {
 			<AlertTitle>No review was started</AlertTitle>
 			<AlertDescription>
 				<span>
-					{refusal.reason === null
+					{refusal.reason === undefined
 						? "No reason was given."
 						: ITEM_EVENT_REASON_SENTENCES[refusal.reason]}
 				</span>

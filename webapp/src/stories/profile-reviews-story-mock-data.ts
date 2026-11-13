@@ -179,7 +179,7 @@ export const runningProfileReview: ProfileReview = {
 	review: reviewRef("00000000-0000-4000-8000-0000000002a6", pullRequest(905), daysBefore(0), {
 		origin: "REQUEST",
 		status: "RUNNING",
-		completedAt: null,
+		completedAt: undefined,
 	}),
 	positionOnWork: 1,
 	totalOnWork: 1,

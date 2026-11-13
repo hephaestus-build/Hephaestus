@@ -13,6 +13,7 @@ import {
 	installOasdiff,
 	latestStableTag,
 	readAcceptedBreaks,
+	nullTypes,
 	removedFromContract,
 } from "./check-api-compatibility.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
@@ -103,6 +104,7 @@ async function compare(
 		majorRelease,
 		revision: name("revision"),
 		acceptedBreaks: name("accepted"),
+		publicOperations: new Set(["GET /items"]),
 		format: "text",
 		cwd: directory,
 	});
@@ -153,6 +155,7 @@ void test("independent accepted-break additions merge and their union accepts bo
 		majorRelease: false,
 		revision: "revision.json",
 		acceptedBreaks: ACCEPTED_BREAKS,
+		publicOperations: new Set<string>(),
 		format: "text",
 		cwd,
 	} as const;
@@ -393,4 +396,37 @@ void test("oasdiff output that changed shape is refused", () => {
 		assert.throws(() => breakLines(JSON.stringify([malformed])), TypeError);
 	}
 	assert.throws(() => breakLines("{}"), TypeError);
+});
+
+void test("a public response that admits null fails the gate, inline or through a schema", async () => {
+	const nullable = { title: { type: ["string", "null"] } };
+	const result = await compare(spec({ responseOnly: nullable }));
+	assert.ok(
+		result.problems.some(
+			(problem) => problem.includes("GET /items 200") && problem.includes("title"),
+		),
+		result.problems.join("\n"),
+	);
+	const referenced = {
+		...spec(),
+		components: {
+			schemas: {
+				Ref: {
+					type: "object",
+					properties: { at: { anyOf: [{ type: "string" }, { type: "null" }] } },
+				},
+			},
+		},
+	};
+	referenced.paths["/items"].get.responses["200"] = {
+		description: "Items",
+		...json({ $ref: "#/components/schemas/Ref" }),
+	};
+	assert.deepEqual(nullTypes(referenced, new Set(["GET /items"])), ["Ref.properties.at.anyOf[1]"]);
+});
+
+void test("null outside the public operations is no problem", () => {
+	const nullable = spec({ optional: { title: { type: ["string", "null"] } } });
+	assert.deepEqual(nullTypes(nullable, new Set(["DELETE /items/{id}"])), []);
+	assert.notDeepEqual(nullTypes(nullable, new Set(["POST /items"])), []);
 });

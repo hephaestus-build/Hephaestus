@@ -128,8 +128,8 @@ export function usePracticePageFeedback({
 	const feedback = feedbackQuery.data ?? [];
 	const responses = useFeedbackResponseWrite(workspaceSlug);
 	const { pendingResponses } = responses;
-	const recordedOf = (feedbackId: string): FeedbackResponse | null =>
-		feedback.find((item) => item.id === feedbackId)?.response ?? null;
+	const recordedOf = (feedbackId: string): FeedbackResponse | undefined =>
+		feedback.find((item) => item.id === feedbackId)?.response ?? undefined;
 	const responseOf = (feedbackId: string) =>
 		responses.responseOf(feedbackId, recordedOf(feedbackId));
 

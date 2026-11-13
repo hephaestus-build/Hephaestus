@@ -84,9 +84,10 @@ const TREND_LABELS = new Map(
 );
 
 /** The registry's word for a standing or a trend, which the wire types as a bare string. */
-const standingLabel = (value: string | null) =>
-	value === null ? undefined : STANDING_LABELS.get(value);
-const trendLabel = (value: string | null) => (value === null ? undefined : TREND_LABELS.get(value));
+const standingLabel = (value: string | undefined) =>
+	value === undefined ? undefined : STANDING_LABELS.get(value);
+const trendLabel = (value: string | undefined) =>
+	value === undefined ? undefined : TREND_LABELS.get(value);
 
 function changeEvent(change: ProfileChange): ChangeEvent | undefined {
 	const group = change.type === "GROUP_MOVED";

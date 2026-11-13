@@ -56,7 +56,7 @@ interface WorkReviewAsk {
 }
 
 /** Said the way a problem detail says it, so the failure toast reads it like any other. */
-function notRequestable(reason: string | null): Error {
+function notRequestable(reason?: string): Error {
 	const detail = reason ?? NOT_REQUESTABLE;
 	return Object.assign(new Error(detail), { detail });
 }
@@ -119,7 +119,7 @@ function Activity() {
 		mutationKey: requestKey,
 		mutationFn: async ({ path, url }: WorkReviewAsk) => {
 			if (!hasText(url)) {
-				throw notRequestable(null);
+				throw notRequestable();
 			}
 			const context = await queryClient.query({
 				...resolveReviewContextOptions({
@@ -128,7 +128,7 @@ function Activity() {
 				}),
 				staleTime: 0,
 			});
-			if (!context.requestAllowed || context.item === null) {
+			if (!context.requestAllowed || context.item === undefined) {
 				throw notRequestable(context.reasonDescription);
 			}
 			// The ask reports its own answer and failure; only the lookup's failure is reported below.
@@ -147,10 +147,10 @@ function Activity() {
 		requestForWork.variables?.path.workspaceSlug === workspaceSlug
 			? requestForWork.data
 			: undefined;
-	const acceptedReviewId = answered?.status === "SUBMITTED" ? answered.reviewId : null;
+	const acceptedReviewId = answered?.status === "SUBMITTED" ? answered.reviewId : undefined;
 
 	const reviewRequestedNotice =
-		mayRequestReview && acceptedReviewId !== null ? (
+		mayRequestReview && acceptedReviewId !== undefined ? (
 			<ReviewRequestedNotice
 				review={
 					<Link

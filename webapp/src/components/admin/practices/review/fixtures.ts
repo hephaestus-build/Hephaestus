@@ -41,8 +41,7 @@ export const adaAccount: AccountRef = {
 	id: "7",
 	status: "ACTIVE",
 	displayName: "Ada Lovelace",
-	avatarUrl: null,
-	identities: [{ provider: "GITHUB", login: "ada", displayName: "Ada Lovelace", avatarUrl: null }],
+	identities: [{ provider: "GITHUB", login: "ada", displayName: "Ada Lovelace" }],
 };
 
 // Prop fixtures bypass response transformation and therefore supply Dates directly.

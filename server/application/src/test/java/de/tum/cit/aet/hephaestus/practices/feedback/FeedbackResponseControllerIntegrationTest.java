@@ -51,11 +51,11 @@ class FeedbackResponseControllerIntegrationTest extends AbstractFeedbackIntegrat
                 .isOk()
                 .expectBody()
                 .jsonPath("$.resolution")
-                .isEmpty()
+                .doesNotExist()
                 .jsonPath("$.usefulness")
-                .isEmpty()
+                .doesNotExist()
                 .jsonPath("$.comment")
-                .isEmpty()
+                .doesNotExist()
                 .jsonPath("$.createdAt")
                 .exists();
         assertThat(jdbc.queryForObject(

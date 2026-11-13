@@ -22,8 +22,6 @@ const ratedReview: ProfileReview = {
 			...detailFeedback,
 			response: {
 				usefulness: "HELPFUL",
-				resolution: null,
-				comment: null,
 				createdAt: daysBefore(1),
 			},
 		},

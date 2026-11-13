@@ -103,12 +103,14 @@ function detailOf(key: string, overrides: Partial<ReviewDetail> = {}): ReviewDet
 	return {
 		...reviewDetailCompleted,
 		...ref,
+		completedAt: ref.completedAt ?? null,
+		itemVersion: ref.itemVersion ?? null,
 		orderedAt: ref.createdAt,
 		startedBy: {
 			id: "event",
 			itemId: ref.item.id,
 			name: "scm.pull_request.ready",
-			itemVersion: ref.itemVersion,
+			itemVersion: ref.itemVersion ?? null,
 			occurredAt: at("13:34:50"),
 			foundBy: "WEBHOOK",
 			state: "STARTED",

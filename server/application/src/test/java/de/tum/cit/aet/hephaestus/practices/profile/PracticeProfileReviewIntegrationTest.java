@@ -161,7 +161,7 @@ class PracticeProfileReviewIntegrationTest extends BaseIntegrationTest {
                 .jsonPath("$.content[0].review.id")
                 .isEqualTo(result.getReviewId().toString())
                 .jsonPath("$.content[0].results[0].summary")
-                .isEmpty()
+                .doesNotExist()
                 .jsonPath("$.content[0].results[0].problems.length()")
                 .isEqualTo(0);
     }
@@ -409,7 +409,7 @@ class PracticeProfileReviewIntegrationTest extends BaseIntegrationTest {
                 .isOk()
                 .expectBody()
                 .jsonPath("$.results[0].summary")
-                .isEmpty()
+                .doesNotExist()
                 .jsonPath("$.results[0].problems.length()")
                 .isEqualTo(0)
                 .jsonPath("$.trace.results.length()")
@@ -591,7 +591,7 @@ class PracticeProfileReviewIntegrationTest extends BaseIntegrationTest {
                 .jsonPath("$.totalElements")
                 .isEqualTo(1)
                 .jsonPath("$.content[0].results[0].summary")
-                .isEmpty()
+                .doesNotExist()
                 .jsonPath("$.content[0].results[0].problems.length()")
                 .isEqualTo(0);
     }

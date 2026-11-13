@@ -11474,13 +11474,9 @@ components:
       type: object
       properties:
         avatarUrl:
-          type:
-          - string
-          - "null"
+          type: string
         displayName:
-          type:
-          - string
-          - "null"
+          type: string
         id:
           type: string
           pattern: "^[1-9][0-9]*$"
@@ -11491,8 +11487,6 @@ components:
         status:
           $ref: "#/components/schemas/AccountStatus"
       required:
-      - avatarUrl
-      - displayName
       - id
       - identities
       - status
@@ -14010,59 +14004,38 @@ components:
           items:
             $ref: "#/components/schemas/DeliveredWorkFeedbackItem"
         item:
-          anyOf:
-          - $ref: "#/components/schemas/ItemRef"
-          - type: "null"
+          $ref: "#/components/schemas/ItemRef"
       required:
       - feedback
-      - item
     DeliveredWorkFeedbackCopy:
       type: object
       properties:
         endLine:
-          type:
-          - "null"
-          - integer
+          type: integer
           format: int32
         externalRef:
-          type:
-          - string
-          - "null"
+          type: string
         externalUrl:
-          type:
-          - string
-          - "null"
+          type: string
         id:
           type: string
           format: uuid
         kind:
           $ref: "#/components/schemas/FeedbackCopyKind"
         path:
-          type:
-          - string
-          - "null"
+          type: string
         postedAt:
           type: string
           format: date-time
         side:
-          anyOf:
-          - $ref: "#/components/schemas/CitationSide"
-          - type: "null"
+          $ref: "#/components/schemas/CitationSide"
         startLine:
-          type:
-          - "null"
-          - integer
+          type: integer
           format: int32
       required:
-      - endLine
-      - externalRef
-      - externalUrl
       - id
       - kind
-      - path
       - postedAt
-      - side
-      - startLine
     DeliveredWorkFeedbackItem:
       type: object
       properties:
@@ -14769,27 +14742,14 @@ components:
       type: object
       properties:
         comment:
-          type:
-          - string
-          - "null"
+          type: string
         createdAt:
-          type:
-          - string
-          - "null"
+          type: string
           format: date-time
         resolution:
-          anyOf:
-          - $ref: "#/components/schemas/FeedbackResolution"
-          - type: "null"
+          $ref: "#/components/schemas/FeedbackResolution"
         usefulness:
-          anyOf:
-          - $ref: "#/components/schemas/FeedbackUsefulness"
-          - type: "null"
-      required:
-      - comment
-      - createdAt
-      - resolution
-      - usefulness
+          $ref: "#/components/schemas/FeedbackUsefulness"
     FeedbackResponseRequest:
       type: object
       description: The complete response to delivered feedback
@@ -15741,9 +15701,7 @@ components:
       type: object
       properties:
         container:
-          type:
-          - string
-          - "null"
+          type: string
         id:
           type: string
           pattern: "^[1-9][0-9]*$"
@@ -15752,42 +15710,23 @@ components:
         label:
           type: string
         parentId:
-          type:
-          - string
-          - "null"
+          type: string
           pattern: "^[1-9][0-9]*$"
         path:
-          type:
-          - string
-          - "null"
+          type: string
         provider:
-          anyOf:
-          - $ref: "#/components/schemas/IntegrationKind"
-          - type: "null"
+          $ref: "#/components/schemas/IntegrationKind"
         removedAt:
-          type:
-          - string
-          - "null"
+          type: string
           format: date-time
         title:
-          type:
-          - string
-          - "null"
+          type: string
         url:
-          type:
-          - string
-          - "null"
+          type: string
       required:
-      - container
       - id
       - kind
       - label
-      - parentId
-      - path
-      - provider
-      - removedAt
-      - title
-      - url
     ItemTrace:
       type: object
       properties:
@@ -17878,9 +17817,7 @@ components:
       type: object
       properties:
         externalUrl:
-          type:
-          - string
-          - "null"
+          type: string
         id:
           type: string
           format: uuid
@@ -17890,7 +17827,6 @@ components:
           type: string
           format: date-time
       required:
-      - externalUrl
       - id
       - kind
       - postedAt
@@ -17902,9 +17838,7 @@ components:
           items:
             $ref: "#/components/schemas/OwnFeedbackCopyRef"
         deliveredAt:
-          type:
-          - string
-          - "null"
+          type: string
           format: date-time
         destination:
           $ref: "#/components/schemas/FeedbackDestination"
@@ -17912,17 +17846,13 @@ components:
           type: string
           format: uuid
         response:
-          anyOf:
-          - $ref: "#/components/schemas/FeedbackResponse"
-          - type: "null"
+          $ref: "#/components/schemas/FeedbackResponse"
         state:
           $ref: "#/components/schemas/FeedbackState"
       required:
       - copies
-      - deliveredAt
       - destination
       - id
-      - response
       - state
     OwnItemEvent:
       type: object
@@ -19638,66 +19568,36 @@ components:
           type: string
           format: date-time
         cleanNeeded:
-          type:
-          - "null"
-          - integer
+          type: integer
           format: int32
         direction:
-          anyOf:
-          - $ref: "#/components/schemas/ProfileChangeDirection"
-          - type: "null"
+          $ref: "#/components/schemas/ProfileChangeDirection"
         evidence:
           type: array
           items:
             $ref: "#/components/schemas/ItemRef"
         feedbackId:
-          type:
-          - string
-          - "null"
+          type: string
           format: uuid
         from:
-          type:
-          - string
-          - "null"
+          type: string
         groupName:
-          type:
-          - string
-          - "null"
+          type: string
         groupSlug:
-          type:
-          - string
-          - "null"
+          type: string
         practiceName:
-          type:
-          - string
-          - "null"
+          type: string
         practiceSlug:
-          type:
-          - string
-          - "null"
+          type: string
         resolvedBy:
-          anyOf:
-          - $ref: "#/components/schemas/ProfileChangeResolvedBy"
-          - type: "null"
+          $ref: "#/components/schemas/ProfileChangeResolvedBy"
         to:
-          type:
-          - string
-          - "null"
+          type: string
         type:
           $ref: "#/components/schemas/ProfileChangeType"
       required:
       - at
-      - cleanNeeded
-      - direction
       - evidence
-      - feedbackId
-      - from
-      - groupName
-      - groupSlug
-      - practiceName
-      - practiceSlug
-      - resolvedBy
-      - to
       - type
     ProfileChangeDirection:
       type: string
@@ -19799,17 +19699,11 @@ components:
       type: object
       properties:
         avatarUrl:
-          type:
-          - string
-          - "null"
+          type: string
         displayName:
-          type:
-          - string
-          - "null"
+          type: string
         login:
-          type:
-          - string
-          - "null"
+          type: string
         provider:
           type: string
           enum:
@@ -19818,9 +19712,6 @@ components:
           - SLACK
           - OUTLINE
       required:
-      - avatarUrl
-      - displayName
-      - login
       - provider
     ProviderResourceAdapterResourceType:
       type: string
@@ -20880,9 +20771,7 @@ components:
       type: object
       properties:
         acceptedAt:
-          type:
-          - string
-          - "null"
+          type: string
           format: date-time
         currentness:
           $ref: "#/components/schemas/Currentness"
@@ -20892,9 +20781,7 @@ components:
         item:
           $ref: "#/components/schemas/ItemRef"
         markedIncorrectAt:
-          type:
-          - string
-          - "null"
+          type: string
           format: date-time
         origin:
           $ref: "#/components/schemas/ReviewOrigin"
@@ -20915,19 +20802,13 @@ components:
           type: string
           format: uuid
         severity:
-          anyOf:
-          - $ref: "#/components/schemas/Severity"
-          - type: "null"
+          $ref: "#/components/schemas/Severity"
         summary:
-          type:
-          - string
-          - "null"
+          type: string
       required:
-      - acceptedAt
       - currentness
       - id
       - item
-      - markedIncorrectAt
       - origin
       - outcome
       - practiceName
@@ -20935,8 +20816,6 @@ components:
       - problems
       - recordedAt
       - reviewId
-      - severity
-      - summary
     ResultMark:
       type: object
       properties:
@@ -21370,13 +21249,9 @@ components:
         canInspectReviewDetails:
           type: boolean
         item:
-          anyOf:
-          - $ref: "#/components/schemas/ItemRef"
-          - type: "null"
+          $ref: "#/components/schemas/ItemRef"
         reasonDescription:
-          type:
-          - string
-          - "null"
+          type: string
         requestAllowed:
           type: boolean
         workspaceId:
@@ -21386,8 +21261,6 @@ components:
           type: string
       required:
       - canInspectReviewDetails
-      - item
-      - reasonDescription
       - requestAllowed
       - workspaceId
       - workspaceSlug
@@ -22431,9 +22304,7 @@ components:
       type: object
       properties:
         completedAt:
-          type:
-          - string
-          - "null"
+          type: string
           format: date-time
         createdAt:
           type: string
@@ -22444,9 +22315,7 @@ components:
         item:
           $ref: "#/components/schemas/ItemRef"
         itemVersion:
-          type:
-          - string
-          - "null"
+          type: string
         kind:
           $ref: "#/components/schemas/ReviewKind"
         origin:
@@ -22454,11 +22323,9 @@ components:
         status:
           $ref: "#/components/schemas/ReviewStatus"
       required:
-      - completedAt
       - createdAt
       - id
       - item
-      - itemVersion
       - kind
       - origin
       - status
@@ -22466,19 +22333,13 @@ components:
       type: object
       properties:
         reason:
-          anyOf:
-          - $ref: "#/components/schemas/ReviewRequestReason"
-          - type: "null"
+          $ref: "#/components/schemas/ReviewRequestReason"
         reviewId:
-          type:
-          - string
-          - "null"
+          type: string
           format: uuid
         status:
           $ref: "#/components/schemas/ReviewRequestStatus"
       required:
-      - reason
-      - reviewId
       - status
     ReviewRequestReason:
       type: string
@@ -23416,9 +23277,7 @@ components:
           type: integer
           format: int32
         files:
-          type:
-          - "null"
-          - integer
+          type: integer
           format: int32
         met:
           type: integer
@@ -23433,9 +23292,7 @@ components:
           type: integer
           format: int32
         practiceItemPairs:
-          type:
-          - "null"
-          - integer
+          type: integer
           format: int32
         problems:
           type: integer
@@ -23452,12 +23309,10 @@ components:
       required:
       - couldNotDetermine
       - doesNotApply
-      - files
       - met
       - notMet
       - notReviewed
       - openProblems
-      - practiceItemPairs
       - problems
       - reused
       - reviewed
@@ -23491,9 +23346,7 @@ components:
       type: object
       properties:
         baselineScanId:
-          type:
-          - string
-          - "null"
+          type: string
           format: uuid
         budgetUsd:
           type: string
@@ -23502,9 +23355,7 @@ components:
           - string
           - "null"
         completedAt:
-          type:
-          - string
-          - "null"
+          type: string
           format: date-time
         counts:
           $ref: "#/components/schemas/ScanCounts"
@@ -23532,25 +23383,17 @@ components:
         repository:
           $ref: "#/components/schemas/ItemRef"
         requestedBy:
-          anyOf:
-          - $ref: "#/components/schemas/AccountRef"
-          - type: "null"
+          $ref: "#/components/schemas/AccountRef"
         startedAt:
-          type:
-          - string
-          - "null"
+          type: string
           format: date-time
         status:
           $ref: "#/components/schemas/ReviewStatus"
         stopReason:
-          anyOf:
-          - $ref: "#/components/schemas/ReviewStopReason"
-          - type: "null"
+          $ref: "#/components/schemas/ReviewStopReason"
       required:
-      - baselineScanId
       - budgetUsd
       - chargedCostUsd
-      - completedAt
       - counts
       - createdAt
       - id
@@ -23561,10 +23404,7 @@ components:
       - progress
       - ref
       - repository
-      - requestedBy
-      - startedAt
       - status
-      - stopReason
     ScanExcludedFile:
       type: object
       properties:
@@ -23798,14 +23638,10 @@ components:
       type: object
       properties:
         baselineScanId:
-          type:
-          - string
-          - "null"
+          type: string
           format: uuid
         completedAt:
-          type:
-          - string
-          - "null"
+          type: string
           format: date-time
         counts:
           $ref: "#/components/schemas/ScanCounts"
@@ -23827,23 +23663,15 @@ components:
         repository:
           $ref: "#/components/schemas/ItemRef"
         requestedBy:
-          anyOf:
-          - $ref: "#/components/schemas/AccountRef"
-          - type: "null"
+          $ref: "#/components/schemas/AccountRef"
         startedAt:
-          type:
-          - string
-          - "null"
+          type: string
           format: date-time
         status:
           $ref: "#/components/schemas/ReviewStatus"
         stopReason:
-          anyOf:
-          - $ref: "#/components/schemas/ReviewStopReason"
-          - type: "null"
+          $ref: "#/components/schemas/ReviewStopReason"
       required:
-      - baselineScanId
-      - completedAt
       - counts
       - createdAt
       - id
@@ -23852,10 +23680,7 @@ components:
       - practiceCount
       - ref
       - repository
-      - requestedBy
-      - startedAt
       - status
-      - stopReason
     ScriptKind:
       type: string
       enum:

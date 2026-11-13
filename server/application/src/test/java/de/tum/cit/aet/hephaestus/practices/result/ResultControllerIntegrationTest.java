@@ -200,7 +200,7 @@ class ResultControllerIntegrationTest extends BaseIntegrationTest {
                 .jsonPath("$.feedback[0].response.resolution")
                 .isEqualTo("ADDRESSED")
                 .jsonPath("$.feedback[0].response.comment")
-                .isEmpty();
+                .doesNotExist();
     }
 
     @Test

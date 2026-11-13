@@ -86,13 +86,11 @@ function account(
 	return {
 		id,
 		displayName,
-		avatarUrl: null,
 		status,
 		identities: identities.map(([provider, login]) => ({
 			provider,
 			login,
 			displayName,
-			avatarUrl: null,
 		})),
 	};
 }
@@ -112,7 +110,7 @@ export const reviewAccounts = {
 function developerOf(owner: AccountRef): ReviewDeveloper {
 	return {
 		accountId: owner.id,
-		displayName: owner.displayName,
+		displayName: owner.displayName ?? null,
 		avatarUrl: null,
 		providerLogin: owner.identities[0]?.login ?? null,
 	};
@@ -152,13 +150,6 @@ export function itemRef(
 	fields: Pick<ItemRef, "id" | "kind" | "label"> & Partial<ItemRef>,
 ): ItemRef {
 	return {
-		parentId: null,
-		provider: null,
-		title: null,
-		url: null,
-		container: null,
-		path: null,
-		removedAt: null,
 		...fields,
 	};
 }
@@ -2460,11 +2451,11 @@ export function reviewRefOf(review: ReviewSummary): ReviewRef {
 		id: review.id,
 		kind: review.kind,
 		item: review.item,
-		itemVersion: review.itemVersion,
+		itemVersion: review.itemVersion ?? undefined,
 		origin: review.origin,
 		status: review.status,
 		createdAt: review.createdAt,
-		completedAt: review.completedAt,
+		completedAt: review.completedAt ?? undefined,
 	};
 }
 
@@ -2771,10 +2762,12 @@ export function manyMembers(count: number): WorkspaceMembership[] {
 				...source.account,
 				id: accountId,
 				displayName:
-					source.account.displayName === null ? null : `${source.account.displayName} ${cycle}`,
+					source.account.displayName === undefined
+						? undefined
+						: `${source.account.displayName} ${cycle}`,
 				identities: source.account.identities.map((identity) => ({
 					...identity,
-					login: identity.login === null ? null : `${identity.login}-${cycle}`,
+					login: identity.login === undefined ? undefined : `${identity.login}-${cycle}`,
 				})),
 			},
 		};

@@ -6,6 +6,9 @@ import io.swagger.v3.core.converter.AnnotatedType;
 import io.swagger.v3.core.converter.ModelConverter;
 import io.swagger.v3.core.converter.ModelConverterContext;
 import io.swagger.v3.oas.models.media.Schema;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -16,13 +19,15 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
+import java.util.stream.Stream;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
 // swagger-core inspects declaration annotations; JSpecify nullness is a type-use annotation.
 // Only explicit @NonNull marks a property required; primitives use @Schema(requiredMode = REQUIRED).
-// JsonInclude.ALWAYS records require every key, including nullable values.
+// JsonInclude.ALWAYS records require every key, including nullable values. In any other record a @Nullable
+// component is never required, whatever its @Schema says.
 @Component
 public class JSpecifyRequiredModelConverter implements ModelConverter {
 
@@ -52,8 +57,12 @@ public class JSpecifyRequiredModelConverter implements ModelConverter {
                 if (alwaysPresent || isNonNull(rc.getAnnotatedType())) {
                     markRequired(model, rc.getName());
                 }
-                if (alwaysPresent && rc.getAnnotatedType().isAnnotationPresent(Nullable.class)) {
+                boolean nullable = rc.getAnnotatedType().isAnnotationPresent(Nullable.class);
+                if (alwaysPresent && nullable) {
                     markNullable(model, rc.getName());
+                } else if (nullable && !validatedPresent(rc) && model.getRequired() != null) {
+                    // Jackson leaves a null out (non_null), so the key can be absent.
+                    model.getRequired().remove(rc.getName());
                 }
             }
         } else {
@@ -66,6 +75,13 @@ public class JSpecifyRequiredModelConverter implements ModelConverter {
             }
         }
         return resolved;
+    }
+
+    /** Whether request validation refuses the component when it is missing, whatever its nullness. */
+    private static boolean validatedPresent(RecordComponent component) {
+        return Stream.of(NotNull.class, NotBlank.class, NotEmpty.class)
+                .anyMatch(constraint -> component.isAnnotationPresent(constraint)
+                        || component.getAccessor().isAnnotationPresent(constraint));
     }
 
     /** Whether a JSpecify {@code @NonNull} sits at the top level of a type-use position. */

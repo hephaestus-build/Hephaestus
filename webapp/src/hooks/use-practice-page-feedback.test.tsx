@@ -103,9 +103,7 @@ function practicePageFeedback(
 		cleanNeeded: 3,
 		cleanWork: [],
 		evidence: [],
-		response: response
-			? { usefulness: null, resolution: null, comment: null, createdAt: null, ...response }
-			: null,
+		response: response ?? null,
 	};
 }
 

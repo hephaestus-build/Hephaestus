@@ -8,13 +8,8 @@ const pullRequest = (n: number): ItemRef => ({
 	id: String(n),
 	kind: "scm.pull_request",
 	label: `#${n}`,
-	url: null,
 	container: "ls1intum/Hephaestus",
-	parentId: null,
-	path: null,
 	provider: "GITHUB",
-	removedAt: null,
-	title: null,
 });
 
 const problem = (n: number, day: string) => ({

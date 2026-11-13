@@ -32,13 +32,6 @@ export function eventLabel(name: string): string {
 const NO_RESULTS = { met: 0, notMet: 0, doesNotApply: 0, couldNotDetermine: 0 };
 
 const item = (fields: Pick<ItemRef, "id" | "kind" | "label"> & Partial<ItemRef>): ItemRef => ({
-	parentId: null,
-	provider: null,
-	title: null,
-	url: null,
-	container: null,
-	path: null,
-	removedAt: null,
 	...fields,
 });
 
@@ -112,7 +105,6 @@ const pushReview: ReviewRef = {
 	origin: "EVENT",
 	status: "RUNNING",
 	createdAt: new Date("2026-08-07T08:30:00Z"),
-	completedAt: null,
 };
 
 export const traceReviews: ReviewRef[] = [readyReview, pushReview];
@@ -352,13 +344,9 @@ const ownResult = (
 ): ResultList => ({
 	reviewId: READY_REVIEW,
 	item: PULL_REQUEST_1423,
-	severity: null,
-	summary: null,
 	origin: "EVENT",
 	recordedAt: new Date("2026-08-06T10:19:00Z"),
 	currentness: "CURRENT",
-	markedIncorrectAt: null,
-	acceptedAt: null,
 	problems: [],
 	...fields,
 });

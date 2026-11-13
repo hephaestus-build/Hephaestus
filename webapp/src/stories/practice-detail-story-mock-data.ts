@@ -89,7 +89,6 @@ export function reviewRef(
 		id,
 		kind: "ITEM",
 		item,
-		itemVersion: null,
 		origin: "EVENT",
 		status: "COMPLETE",
 		createdAt,
@@ -126,7 +125,6 @@ export function ownFeedback(id: string, fields: Partial<OwnFeedbackRef> = {}): O
 		destination: "ON_WORK",
 		state: "DELIVERED",
 		deliveredAt: daysBefore(2),
-		response: null,
 		copies: [],
 		...fields,
 	};
@@ -140,13 +138,13 @@ export function listedResult(result: ResultDetail): ResultList {
 		practiceSlug: result.practiceSlug,
 		practiceName: result.practiceName,
 		outcome: result.outcome,
-		severity: result.severity,
-		summary: result.summary,
+		severity: result.severity ?? undefined,
+		summary: result.summary ?? undefined,
 		origin: result.origin,
 		recordedAt: result.recordedAt,
 		currentness: result.currentness,
-		markedIncorrectAt: result.markedIncorrectAt,
-		acceptedAt: result.acceptedAt,
+		markedIncorrectAt: result.markedIncorrectAt ?? undefined,
+		acceptedAt: result.acceptedAt ?? undefined,
 		problems: result.problems.map(({ id, severity, summary }) => ({ id, severity, summary })),
 	};
 }

@@ -368,7 +368,7 @@ export const ReviewFailed: Story = {
 			...READY_ON_GITHUB,
 			trace: {
 				...OWN_TRACE,
-				review: { ...OWN_TRACE.review, status: "FAILED", completedAt: null },
+				review: { ...OWN_TRACE.review, status: "FAILED", completedAt: undefined },
 			},
 		},
 	},
@@ -385,7 +385,7 @@ export const MetWithoutSummary: Story = {
 		expanded: true,
 		results: {
 			status: "ready",
-			data: { ...OWN_PAGE, rows: [{ ...MET_ROW, summary: null }], total: 1 },
+			data: { ...OWN_PAGE, rows: [{ ...MET_ROW, summary: undefined }], total: 1 },
 		},
 	},
 	play: async ({ canvas }) => {

@@ -18,13 +18,6 @@ const PULL_REQUESTS = "https://github.com/HephaestusTest/practice-validation/pul
 const ISSUES = "https://github.com/HephaestusTest/MaxTestRepo/issues/";
 
 const item = (fields: Pick<ItemRef, "id" | "kind" | "label"> & Partial<ItemRef>): ItemRef => ({
-	parentId: null,
-	provider: null,
-	title: null,
-	url: null,
-	container: null,
-	path: null,
-	removedAt: null,
 	...fields,
 });
 
@@ -309,16 +302,14 @@ const change = (
 ): ProfileChange => ({
 	type,
 	at: LATEST_REVIEW_AT,
-	practiceSlug: null,
-	practiceName: null,
 	...inGroup,
 	...onPractice,
-	cleanNeeded: null,
-	direction: null,
-	feedbackId: null,
-	from: null,
-	to: null,
-	resolvedBy: null,
+	cleanNeeded: undefined,
+	direction: undefined,
+	feedbackId: undefined,
+	from: undefined,
+	resolvedBy: undefined,
+	to: undefined,
 	evidence: [],
 	...rest,
 });

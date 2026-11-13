@@ -106,10 +106,11 @@ The migration guide owns each change. This table gives the names.
 The table covers the changes after the release candidate `1.0.0-rc.5`.
 A host on an earlier candidate also needs the entries of the later candidates.
 
-Eight more checks need a read before the window:
+Nine more checks need a read before the window:
 
 - API callers of the team routes move to the new contract: *Update team API callers*.
 - Custom API clients read error responses in the problem format: *Read problem responses from the top level*.
+- Custom API clients read a left-out field as missing: *Treat an absent field as missing in public API responses*.
 - The first daily run erases old feedback and results. See *Choose the feedback retention before you upgrade*.
 - A production server needs a root HTTPS issuer. See *Use a root HTTPS API issuer in production*.
 - Slack connections need the canonical callback on the Slack app: *Use the canonical Slack workspace callback*.

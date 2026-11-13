@@ -634,7 +634,7 @@ describe("practice review list routes", () => {
 		await screen.findByRole("link", { name: reviewLinkName(requestedReview) }, ROUTE_RENDER_WAIT);
 		const table = screen.getByRole("table", { name: "Practice reviews, newest first" });
 		const requester = reviewAccounts.grace.displayName;
-		assert(requester !== null);
+		assert(requester !== undefined);
 		await within(table).findByText(requester, undefined, ROUTE_RENDER_WAIT);
 		within(table).getByRole("columnheader", { name: "Started by" });
 		expect(within(table).getAllByText("Failed").length).toBeGreaterThan(0);

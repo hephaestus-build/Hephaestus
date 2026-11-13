@@ -87,7 +87,7 @@ export function useFeedbackResponseWrite(workspaceSlug: string): FeedbackRespons
 	});
 	// Mutation cache order is oldest-first; the latest write to one feedback record wins.
 	const pendingResponses = new Map(pending.filter((entry) => entry !== undefined));
-	const responseOf = (feedbackId: string, recorded: FeedbackResponse | null) =>
+	const responseOf = (feedbackId: string, recorded: FeedbackResponse | undefined) =>
 		pendingResponses.get(feedbackId) ?? responseRequestOf(recorded);
 	const clear = (feedbackId: string) => {
 		clearMutation.mutate({ path: { workspaceSlug, feedbackId } });

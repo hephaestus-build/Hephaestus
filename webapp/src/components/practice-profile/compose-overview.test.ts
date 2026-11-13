@@ -17,14 +17,9 @@ const AT = new Date("2026-09-09T14:10:00Z");
 const pullRequest = (n: number): ItemRef => ({
 	id: String(n),
 	kind: ITEM_KIND.pullRequest,
-	parentId: null,
 	provider: "GITLAB",
 	label: `!${n}`,
-	title: null,
 	url: `https://gitlab.example/mr/${n}`,
-	container: null,
-	path: null,
-	removedAt: null,
 });
 /** The sentence as a reader reads it, pills, groups and links and all. */
 function readSegment(segment: FeedbackTextSegment): string {
@@ -52,14 +47,10 @@ const change = (
 	practiceName: name,
 	groupSlug: "review-ready-work",
 	groupName: "Packaging work for review",
-	direction: null,
-	from: null,
-	to: null,
-	resolvedBy: null,
 	// A feedback change on the wire always names the piece it is about, and a fall back says what
 	// the clean run it emptied was.
-	feedbackId: type.startsWith("FEEDBACK_") ? `${slug}-feedback` : null,
-	cleanNeeded: type === "FEEDBACK_RESET" ? 3 : null,
+	feedbackId: type.startsWith("FEEDBACK_") ? `${slug}-feedback` : undefined,
+	cleanNeeded: type === "FEEDBACK_RESET" ? 3 : undefined,
 	evidence: [pullRequest(421), pullRequest(425)],
 	...extra,
 });

@@ -34,7 +34,6 @@ const ready = (result: ReviewResultDetail) => ({ status: "ready" as const, resul
 const ADA_ADMIN: AccountRef = {
 	id: "3",
 	displayName: "Ada Admin",
-	avatarUrl: null,
 	status: "ACTIVE",
 	identities: [],
 };

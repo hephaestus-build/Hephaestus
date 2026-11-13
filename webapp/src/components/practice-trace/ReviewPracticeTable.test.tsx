@@ -41,7 +41,7 @@ describe("results marked incorrect", () => {
 		expect(rows.getAllByText("Marked incorrect")).toHaveLength(1);
 		rows.getByText("Two controllers query the database directly");
 
-		rerender(table([{ ...marked, markedIncorrectAt: null }, valid]));
+		rerender(table([{ ...marked, markedIncorrectAt: undefined }, valid]));
 		expect(rows.queryByText("Marked incorrect")).toBeNull();
 		rows.getByText("Two controllers query the database directly");
 	});

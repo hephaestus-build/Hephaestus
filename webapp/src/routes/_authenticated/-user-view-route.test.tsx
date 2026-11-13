@@ -37,10 +37,9 @@ const sam: Wire<UserViewAccount> = {
 		id: "11",
 		status: "UNCLAIMED",
 		displayName: "Sam",
-		avatarUrl: null,
 		identities: [
-			{ provider: "GITHUB", login: "never-signed-in", displayName: "Sam", avatarUrl: null },
-			{ provider: "GITLAB", login: "sam-lrz", displayName: "Sam", avatarUrl: null },
+			{ provider: "GITHUB", login: "never-signed-in", displayName: "Sam" },
+			{ provider: "GITLAB", login: "sam-lrz", displayName: "Sam" },
 		],
 	},
 };

@@ -12,7 +12,6 @@ const meta = {
 	args: {
 		refusal: {
 			status: "REFUSED",
-			reviewId: null,
 			reason: "REVIEW_MODEL_UNBOUND",
 		},
 		fix: <RefusalFixLink workspaceSlug="demo" reason="REVIEW_MODEL_UNBOUND" />,
@@ -37,7 +36,7 @@ export const OffersTheFixToAnAdmin: Story = {
 // A start switch turned off is a setting, so the alert says so and an admin gets the settings page.
 export const WithheldByTheWorkspaceSettings: Story = {
 	args: {
-		refusal: { status: "REFUSED", reviewId: null, reason: "GATE_WITHHELD" },
+		refusal: { status: "REFUSED", reason: "GATE_WITHHELD" },
 		fix: <RefusalFixLink workspaceSlug="demo" reason="GATE_WITHHELD" />,
 	},
 	play: async ({ canvas }) => {
@@ -63,7 +62,7 @@ export const WithoutAFix: Story = {
 
 export const WithoutAReason: Story = {
 	args: {
-		refusal: { status: "REFUSED", reviewId: null, reason: null },
+		refusal: { status: "REFUSED" },
 		fix: undefined,
 	},
 	play: async ({ canvas }) => {
