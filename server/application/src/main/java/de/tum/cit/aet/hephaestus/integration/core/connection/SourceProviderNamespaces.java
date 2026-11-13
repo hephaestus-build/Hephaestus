@@ -37,9 +37,13 @@ public class SourceProviderNamespaces {
         events.publishEvent(new PersonProviderInstanceRegistered(Objects.requireNonNull(provider.getId())));
     }
 
-    /** Registers login reference data in the caller's provisioning transaction. */
+    /**
+     * Registers login reference data in the resolver's independent transaction, which must commit
+     * before account provisioning writes the identity foreign key.
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public long registerIdentityProvider(IdentityProviderType type, String serverUrl) {
+        // Login creates reference data only. Source capture's fence and registration event belong to ensure().
         providers.registerSourceInstance(type.name(), serverUrl);
         return Objects.requireNonNull(
                 providers.findByTypeAndServerUrl(type, serverUrl).orElseThrow().getId());

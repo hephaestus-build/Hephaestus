@@ -41,6 +41,4 @@ public interface IdentityProviderRepository extends JpaRepository<IdentityProvid
             ON CONFLICT(type,server_url) DO NOTHING
             """, nativeQuery = true)
     void registerSourceInstance(String type, String serverUrl);
-
-    List<IdentityProvider> findAllByType(IdentityProviderType type);
 }

@@ -91,7 +91,7 @@ class RegistrationToGitProviderResolverIntegrationTest extends BaseIntegrationTe
     }
 
     @Test
-    void shouldReuseEquivalentProviderOriginsInTheProvisioningTransaction() {
+    void shouldReuseEquivalentProviderOriginsDuringIndependentRegistration() {
         String host = "origin-" + UUID.randomUUID() + ".example.test";
         var provider =
                 providers.saveAndFlush(new IdentityProvider(IdentityProviderType.GITLAB, "HTTPS://" + host + ":443/"));
