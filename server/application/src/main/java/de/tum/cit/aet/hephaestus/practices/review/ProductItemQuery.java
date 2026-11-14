@@ -139,7 +139,8 @@ public class ProductItemQuery {
             var current = source.current(item);
             return current.isEmpty()
                     ? Map.of()
-                    : ItemSource.recordFingerprints(source, current.orElseThrow(), kinds, occasion, mapper);
+                    // A source without its own reader captures only rows that this server stores.
+                    : ItemSource.recordFingerprints(source::capture, current.orElseThrow(), kinds, occasion, mapper);
         } catch (ItemCaptureException unavailable) {
             return Map.of();
         }

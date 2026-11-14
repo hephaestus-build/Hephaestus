@@ -2,7 +2,10 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.capture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -46,6 +49,17 @@ class ScmCapturePreparationTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> preparation.prepare(preparer, context)).isInstanceOf(IllegalStateException.class);
         verifyNoInteractions(preparer);
+    }
+
+    @Test
+    void shouldReadTheMirrorAsItIsWhenThePreparationHasNoFetch() {
+        var preparation = ScmCapturePreparation.fromMirror();
+        when(preparer.prepare(context))
+                .thenThrow(new ItemCaptureException(ItemCaptureCode.VERSION_UNAVAILABLE, "range"));
+
+        assertThat(preparation.prepare(preparer, context)).isNull();
+        assertThat(preparation.unavailableReason()).isEqualTo(SourceAbsenceReason.REVIEW_VERSION_UNAVAILABLE);
+        verify(preparer, never()).fetch(any());
     }
 
     @Test

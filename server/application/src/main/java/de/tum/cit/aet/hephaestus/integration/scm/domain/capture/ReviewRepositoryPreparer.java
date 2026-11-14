@@ -19,6 +19,7 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.util.UriComponentsBuilder;
 
 /** Authorizes the exact provider repository before Git credentials cross its boundary. */
@@ -133,9 +134,12 @@ public class ReviewRepositoryPreparer {
 
     /**
      * Mints the credential and fetches the mirror and, for a head that no branch reaches, the provider's review ref.
-     * Neither call has a time bound, so the caller runs it outside a transaction.
+     * Neither call has a time bound, so a transaction that waited on them would hold its connection and row locks for as
+     * long as the provider takes.
      */
     public void fetch(Remote remote) {
+        if (TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("A reviewed repository fetches only outside a database transaction");
         var range = range(remote.work());
         var key = remote.key();
         String token = remote.source()

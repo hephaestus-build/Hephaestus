@@ -11,6 +11,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.evidence.SourceFingerprint;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
@@ -22,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.GeneralReviewCommentContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.IssueContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.LinkedWorkItemContentSource;
@@ -30,6 +32,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.RepositoryTreeCo
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ReviewRepositoryPreparer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ReviewThreadContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
@@ -51,6 +54,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.eclipse.jgit.api.errors.InvalidRemoteException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -126,7 +130,10 @@ class ScmItemFetchIntegrationTest extends BaseIntegrationTest {
     private ReviewThreadContentSource threads;
 
     @Autowired
-    private LinkedWorkItemContentSource linked;
+    private IssueRepository issues;
+
+    @Autowired
+    private ScmCaptureConsent consent;
 
     @Autowired
     private RepositoryTreeContentSource repositoryTree;
@@ -142,6 +149,9 @@ class ScmItemFetchIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ScmItemTransactions itemTransactions;
+
+    @Autowired
+    private RepositoryRefState refs;
 
     @Autowired
     private PlatformTransactionManager transactions;
@@ -175,6 +185,8 @@ class ScmItemFetchIntegrationTest extends BaseIntegrationTest {
                 .thenReturn(List.of(new ScmFileVersions.Entry("src/a.ts", "100644", "d".repeat(40))));
         var access = new ScmRepositoryAccess(connectionService, items, repositories, List.of(tokens), git);
         var preparer = new ReviewRepositoryPreparer(git, pulls, connectionService, List.of(tokens), repositories);
+        // Built on the provider double, so that linked work reads this test's mirror rather than a disabled one.
+        var linked = new LinkedWorkItemContentSource(mapper, pulls, issues, git, preparer, consent);
         var capture = new ScmWorkCapture(
                 pullContent,
                 issueContent,
@@ -238,32 +250,7 @@ class ScmItemFetchIntegrationTest extends BaseIntegrationTest {
                 })
                 .when(git)
                 .ensureRepository(any(), anyString(), any());
-        var fixture = fixture();
-        var repository = fixture.repository();
-        var root = repositoryItem(fixture);
-        var author = users.saveAndFlush(TestUserFactory.createUser(
-                ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE),
-                "author-" + UUID.randomUUID(),
-                repository.getProvider()));
-        var pull = new PullRequest();
-        pull.setNativeId(ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));
-        pull.setProvider(repository.getProvider());
-        pull.setRepository(repository);
-        pull.setNumber(7);
-        pull.setTitle("A pull request");
-        pull.setBody("Description");
-        pull.setState(Issue.State.OPEN);
-        pull.setAuthor(author);
-        pull.setHtmlUrl(repository.getHtmlUrl() + "/-/merge_requests/7");
-        pull.setCreatedAt(Instant.now());
-        pull.setUpdatedAt(Instant.now());
-        pull.setHeadRefOid("a".repeat(40));
-        pull.setBaseRefOid("b".repeat(40));
-        pull.setHeadRefName("topic");
-        pull.setBaseRefName("main");
-        pull = pulls.saveAndFlush(pull);
-        var pullRef = writer.upsert(new ItemRegistration(
-                root.workspaceId(), ScmItemEvents.PULL_REQUEST, pull.getId(), root.itemId(), null));
+        var pullRef = pullRequestItem(fixture());
         var pinned = sources.pin(pullRef, null);
 
         var captured = sources.capture(
@@ -273,6 +260,52 @@ class ScmItemFetchIntegrationTest extends BaseIntegrationTest {
 
         assertThat(captured.completeness()).containsKey(LinkedWorkItemContentSource.KIND);
         assertThat(transactionAtProvider).containsExactly(false, false);
+    }
+
+    @Test
+    void shouldReadLinkedWorkFingerprintsFromTheMirrorWithoutFetchingUntilACaptureSyncsIt() {
+        var mirrored = new AtomicBoolean(false);
+        when(git.commitExists(any(), anyString())).thenAnswer(call -> mirrored.get());
+        doAnswer(call -> {
+                    transactionAtProvider.add(TransactionSynchronizationManager.isActualTransactionActive());
+                    mirrored.set(true);
+                    return null;
+                })
+                .when(git)
+                .ensureRepository(any(), anyString(), any());
+        var pullRef = pullRequestItem(fixture());
+        var reader = new ScmSourceFingerprints(sources, items, refs);
+        var kinds = Set.of(LinkedWorkItemContentSource.KIND);
+        var locked = new TransactionTemplate(transactions);
+
+        var beforeSync = locked.execute(status -> reader.fingerprints(pullRef, kinds, null, mapper));
+
+        assertThat(beforeSync).doesNotContainKey(LinkedWorkItemContentSource.KIND);
+        assertThat(transactionAtProvider).isEmpty();
+
+        var captured = sources.capture(
+                sources.pin(pullRef, null),
+                new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 1, kinds, "3.0.0", 3));
+        var capturedFingerprint = SourceFingerprint.of(mapper, LinkedWorkItemContentSource.KIND, captured);
+        var afterSync = locked.execute(status -> reader.fingerprints(pullRef, kinds, null, mapper));
+
+        assertThat(capturedFingerprint).isNotNull();
+        assertThat(afterSync).containsEntry(LinkedWorkItemContentSource.KIND, capturedFingerprint);
+        assertThat(transactionAtProvider).containsExactly(false, false);
+    }
+
+    @Test
+    void shouldRefuseToFetchTheReviewedRepositoryWhenTheCallerHoldsATransaction() {
+        var pullRef = pullRequestItem(fixture());
+        var pinned = sources.pin(pullRef, null);
+        var request = new CaptureRequest(
+                UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(LinkedWorkItemContentSource.KIND), "3.0.0", 3);
+
+        assertThatThrownBy(
+                        () -> new TransactionTemplate(transactions).execute(status -> sources.capture(pinned, request)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("outside a database transaction");
+        assertThat(transactionAtProvider).isEmpty();
     }
 
     private record Fixture(long workspaceId, Repository repository) {}
@@ -302,6 +335,34 @@ class ScmItemFetchIntegrationTest extends BaseIntegrationTest {
         monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(
                 workspace, repository.getNameWithOwner(), repository.getNativeId()));
         return new Fixture(workspace.getId(), repository);
+    }
+
+    private ItemRef pullRequestItem(Fixture fixture) {
+        var repository = fixture.repository();
+        var root = repositoryItem(fixture);
+        var author = users.saveAndFlush(TestUserFactory.createUser(
+                ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE),
+                "author-" + UUID.randomUUID(),
+                repository.getProvider()));
+        var pull = new PullRequest();
+        pull.setNativeId(ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));
+        pull.setProvider(repository.getProvider());
+        pull.setRepository(repository);
+        pull.setNumber(7);
+        pull.setTitle("A pull request");
+        pull.setBody("Description");
+        pull.setState(Issue.State.OPEN);
+        pull.setAuthor(author);
+        pull.setHtmlUrl(repository.getHtmlUrl() + "/-/merge_requests/7");
+        pull.setCreatedAt(Instant.now());
+        pull.setUpdatedAt(Instant.now());
+        pull.setHeadRefOid("a".repeat(40));
+        pull.setBaseRefOid("b".repeat(40));
+        pull.setHeadRefName("topic");
+        pull.setBaseRefName("main");
+        pull = pulls.saveAndFlush(pull);
+        return writer.upsert(new ItemRegistration(
+                root.workspaceId(), ScmItemEvents.PULL_REQUEST, pull.getId(), root.itemId(), null));
     }
 
     private ItemRef repositoryItem(Fixture fixture) {

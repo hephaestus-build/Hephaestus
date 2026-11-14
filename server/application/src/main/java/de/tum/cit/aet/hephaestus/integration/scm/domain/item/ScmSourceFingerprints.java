@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceFingerprint;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.evidence.capture.CaptureContribution;
+import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemFingerprintReader;
@@ -12,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSource;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.RepositoryTreeContentSource;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCapturePreparation;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -23,7 +26,10 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
-/** Git freshness reads the shared source observation; record freshness uses the capture renderer. */
+/**
+ * Git freshness reads the shared source observation; record freshness uses the capture renderer on the synced mirror.
+ * Neither fetches from the provider.
+ */
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
@@ -38,8 +44,8 @@ public class ScmSourceFingerprints implements ItemFingerprintReader {
     }
 
     /**
-     * Not transactional: a record read may fetch the reviewed repository, so each read runs in its own short transaction,
-     * or in the caller's.
+     * Not transactional: each record read runs in its own short transaction, or in the caller's. It reads only the
+     * mirror, so a caller may hold row locks.
      */
     @Override
     public Map<SourceKind, String> fingerprints(
@@ -71,9 +77,28 @@ public class ScmSourceFingerprints implements ItemFingerprintReader {
         }
         if (!records.isEmpty()) {
             var read = occasion != null && holds(item, snapshot, occasion) ? occasion : null;
-            fingerprints.putAll(ItemSource.recordFingerprints(source, snapshot, records, read, mapper));
+            fingerprints.putAll(
+                    ItemSource.recordFingerprints(this::captureFromMirror, snapshot, records, read, mapper));
         }
         return Map.copyOf(fingerprints);
+    }
+
+    /**
+     * A capture from the synced mirror. A source that reads the clone answers without the reviewed commits when the
+     * mirror lacks them, for example with only the references that the title names. That answer is not what the
+     * review's capture read, so the source counts as unreadable: the comparison is unverifiable, never a change.
+     */
+    private CaptureContribution captureFromMirror(ItemSnapshot pinned, CaptureRequest request) {
+        var mirror = ScmCapturePreparation.fromMirror();
+        var contribution = source.capture(pinned, request, mirror);
+        var unread = mirror.unavailableReason();
+        if (unread == null) return contribution;
+        var cleanup = contribution.cleanup();
+        try (cleanup) {
+            return CaptureContribution.unavailable(request.sources(), unread);
+        } catch (Exception failure) {
+            throw new IllegalStateException("Could not release the current source read", failure);
+        }
     }
 
     /**

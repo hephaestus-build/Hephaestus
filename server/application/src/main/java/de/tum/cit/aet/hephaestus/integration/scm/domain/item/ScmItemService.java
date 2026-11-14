@@ -463,34 +463,40 @@ public class ScmItemService implements ItemSource {
             var reviewed = transactions.read(() -> workCapture.reviewedRepository(pinned, request.eventId()));
             preparation.fetch(() -> workCapture.fetch(reviewed));
         }
-        return transactions.snapshot(() -> captureVerified(pinned, request, preparation));
+        return capture(pinned, request, preparation);
     }
 
-    private CaptureContribution captureVerified(
-            ItemSnapshot pinned, CaptureRequest request, ScmCapturePreparation preparation) {
-        var eventId = request.eventId();
-        // An event review captures its retained occasion: the same record, checked against current access again.
-        var occasion = eventId == null || !ScmWorkCapture.retains(pinned.item().kind())
-                ? null
-                : occasion(pinned.item(), pinned.version(), eventId);
-        ItemSnapshot verified = occasion != null ? occasion.snapshot() : pinItem(pinned.item(), pinned.version());
-        if (!verified.integration().equals(pinned.integration())
-                || !verified.roles().equals(pinned.roles())) throw versionUnavailable();
-        if (!request.sourceContractVersion().equals(ClasspathSourceCatalogRegistry.CURRENT_VERSION_VALUE)
-                || request.scriptContractVersion() != 3)
-            throw new ItemCaptureException(ItemCaptureCode.CAPTURE_FAILED, "Capture contract is unavailable");
-        if (pinned.item().kind().equals(ScmItemEvents.REPOSITORY)
-                || pinned.item().kind().equals(ScmItemEvents.FILE)) return captureTree(pinned, request);
-        var work = occasion != null
-                ? new ScmWorkCapture.Work(occasion.work(), occasion.review())
-                : workCapture.currentWork(pinned.item());
-        return workCapture.capture(
-                pinned,
-                request,
-                work.work(),
-                work.review(),
-                occasion != null ? occasion.evidence() : null,
-                preparation);
+    /**
+     * Captures in one read-only snapshot that checks the pin again, reading the clone only through
+     * {@code preparation}. {@link ScmCapturePreparation#fromMirror} reads the synced mirror as it is, with no fetch.
+     */
+    public CaptureContribution capture(ItemSnapshot pinned, CaptureRequest request, ScmCapturePreparation preparation) {
+        return transactions.snapshot(() -> {
+            var eventId = request.eventId();
+            // An event review captures its retained occasion: the same record, checked against current access again.
+            var occasion =
+                    eventId == null || !ScmWorkCapture.retains(pinned.item().kind())
+                            ? null
+                            : occasion(pinned.item(), pinned.version(), eventId);
+            ItemSnapshot verified = occasion != null ? occasion.snapshot() : pinItem(pinned.item(), pinned.version());
+            if (!verified.integration().equals(pinned.integration())
+                    || !verified.roles().equals(pinned.roles())) throw versionUnavailable();
+            if (!request.sourceContractVersion().equals(ClasspathSourceCatalogRegistry.CURRENT_VERSION_VALUE)
+                    || request.scriptContractVersion() != 3)
+                throw new ItemCaptureException(ItemCaptureCode.CAPTURE_FAILED, "Capture contract is unavailable");
+            if (pinned.item().kind().equals(ScmItemEvents.REPOSITORY)
+                    || pinned.item().kind().equals(ScmItemEvents.FILE)) return captureTree(pinned, request);
+            var work = occasion != null
+                    ? new ScmWorkCapture.Work(occasion.work(), occasion.review())
+                    : workCapture.currentWork(pinned.item());
+            return workCapture.capture(
+                    pinned,
+                    request,
+                    work.work(),
+                    work.review(),
+                    occasion != null ? occasion.evidence() : null,
+                    preparation);
+        });
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
