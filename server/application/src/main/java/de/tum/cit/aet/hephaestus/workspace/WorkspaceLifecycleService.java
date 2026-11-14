@@ -180,8 +180,8 @@ public class WorkspaceLifecycleService {
 
         WorkspaceStatus previousStatus = workspace.getStatus();
         workspace.markPurged();
-        workspace = workspaceRepository.save(workspace);
-        recordStatusChange(workspace, previousStatus, WorkspaceStatus.PURGED);
+        Workspace purged = workspaceRepository.save(workspace);
+        recordStatusChange(purged, previousStatus, WorkspaceStatus.PURGED);
 
         // An erasure recovery manifest lists the purges after its recovery point (backup-restore.mdx), so only a
         // committed purge is recorded.
@@ -189,7 +189,7 @@ public class WorkspaceLifecycleService {
                 .addKeyValue("event.name", "workspace.purged")
                 .addKeyValue(StructuredLogKeys.WORKSPACE_ID, workspaceId)
                 .log("Purged workspace"));
-        return workspace;
+        return purged;
     }
 
     @Transactional
