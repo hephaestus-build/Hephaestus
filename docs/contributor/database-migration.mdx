@@ -53,6 +53,12 @@ conventions the drift gate reads are in `server/AGENTS.md` § Schema changes.
 ## Workspace column
 
 A new table carries a `NOT NULL workspace_id`. `WorkspaceTableColumnIntegrationTest` checks every table of the migrated schema.
+
+Some referenced tables have `UNIQUE (id, workspace_id)`.
+A reference from a workspace table to such a table is a foreign key on both columns.
+Then the database refuses a row that points into another workspace.
+`WorkspaceTableColumnIntegrationTest` also checks this rule.
+
 A table that belongs to no workspace is a security decision:
 
 - If an entity maps it, add the table to `WorkspaceScopedTables.GLOBAL_TABLES` and the entity to `DataIsolationArchitectureTest.GLOBAL_ENTITIES`.

@@ -104,6 +104,40 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldKeepEveryReferenceToAWorkspaceRowInsideItsWorkspace() {
+        // A target with UNIQUE (id, workspace_id) lets a reference name both columns, so the database itself refuses a
+        // row that points into another workspace. A single-column key on id alone would accept it.
+        List<String> crossing = jdbc.queryForList("""
+                WITH workspace_keyed AS (
+                    SELECT i.indrelid AS target FROM pg_index i
+                    WHERE i.indisunique AND i.indnkeyatts = 2
+                      AND (SELECT array_agg(a.attname::text ORDER BY a.attname) FROM pg_attribute a
+                           WHERE a.attrelid = i.indrelid AND a.attnum = ANY (i.indkey::int2[]))
+                          = ARRAY['id', 'workspace_id'])
+                SELECT c.conrelid::regclass::text || '.' || col.attname FROM pg_constraint c
+                JOIN pg_attribute col ON col.attrelid = c.conrelid AND col.attnum = c.conkey[1]
+                JOIN pg_attribute ws ON ws.attrelid = c.conrelid AND ws.attname = 'workspace_id'
+                                    AND ws.attnotnull AND NOT ws.attisdropped
+                WHERE c.contype = 'f' AND cardinality(c.conkey) = 1 AND c.connamespace = 'public'::regnamespace
+                  AND c.confrelid IN (SELECT target FROM workspace_keyed)
+                  AND c.confkey[1] = (SELECT a.attnum FROM pg_attribute a
+                                      WHERE a.attrelid = c.confrelid AND a.attname = 'id')
+                  AND NOT EXISTS (SELECT 1 FROM pg_constraint d
+                                  WHERE d.contype = 'f' AND d.conrelid = c.conrelid AND d.confrelid = c.confrelid
+                                    AND c.conkey[1] = ANY (d.conkey) AND ws.attnum = ANY (d.conkey))
+                ORDER BY 1
+                """, String.class).stream()
+                .map(Objects::requireNonNull)
+                .toList();
+
+        assertThat(crossing)
+                .as("These references from a workspace table name a workspace row by id alone. Add a foreign key on"
+                        + " (column, workspace_id), as docs/contributor/database-migration.mdx § Workspace column"
+                        + " describes")
+                .isEmpty();
+    }
+
+    @Test
     void shouldGiveAReasonWhenAGlobalTableNamesAWorkspace() {
         List<String> naming = jdbc.queryForList("""
                 SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
