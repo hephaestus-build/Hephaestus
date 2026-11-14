@@ -156,6 +156,15 @@ spec:
               value: {{ $config.email.rateLimit.dailyCapacity | int | quote }}
             - name: HEPHAESTUS_EMAIL_RATE_LIMIT_OPTIONAL_DAILY_CAPACITY
               value: {{ $config.email.rateLimit.optionalDailyCapacity | int | quote }}
+            {{- if .Values.postgresql.bundled }}
+            {{- $volumeMi := include "hephaestus.quantityUnits" (dict "value" .Values.postgresql.persistence.size "unit" 1048576 "roundDown" true) | int64 }}
+            {{- if lt $volumeMi 1 }}
+            {{- fail "postgresql.persistence.size must be at least 1Mi" }}
+            {{- end }}
+            # The volume of the bundled PostgreSQL, which the database size alert compares against.
+            - name: HEPHAESTUS_DATABASE_VOLUME_SIZE
+              value: {{ printf "%dMB" $volumeMi | quote }}
+            {{- end }}
             - name: HEPHAESTUS_AUTH_ISSUER
               value: {{ printf "https://%s" .Values.host | quote }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_AUTH_STATE_COOKIE_KEY") | nindent 12 }}
