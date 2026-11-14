@@ -3,7 +3,9 @@ package de.tum.cit.aet.hephaestus.agent.mentor.host;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -31,6 +33,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.agent.run.RunLockProbe;
 import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
@@ -370,6 +373,67 @@ class TurnSandboxRunKindIntegrationTest extends AbstractWorkspaceIntegrationTest
         assertThat(replacement.fence().runId()).isEqualTo(second.getRunId());
         assertThat(held.start(replacement).cold()).isTrue();
         assertThat(turnRows.findById(second.getId()).orElseThrow().getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
+    }
+
+    /**
+     * The turn's context build can take longer than the run's lease on a real workspace. The lease renewal and the
+     * reaper lock the run's row, so the context read must hold no sandbox, turn or run row while it builds.
+     */
+    @Test
+    void shouldRenewTheLeaseWhileTheTurnsContextIsBuilt() throws Exception {
+        MentorTurn turn = ask("Question");
+        SandboxRun run = claim();
+        var probe = RunLockProbe.of(runs, transactions, jdbc, run.fence())
+                .alsoLocks("mentor_turn", "run_id = ?", run.fence().runId())
+                .alsoLocks("agent_sandbox", "id = ?", run.sandbox().id());
+        var contexts = spy(HephTurnFixtures.contexts(beans));
+        doAnswer(call -> {
+                    probe.hold();
+                    return call.callRealMethod();
+                })
+                .when(contexts)
+                .context(any());
+        var slowKind = new TurnSandboxRunKind(
+                MentorTurnStarts.admitting(beans, meters, digests),
+                beans.getBean(TurnRunsAdapter.class),
+                runs,
+                held,
+                contexts,
+                turnRows,
+                turns,
+                beans.getBean(MentorTurnCompletion.class),
+                clock,
+                beans.getBean(ObjectMapper.class),
+                meters);
+        assertThat(probe.during(() -> slowKind.context(run)).isObject()).isTrue();
+        assertThat(turnRows.findById(turn.getId()).orElseThrow().getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
+    }
+
+    @Test
+    void shouldAnswerNoContextThatAPersonErasureOvertook() {
+        ask("Question");
+        SandboxRun run = claim();
+        var copyFence = mock(PersonDataCopyFence.class);
+        when(copyFence.tryHoldForCapture()).thenReturn(true);
+        var observed = new HephTurns(
+                turnRows,
+                beans.getBean(MentorConversationRepository.class),
+                beans.getBean(PersonDataWriteFence.class),
+                copyFence,
+                clock,
+                runs,
+                turns,
+                sandboxes,
+                transactions);
+        var read = new AtomicBoolean();
+        doAnswer(call -> read.get()).when(copyFence).erasedSince(any(), any());
+        assertThatThrownBy(() -> observed.read(run, turn -> {
+                    // The erasure completes while the context is built.
+                    read.set(true);
+                    return turn.turnId();
+                }))
+                .isInstanceOf(StaleRunException.class);
+        assertThat(runs.find(run.fence().run()).orElseThrow().getState()).isEqualTo(AgentRunState.LEASED);
     }
 
     @Test

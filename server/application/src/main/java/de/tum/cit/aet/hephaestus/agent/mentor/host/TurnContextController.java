@@ -66,7 +66,7 @@ public class TurnContextController {
     /** An item listed in the context index is read on demand, then staged in the sandbox for Pi's read tool. */
     @PostMapping("/document")
     public ResponseEntity<byte[]> document(SandboxRun run, @Valid @RequestBody LoadRequest request) {
-        return turns.write(run, false, turn -> {
+        return turns.read(run, turn -> {
             var bytes = contexts.document(turn, request.path())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
             return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(bytes);
