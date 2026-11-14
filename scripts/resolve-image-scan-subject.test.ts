@@ -477,8 +477,44 @@ void test(
 				},
 			);
 			assert.notEqual(failed.status, 0);
-			assert.match(failed.stdout, /::notice::application-server did not build/u);
+			assert.match(
+				failed.stdout,
+				/::notice::application-server has no digest: its build step failed/u,
+			);
 			assert.doesNotMatch(failed.stdout, /No digest produced/u);
+			// A failed bake still hands over the sibling images that it pushed, so each is scanned.
+			rmSync(path.join(directory, "digests"), { recursive: true, force: true });
+			const partial = spawnSync(
+				"bash",
+				["-e", "-c", String(step("build", "Export digests").get("run"))],
+				{
+					encoding: "utf8",
+					env: {
+						...process.env,
+						RUNNER_TEMP: directory,
+						PLATFORM_PAIR: "linux-arm64",
+						IMAGES: JSON.stringify(["webapp", "postgres"]),
+						WEBAPP_DIGEST: `sha256:${artifact}`,
+						POSTGRES_DIGEST: "",
+						BUILDPACKS_DIGEST: "",
+						BUILDPACKS_OUTCOME: "",
+						BAKE_OUTCOME: "failure",
+					},
+				},
+			);
+			assert.notEqual(partial.status, 0);
+			assert.deepEqual(
+				readdirSync(path.join(directory, "digests"), {
+					encoding: "utf8",
+					recursive: true,
+				}).toSorted((left, right) => left.localeCompare(right)),
+				[
+					"webapp",
+					path.join("webapp", "linux-arm64"),
+					path.join("webapp", "linux-arm64", artifact),
+				],
+			);
+			assert.match(partial.stdout, /::notice::postgres has no digest/u);
 		} finally {
 			rmSync(directory, { recursive: true, force: true });
 		}

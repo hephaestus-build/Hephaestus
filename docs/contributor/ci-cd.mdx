@@ -160,8 +160,8 @@ optional framework adapters: a previously investigated class can fail for a diff
 an update. Unfamiliar diagnostics and archive failures also remain visible. The reporting pipe cannot
 change the image build's exit status.
 
-When the build fails, one annotation on the build step holds the lifecycle's error lines, such as a dependency it could not get.
-The digest export then names the failed build instead of a missing digest.
+When `pack build` fails, one annotation on its step holds the lifecycle's error lines, such as a dependency it could not get.
+When an image build fails, the digest export names the failed build, not a missing digest.
 
 The quality servers in `ci-quality-gates.yml` share native YAML step aliases. Job-level conditions omit unchanged
 legs before a runner is allocated. In a pull request, selected legs do not cancel each other on failure.
