@@ -209,7 +209,12 @@ jobs:
           chmod +x "$launcher"
           export PRE_PUSH_PROBE="$probe"
           git init --bare --quiet "$remote"
+          # A remote that is not GitHub, such as a validation mirror, skips the checks.
           git push --dry-run --quiet "$remote" HEAD:refs/heads/pre-push-probe
+          test ! -s "$probe"
+          # A GitHub URL runs them. insteadOf sends the push to the local repository.
+          git -c "url.$remote.insteadOf=https://github.com/hephaestus-build/pre-push-probe" \
+            push --dry-run --quiet https://github.com/hephaestus-build/pre-push-probe HEAD:refs/heads/pre-push-probe
           test "$(cat "$probe")" = ran
 
       - name: Upload application test results
