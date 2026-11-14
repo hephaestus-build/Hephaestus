@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationTokenProvider;
@@ -292,7 +293,7 @@ class GitHubLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                 ? new ConnectionConfig.GitHubAppConfig(123L, workspace.getAccountLogin(), null, Set.of())
                 : new ConnectionConfig.GitHubPatConfig(workspace.getAccountLogin(), null, Set.of());
         Connection connection = new Connection(workspace, IntegrationKind.GITHUB, "initial-group", config);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connection = connectionRepository.saveAndFlush(connection);
         assertThat(syncTargets.getSyncTargetsForScope(workspace.getId())).hasSize(2);
         jobs.run(

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.reset;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
@@ -138,7 +139,7 @@ class OutlineConnectionAdminControllerIntegrationTest extends AbstractWorkspaceI
                 "team-1",
                 new ConnectionConfig.OutlineConfig(SERVER_URL, null, null, Set.of()));
         connection.setCredentials(new BearerToken("outline-token", null), credentialConverter);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connectionRepository.save(connection);
     }
 }

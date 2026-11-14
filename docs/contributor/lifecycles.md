@@ -27,8 +27,11 @@ Use a plain enum. Do not add a state machine framework.
 [`Lifecycle`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/java/de/tum/cit/aet/hephaestus/core/Lifecycle.java)
 is the shared transition contract.
 `LifecycleContractTest` discovers every production enum that implements the contract.
-Each enum has explicit initial and terminal states in that test.
-The test checks that a terminal state has no exit and that each state is reachable from an initial state.
+Each enum has explicit initial states and a terminal set in that test.
+A lifecycle with no terminal state must declare `@ContinuingLifecycle` with a nonblank reason.
+The contract then requires an empty terminal set and an exit from every state.
+An unmarked lifecycle must have a terminal state.
+The test checks that terminal states have no exit and that each state is reachable from an initial state.
 
 `LifecycleSetterArchTest` refuses an entity method named `set*` that takes a `Lifecycle` value.
 Its remaining exceptions name one owner per field.
@@ -172,3 +175,41 @@ A temporary store failure keeps the request in `ERASING` with the failure code `
 `complete` removes the identifying scope and the selections, so the receipt keeps only counts and times.
 
 The database trigger `guard_person_data_request` also refuses a change to a completed request's state.
+
+## Provider connections
+
+`IntegrationState` names each legal edge, including `RECONNECT`.
+`Connection.transitionTo` checks the edge and reconnect authority before it changes state, reason and lifecycle generation together.
+A same-state call changes none of them.
+A refused transition changes none of them.
+
+```mermaid
+stateDiagram-v2
+    accTitle: Provider connection lifecycle
+    accDescr: A connection starts pending, can activate, suspend, resume or disconnect, and can reconnect with verified authority.
+    [*] --> PENDING
+    PENDING --> ACTIVE: CONNECT
+    PENDING --> UNINSTALLED: DISCONNECT
+    ACTIVE --> SUSPENDED: SUSPEND
+    ACTIVE --> UNINSTALLED: DISCONNECT
+    SUSPENDED --> ACTIVE: RESUME
+    SUSPENDED --> UNINSTALLED: DISCONNECT
+    UNINSTALLED --> ACTIVE: RECONNECT (verified)
+```
+
+A reconnect reuses the connection row and its audit history.
+It advances the lifecycle generation so that work from an earlier connection lifetime cannot apply to it.
+Thus this lifecycle has no terminal state; it declares the reason with `@ContinuingLifecycle`.
+`INITIATE` authorizes reconnect for each provider after its strategy verified fresh credentials.
+`OAUTH_COMPLETE` authorizes reconnect only for GitHub and Slack, after their verified OAuth flow.
+GitLab and Outline do not use that OAuth authority.
+These event names are internal authority from the connection use case, not caller-supplied state changes.
+
+`ConnectionService` first coordinates provider identities, then holds the scoped connection lifecycle lock and reads the current row again.
+It skips a recorded event and refuses an illegal transition before local erasure, cancellation or state writes.
+The audit identity includes the connection, event type and correlation ID, including a null correlation ID.
+The unique database index remains the last duplicate fence.
+[Provider resource removal and adoption](./provider-resource-repair.md) owns the resource, credential and generation fences.
+
+No new stored state is required for reconnect.
+The four stored values stay unchanged, so old and new servers read the same state set during an upgrade.

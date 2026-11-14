@@ -34,6 +34,10 @@ class ConnectionAuditRepositoryIntegrationTest extends AbstractWorkspaceIntegrat
         assertThat(audits.findByWorkspaceIdAndConnectionIdOrderByOccurredAtDesc(
                         second.getId(), firstConnection.getId()))
                 .isEmpty();
+        assertThat(audits.containsEvent(firstConnection.getId(), first.getId(), "INITIATE", "audit-test"))
+                .isTrue();
+        assertThat(audits.containsEvent(firstConnection.getId(), second.getId(), "INITIATE", "audit-test"))
+                .isFalse();
     }
 
     private Connection connection(Workspace workspace, String teamId) {

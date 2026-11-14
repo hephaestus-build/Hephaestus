@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.oauth.state;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.OAuthCallbackService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -77,10 +78,11 @@ class OAuthStateNonceStoreIntegrationTest extends BaseIntegrationTest {
         store.issue(nonce, workspace.getId(), kind, issued);
         var verified = new OAuthStateService.StateBinding(workspace.getId(), kind, issued);
         var original = store.boundAttempt(nonce, verified);
-        transactions.executeWithoutResult(status -> connections
-                .findByIdAndWorkspaceId(original.connectionId(), workspace.getId())
-                .orElseThrow()
-                .setState(IntegrationState.UNINSTALLED));
+        transactions.executeWithoutResult(status -> ConnectionFixtures.reachState(
+                connections
+                        .findByIdAndWorkspaceId(original.connectionId(), workspace.getId())
+                        .orElseThrow(),
+                IntegrationState.UNINSTALLED));
         String replacementNonce = UUID.randomUUID().toString().replace("-", "");
         store.issue(replacementNonce, workspace.getId(), kind, issued);
         var replacement = store.boundAttempt(replacementNonce, verified);
@@ -106,8 +108,8 @@ class OAuthStateNonceStoreIntegrationTest extends BaseIntegrationTest {
             var owner = connections
                     .findByIdAndWorkspaceId(original.connectionId(), workspace.getId())
                     .orElseThrow();
-            owner.setState(IntegrationState.SUSPENDED);
-            owner.setState(IntegrationState.ACTIVE);
+            ConnectionFixtures.reachState(owner, IntegrationState.SUSPENDED);
+            ConnectionFixtures.reachState(owner, IntegrationState.ACTIVE);
         });
         assertThatThrownBy(() -> callbacks.findAttemptConnection(original)).isInstanceOf(IllegalStateException.class);
     }

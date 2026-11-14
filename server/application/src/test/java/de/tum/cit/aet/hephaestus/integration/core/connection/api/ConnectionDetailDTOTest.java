@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -117,7 +118,7 @@ class ConnectionDetailDTOTest {
         Workspace workspace = new Workspace();
         workspace.setId(7L);
         Connection connection = new Connection(workspace, IntegrationKind.OUTLINE, "https://o.test", config);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         stampPersistenceFields(connection);
         return connection;
     }

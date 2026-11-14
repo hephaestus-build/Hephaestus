@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -69,7 +70,7 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
                 IntegrationKind.SLACK,
                 "TREADCOST",
                 new ConnectionConfig.SlackConfig("TREADCOST", "Read cost", null, Set.of()));
-        slack.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(slack, IntegrationState.ACTIVE);
         slack = connections.saveAndFlush(slack);
 
         var read = reads.measure(() -> queries.toWorkspaceDTO(workspace));
@@ -91,14 +92,14 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
         var github = connections
                 .findActive(workspace.getId(), IntegrationKind.GITHUB)
                 .orElseThrow();
-        github.setState(IntegrationState.SUSPENDED);
+        ConnectionFixtures.reachState(github, IntegrationState.SUSPENDED);
         connections.saveAndFlush(github);
         var gitlab = new Connection(
                 workspace,
                 IntegrationKind.GITLAB,
                 "read-group",
                 new ConnectionConfig.GitLabConfig("https://gitlab.example.test", 42L, 7L, Set.of(), null));
-        gitlab.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(gitlab, IntegrationState.ACTIVE);
         connections.saveAndFlush(gitlab);
         storeUnreadableCredential(workspace, IntegrationKind.GITLAB);
 
@@ -239,7 +240,7 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
                 Long.toString(installation),
                 new ConnectionConfig.GitHubAppConfig(
                         installation, "read-new", "https://github.example.test", Set.of()));
-        recent.setState(IntegrationState.SUSPENDED);
+        ConnectionFixtures.reachState(recent, IntegrationState.SUSPENDED);
         recent = connections.saveAndFlush(recent);
         jdbc.update(
                 "UPDATE connection SET created_at = ? WHERE workspace_id = ?",
@@ -264,7 +265,7 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
         var github = connections
                 .findActive(workspace.getId(), IntegrationKind.GITHUB)
                 .orElseThrow();
-        github.setState(IntegrationState.SUSPENDED);
+        ConnectionFixtures.reachState(github, IntegrationState.SUSPENDED);
         connections.saveAndFlush(github);
 
         var read = reads.measure(() -> queries.toWorkspaceDTO(workspace));
@@ -307,7 +308,7 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
                 IntegrationKind.SLACK,
                 "TSTORED",
                 new ConnectionConfig.SlackConfig("TSTORED", "Stored", null, Set.of()));
-        slack.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(slack, IntegrationState.ACTIVE);
         slack = connections.saveAndFlush(slack);
         storeUnreadableCredential(workspace, IntegrationKind.SLACK);
 
@@ -353,7 +354,7 @@ class WorkspaceConnectionReadCostIntegrationTest extends AbstractWorkspaceIntegr
                         installation, workspace.getAccountLogin(), "https://api.github.com", Set.of());
         var connection = new Connection(
                 workspace, IntegrationKind.GITHUB, personalAccessToken ? null : Long.toString(installation), config);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connections.saveAndFlush(connection);
         return workspace;
     }

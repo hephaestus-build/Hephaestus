@@ -40,13 +40,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.task.SyncTaskExecutor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -193,7 +194,7 @@ class ConnectionServiceTest extends BaseUnitTest {
         Connection connection = new Connection(
                 workspace, IntegrationKind.SLACK, "T1", new ConnectionConfig.SlackConfig("T1", "Acme", null, Set.of()));
         setId(connection, 55L);
-        connection.setState(IntegrationState.UNINSTALLED);
+        ConnectionFixtures.reachState(connection, IntegrationState.UNINSTALLED);
         when(connectionRepository.findByIdAndWorkspaceId(connection.getId(), workspace.getId()))
                 .thenReturn(Optional.of(connection));
 
@@ -333,7 +334,7 @@ class ConnectionServiceTest extends BaseUnitTest {
     void findReferenced_resolvesAnExplicitSuspendedConnection() {
         Connection connection = connection(
                 58L, IntegrationKind.SLACK, new ConnectionConfig.SlackConfig("team-1", "Acme", null, Set.of()));
-        connection.setState(IntegrationState.SUSPENDED);
+        ConnectionFixtures.reachState(connection, IntegrationState.SUSPENDED);
         IntegrationRef ref = new IntegrationRef(
                 IntegrationKind.SLACK, workspace.getId(), connection.getInstanceKey(), connection.getId());
 
@@ -421,9 +422,8 @@ class ConnectionServiceTest extends BaseUnitTest {
     @Test
     void transition_duplicateCorrelationId_shortCircuitsWithoutMutatingState() {
         Connection connection = pendingConnection();
-        // Conflicting INSERT on the idempotency index → the conflicting redelivery is dropped.
-        when(auditRepository.save(any(ConnectionAudit.class)))
-                .thenThrow(new DataIntegrityViolationException("uq_connection_audit_idempotency"));
+        // A recorded delivery is found under the lifecycle lock, before any state or erasure write.
+        when(auditRepository.containsEvent(55L, 7L, "INSTALL_BIND", "corr-dup")).thenReturn(true);
 
         Connection result = service.transition(
                 connection,
@@ -432,6 +432,60 @@ class ConnectionServiceTest extends BaseUnitTest {
 
         assertThat(result).isSameAs(connection);
         assertThat(result.getState()).isEqualTo(IntegrationState.PENDING);
+        verify(connectionRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldRejectAnUnverifiedReconnectBeforeCancellationOrAuditWrites() {
+        var connection = connectionInState(IntegrationState.UNINSTALLED);
+        long generation = connection.getLifecycleGeneration();
+        assertThatThrownBy(() -> service.transition(
+                        connection,
+                        new TransitionRequest(IntegrationState.ACTIVE, "UNVERIFIED", "SYSTEM", null, "invalid", "no")))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(connection.getLifecycleGeneration()).isEqualTo(generation);
+        verify(auditRepository, never()).save(any());
+        verify(syncJobService, never()).requestCancelForTeardown(anyLong());
+        verify(connectionRepository, never()).save(any());
+    }
+
+    @Test
+    void shouldSkipARecordedAdminDisconnectBeforeCancellingAnActiveSyncOrErasing() {
+        var connection = connectionInState(IntegrationState.ACTIVE);
+        var strategy = mock(ConnectionStrategy.class);
+        lenient()
+                .when(syncJobService.requestCancelForTeardown(connection.getId()))
+                .thenReturn(Optional.of(99L));
+        when(auditRepository.containsEvent(connection.getId(), workspace.getId(), "DISCONNECT", "recorded"))
+                .thenReturn(true);
+        var request = new TransitionRequest(
+                IntegrationState.UNINSTALLED, "DISCONNECT", "SYSTEM", null, "recorded", "ignored");
+        assertThat(service.disconnect(connection, request, strategy)).isSameAs(connection);
+        verify(syncJobService, never()).requestCancelForTeardown(anyLong());
+        verifyNoInteractions(strategy);
+        verify(auditRepository, never()).save(any());
+        assertThat(connection.getState()).isEqualTo(IntegrationState.ACTIVE);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = IntegrationKind.class,
+            names = {"GITLAB", "OUTLINE"})
+    void shouldRefuseOAuthReconnectForAProviderWithoutThatAuthority(IntegrationKind kind) {
+        ConnectionConfig config = kind == IntegrationKind.GITLAB
+                ? new ConnectionConfig.GitLabConfig("https://gitlab.example", 42L, null, Set.of(), null)
+                : new ConnectionConfig.OutlineConfig("https://outline.example", null, null, Set.of());
+        var connection = connection(71L, kind, config);
+        ConnectionFixtures.reachState(connection, IntegrationState.UNINSTALLED);
+        long generation = connection.getLifecycleGeneration();
+        assertThatThrownBy(() -> service.transition(
+                        connection,
+                        new TransitionRequest(
+                                IntegrationState.ACTIVE, "OAUTH_COMPLETE", "SYSTEM", null, "unsupported", "ignored")))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(connection.getLifecycleGeneration()).isEqualTo(generation);
+        assertThat(connection.getState()).isEqualTo(IntegrationState.UNINSTALLED);
+        verify(auditRepository, never()).save(any());
         verify(connectionRepository, never()).save(any());
     }
 
@@ -588,8 +642,8 @@ class ConnectionServiceTest extends BaseUnitTest {
         @Test
         void duplicateCorrelationId_publishesNothing() {
             Connection connection = pendingConnection();
-            when(auditRepository.save(any(ConnectionAudit.class)))
-                    .thenThrow(new DataIntegrityViolationException("uq_connection_audit_idempotency"));
+            when(auditRepository.containsEvent(55L, 7L, "INSTALL_BIND", "corr-dup"))
+                    .thenReturn(true);
 
             service.transition(
                     connection,
@@ -612,7 +666,7 @@ class ConnectionServiceTest extends BaseUnitTest {
                 new ConnectionConfig.GitHubAppConfig(100L, null, null, Set.of()));
         // Lifecycle events carry the connection id; persisted rows always have one.
         setId(connection, 55L);
-        connection.setState(state);
+        ConnectionFixtures.reachState(connection, state);
         lenient()
                 .when(connectionRepository.findByIdAndWorkspaceId(connection.getId(), workspace.getId()))
                 .thenReturn(Optional.of(connection));
@@ -622,7 +676,7 @@ class ConnectionServiceTest extends BaseUnitTest {
     private Connection connection(long id, IntegrationKind kind, ConnectionConfig config) {
         Connection connection = new Connection(workspace, kind, kind.name().toLowerCase(Locale.ROOT), config);
         setId(connection, id);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         lenient()
                 .when(connectionRepository.findByIdAndWorkspaceId(connection.getId(), workspace.getId()))
                 .thenReturn(Optional.of(connection));

@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.spi.LoginProviderQuery;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -48,7 +49,7 @@ class WorkspaceOnboardingLinksTest extends BaseUnitTest {
                 "T123",
                 new ConnectionConfig.SlackConfig("T123", "Engineering", null, Set.of()));
         ReflectionTestUtils.setField(connection, "id", 9L);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         return connection;
     }
 
@@ -91,7 +92,7 @@ class WorkspaceOnboardingLinksTest extends BaseUnitTest {
                 "team",
                 new ConnectionConfig.OutlineConfig("https://docs.example.org", null, null, Set.of()));
         ReflectionTestUtils.setField(connection, "id", 9L);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         when(connections.findByWorkspaceId(1L)).thenReturn(List.of(connection));
         when(providers.enabledProviders())
                 .thenReturn(List.of(
@@ -121,7 +122,7 @@ class WorkspaceOnboardingLinksTest extends BaseUnitTest {
                 "team",
                 new ConnectionConfig.OutlineConfig("not-a-url", null, null, Set.of()));
         ReflectionTestUtils.setField(connection, "id", 9L);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         when(connections.findByWorkspaceId(1L)).thenReturn(List.of(connection));
         when(providers.enabledProviders())
                 .thenReturn(List.of(new LoginProviderQuery.Provider("outline", "Outline", "OUTLINE", "not-a-url")));

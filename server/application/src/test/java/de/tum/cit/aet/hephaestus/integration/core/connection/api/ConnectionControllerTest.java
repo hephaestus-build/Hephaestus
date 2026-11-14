@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionBusyException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.OAuthBrowserBinding;
@@ -205,8 +206,8 @@ class ConnectionControllerTest extends BaseUnitTest {
         when(connectionService.transition(any(Connection.class), any(TransitionRequest.class)))
                 .thenAnswer(inv -> {
                     Connection conn = inv.getArgument(0);
-                    conn.setState(IntegrationState.SUSPENDED);
-                    conn.setStateReason(((TransitionRequest) inv.getArgument(1)).detail());
+                    ConnectionFixtures.reachState(
+                            conn, IntegrationState.SUSPENDED, ((TransitionRequest) inv.getArgument(1)).detail());
                     return conn;
                 });
 
@@ -236,7 +237,7 @@ class ConnectionControllerTest extends BaseUnitTest {
         when(connectionService.transition(any(Connection.class), any(TransitionRequest.class)))
                 .thenAnswer(inv -> {
                     Connection conn = inv.getArgument(0);
-                    conn.setState(IntegrationState.ACTIVE);
+                    ConnectionFixtures.reachState(conn, IntegrationState.ACTIVE);
                     return conn;
                 });
 
@@ -261,7 +262,7 @@ class ConnectionControllerTest extends BaseUnitTest {
         when(connectionService.disconnect(any(Connection.class), any(TransitionRequest.class), any()))
                 .thenAnswer(inv -> {
                     Connection conn = inv.getArgument(0);
-                    conn.setState(IntegrationState.UNINSTALLED);
+                    ConnectionFixtures.reachState(conn, IntegrationState.UNINSTALLED);
                     return conn;
                 });
 
@@ -349,7 +350,7 @@ class ConnectionControllerTest extends BaseUnitTest {
             case OUTLINE -> new ConnectionConfig.OutlineConfig("https://app.getoutline.com", null, null, Set.of());
         };
         Connection c = new Connection(ws, kind, instanceKey, cfg);
-        c.setState(state);
+        ConnectionFixtures.reachState(c, state);
         setIdAndTimestamps(c, id);
         return c;
     }

@@ -18,6 +18,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties.BackfillProperties;
@@ -155,7 +156,7 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
                 IntegrationKind.GITHUB,
                 "100",
                 new ConnectionConfig.GitHubAppConfig(100L, "acme", null, Set.of()));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         ReflectionTestUtils.setField(connection, "id", CONNECTION_ID);
         return connection;
     }

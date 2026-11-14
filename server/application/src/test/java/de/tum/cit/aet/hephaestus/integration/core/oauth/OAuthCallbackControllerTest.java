@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService.StateBinding;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
@@ -97,7 +98,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         when(callbackService.completeConnection(any(Connection.class), any(), any()))
                 .thenAnswer(inv -> {
                     Connection c = inv.getArgument(0);
-                    c.setState(IntegrationState.ACTIVE);
+                    ConnectionFixtures.reachState(c, IntegrationState.ACTIVE);
                     return c;
                 });
 
@@ -662,7 +663,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
             case OUTLINE -> new ConnectionConfig.OutlineConfig("https://app.getoutline.com", null, null, Set.of());
         };
         Connection c = new Connection(ws, kind, instanceKey, cfg);
-        c.setState(state);
+        ConnectionFixtures.reachState(c, state);
         setId(c, id);
         return c;
     }

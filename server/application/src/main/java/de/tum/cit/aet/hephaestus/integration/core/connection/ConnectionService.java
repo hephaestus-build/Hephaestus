@@ -26,16 +26,15 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.TransientDataAccessResourceException;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Connection lookups + state transitions. Transitions are guarded by
- * {@link IntegrationState#canTransitionTo}; same-state calls are no-ops. The audit
- * row's correlation_id uniqueness silences webhook redelivery.
+ * Connection lookups and state transitions. {@link Connection#transitionTo} owns the state guard.
+ * The application service holds the scoped lifecycle lock and checks the audit identity before local erasure;
+ * same-state calls and recorded deliveries are no-ops.
  */
 @Service
 public class ConnectionService {
@@ -621,21 +620,30 @@ public class ConnectionService {
                             ProviderResourceRepairs.ref(connection),
                             connection.getConfig(),
                             resourceRepairs.retainedCredential(connection)));
-            if (fenceOnActiveSyncJob) {
-                // Inside the lock, so no job can slip in between this check and the state write.
-                syncJobService.requestCancelForTeardown(connectionId).ifPresent(activeJobId -> {
-                    throw new ConnectionBusyException(connectionId, activeJobId);
-                });
-            }
         }
         IntegrationState current = connection.getState();
         if (current == req.next()) {
             log.debug("Connection {} already in state {}, no-op", connection.getId(), req.next());
             return connection;
         }
-        if (!current.canTransitionTo(req.next()) && !isGuardedReconnect(connection, current, req)) {
-            throw new IllegalStateException(
-                    "Connection " + connection.getId() + " cannot change from " + current + " to " + req.next() + ".");
+        if (auditRepository.containsEvent(
+                connection.getId(), connection.getWorkspace().getId(), req.eventType(), req.correlationId())) {
+            log.info(
+                    "Skipped recorded connection event: connectionId={}, current={}, requested={}, eventType={}, correlationId={}",
+                    connection.getId(),
+                    current,
+                    req.next(),
+                    req.eventType(),
+                    req.correlationId());
+            return connection;
+        }
+        connection.requireTransitionTo(req.next(), req.eventType());
+        if (fenceOnActiveSyncJob) {
+            // The state guard passes before cancellation or erasure can write anything.
+            long connectionId = connection.getId();
+            syncJobService.requestCancelForTeardown(connectionId).ifPresent(activeJobId -> {
+                throw new ConnectionBusyException(connectionId, activeJobId);
+            });
         }
         if (req.next() == IntegrationState.ACTIVE) {
             if (current == IntegrationState.SUSPENDED
@@ -660,22 +668,12 @@ public class ConnectionService {
                 req.correlationId(),
                 req.detail());
         audit.setActorAccountId(req.actorAccountId());
-        try {
-            auditRepository.save(audit);
-        } catch (DataIntegrityViolationException e) {
-            log.info(
-                    "Idempotent {} for connection={} corr={} (already recorded)",
-                    req.eventType(),
-                    connection.getId(),
-                    req.correlationId());
-            return connection;
-        }
+        auditRepository.save(audit);
         if ((req.next() == IntegrationState.UNINSTALLED && retainForTeardown)
                 || req.next() == IntegrationState.SUSPENDED) {
             resourceRepairs.requestRemoval(connection, req.next() == IntegrationState.SUSPENDED);
         }
-        connection.setState(req.next());
-        connection.setStateReason(req.detail());
+        connection.transitionTo(req.next(), req.eventType(), req.detail());
         Instant now = clock.instant();
         if (req.next() == IntegrationState.UNINSTALLED) {
             if (retainForTeardown) {
@@ -698,26 +696,10 @@ public class ConnectionService {
     }
 
     /**
-     * Guarded revival of a terminal UNINSTALLED row — the kind-specific reconnect flows the
-     * {@link IntegrationState} javadoc reserves. Two doors only: a completed Slack or GitHub OAuth
-     * round-trip, whose strategy just proved the team or installation belongs to the person
-     * connecting, and an admin-driven inline re-connect ({@code INITIATE}) whose strategy just
-     * re-validated fresh credentials against the vendor. Both preserve the vendor natural key
-     * {@code (workspace, kind, instance_key)} instead of colliding with the unique constraint.
+     * Parameter object for {@link #transition}. A correlation identifies one event for the stored connection,
+     * across reconnects. Null is one identity too, as the audit index requires. A new event must use a distinct
+     * non-null delivery or request ID; reconnect never makes an old delivery new again.
      */
-    private static boolean isGuardedReconnect(
-            Connection connection, IntegrationState current, TransitionRequest request) {
-        if (current != IntegrationState.UNINSTALLED || request.next() != IntegrationState.ACTIVE) {
-            return false;
-        }
-        if ((connection.getKind() == IntegrationKind.SLACK || connection.getKind() == IntegrationKind.GITHUB)
-                && "OAUTH_COMPLETE".equals(request.eventType())) {
-            return true;
-        }
-        return "INITIATE".equals(request.eventType());
-    }
-
-    /** Parameter object for {@link #transition}. */
     public record TransitionRequest(
             IntegrationState next,
             String eventType,

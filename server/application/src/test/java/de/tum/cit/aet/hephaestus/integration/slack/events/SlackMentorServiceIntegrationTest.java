@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorRefusal;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveConnectionGuard;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
@@ -151,7 +152,7 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
             String team = each.getId().equals(workspace.getId()) ? TEAM : OTHER_TEAM;
             Connection slackConnection = new Connection(
                     each, IntegrationKind.SLACK, team, new ConnectionConfig.SlackConfig(team, "Slack", null, Set.of()));
-            slackConnection.setState(IntegrationState.ACTIVE);
+            ConnectionFixtures.reachState(slackConnection, IntegrationState.ACTIVE);
             connectionRepository.save(slackConnection);
             when(identities.resolveActiveAccountId(each.getId(), team, SLACK_USER))
                     .thenReturn(Optional.of(developerId));
@@ -426,7 +427,8 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .findActive(workspace.getId(), IntegrationKind.SLACK)
                 .orElseThrow();
         connectionRepository.acquireLifecycleLock(connection.getId(), workspace.getId());
-        jdbc.update("UPDATE connection SET state = 'UNINSTALLED' WHERE id = ?", connection.getId());
+        ConnectionFixtures.reachState(connection, IntegrationState.UNINSTALLED);
+        connectionRepository.saveAndFlush(connection);
         eraser.eraseWorkspace(workspace.getId());
     }
 

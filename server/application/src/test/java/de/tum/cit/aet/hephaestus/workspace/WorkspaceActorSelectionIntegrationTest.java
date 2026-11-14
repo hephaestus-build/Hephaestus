@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery.MembershipView;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -128,7 +129,7 @@ class WorkspaceActorSelectionIntegrationTest extends AbstractWorkspaceIntegratio
 
     private void connect(Workspace workspace, IntegrationKind kind, ConnectionConfig config) {
         Connection connection = new Connection(workspace, kind, kind.name(), config);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connections.saveAndFlush(connection);
     }
 }

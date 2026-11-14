@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadEvents;
 import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadItemDescriptor;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyCapability;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -85,7 +86,7 @@ class ThreadItemSourceTest extends BaseUnitTest {
         var connection = new Connection(
                 workspace, IntegrationKind.SLACK, team, new ConnectionConfig.SlackConfig(team, null, null, Set.of()));
         ReflectionTestUtils.setField(connection, "id", id);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         return connection;
     }
 

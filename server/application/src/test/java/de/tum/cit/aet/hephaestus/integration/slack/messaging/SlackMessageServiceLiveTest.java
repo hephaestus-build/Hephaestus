@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleConverter;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
@@ -58,7 +59,7 @@ class SlackMessageServiceLiveTest {
                 IntegrationKind.SLACK,
                 "T-live-e2e",
                 new ConnectionConfig.SlackConfig("T-live-e2e", "hephaestus-test", null, Set.of()));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connection.setCredentials(new BearerToken(botToken, null), converter);
         // Prove the round-trip before we ever hit Slack: the stored blob decrypts back to the token.
         assertThatCode(() -> CredentialReaders.forTests(converter).credentialsOf(connection))

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -169,9 +170,13 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
 
         try (java.sql.Connection winner = dataSource.getConnection()) {
             winner.setAutoCommit(false);
-            try (var activate = winner.prepareStatement("UPDATE connection SET state = 'ACTIVE' WHERE id = ?")) {
+            // This fixture must retain the JDBC transaction ID for the conflict barrier below. Model the legal
+            // PENDING -> ACTIVE change, including both generation and optimistic-lock version, on that connection.
+            try (var activate = winner.prepareStatement(
+                    "UPDATE connection SET state = 'ACTIVE', lifecycle_generation = lifecycle_generation + 1, version = version + 1 WHERE id = ? AND workspace_id = ? AND state = 'PENDING'")) {
                 activate.setLong(1, Objects.requireNonNull(racing.getId()));
-                activate.executeUpdate();
+                activate.setLong(2, source.getId());
+                assertThat(activate.executeUpdate()).isEqualTo(1);
             }
             String winnerXid;
             try (var xid = winner.createStatement();
@@ -377,7 +382,7 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
                 IntegrationKind.SLACK,
                 team,
                 new ConnectionConfig.SlackConfig(team, null, retentionDays, streams));
-        connection.setState(state);
+        ConnectionFixtures.reachState(connection, state);
         return connectionRepository.save(connection);
     }
 }

@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -751,7 +752,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
         Workspace team = createWorkspace("gh-course", "GH course", "gh-course", AccountType.ORG, author);
         Connection connection = new Connection(
                 team, IntegrationKind.GITHUB, "pat", new ConnectionConfig.GitHubPatConfig("gh-course", null, Set.of()));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connectionRepository.saveAndFlush(connection);
         Repository app = repository(github, "gh-course/app");
         monitor(team, app);
@@ -945,7 +946,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractWorkspaceIntegr
                 IntegrationKind.GITLAB,
                 "GITLAB",
                 new ConnectionConfig.GitLabConfig(serverUrl, 42L, null, Set.of(), null));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connectionRepository.saveAndFlush(connection);
     }
 

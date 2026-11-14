@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveConnectionGuard;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -76,7 +77,7 @@ class SlackWorkspaceResolverIntegrationTest extends AbstractWorkspaceIntegration
     private void connectSlack(Workspace workspace, String team, IntegrationState state) {
         Connection connection = new Connection(
                 workspace, IntegrationKind.SLACK, team, new ConnectionConfig.SlackConfig(team, null, null, Set.of()));
-        connection.setState(state);
+        ConnectionFixtures.reachState(connection, state);
         connectionRepository.save(connection);
     }
 }

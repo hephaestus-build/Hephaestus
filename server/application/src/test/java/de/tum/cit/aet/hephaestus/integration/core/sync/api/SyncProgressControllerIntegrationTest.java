@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -95,7 +96,7 @@ class SyncProgressControllerIntegrationTest extends AbstractWorkspaceIntegration
                 IntegrationKind.GITHUB,
                 String.valueOf(nativeId),
                 new ConnectionConfig.GitHubAppConfig(nativeId, "progress-org", null, Set.of())));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connection = connectionRepository.save(connection);
         return syncJobRepository.save(new SyncJob(
                 target, connection, IntegrationKind.GITHUB, SyncJobType.RECONCILIATION, SyncJobTrigger.MANUAL, null));

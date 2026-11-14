@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
@@ -128,7 +129,7 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                 persistUser("initial-owner"));
         gitLabConfig = new ConnectionConfig.GitLabConfig("https://gitlab.com", 42L, null, Set.of(), null);
         connection = new Connection(workspace, IntegrationKind.GITLAB, "initial-group", gitLabConfig);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connection = connectionRepository.saveAndFlush(connection);
         first = monitoredRepository("initial-group/a", 901L);
         second = monitoredRepository("initial-group/b", 902L);

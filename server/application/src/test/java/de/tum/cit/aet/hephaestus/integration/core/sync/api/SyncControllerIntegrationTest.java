@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionSyncDetails;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionSyncStateProvider;
@@ -103,7 +104,7 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 IntegrationKind.GITHUB,
                 "100",
                 new ConnectionConfig.GitHubAppConfig(100L, "sync-org", null, Set.of())));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connection = connectionRepository.save(connection);
 
         // A second tenant, owned by a different user. The @WithAdminUser principal is made an ADMIN
@@ -119,7 +120,7 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 IntegrationKind.GITHUB,
                 "200",
                 new ConnectionConfig.GitHubAppConfig(200L, "other-org", null, Set.of())));
-        otherConnection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(otherConnection, IntegrationState.ACTIVE);
         otherConnection = connectionRepository.save(otherConnection);
         otherJob = syncJobRepository.save(new SyncJob(
                 otherWorkspace,
@@ -154,7 +155,7 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @DisplayName("a SUSPENDED connection still answers 200 with a state-aware DTO, never 404")
     void status_suspendedConnection_returns200NotSuspendedHealth() {
         ensureAdminMembership(workspace);
-        connection.setState(IntegrationState.SUSPENDED);
+        ConnectionFixtures.reachState(connection, IntegrationState.SUSPENDED);
         connectionRepository.save(connection);
 
         ConnectionSyncStatusDTO status = statusRequest()
@@ -298,7 +299,7 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @WithAdminUser
     void trigger_notActiveConnection_returns409() {
         ensureAdminMembership(workspace);
-        connection.setState(IntegrationState.SUSPENDED);
+        ConnectionFixtures.reachState(connection, IntegrationState.SUSPENDED);
         connectionRepository.save(connection);
 
         triggerRequest(TestAuthUtils.getCurrentUserToken())

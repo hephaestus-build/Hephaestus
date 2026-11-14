@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAudit;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAuditRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -412,7 +413,7 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
                 "100",
                 new ConnectionConfig.GitHubAppConfig(100L, "app-token", null, Set.of()));
         connection.setDisplayName("app-token");
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connectionRepository.save(connection);
     }
 

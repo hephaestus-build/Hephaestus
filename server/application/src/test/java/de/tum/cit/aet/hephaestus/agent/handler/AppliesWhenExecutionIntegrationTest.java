@@ -40,6 +40,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -392,7 +393,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                 ? new ConnectionConfig.GitHubPatConfig("example", provider.getServerUrl(), Set.of())
                 : new ConnectionConfig.GitLabConfig(provider.getServerUrl(), 1L, null, Set.of(), null);
         var connection = new Connection(pending.scenario().workspace(), kind, "pat", config);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connections.saveAndFlush(connection);
         monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(
                 pending.scenario().workspace(), repository.getNameWithOwner(), repository.getNativeId()));

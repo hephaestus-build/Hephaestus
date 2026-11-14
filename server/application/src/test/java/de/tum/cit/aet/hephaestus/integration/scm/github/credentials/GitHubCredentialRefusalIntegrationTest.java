@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
@@ -90,7 +91,7 @@ class GitHubCredentialRefusalIntegrationTest extends AbstractWorkspaceIntegratio
                 IntegrationKind.GITHUB,
                 "https://github.com",
                 new ConnectionConfig.GitHubPatConfig("acme", null, Set.of()));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         repository.save(connection);
         connections.rotateBearerToken(workspace.getId(), IntegrationKind.GITHUB, new BearerToken(token, null));
         // An observed rate limit keeps the client from probing the real GitHub REST API.

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionBusyException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
@@ -69,7 +70,7 @@ class SyncJobActiveIndexIntegrationTest extends AbstractWorkspaceIntegrationTest
                 IntegrationKind.GITHUB,
                 "200",
                 new ConnectionConfig.GitHubAppConfig(200L, "sync-index-org", null, Set.of())));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connection = connectionRepository.save(connection);
     }
 

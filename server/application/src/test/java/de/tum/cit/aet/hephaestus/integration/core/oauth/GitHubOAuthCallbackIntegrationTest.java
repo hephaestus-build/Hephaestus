@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -309,7 +310,7 @@ class GitHubOAuthCallbackIntegrationTest extends AbstractWorkspaceIntegrationTes
                 IntegrationKind.GITHUB,
                 Long.toString(installationId),
                 new ConnectionConfig.GitHubAppConfig(installationId, "acme", null, Set.of()));
-        connection.setState(state);
+        ConnectionFixtures.reachState(connection, state);
         return connectionRepository.save(connection);
     }
 }

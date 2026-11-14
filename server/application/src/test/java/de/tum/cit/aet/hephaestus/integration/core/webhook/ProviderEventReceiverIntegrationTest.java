@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics;
@@ -154,7 +155,7 @@ class ProviderEventReceiverIntegrationTest extends BaseIntegrationTest {
             var current = connections
                     .findByIdAndWorkspaceId(connectionId, workspace.getId())
                     .orElseThrow();
-            current.setState(IntegrationState.SUSPENDED);
+            ConnectionFixtures.reachState(current, IntegrationState.SUSPENDED);
             connections.saveAndFlush(current);
         });
         var receiving = CompletableFuture.supplyAsync(() -> receiver.receive(
@@ -191,7 +192,7 @@ class ProviderEventReceiverIntegrationTest extends BaseIntegrationTest {
                     .findActive(source.getId(), IntegrationKind.GITHUB)
                     .orElseThrow();
             connections.acquireLifecycleLock(Objects.requireNonNull(connection.getId()), source.getId());
-            connection.setState(IntegrationState.SUSPENDED);
+            ConnectionFixtures.reachState(connection, IntegrationState.SUSPENDED);
             connections.saveAndFlush(connection);
         });
 
@@ -307,7 +308,7 @@ class ProviderEventReceiverIntegrationTest extends BaseIntegrationTest {
         var config = new ConnectionConfig.GitHubPatConfig(LOGIN, serverUrl, Set.of());
         var connection = new de.tum.cit.aet.hephaestus.integration.core.connection.Connection(
                 workspace, IntegrationKind.GITHUB, "pat", config);
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connections.saveAndFlush(connection);
         monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(workspace, LOGIN + "/app", nativeId));
         return workspace;
