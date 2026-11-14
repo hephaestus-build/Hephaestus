@@ -688,6 +688,7 @@ void test("Hephaestus has read, bash and load_context only in a turn whose conte
 			base: `http://127.0.0.1:${address.port}/turn/turn-1`,
 			headers: { Authorization: "Bearer token" },
 			label: "turn turn-1",
+			patience: new AbortController().signal,
 		}).context();
 		assert.equal(context.contextFolder, false);
 	} finally {
@@ -2296,3 +2297,44 @@ async function until(condition: () => boolean): Promise<void> {
 		await sleep(2);
 	}
 }
+
+void test("a turn's call waits while its worker restarts, and its run's end stops the wait", async () => {
+	const served = readFileSync(
+		new URL("heph-turn-contract/context.response.json", import.meta.url),
+		"utf8",
+	);
+	// A port that nothing listens on until the worker comes back: every connection is refused.
+	const probe = createServer();
+	probe.listen(0, "127.0.0.1");
+	await once(probe, "listening");
+	const address = probe.address();
+	assert.ok(isRecord(address) && typeof address.port === "number");
+	const { port } = address;
+	probe.close();
+	await once(probe, "close");
+	const endpoint = {
+		base: `http://127.0.0.1:${port}/turn/turn-1`,
+		headers: {},
+		label: "turn turn-1",
+	};
+
+	const run = new AbortController();
+	const read = httpTurnApi({ ...endpoint, patience: run.signal }).context();
+	await sleep(1500);
+	const worker = createServer((_request, response) => {
+		response.writeHead(200, { "content-type": "application/json" });
+		response.end(served);
+	});
+	worker.listen(port, "127.0.0.1");
+	await once(worker, "listening");
+	try {
+		assert.ok(isRecord(await read));
+	} finally {
+		worker.close();
+		await once(worker, "close");
+	}
+
+	const ended = AbortSignal.timeout(1500);
+	await assert.rejects(httpTurnApi({ ...endpoint, patience: ended }).context());
+	assert.ok(ended.aborted);
+});

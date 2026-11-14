@@ -25,6 +25,9 @@ const admitted = {
 	explanation: "An authentication call is unguarded.",
 };
 
+/** A call whose work never ends: a refused connection would wait for the gateway. */
+const patience = new AbortController().signal;
+
 void test("admission rejects an invalid identity, unknown outcome and a verdict inconsistent with its problems", () => {
 	for (const result of [
 		{ ...admitted, resultId: "result-1" },
@@ -59,14 +62,18 @@ void test("admission refuses the version 3 answer", () => {
 void test("admission retries an interrupted answer with the exact frozen request", async () => {
 	const request = { results: ["frozen measurement"] };
 	const sent: string[] = [];
-	const admission = await admit(request, async (body) => {
-		sent.push(body);
-		if (sent.length === 1) {
-			request.results.push("must not enter the replay");
-			return new Response("{", { status: 200 });
-		}
-		return Response.json(response);
-	});
+	const admission = await admit(
+		request,
+		async (body) => {
+			sent.push(body);
+			if (sent.length === 1) {
+				request.results.push("must not enter the replay");
+				return new Response("{", { status: 200 });
+			}
+			return Response.json(response);
+		},
+		patience,
+	);
 	assert.deepEqual(sent, [
 		JSON.stringify({ results: ["frozen measurement"] }),
 		JSON.stringify({ results: ["frozen measurement"] }),
@@ -78,10 +85,14 @@ void test("admission retries an interrupted answer with the exact frozen request
 void test("an explicit admission refusal is terminal", async () => {
 	let calls = 0;
 	await assert.rejects(
-		admit({}, async () => {
-			calls += 1;
-			return Response.json({ detail: "not authorized" }, { status: 403 });
-		}),
+		admit(
+			{},
+			async () => {
+				calls += 1;
+				return Response.json({ detail: "not authorized" }, { status: 403 });
+			},
+			patience,
+		),
 		/admission was refused: HTTP 403/u,
 	);
 	assert.equal(calls, 1);
@@ -90,22 +101,30 @@ void test("an explicit admission refusal is terminal", async () => {
 void test("a server error is reported once as the server's own, and a gateway that cannot reach it is retried as unreachable", async () => {
 	let calls = 0;
 	await assert.rejects(
-		admit({}, async () => {
-			calls += 1;
-			return Response.json(
-				{ detail: "Only the bound invocation can record an execution failure." },
-				{ status: 500 },
-			);
-		}),
+		admit(
+			{},
+			async () => {
+				calls += 1;
+				return Response.json(
+					{ detail: "Only the bound invocation can record an execution failure." },
+					{ status: 500 },
+				);
+			},
+			patience,
+		),
 		(error) => isAdmissionServerError(error) && /HTTP 500/u.test(error.message),
 	);
 	assert.equal(calls, 1);
 	calls = 0;
 	await assert.rejects(
-		admit({}, async () => {
-			calls += 1;
-			return new Response("", { status: 503 });
-		}),
+		admit(
+			{},
+			async () => {
+				calls += 1;
+				return new Response("", { status: 503 });
+			},
+			patience,
+		),
 		(error) => error instanceof AdmissionUnreachableError,
 	);
 	assert.equal(calls, 4);
@@ -134,51 +153,112 @@ for (const [field, value, path] of [
 void test("staging repeats the same completed practice after its committed answer is lost", async () => {
 	const request = { results: [{ practiceSlug: "names" }] };
 	const sent: string[] = [];
-	await stagePractice("names", request, async (body) => {
-		sent.push(body);
-		if (sent.length === 1) {
-			request.results.push({ practiceSlug: "later" });
-			return new Response("{", { status: 200 });
-		}
-		return Response.json({ practiceSlug: "names", digest: "a".repeat(64) });
-	});
+	await stagePractice(
+		"names",
+		request,
+		async (body) => {
+			sent.push(body);
+			if (sent.length === 1) {
+				request.results.push({ practiceSlug: "later" });
+				return new Response("{", { status: 200 });
+			}
+			return Response.json({ practiceSlug: "names", digest: "a".repeat(64) });
+		},
+		patience,
+	);
 	assert.deepEqual(sent, [sent[0], sent[0]]);
 	assert.equal(sent[0], JSON.stringify({ results: [{ practiceSlug: "names" }] }));
 });
 
 void test("staging refuses another practice's acknowledgement and never retries an expired fence", async () => {
 	await assert.rejects(
-		stagePractice("names", {}, async () =>
-			Response.json({ practiceSlug: "other", digest: "a".repeat(64) }),
+		stagePractice(
+			"names",
+			{},
+			async () => Response.json({ practiceSlug: "other", digest: "a".repeat(64) }),
+			patience,
 		),
 	);
 	let calls = 0;
 	await assert.rejects(
-		stagePractice("names", {}, async () => {
-			calls += 1;
-			return new Response(null, { status: 409 });
-		}),
+		stagePractice(
+			"names",
+			{},
+			async () => {
+				calls += 1;
+				return new Response(null, { status: 409 });
+			},
+			patience,
+		),
 	);
 	assert.equal(calls, 1);
 });
 
 void test("a replaced practice skips measurement only after the gateway identifies it", async () => {
 	assert.equal(
-		await startPractice("names", async () =>
-			Response.json({ practiceSlug: "names", current: false }),
+		await startPractice(
+			"names",
+			async () => Response.json({ practiceSlug: "names", current: false }),
+			patience,
 		),
 		false,
 	);
 	assert.equal(
-		await startPractice("names", async () =>
-			Response.json({ practiceSlug: "names", current: true }),
+		await startPractice(
+			"names",
+			async () => Response.json({ practiceSlug: "names", current: true }),
+			patience,
 		),
 		true,
 	);
 	await assert.rejects(
-		startPractice("names", async () => Response.json({ practiceSlug: "other", current: false })),
+		startPractice(
+			"names",
+			async () => Response.json({ practiceSlug: "other", current: false }),
+			patience,
+		),
 	);
 	await assert.rejects(
-		startPractice("names", async () => Response.json({ practiceSlug: "names", current: "false" })),
+		startPractice(
+			"names",
+			async () => Response.json({ practiceSlug: "names", current: "false" }),
+			patience,
+		),
 	);
+});
+
+void test("a refused connection waits for the gateway and sends the recorded request once it takes it", async () => {
+	let refusals = 0;
+	assert.equal(
+		await startPractice(
+			"names",
+			async () => {
+				if (refusals < 2) {
+					refusals += 1;
+					throw new TypeError("fetch failed", { cause: { code: "ECONNREFUSED" } });
+				}
+				return Response.json({ practiceSlug: "names", current: true });
+			},
+			patience,
+		),
+		true,
+	);
+	assert.equal(refusals, 2);
+});
+
+void test("a refused connection after its work ended fails as unreachable, so the attempt ends retryable", async () => {
+	const ended = AbortSignal.abort();
+	let calls = 0;
+	await assert.rejects(
+		startPractice(
+			"names",
+			async () => {
+				calls += 1;
+				throw new TypeError("fetch failed", { cause: { code: "ECONNREFUSED" } });
+			},
+			ended,
+		),
+		(error) => error instanceof AdmissionUnreachableError,
+	);
+	assert.equal(calls, 4);
 });

@@ -191,6 +191,8 @@ export interface StagedPractice {
 	program?: string;
 	inputs?: boolean;
 	readsSources?: readonly string[];
+	/** Context paths make the runner measure its practices one at a time, on the serial path. */
+	contextPaths?: readonly string[];
 }
 
 export const SESSION_CANDIDATE = {
@@ -279,12 +281,17 @@ export function stagePractices(
 		"catalog/practices/index.json",
 		JSON.stringify(
 			practices.map(
-				({ slug, readsSources = ["scm.pull-request.core", "scm.pull-request.diff"] }) => ({
+				({
+					slug,
+					readsSources = ["scm.pull-request.core", "scm.pull-request.diff"],
+					contextPaths,
+				}) => ({
 					slug,
 					name: "Authentication review",
 					readsSources,
 					exhaustiveSources: ["scm.pull-request.diff"],
 					versionId: "7",
+					...(contextPaths === undefined ? {} : { contextPaths }),
 				}),
 			),
 		),
@@ -511,12 +518,26 @@ if (scenario !== undefined && scenario !== "") {
 		},
 	});
 	const realFetch = globalThis.fetch;
+	// A practice's start that the gateway refuses, as while the server restarts: for that many milliseconds from its
+	// first call, or for good when null.
+	const startRefusals = parseJson(process.env.PI_HOST_START_REFUSED ?? "{}");
+	const refusedSince = new Map<string, number>();
 	mock.method(globalThis, "fetch", async (input: string | URL | Request, init?: RequestInit) => {
 		const url = input instanceof Request ? input.url : String(input);
 		if (url.endsWith("/start-practice")) {
 			assert.ok(typeof init?.body === "string");
 			const request = parseJson(init.body);
 			assert.ok(isJsonObject(request));
+			const slug = String(request.practiceSlug);
+			const refusedFor = field(startRefusals, slug);
+			if (refusedFor !== undefined) {
+				const since = refusedSince.get(slug) ?? performance.now();
+				refusedSince.set(slug, since);
+				if (refusedFor === null || performance.now() - since < Number(refusedFor)) {
+					capture("start-refused", { slug });
+					throw new TypeError("fetch failed", { cause: { code: "ECONNREFUSED" } });
+				}
+			}
 			return Response.json({ practiceSlug: request.practiceSlug, current: true });
 		}
 		if (url.endsWith("/stage-result")) {

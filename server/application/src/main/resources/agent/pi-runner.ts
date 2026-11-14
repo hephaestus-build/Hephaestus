@@ -30,6 +30,7 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 
+import { GatewayUnavailableError } from "./gateway-connection.ts";
 import {
 	SANDBOX_RESOURCE_LOADER_OPTIONS,
 	SANDBOX_SETTINGS_MANAGER_OPTIONS,
@@ -46,7 +47,6 @@ import {
 	roomForSession,
 	SessionPace,
 } from "./pi-session-pace.ts";
-import { GatewayUnavailableError } from "./work/practice-scripts/lib/core/gateway-connection.ts";
 
 import {
 	type DeclaredSources,
@@ -746,6 +746,9 @@ export async function runReviewJob(): Promise<void> {
 	// The instant the watchdog below counts from. Every stage deadline starts later than this, so it is
 	// the only reading against which the process budget means anything.
 	const PROCESS_START_MS = Date.now();
+	/** Until the work's end, a gateway call waits out a refused connection (gateway-connection.ts). */
+	const gatewayPatience = (): AbortSignal =>
+		AbortSignal.timeout(Math.max(0, PROCESS_START_MS + AGENT_BUDGET_MS - Date.now()));
 
 	// Node's fetch gives up after 5 minutes without response headers, but a model call can wait longer
 	// for its pool's grant. The proxy answers or refuses every waiting call by the attempt's deadline,
@@ -904,6 +907,8 @@ export async function runReviewJob(): Promise<void> {
 	const skippedPractices = new Set<string>();
 	let stagingFailure: { error: unknown } | undefined;
 	let gatewayFailure: GatewayUnavailableError | undefined;
+	/** The failure that ended a parallel session; the serial path throws the same failure from its turn. */
+	let sessionFailure: { error: unknown } | undefined;
 	const runtimeReasons: Partial<Record<NonNullable<ProgramOutcome["stopReason"]>, string>> = {
 		budget: "BUDGET",
 		deadline: "DEADLINE",
@@ -948,6 +953,7 @@ export async function runReviewJob(): Promise<void> {
 						},
 						body,
 					}),
+				gatewayPatience(),
 			);
 			stagedPractices.add(practiceSlug);
 		} catch (error) {
@@ -2043,14 +2049,14 @@ export async function runReviewJob(): Promise<void> {
 
 	const RECORD_NUDGE = `This turn has the work left to write its result and no more. Stop exploring. Submit what the inspected evidence supports for this session's practice with submit_result. ${PERSIST_DISCIPLINE}`;
 
-	// The server interprets exit 75 as unreachable admission and retries the review.
+	// SandboxLayout owns each exit and what the server does with it; docs/contributor/agent-runs.mdx has the table.
+	// The gateway stayed unreachable until the work ended: the server retries the review.
 	const SERVER_UNREACHABLE_EXIT = 75;
-	// The server interprets exit 76 as provider failure without a recorded result and retries the review.
+	// No model call was answered and no result recorded: the server retries the review.
 	const PROVIDER_UNREACHABLE_EXIT = 76;
-	// The server answered staging or admission with its own error and ends the attempt, with no retry.
+	// The server answered staging or admission with its own error.
 	const SERVER_ERROR_EXIT = 77;
-	// The review staged what it could and left at least one practice without a result. The server decides from what is
-	// staged whether another attempt continues it; the code only tells this designed end from a failure.
+	// The review staged what it could and left at least one practice without a result.
 	const PARTIAL_REVIEW_EXIT = 78;
 
 	function readTaskEnvelope(): TaskEnvelope {
@@ -2823,18 +2829,23 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			}
 			const slugs: string[] = [];
 			for (const slug of requestedSlugs) {
-				const current = await startPractice(slug, async (body, signal) =>
-					fetch(`${LLM_PROXY_URL}/start-practice`, {
-						method: "POST",
-						signal,
-						headers: {
-							authorization: `Bearer ${LLM_PROXY_TOKEN}`,
-							...LLM_PROXY_CLAIM,
-							"content-type": "application/json",
-							...(hasText(process.env.TRACEPARENT) ? { traceparent: process.env.TRACEPARENT } : {}),
-						},
-						body,
-					}),
+				const current = await startPractice(
+					slug,
+					async (body, signal) =>
+						fetch(`${LLM_PROXY_URL}/start-practice`, {
+							method: "POST",
+							signal,
+							headers: {
+								authorization: `Bearer ${LLM_PROXY_TOKEN}`,
+								...LLM_PROXY_CLAIM,
+								"content-type": "application/json",
+								...(hasText(process.env.TRACEPARENT)
+									? { traceparent: process.env.TRACEPARENT }
+									: {}),
+							},
+							body,
+						}),
+					gatewayPatience(),
 				);
 				if (!current) {
 					skippedPractices.add(slug);
@@ -3372,6 +3383,8 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				const failure = workers.find((worker) => worker.status === "rejected");
 				if (failure?.status === "rejected") {
 					diagnose("measurement.stopped", { error: errorKind(failure.reason) });
+					// Thrown after the coverage log, so a lost gateway exits retryable as on the serial path.
+					sessionFailure = { error: failure.reason };
 				}
 			}
 		}
@@ -3418,6 +3431,9 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 
 		if (gatewayFailure !== undefined) {
 			throw gatewayFailure;
+		}
+		if (sessionFailure !== undefined) {
+			throw sessionFailure.error;
 		}
 		if (stagingFailure !== undefined) {
 			throw stagingFailure.error;
@@ -3470,6 +3486,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					},
 					body,
 				}),
+			gatewayPatience(),
 		);
 		diagnose("review.succeeded", { results: reviewState.size });
 		finalizeOutput();

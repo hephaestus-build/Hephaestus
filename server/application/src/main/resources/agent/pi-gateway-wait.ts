@@ -3,13 +3,15 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { createAssistantMessageEventStream, type AssistantMessage } from "@earendil-works/pi-ai";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 
-import { diagnose } from "./pi-diagnostics.ts";
-import { errorText } from "./pi-error-text.ts";
 import {
 	gatewayConnectionFailure,
 	GatewayUnavailableError,
+	GATEWAY_RECONNECT_MS,
 	MAX_GATEWAY_RESPONSE_REPLAYS,
-} from "./work/practice-scripts/lib/core/gateway-connection.ts";
+	untilGatewayTakes,
+} from "./gateway-connection.ts";
+import { diagnose } from "./pi-diagnostics.ts";
+import { errorText } from "./pi-error-text.ts";
 
 type Stream = AgentSession["agent"]["streamFunction"];
 
@@ -31,11 +33,20 @@ export function waitForGateway(
 		const transport = options?.fetch ?? globalThis.fetch;
 		let failure: "connection" | "response" | undefined;
 		const failureKind = () => failure;
+		let waits = 0;
+		const waited = () => {
+			waits += 1;
+			observer.waiting?.();
+			if (Number.isInteger(Math.log2(waits))) {
+				diagnose("gateway.waiting", { waits });
+			}
+		};
 		const fetchGateway: typeof fetch = async (input, init) => {
 			failure = undefined;
 			let response: Response;
 			try {
-				response = await transport(input, init);
+				// A refused connection reached no server, so the call waits here until the gateway takes it.
+				response = await untilGatewayTakes(async () => transport(input, init), signal, waited);
 			} catch (error) {
 				failure = isAborted() ? undefined : gatewayConnectionFailure(error);
 				throw error;
@@ -86,7 +97,6 @@ export function waitForGateway(
 		void (async () => {
 			let started = false;
 			let lastFailure: AssistantMessage | undefined;
-			let waits = 0;
 			let lostResponses = 0;
 			function countResponseLoss(): void {
 				if (failureKind() !== "response") {
@@ -124,12 +134,8 @@ export function waitForGateway(
 						output.end(await current.result());
 						return;
 					}
-					waits += 1;
-					observer.waiting?.();
-					if (Number.isInteger(Math.log2(waits))) {
-						diagnose("gateway.waiting", { waits });
-					}
-					await sleep(1000, undefined, { signal });
+					waited();
+					await sleep(GATEWAY_RECONNECT_MS, undefined, { signal });
 					current = await call();
 				}
 			} catch (error) {

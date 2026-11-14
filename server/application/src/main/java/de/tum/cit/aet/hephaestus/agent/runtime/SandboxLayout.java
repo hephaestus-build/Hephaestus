@@ -182,8 +182,11 @@ public final class SandboxLayout {
     public static final Duration RESULT_UPLOAD_GRACE = Duration.ofMinutes(10);
 
     /**
-     * The sandbox gateway stayed unavailable for admission, or repeatedly disconnected a model response. The server
-     * retries the review without treating this infrastructure failure as a finding about the reviewed work.
+     * The sandbox gateway stayed unreachable until the attempt's work ended, or repeatedly disconnected a model
+     * response. Every gateway call waits out a refused connection first ({@code agent/gateway-connection.ts}), so a
+     * server restart ends here only when it outlasts the work. The server retries the review without treating this
+     * infrastructure failure as a finding about the reviewed work. {@code docs/contributor/agent-runs.mdx} has the table
+     * of every exit.
      */
     public static final int EXIT_SERVER_UNREACHABLE = 75;
 

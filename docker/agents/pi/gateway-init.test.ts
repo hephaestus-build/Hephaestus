@@ -7,6 +7,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import { downloadWorkspace, extract, extractArguments } from "./gateway-init.ts";
 
@@ -108,6 +109,60 @@ void test("waits out a limit of the gateway on discovery and on the download", a
 		server.close();
 		server.closeAllConnections();
 		await closed;
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+void test("a workspace cut by a server restart downloads from its replacement within the work signal", async () => {
+	const directory = await mkdtemp(path.join(tmpdir(), "gateway-download-test-"));
+	const workspace = Buffer.from("workspace after a restart");
+	const capabilities = JSON.stringify({ protocolVersion: 3, workspaceByteBudget: 1024 });
+	const first = createServer((request, response) => {
+		if (request.url === "/runtime") {
+			response.end(capabilities);
+			return;
+		}
+		// The server dies mid-transfer, and nothing listens on its port until its replacement starts.
+		response.writeHead(200, { "content-length": String(workspace.length) });
+		response.write(workspace.subarray(0, 4));
+		setImmediate(() => {
+			response.destroy();
+			first.close();
+			first.closeAllConnections();
+		});
+	});
+	let replacement: ReturnType<typeof createServer> | undefined;
+	try {
+		first.listen(0, "127.0.0.1");
+		await once(first, "listening");
+		const address = first.address();
+		assert.ok(address !== null && typeof address !== "string");
+		const { port } = address;
+		const archive = path.join(directory, "workspace.tar");
+		const download = downloadWorkspace(
+			`http://127.0.0.1:${port}/runtime`,
+			"attempt-token",
+			archive,
+			AbortSignal.timeout(30_000),
+		);
+		await once(first, "close");
+		// Longer than every retry of an answered failure: only the wait on a refused connection bridges it.
+		await sleep(2500);
+		const restarted = createServer((_request, response) => {
+			response.writeHead(200, { "content-length": String(workspace.length) }).end(workspace);
+		});
+		replacement = restarted;
+		restarted.listen(port, "127.0.0.1");
+		await once(restarted, "listening");
+		await download;
+		assert.deepEqual(await readFile(archive), workspace);
+	} finally {
+		if (replacement !== undefined) {
+			const closed = once(replacement, "close");
+			replacement.close();
+			replacement.closeAllConnections();
+			await closed;
+		}
 		await rm(directory, { recursive: true, force: true });
 	}
 });

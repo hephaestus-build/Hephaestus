@@ -96,6 +96,7 @@ async function fakeWorker(answers: Answer[], unknownKeyDelayMs = 0) {
 				base: `http://127.0.0.1:${address.port}/internal/agent/runs/run-1`,
 				headers: { Authorization: "Bearer turn-token" },
 				label: "turn run run-1",
+				patience: new AbortController().signal,
 			},
 			(reason) => {
 				stops.push(reason);
@@ -143,6 +144,7 @@ void test("a context folder call ends when its turn is stopped", async () => {
 		base: `http://127.0.0.1:${address.port}/internal/agent/runs/run-1`,
 		headers: { Authorization: "Bearer turn-token" },
 		label: "turn run run-1",
+		patience: new AbortController().signal,
 	});
 	const waiting = api.folder.load("repos/github.com/acme/api", stop.signal);
 	try {
@@ -579,6 +581,7 @@ async function archiveWorker(sized: boolean) {
 				base: `http://127.0.0.1:${address.port}/internal/agent/runs/run-1`,
 				headers: { Authorization: "Bearer turn-token" },
 				label: "turn run run-1",
+				patience: new AbortController().signal,
 			},
 			() => undefined,
 			[0, 0, 0],

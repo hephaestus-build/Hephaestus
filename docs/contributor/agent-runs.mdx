@@ -511,6 +511,31 @@ A review's `REVIEW` run is measured in the review's own sandbox (`ReviewSandboxR
    The kind first empties `/workspace`. Thus, a requeued attempt that the same sandbox pulls starts from its own captured workspace, not from the files that an earlier attempt left in `/workspace`.
 5. The runner's result arrives at `…/runs/{runId}/runtime/result`, with the runner's exit. `ReviewAttemptResults` then ends the attempt, requeues it, or hands an admitted review on to its `REVIEW_COMPOSE` run (`ReviewRunKind.continueToCompose`), which the same sandbox pulls next.
 
+#### The runner's exit
+
+`SandboxLayout` owns each code. The runner's constants name the same values, and `SandboxLayoutSyncTest` holds them equal.
+
+| Exit | The runner | `ReviewAttemptResults` |
+| --- | --- | --- |
+| 0 | Admitted its results | Ends the attempt, or hands an admitted review on to its composition |
+| 1 | Measured no practice, although its calls were answered | Ends the job failed |
+| 2 | Stopped on an error that it has no class for | Ends the job failed |
+| 42 | Could not use `task.json` | Ends the job failed |
+| 43 | The upload was not acknowledged before its deadline | The run hands on |
+| 75 | The gateway stayed unreachable until the work ended, or repeatedly cut a model response | Requeues the attempt, which spends a retry |
+| 76 | The model provider answered none of its calls | Requeues the attempt |
+| 77 | The server answered staging or admission with its own error | Ends the attempt with what it staged |
+| 78 | Staged what it could and left a practice without a result | Decides from what is staged |
+| 124, 137 | Stopped at the work deadline, or killed | Ends the attempt by its deadline or as interrupted |
+
+A lost server must never exit 1.
+Every call that a sandbox program makes to the gateway waits out a refused connection until its work ends (`untilGatewayTakes` in `agent/gateway-connection.ts`).
+Thus, a server restart costs a wait, not the attempt.
+A model call, a practice's start, staging, admission and a turn's calls share this rule.
+The workspace download follows it in `fetchGatewayInput`, because the image builds that program apart from the runtime tree.
+A reset during a call can follow a request that the server already recorded. Only a caller that can replay its request sends it again.
+When a parallel review session fails, the runner throws its failure after the coverage log, so it exits with the same code as the serial path.
+
 ### Review preparation recovery
 
 ADR [0079](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0079-one-agent-system.md) keeps the sandbox as the lease writer.
