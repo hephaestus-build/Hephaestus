@@ -52,6 +52,12 @@ class WorkspaceSummaryQueryAdapter implements WorkspaceSummaryQuery {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Optional<WorkspaceState> findStateByInstallationId(long installationId) {
+        return workspaceRepository.findByInstallationId(installationId).map(WorkspaceSummaryQueryAdapter::state);
+    }
+
+    @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<WorkspaceState> findStateForUpdate(long workspaceId) {
         return workspaceRepository.findByIdForUpdate(workspaceId).map(WorkspaceSummaryQueryAdapter::state);

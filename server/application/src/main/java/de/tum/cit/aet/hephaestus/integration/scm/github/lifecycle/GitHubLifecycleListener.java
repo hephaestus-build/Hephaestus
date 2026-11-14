@@ -22,14 +22,14 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenServic
 import de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.GitHubInstallationRequests;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.ScmWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
-import de.tum.cit.aet.hephaestus.workspace.Membership;
-import de.tum.cit.aet.hephaestus.workspace.MembershipService;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceLifecycleService;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceSlugService;
+import de.tum.cit.aet.hephaestus.workspace.spi.RepositoryMonitorCommands;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRoots;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
@@ -52,14 +52,16 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
 
     private static final Logger log = LoggerFactory.getLogger(GitHubLifecycleListener.class);
 
-    private final WorkspaceRepository workspaceRepository;
-    private final RepositoryToMonitorRepository repositoryToMonitorRepository;
+    private final WorkspaceRoots workspaces;
+
+    private final WorkspaceLocks workspaceLocks;
+    private final WorkspaceRepositoryMonitors monitors;
+    private final RepositoryMonitorCommands monitorCommands;
     private final RepositoryRepository repositoryRepository;
     private final UserRepository userRepository;
     private final IdentityProviderLookup identityProviders;
 
     private final WorkspaceSlugService workspaceSlugService;
-    private final MembershipService workspaceMembershipService;
     private final PeopleRegistry people;
 
     private final GitHubAppTokenService gitHubAppTokenService;
@@ -71,13 +73,14 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
     private final GitHubInstallationRequests installationRequests;
 
     public GitHubLifecycleListener(
-            WorkspaceRepository workspaceRepository,
-            RepositoryToMonitorRepository repositoryToMonitorRepository,
+            WorkspaceRoots workspaces,
+            WorkspaceLocks workspaceLocks,
+            WorkspaceRepositoryMonitors monitors,
+            RepositoryMonitorCommands monitorCommands,
             RepositoryRepository repositoryRepository,
             UserRepository userRepository,
             IdentityProviderLookup identityProviders,
             WorkspaceSlugService workspaceSlugService,
-            MembershipService workspaceMembershipService,
             PeopleRegistry people,
             GitHubAppTokenService gitHubAppTokenService,
             OrganizationService organizationService,
@@ -86,13 +89,14 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             IntegrationAttentionService attention,
             ScmWorkspaceContentEraser contentEraser,
             GitHubInstallationRequests installationRequests) {
-        this.workspaceRepository = workspaceRepository;
-        this.repositoryToMonitorRepository = repositoryToMonitorRepository;
+        this.workspaces = workspaces;
+        this.workspaceLocks = workspaceLocks;
+        this.monitors = monitors;
+        this.monitorCommands = monitorCommands;
         this.repositoryRepository = repositoryRepository;
         this.userRepository = userRepository;
         this.identityProviders = identityProviders;
         this.workspaceSlugService = workspaceSlugService;
-        this.workspaceMembershipService = workspaceMembershipService;
         this.people = people;
         this.gitHubAppTokenService = gitHubAppTokenService;
         this.organizationService = organizationService;
@@ -253,9 +257,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             return null;
         }
 
-        Workspace workspace = workspaceRepository
-                .findByInstallationIdForUpdate(installationId)
-                .orElse(null);
+        Workspace workspace = workspaceLocks.lockByInstallation(installationId).orElse(null);
         if (workspace != null && workspace.getStatus() == Workspace.WorkspaceStatus.PURGED) {
             log.info("Skipped installation event for purged workspace: installationId={}", installationId);
             return null;
@@ -266,7 +268,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
         if (workspace == null && accountKind == AccountKind.ORGANIZATION && accountId != null) {
             Workspace existing = organizationService
                     .findId(accountId, githubProviderId())
-                    .flatMap(workspaceRepository::findByOrganizationIdForUpdate)
+                    .flatMap(workspaceLocks::lockByOrganization)
                     .orElse(null);
             if (existing != null && existing.getStatus() == Workspace.WorkspaceStatus.PURGED) {
                 log.info(
@@ -354,15 +356,15 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
         }
 
         if (!isBlank(accountLogin)) {
-            workspace.setAccountLogin(Objects.requireNonNull(accountLogin));
+            workspaces.renameAccount(workspace.getId(), Objects.requireNonNull(accountLogin));
         }
 
         if (repositorySelection != null) {
-            workspace.setRepositorySelection(repositorySelection);
+            workspaces.selectRepositories(workspace.getId(), repositorySelection);
         }
 
         Workspace.WorkspaceStatus previousStatus = workspace.getStatus();
-        if (workspace.resume()) {
+        if (workspaces.resume(workspace.getId())) {
             log.info(
                     "Reactivated workspace from installation: workspaceId={}, previousStatus={}, installationId={}",
                     workspace.getId(),
@@ -374,23 +376,21 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
         if (accountKind == AccountKind.ORGANIZATION && accountId != null) {
             Organization org = organizationService.upsertIdentity(
                     accountId, Objects.requireNonNull(accountLogin), githubProviderId());
-            workspace.setOrganizationId(org.getId());
+            workspaces.linkOrganization(workspace.getId(), org.getId());
             log.debug("Linked organization to workspace: orgId={}, workspaceId={}", org.getId(), workspace.getId());
         }
-
-        Workspace saved = workspaceRepository.save(workspace);
 
         // upsertGitHubAppConnection retires any non-matching GITHUB connection on this workspace
         // (PAT or stale App) and reuses or creates the App row. Correlation id is stable per
         // installation so webhook redelivery is idempotent.
         connectionService.upsertGitHubAppConnection(
-                saved,
+                workspace,
                 gitHubAppTokenService.getConfiguredAppId(),
                 installationId,
                 accountLogin,
                 "install-bind-" + installationId);
 
-        return saved;
+        return workspace;
     }
 
     /**
@@ -430,7 +430,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
     }
 
     private Optional<Workspace> purgeWorkspaceForInstallationInternal(long installationId) {
-        var workspaceOpt = workspaceRepository.findByInstallationIdForUpdate(installationId);
+        var workspaceOpt = workspaceLocks.lockByInstallation(installationId);
         if (workspaceOpt.isEmpty()) {
             log.warn(
                     "Skipped installation purge: reason=noWorkspaceForInstallation, installationId={}", installationId);
@@ -482,7 +482,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
     }
 
     private Optional<Workspace> changeStatus(long installationId, boolean active) {
-        var workspaceOpt = workspaceRepository.findByInstallationIdForUpdate(installationId);
+        var workspaceOpt = workspaceLocks.lockByInstallation(installationId);
         if (workspaceOpt.isEmpty()) {
             return workspaceOpt;
         }
@@ -491,9 +491,8 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
         if (workspace.getStatus() == Workspace.WorkspaceStatus.PURGED) {
             return Optional.of(workspace);
         }
-        if (active ? workspace.resume() : workspace.suspend()) {
-            workspace = workspaceRepository.save(workspace);
-        }
+        if (active) workspaces.resume(workspace.getId());
+        else workspaces.suspend(workspace.getId());
 
         long workspaceId = workspace.getId();
         connectionService
@@ -516,19 +515,15 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
      */
     @Transactional
     public Optional<Workspace> updateRepositorySelection(long installationId, RepositorySelection selection) {
-        var workspaceOpt = workspaceRepository
-                .findByInstallationIdForUpdate(installationId)
+        var workspaceOpt = workspaceLocks
+                .lockByInstallation(installationId)
                 .filter(workspace -> workspace.getStatus() == Workspace.WorkspaceStatus.ACTIVE);
         if (workspaceOpt.isEmpty() || selection == null) {
             return workspaceOpt;
         }
 
         Workspace workspace = workspaceOpt.get();
-        if (workspace.getRepositorySelection() != selection) {
-            workspace.setRepositorySelection(selection);
-            workspace = workspaceRepository.save(workspace);
-        }
-
+        workspaces.selectRepositories(workspace.getId(), selection);
         return Optional.of(workspace);
     }
 
@@ -552,16 +547,13 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             return;
         }
 
-        workspaceRepository
-                .findByInstallationIdForUpdate(installationId)
+        workspaceLocks
+                .lockByInstallation(installationId)
                 .filter(workspace -> workspace.getStatus() == Workspace.WorkspaceStatus.ACTIVE)
                 .ifPresentOrElse(
                         workspace -> {
                             String oldLogin = !isBlank(previousLogin) ? previousLogin : workspace.getAccountLogin();
-                            if (!newLogin.equals(workspace.getAccountLogin())) {
-                                workspace.setAccountLogin(newLogin);
-                                workspaceRepository.save(workspace);
-                            }
+                            workspaces.renameAccount(workspace.getId(), newLogin);
                             if (oldLogin != null) {
                                 retargetRepositoryMonitors(workspace, oldLogin, newLogin);
                                 renameTrackedRepositories(oldLogin, newLogin);
@@ -580,8 +572,8 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
         }
 
         String prefixLower = (oldLogin + "/").toLowerCase(Locale.ENGLISH);
-        var monitors = repositoryToMonitorRepository.findByWorkspaceId(workspace.getId());
-        monitors.forEach(monitor -> {
+        var existing = monitors.monitors(workspace.getId());
+        existing.forEach(monitor -> {
             String current = monitor.getNameWithOwner();
             if (current == null) {
                 return;
@@ -596,7 +588,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             }
             String suffix = current.substring(slashIndex);
             String target = newLogin + suffix;
-            if (monitors.stream()
+            if (existing.stream()
                     .anyMatch(other ->
                             !other.getId().equals(monitor.getId()) && target.equals(other.getNameWithOwner()))) {
                 log.warn(
@@ -605,8 +597,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
                         monitor.getId());
                 return;
             }
-            monitor.setNameWithOwner(target);
-            repositoryToMonitorRepository.save(monitor);
+            monitorCommands.rename(workspace.getId(), monitor.getId(), target);
         });
     }
 
@@ -649,11 +640,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             @Nullable Long ownerAccountId) {
         workspaceSlugService.validate(slug);
 
-        Workspace saved = workspaceRepository.save(Workspace.create(slug, displayName, accountLogin, accountType));
-        if (ownerAccountId != null) {
-            workspaceMembershipService.createMembership(saved, ownerAccountId, Membership.WorkspaceRole.OWNER);
-        }
-        return saved;
+        return workspaces.create(slug, displayName, accountLogin, accountType, ownerAccountId);
     }
 
     /** The account of a personal installation's GitHub user; an organization has no human owner account. */

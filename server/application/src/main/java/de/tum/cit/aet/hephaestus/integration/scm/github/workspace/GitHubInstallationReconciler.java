@@ -13,9 +13,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption.Gi
 import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceService;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
@@ -59,7 +59,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
 
     private final GitHubAppTokenService gitHubAppTokenService;
     private final GitHubLifecycleListener githubLifecycleListener;
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceSummaryQuery workspaces;
     private final WorkspaceService workspaceService;
     private final WorkspaceScopeFilter workspaceScopeFilter;
     private final GitHubInstallationRequests installationRequests;
@@ -68,7 +68,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
     public GitHubInstallationReconciler(
             GitHubAppTokenService gitHubAppTokenService,
             GitHubLifecycleListener githubLifecycleListener,
-            WorkspaceRepository workspaceRepository,
+            WorkspaceSummaryQuery workspaces,
             WorkspaceService workspaceService,
             WorkspaceScopeFilter workspaceScopeFilter,
             GitHubInstallationRequests installationRequests,
@@ -76,7 +76,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
         this.installationRequests = installationRequests;
         this.gitHubAppTokenService = gitHubAppTokenService;
         this.githubLifecycleListener = githubLifecycleListener;
-        this.workspaceRepository = workspaceRepository;
+        this.workspaces = workspaces;
         this.workspaceService = workspaceService;
         this.workspaceScopeFilter = workspaceScopeFilter;
         this.webClient = webClients
@@ -165,8 +165,8 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
         if (installation.suspendedAt() != null) {
             log.info("Skipped installation sync: reason=suspended, installationId={}", installation.id());
             gitHubAppTokenService.markInstallationSuspended(installation.id());
-            workspaceRepository.findByInstallationId(installation.id()).ifPresent(ws -> {
-                if (ws.getStatus() != Workspace.WorkspaceStatus.SUSPENDED) {
+            workspaces.findStateByInstallationId(installation.id()).ifPresent(ws -> {
+                if (!Workspace.WorkspaceStatus.SUSPENDED.name().equals(ws.status())) {
                     githubLifecycleListener.suspendForInstallation(installation.id());
                 }
             });

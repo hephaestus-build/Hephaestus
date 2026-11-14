@@ -65,30 +65,6 @@ final class RepositoryOwnershipRatchet {
                             "integration.scm.workspace.adapter.WorkspaceTeamMembershipAdapter",
                             "integration.scm.workspace.settings.WorkspaceTeamSettingsService")),
             new Entry(
-                    "integration.scm.github",
-                    "workspace.MembershipRepository",
-                    "DDD9 (ROLE)",
-                    "workspace::spi WorkspaceMemberships.isActiveMember(workspaceId, accountId)",
-                    Set.of("integration.scm.github.installation.adoption.GitHubInstallationClaimService")),
-            new Entry(
-                    "integration.scm.github",
-                    "workspace.RepositoryToMonitorRepository",
-                    "DDD9",
-                    "workspace::spi WorkspaceRepositoryMonitors",
-                    Set.of(
-                            "integration.scm.github.lifecycle.GitHubLifecycleListener",
-                            "integration.scm.github.sync.status.GitHubConnectionSyncStateProvider")),
-            new Entry(
-                    "integration.scm.github",
-                    "workspace.WorkspaceRepository",
-                    "DDD9",
-                    "workspace::spi WorkspaceQueries and WorkspaceCommands",
-                    Set.of(
-                            "integration.scm.github.installation.adoption.GitHubInstallationClaimService",
-                            "integration.scm.github.installation.adoption.GitHubInstallationRequests",
-                            "integration.scm.github.lifecycle.GitHubLifecycleListener",
-                            "integration.scm.github.workspace.GitHubInstallationReconciler")),
-            new Entry(
                     "integration.scm.gitlab",
                     "workspace.RepositoryToMonitorRepository",
                     "DDD9",

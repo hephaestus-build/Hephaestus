@@ -28,8 +28,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.sync.status.ScmResourceCountRea
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -68,7 +68,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
     private GitHubInstallationSuspensionTracker suspensionTracker;
 
     @Mock
-    private RepositoryToMonitorRepository repositoryToMonitorRepository;
+    private WorkspaceRepositoryMonitors monitors;
 
     @Mock
     private RepositoryRepository repositoryRepository;
@@ -92,7 +92,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
                 rateLimitTracker,
                 suspensionTracker,
                 properties,
-                repositoryToMonitorRepository,
+                monitors,
                 repositoryRepository,
                 countReader,
                 clock);
@@ -257,7 +257,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
             when(connectionQueries.findReferenced(
                             new IntegrationRef(IntegrationKind.GITHUB, WORKSPACE_ID, null, CONNECTION_ID)))
                     .thenAnswer(ignored -> Optional.of(viewFixture(githubAppConnection())));
-            when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of());
+            when(monitors.monitors(WORKSPACE_ID)).thenReturn(List.of());
 
             ConnectionSyncDetails details = provider(schedulerProperties(true)).describe(ref, CONNECTION_ID);
 
@@ -277,7 +277,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
             rtm.setIssueBackfillCheckpoint(0);
             rtm.setPullRequestBackfillHighWaterMark(0);
             rtm.setPullRequestBackfillCheckpoint(0);
-            when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(rtm));
+            when(monitors.monitors(WORKSPACE_ID)).thenReturn(List.of(rtm));
 
             ConnectionSyncDetails details = provider(schedulerProperties(true)).describe(ref, CONNECTION_ID);
 
@@ -297,7 +297,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
             rtm.setIssueBackfillCheckpoint(25);
             rtm.setPullRequestBackfillHighWaterMark(0);
             rtm.setPullRequestBackfillCheckpoint(0);
-            when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(rtm));
+            when(monitors.monitors(WORKSPACE_ID)).thenReturn(List.of(rtm));
 
             ConnectionSyncDetails details = provider(schedulerProperties(true)).describe(ref, CONNECTION_ID);
 
@@ -312,7 +312,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
 
         @Test
         void noMonitoredRepositories_returnsEmptyList() {
-            when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of());
+            when(monitors.monitors(WORKSPACE_ID)).thenReturn(List.of());
 
             List<SyncResourceState> resources =
                     provider(schedulerProperties(false)).resources(ref, CONNECTION_ID);
@@ -330,7 +330,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
             Instant prsSyncedAt = Instant.now().minusSeconds(30);
             rtm.setIssuesSyncedAt(issuesSyncedAt);
             rtm.setPullRequestsSyncedAt(prsSyncedAt);
-            when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(rtm));
+            when(monitors.monitors(WORKSPACE_ID)).thenReturn(List.of(rtm));
 
             Repository repository = new Repository();
             repository.setId(900L);
@@ -360,7 +360,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
         void repositoryPendingInitialSync_stateReflectsPending() {
             RepositoryToMonitor rtm = WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/repo-b", 101L);
             rtm.setId(501L);
-            when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(rtm));
+            when(monitors.monitors(WORKSPACE_ID)).thenReturn(List.of(rtm));
             when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID)).thenReturn(List.of());
 
             List<SyncResourceState> resources =
@@ -378,7 +378,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
             rtm.setId(500L);
             rtm.setIssuesSyncedAt(Instant.now().minusSeconds(60));
             rtm.setPullRequestsSyncedAt(Instant.now().minusSeconds(30));
-            when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(rtm));
+            when(monitors.monitors(WORKSPACE_ID)).thenReturn(List.of(rtm));
 
             Repository repository = new Repository();
             repository.setId(900L);
@@ -413,7 +413,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
             rtm.setId(500L);
             rtm.setIssuesSyncedAt(issuesSyncedAt);
             rtm.setPullRequestsSyncedAt(prsSyncedAt);
-            when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(rtm));
+            when(monitors.monitors(WORKSPACE_ID)).thenReturn(List.of(rtm));
 
             Repository repository = new Repository();
             repository.setId(900L);
@@ -448,7 +448,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
         void monitorWithoutLocalRepositoryRow_reportsNoBreakdownRatherThanZeroes() {
             RepositoryToMonitor rtm = WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/repo-b", 101L);
             rtm.setId(501L);
-            when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(rtm));
+            when(monitors.monitors(WORKSPACE_ID)).thenReturn(List.of(rtm));
             when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID)).thenReturn(List.of());
 
             List<SyncResourceState> resources =
@@ -470,7 +470,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
             rtm.setIssueBackfillCheckpoint(25);
             rtm.setPullRequestBackfillHighWaterMark(0);
             rtm.setPullRequestBackfillCheckpoint(0);
-            when(repositoryToMonitorRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(rtm));
+            when(monitors.monitors(WORKSPACE_ID)).thenReturn(List.of(rtm));
             when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID)).thenReturn(List.of());
 
             List<SyncResourceState> resources =
