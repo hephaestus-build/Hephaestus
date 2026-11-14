@@ -9,10 +9,10 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitCloneUrl;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ScmTokenSource;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -20,7 +20,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.web.util.UriComponentsBuilder;
 
 /** Authorizes the exact provider repository before Git credentials cross its boundary. */
 @Component
@@ -75,21 +74,6 @@ public class ReviewRepositoryPreparer {
                         .findFirst());
     }
 
-    /** The clone URL of {@code repositoryPath} on {@code serverUrl}; empty for a path that is not a provider path. */
-    static Optional<String> cloneUrl(String serverUrl, String repositoryPath) {
-        String[] segments = repositoryPath.split("/", -1);
-        if (segments.length < 2
-                || Arrays.stream(segments)
-                        .anyMatch(segment -> segment.isBlank() || segment.equals(".") || segment.equals("..")))
-            return Optional.empty();
-        segments[segments.length - 1] += ".git";
-        return Optional.of(UriComponentsBuilder.fromUriString(serverUrl)
-                .pathSegment(segments)
-                .build()
-                .encode()
-                .toUriString());
-    }
-
     private Remote authorized(ItemSnapshot pinned, ScmCapturedWork work) {
         long workspaceId = pinned.item().workspaceId();
         var pullRequest = pullRequests
@@ -126,7 +110,7 @@ public class ReviewRepositoryPreparer {
                         .equals(ScmOrigin.of(repository.getProvider().getServerUrl())))
             throw new ItemCaptureException(
                     ItemCaptureCode.ITEM_NOT_VISIBLE, "Repository belongs to another provider instance");
-        String cloneUrl = cloneUrl(serverUrl, work.repositoryPath())
+        String cloneUrl = GitCloneUrl.of(serverUrl, work.repositoryPath())
                 .orElseThrow(() -> new ItemCaptureException(
                         ItemCaptureCode.CAPTURE_FAILED, "Repository has an invalid provider path"));
         return new Remote(new RepositoryKey(workspaceId, work.repositoryId()), cloneUrl, source, work);

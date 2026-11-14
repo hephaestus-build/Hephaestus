@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.evidence.capture.CheckoutKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CapturedCheckouts;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedException.Reason;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitCloneUrl;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.metrics.ScmMetrics;
@@ -84,7 +85,7 @@ public class ScmCapturedCheckouts implements CapturedCheckouts {
         var source = preparer.activeTokenSource(workspaceId)
                 .orElseThrow(() -> unverified(Reason.UNAVAILABLE, "SCM connection is unavailable"));
         String cloneUrl = source.serverUrl(workspaceId)
-                .flatMap(serverUrl -> ReviewRepositoryPreparer.cloneUrl(serverUrl, permitted.getNameWithOwner()))
+                .flatMap(serverUrl -> GitCloneUrl.of(serverUrl, permitted.getNameWithOwner()))
                 .orElseThrow(() -> unverified(Reason.UNAVAILABLE, "SCM server is unavailable"));
         String token = source.accessToken(workspaceId)
                 .orElseThrow(() -> unverified(Reason.UNAVAILABLE, "SCM credentials are unavailable"));

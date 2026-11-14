@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.util.CommitUtils;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitCloneUrl;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
@@ -224,7 +225,7 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
             }
             String serverUrl = tokenService.resolveServerUrl(scopeId);
             String token = tokenService.getAccessToken(scopeId);
-            String cloneUrl = serverUrl + "/" + repository.getNameWithOwner() + ".git";
+            String cloneUrl = GitCloneUrl.require(serverUrl, repository.getNameWithOwner());
             gitRepositoryManager.ensureRepository(new RepositoryKey(scopeId, repository.getId()), cloneUrl, token);
             log.debug(
                     "Fetched non-default branch push: ref={}, repo={}",
@@ -255,7 +256,7 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
         try {
             String serverUrl = tokenService.resolveServerUrl(scopeId);
             String token = tokenService.getAccessToken(scopeId);
-            String cloneUrl = serverUrl + "/" + repository.getNameWithOwner() + ".git";
+            String cloneUrl = GitCloneUrl.require(serverUrl, repository.getNameWithOwner());
             RepositoryKey key = new RepositoryKey(scopeId, repository.getId());
             gitRepositoryManager.ensureRepository(key, cloneUrl, token);
 

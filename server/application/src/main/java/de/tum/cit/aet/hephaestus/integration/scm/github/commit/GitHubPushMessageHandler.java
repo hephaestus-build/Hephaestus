@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.util.CommitUtils;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitCloneUrl;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
@@ -187,7 +188,7 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
 
         int[] failed = {0};
         try {
-            String cloneUrl = "https://github.com/" + repository.getNameWithOwner() + ".git";
+            String cloneUrl = GitCloneUrl.require("https://github.com", repository.getNameWithOwner());
             String token = null;
             if (event.installation() != null && tokenService.isConfigured()) {
                 token = tokenService.getInstallationToken(event.installation().id());
