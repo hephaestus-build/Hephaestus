@@ -89,14 +89,20 @@ public class AgentSandboxReaper {
         }
     }
 
-    /** Each in a short transaction that takes the row back only while it is still ready with that claim. */
+    /**
+     * Each in a short transaction that takes the row back only while it is still ready with that claim. At most
+     * {@link #BATCH} per tick; the rest go on the next one.
+     */
     private void takeBackLost(List<AgentSandboxRepository.SandboxRow> ready, List<String> names) {
         var live = new HashSet<>(names);
+        int taken = 0;
         for (var row : ready) {
+            if (taken == BATCH) return;
             if (live.contains(row.getClaimName())) continue;
             var lost = transactions.execute(
                     status -> sandboxes.takeBackLost(row.getId(), row.getWorkspaceId(), row.getClaimName()));
             if (lost == null || lost.isEmpty()) continue;
+            taken++;
             meters.counter(AgentMetrics.AGENT_SANDBOX_REAPED, "reason", "lost").increment();
             SandboxEvents.event(log.atInfo(), "agent.sandbox.taken_back", lost.get())
                     .addKeyValue("sandbox.reason", "lost")

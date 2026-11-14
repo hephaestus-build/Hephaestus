@@ -408,6 +408,7 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
         // A stopped window deleted the claims outside the server, while every server was down.
         claims.created.remove(claimName(lost));
         claims.created.remove(claimName(requested));
+        keepClaimsOfOtherReadySandboxes(Set.of(lost.id()));
 
         reaper(Duration.ofHours(1)).reap();
 
@@ -423,6 +424,30 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
         var next = ensure(subject, AgentSandboxKind.REVIEW);
         assertThat(next.id()).isNotEqualTo(lost.id());
         assertThat(claims.created).containsKey(claimName(next));
+    }
+
+    @Test
+    void shouldTakeBackAtMostOneBatchOfLostSandboxesPerTick() {
+        var lost = new ArrayList<UUID>();
+        for (int i = 0; i <= AgentSandboxReaper.BATCH; i++) {
+            String subject = "review:" + UUID.randomUUID();
+            queueRun(subject);
+            var sandbox = ensure(subject, AgentSandboxKind.REVIEW);
+            sandboxes.authenticate(token(sandbox));
+            claims.created.remove(claimName(sandbox));
+            lost.add(sandbox.id());
+        }
+        keepClaimsOfOtherReadySandboxes(Set.copyOf(lost));
+        var reaper = reaper(Duration.ofHours(1));
+
+        reaper.reap();
+        assertThat(stillReady(lost)).as("one tick takes back one batch").hasSize(1);
+
+        reaper.reap();
+        assertThat(stillReady(lost)).isEmpty();
+        assertThat(meters.counter(AgentMetrics.AGENT_SANDBOX_REAPED, "reason", "lost")
+                        .count())
+                .isEqualTo(AgentSandboxReaper.BATCH + 1);
     }
 
     @Test
@@ -517,6 +542,31 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
         assertThatThrownBy(() -> jdbc.update("UPDATE agent_sandbox SET state = 'READY' WHERE id = ?", sandbox.id()))
                 .isInstanceOf(DataAccessException.class)
                 .hasMessageContaining("never live again");
+    }
+
+    /** Taken back means no longer ready; its row goes once the claim delete of a later step or tick removes it. */
+    private List<UUID> stillReady(List<UUID> sandboxIds) {
+        return sandboxIds.stream()
+                .filter(id -> repository
+                        .findById(id)
+                        .map(row -> row.getState() == AgentSandboxState.READY)
+                        .orElse(false))
+                .toList();
+    }
+
+    /** The reaper reads every workspace: ready sandboxes that earlier tests left keep their claims here. */
+    private void keepClaimsOfOtherReadySandboxes(Set<UUID> lost) {
+        for (var other : repository.findReady()) {
+            if (lost.contains(other.getId())) continue;
+            claims.created.putIfAbsent(
+                    other.getClaimName(),
+                    new SandboxClaims.Claim(
+                            other.getClaimName(),
+                            other.getId(),
+                            AgentSandboxKind.valueOf(other.getKind()),
+                            other.getShutdownAt(),
+                            Map.of()));
+        }
     }
 
     private String state(AgentSandboxes.LiveSandbox sandbox) {
