@@ -6,7 +6,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoadException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.Serial;
@@ -60,7 +60,7 @@ public class TurnContextLoads implements AutoCloseable {
     /** How often a running load reads whether its attempt still holds its lease. */
     private static final Duration LEASE_CHECK = Duration.ofSeconds(2);
 
-    private final MentorTurnRepository turns;
+    private final MentorTurnAccess turns;
     private final ObjectProvider<ContextLoader> loaders;
     private final Clock clock;
     private final PersonDataCopyFence copies;
@@ -71,7 +71,7 @@ public class TurnContextLoads implements AutoCloseable {
     private final ExecutorService preparations = Executors.newVirtualThreadPerTaskExecutor();
 
     public TurnContextLoads(
-            MentorTurnRepository turns,
+            MentorTurnAccess turns,
             ObjectProvider<ContextLoader> loaders,
             Clock clock,
             PersonDataCopyFence copies,
@@ -126,10 +126,11 @@ public class TurnContextLoads implements AutoCloseable {
 
     /** Counts a context load in the transaction that checks the sandbox, run and turn fences. */
     public Optional<Refused> admit(TurnAttempt turn) {
-        if (turns.countToolsLoad(turn.turnId(), turn.workspaceId(), turn.attempt(), turn.runId(), MAX_LOADS_PER_ATTEMPT)
-                != 0) return Optional.empty();
+        if (turns.countContextLoad(
+                turn.workspaceId(), turn.turnId(), turn.attempt(), turn.runId(), MAX_LOADS_PER_ATTEMPT))
+            return Optional.empty();
         return Optional.of(new Refused(
-                turns.hasLiveLease(turn.turnId(), turn.workspaceId(), turn.attempt(), turn.runId())
+                turns.hasLiveLease(turn.workspaceId(), turn.turnId(), turn.attempt(), turn.runId())
                         ? refusal("BUDGET_EXHAUSTED", "This answer already loaded " + MAX_LOADS_PER_ATTEMPT + " items.")
                         : refusal("TIMEOUT", "The answer ended before the item could load.")));
     }
@@ -310,7 +311,7 @@ public class TurnContextLoads implements AutoCloseable {
             Instant now = clock.instant();
             Instant last = checked.get();
             if (Duration.between(last, now).compareTo(LEASE_CHECK) >= 0 && checked.compareAndSet(last, now)) {
-                lost.set(!turns.hasLiveLease(turn.turnId(), turn.workspaceId(), turn.attempt(), turn.runId()));
+                lost.set(!turns.hasLiveLease(turn.workspaceId(), turn.turnId(), turn.attempt(), turn.runId()));
             }
             return lost.get();
         };

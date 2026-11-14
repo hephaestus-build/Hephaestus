@@ -9,7 +9,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -68,7 +68,7 @@ class TurnContextLoadCopyFenceIntegrationTest extends AbstractWorkspaceIntegrati
         var turn = new TurnAttempt(UUID.randomUUID(), 1L, 2L, UUID.randomUUID(), 1, UUID.randomUUID());
         try (var preparations = Executors.newVirtualThreadPerTaskExecutor();
                 var folder = new TurnContextLoads(
-                        mock(MentorTurnRepository.class),
+                        mock(MentorTurnAccess.class),
                         beans.getBeanProvider(ContextLoader.class),
                         Clock.fixed(now, ZoneOffset.UTC),
                         observed,

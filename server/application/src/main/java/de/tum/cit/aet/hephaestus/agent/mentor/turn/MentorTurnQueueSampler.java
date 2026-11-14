@@ -3,8 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.mentor.turn;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.concurrent.TimeUnit;
@@ -25,10 +24,10 @@ public class MentorTurnQueueSampler {
 
     private static final Logger log = LoggerFactory.getLogger(MentorTurnQueueSampler.class);
 
-    private final MentorTurnRepository turns;
+    private final MentorTurnAccess turns;
     private final AtomicLong queued = new AtomicLong();
 
-    public MentorTurnQueueSampler(MentorTurnRepository turns, MeterRegistry meters) {
+    public MentorTurnQueueSampler(MentorTurnAccess turns, MeterRegistry meters) {
         this.turns = turns;
         Gauge.builder(AgentMetrics.MENTOR_TURN_QUEUED, queued, AtomicLong::get)
                 .description("conversation turns that wait to start; last-good when a sample fails")
@@ -38,7 +37,7 @@ public class MentorTurnQueueSampler {
     @Scheduled(fixedDelay = 30, initialDelay = 10, timeUnit = TimeUnit.SECONDS)
     public void sample() {
         try {
-            queued.set(turns.countByStatusAndSurfaceNot(MentorTurn.Status.QUEUED, MentorTurn.Surface.SYSTEM));
+            queued.set(turns.countQueuedQuestions());
         } catch (RuntimeException e) {
             // A database blip must not read as an empty queue.
             log.warn(

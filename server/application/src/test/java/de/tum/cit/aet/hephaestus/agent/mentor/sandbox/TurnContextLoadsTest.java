@@ -17,7 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoadException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
 import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -61,7 +61,7 @@ class TurnContextLoadsTest extends BaseUnitTest {
     @TempDir
     Path temp;
 
-    private final MentorTurnRepository turns = mock(MentorTurnRepository.class);
+    private final MentorTurnAccess turns = mock(MentorTurnAccess.class);
     private final MutableClock clock = new MutableClock(NOW, ZoneOffset.UTC);
     private final DefaultListableBeanFactory beans = new DefaultListableBeanFactory();
     private final PersonDataCopyFence copies = mock(PersonDataCopyFence.class);
@@ -97,13 +97,13 @@ class TurnContextLoadsTest extends BaseUnitTest {
                 }
             };
         });
-        lenient().when(turns.hasLiveLease(any(), anyLong(), anyInt(), any())).thenAnswer(call -> leased.get());
+        lenient().when(turns.hasLiveLease(anyLong(), any(), anyInt(), any())).thenAnswer(call -> leased.get());
         lenient()
-                .when(turns.countToolsLoad(any(), anyLong(), anyInt(), any(), anyInt()))
+                .when(turns.countContextLoad(anyLong(), any(), anyInt(), any(), anyInt()))
                 .thenAnswer(call -> {
-                    if (!leased.get() || loads.get() >= call.<Integer>getArgument(4)) return 0;
+                    if (!leased.get() || loads.get() >= call.<Integer>getArgument(4)) return false;
                     loads.incrementAndGet();
-                    return 1;
+                    return true;
                 });
     }
 

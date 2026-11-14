@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.model.Problem;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ProblemRepository;
+import de.tum.cit.aet.hephaestus.practices.result.ResultEvidenceQueryService;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
@@ -30,7 +31,7 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
     void keepsVerifiedDeliveryIndependentOfRuntimeJobRetention() {
         var sources = mock(ClasspathSourceCatalogRegistry.class);
         var access = mock(CitedSourceAccess.class);
-        var authorization = new EvidenceDeliveryAuthorization(sources, access, mock(ProblemRepository.class));
+        var authorization = new EvidenceDeliveryAuthorization(sources, access, evidence(mock(ProblemRepository.class)));
         var result = Result.builder()
                 .id(UUID.randomUUID())
                 .workspaceId(1)
@@ -58,7 +59,7 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
     void shouldReadMigratedWordsWithoutCertifyingThemForNewUse() {
         var access = mock(CitedSourceAccess.class);
         var authorization = new EvidenceDeliveryAuthorization(
-                mock(ClasspathSourceCatalogRegistry.class), access, mock(ProblemRepository.class));
+                mock(ClasspathSourceCatalogRegistry.class), access, evidence(mock(ProblemRepository.class)));
         var result = Result.builder()
                 .id(UUID.randomUUID())
                 .workspaceId(1)
@@ -84,7 +85,7 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
         var sources = mock(ClasspathSourceCatalogRegistry.class);
         var access = mock(CitedSourceAccess.class);
         var problems = mock(ProblemRepository.class);
-        var authorization = new EvidenceDeliveryAuthorization(sources, access, problems);
+        var authorization = new EvidenceDeliveryAuthorization(sources, access, evidence(problems));
         var result = Result.builder()
                 .id(UUID.randomUUID())
                 .workspaceId(1)
@@ -122,7 +123,7 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
         var sources = mock(ClasspathSourceCatalogRegistry.class);
         var access = mock(CitedSourceAccess.class);
         var problems = mock(ProblemRepository.class);
-        var authorization = new EvidenceDeliveryAuthorization(sources, access, problems);
+        var authorization = new EvidenceDeliveryAuthorization(sources, access, evidence(problems));
         var result = Result.builder()
                 .id(UUID.randomUUID())
                 .workspaceId(1)
@@ -142,5 +143,9 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
 
         assertThat(authorization.permitsForNewDelivery(1, List.of(result), purpose))
                 .isEmpty();
+    }
+
+    private static ResultEvidenceQueryService evidence(ProblemRepository problems) {
+        return new ResultEvidenceQueryService(problems);
     }
 }
