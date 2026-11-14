@@ -6,26 +6,54 @@ import { asArray, asRecord, isRecord, parseJson, readJsonFile } from "./lib/json
 import { output } from "./lib/process.ts";
 import { isCommit, parseChannel, type Channel } from "./reconcile-deployment.ts";
 
+/**
+ * What an automatic request does. `held`: the channel is frozen, so it stays on its release until a
+ * promotion without freeze. `current`: the channel already carries this build or a later one.
+ * Neither publishes anything, and neither is a failure.
+ */
+export type AutomaticDecision =
+	| { outcome: "promote" }
+	| { outcome: "held"; release: string }
+	| { outcome: "current"; release: string };
+
 /** Called under the promotion concurrency lock, against its freshly checked-out channel. */
 export async function automaticPromotion(
 	channel: Channel,
 	commit: string,
 	compare: (base: string, head: string) => Promise<string>,
-): Promise<boolean> {
+): Promise<AutomaticDecision> {
 	if (!isCommit(commit)) {
 		throw new Error("automatic promotion requires a full commit SHA");
 	}
 	if (channel.freeze === true) {
-		return false;
+		return { outcome: "held", release: channel.release };
 	}
 	const status = await compare(channel.release, commit);
 	if (status === "ahead") {
-		return true;
+		return { outcome: "promote" };
 	}
 	if (status === "behind" || status === "identical") {
-		return false;
+		return { outcome: "current", release: channel.release };
 	}
 	throw new Error(`cannot automatically promote divergent or unknown history: ${status}`);
+}
+
+/** The run's summary of a request that leaves the channel where it is. */
+export function unchangedSummary(
+	decision: Exclude<AutomaticDecision, { outcome: "promote" }>,
+	channel: string,
+	commit: string,
+): { title: string; text: string } {
+	const build = commit.slice(0, 10);
+	return decision.outcome === "held"
+		? {
+				title: `${channel} is held`,
+				text: `The ${channel} channel is frozen on ${decision.release}, so ${build} was not promoted. Nothing was published or deployed. A promotion without freeze lifts the hold.`,
+			}
+		: {
+				title: `${channel} already carries this build`,
+				text: `The ${channel} channel is on ${decision.release}, which already includes ${build}. Nothing was published or deployed.`,
+			};
 }
 
 /** The head commit of a listed run, if it is a successful CI/CD build of a push to this repository's main. */
@@ -89,7 +117,8 @@ if (import.meta.main) {
 	const repository = requiredEnv(process.env, "GITHUB_REPOSITORY");
 	const current = parseChannel(await readJsonFile("deploy-state/channels/staging.json"));
 	const compare = async (base: string, head: string) => compareStatus(repository, base, head);
-	const ahead = await automaticPromotion(current, commit, compare);
+	const decision = await automaticPromotion(current, commit, compare);
+	const ahead = decision.outcome === "promote";
 	// Only the latest successful main build is checked; an inconclusive lookup leaves the request in place.
 	const superseding = ahead
 		? await supersedingBuild(
@@ -109,8 +138,13 @@ if (import.meta.main) {
 	// for an older build can replace the newer build's. It promotes the newer build, which descends
 	// from it and is therefore ahead of the channel too, so no build is left unpromoted.
 	const target = superseding ?? commit;
-	if (!ahead) {
-		console.log("Automatic promotion skipped: channel is frozen or already at a newer build.");
+	if (decision.outcome !== "promote") {
+		const { title, text } = unchangedSummary(decision, channel, commit);
+		console.log(`::notice title=${title}::${text}`);
+		const summary = process.env.GITHUB_STEP_SUMMARY;
+		if (summary !== undefined && summary !== "") {
+			await appendFile(summary, `### ${title}\n\n${text}\n`);
+		}
 	} else if (superseding === undefined) {
 		console.log(`Promoting ${commit}`);
 	} else {
@@ -120,6 +154,8 @@ if (import.meta.main) {
 	}
 	await appendFile(
 		requiredEnv(process.env, "GITHUB_OUTPUT"),
-		ahead ? `apply=true\ncommit=${target}\n` : "apply=false\n",
+		ahead
+			? `apply=true\noutcome=promote\ncommit=${target}\n`
+			: `apply=false\noutcome=${decision.outcome}\n`,
 	);
 }

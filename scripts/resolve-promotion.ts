@@ -3,14 +3,22 @@
  * `promote.yml` signs and publishes: a published release by tag, or, for the environment that follows
  * the default branch, a commit of it with the digests its build produced.
  */
+import { existsSync } from "node:fs";
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { readInventory, resolveAndVerify, resolveImages } from "./commit-image-lock.ts";
 import { isSet, requiredEnv } from "./lib/env.ts";
 import { compareStatus } from "./lib/github.ts";
+import { readJsonFile } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
-import { isCommit, RELEASE_TAG, serializeChannel, type Channel } from "./reconcile-deployment.ts";
+import {
+	isCommit,
+	parseChannel,
+	RELEASE_TAG,
+	serializeChannel,
+	type Channel,
+} from "./reconcile-deployment.ts";
 
 /** The one environment that follows the default branch; every other runs published releases only. */
 const FOLLOWS_MAIN = "Staging";
@@ -22,6 +30,8 @@ export interface PromotionRequest {
 	allowRollback: boolean;
 	freeze: boolean;
 	refreshDatabaseImage: boolean;
+	/** The channel this promotion replaces; absent before an environment's first promotion. */
+	current?: Channel;
 }
 
 export interface PromotionSources {
@@ -36,6 +46,27 @@ export interface Promotion {
 	channel: Channel;
 	/** What the environment reports once it runs the channel: the version, or the commit. */
 	version: string;
+}
+
+/**
+ * A target behind what the channel already asks for is a rollback. The host refuses one without
+ * allowRollback (`decide` in reconcile-deployment.ts), so it is refused here, before a channel is
+ * published that the host would never apply and the run waits for a version that never comes.
+ */
+async function refuseUnaskedRollback(
+	request: PromotionRequest,
+	target: string,
+	compare: PromotionSources["compare"],
+): Promise<void> {
+	const { current, allowRollback, environment } = request;
+	if (current === undefined || allowRollback || current.release === target) {
+		return;
+	}
+	if ((await compare(current.release, target)) === "behind") {
+		throw new Error(
+			`${target} is behind ${current.release}, which the ${environment} channel asks for; set allow-rollback to move back deliberately`,
+		);
+	}
 }
 
 export async function resolvePromotion(
@@ -66,6 +97,7 @@ export async function resolvePromotion(
 		if (status !== "identical" && status !== "ahead") {
 			throw new Error(`${commit} is not on the default branch`);
 		}
+		await refuseUnaskedRollback(request, commit, sources.compare);
 		const images = await sources.images(commit);
 		return {
 			channel: { release: commit, images, allowRollback, freeze, refreshDatabaseImage },
@@ -86,6 +118,7 @@ export async function resolvePromotion(
 	if (await sources.isDraft(release)) {
 		throw new Error(`${release} is still a draft`);
 	}
+	await refuseUnaskedRollback(request, release, sources.compare);
 	return { channel: { release, allowRollback, freeze }, version: release.slice(1) };
 }
 
@@ -116,6 +149,7 @@ if (import.meta.main) {
 	const owner = repository.slice(0, repository.indexOf("/"));
 	const environment = requiredEnv(process.env, "CHANNEL");
 	const hostname = requiredEnv(process.env, "HOSTNAME");
+	const file = `channels/${environment.toLowerCase()}.json`;
 	const { channel, version } = await resolvePromotion(
 		{
 			environment,
@@ -124,6 +158,9 @@ if (import.meta.main) {
 			allowRollback: process.env.ALLOW_ROLLBACK === "true",
 			freeze: process.env.FREEZE === "true",
 			refreshDatabaseImage: process.env.REFRESH_DATABASE_IMAGE === "true",
+			current: existsSync(path.join("deploy-state", file))
+				? parseChannel(await readJsonFile(path.join("deploy-state", file)))
+				: undefined,
 		},
 		{
 			compare: async (base, head) => compareStatus(repository, base, head),
@@ -151,7 +188,6 @@ if (import.meta.main) {
 				),
 		},
 	);
-	const file = `channels/${environment.toLowerCase()}.json`;
 	await mkdir(path.join("deploy-state", "channels"), { recursive: true });
 	await writeFile(path.join("deploy-state", file), serializeChannel(channel));
 	await appendFile(
