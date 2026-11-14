@@ -69,7 +69,7 @@ const mockModels: LlmModel[] = [
 		upstreamModelId: "vendor/new-model",
 		dataHandlingTier: "UNDECLARED",
 		enabled: false,
-		readiness: "OFF",
+		readiness: "PRICE_MISSING",
 		reasoningEffort: undefined,
 		currentPrice: undefined,
 	},
@@ -82,6 +82,7 @@ const mockModels: LlmModel[] = [
 		dataHandlingTier: "IN_HOUSE",
 		operatedBy: "OWN_ORGANISATION",
 		limits: { bounded: false },
+		readiness: "LIMITS_MISSING",
 	},
 ];
 
@@ -100,7 +101,6 @@ const meta = {
 			displayName: "OpenAI production",
 			apiProtocol: "openai-responses",
 			purposes: ["PRACTICE_REVIEW", "MENTOR"],
-			enabled: true,
 		},
 		workspaceOptions: [
 			{ id: 10, displayName: "Teaching team", workspaceSlug: "teaching" },

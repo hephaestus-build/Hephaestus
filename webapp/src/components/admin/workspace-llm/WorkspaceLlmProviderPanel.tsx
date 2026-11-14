@@ -336,7 +336,6 @@ function ProviderSection({
 			)}
 			<WorkspaceLlmModelsTable
 				providerName={connection.displayName}
-				connectionEnabled={connection.enabled}
 				models={models}
 				mutatingIds={writingModelIds}
 				onEdit={onEditModel}
