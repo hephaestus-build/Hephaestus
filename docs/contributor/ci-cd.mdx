@@ -418,7 +418,7 @@ The native review requirement needs the approval, so a maintainer's pull request
 
 Zizmor reports every `pull_request_target` and `workflow_run` trigger as `dangerous-triggers`, and the Zizmor job fails on any finding.
 `pull-request-policy.yml` carries an ignore comment with its reason.
-`scripts/ci-contract.test.ts` also refuses any workflow that runs on `pull_request_target`, so an ignore comment cannot admit one.
+`scripts/ci-contract*.test.ts` also refuses any workflow that runs on `pull_request_target`, so an ignore comment cannot admit one.
 
 A merge group uses a synthetic ref, not the Version PR branch name. If its aggregate tree changes `package.json`'s version relative to the group's base, it is a release candidate.
 It builds every release image on both platforms and must pass release evidence preflight on that exact tree.
@@ -525,7 +525,7 @@ The token goes to the one job of `merge-group-cancel.yml`.
 That job runs on `ubuntu-slim`, with no checkout and no action, so no other code holds the token.
 Each callback only grants the permission and calls the workflow, so its token never reaches a step.
 Each workflow keeps `permissions: {}` at the top level.
-`ACTIONS_WRITE_GRANTS` in `scripts/ci-contract.test.ts` lists each other job with this permission, and the reason.
+`ACTIONS_WRITE_GRANTS` in `scripts/ci-contract*.test.ts` lists each other job with this permission, and the reason.
 
 The cancel job needs a runner, so a busy runner pool adds its wait to the eviction time.
 
@@ -536,7 +536,7 @@ Without the cancel jobs it was about 6 minutes, and on `main` the gate failed 13
 The time on `main` is not measured yet.
 Record it here from the first merge group that fails after this rule reached `main`.
 
-`scripts/ci-contract.test.ts` holds each rule:
+`scripts/ci-contract*.test.ts` holds each rule:
 
 - Each leg that runs in a merge group has its cancel job, for merge groups only.
   Each cancel job calls `merge-group-cancel.yml`.
@@ -662,7 +662,7 @@ Renovate uses the same path for dependency bumps.
 
 `scripts/commit-via-api.ts` holds the one implementation.
 `openapi-autocommit.yml` commits the regenerated spec and client to the pull request's branch through it.
-`promote.yml` commits the channel to `deploy-state`, and `scripts/maintain-version-pr.ts` commits the Version PR. `scripts/ci-contract.test.ts` fails any workflow that pushes to a real ref.
+`promote.yml` commits the channel to `deploy-state`, and `scripts/maintain-version-pr.ts` commits the Version PR. `scripts/ci-contract*.test.ts` fails any workflow that pushes to a real ref.
 
 The mutation carries whole file contents, not a diff.
 Thus, the script enumerates every added, modified, or deleted work-tree path and sends each complete file. A rename is its source
@@ -939,7 +939,7 @@ A push to the retargeted pull request runs the ordinary pull-request tier as wel
 ## Path filters
 
 The `kubernetes` filter includes `docker/**`, `application*.yml`, `*Properties.java` and `Application.java`.
-`ci-contract.test.ts` checks that it covers every configuration-binding source.
+`ci-contract*.test.ts` checks that it covers every configuration-binding source.
 
 `detect-changes` in `cicd.yml` selects legs from changed paths for two diff events.
 A pull request compares with its base.
@@ -1027,7 +1027,7 @@ Within a run, the vulnerability scan ignores tags.
 It reads the digest that its own build job exported.
 Re-running a failed build job builds and scans the platform again, and the manifest job reads that new digest.
 
-`ci-contract.test.ts` asserts the whole contract.
+`ci-contract*.test.ts` asserts the whole contract.
 The build must publish every consumer-resolved tag for that consumer's event.
 No job resolves an image by the run that built it. A run-scoped tag names the attempt rather than the artifact, and GitHub's *re-run failed jobs*
 gives the retried job a new attempt number.
@@ -1240,7 +1240,7 @@ Right after a merge, that run is still building, so the pull request builds ever
   ([GitHub-hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners))
   is a ceiling for those jobs, not the basis of the floor.
   This rule covers job limits only. A step limit stops the step's process on the runner.
-  `ci-contract.test.ts` holds every job to the floor, and every number in an expression limit too.
+  `ci-contract*.test.ts` holds every job to the floor, and every number in an expression limit too.
 - Action and composite setup steps run sequentially within each job. The runner writes the shared
   event file before each action. The action SDK reads that file. Concurrent action starts can expose
   incomplete event data. Jobs and matrix entries still run independently. Standalone shell work
@@ -1278,7 +1278,7 @@ Right after a merge, that run is still building, so the pull request builds ever
   Some workflows do not cancel, because a run cancelled halfway leaves state that no later run replaces.
   That state is a deploy, a teardown, a commit, or an approval.
   The policy runs only after a successful `pull-request.yml` run, so a cancelled run leaves no verdict, and that workflow cancels.
-  `UNCANCELLED_PULL_REQUEST_RUNS` in `scripts/ci-contract.test.ts` lists the workflows that do not cancel, with their reasons.
+  `UNCANCELLED_PULL_REQUEST_RUNS` in `scripts/ci-contract*.test.ts` lists the workflows that do not cancel, with their reasons.
 
   The test evaluates each group. It fails when a workflow lacks the rule or when one pull request cancels another.
   It also fails when a run can cancel a run on `main` or in the merge queue.
@@ -1290,7 +1290,7 @@ Right after a merge, that run is still building, so the pull request builds ever
 - A run on `main` that leaves a per-commit record — `semgrep.yml`, `scorecard.yml`,
   `scorecard-ratchet.yml` — does not cancel an in-progress predecessor when another commit arrives.
   A missing record can become a gap in a later score. Those workflows write
-  `cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}`, and `scripts/ci-contract.test.ts`
+  `cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}`, and `scripts/ci-contract*.test.ts`
   holds every `main` push to it. A workflow whose newest run simply replaces the last, such as the
   docs deploy, is named there as the exception. GitHub can still replace a **pending** run in the
   same [concurrency group](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency):
@@ -1318,7 +1318,7 @@ A `@Nested` class stays with its top-level class.
 This is the idea of Develocity's [Test Distribution](https://docs.develocity.ai/test-distribution/), which balances partitions with historical test times, without its server.
 
 The number of shards and the default seconds live in `server/application/integration-test-durations.json`.
-The CI matrix lists `review` and each numbered shard, and `scripts/ci-contract.test.ts` pins the matrix to the file.
+The CI matrix lists `review` and each numbered shard, and `scripts/ci-contract*.test.ts` pins the matrix to the file.
 To change the number of shards, change `shards` in the file and the three matrices.
 
 The file is committed, so every run of a commit partitions the same way, locally too.
@@ -1560,7 +1560,7 @@ runners at once.
 The integration tier is profiled one shard at a time, with the shards that
 [Parallelism and concurrency](#parallelism-and-concurrency) defines.
 A run of the whole tier no longer fits in one test task's timeout.
-The shard list is mirrored in both weekly workflows and pinned to the CI matrix by `scripts/ci-contract.test.ts`.
+The shard list is mirrored in both weekly workflows and pinned to the CI matrix by `scripts/ci-contract*.test.ts`.
 
 Each tier retains its JFR recording, Gradle task profile, resource usage and JUnit
 results for 14 days. Verification profiles are diagnostic artifacts, not integration-history samples.

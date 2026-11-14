@@ -668,7 +668,7 @@ jobs:
             release-images:
               # The pinned upstream digests need no build, so the pull request that edits them —
               # a Renovate digest bump included — is the one that scans them (#1741). The script
-              # entries are the gate's whole transitive import closure, which ci-contract.test.ts
+              # entries are the gate's whole transitive import closure, which ci-contract*.test.ts
               # re-derives from the imports and asserts against this list.
               - 'security/release-images.json'
               - 'security/vulnerability-policy.json'

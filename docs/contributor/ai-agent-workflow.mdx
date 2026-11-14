@@ -96,7 +96,7 @@ Parallel work stays parallel only when contributors avoid manufacturing shared d
 
 1. **Reserve hot-file lanes at assignment time.** Only one in-flight PR can write each lane:
    - `.github/workflows/**` and `.github/actions/**`.
-   - `vite.config.ts` with `scripts/ci-contract.test.ts`.
+   - `vite.config.ts` with `scripts/ci-contract*.test.ts`.
      The task graph and its contract keep these in step.
    - Root `package.json` with `pnpm-lock.yaml`.
    - `CHANGELOG.md` and `MIGRATION.md`, for release automation only.

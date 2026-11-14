@@ -396,13 +396,13 @@ which performs every check except signature verification.
 | SBOM attestation matches the durable evidence                                    | **Yes, structurally.** `cosign attest` creates the attestation during the release. There is nothing to verify before it exists                                                                                                                     |
 | Image index signature and build provenance match the release subjects | **Yes, structurally.** The index signature names the reusable image workflow on `refs/heads/main`. Native SLSA v1 build provenance names that workflow and the full source commit, and excludes self-hosted runners. A reused digest can retain its merge-group build provenance. |
 | The manifest names a release version                                             | **Yes, structurally.** Only `plan-release.ts` decides the tag. The preflight substitutes the version the ref carries                                                                                                                               |
-| The bundle describes the images this run built                                   | No — the preflight and `release.yml` resolve subjects through the image build's published commit tag. `ci-contract.test.ts` requires that tag for every supported event of either caller. See [CI/CD § Image identity](./ci-cd.mdx#image-identity) |
+| The bundle describes the images this run built                                   | No — the preflight and `release.yml` resolve subjects through the image build's published commit tag. `ci-contract*.test.ts` requires that tag for every supported event of either caller. See [CI/CD § Image identity](./ci-cd.mdx#image-identity) |
 | The verifiers of earlier releases accept the chart images, the lock schema and the evidence manifest | No — the preflight runs the same verifiers and accepted breaks as `publish-release` on the joint lock that the release would sign ([Joint lock with the chart](#joint-lock-with-the-chart)) |
 | The verifiers of earlier releases accept the asset names, the signing identity, the chart digest and the packaged chart's metadata | **Yes, structurally.** The signed lock, the chart and its signature exist only after `release.yml` creates the draft |
 | The one-host install from the signed k3s bundle passes `release-smoke` on both architectures | **Yes, structurally.** `k3s-install.sh` verifies the bundle and the chart by the release workflow's signing identity. The preflight has no signed bundle and no release identity |
 
 The two signature entries are the verifier's only mode-conditional behavior.
-`ci-contract.test.ts` asserts this: a check gated on anything except `mode === "verify-signatures"` fails the contract test.
+`ci-contract*.test.ts` asserts this: a check gated on anything except `mode === "verify-signatures"` fails the contract test.
 Otherwise, a release could be the first to perform that check.
 The third structural entry is unconditional.
 The verifier always requires a release version, and preflight supplies the ref's version.
@@ -432,7 +432,7 @@ Removal of upstream evidence from the bundle would make the verifier reject it.
 The webapp build emits no source maps and uploads nothing.
 No image build receives an upload credential.
 The webapp Dockerfile fails the build if a `.map` file appears in the output.
-`scripts/ci-contract.test.ts` keeps the image workflows free of upload secrets.
+`scripts/ci-contract*.test.ts` keeps the image workflows free of upload secrets.
 
 ### Operator verification
 

@@ -408,7 +408,7 @@ Write a rule once.
   § oxlint traps has the rest.
 - **`vp run` does not give a command a POSIX shell on every platform.**
   Thus, a command never contains `$`.
-  `scripts/ci-contract.test.ts` enforces this.
+  `scripts/ci-contract*.test.ts` enforces this.
   When the config loads, `vite.config.ts` determines what a command reads from the environment.
   `scripts/check-runner-contract.ts` proves the runner facts that the graph needs.
 

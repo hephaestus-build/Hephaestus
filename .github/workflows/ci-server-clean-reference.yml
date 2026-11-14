@@ -65,7 +65,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # The shards mirror the ci-tests.yml matrix, pinned by scripts/ci-contract.test.ts. Each job compiles cold.
+  # The shards mirror the ci-tests.yml matrix, pinned by scripts/ci-contract*.test.ts. Each job compiles cold.
   integration:
     name: Profile clean integration (${{ matrix.shard }})
     needs: verify

@@ -38,14 +38,14 @@ This ADR states how a release is built, signed and delivered at 1.0 as rules.
 ## Decision
 
 1. **CI builds each image once.** A merge group builds, scans, signs and attests each image for its commit. The push to `main` reuses that digest. The server JAR is packaged once, and every server suite tests its classes.
-   Enforced by: the build-once and image-reuse cases in `scripts/ci-contract.test.ts`.
+   Enforced by: the build-once and image-reuse cases in `scripts/ci-contract*.test.ts`.
 2. **The release builds no image.** `release.yml` resolves the digests of the released commit and promotes them. A stable release that promotes a candidate keeps the digests of the candidate.
    Not enforced. `release.yml` has no build step, and review catches one.
 3. **The vulnerability policy runs at build time and at release time.** `security/vulnerability-policy.json` judges each platform of each image where it is built, and again in the release evidence gate.
    1.0 target: the one-host platform images come under the same policy in [#4073](https://github.com/hephaestus-build/Hephaestus/pull/4073). These are k3s, Traefik, cert-manager and the agent-sandbox controller.
-   Enforced by: the vulnerability policy cases in `ci-contract.test.ts`.
+   Enforced by: the vulnerability policy cases in `ci-contract*.test.ts`.
 4. **No release exists before its evidence passes.** Each image in `security/release-images.json` gets an SPDX and a CycloneDX SBOM, a licence report and a vulnerability report for each platform. Upstream images get the same evidence. The draft release exists only after this gate passes. Signed `SHA256SUMS` cover the evidence.
-   Enforced by: the evidence gate cases in `ci-contract.test.ts`, and `scripts/check-release-image-inventory.test.ts`.
+   Enforced by: the evidence gate cases in `ci-contract*.test.ts`, and `scripts/check-release-image-inventory.test.ts`.
 5. **Each first-party image carries signed build provenance and a signed SBOM.** GitHub-hosted runners make native SLSA v1 provenance. The release attaches the SPDX SBOM to each platform digest as a Cosign attestation. The release gate verifies the signer workflow, the source commit and the hosted runner. The claim is Build L2 ([Release artifact provenance](../contributor/release-artifact-provenance.md)).
    Enforced by: `scripts/verify-release-evidence.ts --verify-signatures` in `release.yml`, and `scripts/verify-release-evidence.test.ts`.
 6. **One lock names every application image.** `release-vX.Y.Z.chart.json` names the release, the source commit, the chart digest, and the index and platform digests of each application image. The default values of the chart pin exactly these digests. The signed k3s bundle pins the platform images.
