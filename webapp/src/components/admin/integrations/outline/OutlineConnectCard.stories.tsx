@@ -150,9 +150,10 @@ export const TokenExpiringSoon: Story = {
 		tokenStatus: { ...healthyToken, expiresAt: daysAfter(5) },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/this api key expires in [45] days/iu);
-		canvas.getByText(/cannot be rotated through the api/iu);
-		canvas.getByText(/settings → api keys/iu);
+		const alert = within(canvas.getByRole("alert"));
+		alert.getByText(/this api key expires in [45] days/iu);
+		alert.getByText(/cannot be rotated through the api/iu);
+		alert.getByText(/settings → api keys/iu);
 	},
 };
 
