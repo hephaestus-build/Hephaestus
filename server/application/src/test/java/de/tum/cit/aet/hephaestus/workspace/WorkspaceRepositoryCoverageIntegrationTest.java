@@ -55,13 +55,13 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -75,7 +75,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.IllegalTransactionStateException;
-import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.reactive.function.client.ClientResponse;
@@ -715,7 +714,7 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
         Connection connection = connectionRepository
                 .findActive(workspace.getId(), IntegrationKind.GITHUB)
                 .orElseThrow();
-        assertThatThrownBy(() -> holdLockWhile(() -> disconnect(connection), List.of(status -> {
+        assertThatThrownBy(() -> holdLockWhile(() -> disconnect(connection), List.of(() -> {
                     workspaceRepositoryMonitorService.addRepositoryToMonitor(workspace.getWorkspaceSlug(), SHARED_NAME);
                     return true;
                 })))
@@ -740,13 +739,19 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
         Connection connection = connectionRepository
                 .findActive(workspace.getId(), IntegrationKind.GITHUB)
                 .orElseThrow();
+        // Row-lock waiters are granted in arrival order: creation commits first, then disconnect erases its monitor.
         holdLockWhile(
-                () -> workspaceRepositoryMonitorService.addRepositoryToMonitor(
-                        workspace.getWorkspaceSlug(), SHARED_NAME),
-                List.of(status -> {
-                    disconnect(connection);
-                    return true;
-                }));
+                () -> connectionRepository.acquireLifecycleLock(connection.getId(), workspace.getId()),
+                List.of(
+                        () -> {
+                            workspaceRepositoryMonitorService.addRepositoryToMonitor(
+                                    workspace.getWorkspaceSlug(), SHARED_NAME);
+                            return true;
+                        },
+                        () -> {
+                            disconnect(connection);
+                            return true;
+                        }));
         assertThat(connectionRepository
                         .findById(connection.getId())
                         .orElseThrow()
@@ -774,7 +779,7 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
                                     INSTALLATION_ID, workspace.getAccountLogin(), null, Set.of()));
                             connectionRepository.saveAndFlush(current);
                         },
-                        List.of(status -> {
+                        List.of(() -> {
                             workspaceRepositoryMonitorService.addRepositoryToMonitor(
                                     workspace.getWorkspaceSlug(), SHARED_NAME);
                             return true;
@@ -792,12 +797,11 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
         Connection connection = connectionRepository
                 .findActive(workspace.getId(), IntegrationKind.GITHUB)
                 .orElseThrow();
-        Function<TransactionStatus, Boolean> create = status -> {
+        Callable<Boolean> create = () -> {
             try {
                 workspaceRepositoryMonitorService.addRepositoryToMonitor(workspace.getWorkspaceSlug(), SHARED_NAME);
                 return true;
             } catch (RepositoryAlreadyMonitoredException exception) {
-                status.setRollbackOnly();
                 return false;
             }
         };
@@ -831,8 +835,11 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
                 strategy);
     }
 
-    private <T> List<T> holdLockWhile(Runnable holder, List<Function<TransactionStatus, T>> contenders)
-            throws Exception {
+    /**
+     * Holds the lifecycle lock in {@code holder}'s open transaction while each contender, in order, waits behind it.
+     * Contenders run like a request, with no transaction around them, so provider calls happen before their writes.
+     */
+    private <T> List<T> holdLockWhile(Runnable holder, List<Callable<T>> contenders) throws Exception {
         var release = new CountDownLatch(1);
         var blocker = new CompletableFuture<Integer>();
         try (var threads = Executors.newFixedThreadPool(contenders.size() + 1)) {
@@ -853,24 +860,19 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
                 int holderPid = blocker.get(20, SECONDS);
                 var pending = new ArrayList<Future<T>>();
                 for (var operation : contenders) {
-                    var contender = new CompletableFuture<Integer>();
-                    pending.add(threads.submit(() -> Objects.requireNonNull(transactionTemplate.execute(status -> {
-                        contender.complete(
-                                Objects.requireNonNull(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class)));
-                        return operation.apply(status);
-                    }))));
-                    int contenderPid = contender.get(20, SECONDS);
+                    pending.add(threads.submit(operation));
+                    int waiting = pending.size();
                     await().atMost(Duration.ofSeconds(20))
-                            .untilAsserted(
-                                    () -> assertThat(jdbc.queryForObject("""
-                                            WITH RECURSIVE blockers(pid) AS (
-                                                SELECT unnest(pg_blocking_pids(?))
+                            .untilAsserted(() -> assertThat(jdbc.queryForObject("""
+                                            WITH RECURSIVE waiters(pid) AS (
+                                                SELECT a.pid FROM pg_stat_activity a WHERE ? = ANY(pg_blocking_pids(a.pid))
                                                 UNION
-                                                SELECT unnest(pg_blocking_pids(b.pid)) FROM blockers b
+                                                SELECT a.pid FROM pg_stat_activity a
+                                                JOIN waiters w ON w.pid = ANY(pg_blocking_pids(a.pid))
                                             )
-                                            SELECT EXISTS(SELECT 1 FROM blockers WHERE pid=?)
-                                            """, Boolean.class, contenderPid, holderPid))
-                                            .isTrue());
+                                            SELECT count(*) FROM waiters
+                                            """, Integer.class, holderPid))
+                                    .isEqualTo(waiting));
                 }
                 release.countDown();
                 holding.get(20, SECONDS);
