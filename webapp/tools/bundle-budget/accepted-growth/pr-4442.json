@@ -1,0 +1,10 @@
+{
+	"accepted": [
+		{
+			"load": "src/components/common/MonacoCodeEditor.tsx",
+			"gzipBytes": 1304169,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4442",
+			"reason": "Monaco leaves the workspace Practices list and the instance catalog and loads only when a script field opens; the new lazy chunks are the editor itself."
+		}
+	]
+}
