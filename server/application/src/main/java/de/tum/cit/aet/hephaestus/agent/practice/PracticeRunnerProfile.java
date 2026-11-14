@@ -45,6 +45,7 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
             "pi-runner-output.js",
             "pi-runner-usage.js",
             "pi-runner-retry.js",
+            "pi-runner-scope.js",
             "pi-admitted-results.js",
             "pi-session-lifecycle.js",
             "pi-session-reads.js",
