@@ -99,24 +99,6 @@ public class GitHubMilestoneProcessor {
                 milestoneRepository.findByNumberAndRepositoryId(dto.number(), repository.getId());
         boolean isNew = existingOpt.isEmpty();
 
-        // A late delivery would restore an older title, state or due date (sync-lifecycle.md).
-        // A sync read that began after the last write may settle an equal version: issue counts change without moving
-        // it.
-        if (!isNew
-                && ProviderStateVersion.refuses(
-                        dto.updatedAt(),
-                        existingOpt.get().getUpdatedAt(),
-                        context.isSync(),
-                        context.observedAt(),
-                        existingOpt.get().getLastSyncAt())) {
-            log.debug(
-                    "Skipped stale milestone update: milestoneId={}, existingUpdatedAt={}, dtoUpdatedAt={}",
-                    existingOpt.get().getId(),
-                    existingOpt.get().getUpdatedAt(),
-                    dto.updatedAt());
-            return existingOpt.get();
-        }
-
         Milestone milestone = existingOpt.orElseGet(Milestone::new);
 
         // Handle nativeId assignment:
@@ -132,6 +114,25 @@ public class GitHubMilestoneProcessor {
             milestone.setNativeId(generateDeterministicId(repository.getId(), dto.number()));
         }
         // else: existing milestone, keep its current nativeId (whether real or generated)
+
+        // A late delivery would restore an older title, state or due date (sync-lifecycle.md).
+        // A sync read that began after the last write may settle an equal version, because issue counts change
+        // without moving updated_at. Identity is not versioned: a refused webhook still records the real id above,
+        // which a later delete looks up.
+        if (!isNew
+                && ProviderStateVersion.refuses(
+                        dto.updatedAt(),
+                        milestone.getUpdatedAt(),
+                        context.isSync(),
+                        context.observedAt(),
+                        milestone.getLastSyncAt())) {
+            log.debug(
+                    "Skipped stale milestone update: milestoneId={}, existingUpdatedAt={}, dtoUpdatedAt={}",
+                    milestone.getId(),
+                    milestone.getUpdatedAt(),
+                    dto.updatedAt());
+            return milestone;
+        }
 
         // Set provider for new milestones
         if (isNew) {

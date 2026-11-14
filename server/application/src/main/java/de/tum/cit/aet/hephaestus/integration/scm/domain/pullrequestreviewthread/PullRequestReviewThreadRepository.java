@@ -33,6 +33,7 @@ public interface PullRequestReviewThreadRepository extends JpaRepository<PullReq
      * It must be the transaction's first read of the thread: the caller then reads it through
      * {@link #findByNativeIdAndProviderId}, which sees what the last writer committed.
      */
+    @WorkspaceAgnostic("Sync locks one shared mirror row of a repository taken from the provider event")
     @Query(
             value =
                     "SELECT id FROM pull_request_review_thread WHERE native_id = :nativeId AND provider_id = :providerId"

@@ -136,6 +136,23 @@ class SlackUserPreferencesServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldAnswerWithTheStoredChoiceWhenALaterSlackChoiceKeepsItsPlace() {
+        givenWorkspaceSummary();
+        when(connectionRepository.findActive(1L, IntegrationKind.SLACK))
+                .thenReturn(Optional.of(slackConnection(1L, "acme", "Hephaestus", "T1", "acme-slack")));
+        when(accountIdentityQuery.activeLinksForAccount(ACCOUNT_ID))
+                .thenReturn(List.of(link(SLACK_PROVIDER_ID, "U1", "T1")));
+        when(participantConsentService.recordChannelMessageOptOut(eq(1L), eq("U1"), any(Instant.class)))
+                .thenReturn(false);
+        when(participantConsentService.channelMessagesAllowed(1L, "U1")).thenReturn(true);
+
+        SlackUserWorkspacePreferencesDTO dto = service.updateChannelMessagesAllowed(1L, ACCOUNT_ID, false);
+
+        assertThat(dto.channelMessagesAllowed()).isTrue();
+        verify(erasureService, never()).erasePerson(anyLong(), anyLong(), anyString());
+    }
+
+    @Test
     void updateOptInDoesNotEraseData() {
         givenWorkspaceSummary();
         when(connectionRepository.findActive(1L, IntegrationKind.SLACK))

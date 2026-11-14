@@ -36,7 +36,8 @@ import org.jspecify.annotations.Nullable;
  * @param repository The repository being processed (JPA entity - transaction required)
  * @param provider The git provider instance (e.g., github.com, gitlab.lrz.de)
  * @param observedAt When Hephaestus received what is processed: when the inbox stored the webhook,
- *     or when a sync asked for the page. Issue, pull request and merge request processing compare this time.
+ *     or when a sync asked for the page. Issue, pull request, merge request and milestone processing compare this
+ *     time.
  *     Sync callers capture it before the provider request and set it with {@link #withObservedAt}.
  *     A payload handled outside a delivery is observed when it is handled, as a core inbox event is.
  * @param correlationId Unique ID for distributed tracing - correlates all log entries and events

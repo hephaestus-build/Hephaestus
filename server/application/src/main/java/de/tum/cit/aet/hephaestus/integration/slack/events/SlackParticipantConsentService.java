@@ -44,6 +44,13 @@ public class SlackParticipantConsentService {
         return record(workspaceId, slackUserId, false, decidedAt);
     }
 
+    /** Whether the stored choice lets this person's channel messages in; no choice lets them in. */
+    @Transactional(readOnly = true)
+    public boolean channelMessagesAllowed(long workspaceId, String slackUserId) {
+        return !participantConsentRepository.existsByWorkspaceIdAndSlackUserIdAndIngestionOptedOutTrue(
+                workspaceId, slackUserId);
+    }
+
     private boolean record(long workspaceId, String slackUserId, boolean optedOut, Instant decidedAt) {
         if (slackUserId == null || slackUserId.isBlank()) {
             return false;

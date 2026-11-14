@@ -49,6 +49,7 @@ public interface MilestoneRepository extends JpaRepository<Milestone, Long> {
      * It must be the transaction's first read of the milestone: the caller then reads it through
      * {@link #findByNumberAndRepositoryId}, which sees what the last writer committed.
      */
+    @WorkspaceAgnostic("Sync locks one shared mirror row of a repository taken from the provider event")
     @Query(
             value = "SELECT id FROM milestone WHERE repository_id = :repositoryId AND number = :number"
                     + " FOR NO KEY UPDATE",
@@ -61,6 +62,9 @@ public interface MilestoneRepository extends JpaRepository<Milestone, Long> {
      * Uses PostgreSQL's ON CONFLICT DO NOTHING to handle concurrent inserts
      * on the unique constraint (number, repository_id). This eliminates the race
      * condition where two threads both check for existence and try to insert.
+     * <p>
+     * {@code lastSyncAt} is when the row was written, on the clock that a later sync's request time uses: without it,
+     * a sync at the same provider version could never refresh the row.
      *
      * @return 1 if inserted, 0 if duplicate (milestone with same repo+number exists)
      */
@@ -69,11 +73,11 @@ public interface MilestoneRepository extends JpaRepository<Milestone, Long> {
     @Query(value = """
         INSERT INTO milestone (
             native_id, provider_id, number, title, description, state, html_url, due_on,
-            open_issues_count, closed_issues_count, repository_id, created_at, updated_at
+            open_issues_count, closed_issues_count, repository_id, created_at, updated_at, last_sync_at
         )
         VALUES (
             :nativeId, :providerId, :number, :title, :description, :state, :htmlUrl, :dueOn,
-            :openIssuesCount, :closedIssuesCount, :repositoryId, :createdAt, :updatedAt
+            :openIssuesCount, :closedIssuesCount, :repositoryId, :createdAt, :updatedAt, :lastSyncAt
         )
         ON CONFLICT (number, repository_id) DO NOTHING
         """, nativeQuery = true)
@@ -90,5 +94,6 @@ public interface MilestoneRepository extends JpaRepository<Milestone, Long> {
             @Param("closedIssuesCount") int closedIssuesCount,
             @Param("repositoryId") Long repositoryId,
             @Param("createdAt") @Nullable Instant createdAt,
-            @Param("updatedAt") @Nullable Instant updatedAt);
+            @Param("updatedAt") @Nullable Instant updatedAt,
+            @Param("lastSyncAt") Instant lastSyncAt);
 }

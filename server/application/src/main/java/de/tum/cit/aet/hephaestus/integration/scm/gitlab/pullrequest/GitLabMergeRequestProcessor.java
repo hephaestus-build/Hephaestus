@@ -969,13 +969,9 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         if (reviewsObservedAt != null && (lastWriteAt == null || reviewsObservedAt.isAfter(lastWriteAt))) {
             lastWriteAt = reviewsObservedAt;
         }
-        boolean freshEqualRead = existingOpt.isPresent()
-                && ProviderStateVersion.acceptsEqualRead(
-                        fetchedUpdatedAt, existingOpt.get().getUpdatedAt(), context.observedAt(), lastWriteAt);
         boolean sameVersion = existingOpt.isPresent()
-                && !freshEqualRead
-                && ProviderStateVersion.cannotReplace(
-                        fetchedUpdatedAt, existingOpt.get().getUpdatedAt());
+                && ProviderStateVersion.refuses(
+                        fetchedUpdatedAt, existingOpt.get().getUpdatedAt(), true, context.observedAt(), lastWriteAt);
         if (sameVersion
                 && (!Objects.equals(
                                 data.diffHeadSha(), existingOpt.orElseThrow().getHeadRefOid())

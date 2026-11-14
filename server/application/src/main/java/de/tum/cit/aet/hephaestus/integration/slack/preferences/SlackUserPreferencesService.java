@@ -115,15 +115,19 @@ public class SlackUserPreferencesService {
                 .findFirst()
                 .orElseThrow(() -> notFound("Slack account is not linked for this workspace."));
 
+        String slackUserId = slackLink.providerUserKey();
         Instant decidedAt = Instant.now();
-        if (channelMessagesAllowed) {
-            participantConsentService.recordChannelMessageOptIn(workspaceId, slackLink.providerUserKey(), decidedAt);
-        } else if (participantConsentService.recordChannelMessageOptOut(
-                workspaceId, slackLink.providerUserKey(), decidedAt)) {
-            erasureService.erasePerson(workspaceId, accountId, slackLink.providerUserKey());
+        boolean recorded = channelMessagesAllowed
+                ? participantConsentService.recordChannelMessageOptIn(workspaceId, slackUserId, decidedAt)
+                : participantConsentService.recordChannelMessageOptOut(workspaceId, slackUserId, decidedAt);
+        if (recorded && !channelMessagesAllowed) {
+            erasureService.erasePerson(workspaceId, accountId, slackUserId);
         }
-        return toDto(connection, slackLink, channelMessagesAllowed)
-                .orElseThrow(() -> notFound("Workspace is not available."));
+        // A choice made in Slack with a later time keeps its place, so the answer shows what is stored.
+        boolean allowed = recorded
+                ? channelMessagesAllowed
+                : participantConsentService.channelMessagesAllowed(workspaceId, slackUserId);
+        return toDto(connection, slackLink, allowed).orElseThrow(() -> notFound("Workspace is not available."));
     }
 
     private Map<String, AccountIdentityQuery.IdentityView> slackLinksByTeam(

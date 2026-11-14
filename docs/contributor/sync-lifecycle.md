@@ -199,7 +199,7 @@ For these, the compare and the write are one step, also when a sync writes the s
   Outline reconciliation can refresh metadata at the same version, if the mirror has not changed since its read.
   It keeps evicted bodies absent until a live read needs them.
 - An Outline delete or archive without a version reads current provider state before it changes the mirror.
-- A GitHub thread resolve or unresolve applies only if its event date is not older than the last one the thread recorded.
+- A GitHub thread resolve or unresolve applies only if its event date is not older than the stored one.
   The thread stores that date also when the event finds the state it sets.
   Events of the same second keep their arrival order.
   GitLab orders a resolution by the start of the discussion read that saw it.

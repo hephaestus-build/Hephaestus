@@ -101,25 +101,6 @@ public class GitLabMilestoneProcessor extends BaseGitLabProcessor {
                 milestoneRepository.findByNumberAndRepositoryId(dto.iid(), repository.getId());
         boolean isNew = existingOpt.isEmpty();
 
-        // A late hook would restore an older title, state or due date (sync-lifecycle.md).
-        Instant incomingUpdatedAt = parseGitLabTimestamp(dto.updatedAt());
-        // A sync read that began after the last write may settle an equal version: issue counts change without moving
-        // it.
-        if (!isNew
-                && ProviderStateVersion.refuses(
-                        incomingUpdatedAt,
-                        existingOpt.get().getUpdatedAt(),
-                        context.isSync(),
-                        context.observedAt(),
-                        existingOpt.get().getLastSyncAt())) {
-            log.debug(
-                    "Skipped stale milestone update: milestoneId={}, existingUpdatedAt={}, dtoUpdatedAt={}",
-                    existingOpt.get().getId(),
-                    existingOpt.get().getUpdatedAt(),
-                    incomingUpdatedAt);
-            return existingOpt.get();
-        }
-
         Milestone milestone = existingOpt.orElseGet(Milestone::new);
 
         // Group milestone ids must not collide with project milestone ids on the same provider.
@@ -133,6 +114,25 @@ public class GitLabMilestoneProcessor extends BaseGitLabProcessor {
         } else if (!dto.groupMilestone() && milestone.getNativeId() < 0) {
             // Existing milestone was stored with deterministic ID but now has real ID
             milestone.setNativeId(dto.nativeId());
+        }
+
+        // A late hook would restore an older title, state or due date (sync-lifecycle.md).
+        Instant incomingUpdatedAt = parseGitLabTimestamp(dto.updatedAt());
+        // A sync read that began after the last write may settle an equal version, because issue counts change
+        // without moving updated_at. Identity is not versioned: a refused hook still records the real id above.
+        if (!isNew
+                && ProviderStateVersion.refuses(
+                        incomingUpdatedAt,
+                        milestone.getUpdatedAt(),
+                        context.isSync(),
+                        context.observedAt(),
+                        milestone.getLastSyncAt())) {
+            log.debug(
+                    "Skipped stale milestone update: milestoneId={}, existingUpdatedAt={}, dtoUpdatedAt={}",
+                    milestone.getId(),
+                    milestone.getUpdatedAt(),
+                    incomingUpdatedAt);
+            return milestone;
         }
 
         milestone.setNumber(dto.iid());

@@ -610,6 +610,56 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
         }
 
         @Test
+        void shouldRecordTheRealIdFromARefusedWebhookSoThatItsDeleteFindsTheMilestone() {
+            GitHubMilestoneDTO synced = new GitHubMilestoneDTO(
+                    null,
+                    9,
+                    "Release",
+                    null,
+                    "open",
+                    null,
+                    "https://github.com/" + FIXTURE_REPO_FULL_NAME + "/milestone/9",
+                    0,
+                    1,
+                    EARLIER,
+                    LATER,
+                    null);
+            processor.process(synced, testRepository, null, createContext());
+            assertThat(stored().getNativeId()).isNegative();
+
+            processor.process(snapshot("Release", "open", 1, LATER), testRepository, null, webhook());
+            processor.delete(MILESTONE_ID, webhook());
+
+            assertThat(milestoneRepository.findByNumberAndRepositoryId(9, testRepository.getId()))
+                    .isEmpty();
+        }
+
+        @Test
+        void shouldRefreshTheCountsOfAMilestoneThatAnIssueWebhookInsertedWhenASyncReadsTheSameVersion() {
+            milestoneRepository.insertIfAbsent(
+                    MILESTONE_ID,
+                    providerId(),
+                    9,
+                    "Release",
+                    null,
+                    "OPEN",
+                    "https://github.com/" + FIXTURE_REPO_FULL_NAME + "/milestone/9",
+                    null,
+                    0,
+                    1,
+                    testRepository.getId(),
+                    EARLIER,
+                    LATER,
+                    Instant.now());
+            ProcessingContext readAfterTheWrite =
+                    createContext().withObservedAt(Instant.now().plusSeconds(1));
+
+            processor.process(snapshot("Release", "open", 3, LATER), testRepository, null, readAfterTheWrite);
+
+            assertThat(stored().getClosedIssuesCount()).isEqualTo(3);
+        }
+
+        @Test
         void shouldKeepTheStoredCountsWhenASyncReadBegunBeforeTheLastWriteCarriesTheSameVersion() {
             ProcessingContext readBeforeTheWrite =
                     createContext().withObservedAt(Instant.now().minusSeconds(60));
