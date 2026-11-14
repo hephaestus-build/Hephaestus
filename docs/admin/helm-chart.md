@@ -37,7 +37,7 @@ Conversation turn leases and person erasure compare times that different hosts w
 
 | Component | Kind | What it runs |
 | --- | --- | --- |
-| `server` | Deployment, 2 replicas by default | The server: the API, the provider webhook receiver, sync, delivery, and with `sandbox.enabled` the sandboxes and their gateway. `server.replicas: 0` stops it for maintenance. |
+| `server` | Deployment, 2 replicas by default | The server: the API, the provider webhook receiver, sync, delivery, and with `sandbox.enabled` the sandboxes and their gateway. `server.stopped: true` stops it and keeps `server.replicas`, which also sizes PostgreSQL's connections. |
 | `migration` | Job, one for each Helm revision | The server image in its migrate run mode. It applies the database migrations of the release and exits. |
 | `webapp` | Deployment | The SPA, from the non-root webapp image. |
 | `postgresql` | StatefulSet, with `postgresql.bundled` | The release PostgreSQL image, with `pg_partman` and pgBackRest. |

@@ -161,9 +161,6 @@ postgresql:
     # The CIDR that holds the database, for the egress rule.
     cidr: ""
 
-# server.replicas sets 0 only to stop the server for maintenance; the release then receives no provider deliveries.
-# docs/admin/upgrade.mdx and docs/admin/maintenance.md.
-#
 # The JVM Pods request all of their memory limit: the buildpack sizes the
 # heap from the limit, so a node that has only the request cannot hold what the JVM grows to. Each
 # size is a measured resident set plus headroom (docs/contributor/capacity-benchmark.md).
@@ -176,8 +173,11 @@ server:
     # The chart derives the holder floor plus sync and HTTP reserve. An explicit count must hold it.
     maximumPoolSize: auto
     minimumIdle: 5
-  # Two servers keep reception available during a restart. 0 stops them for maintenance.
+  # Two servers keep reception available during a restart. The count also sizes PostgreSQL's connections.
   replicas: 2
+  # Stops the servers for a stopped upgrade or maintenance without changing the count that sizes PostgreSQL, so
+  # PostgreSQL keeps running. The release then receives no provider deliveries. docs/admin/upgrade.mdx.
+  stopped: false
   # How long a stopping server finishes its running reviews and claims none. A practice review's median run is
   # 10 to 16 minutes, and its bound is 3 hours. When the drain ends, a review that still runs stops and is tried
   # again, within its separate limit on drains.
