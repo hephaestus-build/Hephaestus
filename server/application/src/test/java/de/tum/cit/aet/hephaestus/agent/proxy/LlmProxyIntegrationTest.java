@@ -67,6 +67,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.action.AgentActions;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -132,6 +133,9 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
+
+    @Autowired
+    private SystemSecrets systemSecrets;
 
     private static final String PRACTICE = "comment-quality";
 
@@ -429,7 +433,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             var connection = LlmCatalogTestFixtures.connection("probe-" + UUID.randomUUID());
             connection.setBaseUrl(upstream.url("/").toString());
             connection.setApiProtocol(protocol);
-            connection.setApiKey("synthetic-probe-key");
+            connection.replaceApiKey("synthetic-probe-key", systemSecrets);
             connection.setEnabled(false);
             connection = connectionRepository.saveAndFlush(connection);
             var model = modelRepository.saveAndFlush(LlmCatalogTestFixtures.model(
@@ -1453,7 +1457,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         connection.setBaseUrl("https://api.example.com/v1");
         connection.setApiProtocol(LlmApiProtocol.OPENAI_COMPLETIONS);
         connection.setAuthMode(LlmAuthMode.BEARER);
-        connection.setApiKey("upstream-secret");
+        connection.replaceApiKey("upstream-secret", systemSecrets);
         connection = connectionRepository.save(connection);
 
         LlmModel model = modelRepository.save(LlmCatalogTestFixtures.model(
@@ -1506,7 +1510,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         connection.setBaseUrl(baseUrl);
         connection.setApiProtocol(protocol);
         connection.setAuthMode(LlmAuthMode.BEARER);
-        connection.setApiKey("upstream-secret");
+        connection.replaceApiKey("upstream-secret", systemSecrets);
         connection = connectionRepository.save(connection);
         LlmModel model = modelRepository.save(
                 LlmCatalogTestFixtures.model(connection, "chat-" + System.nanoTime(), "chat-upstream"));

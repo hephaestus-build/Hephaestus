@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
@@ -30,9 +31,15 @@ public interface WorkspaceLlmConnectionRepository extends JpaRepository<Workspac
     Optional<WorkspaceLlmConnection> findByIdAndWorkspaceIdForUpdate(
             @Param("id") Long id, @Param("workspaceId") Long workspaceId);
 
-    @Query(
-            "SELECT new de.tum.cit.aet.hephaestus.agent.catalog.LlmProbeTarget(c.baseUrl, c.authMode, c.apiKey, c.apiProtocol) "
-                    + "FROM WorkspaceLlmConnection c WHERE c.id = :id AND c.workspace.id = :workspaceId")
-    Optional<LlmProbeTarget> findProbeTargetByIdAndWorkspaceId(
+    @Query("SELECT new de.tum.cit.aet.hephaestus.agent.catalog.SealedProbeTarget("
+            + "c.baseUrl, c.authMode, c.sealedApiKey, c.apiProtocol, c.workspace.id, c.slug) "
+            + "FROM WorkspaceLlmConnection c WHERE c.id = :id AND c.workspace.id = :workspaceId")
+    Optional<SealedProbeTarget> findProbeTargetByIdAndWorkspaceId(
             @Param("id") Long id, @Param("workspaceId") Long workspaceId);
+
+    /** Every row, locked, for the system key rotation ({@code SystemKeyRotation}). */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @WorkspaceAgnostic("Seals the AI provider keys of every workspace again during a system key rotation")
+    @Query("SELECT x FROM WorkspaceLlmConnection x ORDER BY x.id")
+    List<WorkspaceLlmConnection> lockAllForKeyRotation();
 }

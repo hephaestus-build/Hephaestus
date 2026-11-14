@@ -30,7 +30,12 @@ import org.springframework.modulith.NamedInterface;
  */
 @NamedInterface("database-migration")
 @ImportAutoConfiguration({DataSourceAutoConfiguration.class, LiquibaseAutoConfiguration.class})
-@Import({DatabaseTransportGuard.class, MigrationDataSourceConfiguration.class, MigrationLock.class})
+@Import({
+    DatabaseTransportGuard.class,
+    MigrationDataSourceConfiguration.class,
+    MigrationLock.class,
+    SystemSecretSealingConfiguration.class
+})
 public class DatabaseMigration {
 
     public static final String PROFILE = "migrate";

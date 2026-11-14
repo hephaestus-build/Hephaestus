@@ -1,9 +1,14 @@
 package de.tum.cit.aet.hephaestus.core.auth.jwt;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import jakarta.persistence.LockModeType;
+import java.time.Instant;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -39,4 +44,23 @@ public interface JwtSigningKeyRepository extends JpaRepository<JwtSigningKey, St
      */
     @Query(value = "SELECT pg_advisory_xact_lock(17, 1)", nativeQuery = true)
     void acquireBootstrapLock();
+
+    /** Every row, locked, for the system key rotation ({@code SystemKeyRotation}). */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT x FROM JwtSigningKey x ORDER BY x.kid")
+    List<JwtSigningKey> lockAllForKeyRotation();
+
+    /** Whether an active key was created at or after {@code notBefore}, so no new key is needed. */
+    boolean existsByActiveTrueAndCreatedAtGreaterThanEqual(Instant notBefore);
+
+    /** Retires each active key that an active key created after it and before {@code cutoff} replaced. */
+    @Modifying
+    @Query("""
+        UPDATE JwtSigningKey k SET k.active = false
+        WHERE k.active = true
+          AND EXISTS (
+            SELECT 1 FROM JwtSigningKey n
+            WHERE n.active = true AND n.createdAt > k.createdAt AND n.createdAt <= :cutoff)
+        """)
+    int retireSupersededBefore(@Param("cutoff") Instant cutoff);
 }

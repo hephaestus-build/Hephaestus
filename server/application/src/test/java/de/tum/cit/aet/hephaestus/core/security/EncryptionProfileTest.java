@@ -15,15 +15,16 @@ class EncryptionProfileTest extends BaseUnitTest {
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withInitializer(new ConfigDataApplicationContextInitializer())
             .withPropertyValues("spring.config.import=")
-            .withBean(SecurityProperties.class, () -> new SecurityProperties(null, null, 1, null, null, false, 100));
+            .withBean(
+                    SecurityProperties.class,
+                    () -> new SecurityProperties(null, null, 1, null, null, false, 100, null, false));
 
     @ParameterizedTest
     @ValueSource(strings = {"test", "nonprod"})
     void shouldNotMistakeOtherProfileNamesForProduction(String profile) {
         runner.withPropertyValues("spring.profiles.active=" + profile)
                 .withBean(ObjectMapper.class, ObjectMapper::new)
-                .withUserConfiguration(
-                        SystemEncryptionKey.class, EncryptedStringConverter.class, CredentialBundleConverter.class)
+                .withUserConfiguration(SystemSecrets.class, CredentialBundleConverter.class)
                 .run(context -> assertThat(context).hasNotFailed());
     }
 
@@ -31,7 +32,7 @@ class EncryptionProfileTest extends BaseUnitTest {
     @ValueSource(strings = {"prod", "prod,webhook"})
     void shouldRequireSystemEncryptionWhenProductionIsActive(String profile) {
         runner.withPropertyValues("spring.profiles.active=" + profile)
-                .withUserConfiguration(SystemEncryptionKey.class, EncryptedStringConverter.class)
+                .withUserConfiguration(SystemSecrets.class)
                 .run(context -> {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure())

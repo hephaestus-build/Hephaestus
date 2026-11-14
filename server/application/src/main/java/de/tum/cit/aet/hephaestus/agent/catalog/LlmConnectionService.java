@@ -4,6 +4,8 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.LlmConnectionAudit;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecretOwner;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -22,12 +24,13 @@ import org.springframework.util.StringUtils;
 @RequiredArgsConstructor
 @WorkspaceAgnostic("Instance LLM connection catalog is global (app_admin-owned), not tenant-scoped")
 @ConditionalOnServerRole
-public class LlmConnectionService {
+public class LlmConnectionService implements SystemSecretOwner {
 
     private final LlmConnectionRepository connectionRepository;
     private final LlmModelRepository modelRepository;
     private final EgressPolicy egressPolicy;
     private final LlmConnectionAudit llmConnectionAudit;
+    private final SystemSecrets secrets;
 
     @Transactional(readOnly = true)
     public List<LlmConnection> list() {
@@ -51,7 +54,7 @@ public class LlmConnectionService {
         connection.setApiProtocol(request.apiProtocol());
         connection.setAuthMode(request.authMode() != null ? request.authMode() : LlmAuthMode.BEARER);
         if (StringUtils.hasText(request.apiKey())) {
-            connection.setApiKey(request.apiKey());
+            connection.replaceApiKey(request.apiKey(), secrets);
         }
         if (request.enabled() != null) {
             connection.setEnabled(request.enabled());
@@ -76,8 +79,9 @@ public class LlmConnectionService {
 
     @Transactional
     public LlmConnection update(Long id, UpdateLlmConnectionRequestDTO request) {
-        LlmConnection connection =
-                connectionRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("LlmConnection", id));
+        LlmConnection connection = connectionRepository
+                .findByIdForUpdate(id)
+                .orElseThrow(() -> new EntityNotFoundException("LlmConnection", id));
 
         if (request.displayName() != null) {
             connection.setDisplayName(request.displayName());
@@ -88,9 +92,9 @@ public class LlmConnectionService {
             connection.setConnectionPlatform(request.connectionPlatform());
         }
         if (Boolean.TRUE.equals(request.clearApiKey())) {
-            connection.setApiKey(null);
+            connection.replaceApiKey(null, secrets);
         } else if (request.apiKey() != null) {
-            connection.setApiKey(request.apiKey());
+            connection.replaceApiKey(request.apiKey(), secrets);
         }
         if (request.enabled() != null) {
             connection.setEnabled(request.enabled());
@@ -110,5 +114,15 @@ public class LlmConnectionService {
         }
         connectionRepository.delete(connection);
         llmConnectionAudit.connectionDeleted(connection.getId(), connection.getSlug());
+    }
+
+    @Override
+    @Transactional
+    public int resealWithActiveKey(SystemSecrets secrets) {
+        int resealed = 0;
+        for (var row : connectionRepository.lockAllForKeyRotation()) {
+            if (row.resealWithActiveKey(secrets)) resealed++;
+        }
+        return resealed;
     }
 }

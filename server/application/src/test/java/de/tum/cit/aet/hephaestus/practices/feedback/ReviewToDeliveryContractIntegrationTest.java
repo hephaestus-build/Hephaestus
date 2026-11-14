@@ -67,6 +67,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.core.runtime.AgentRuntimeWithoutCluster;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
 import de.tum.cit.aet.hephaestus.evidence.AppliesWhenCheck;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
@@ -2839,7 +2840,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         var connection = LlmCatalogTestFixtures.connection("compose-" + UUID.randomUUID());
         connection.setBaseUrl(baseUrl);
         connection.setAuthMode(LlmAuthMode.BEARER);
-        connection.setApiKey("compose-provider-key");
+        connection.replaceApiKey("compose-provider-key", context.getBean(SystemSecrets.class));
         connection = context.getBean(LlmConnectionRepository.class).save(connection);
         var model = context.getBean(LlmModelRepository.class)
                 .save(LlmCatalogTestFixtures.model(connection, "compose-" + UUID.randomUUID(), "contract-model"));

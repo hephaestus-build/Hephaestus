@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,6 +33,7 @@ public class LlmModelLimitDiscovery {
     private final WorkspaceLlmModelRepository workspaceModelRepository;
     private final EgressPolicy egressPolicy;
     private final TransactionTemplate transactions;
+    private final SystemSecrets secrets;
 
     LlmModelLimitDiscovery(
             LlmConnectionProbeService probeService,
@@ -40,7 +42,8 @@ public class LlmModelLimitDiscovery {
             WorkspaceLlmConnectionRepository workspaceConnectionRepository,
             WorkspaceLlmModelRepository workspaceModelRepository,
             EgressPolicy egressPolicy,
-            TransactionTemplate transactions) {
+            TransactionTemplate transactions,
+            SystemSecrets secrets) {
         this.probeService = probeService;
         this.connectionRepository = connectionRepository;
         this.modelRepository = modelRepository;
@@ -48,12 +51,14 @@ public class LlmModelLimitDiscovery {
         this.workspaceModelRepository = workspaceModelRepository;
         this.egressPolicy = egressPolicy;
         this.transactions = transactions;
+        this.secrets = secrets;
     }
 
     /** Tests an instance connection and stores the limits its provider reports for the connection's models. */
     public LlmProbeResultDTO probeInstanceConnection(long connectionId) {
         LlmProbeTarget target = connectionRepository
                 .findProbeTargetById(connectionId)
+                .map(row -> row.open(secrets))
                 .orElseThrow(() -> new EntityNotFoundException("LlmConnection", connectionId));
         boolean privateTarget = egressPolicy.validate(target.baseUrl());
         List<String> upstreamIds = modelRepository.findUpstreamModelIdsByConnectionId(connectionId);
@@ -62,6 +67,7 @@ public class LlmModelLimitDiscovery {
             transactions.executeWithoutResult(tx -> {
                 if (!connectionRepository
                         .findProbeTargetById(connectionId)
+                        .map(row -> row.open(secrets))
                         .map(target::equals)
                         .orElse(false)) return;
                 probe.limits()
@@ -80,6 +86,7 @@ public class LlmModelLimitDiscovery {
     public LlmProbeResultDTO probeWorkspaceConnection(long workspaceId, long connectionId) {
         LlmProbeTarget target = workspaceConnectionRepository
                 .findProbeTargetByIdAndWorkspaceId(connectionId, workspaceId)
+                .map(row -> row.open(secrets))
                 .orElseThrow(() -> new EntityNotFoundException("WorkspaceLlmConnection", connectionId));
         boolean privateTarget = egressPolicy.validate(target.baseUrl());
         List<String> upstreamIds =
@@ -89,6 +96,7 @@ public class LlmModelLimitDiscovery {
             transactions.executeWithoutResult(tx -> {
                 if (!workspaceConnectionRepository
                         .findProbeTargetByIdAndWorkspaceId(connectionId, workspaceId)
+                        .map(row -> row.open(secrets))
                         .map(target::equals)
                         .orElse(false)) return;
                 probe.limits()

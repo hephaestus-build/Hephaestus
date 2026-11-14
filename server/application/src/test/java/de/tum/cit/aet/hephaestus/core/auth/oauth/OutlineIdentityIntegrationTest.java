@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +22,9 @@ import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 
 class OutlineIdentityIntegrationTest extends RealAuthIntegrationTest {
+
+    @Autowired
+    private SystemSecrets systemSecrets;
 
     private static final String OUTLINE_USER = "0aa1bb2c-user";
 
@@ -153,7 +157,7 @@ class OutlineIdentityIntegrationTest extends RealAuthIntegrationTest {
         // (type, server_url) key collision-free across the tests in this class.
         provider.setBaseUrl("https://" + registrationId + ".example");
         provider.setClientId("test-client-id");
-        provider.setClientSecret("test-client-secret");
+        provider.replaceClientSecret("test-client-secret", systemSecrets);
         provider.setScopes(type == LoginProvider.ProviderType.OUTLINE ? "read" : "read:user");
         loginProviderRepository.save(provider);
     }

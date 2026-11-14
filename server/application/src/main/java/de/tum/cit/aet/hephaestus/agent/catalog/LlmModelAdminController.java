@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -47,6 +48,7 @@ public class LlmModelAdminController {
     private final LlmModelService modelService;
     private final PublicApiUrls publicApiUrls;
     private final LlmModelCapabilityProbe capabilityProbe;
+    private final SystemSecrets secrets;
 
     @PostMapping("/connections/{connectionId}/models")
     @Operation(summary = "Create a model on an LLM connection", operationId = "adminCreateLlmModel")
@@ -111,7 +113,10 @@ public class LlmModelAdminController {
         var model = modelService.get(id);
         var connection = model.getConnection();
         var target = new LlmProbeTarget(
-                connection.getBaseUrl(), connection.getAuthMode(), connection.getApiKey(), connection.getApiProtocol());
+                connection.getBaseUrl(),
+                connection.getAuthMode(),
+                connection.apiKey(secrets),
+                connection.getApiProtocol());
         var result = capabilityProbe.probe(
                 new LlmModelResolver.ConnectionRef(UsageFundingSource.INSTANCE, connection.getId(), id, null),
                 target,

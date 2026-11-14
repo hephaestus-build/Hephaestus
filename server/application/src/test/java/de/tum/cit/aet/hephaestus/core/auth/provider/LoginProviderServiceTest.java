@@ -19,8 +19,10 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventWriter;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.core.security.ScmEgressProperties;
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.OfflineNetwork;
+import de.tum.cit.aet.hephaestus.testconfig.TestSystemSecrets;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -43,6 +45,9 @@ import tools.jackson.databind.ObjectMapper;
  * {@code gitlab-lrz}) and several seed in one boot.
  */
 class LoginProviderServiceTest extends BaseUnitTest {
+
+    private static final SystemSecrets SECRETS =
+            TestSystemSecrets.systemSecrets("0123456789abcdef0123456789abcdef", "test");
 
     @BeforeAll
     static void declarePublicHosts() {
@@ -68,7 +73,8 @@ class LoginProviderServiceTest extends BaseUnitTest {
                 new ObjectMapper(),
                 new OutlineOriginPolicy(Set.of("https://wiki.example.com", "https://wiki.acme.test")),
                 new ScmServerEndpointPolicy(
-                        new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())));
+                        new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())),
+                SECRETS);
     }
 
     private LoginProviderService adminService() {
@@ -318,7 +324,7 @@ class LoginProviderServiceTest extends BaseUnitTest {
     @Test
     void updateRejectsGitlabOpenidScope() {
         LoginProvider existing = gitlabProvider("gitlab", "sealed");
-        when(repository.findByRegistrationId("gitlab")).thenReturn(Optional.of(existing));
+        when(repository.findByRegistrationIdForUpdate("gitlab")).thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> adminService()
                         .update(
@@ -356,7 +362,7 @@ class LoginProviderServiceTest extends BaseUnitTest {
     @Test
     void updateRejectsOutlineOpenidScope() {
         LoginProvider existing = outlineProvider("outline", "sealed");
-        when(repository.findByRegistrationId("outline")).thenReturn(Optional.of(existing));
+        when(repository.findByRegistrationIdForUpdate("outline")).thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> adminService()
                         .update("outline", new LoginProviderService.Patch(null, null, null, null, "openid read", null)))
@@ -391,7 +397,7 @@ class LoginProviderServiceTest extends BaseUnitTest {
         only.setRegistrationId("github");
         only.setType(LoginProvider.ProviderType.GITHUB);
         only.setEnabled(true);
-        when(repository.findByRegistrationId("github")).thenReturn(Optional.of(only));
+        when(repository.findByRegistrationIdForUpdate("github")).thenReturn(Optional.of(only));
         when(repository.findByEnabledTrueOrderByDisplayNameAsc()).thenReturn(List.of(only));
 
         assertThatThrownBy(() -> adminService()
@@ -431,7 +437,7 @@ class LoginProviderServiceTest extends BaseUnitTest {
     @Test
     void disableAllowsTheLastEnabledProviderWhenItIsLinkOnly() {
         LoginProvider outline = outlineProvider("outline", "sealed");
-        when(repository.findByRegistrationId("outline")).thenReturn(Optional.of(outline));
+        when(repository.findByRegistrationIdForUpdate("outline")).thenReturn(Optional.of(outline));
         when(repository.findByEnabledTrueOrderByDisplayNameAsc()).thenReturn(List.of(outline));
         when(repository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -470,24 +476,24 @@ class LoginProviderServiceTest extends BaseUnitTest {
     @Test
     void updateLeavesSealedSecretUnchangedWhenPatchSecretIsNullOrBlank() {
         LoginProvider existing = gitlabProvider("gitlab", "sealed-secret");
-        when(repository.findByRegistrationId("gitlab")).thenReturn(Optional.of(existing));
+        when(repository.findByRegistrationIdForUpdate("gitlab")).thenReturn(Optional.of(existing));
         when(repository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
         adminService().update("gitlab", new LoginProviderService.Patch("Renamed", null, null, null, null, null));
-        assertThat(existing.getClientSecret()).isEqualTo("sealed-secret"); // null secret → unchanged
+        assertThat(existing.clientSecret(SECRETS)).isEqualTo("sealed-secret"); // null secret → unchanged
 
         adminService().update("gitlab", new LoginProviderService.Patch(null, null, null, "   ", null, null));
-        assertThat(existing.getClientSecret()).isEqualTo("sealed-secret"); // blank secret → unchanged
+        assertThat(existing.clientSecret(SECRETS)).isEqualTo("sealed-secret"); // blank secret → unchanged
     }
 
     @Test
     void updateReplacesSecretWhenPatchSecretIsPresent() {
         LoginProvider existing = gitlabProvider("gitlab", "old-secret");
-        when(repository.findByRegistrationId("gitlab")).thenReturn(Optional.of(existing));
+        when(repository.findByRegistrationIdForUpdate("gitlab")).thenReturn(Optional.of(existing));
         when(repository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
         adminService().update("gitlab", new LoginProviderService.Patch(null, null, null, "new-secret", null, null));
-        assertThat(existing.getClientSecret()).isEqualTo("new-secret");
+        assertThat(existing.clientSecret(SECRETS)).isEqualTo("new-secret");
     }
 
     private static LoginProvider outlineProvider(String registrationId, String clientSecret) {
@@ -497,7 +503,7 @@ class LoginProviderServiceTest extends BaseUnitTest {
         provider.setDisplayName("Team Wiki");
         provider.setBaseUrl("https://wiki.example.com");
         provider.setClientId("client-id");
-        provider.setClientSecret(clientSecret);
+        provider.replaceClientSecret(clientSecret, SECRETS);
         provider.setScopes("read");
         provider.setEnabled(true);
         return provider;
@@ -508,6 +514,7 @@ class LoginProviderServiceTest extends BaseUnitTest {
         when(repository.existsByRegistrationId("gitlab-acme")).thenReturn(false);
         when(repository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
         LoginProvider existing = gitlabProvider("gitlab-acme", "sealed");
+        when(repository.findByRegistrationIdForUpdate("gitlab-acme")).thenReturn(Optional.of(existing));
         when(repository.findByRegistrationId("gitlab-acme")).thenReturn(Optional.of(existing));
         // Two enabled providers, so neither disable nor delete trips the last-provider lockout guard.
         when(repository.findByEnabledTrueOrderByDisplayNameAsc())
@@ -534,7 +541,7 @@ class LoginProviderServiceTest extends BaseUnitTest {
     @Test
     void updateAuditNamesTheRotatedSecretWithoutRecordingIt() {
         LoginProvider existing = gitlabProvider("gitlab-acme", "old-secret");
-        when(repository.findByRegistrationId("gitlab-acme")).thenReturn(Optional.of(existing));
+        when(repository.findByRegistrationIdForUpdate("gitlab-acme")).thenReturn(Optional.of(existing));
         when(repository.findByEnabledTrueOrderByDisplayNameAsc()).thenReturn(List.of(existing));
         when(repository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -557,7 +564,7 @@ class LoginProviderServiceTest extends BaseUnitTest {
         provider.setDisplayName("GitLab");
         provider.setBaseUrl("https://gitlab.example.com");
         provider.setClientId("client-id");
-        provider.setClientSecret(clientSecret);
+        provider.replaceClientSecret(clientSecret, SECRETS);
         provider.setScopes("read_user");
         provider.setEnabled(true);
         return provider;
