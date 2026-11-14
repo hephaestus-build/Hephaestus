@@ -394,6 +394,67 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     @Test
+    void shouldReportWhyAnInstanceModelCannotRunUntilItIsPricedOnAndShared() {
+        LlmConnection connection = seedConnection();
+        var request = new CreateLlmModelRequestDTO(
+                "readiness-model", "Readiness Model", "custom-model", 200_000, 8_192, null, null, null, false, null);
+        LlmModelDTO created = Objects.requireNonNull(webTestClient
+                .post()
+                .uri("/admin/llm/connections/{connectionId}/models", connection.getId())
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus()
+                .isCreated()
+                .expectBody(LlmModelDTO.class)
+                .returnResult()
+                .getResponseBody());
+        assertThat(created.readiness()).isEqualTo(LlmModelReadiness.PRICE_MISSING);
+
+        webTestClient
+                .put()
+                .uri("/admin/llm/models/{id}/price", created.id())
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new UpdateLlmModelPriceRequestDTO(PricingMode.NO_CHARGE, null, null, null, null, null))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+        assertThat(listedModel(created.id()).orElseThrow().readiness()).isEqualTo(LlmModelReadiness.OFF);
+
+        webTestClient
+                .patch()
+                .uri("/admin/llm/models/{id}", created.id())
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new UpdateLlmModelRequestDTO(
+                        null, null, null, null, null, null, null, true, null, null, null, null, null))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+        assertThat(listedModel(created.id()).orElseThrow().readiness())
+                .as("a model shared with selected workspaces that names none")
+                .isEqualTo(LlmModelReadiness.NO_WORKSPACE_ACCESS);
+
+        LlmModelDTO shared = Objects.requireNonNull(webTestClient
+                .put()
+                .uri("/admin/llm/models/{id}/sharing", created.id())
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new UpdateLlmModelSharingRequestDTO(ModelVisibility.PUBLIC, List.of()))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(LlmModelDTO.class)
+                .returnResult()
+                .getResponseBody());
+        assertThat(shared.readiness()).isEqualTo(LlmModelReadiness.READY);
+    }
+
+    @Test
     void sharingWithASelectedWorkspaceSetRoundTrips() {
         LlmConnection connection = seedConnection();
         LlmModelDTO model = createModel(connection.getId(), "sharing-model");

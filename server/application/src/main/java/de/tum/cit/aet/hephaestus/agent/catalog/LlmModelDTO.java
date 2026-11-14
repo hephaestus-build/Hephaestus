@@ -69,6 +69,9 @@ public record LlmModelDTO(
 
         @NonNull @Schema(description = "Active toggle") Boolean enabled,
 
+        @NonNull @Schema(description = "Whether the model can run now, or the first reason it cannot")
+        LlmModelReadiness readiness,
+
         @Nullable @Schema(description = "Current price; null if none has ever been set")
         LlmModelPriceDTO currentPrice,
 
@@ -100,6 +103,11 @@ public record LlmModelDTO(
                 model.getVisibility(),
                 grantedWorkspaceIds,
                 model.isEnabled(),
+                LlmModelReadiness.of(
+                        model,
+                        model.getConnection().isEnabled(),
+                        PricingMode.of(currentPrice),
+                        model.getVisibility() == ModelVisibility.PUBLIC || !grantedWorkspaceIds.isEmpty()),
                 currentPrice != null ? LlmModelPriceDTO.from(currentPrice) : null,
                 model.getCreatedAt(),
                 model.getUpdatedAt(),

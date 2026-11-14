@@ -64,4 +64,5 @@ public record CreateWorkspaceLlmModelRequestDTO(
         String priceNote,
 
         @Nullable @Schema(description = "Model brand declared by an admin; display only")
-        AiModelBrand brand) {}
+        AiModelBrand brand)
+        implements LlmModelSettings {}
