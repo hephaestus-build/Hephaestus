@@ -24,18 +24,17 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Both providers. The link's name is the card's title, and its description follows it. */
+/** Both providers. Each link is named by the text on its card, the provider first. */
 export const GitHubAndGitLab: Story = {
 	play: async ({ canvas }) => {
-		const gitlab = canvas.getByRole("link", { name: "GitLab" });
+		const gitlab = canvas.getByRole("link", { name: /^GitLab Connect with an access token/u });
 		await expect(gitlab).toHaveAttribute("href", "/workspaces/new/gitlab");
-		await expect(gitlab).toHaveAccessibleDescription(
-			"Connect with an access token and select a group to monitor.",
+		await expect(gitlab).toHaveAccessibleName(
+			"GitLab Connect with an access token and select a group to monitor.",
 		);
-		await expect(canvas.getByRole("link", { name: "GitHub" })).toHaveAttribute(
-			"href",
-			"/workspaces/new/github",
-		);
+		await expect(
+			canvas.getByRole("link", { name: /^GitHub Install the Hephaestus GitHub App/u }),
+		).toHaveAttribute("href", "/workspaces/new/github");
 	},
 };
 
@@ -43,8 +42,12 @@ export const GitHubAndGitLab: Story = {
 export const GitLabOnly: Story = {
 	args: { providers: ["gitlab"] },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("link", { name: "GitLab" })).toBeVisible();
-		await expect(canvas.queryByRole("link", { name: "GitHub" })).toBeNull();
+		await expect(
+			canvas.getByRole("link", { name: /^GitLab Connect with an access token/u }),
+		).toBeVisible();
+		await expect(
+			canvas.queryByRole("link", { name: /^GitHub Install the Hephaestus GitHub App/u }),
+		).toBeNull();
 	},
 };
 

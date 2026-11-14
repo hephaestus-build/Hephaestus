@@ -1,6 +1,5 @@
 import { Link } from "@tanstack/react-router";
 import { OctagonXIcon } from "lucide-react";
-import { useId } from "react";
 
 import { type BrandIcon, GitHubIcon, GitLabIcon } from "@/components/icons/brand";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -42,8 +41,8 @@ export interface WorkspaceProviderChoiceProps {
 
 /**
  * The first step of creating a workspace: one card per provider the instance offers. Each card is a
- * link named by the provider it shows, so the name is the text on screen (WCAG 2.2 SC 2.5.3), and
- * its description is read after the name.
+ * link named by all the text on it, the provider first, so its name is what the reader sees and can
+ * say (WCAG 2.2 SC 2.5.3).
  */
 export function WorkspaceProviderChoice({
 	providers,
@@ -92,19 +91,16 @@ export function WorkspaceProviderChoice({
 }
 
 function ProviderCard({ provider }: { provider: WorkspaceProvider }) {
-	const id = useId();
 	const { name, description, icon: Icon, to } = PROVIDERS[provider];
 	return (
-		<Link to={to} aria-labelledby={`${id}-name`} aria-describedby={`${id}-description`}>
+		<Link to={to}>
 			<Card variant="interactive" className="h-full cursor-pointer">
 				<CardHeader>
 					<div className="mb-1 flex items-center gap-3">
 						<Icon className="size-6" aria-hidden="true" />
-						<CardTitle id={`${id}-name`} className="text-lg">
-							{name}
-						</CardTitle>
+						<CardTitle className="text-lg">{name}</CardTitle>
 					</div>
-					<CardDescription id={`${id}-description`}>{description}</CardDescription>
+					<CardDescription>{description}</CardDescription>
 				</CardHeader>
 			</Card>
 		</Link>
