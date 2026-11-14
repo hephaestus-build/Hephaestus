@@ -77,7 +77,11 @@ class RoutingService {
     void routeAnswered() {
         for (int i = 0; i < 20; i++) {
             try {
-                if (!Boolean.TRUE.equals(transactions.execute(status -> routeOne()))) return;
+                Lookup intent = transactions.execute(status -> claim());
+                if (intent == null) return;
+                String target = intent.target();
+                var repository = target == null ? null : freeze(target, intent.route());
+                transactions.executeWithoutResult(status -> complete(intent, repository));
             } catch (RuntimeException failed) {
                 meters.failed(failed);
                 log.warn(
@@ -88,10 +92,18 @@ class RoutingService {
         }
     }
 
-    private boolean routeOne() {
+    private record Lookup(
+            UUID id,
+            int generation,
+            @Nullable String target,
+            FilingRoute route,
+            @Nullable Draft draft,
+            Instant destinationUpdatedAt) {}
+
+    private @Nullable Lookup claim() {
         Instant now = clock.instant();
-        UUID id = filings.claimableAnswer().orElse(null);
-        if (id == null) return false;
+        UUID id = filings.claimableAnswer(now).orElse(null);
+        if (id == null) return null;
         ProductFeedbackFiling filing = filings.lock(id).orElseThrow();
         ProductFeedback report = feedback.findById(id).orElseThrow();
         ProductFeedbackDestination destination = destinations.current();
@@ -107,18 +119,42 @@ class RoutingService {
                 meters.draft("invalid");
             }
         }
-        route(filing, report, destination, draft, now);
-        return true;
+        var outcome = evaluate(filing, report, destination, draft);
+        filing.setAttempt(filing.getAttempt() + 1);
+        filing.setNextAttemptAt(now.plus(ProductFeedbackFiling.LOOKUP_LEASE));
+        filing.setUpdatedAt(now);
+        return new Lookup(
+                id,
+                filing.getAttempt(),
+                target(outcome.decision().route(), destination),
+                outcome.decision().route(),
+                draft,
+                destination.getUpdatedAt());
     }
 
-    /** The whole routing decision for one revision, stored on the row. Without a draft a report never goes public. */
-    void route(
+    private void complete(Lookup intent, ProductFeedbackIssues.@Nullable Repository repository) {
+        var filing = filings.lock(intent.id())
+                .filter(row -> row.getState() == FilingState.ANSWERED && row.getAttempt() == intent.generation())
+                .orElse(null);
+        if (filing == null) return;
+        Instant now = clock.instant();
+        filing.setNextAttemptAt(now);
+        var report = feedback.findById(intent.id()).orElse(null);
+        if (report == null) return;
+        var destination = destinations.current();
+        var outcome = evaluate(filing, report, destination, intent.draft());
+        if (!destination.getUpdatedAt().equals(intent.destinationUpdatedAt())
+                || outcome.decision().route() != intent.route()
+                || !Objects.equals(target(outcome.decision().route(), destination), intent.target())) return;
+        route(filing, report, intent.draft(), outcome, repository, now);
+    }
+
+    private RoutingGate.Outcome evaluate(
             ProductFeedbackFiling filing,
             ProductFeedback report,
             ProductFeedbackDestination destination,
-            @Nullable Draft draft,
-            Instant now) {
-        var outcome = RoutingGate.evaluate(
+            @Nullable Draft draft) {
+        return RoutingGate.evaluate(
                 filing.isAllowPublic(),
                 destination.getPublicRepository() != null,
                 destination.getPrivateRepository() != null,
@@ -127,6 +163,24 @@ class RoutingService {
                 linkRepository(destination),
                 draft,
                 filing.isRiskLatch());
+    }
+
+    private static @Nullable String target(FilingRoute route, ProductFeedbackDestination destination) {
+        return switch (route) {
+            case PUBLIC -> destination.getPublicRepository();
+            case PRIVATE -> destination.getPrivateRepository();
+            case ADMINS -> null;
+        };
+    }
+
+    /** The whole routing decision for one revision, stored on the row. Without a draft a report never goes public. */
+    private void route(
+            ProductFeedbackFiling filing,
+            ProductFeedback report,
+            @Nullable Draft draft,
+            RoutingGate.Outcome outcome,
+            ProductFeedbackIssues.@Nullable Repository repository,
+            Instant now) {
         var decision = outcome.decision();
         if (decision.latch()) filing.setRiskLatch(true);
         filing.setRoute(decision.route());
@@ -149,10 +203,6 @@ class RoutingService {
             filing.apply(FilingLifecycle.Event.ROUTED_TO_FILE);
             return;
         }
-        String target = decision.route() == FilingRoute.PUBLIC
-                ? destination.getPublicRepository()
-                : destination.getPrivateRepository();
-        ProductFeedbackIssues.Repository repository = freeze(Objects.requireNonNull(target), decision.route());
         if (repository == null) {
             filing.apply(FilingLifecycle.Event.ROUTED_TO_FILE);
             filing.setRoute(FilingRoute.ADMINS);

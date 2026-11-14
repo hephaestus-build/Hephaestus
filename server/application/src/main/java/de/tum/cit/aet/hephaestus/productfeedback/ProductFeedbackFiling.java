@@ -7,6 +7,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -28,6 +29,9 @@ import org.jspecify.annotations.Nullable;
 @Setter
 @NoArgsConstructor
 public class ProductFeedbackFiling {
+    /** Longer than the GitHub client timeouts, so another replica does not reclaim a live lookup. */
+    static final Duration LOOKUP_LEASE = Duration.ofMinutes(2);
+
     @Id
     @Column(name = "feedback_id")
     private UUID feedbackId;
@@ -66,7 +70,7 @@ public class ProductFeedbackFiling {
     @Column(name = "risk_latch", nullable = false)
     private boolean riskLatch;
 
-    /** Counts up for every draft and every hand-over to filing; a result is written only for its own generation. */
+    /** Counts up for each draft, repository lookup and filing hand-over; a result writes only its own generation. */
     @Column(nullable = false)
     private int attempt;
 

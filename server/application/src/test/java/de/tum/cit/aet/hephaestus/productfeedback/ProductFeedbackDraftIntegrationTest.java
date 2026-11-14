@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -182,7 +183,8 @@ class ProductFeedbackDraftIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldReserveDailyQuotaAtCallAdmissionAndRejectAnAlreadyQueuedReport() {
         var destination = destination();
-        destination.setDailyDraftLimit(1);
+        long alreadyAdmitted = filings.countDraftedSince(Instant.now().truncatedTo(ChronoUnit.DAYS));
+        destination.setDailyDraftLimit(Math.toIntExact(alreadyAdmitted) + 1);
         destinationRows.saveAndFlush(destination);
         UUID first = report();
         UUID second = report();

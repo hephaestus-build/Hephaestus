@@ -34,10 +34,10 @@ interface ProductFeedbackFilingRepository extends JpaRepository<ProductFeedbackF
      */
     @Query(value = """
                     SELECT feedback_id FROM product_feedback_filing
-                    WHERE state = 'ANSWERED'
+                    WHERE state = 'ANSWERED' AND next_attempt_at <= :now
                     ORDER BY next_attempt_at LIMIT 1 FOR UPDATE SKIP LOCKED
                     """, nativeQuery = true)
-    Optional<UUID> claimableAnswer();
+    Optional<UUID> claimableAnswer(@Param("now") Instant now);
 
     /** A routed report that goes to no repository, so the hourly GitHub limit does not hold it back. */
     @Query(value = """

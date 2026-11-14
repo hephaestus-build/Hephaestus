@@ -101,7 +101,13 @@ class FilingService {
     void fileDue() {
         if (Duration.between(lastWrite, clock.instant()).compareTo(SPACING) < 0) return;
         try {
-            if (Boolean.TRUE.equals(transactions.execute(status -> claim()))) lastWrite = clock.instant();
+            Lookup intent = transactions.execute(status -> claim());
+            if (intent == null) return;
+            var frozen = intent.frozen();
+            var repository =
+                    frozen != null ? frozen : issues.repository(intent.target()).orElse(null);
+            if (Boolean.TRUE.equals(transactions.execute(status -> complete(intent, repository))))
+                lastWrite = clock.instant();
         } catch (RuntimeException failed) {
             meters.failed(failed);
             log.warn(
@@ -119,62 +125,72 @@ class FilingService {
                 .orElse(0L));
     }
 
-    /** Routes the next due report, and hands it to the outbox when it goes to GitHub. */
-    private boolean claim() {
+    private record Lookup(
+            UUID id,
+            int generation,
+            FilingState state,
+            String target,
+            Instant destinationUpdatedAt,
+            ProductFeedbackIssues.@Nullable Repository frozen) {}
+
+    /** Claims a repository lookup; the hand-over checks its generation after the lookup returns. */
+    private @Nullable Lookup claim() {
         Instant now = clock.instant();
-        if (!filings.tryPaceLock(PACE_LOCK)) return false;
+        if (!filings.tryPaceLock(PACE_LOCK)) return null;
         // The limit is about GitHub: a report bound for the admins must not wait behind it, or they cannot see it.
         boolean atLimit = filings.countFiledSince(now.minus(Duration.ofHours(1))) >= HOURLY_LIMIT;
         UUID id = (atLimit ? filings.claimableForAdmins(now) : filings.claimableFiling(now)).orElse(null);
-        if (id == null) return false;
+        if (id == null) return null;
         ProductFeedbackFiling filing = filings.lock(id).orElseThrow();
         ProductFeedback report = feedback.findById(id).orElseThrow();
-        ProductFeedbackIssues.Repository frozen = frozen(filing);
         ProductFeedbackDestination destination = destinations.current();
-        if (destination.isPaused() || !destination.configured() || filing.getRoute() == FilingRoute.ADMINS) {
-            keepForAdmins(filing, report, filing.getRoute() == FilingRoute.ADMINS ? filing.getReason() : null, now);
+        String target = target(filing, report, destination, now);
+        if (target == null) return null;
+        filing.setAttempt(filing.getAttempt() + 1);
+        filing.setNextAttemptAt(now.plus(ProductFeedbackFiling.LOOKUP_LEASE));
+        filing.setUpdatedAt(now);
+        return new Lookup(
+                id, filing.getAttempt(), filing.getState(), target, destination.getUpdatedAt(), frozen(filing));
+    }
+
+    private static boolean owns(ProductFeedbackFiling filing, Lookup intent) {
+        return filing.getAttempt() == intent.generation() && filing.getState() == intent.state();
+    }
+
+    private boolean complete(Lookup intent, ProductFeedbackIssues.@Nullable Repository repository) {
+        if (!filings.tryPaceLock(PACE_LOCK)) return false;
+        var filing = filings.lock(intent.id()).filter(row -> owns(row, intent)).orElse(null);
+        if (filing == null) return false;
+        Instant now = clock.instant();
+        filing.setNextAttemptAt(now);
+        var report = feedback.findById(intent.id()).orElse(null);
+        if (report == null) return false;
+        var destination = destinations.current();
+        String target = target(filing, report, destination, now);
+        if (target == null
+                || !target.equalsIgnoreCase(intent.target())
+                || !destination.getUpdatedAt().equals(intent.destinationUpdatedAt())
+                || filings.countFiledSince(now.minus(Duration.ofHours(1))) >= HOURLY_LIMIT) return false;
+        if (repository == null || (!filing.publicRoute() && !repository.isPrivate())) {
+            stop(filing, report, FilingReason.DESTINATION_UNAVAILABLE, now);
             return false;
         }
-        if (filing.publicRoute() && !consentCurrent(filing, destination)) {
-            filing.setAllowPublic(false);
-            reroutePrivate(filing, report, destination, now);
-            return false;
-        }
-        boolean isPublic = filing.publicRoute();
-        if (isPublic
-                && filings.countPublicFiledByAccountSince(report.getAccountId(), now.truncatedTo(ChronoUnit.DAYS))
-                        >= PUBLIC_PER_ACCOUNT_DAILY) {
-            filing.setAllowPublic(false);
-            reroutePrivate(filing, report, destination, now);
-            return false;
-        }
-        String target = isPublic ? destination.getPublicRepository() : destination.getPrivateRepository();
-        if (target == null || (filing.getRepository() != null && !target.equalsIgnoreCase(filing.getRepository()))) {
-            keepForAdmins(filing, report, FilingReason.DESTINATION_CHANGED, now);
-            return false;
-        }
-        ProductFeedbackIssues.Repository repository = frozen;
-        if (repository == null) {
-            repository = issues.repository(target).orElse(null);
-            if (repository == null || (!isPublic && !repository.isPrivate())) {
-                stop(filing, report, FilingReason.DESTINATION_UNAVAILABLE, now);
-                return false;
-            }
-            filing.setRepository(repository.fullName());
-            filing.setRepositoryId(repository.id());
-            filing.setRepositoryNodeId(repository.nodeId());
-            filing.setInstallationId(repository.installationId());
-        }
+        filing.setRepository(repository.fullName());
+        filing.setRepositoryId(repository.id());
+        filing.setRepositoryNodeId(repository.nodeId());
+        filing.setInstallationId(repository.installationId());
         Draft draft = Objects.requireNonNull(routing.read(filing.getDraft()));
         var rendered = IssueRenderer.render(
                 draft,
                 new IssueRenderer.Context(
                         report.getAppVersion(), filing.getPageRoute(), null, filing.getDraftedAt() != null),
                 destination.getPublicRepository(),
-                isPublic ? null : Objects.requireNonNull(filing.getReason()).words(),
-                isPublic ? null : id.toString(),
-                isPublic ? filing.getMentionLogin() : null,
-                id.toString(),
+                filing.publicRoute()
+                        ? null
+                        : Objects.requireNonNull(filing.getReason()).words(),
+                filing.publicRoute() ? null : intent.id().toString(),
+                filing.publicRoute() ? filing.getMentionLogin() : null,
+                intent.id().toString(),
                 routing.version());
         filing.setIssueTitle(rendered.title());
         filing.setIssueText(rendered.shown());
@@ -191,6 +207,33 @@ class FilingService {
         return true;
     }
 
+    private @Nullable String target(
+            ProductFeedbackFiling filing, ProductFeedback report, ProductFeedbackDestination destination, Instant now) {
+        if (destination.isPaused() || !destination.configured() || filing.getRoute() == FilingRoute.ADMINS) {
+            keepForAdmins(filing, report, filing.getRoute() == FilingRoute.ADMINS ? filing.getReason() : null, now);
+            return null;
+        }
+        if (filing.publicRoute() && !consentCurrent(filing, destination)) {
+            filing.setAllowPublic(false);
+            reroutePrivate(filing, report, destination, now);
+            return null;
+        }
+        boolean isPublic = filing.publicRoute();
+        if (isPublic
+                && filings.countPublicFiledByAccountSince(report.getAccountId(), now.truncatedTo(ChronoUnit.DAYS))
+                        >= PUBLIC_PER_ACCOUNT_DAILY) {
+            filing.setAllowPublic(false);
+            reroutePrivate(filing, report, destination, now);
+            return null;
+        }
+        String target = isPublic ? destination.getPublicRepository() : destination.getPrivateRepository();
+        if (target == null || (filing.getRepository() != null && !target.equalsIgnoreCase(filing.getRepository()))) {
+            keepForAdmins(filing, report, FilingReason.DESTINATION_CHANGED, now);
+            return null;
+        }
+        return target;
+    }
+
     /**
      * Hands the report to the outbox as the next generation of its {@code file_issue} action. Without {@code issue}
      * the action only looks for an earlier generation's issue by its marker.
@@ -201,7 +244,6 @@ class FilingService {
             ProductFeedbackIssues.Repository repository,
             FileIssueAdapter.@Nullable IssueText issue,
             Instant now) {
-        filing.setAttempt(filing.getAttempt() + 1);
         filing.setUpdatedAt(now);
         fileIssues.enqueue(
                 new FileIssueAdapter.Payload(
@@ -407,6 +449,7 @@ class FilingService {
                     if (filing.getFirstAttemptAt() != null && frozen != null) {
                         // A write may have reached GitHub: look for it by its marker before anything writes again.
                         filing.apply(FilingLifecycle.Event.RETRIED_RECONCILE);
+                        filing.setAttempt(filing.getAttempt() + 1);
                         handOver(filing, feedback.findById(feedbackId).orElseThrow(), frozen, null, now);
                     } else if (filing.getDraft() == null) {
                         filing.apply(FilingLifecycle.Event.RETRIED_DRAFT);
