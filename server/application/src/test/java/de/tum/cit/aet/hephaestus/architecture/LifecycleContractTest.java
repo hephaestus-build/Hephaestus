@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunState;
 import de.tum.cit.aet.hephaestus.core.Lifecycle;
 import de.tum.cit.aet.hephaestus.core.action.ActionState;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -45,6 +46,10 @@ class LifecycleContractTest extends HephaestusArchitectureTest {
                                 ReviewStatus.PARTIAL,
                                 ReviewStatus.FAILED,
                                 ReviewStatus.CANCELLED)),
+                new Contract<>(
+                        PersonDataRequest.State.class,
+                        Set.of(PersonDataRequest.State.PREVIEW),
+                        Set.of(PersonDataRequest.State.COMPLETE, PersonDataRequest.State.EXPIRED)),
                 new Contract<>(
                         Workspace.WorkspaceStatus.class,
                         Set.of(Workspace.WorkspaceStatus.ACTIVE),

@@ -143,9 +143,7 @@ public class PersonDataService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The request scope changed. Create a new preview.");
         if (r.getState() == PersonDataRequest.State.FAILED) {
             requireExternalRemoval(selections(r), externalCopiesRemoved);
-            r.setAdministratorAccountId(administratorId);
-            r.setState(PersonDataRequest.State.ERASING);
-            r.setFailureCode(null);
+            r.startErasure(administratorId);
             return;
         }
         var selected = selections(r);
@@ -172,9 +170,7 @@ public class PersonDataService {
             issuedTokens.revokeAllForAccount(
                     person.accountId(), Instant.now(), IssuedJwt.RevokedReason.ACCOUNT_DELETED);
         }
-        r.setAdministratorAccountId(administratorId);
-        r.setState(PersonDataRequest.State.ERASING);
-        r.setFailureCode(null);
+        r.startErasure(administratorId);
     }
 
     private record ErasureAdmission(String state, @Nullable String scopeJson) {}
@@ -218,7 +214,7 @@ public class PersonDataService {
             var selected = registry.select(person);
             request.setSelectionsJson(mapper.writeValueAsString(selected));
             request.setCountsJson(mapper.writeValueAsString(registry.counts(selected)));
-            request.setState(PersonDataRequest.State.ERASING);
+            request.startErasure(null);
             requests.saveAndFlush(request);
             suppression.suppress(person, request.getId());
             jdbc.update(
@@ -227,8 +223,7 @@ public class PersonDataService {
                     accountId);
             issuedTokens.revokeAllForAccount(accountId, Instant.now(), IssuedJwt.RevokedReason.ACCOUNT_DELETED);
             if (!deliveries(selected).isEmpty()) {
-                request.setState(PersonDataRequest.State.FAILED);
-                request.setFailureCode("EXTERNAL_COPIES_REQUIRE_REMOVAL");
+                request.fail("EXTERNAL_COPIES_REQUIRE_REMOVAL");
                 requests.saveAndFlush(request);
             }
             return request.getId();
@@ -305,11 +300,7 @@ public class PersonDataService {
                     PersonDataRequest r = requests.lock(id).orElseThrow(() -> notFound());
                     if (r.getState() != PersonDataRequest.State.ERASING) return;
                     suppression.release(id);
-                    r.setState(PersonDataRequest.State.COMPLETE);
-                    r.setCompletedAt(Instant.now());
-                    r.setScopeJson(null);
-                    r.setSelectionsJson(null);
-                    r.setFailureCode(null);
+                    r.complete(Instant.now());
                     requests.saveAndFlush(r);
                 });
             }
@@ -321,8 +312,8 @@ public class PersonDataService {
                     var r = requests.lock(id).orElseThrow(() -> notFound());
                     if (r.getState() != PersonDataRequest.State.ERASING) return r.getState();
                     boolean retryPending = temporary && !"STORE_ERASURE_RETRY_PENDING".equals(r.getFailureCode());
-                    if (!retryPending) r.setState(PersonDataRequest.State.FAILED);
-                    r.setFailureCode(retryPending ? "STORE_ERASURE_RETRY_PENDING" : "STORE_ERASURE_FAILED");
+                    if (retryPending) r.setFailureCode("STORE_ERASURE_RETRY_PENDING");
+                    else r.fail("STORE_ERASURE_FAILED");
                     requests.saveAndFlush(r);
                     return r.getState();
                 });

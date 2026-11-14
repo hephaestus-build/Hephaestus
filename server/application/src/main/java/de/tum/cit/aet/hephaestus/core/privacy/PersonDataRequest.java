@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
+import de.tum.cit.aet.hephaestus.core.Lifecycle;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -8,7 +9,11 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
 import org.jspecify.annotations.Nullable;
@@ -25,8 +30,13 @@ public class PersonDataRequest {
     @Column(name = "administrator_account_id")
     private @Nullable Long administratorAccountId;
 
+    /**
+     * Changes through {@link #startErasure}, {@link #fail} and {@link #complete}, and from {@code PREVIEW} to
+     * {@code EXPIRED} through the SQL of {@link PersonDataService#expirePreviews}.
+     */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 24)
+    @Setter(AccessLevel.NONE)
     private State state = State.PREVIEW;
 
     @Column(name = "scope_json", columnDefinition = "text")
@@ -56,11 +66,56 @@ public class PersonDataRequest {
     @Version
     private long version;
 
-    public enum State {
+    /** Admits the erasure of a preview, or resumes a failed one. */
+    public void startErasure(@Nullable Long administratorAccountId) {
+        moveTo(State.ERASING);
+        this.administratorAccountId = administratorAccountId;
+        this.failureCode = null;
+    }
+
+    /** Stops the erasure until an administrator resumes it. */
+    public void fail(String failureCode) {
+        moveTo(State.FAILED);
+        this.failureCode = failureCode;
+    }
+
+    /** Ends the erasure. The receipt keeps no identifying scope. */
+    public void complete(Instant completedAt) {
+        moveTo(State.COMPLETE);
+        this.completedAt = completedAt;
+        this.scopeJson = null;
+        this.selectionsJson = null;
+        this.failureCode = null;
+    }
+
+    private void moveTo(State next) {
+        if (!state.canTransitionTo(next)) {
+            throw new IllegalStateException("A person data request cannot move from " + state + " to " + next);
+        }
+        state = next;
+    }
+
+    /**
+     * {@code EXPIRED} is terminal: {@code expirePreviews} drops the preview data, so an expired request cannot be
+     * confirmed. The trigger {@code guard_person_data_request} keeps a completed request complete in the database too.
+     */
+    public enum State implements Lifecycle<State> {
         PREVIEW,
         ERASING,
         FAILED,
         COMPLETE,
-        EXPIRED
+        EXPIRED;
+
+        private static final Map<State, Set<State>> LEGAL = Map.of(
+                PREVIEW, Set.of(ERASING, EXPIRED),
+                ERASING, Set.of(FAILED, COMPLETE),
+                FAILED, Set.of(ERASING),
+                COMPLETE, Set.of(),
+                EXPIRED, Set.of());
+
+        @Override
+        public boolean canTransitionTo(State next) {
+            return Objects.requireNonNull(LEGAL.get(this)).contains(next);
+        }
     }
 }
