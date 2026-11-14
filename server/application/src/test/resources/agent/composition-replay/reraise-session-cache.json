@@ -62,14 +62,10 @@
     "reviewStops" : [ ],
     "handedOn" : "ROUTING_UNAVAILABLE",
     "calls" : [ {
-      "system" : "f21689257902ac4e05f10e0a4ddc6cd590b9d113c65f284e99a81dcbe0482edf",
-      "tools" : "74e8a4dd90a99eb80cebcbcf20f526dd8457b2d856edab32ddfaebf1007e003d",
+      "starts" : [ "check_package", "publish_package", "edit_own" ],
       "messages" : [ {
         "role" : "user",
-        "text" : {
-          "sha256" : "85c47e9b123f56fba6955846143254b22b6a67a0b443ebd97907b6059fb2eef0",
-          "length" : 24198
-        }
+        "names" : [ "a599d9f5-0140-3ace-ac9e-07200a7950bc", "d63890ed-04e1-3d94-a414-5834c4f158d4", "0852304b-007a-3d09-9125-894f2eee376e", "e0cc8031-0523-3a33-9976-0b83d2fe6c5f" ]
       } ]
     }, {
       "messages" : [ {
