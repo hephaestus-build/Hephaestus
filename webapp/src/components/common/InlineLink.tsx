@@ -1,10 +1,9 @@
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
-import { ExternalLinkIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "cn";
-import { FOCUS_RING } from "@/components/common/focus";
+import { INLINE_LINK_CLASS, OutboundMark } from "@/components/common/outbound-link";
 import { hasText } from "@/lib/text";
 
 export interface InlineLinkProps extends Omit<
@@ -50,10 +49,7 @@ export function InlineLink({
 	const ownProps: useRender.ElementProps<"a"> = {
 		className: cn(
 			"text-foreground",
-			interactive && [
-				"cursor-pointer rounded-sm text-left decoration-1 underline-offset-3 hover:text-highlight hover:underline focus-visible:text-highlight focus-visible:underline",
-				FOCUS_RING,
-			],
+			interactive && INLINE_LINK_CLASS,
 			tone === "count" && [
 				"text-muted-foreground",
 				interactive &&
@@ -79,8 +75,7 @@ export function InlineLink({
 			children: outbound ? (
 				<>
 					{children}
-					<ExternalLinkIcon className="ms-0.5 inline size-3 align-baseline" aria-hidden />
-					<span className="sr-only"> (opens in a new tab)</span>
+					<OutboundMark />
 				</>
 			) : (
 				children

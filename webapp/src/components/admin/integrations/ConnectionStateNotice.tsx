@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import type * as React from "react";
 
+import { DocLink } from "@/components/common/DocLink";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 import type { ConnectionState } from "./sync-format";
@@ -106,7 +107,8 @@ export function ConnectionStateNotice({
 					<KeyRoundIcon />
 					<AlertTitle>The stored token cannot be read</AlertTitle>
 					<AlertDescription>
-						{`This server’s current keys cannot decrypt the stored ${displayName} token. That usually happens after a key change or after you restore the database under another key. Nothing that needs the token can run. ${credentialRecovery}, or restore the key that encrypted the token if the key was changed by mistake.`}
+						{`This server’s current keys cannot decrypt the stored ${displayName} token. That usually happens after a key change or after you restore the database under another key. Nothing that needs the token can run. ${credentialRecovery}. If the key was changed by mistake, ask your instance operator to `}
+						<DocLink doc="unreadableCredential">restore the key that encrypted the token</DocLink>.
 					</AlertDescription>
 				</Alert>
 			)}

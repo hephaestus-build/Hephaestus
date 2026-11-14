@@ -8,6 +8,7 @@ import {
 	CONNECTION_STATE_LABEL,
 	type ConnectionState,
 } from "@/components/admin/integrations/sync-format";
+import { DocLink } from "@/components/common/DocLink";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { useNow } from "@/components/common/use-now";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -175,8 +176,9 @@ export function OutlineConnectCard({
 									<AlertTitle>Outline may not be enabled on this instance</AlertTitle>
 									<AlertDescription>
 										The server has no Outline integration configured, so connecting cannot succeed
-										here. If your URL and token are correct, ask your instance operator to enable
-										the Outline integration for this deployment.
+										here. If your URL and token are correct, ask your instance operator to{" "}
+										<DocLink doc="outlineIntegration">enable the Outline integration</DocLink> for
+										this deployment.
 									</AlertDescription>
 								</Alert>
 							)}

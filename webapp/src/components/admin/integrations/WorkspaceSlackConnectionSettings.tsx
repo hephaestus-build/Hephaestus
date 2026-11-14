@@ -1,6 +1,7 @@
 import { ExternalLinkIcon } from "lucide-react";
 import { useState } from "react";
 
+import { DocLink } from "@/components/common/DocLink";
 import { SlackIcon } from "@/components/icons/brand";
 import {
 	AlertDialog,
@@ -143,7 +144,8 @@ function MissingScopes({ scopes }: { scopes: readonly string[] }) {
 					<code>{scope}</code>
 				</span>
 			))}
-			.
+			. If they are still missing after you reconnect, ask your instance operator to{" "}
+			<DocLink doc="slackPermissions">update the Slack app</DocLink>, then reconnect again.
 		</>
 	);
 }

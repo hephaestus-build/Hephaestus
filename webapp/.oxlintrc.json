@@ -256,6 +256,8 @@
 				"src/components/layout/Header.tsx",
 				"src/components/site/landing/LandingVisuals.tsx"
 			],
+			// Docs heading slugs, such as "outline-integration", are not classes.
+			"excludeFiles": ["src/lib/doc-targets.ts"],
 			"rules": { "shadcn/no-raw-colors": ["error", { "scanAllStrings": true }] }
 		},
 		{
