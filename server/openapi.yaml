@@ -1919,6 +1919,8 @@ paths:
           default: OPEN
           enum:
           - OPEN
+          - IN_FLIGHT
+          - ON_GITHUB
           - RESOLVED
           - ALL
       - description: Zero-based page index (0..N)
@@ -2084,8 +2086,8 @@ paths:
           type: string
           format: uuid
       responses:
-        "200":
-          description: OK
+        "204":
+          description: The report goes back to filing
       summary: File a stopped report again
       tags:
       - product-feedback-destinations
@@ -15492,12 +15494,25 @@ components:
           type: string
         canFile:
           type: boolean
+        canTriage:
+          type: boolean
         createdAt:
           type: string
           format: date-time
         id:
           type: string
           format: uuid
+        issueClosedAs:
+          type: string
+        issueNumber:
+          type: integer
+          format: int64
+        issueText:
+          type: string
+        issueTitle:
+          type: string
+        issueUrl:
+          type: string
         kind:
           type: string
           enum:
@@ -15508,24 +15523,44 @@ components:
           type: string
         pagePath:
           type: string
+        reason:
+          type: string
         resolvedAt:
           type: string
           format: date-time
         resolvedBy:
           $ref: "#/components/schemas/FeedbackAccountRef"
+        route:
+          type: string
+          enum:
+          - PUBLIC
+          - PRIVATE
+          - ADMINS
         savedBeforeDisclosure:
           type: boolean
+        state:
+          type: string
+          enum:
+          - SAVED_FOR_ADMINS
+          - DRAFTING
+          - HELD
+          - FILING
+          - FILED
+          - STOPPED
         userAgent:
           type: string
         workspace:
           $ref: "#/components/schemas/FeedbackWorkspaceRef"
       required:
       - canFile
+      - canTriage
       - createdAt
       - id
       - kind
       - message
+      - route
       - savedBeforeDisclosure
+      - state
     FeedbackModeAssignment:
       type: object
       properties:
@@ -17878,8 +17913,6 @@ components:
           type: string
           description: "the drafted title, while the report is held or once it is\
             \ filed"
-        excerpt:
-          type: string
         filedAfter:
           type: string
           format: date-time
@@ -17893,6 +17926,10 @@ components:
         issueNumber:
           type: integer
           format: int64
+        issueText:
+          type: string
+        issueTitle:
+          type: string
         issueUrl:
           type: string
           description: "the issue the person can open: a public one, or a private\
@@ -17903,6 +17940,8 @@ components:
           - IDEA
           - BUG
           - FEEDBACK
+        message:
+          type: string
         reason:
           type: string
           description: "why the report is not public, in words; null for a public\
@@ -17932,9 +17971,9 @@ components:
       - canKeepPrivate
       - canMakePrivate
       - createdAt
-      - excerpt
       - id
       - kind
+      - message
       - route
       - state
     NotReviewedScanReportItem:

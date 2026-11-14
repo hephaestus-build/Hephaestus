@@ -10,8 +10,10 @@ import de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackSub
 import java.time.Clock;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -115,7 +117,7 @@ class FeedbackService {
 
     @Transactional(readOnly = true)
     public Page<FeedbackItemDTO> list(FeedbackFilter filter, Pageable pageable) {
-        Page<ProductFeedback> page = feedback.findNotOnGitHub(filter.name(), pageable);
+        Page<ProductFeedback> page = feedback.findForAdmin(filter.name(), pageable);
         return new PageImpl<>(dtos(page.getContent()), pageable, page.getTotalElements());
     }
 
@@ -123,8 +125,7 @@ class FeedbackService {
     public FeedbackItemDTO triage(UUID id, boolean resolved, Long accountId) {
         ProductFeedback item =
                 feedback.findById(id).orElseThrow(() -> new EntityNotFoundException("Product feedback", id.toString()));
-        // The console lists only reports that GitHub will not get; one that is filed, or on its way, is worked on
-        // there.
+        // Reports that are filed, or on their way, are worked on in GitHub.
         boolean onGitHub = filings.lock(id)
                 .map(filing -> !FilingLifecycle.waitsForAdmin(filing.getState()))
                 .orElse(false);
@@ -145,28 +146,49 @@ class FeedbackService {
         ProductFeedbackDestination destination = destinations.current();
         Set<UUID> fileable = new HashSet<>();
         Set<UUID> undrafted = new HashSet<>();
+        Map<UUID, ProductFeedbackFiling> byId = new HashMap<>();
         for (ProductFeedbackFiling filing :
                 filings.findAllById(list.stream().map(ProductFeedback::getId).toList())) {
+            byId.put(filing.getFeedbackId(), filing);
             if (filing.canFileAt(destination)) fileable.add(filing.getFeedbackId());
             if (!filing.isFileDisclosed()) undrafted.add(filing.getFeedbackId());
         }
         FeedbackRefs.Resolved resolved = refs.resolve(
                 accountIds, list.stream().map(ProductFeedback::getWorkspaceId).toList());
         return list.stream()
-                .map(f -> new FeedbackItemDTO(
-                        f.getId(),
-                        resolved.account(f.getAccountId()),
-                        resolved.workspace(f.getWorkspaceId()),
-                        f.getKind(),
-                        f.getMessage(),
-                        f.getPagePath(),
-                        f.getUserAgent(),
-                        f.getAppVersion(),
-                        Objects.requireNonNull(f.getCreatedAt()),
-                        f.getResolvedAt(),
-                        resolved.account(f.getResolvedByAccountId()),
-                        !f.isResolved() && fileable.contains(f.getId()),
-                        undrafted.contains(f.getId())))
+                .map(f -> item(f, byId.get(f.getId()), resolved, fileable, undrafted))
                 .toList();
+    }
+
+    private FeedbackItemDTO item(
+            ProductFeedback f,
+            @Nullable ProductFeedbackFiling filing,
+            FeedbackRefs.Resolved resolved,
+            Set<UUID> fileable,
+            Set<UUID> undrafted) {
+        var shown = reports.dto(f, filing, true);
+        return new FeedbackItemDTO(
+                f.getId(),
+                resolved.account(f.getAccountId()),
+                resolved.workspace(f.getWorkspaceId()),
+                f.getKind(),
+                f.getMessage(),
+                f.getPagePath(),
+                f.getUserAgent(),
+                f.getAppVersion(),
+                Objects.requireNonNull(f.getCreatedAt()),
+                f.getResolvedAt(),
+                resolved.account(f.getResolvedByAccountId()),
+                !f.isResolved() && fileable.contains(f.getId()),
+                undrafted.contains(f.getId()),
+                shown.state(),
+                shown.route(),
+                shown.reason(),
+                shown.issueUrl(),
+                shown.issueNumber(),
+                shown.issueClosedAs(),
+                shown.issueTitle(),
+                shown.issueText(),
+                filing == null || FilingLifecycle.waitsForAdmin(filing.getState()));
     }
 }

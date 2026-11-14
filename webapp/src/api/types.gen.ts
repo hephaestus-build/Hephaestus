@@ -1811,14 +1811,23 @@ export type FeedbackItem = {
 	account?: FeedbackAccountRef;
 	appVersion?: string;
 	canFile: boolean;
+	canTriage: boolean;
 	createdAt: Date;
 	id: string;
+	issueClosedAs?: string;
+	issueNumber?: number;
+	issueText?: string;
+	issueTitle?: string;
+	issueUrl?: string;
 	kind: "IDEA" | "BUG" | "FEEDBACK";
 	message: string;
 	pagePath?: string;
+	reason?: string;
 	resolvedAt?: Date;
 	resolvedBy?: FeedbackAccountRef;
+	route: "PUBLIC" | "PRIVATE" | "ADMINS";
 	savedBeforeDisclosure: boolean;
+	state: "SAVED_FOR_ADMINS" | "DRAFTING" | "HELD" | "FILING" | "FILED" | "STOPPED";
 	userAgent?: string;
 	workspace?: FeedbackWorkspaceRef;
 };
@@ -3279,7 +3288,6 @@ export type MyProductFeedback = {
 	 * the drafted title, while the report is held or once it is filed
 	 */
 	draftTitle?: string;
-	excerpt: string;
 	filedAfter?: Date;
 	id: string;
 	/**
@@ -3287,11 +3295,14 @@ export type MyProductFeedback = {
 	 */
 	issueClosedAs?: string;
 	issueNumber?: number;
+	issueText?: string;
+	issueTitle?: string;
 	/**
 	 * the issue the person can open: a public one, or a private one for an instance admin
 	 */
 	issueUrl?: string;
 	kind: "IDEA" | "BUG" | "FEEDBACK";
+	message: string;
 	/**
 	 * why the report is not public, in words; null for a public one
 	 */
@@ -9961,7 +9972,7 @@ export type AdminListProductFeedbackData = {
 	body?: never;
 	path?: never;
 	query?: {
-		status?: "OPEN" | "RESOLVED" | "ALL";
+		status?: "OPEN" | "IN_FLIGHT" | "ON_GITHUB" | "RESOLVED" | "ALL";
 		/**
 		 * Zero-based page index (0..N)
 		 */
@@ -10124,10 +10135,13 @@ export type RetryProductFeedbackFilingData = {
 
 export type RetryProductFeedbackFilingResponses = {
 	/**
-	 * OK
+	 * The report goes back to filing
 	 */
-	200: unknown;
+	204: void;
 };
+
+export type RetryProductFeedbackFilingResponse =
+	RetryProductFeedbackFilingResponses[keyof RetryProductFeedbackFilingResponses];
 
 export type ListInstanceProviderRepairsData = {
 	body?: never;

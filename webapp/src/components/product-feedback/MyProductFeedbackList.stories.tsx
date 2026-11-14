@@ -73,7 +73,7 @@ export const PublicIssue: Story = {
 		);
 		await expect(canvas.getByText(/Closed as done/u)).toBeVisible();
 		const [first] = canvas.getAllByRole("button", { name: "Make private" });
-		await expect(first).toHaveAccessibleDescription(publicIssue.excerpt);
+		await expect(first).toHaveAccessibleDescription(publicIssue.message);
 		if (first !== undefined) {
 			await userEvent.click(first);
 		}
@@ -127,4 +127,39 @@ export const NotOnGitHub: Story = {
 
 export const Reflow: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+};
+
+/** A private issue copy is readable here without a private repository link. */
+export const PrivateFiledCopy: Story = {
+	args: {
+		state: {
+			status: "ready",
+			reports: [
+				{
+					...privateIssue,
+					message: "The summary repeats the same point. ".repeat(8),
+					issueTitle: "Avoid repeated points in the review summary",
+					issueText:
+						"### User problem\n\nThe summary repeats the same point on a long pull request.",
+				},
+			],
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByText("The summary repeats the same point. ".repeat(8).trim()),
+		).toBeVisible();
+		await expect(canvas.queryByRole("link", { name: /issue #/u })).not.toBeInTheDocument();
+		await userEvent.click(
+			canvas.getByRole("button", {
+				name: "The issue as filed: Avoid repeated points in the review summary",
+			}),
+		);
+		await expectSettledVisible(
+			await canvas.findByText("Avoid repeated points in the review summary"),
+		);
+		await expect(
+			await canvas.findByText("The summary repeats the same point on a long pull request."),
+		).toBeVisible();
+	},
 };

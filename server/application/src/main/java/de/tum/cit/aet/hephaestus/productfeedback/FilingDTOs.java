@@ -84,7 +84,7 @@ final class FilingDTOs {
     record MyProductFeedbackDTO(
             @NonNull UUID id,
             ProductFeedback.@NonNull Kind kind,
-            @NonNull String excerpt,
+            @NonNull String message,
             @NonNull Instant createdAt,
             @NonNull ReportState state,
             @NonNull ReportRoute route,
@@ -93,6 +93,8 @@ final class FilingDTOs {
             @Nullable String issueUrl,
             @Nullable Long issueNumber,
             @Nullable String issueClosedAs,
+            @Nullable String issueTitle,
+            @Nullable String issueText,
             @Nullable String removed,
             @Nullable String draftTitle,
             @Nullable String draftDescription,

@@ -59,7 +59,7 @@ public class ProductfeedbackPersonDataCatalog implements PersonDataCatalog {
                         "product_feedback_filing",
                         "product_feedback_filing",
                         "t.feedback_id IN (SELECT p.id FROM product_feedback p WHERE p.account_id = :account)",
-                        "feedback_id,state,route,reason,allow_public,mention_login,repository,issue_number,issue_url,created_at",
+                        "feedback_id,state,route,reason,allow_public,mention_login,repository,issue_number,issue_url,issue_title,issue_text,created_at",
                         "feedback_id",
                         "",
                         399) {

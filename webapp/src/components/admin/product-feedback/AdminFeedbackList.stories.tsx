@@ -3,9 +3,18 @@ import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import type { FeedbackItem } from "@/api/types.gen";
 import { withStandardPage } from "@/stories/decorators";
+import { expectSettledVisible } from "@/stories/overlay";
 
 import { AdminFeedbackList } from "./AdminFeedbackList";
-import { bugReport, openFeedback, resolvedBugReport, resolvedFeedback } from "./fixtures";
+import {
+	bugReport,
+	draftingFeedback,
+	filedPrivateFeedback,
+	filedPublicFeedback,
+	openFeedback,
+	resolvedBugReport,
+	resolvedFeedback,
+} from "./fixtures";
 
 const meta = {
 	component: AdminFeedbackList,
@@ -21,7 +30,7 @@ type Story = StoryObj<typeof meta>;
 
 const ready = (
 	items: FeedbackItem[],
-	filter: "OPEN" | "RESOLVED" | "ALL",
+	filter: "OPEN" | "IN_FLIGHT" | "ON_GITHUB" | "RESOLVED" | "ALL",
 	onPageChange = fn(),
 ) => ({ status: "ready" as const, items, filter, page: 0, totalPages: 1, onPageChange });
 
@@ -44,6 +53,50 @@ export const Open: Story = {
 	},
 };
 
+/** Hephaestus is still working, so an admin has nothing to press. */
+export const OnItsWay: Story = {
+	args: { state: ready([draftingFeedback], "IN_FLIGHT") },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Drafting")).toBeVisible();
+		await expect(canvas.queryByRole("button", { name: "Mark resolved" })).not.toBeInTheDocument();
+		await expect(canvas.queryByRole("button", { name: "File on GitHub" })).not.toBeInTheDocument();
+	},
+};
+
+export const NothingOnItsWay: Story = {
+	args: { state: ready([], "IN_FLIGHT") },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Nothing on its way")).toBeVisible();
+	},
+};
+
+/** An admin sees the issue, also a private one, with the words the reporter sees. */
+export const OnGitHub: Story = {
+	args: { state: ready([filedPublicFeedback, filedPrivateFeedback], "ON_GITHUB") },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("link", { name: /Public issue #412/u })).toBeVisible();
+		await expect(canvas.getByRole("link", { name: /Private issue #18/u })).toBeVisible();
+		await expect(
+			canvas.getByText("It may be about a security problem, so it stays private."),
+		).toBeVisible();
+		await expect(
+			canvas.getByRole("button", {
+				name: "The issue as filed: Practice page jumps to the top when the filter changes",
+			}),
+		).toBeVisible();
+		await expect(
+			canvas.getByRole("button", { name: "The issue as filed: Report about session handling" }),
+		).toBeVisible();
+	},
+};
+
+export const NothingOnGitHub: Story = {
+	args: { state: ready([], "ON_GITHUB") },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("No open issues")).toBeVisible();
+	},
+};
+
 /** A saved report that a destination can take now. */
 export const CanFile: Story = {
 	args: { state: ready([{ ...bugReport, canFile: true }], "OPEN") },
@@ -62,7 +115,7 @@ export const SavedBeforeDisclosure: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "File on GitHub" }));
 		const confirm = within(await screen.findByRole("alertdialog"));
-		await expect(confirm.getByText(/No AI model reads it/u)).toBeVisible();
+		await expectSettledVisible(confirm.getByText(/No AI model reads it/u));
 	},
 };
 
@@ -99,7 +152,7 @@ export const Saving: Story = {
 export const Empty: Story = {
 	args: { state: ready([], "OPEN") },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No open feedback")).toBeVisible();
+		await expect(canvas.getByText("Nothing waits for you")).toBeVisible();
 	},
 };
 
@@ -116,4 +169,10 @@ export const Loading: Story = {
 
 export const Error: Story = {
 	args: { state: { status: "error", error: new TypeError("Failed to fetch"), onRetry: fn() } },
+};
+
+/** Full report text and the issue copy wrap on a narrow screen. */
+export const Reflow: Story = {
+	args: { state: ready([filedPrivateFeedback], "ON_GITHUB") },
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 };

@@ -176,6 +176,8 @@ class FilingService {
                 isPublic ? filing.getMentionLogin() : null,
                 id.toString(),
                 routing.version());
+        filing.setIssueTitle(rendered.title());
+        filing.setIssueText(rendered.shown());
         filing.setPayloadHash(sha256(rendered.title() + "\n" + rendered.body()));
         if (filing.getFirstAttemptAt() == null) filing.setFirstAttemptAt(now.minusSeconds(60));
         filing.apply(FilingLifecycle.Event.FILING_CLAIMED);

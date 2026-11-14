@@ -11,6 +11,7 @@ import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -22,11 +23,13 @@ import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssueUpdates;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssues;
 import de.tum.cit.aet.hephaestus.notification.email.CapturingMailTestConfiguration;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackRequestDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FilingDTOs.UpdateProductFeedbackDestinationsDTO;
+import de.tum.cit.aet.hephaestus.productfeedback.adapter.ProductfeedbackPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.productfeedback.metrics.ProductFeedbackMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -94,6 +97,9 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private MyReportsService reports;
+
+    @Autowired
+    private ProductfeedbackPersonDataCatalog personData;
 
     @Autowired
     private FeedbackAccountErasureAdapter feedbackErasure;
@@ -448,12 +454,43 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldEndAnExpandedFallbackTitleWithoutBlockingTheNextReport() {
+        UUID oversized = privateReportDue();
+        String message = "#1 ".repeat(60).strip();
+        jdbc.update("UPDATE product_feedback SET message = ? WHERE id = ?", message, oversized);
+        jdbc.update(
+                "UPDATE product_feedback_filing SET draft = ? WHERE feedback_id = ?",
+                routing.write(Fallback.of(ProductFeedback.Kind.BUG, message)),
+                oversized);
+        when(issues.create(any(), anyString(), anyString(), any()))
+                .thenThrow(new ProductFeedbackIssues.Refused("422 title too long"));
+        fileDueAndDrain();
+        var stopped = filings.findById(oversized).orElseThrow();
+        assertThat(stopped.getState()).isEqualTo(FilingState.STOPPED);
+        assertThat(stopped.getReason()).isEqualTo(FilingReason.GITHUB_REFUSED);
+        assertThat(stopped.getIssueTitle())
+                .isEqualTo("issue 1 ".repeat(60).strip())
+                .hasSizeGreaterThan(300);
+
+        UUID next = privateReportDue();
+        doReturn(new ProductFeedbackIssues.Issue(93, "I_93", "https://github.com/acme/feedback-private/issues/93"))
+                .when(issues)
+                .create(any(), anyString(), anyString(), any());
+        fileDueAndDrain();
+        assertThat(filings.findById(next).orElseThrow().getState()).isEqualTo(FilingState.FILED);
+    }
+
+    @Test
     void shouldFindTheIssueByItsMarkerInsteadOfFilingItAgainWhenGitHubsAnswerWasLost() {
         UUID id = privateReportDue();
         when(issues.create(any(), anyString(), anyString(), any()))
                 .thenThrow(new ProductFeedbackIssues.Unknown("read timed out", null));
         fileDueAndDrain();
         assertThat(filings.findById(id).orElseThrow().getState()).isEqualTo(FilingState.FILING);
+        String claimedTitle = filings.findById(id).orElseThrow().getIssueTitle();
+        String claimedText = filings.findById(id).orElseThrow().getIssueText();
+        assertThat(claimedTitle).isNotBlank();
+        assertThat(claimedText).isNotBlank();
 
         when(issues.findByMarker(eq(PRIVATE_REPOSITORY), eq(id.toString()), any()))
                 .thenReturn(Optional.of(new ProductFeedbackIssues.Issue(
@@ -469,6 +506,8 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
         var filed = filings.findById(id).orElseThrow();
         assertThat(filed.getState()).isEqualTo(FilingState.FILED);
         assertThat(filed.getIssueNumber()).isEqualTo(92L);
+        assertThat(filed.getIssueTitle()).isEqualTo(claimedTitle);
+        assertThat(filed.getIssueText()).isEqualTo(claimedText);
     }
 
     @Test
@@ -576,6 +615,8 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
         var published = filings.findById(id).orElseThrow();
         assertThat(published.getRoute()).isEqualTo(FilingRoute.PUBLIC);
         assertThat(published.getIssueNumber()).isEqualTo(301L);
+        assertThat(published.getIssueTitle()).isEqualTo("The list jumps");
+        assertThat(published.getIssueText()).contains("The list jumps when it loads", "The list stays in place");
         assertThat(published.getPublishRequestedBy()).isNull();
     }
 
@@ -600,7 +641,10 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
         executor.runDue();
 
         verify(issues, times(1)).create(eq(PUBLIC_REPOSITORY), anyString(), anyString(), any());
-        assertThat(filings.findById(id).orElseThrow().getIssueNumber()).isEqualTo(301L);
+        var recovered = filings.findById(id).orElseThrow();
+        assertThat(recovered.getIssueNumber()).isEqualTo(301L);
+        assertThat(recovered.getIssueTitle()).isNull();
+        assertThat(recovered.getIssueText()).isNull();
     }
 
     @Test
@@ -653,6 +697,84 @@ class ProductFeedbackTrustGatesIntegrationTest extends BaseIntegrationTest {
                 id);
         when(updates.permission(any(), eq("maintainer"))).thenReturn("write");
         return id;
+    }
+
+    @Test
+    void shouldListFiledClosedAndCapacityWaitingReportsInTheirAdminSlices() {
+        UUID filed = filedPrivately();
+        assertThat(feedbackService.list(FeedbackDTOs.FeedbackFilter.ON_GITHUB, PageRequest.of(0, 500)))
+                .anyMatch(report -> report.id().equals(filed));
+        assertThat(feedbackService.list(FeedbackDTOs.FeedbackFilter.OPEN, PageRequest.of(0, 500)))
+                .noneMatch(report -> report.id().equals(filed));
+        jdbc.update(
+                "UPDATE product_feedback_filing SET issue_open = false, issue_state_reason = 'completed'"
+                        + " WHERE feedback_id = ?",
+                filed);
+        assertThat(feedbackService.list(FeedbackDTOs.FeedbackFilter.RESOLVED, PageRequest.of(0, 500)))
+                .anyMatch(report -> report.id().equals(filed));
+        assertThat(feedbackService.list(FeedbackDTOs.FeedbackFilter.ON_GITHUB, PageRequest.of(0, 500)))
+                .noneMatch(report -> report.id().equals(filed));
+
+        UUID waiting = privateReportDue();
+        jdbc.update("UPDATE product_feedback_filing SET state = 'DRAFT_WAITING' WHERE feedback_id = ?", waiting);
+        var waitingItem = feedbackService.list(FeedbackDTOs.FeedbackFilter.IN_FLIGHT, PageRequest.of(0, 500)).stream()
+                .filter(report -> report.id().equals(waiting))
+                .findFirst()
+                .orElseThrow();
+        assertThat(waitingItem.state()).isEqualTo(FilingDTOs.ReportState.DRAFTING);
+        assertThat(waitingItem.canTriage()).isFalse();
+        assertThat(feedbackService.list(FeedbackDTOs.FeedbackFilter.OPEN, PageRequest.of(0, 500)))
+                .noneMatch(report -> report.id().equals(waiting));
+    }
+
+    @Test
+    void shouldShowTheWholeReportAndItsFiledCopyOnlyToItsReporterAndAdmins() {
+        UUID id = filedPrivately();
+        long reporter = Objects.requireNonNull(
+                jdbc.queryForObject("SELECT account_id FROM product_feedback WHERE id = ?", Long.class, id));
+        String original = "The list jumps while loading. ".repeat(12).strip();
+        jdbc.update("UPDATE product_feedback SET message = ? WHERE id = ?", original, id);
+
+        var own = reports.mine(reporter, false).stream()
+                .filter(report -> report.id().equals(id))
+                .findFirst()
+                .orElseThrow();
+        assertThat(own.message()).isEqualTo(original);
+        assertThat(own.state()).isEqualTo(FilingDTOs.ReportState.FILED);
+        assertThat(own.route()).isEqualTo(FilingDTOs.ReportRoute.PRIVATE);
+        assertThat(own.issueUrl()).isNull();
+        assertThat(own.issueTitle()).isEqualTo("The list jumps");
+        assertThat(own.issueText())
+                .contains("The list jumps")
+                .doesNotContain("Private because:", "Report " + id, "hephaestus-product-feedback:");
+        assertThat(reports.mine(Objects.requireNonNull(newReporter().getId()), false))
+                .noneMatch(report -> report.id().equals(id));
+
+        var adminItem = feedbackService.list(FeedbackDTOs.FeedbackFilter.ALL, PageRequest.of(0, 100)).stream()
+                .filter(report -> report.id().equals(id))
+                .findFirst()
+                .orElseThrow();
+        assertThat(adminItem.state()).isEqualTo(FilingDTOs.ReportState.FILED);
+        assertThat(adminItem.route()).isEqualTo(FilingDTOs.ReportRoute.PRIVATE);
+        assertThat(adminItem.issueUrl()).isEqualTo("https://github.com/acme/feedback-private/issues/92");
+        assertThat(adminItem.issueText()).isEqualTo(own.issueText());
+
+        var store = personData.contributors().stream()
+                .filter(contributor -> contributor.store().equals("product_feedback_filing"))
+                .findFirst()
+                .orElseThrow();
+        var scope = new PersonScope(reporter, List.of(), List.of());
+        var selected = store.select(scope);
+        var exported = store.export(selected, scope).stream()
+                .filter(row -> row.path("feedback_id").asString().equals(id.toString()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(exported.path("issue_title").asString()).isEqualTo(own.issueTitle());
+        assertThat(exported.path("issue_text").asString()).isEqualTo(own.issueText());
+        var other = new PersonScope(Objects.requireNonNull(newReporter().getId()), List.of(), List.of());
+        assertThat(store.export(store.select(other), other)).isEmpty();
+        store.erase(selected, scope);
+        assertThat(filings.findById(id)).isEmpty();
     }
 
     /** A private issue, filed for a report whose reporter kept it private. */

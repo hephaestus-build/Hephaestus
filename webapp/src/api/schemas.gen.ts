@@ -3794,6 +3794,9 @@ export const FeedbackItemSchema = {
 		canFile: {
 			type: "boolean",
 		},
+		canTriage: {
+			type: "boolean",
+		},
 		createdAt: {
 			type: "string",
 			format: "date-time",
@@ -3801,6 +3804,22 @@ export const FeedbackItemSchema = {
 		id: {
 			type: "string",
 			format: "uuid",
+		},
+		issueClosedAs: {
+			type: "string",
+		},
+		issueNumber: {
+			type: "integer",
+			format: "int64",
+		},
+		issueText: {
+			type: "string",
+		},
+		issueTitle: {
+			type: "string",
+		},
+		issueUrl: {
+			type: "string",
 		},
 		kind: {
 			type: "string",
@@ -3812,6 +3831,9 @@ export const FeedbackItemSchema = {
 		pagePath: {
 			type: "string",
 		},
+		reason: {
+			type: "string",
+		},
 		resolvedAt: {
 			type: "string",
 			format: "date-time",
@@ -3819,8 +3841,16 @@ export const FeedbackItemSchema = {
 		resolvedBy: {
 			$ref: "#/components/schemas/FeedbackAccountRef",
 		},
+		route: {
+			type: "string",
+			enum: ["PUBLIC", "PRIVATE", "ADMINS"],
+		},
 		savedBeforeDisclosure: {
 			type: "boolean",
+		},
+		state: {
+			type: "string",
+			enum: ["SAVED_FOR_ADMINS", "DRAFTING", "HELD", "FILING", "FILED", "STOPPED"],
 		},
 		userAgent: {
 			type: "string",
@@ -3829,7 +3859,17 @@ export const FeedbackItemSchema = {
 			$ref: "#/components/schemas/FeedbackWorkspaceRef",
 		},
 	},
-	required: ["canFile", "createdAt", "id", "kind", "message", "savedBeforeDisclosure"],
+	required: [
+		"canFile",
+		"canTriage",
+		"createdAt",
+		"id",
+		"kind",
+		"message",
+		"route",
+		"savedBeforeDisclosure",
+		"state",
+	],
 } as const;
 
 export const FeedbackModeAssignmentSchema = {
@@ -6365,9 +6405,6 @@ export const MyProductFeedbackSchema = {
 			type: "string",
 			description: "the drafted title, while the report is held or once it is filed",
 		},
-		excerpt: {
-			type: "string",
-		},
 		filedAfter: {
 			type: "string",
 			format: "date-time",
@@ -6385,6 +6422,12 @@ export const MyProductFeedbackSchema = {
 			type: "integer",
 			format: "int64",
 		},
+		issueText: {
+			type: "string",
+		},
+		issueTitle: {
+			type: "string",
+		},
 		issueUrl: {
 			type: "string",
 			description:
@@ -6393,6 +6436,9 @@ export const MyProductFeedbackSchema = {
 		kind: {
 			type: "string",
 			enum: ["IDEA", "BUG", "FEEDBACK"],
+		},
+		message: {
+			type: "string",
 		},
 		reason: {
 			type: "string",
@@ -6418,9 +6464,9 @@ export const MyProductFeedbackSchema = {
 		"canKeepPrivate",
 		"canMakePrivate",
 		"createdAt",
-		"excerpt",
 		"id",
 		"kind",
+		"message",
 		"route",
 		"state",
 	],

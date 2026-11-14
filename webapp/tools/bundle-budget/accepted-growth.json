@@ -1,10 +1,22 @@
 {
 	"accepted": [
 		{
-			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/usage.tsx?tsr-split=component",
-			"gzipBytes": 29806,
-			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4290",
-			"reason": "Docs links load small shared chunks (DocLink, the docs URL module with its registry, the shared link look, the focus ring and the outbound icon). The browser fetches each once per session; the budget counts them for every route that loads them. Nothing is duplicated."
+			"load": "entry",
+			"gzipBytes": 387798,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4330",
+			"reason": "Your reports and the admin list show the whole report and its saved filed issue. Markdown stays lazy until expansion; these measured route and entry changes support the report views without new packages."
+		},
+		{
+			"load": "src/routes/_authenticated/admin.feedback.tsx?tsr-split=component",
+			"gzipBytes": 60013,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4330",
+			"reason": "Your reports and the admin list show the whole report and its saved filed issue. Markdown stays lazy until expansion; these measured route and entry changes support the report views without new packages."
+		},
+		{
+			"load": "src/routes/_authenticated/product-feedback.tsx?tsr-split=component",
+			"gzipBytes": 24200,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4330",
+			"reason": "Your reports and the admin list show the whole report and its saved filed issue. Markdown stays lazy until expansion; these measured route and entry changes support the report views without new packages."
 		}
 	]
 }

@@ -18,7 +18,7 @@ beforeEach(() => {
 const publicIssue = {
 	id: "b1b1b1b1-0000-0000-0000-000000000004",
 	kind: "IDEA",
-	excerpt: "A dark mode for the practice profile.",
+	message: "A dark mode for the practice profile.",
 	createdAt: "2026-09-11T09:00:00.000Z",
 	state: "FILED",
 	route: "PUBLIC",

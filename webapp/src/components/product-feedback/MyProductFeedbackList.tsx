@@ -35,9 +35,11 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { hasText } from "@/lib/text";
 
+import { FiledIssue } from "./FiledIssue";
 import { ProductFeedbackDraftForm } from "./ProductFeedbackDraftForm";
 import { REPORT_STATE_DEFS } from "./report-state-defs";
 import {
+	closedAs,
 	holdCountdown,
 	type ProductFeedbackAction,
 	reasonSentence,
@@ -155,8 +157,8 @@ function MyProductFeedbackRow({
 				<RelativeTime value={report.createdAt} className="text-sm text-muted-foreground" />
 			</CardHeader>
 			<CardContent className="flex flex-col gap-2">
-				<p id={`${id}-excerpt`} className="break-words whitespace-pre-wrap">
-					{report.excerpt}
+				<p id={`${id}-message`} className="break-words whitespace-pre-wrap">
+					{report.message}
 				</p>
 				{hasText(report.issueUrl) && (
 					<p>
@@ -172,6 +174,9 @@ function MyProductFeedbackRow({
 					</p>
 				)}
 				{where !== undefined && <p className="text-muted-foreground">{where}</p>}
+				{hasText(report.issueTitle) && hasText(report.issueText) && (
+					<FiledIssue title={report.issueTitle} text={report.issueText} />
+				)}
 				{report.state === "HELD" && report.filedAfter !== undefined && (
 					<p className="text-muted-foreground">
 						Unless a check keeps it private, it becomes a public issue{" "}
@@ -206,7 +211,7 @@ function MyProductFeedbackRow({
 								variant="outline"
 								size="sm"
 								disabled={busy}
-								aria-describedby={`${id}-excerpt`}
+								aria-describedby={`${id}-message`}
 								onClick={() => onKeepPrivate(report)}
 							>
 								{pending === "keep-private" && <Spinner />}
@@ -219,7 +224,7 @@ function MyProductFeedbackRow({
 								variant="outline"
 								size="sm"
 								disabled={busy}
-								aria-describedby={`${id}-excerpt`}
+								aria-describedby={`${id}-message`}
 								onClick={() => setEditing(true)}
 							>
 								Edit
@@ -234,7 +239,7 @@ function MyProductFeedbackRow({
 											variant="outline"
 											size="sm"
 											disabled={busy}
-											aria-describedby={`${id}-excerpt`}
+											aria-describedby={`${id}-message`}
 										>
 											{pending === "make-private" && <Spinner />}
 											{pending === "make-private" ? "Making private…" : "Make private"}
@@ -261,7 +266,7 @@ function MyProductFeedbackRow({
 									id={`${id}-allow-public`}
 									checked={report.allowPublic}
 									readOnly={busy}
-									aria-describedby={`${id}-allow-public-detail ${id}-excerpt`}
+									aria-describedby={`${id}-allow-public-detail ${id}-message`}
 									onCheckedChange={(next) => onAllowPublicChange(report, next)}
 								/>
 								<FieldContent>
@@ -296,14 +301,4 @@ function issueLine(report: MyProductFeedback): string | undefined {
 		return "Your report is saved on this instance for its admins. They can move it to GitHub as a private issue.";
 	}
 	return undefined;
-}
-
-const CLOSED_AS: Record<string, string> = {
-	completed: "done",
-	not_planned: "not planned",
-	duplicate: "duplicate",
-};
-
-function closedAs(value: string): string {
-	return CLOSED_AS[value] ?? value.replaceAll("_", " ");
 }

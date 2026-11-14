@@ -2,10 +2,14 @@ import { Inbox } from "lucide-react";
 import { definitionFor } from "@/components/common/status-def";
 
 import type { FeedbackItem } from "@/api/types.gen";
+import { InlineLink } from "@/components/common/InlineLink";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { TablePagination } from "@/components/common/TablePagination";
+import { FiledIssue } from "@/components/product-feedback/FiledIssue";
+import { REPORT_STATE_DEFS } from "@/components/product-feedback/report-state-defs";
+import { closedAs, reasonSentence } from "@/components/product-feedback/sharing-copy";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -32,7 +36,7 @@ import { hasText } from "@/lib/text";
 
 import { FEEDBACK_KIND_DEFS } from "./feedback-kind-defs";
 
-export type FeedbackStatusFilter = "OPEN" | "RESOLVED" | "ALL";
+export type FeedbackStatusFilter = "OPEN" | "IN_FLIGHT" | "ON_GITHUB" | "RESOLVED" | "ALL";
 
 export type AdminFeedbackListState =
 	| { status: "loading" }
@@ -59,8 +63,19 @@ export interface AdminFeedbackListProps {
 }
 
 const EMPTY_COPY: Record<FeedbackStatusFilter, { title: string; description: string }> = {
-	OPEN: { title: "No open feedback", description: "New feedback from members appears here." },
-	RESOLVED: { title: "No resolved feedback yet", description: "Resolved feedback moves here." },
+	OPEN: { title: "Nothing waits for you", description: "Reports that need an admin appear here." },
+	IN_FLIGHT: {
+		title: "Nothing on its way",
+		description: "Reports appear here while Hephaestus drafts and files them.",
+	},
+	ON_GITHUB: {
+		title: "No open issues",
+		description: "Filed reports with an open issue appear here.",
+	},
+	RESOLVED: {
+		title: "Nothing closed yet",
+		description: "Reports you resolved and closed issues appear here.",
+	},
 	ALL: {
 		title: "No feedback yet",
 		description: "Members send ideas, bug reports and feedback from the header.",
@@ -177,6 +192,7 @@ function FeedbackCard({ item, pending, filing, onTriage, onFile }: FeedbackCardP
 		<Card>
 			<CardHeader className="flex flex-wrap items-center gap-x-3 gap-y-1">
 				<StatusBadge def={definitionFor(FEEDBACK_KIND_DEFS, item.kind)} />
+				<StatusBadge def={definitionFor(REPORT_STATE_DEFS, item.state)} />
 				<span className="font-medium">{item.account?.displayName ?? "Deleted account"}</span>
 				{hasText(item.account?.email) && (
 					<a
@@ -196,57 +212,83 @@ function FeedbackCard({ item, pending, filing, onTriage, onFile }: FeedbackCardP
 				{context.length > 0 && (
 					<p className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">{context}</p>
 				)}
-			</CardContent>
-			<CardFooter className="flex flex-wrap items-center justify-between gap-2">
-				{resolved ? (
-					<span className="text-muted-foreground">
-						Resolved by {item.resolvedBy?.displayName ?? "a deleted account"} ·{" "}
-						<RelativeTime value={item.resolvedAt} />
-					</span>
-				) : (
-					<span className="text-muted-foreground">Open</span>
+				{hasText(item.issueUrl) && (
+					<p>
+						<InlineLink href={item.issueUrl} external className="underline">
+							{item.route === "PUBLIC" ? "Public" : "Private"} issue #{item.issueNumber}
+						</InlineLink>
+						{hasText(item.issueClosedAs) && (
+							<span className="text-muted-foreground">
+								{" "}
+								· Closed as {closedAs(item.issueClosedAs)}
+							</span>
+						)}
+					</p>
 				)}
-				<div className="flex flex-wrap items-center gap-2">
-					{item.canFile && (
-						<AlertDialog>
-							<AlertDialogTrigger
-								render={
-									<Button type="button" variant="outline" size="sm" disabled={pending || filing}>
-										{filing && <Spinner className="size-4" />}
-										{filing ? "Filing…" : "File on GitHub"}
-									</Button>
-								}
-							/>
-							<AlertDialogContent>
-								<AlertDialogHeader>
-									<AlertDialogTitle>File this report on GitHub?</AlertDialogTitle>
-									<AlertDialogDescription>
-										{item.savedBeforeDisclosure
-											? "It becomes a private issue with the sender’s text as written. No AI model reads it."
-											: "An AI model drafts a private issue from it."}{" "}
-										The text leaves this instance, and the sender’s name stays here. You cannot take
-										this back.
-									</AlertDialogDescription>
-								</AlertDialogHeader>
-								<AlertDialogFooter>
-									<AlertDialogCancel>Cancel</AlertDialogCancel>
-									<AlertDialogAction onClick={() => onFile(item)}>File on GitHub</AlertDialogAction>
-								</AlertDialogFooter>
-							</AlertDialogContent>
-						</AlertDialog>
+				{hasText(item.reason) && (
+					<p className="text-muted-foreground">{reasonSentence(item.reason)}</p>
+				)}
+				{hasText(item.issueTitle) && hasText(item.issueText) && (
+					<FiledIssue title={item.issueTitle} text={item.issueText} />
+				)}
+			</CardContent>
+			{/* A filed report has nothing to press, so it shows no empty footer. */}
+			{(resolved || item.canFile || item.canTriage) && (
+				<CardFooter className="flex flex-wrap items-center justify-between gap-2">
+					{resolved ? (
+						<span className="text-muted-foreground">
+							Resolved by {item.resolvedBy?.displayName ?? "a deleted account"} ·{" "}
+							<RelativeTime value={item.resolvedAt} />
+						</span>
+					) : (
+						<span />
 					)}
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						disabled={pending || filing}
-						onClick={() => onTriage(item, !resolved)}
-					>
-						{pending && <Spinner className="size-4" />}
-						{triageLabel}
-					</Button>
-				</div>
-			</CardFooter>
+					<div className="flex flex-wrap items-center gap-2">
+						{item.canFile && (
+							<AlertDialog>
+								<AlertDialogTrigger
+									render={
+										<Button type="button" variant="outline" size="sm" disabled={pending || filing}>
+											{filing && <Spinner className="size-4" />}
+											{filing ? "Filing…" : "File on GitHub"}
+										</Button>
+									}
+								/>
+								<AlertDialogContent>
+									<AlertDialogHeader>
+										<AlertDialogTitle>File this report on GitHub?</AlertDialogTitle>
+										<AlertDialogDescription>
+											{item.savedBeforeDisclosure
+												? "It becomes a private issue with the sender’s text as written. No AI model reads it."
+												: "An AI model drafts a private issue from it."}{" "}
+											The text leaves this instance, and the sender’s name stays here. You cannot
+											take this back.
+										</AlertDialogDescription>
+									</AlertDialogHeader>
+									<AlertDialogFooter>
+										<AlertDialogCancel>Cancel</AlertDialogCancel>
+										<AlertDialogAction onClick={() => onFile(item)}>
+											File on GitHub
+										</AlertDialogAction>
+									</AlertDialogFooter>
+								</AlertDialogContent>
+							</AlertDialog>
+						)}
+						{item.canTriage && (
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								disabled={pending || filing}
+								onClick={() => onTriage(item, !resolved)}
+							>
+								{pending && <Spinner className="size-4" />}
+								{triageLabel}
+							</Button>
+						)}
+					</div>
+				</CardFooter>
+			)}
 		</Card>
 	);
 }

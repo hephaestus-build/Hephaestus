@@ -79,3 +79,13 @@ export function holdCountdown(filedAfter: Date, now: number): string {
 	}
 	return minutes === 1 ? "in about 1 minute" : `in about ${minutes} minutes`;
 }
+
+const CLOSED_AS: Record<string, string> = {
+	completed: "done",
+	not_planned: "not planned",
+	duplicate: "duplicate",
+};
+
+export function closedAs(value: string): string {
+	return CLOSED_AS[value] ?? value.replaceAll("_", " ");
+}

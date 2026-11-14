@@ -1,7 +1,7 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
 	FeedbackItem,
@@ -29,6 +29,9 @@ const bugReport = {
 	pagePath: "/w/acme/practices/code-review",
 	appVersion: "0.71.0",
 	createdAt: "2026-09-11T09:00:00.000Z",
+	canTriage: true,
+	state: "SAVED_FOR_ADMINS",
+	route: "ADMINS",
 	canFile: false,
 	savedBeforeDisclosure: false,
 } satisfies Wire<FeedbackItem>;
@@ -41,6 +44,9 @@ const resolvedNote = {
 	createdAt: "2026-08-30T09:00:00.000Z",
 	resolvedAt: "2026-09-01T09:00:00.000Z",
 	resolvedBy: { id: 1, displayName: "Ada Lovelace" },
+	canTriage: true,
+	state: "SAVED_FOR_ADMINS",
+	route: "ADMINS",
 	canFile: false,
 	savedBeforeDisclosure: false,
 } satisfies Wire<FeedbackItem>;
@@ -284,6 +290,44 @@ describe("instance product feedback destinations", () => {
 });
 
 describe("instance product feedback route", () => {
+	it.each(["DRAFTING", "HELD", "FILING"] as const)(
+		"refreshes %s reports until they leave the in-flight list",
+		async (state) => {
+			let content: Wire<FeedbackItem>[] = [{ ...bugReport, state, canTriage: false }];
+			let reads = 0;
+			server.use(
+				http.get("*/admin/product-feedback", () => {
+					reads += 1;
+					return HttpResponse.json({
+						content,
+						page: 0,
+						size: 20,
+						totalElements: content.length,
+						totalPages: content.length,
+					});
+				}),
+			);
+			vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+			const queryClient = renderRouteAt("/admin/feedback?status=IN_FLIGHT");
+			try {
+				await screen.findByText(bugReport.message, undefined, ROUTE_RENDER_WAIT);
+				await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+				const initialReads = reads;
+				content = [];
+				await act(async () => vi.advanceTimersByTimeAsync(10_000));
+				await screen.findByText("Nothing on its way");
+				expect(screen.queryByText(bugReport.message)).toBeNull();
+				expect(reads).toBe(initialReads + 1);
+
+				await act(async () => vi.advanceTimersByTimeAsync(30_000));
+				expect(reads).toBe(initialReads + 1);
+			} finally {
+				queryClient.clear();
+				vi.useRealTimers();
+			}
+		},
+	);
+
 	it("shows open feedback by default and asks for the status the filter selects", async () => {
 		const requested = mockReports();
 		renderRouteAt("/admin/feedback");
@@ -296,7 +340,7 @@ describe("instance product feedback route", () => {
 		);
 		expect(screen.queryByText(resolvedNote.message)).toBeNull();
 
-		await user.click(screen.getByRole("button", { name: "Resolved" }));
+		await user.click(screen.getByRole("button", { name: "Closed" }));
 		await screen.findByText(resolvedNote.message);
 		expect(requested.at(-1)).toBe("RESOLVED");
 		expect(screen.queryByText(bugReport.message)).toBeNull();

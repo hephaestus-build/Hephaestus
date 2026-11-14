@@ -43,7 +43,13 @@ final class FeedbackDTOs {
             @Schema(requiredMode = RequiredMode.REQUIRED) boolean resolved) {}
 
     enum FeedbackFilter {
+        /** Waits for an admin: saved here, stopped, or never filed. */
         OPEN,
+        /** On its way: drafting, held, queued or filing. */
+        IN_FLIGHT,
+        /** An open issue on GitHub. */
+        ON_GITHUB,
+        /** Marked resolved here, or its issue closed. */
         RESOLVED,
         ALL
     }
@@ -65,5 +71,16 @@ final class FeedbackDTOs {
             @Schema(requiredMode = RequiredMode.REQUIRED) boolean canFile,
 
             /* Its author was not told about the model, so it moves as written and no model reads it. */
-            @Schema(requiredMode = RequiredMode.REQUIRED) boolean savedBeforeDisclosure) {}
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean savedBeforeDisclosure,
+
+            /* Everything below comes from the same states as the reporter's view. */
+            FilingDTOs.@NonNull ReportState state,
+            FilingDTOs.@NonNull ReportRoute route,
+            @Nullable String reason,
+            @Nullable String issueUrl,
+            @Nullable Long issueNumber,
+            @Nullable String issueClosedAs,
+            @Nullable String issueTitle,
+            @Nullable String issueText,
+            @Schema(requiredMode = RequiredMode.REQUIRED) boolean canTriage) {}
 }

@@ -92,6 +92,14 @@ public class ProductFeedbackFiling {
     @Column(name = "publish_requested_at")
     private @Nullable Instant publishRequestedAt;
 
+    /** The issue's title as filed, frozen because the destination and the release can change afterwards. */
+    @Column(name = "issue_title", columnDefinition = "text")
+    private @Nullable String issueTitle;
+
+    /** The issue's sections as filed, without its footer, reason or marker: what the reporter may read. */
+    @Column(name = "issue_text", columnDefinition = "text")
+    private @Nullable String issueText;
+
     /** The private issue a promotion closed. It keeps its text, so erasure must still reach it. */
     @Column(name = "predecessor_repository", length = 200)
     private @Nullable String predecessorRepository;

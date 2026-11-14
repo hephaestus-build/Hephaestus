@@ -69,6 +69,7 @@ public class ProductFeedbackDestinationsController {
     @RecentSignInExempt(reason = "files a stopped report again; changes no destination and grants no access")
     @AuditExempt(reason = "sends a stopped report through filing again; changes no configuration")
     @Operation(operationId = "retryProductFeedbackFiling", summary = "File a stopped report again")
+    @ApiResponse(responseCode = "204", description = "The report goes back to filing")
     public ResponseEntity<Void> retry(@PathVariable UUID feedbackId) {
         if (!filing.retry(feedbackId))
             throw new EntityNotFoundException("Stopped product feedback", feedbackId.toString());

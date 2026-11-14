@@ -4,16 +4,23 @@ import type { DefaultError, UseMutationOptions } from "@tanstack/react-query";
 
 import type { Options } from "../../sdk.gen.js";
 import { retryProductFeedbackFiling } from "../../sdk/retryProductFeedbackFiling.gen.js";
-import type { RetryProductFeedbackFilingData } from "../../types.gen.js";
+import type {
+	RetryProductFeedbackFilingData,
+	RetryProductFeedbackFilingResponse,
+} from "../../types.gen.js";
 
 /**
  * File a stopped report again
  */
 export const retryProductFeedbackFilingMutation = (
 	options?: Partial<Options<RetryProductFeedbackFilingData>>,
-): UseMutationOptions<unknown, DefaultError, Options<RetryProductFeedbackFilingData>> => {
+): UseMutationOptions<
+	RetryProductFeedbackFilingResponse,
+	DefaultError,
+	Options<RetryProductFeedbackFilingData>
+> => {
 	const mutationOptions: UseMutationOptions<
-		unknown,
+		RetryProductFeedbackFilingResponse,
 		DefaultError,
 		Options<RetryProductFeedbackFilingData>
 	> = {

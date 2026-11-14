@@ -197,6 +197,7 @@ class FollowService {
                     ? issues.findByMarker(publicRepository, marker, plan.since())
                             .orElse(null)
                     : null;
+            boolean created = issue == null;
             if (issue == null) {
                 String refusal = plan.refusal();
                 if (refusal == null
@@ -241,6 +242,9 @@ class FollowService {
                 filing.setIssueUrl(published.url());
                 filing.setIssueOpen(true);
                 filing.setIssueStateReason(null);
+                // A recovered issue can predate this render. Never label the private copy as the new public issue.
+                filing.setIssueTitle(created ? plan.title() : null);
+                filing.setIssueText(created ? plan.shown() : null);
                 filing.setLastCommentId(null);
                 clear(filing);
                 filing.setFollowedAt(now);
@@ -324,6 +328,7 @@ class FollowService {
             @Nullable String refusal,
             String title,
             String body,
+            String shown,
             @Nullable String type,
             Instant since) {}
 
@@ -376,6 +381,7 @@ class FollowService {
                     refusalText(refused),
                     "",
                     "",
+                    "",
                     null,
                     since);
         ProductFeedback report = feedback.findById(filing.getFeedbackId()).orElseThrow();
@@ -399,6 +405,7 @@ class FollowService {
                 null,
                 rendered.title(),
                 rendered.body(),
+                rendered.shown(),
                 draft.type() == Draft.Type.BUG ? "Bug" : "Feature",
                 since);
     }
