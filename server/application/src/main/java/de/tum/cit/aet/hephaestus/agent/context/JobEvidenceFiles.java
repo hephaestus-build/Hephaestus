@@ -1254,9 +1254,12 @@ public class JobEvidenceFiles implements SandboxResultListener {
                             continue;
                         }
                         var acquired = EvidenceFolderLease.tryAcquire(
-                                layout.root(), Long.parseLong(workspace.getFileName().toString()), jobId);
+                                layout.root(),
+                                Long.parseLong(workspace.getFileName().toString()),
+                                jobId);
                         if (acquired.isEmpty()) continue;
-                        try (var lease = acquired.get()) {
+                        var lease = acquired.get();
+                        try (lease) {
                             if (isEmptyDirectory(jobFolder)) Files.deleteIfExists(jobFolder);
                         } catch (DirectoryNotEmptyException written) {
                             // A capture wrote into it after the check; the next pass sees what it holds.
