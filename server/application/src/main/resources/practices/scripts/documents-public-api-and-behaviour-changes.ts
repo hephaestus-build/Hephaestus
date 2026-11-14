@@ -1,4 +1,4 @@
-import { definePracticeScript, type ReviewLead } from "@hephaestus/practice-scripts";
+import { definePracticeScript, listWithin, type ReviewLead } from "@hephaestus/practice-scripts";
 import { languageOf, scm, type FileTree } from "@hephaestus/practice-scripts/scm";
 
 export const LABELS = {
@@ -65,6 +65,57 @@ const EXPORT_RULES: Record<string, ExportRule> = {
 	},
 };
 
+/** Paths a consumer reads to learn what moved: docs, a changelog or changeset, and an API specification. */
+const CONSUMER_DOC_PATH =
+	/(?:^|\/)(?:docs?\/|README[^/]*$|CHANGELOG[^/]*$|\.changeset\/)|\.(?:md|mdx|rst|adoc)$|(?:^|\/)openapi[^/]*\.(?:ya?ml|json)$|\.graphql$/iu;
+
+const DECLARED_NAME =
+	/\b(?:func|class|struct|enum|protocol|interface|type|record|object|fun|def|actor|typealias|namespace|trait)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)/u;
+const METHOD_NAME = /(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*\(/u;
+const BINDING = /\b(?:const|let|var|val)\b/u;
+const NOT_NAMES = new Set([
+	"if",
+	"for",
+	"while",
+	"switch",
+	"catch",
+	"return",
+	"new",
+	"super",
+	"this",
+	"function",
+]);
+const MAX_NAMES = 8;
+
+/** The name a declaration line declares; a binding or a call is no declaration. */
+function declaredName(line: string): string | null {
+	const keyword = DECLARED_NAME.exec(line)?.groups?.name;
+	if (keyword !== undefined) {
+		return keyword.length >= 3 ? keyword : null;
+	}
+	if (BINDING.test(line)) {
+		return null;
+	}
+	const method = METHOD_NAME.exec(line)?.groups?.name;
+	return method !== undefined && method.length >= 3 && !NOT_NAMES.has(method) ? method : null;
+}
+
+/**
+ * A pattern that admission can read: words joined by `|`, each bounded by `\b`. A claim that nothing
+ * outside the change uses a symbol is backed only by a search whose plain pattern names it.
+ */
+function plainPattern(names: readonly string[], max: number): string {
+	let pattern = "";
+	for (const name of names.slice(0, MAX_NAMES)) {
+		const next = pattern === "" ? `\\b${name}\\b` : `${pattern}|\\b${name}\\b`;
+		if (next.length > max) {
+			break;
+		}
+		pattern = next;
+	}
+	return pattern;
+}
+
 async function declaresPublicProduct(tree: FileTree): Promise<boolean> {
 	for (const ext of MANIFEST_NAMES) {
 		const { paths } = await tree.list(`**/*.${ext}`);
@@ -96,6 +147,9 @@ export default definePracticeScript({
 		let changedInternalSymbols = 0;
 		let filesScanned = 0;
 		let linesAdded = 0;
+		const publicNames: string[] = [];
+		const internalNames: string[] = [];
+		const consumerDocs = [...change.keys()].filter((path) => CONSUMER_DOC_PATH.test(path));
 		for (const [path, df] of change) {
 			const lang = languageOf(path);
 			if (lang === null) {
@@ -115,6 +169,10 @@ export default definePracticeScript({
 					continue;
 				}
 				const isPublic = rule.isPublic(content);
+				const name = declaredName(content);
+				if (name !== null) {
+					(isPublic ? publicNames : internalNames).push(name);
+				}
 				if (isPublic) {
 					changedPublicSymbols += 1;
 				} else {
@@ -150,6 +208,18 @@ export default definePracticeScript({
 		}
 		if (leads.length === 0) {
 			directions.push(...noMatchDirections(linesAdded, filesScanned));
+		}
+		directions.push(
+			consumerDocs.length > 0
+				? `The change updates ${String(consumerDocs.length)} documentation, changelog or API-specification file(s): ${listWithin(consumerDocs, 180)}.`
+				: "The change updates no documentation, changelog or API-specification file, by path; doc-comments in source are not counted here. That statement rests on the diff: cite its file list, and do not name the checkout as searched for it.",
+		);
+		const pattern = plainPattern([...new Set([...publicNames, ...internalNames])], 280);
+		if (pattern !== "") {
+			directions.push(
+				"To show whether a separate consumer uses the changed declarations, search the whole checkout with the grep tool, not a shell command, using the next direction's pattern. A claim that nothing outside the change uses them names these symbols, in its text and in lookedFor.",
+				pattern,
+			);
 		}
 
 		return ctx.review({

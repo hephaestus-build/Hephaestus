@@ -55,11 +55,19 @@ final class AbsenceClaims {
             "\\b(?:nothing else|nothing in the (?:project|application|code ?base|repository|repo|"
                     + "checkout)|no (?:other )?(?:code|callers?)(?! path| (?:in|of)\\b)|none of (?:the|"
                     + "its) callers)\\b[^.]{0,60}\\b(?:catch(?:es)?|handles?)\\b(?!\\()",
-            "\\b(?:the|its) only (?:unit |integration |end-to-end )?tests? (?:of|for|that "
-                    + "(?:covers?|exercises?|checks?))\\b(?![^.;]{0,60}\\b(?:in|of) (?:the|this) "
-                    + "(?:change|diff|commit|pull request)\\b)|\\bno (?:other )?(?:unit |integration |end-to-end )?tests?\\b(?![^.;]{0,60}\\b(?:in|of) "
-                    + "(?:the|this) (?:change|diff|commit|pull request)\\b)[^.;]{0,30}\\b(?:covers?|"
-                    + "exercises?|tests?|checks?|asserts?|verif(?:y|ies)|reach(?:es)?)\\b|"
+            "\\b(?:the|its) only (?:unit |integration |end-to-end )?tests? (?:of|for|that (?:covers?|"
+                    + "exercises?|checks?))\\b(?! from (?:the|this) (?:same )?(?:change|diff|commit|pull request|"
+                    + "merge request|patch|MR|PR)\\b)(?![^.;]{0,60}\\b(?:in|of) (?:the|this) (?:same |whole |entire |"
+                    + "reviewed |pinned )?(?:change|diff|commit|pull request|merge request|patch|MR|PR)\\b)|"
+                    + "(?:(?<!\\b(?:change|diff|commit|pull request|merge request|patch|MR|"
+                    + "PR)\\b[^.;]{0,40}\\b(?:contains?|has|adds?|touches?|modif(?:y|ies)|shows?|includes?|carries|"
+                    + "changes?) (?:no [^.;,]{1,30}, )?(?:no [^.;,]{1,30}, )?(?:no [^.;,]{1,30}, )?)\\bno |"
+                    + "\\bno other )(?:unit |integration |end-to-end )?tests?\\b(?! from (?:the|"
+                    + "this) (?:same )?(?:change|diff|commit|pull request|merge request|patch|MR|"
+                    + "PR)\\b)(?![^.;]{0,60}\\b(?:in|of) (?:the|this) (?:same |whole |entire |reviewed |"
+                    + "pinned )?(?:change|diff|commit|pull request|merge request|patch|MR|"
+                    + "PR)\\b)[^.;]{0,30}\\b(?:covers?|exercises?|tests\\b|test\\b(?!,| (?:file|hunk|annotation|case|"
+                    + "suite|target|assertion|method|block)s?\\b)|checks?|asserts?|verif(?:y|ies)|reach(?:es)?)\\b|"
                     + "\\b(?:covered|tested|exercised) by no other tests?\\b");
 
     static final String DISCLAIMER =
