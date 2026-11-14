@@ -80,6 +80,7 @@ jobs:
       docker-config: ${{ steps.filter.outputs.docker-config }}
       pmd-canary: ${{ steps.filter.outputs.pmd-canary }}
       gradle-dependencies: ${{ steps.filter.outputs.gradle-dependencies }}
+      feedback-eval: ${{ steps.filter.outputs.feedback-eval }}
       version-bump: ${{ steps.version_bump.outputs.changed }}
       version: ${{ steps.version.outputs.version }}
       release-candidate: ${{ steps.release_candidate.outputs.release-candidate }}
@@ -725,6 +726,24 @@ jobs:
               - 'server/gradle/**'
               - 'server/gradlew*'
               - 'scripts/check-gradle-verification-metadata.ts'
+            # What the feedback eval gate checks: the prompts and the writing guide they include, the
+            # practice catalog and its scripts, the composer, and the gate with its fixed case set.
+            # feedback-eval-panel.yml composes on a subset of these paths.
+            feedback-eval:
+              - 'server/application/src/main/resources/agent/*.md'
+              - 'server/application/src/main/resources/agent/mentor/**'
+              - 'server/application/src/main/resources/agent/review-composer*.ts'
+              - 'server/application/src/main/java/de/tum/cit/aet/hephaestus/agent/composer/**'
+              - 'server/application/src/main/resources/practices/**'
+              - 'server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/composer/CompositionEval*.java'
+              - 'server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/composer/LiveChatTransport*.java'
+              - '.github/workflows/feedback-eval-panel.yml'
+              - 'docs/contributor/practice-feedback-language.md'
+              - 'docs/contributor/composition-label-rubric.md'
+              - 'scripts/feedback-eval-gate.ts'
+              - 'scripts/feedback-eval/**'
+              # G6 runs the practice-script corpus and its snapshots.
+              - 'docker/agents/practice-scripts/**'
 
   Changesets:
     name: "Release notes"
@@ -798,6 +817,44 @@ jobs:
         env:
           ZIZMOR_SARIF: ${{ steps.zizmor.outputs.output-file }}
         run: jq -e '[.runs[]?.results[]?] | length == 0' "$ZIZMOR_SARIF"
+
+  # Prompt regressions: docs/contributor/feedback-quality-evals.md § Feedback eval gate. These are
+  # the checks that need no model; feedback-eval-panel.yml composes the model panel.
+  feedback-eval:
+    name: Feedback eval gate
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    needs: [detect-changes]
+    # Only its paths select it, never the tier: a stacked layer that changes a prompt runs it too.
+    if: |
+      needs.detect-changes.outputs.should_skip != 'true' &&
+      (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
+      (
+        needs.detect-changes.outputs.feedback-eval == 'true' ||
+        needs.detect-changes.outputs.unfiltered == 'true'
+      )
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+
+      - name: Run the feedback eval gate
+        run: node scripts/feedback-eval-gate.ts --output "$RUNNER_TEMP/feedback-eval-gate"
+
+      - name: Keep the gate result
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: feedback-eval-gate
+          path: ${{ runner.temp }}/feedback-eval-gate
+          retention-days: 14
+          if-no-files-found: warn
 
   # One prerequisite scan on every event; advisory preparation and upstream scans stay independent.
   Security:
@@ -1315,6 +1372,7 @@ jobs:
         detect-changes,
         vulnerability-database,
         workflow-lint,
+        feedback-eval,
         Quality,
         server-package,
         Build,
@@ -1354,6 +1412,7 @@ jobs:
                   "detect-changes": "Changes",
                   "vulnerability-database": "Image advisories",
                   "workflow-lint": "Workflow lint",
+                  "feedback-eval": "Feedback eval gate",
                   "Quality": "Quality",
                   "server-package": "Server package",
                   "Build": "Build",
@@ -1524,6 +1583,21 @@ jobs:
   fail-fast-workflow-lint:
     name: Stop the merge group early
     needs: [workflow-lint]
+    if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel this run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+
+  fail-fast-feedback-eval:
+    name: Stop the merge group early
+    needs: [feedback-eval]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-slim
     timeout-minutes: 15

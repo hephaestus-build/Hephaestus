@@ -289,6 +289,27 @@ class CompositionEvalTest {
         assertThat(entry.path("review").isNull()).isTrue();
     }
 
+    @Test
+    void shouldSendAFailedModelRequestOnceAndRecordTheProviderFailure() throws Exception {
+        var scenario = CompositionEvalCases.load().getFirst();
+        var requests = new int[] {0};
+
+        var entry = CompositionEvalCases.compose(
+                scenario.id(),
+                CompositionEvalCases.basis(scenario, null, 4_000),
+                FeedbackDestination.ON_WORK,
+                scenario::fromModel,
+                body -> {
+                    requests[0]++;
+                    return new ModelSession.Answer(503, new byte[0], true, null);
+                });
+
+        assertThat(requests[0]).isEqualTo(1);
+        assertThat(entry.path("calls").asInt()).isEqualTo(1);
+        assertThat(entry.path("accepted").asBoolean()).isFalse();
+        assertThat(entry.path("failure").asString()).isEqualTo("PROVIDER");
+    }
+
     private static JsonNode reference(CompositionEvalCases.Scenario scenario) {
         for (JsonNode composition : scenario.item().path("compositions"))
             if ("reference".equals(composition.path("id").asString())) return composition.path("review");

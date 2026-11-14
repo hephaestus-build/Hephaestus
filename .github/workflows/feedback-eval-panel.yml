@@ -1,0 +1,183 @@
+name: CI / Feedback eval panel
+
+# The model panel of the feedback eval gate: docs/contributor/feedback-quality-evals.md § Model panel.
+# The checks that need no model gate every pull request in cicd.yml. With a configured provider, this
+# workflow composes the fixed panel each night on main, on a manual run, and on a pull request
+# labelled `eval:run`. Any other pull request that changes what the composer reads composes the
+# prompt-safety subset. Neither result is a required check.
+
+on:
+  schedule:
+    - cron: "41 3 * * *"
+  workflow_dispatch:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled]
+    # What the composer reads, and what composes the panel: the prompts, the writing guide they
+    # include, the composer, the practice catalog and the eval runner. ci-contract.test.ts keeps each
+    # path inside the feedback-eval filter of cicd.yml.
+    paths:
+      - "server/application/src/main/resources/agent/*.md"
+      - "server/application/src/main/resources/agent/mentor/**"
+      - "server/application/src/main/resources/agent/review-composer*.ts"
+      - "server/application/src/main/java/de/tum/cit/aet/hephaestus/agent/composer/**"
+      - "server/application/src/main/resources/practices/**"
+      - "server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/composer/CompositionEval*.java"
+      - "server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/composer/LiveChatTransport*.java"
+      - "docs/contributor/practice-feedback-language.md"
+      - "scripts/feedback-eval-gate.ts"
+      - "scripts/feedback-eval/**"
+      - ".github/workflows/feedback-eval-panel.yml"
+
+permissions: {}
+
+jobs:
+  # The panel runs only with a configured provider: docs/contributor/ci-cd.mdx § Feedback eval
+  # panel provider. A cron cannot be conditional, so a night without the variables starts no job.
+  provider:
+    name: Model provider
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'schedule' && vars.FEEDBACK_EVAL_BASE_URL != '' && vars.FEEDBACK_EVAL_MODEL != '') ||
+      (github.event_name == 'pull_request' && (
+        github.event.action != 'labeled' || github.event.label.name == 'eval:run'
+      ))
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions: {}
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    steps:
+      # A secret cannot appear in an `if:`, so this step reads only whether the key is set.
+      - name: Check the provider settings
+        id: check
+        env:
+          BASE_URL_SET: ${{ vars.FEEDBACK_EVAL_BASE_URL != '' }}
+          MODEL_SET: ${{ vars.FEEDBACK_EVAL_MODEL != '' }}
+          KEY_SET: ${{ secrets.FEEDBACK_EVAL_API_KEY != '' }}
+        run: |
+          if [ "$BASE_URL_SET" = true ] && [ "$MODEL_SET" = true ] && [ "$KEY_SET" = true ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          missing=()
+          [ "$BASE_URL_SET" = true ] || missing+=("FEEDBACK_EVAL_BASE_URL")
+          [ "$MODEL_SET" = true ] || missing+=("FEEDBACK_EVAL_MODEL")
+          [ "$KEY_SET" = true ] || missing+=("FEEDBACK_EVAL_API_KEY")
+          {
+            echo "## Feedback eval panel"
+            echo
+            echo "The model provider is not configured, so the panel did not run. Missing: ${missing[*]}."
+            echo "The deterministic feedback eval gate still covers every pull request."
+            echo "docs/contributor/ci-cd.mdx § Feedback eval panel provider lists the settings."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  panel:
+    name: Model panel
+    needs: [provider]
+    if: needs.provider.outputs.configured == 'true'
+    # On the job, not the workflow: a run whose jobs are skipped, such as one for an unrelated label,
+    # never enters the group, so it cancels no running panel.
+    concurrency:
+      group: feedback-eval-panel-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    outputs:
+      status: ${{ steps.gate.outputs.status }}
+      artifact: ${{ steps.keep.outputs.artifact-url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+
+      - uses: ./.github/actions/setup-caches
+
+      # The whole panel each night, on a manual run and with the eval:run label; else the safety subset.
+      - name: Compose the panel or the safety subset
+        id: gate
+        env:
+          HEPHAESTUS_LIVE_LLM_BASE_URL: ${{ vars.FEEDBACK_EVAL_BASE_URL }}
+          HEPHAESTUS_LIVE_LLM_MODEL: ${{ vars.FEEDBACK_EVAL_MODEL }}
+          HEPHAESTUS_LIVE_LLM_API_KEY: ${{ secrets.FEEDBACK_EVAL_API_KEY }}
+          SCOPE: ${{ (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'eval:run')) && '--model' || '--safety' }}
+        run: node scripts/feedback-eval-gate.ts "$SCOPE" --output "$RUNNER_TEMP/feedback-eval-panel"
+
+      - name: Keep the panel result
+        id: keep
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: feedback-eval-panel
+          path: ${{ runner.temp }}/feedback-eval-panel
+          retention-days: 14
+          if-no-files-found: warn
+
+  # The last night that measured and passed is state, not a search through run history: a cache
+  # entry whose key carries this run and commit (scripts/feedback-eval-night.ts reads the newest on
+  # main). Only a scheduled night on main whose whole panel job succeeded saves it.
+  record-green:
+    name: Record the measured green night
+    needs: [panel]
+    if: needs.panel.result == 'success' && github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions: {}
+    steps:
+      - name: Write the commit
+        run: echo "$GITHUB_SHA" > .feedback-eval-last-green
+
+      - name: Keep the measured green night
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .feedback-eval-last-green
+          key: feedback-eval-last-green-${{ github.run_id }}-${{ github.sha }}
+
+  # A night has no pull request to fail, so it keeps one tracking issue (scripts/feedback-eval-night.ts).
+  # A night without a provider runs no panel, so it never reaches this job. CI / Scheduled failures
+  # calls the same script if this job itself fails or the night was cancelled before it ran.
+  report:
+    name: "Report a failure"
+    needs: [panel]
+    if: always() && github.event_name == 'schedule' && needs.panel.result != 'skipped'
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/feedback-eval-night.ts
+          sparse-checkout-cone-mode: false
+
+      - name: Keep the tracking issue in step with the night
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          RESULT: ${{ needs.panel.result }}
+          STATUS: ${{ needs.panel.outputs.status }}
+          ARTIFACT_URL: ${{ needs.panel.outputs.artifact }}
+        with:
+          retries: 2
+          script: |
+            const { reportNight } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/feedback-eval-night.ts`);
+            const { data: run } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: context.runId });
+            await reportNight(github, context.repo, {
+              runId: context.runId,
+              attempt: Number(process.env.GITHUB_RUN_ATTEMPT),
+              date: run.run_started_at,
+              sha: context.sha,
+              serverUrl: context.serverUrl,
+              runUrl: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              result: process.env.RESULT,
+              status: process.env.STATUS,
+              artifactUrl: process.env.ARTIFACT_URL,
+            });

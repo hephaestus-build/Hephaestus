@@ -125,6 +125,7 @@ The job's own limit cancels the run and can lose its log, so the list is the evi
 | Changesets → Verify changesets                                          | policy tests, verified-revert detection, release-note presence, `MIGRATION.md` freeze, [public contract](#public-contract-gate)                                                                                                                     | `vp run gate:changesets`, `gate:public-contract`                                                 |
 | Images → linux/amd64, linux/arm64, Manifest, Tag unchanged images                                   | One build job per platform builds every image of the run and scans it. The Dockerfile images use `docker buildx bake`. The Server image uses `pack build` from the packaged JAR. One manifest job merges, attests and signs them. Aliases for unchanged images           | —                                                                        |
 | Workflow lint                                                      | workflow lint with ShellCheck warnings. Zizmor at medium confidence                                                                                                                                       | —                                                                        |
+| Feedback eval gate | The deterministic checks of the [feedback eval gate](./feedback-quality-evals.md#feedback-eval-gate): valid fixtures and case lists, literal checks, practice occasions, practice-script snapshots and the call ceiling. Keeps the `feedback-eval-gate` artifact. The model panel and the prompt-safety subset run in `feedback-eval-panel.yml` | `node scripts/feedback-eval-gate.ts` |
 | PR → Validate PR                                                        | Conventional Commit title. Every commit’s primary author resolves to the PR author’s GitHub account (including bot accounts) or a listed review-policy maintainer. The title, body, and every commit message contain no `Claude-Session:` trailer, "Generated with" line, or session link (a `Co-authored-by:` trailer is allowed) | —                                                                        |
 
 `Build → Database migrations`, the PostgreSQL drills, both E2E rows and the integration shards other than `review` are
@@ -570,6 +571,38 @@ The reconciler applies one Helm chart.
 The chart's [migration Job](/admin/runtime-roles#database-migrations) applies the schema. The server role waits until the database holds its change sets. Helm does not enforce a stopped cutover: [Recover a stopped cutover](/admin/pull-based-deployment#recover-a-stopped-cutover) gives that procedure.
 The [one-host platform](/admin/k3s) owns ports 80 and 443.
 
+### Feedback eval panel provider
+
+The [model panel](./feedback-quality-evals.md#model-panel) of the feedback eval gate composes with a model.
+`feedback-eval-panel.yml` reads its provider from three repository settings:
+
+| Setting | Kind | Value |
+| --- | --- | --- |
+| `FEEDBACK_EVAL_BASE_URL` | Variable | The OpenAI-compatible base URL of the provider. The panel sends each request to `<base>/v1/chat/completions`, or to `<base>/chat/completions` when the base ends with `/v1` |
+| `FEEDBACK_EVAL_MODEL` | Variable | The model name at that provider |
+| `FEEDBACK_EVAL_API_KEY` | Secret | A key used only for this panel, with a spending limit at the provider |
+
+Use a dedicated key for the panel, and set a spending limit for it at the provider.
+One run sends at most 240 model calls.
+The workflow passes the settings to the live test as the three `HEPHAESTUS_LIVE_LLM_*` variables. It never prints the key.
+
+Without all three settings, the panel is inactive:
+
+- A night without both variables starts no job, and the tracking issue stays unchanged.
+- A night with both variables but no key runs only the provider check. A job condition cannot read a secret, so the check is a step. It ends without failure, names `FEEDBACK_EVAL_API_KEY` as missing in its summary, and starts no panel. The tracking issue stays unchanged.
+- A manual run and a pull request run end without failure. Their summary says that the provider is not configured.
+
+The deterministic gate in `cicd.yml` still covers every pull request.
+GitHub Models, which needed no key, was retired on 2026-07-30, so the panel has no default provider.
+
+The last night whose panel measured and passed is kept as state, not searched for in run history.
+A scheduled night on `main` saves an Actions cache entry with the key `feedback-eval-last-green-<run ID>-<commit>`.
+A separate job saves it after the whole panel job succeeded. Thus, a later failing step of the panel job cannot record a failed night.
+
+A red or unfinished night reads the newest such entry on `main` and links the commits since that commit. An entry from another ref does not count.
+GitHub evicts a cache entry that nobody used for 7 days.
+Without an entry, or when the lookup fails, the comment says that the last green night is unknown and why. It does not compute the range.
+
 ## The `preview` label
 
 The label builds images only.
@@ -627,6 +660,7 @@ The required checks are job names, so a display name does not change them.
 | `scorecard.yml`                       | Push to main, branch-protection change, weekly                                | Publishes the OpenSSF Scorecard                                                                                                                                                                                                  |
 | `semgrep.yml`                         | Pull request, push to main                                                    | Tests and scans the repository's own TLS rule pack                                                                                                                                                                               |
 | `kubernetes-nightly.yml`              | Nightly, manual                                                               | Runs every Kubernetes leg and the sandbox footprint benchmark on the newest main build that passed CI, with its chart and agent image. Reports a failure on one tracking issue                                              |
+| `feedback-eval-panel.yml` | Nightly, manual, PR that changes what the composer reads | Composes the [model panel](./feedback-quality-evals.md#when-the-panel-runs) of the feedback eval gate, or its prompt-safety subset on a PR without the `eval:run` label. Never a required check. Inactive without its [provider settings](#feedback-eval-panel-provider). A red or unfinished night comments on one tracking issue, and the next green night closes it |
 | `extension-provider-slots.yml` | Nightly, manual | Checks the actual extension adapter against six public GitHub and GitLab report layouts and keeps each result |
 | `platform-pins.yml` | PR touching platform pins or their validator | Verifies the installer checksum and the images that both upstream charts render |
 | `rescan-images.yml`                   | Daily, manual                                                                | Rescans main's published images against the release vulnerability policy and keeps one tracking issue in step with the findings. A second job rescans the latest published release's images and reports drift on the vulnerability response issue|
@@ -950,6 +984,7 @@ Any other pull request builds no image. The merge group builds every changed ima
 | Quality → Extension        | `extension/**`. Webapp files imported by path: vocabulary registries, trace formatting, status definitions, sign-in providers, text helpers, and their imports. Webapp lint plugin and stylesheet. Root oxlint and oxfmt configs, `scripts/ci-browser.ts`, `.github/playwright-image.json`, and root package files                                                                                                                                       |
 | Quality → Server       | `server/**` except `AGENTS.md` and `CLAUDE.md`, `scripts/run-gradlew.ts`, `scripts/check-gradle-verification-metadata.ts`, root package files                                                                                                                                                                                                                                                                                     |
 | Quality → Tooling and docs | `scripts/**`, `docker/agents/**`, `server/application/src/{main,test}/resources/agent/**`, `load-tests/**`, `docs/**`, tsconfigs, oxlint and oxfmt configs, `.changeset/**`, `commitlint.config.ts`, instruction files, `.github/renovate.json`                                                                                                                                                                                                                               |
+| Feedback eval gate | `server/application/src/main/resources/agent/*.md`, `agent/mentor/**`, `agent/review-composer*.ts`, the composer package `agent/composer/**`, `practices/**`, the `CompositionEval*` tests, `docs/contributor/practice-feedback-language.md`, `docs/contributor/composition-label-rubric.md`, `scripts/feedback-eval-gate.ts`, `scripts/feedback-eval/**`, `docker/agents/practice-scripts/**` |
 | Every quality leg          | `vite.config.ts`, `scripts/lib/push-gates.ts`, `.vite-hooks/**`, `.java-version`, `cicd.yml`, `ci-quality-gates.yml` and the setup actions: the task graph, the hooks and the JDK decide every leg's verdict, so a change to one runs all of them                                                                                                                                                                                        |
 | Build artifact gates       | contracts: the Server paths, `docker/postgres/**`, or either generated client and its generator config (`api-clients`). E2E: webapp source and the server main sources. Extension E2E: `extension/**`, the vocabulary registries and the server main sources. Image: `server/application/src/main/**`, the Gradle build scripts, catalog, locks and wrapper, `server/application/project.toml`, `server/generated-clients/**` |
 | Docker images              | `webapp-image`: the webapp build inputs and non-test source. `agent-images`: `docker/agents/**`. `postgres-image`: `docker/postgres/**`                                                                                                                                                                                                                                                                                           |

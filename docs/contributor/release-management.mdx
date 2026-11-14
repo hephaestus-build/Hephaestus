@@ -620,6 +620,7 @@ Attach its `results.json` file to the release evidence.
 Check that its commit is the candidate source commit and that its model is the configured release model.
 Require complete outputs and AI-drafted labels bound to those outputs.
 Read every finding and each unmeasured destination before deciding whether to qualify the candidate.
+Do not qualify a candidate with a labelled defect on a case of the [prompt-safety subset](./feedback-quality-evals.md#prompt-safety-subset).
 
 A failed, skipped or incomplete eval does not establish feedback quality.
 Record the decision with the release evidence. Do not change a check or label to obtain a passing result.

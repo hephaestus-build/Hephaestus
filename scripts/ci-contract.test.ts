@@ -6901,11 +6901,21 @@ void test("a superseded PR cancels its native gate while live failures still get
 	);
 	assert.equal(fixture.conclusion, "cancelled");
 	const observed = asRecord(fixture.needs, "recorded prerequisite results");
-	const recordedNeeds = Object.fromEntries(
-		Object.entries(observed).map(([name, value]) => [
-			name,
-			{ result: asString(asRecord(value, name).result, `${name} result`) },
-		]),
+	const recordedNeeds = {
+		...Object.fromEntries(
+			Object.entries(observed).map(([name, value]) => [
+				name,
+				{ result: asString(asRecord(value, name).result, `${name} result`) },
+			]),
+		),
+		// The feedback eval gate is newer than this recording. Its path filter selects no change of that
+		// run, so the job would have been skipped; the recording itself stays as it was captured.
+		"feedback-eval": { result: "skipped" },
+	};
+	assert.equal(
+		"feedback-eval" in observed,
+		false,
+		"the recording now holds the gate: drop this model",
 	);
 	const recordedJobs = asArray(fixture.jobs, "recorded jobs").map((entry) =>
 		asRecord(entry, "recorded job"),
@@ -7569,4 +7579,91 @@ void test("an old candidate lacks the release drill verifier and stops before an
 	assert.ok(isMap(checkout));
 	assert.match(String(checkout.get("uses")), /^actions\/checkout@/u);
 	assert.equal(steps.items[1], verifier);
+});
+
+void test("the feedback eval gate runs on its paths in every tier, a stacked layer's light tier included", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	const runs = (outputs: Record<string, string>, event = "pull_request") =>
+		jobRuns(workflow, "feedback-eval", event, {
+			"detect-changes": {
+				result: "success",
+				outputs: {
+					should_skip: "false",
+					"version-bump": "false",
+					unfiltered: "false",
+					"light-tier": "false",
+					"feedback-eval": "false",
+					...outputs,
+				},
+			},
+		});
+	assert.equal(runs({ "feedback-eval": "true", "light-tier": "true" }), true);
+	assert.equal(runs({ "feedback-eval": "true" }), true);
+	assert.equal(runs({ "feedback-eval": "true" }, "merge_group"), true);
+	assert.equal(runs({ "light-tier": "true" }), false);
+	assert.equal(runs({}), false);
+});
+
+/** The `github` context of a feedback eval panel run for a pull request with `labels`. */
+function panelContext(event: string, action: string, labels: string[], label?: string) {
+	return {
+		github: {
+			event_name: event,
+			event: {
+				action,
+				...(label === undefined ? {} : { label: { name: label } }),
+				pull_request: { number: 7, labels: labels.map((name) => ({ name })) },
+			},
+		},
+		vars: {},
+	};
+}
+
+void test("a prompt change composes the safety subset, the eval:run label the whole panel, and nothing else cancels it", async () => {
+	const workflow = parseDocument(
+		await readFile(".github/workflows/feedback-eval-panel.yml", "utf8"),
+	);
+	const starts = (action: string, labels: string[], label?: string) =>
+		expandExpressions(
+			`\${{ ${asString(workflow.getIn(["jobs", "provider", "if"]), "provider if")} }}`,
+			panelContext("pull_request", action, labels, label),
+		) === "true";
+	// The path filter selects the pull requests; an unrelated label adds no second run.
+	assert.equal(starts("labeled", ["eval:run", "ci:full"], "ci:full"), false);
+	assert.equal(starts("labeled", ["eval:run"], "eval:run"), true);
+	assert.equal(starts("synchronize", []), true);
+	assert.equal(starts("opened", []), true);
+	const jobs = asRecord(asRecord(workflow.toJS(), "panel workflow").jobs, "jobs");
+	const gateStep = asArray(asRecord(jobs.panel, "panel job").steps, "panel steps")
+		.map((entry) => asRecord(entry, "panel step"))
+		.find((entry) => entry.id === "gate");
+	assert.ok(gateStep);
+	const scope = (event: string, labels: string[]) =>
+		expandExpressions(
+			asString(asRecord(gateStep.env, "gate env").SCOPE, "scope"),
+			panelContext(event, "synchronize", labels),
+		);
+	assert.equal(scope("pull_request", []), "--safety");
+	assert.equal(scope("pull_request", ["eval:run"]), "--model");
+	assert.equal(scope("schedule", []), "--model");
+	assert.equal(scope("workflow_dispatch", []), "--model");
+	// Each path that starts a composition also selects the deterministic gate.
+	const orchestrator = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	const filter = step(orchestrator, ["jobs", "detect-changes"], "dorny/paths-filter");
+	const filters = asRecord(parseDocument(String(filter.get("filters"))).toJSON(), "CI filters");
+	const gatePaths = asArray(filters["feedback-eval"], "feedback-eval paths");
+	const trigger = asRecord(
+		asRecord(asRecord(workflow.toJS(), "panel workflow").on, "panel triggers").pull_request,
+		"pull_request trigger",
+	);
+	for (const panelPath of asArray(trigger.paths, "panel paths")) {
+		assert.ok(gatePaths.includes(panelPath), String(panelPath));
+	}
+	// A run whose jobs are skipped must not enter a cancelling group, so only the panel job holds one.
+	assert.equal(workflow.has("concurrency"), false);
+	assert.equal(workflow.hasIn(["jobs", "provider", "concurrency"]), false);
+	assert.equal(
+		workflow.getIn(["jobs", "panel", "concurrency", "group"]),
+		`feedback-eval-panel-\${{ github.event.pull_request.number || github.ref }}`,
+	);
 });
