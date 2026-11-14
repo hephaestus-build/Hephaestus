@@ -261,7 +261,7 @@ That is a prompt, the writing guide, the practice catalog or its scripts, the pr
 [Path filters](./ci-cd.mdx#path-filters) list the paths.
 `scripts/feedback-eval/gate.json` holds its fixed case set, its prompt clauses and its floors.
 
-### Deterministic checks
+### Gate checks without a model
 
 These checks send no model request. Each check must pass exactly.
 They detect edits. They do not judge what an edit means: only the [model panel](#model-panel) composes with a model.
