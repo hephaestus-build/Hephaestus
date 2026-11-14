@@ -1,11 +1,20 @@
 package de.tum.cit.aet.hephaestus.integration.core;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import org.jspecify.annotations.Nullable;
 
 /** Provider versions order mutable state; arrival order cannot make a replay current. */
 public final class ProviderStateVersion {
     private ProviderStateVersion() {}
+
+    /**
+     * The version as the database keeps it. A version column holds microseconds and PostgreSQL rounds a finer value,
+     * so a version is compared and stored at that precision: otherwise an identical snapshot can read back as newer.
+     */
+    public static @Nullable Instant atStoredPrecision(@Nullable Instant version) {
+        return version == null ? null : version.truncatedTo(ChronoUnit.MICROS);
+    }
 
     /** An undated payload cannot replace a dated snapshot. */
     public static boolean isOlder(@Nullable Instant incoming, @Nullable Instant stored) {

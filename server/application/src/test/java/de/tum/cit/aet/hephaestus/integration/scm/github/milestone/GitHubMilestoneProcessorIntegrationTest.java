@@ -610,6 +610,22 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
         }
 
         @Test
+        void shouldSettleAnIdenticalSnapshotWhoseTimeIsFinerThanTheDatabaseKeeps() {
+            // PostgreSQL keeps microseconds and rounds this time up; the identical snapshot must still compare equal.
+            Instant finer = Instant.parse("2026-02-02T10:00:00.000000600Z");
+            processor.process(snapshot("Release", "open", 1, finer), testRepository, null, webhook());
+            eventListener.clear();
+            ProcessingContext readAfterTheWrite =
+                    createContext().withObservedAt(Instant.now().plusSeconds(1));
+
+            processor.process(snapshot("Release", "open", 3, finer), testRepository, null, readAfterTheWrite);
+
+            assertThat(stored().getClosedIssuesCount()).isEqualTo(3);
+            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneUpdated.class))
+                    .hasSize(1);
+        }
+
+        @Test
         void shouldRecordTheRealIdFromARefusedWebhookSoThatItsDeleteFindsTheMilestone() {
             GitHubMilestoneDTO synced = new GitHubMilestoneDTO(
                     null,

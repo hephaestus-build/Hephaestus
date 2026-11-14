@@ -117,7 +117,7 @@ public class GitLabMilestoneProcessor extends BaseGitLabProcessor {
         }
 
         // A late hook would restore an older title, state or due date (sync-lifecycle.md).
-        Instant incomingUpdatedAt = parseGitLabTimestamp(dto.updatedAt());
+        Instant incomingUpdatedAt = ProviderStateVersion.atStoredPrecision(parseGitLabTimestamp(dto.updatedAt()));
         // A sync read that began after the last write may settle an equal version, because issue counts change
         // without moving updated_at. Identity is not versioned: a refused hook still records the real id above.
         if (!isNew
@@ -186,8 +186,8 @@ public class GitLabMilestoneProcessor extends BaseGitLabProcessor {
         if (dto.createdAt() != null) {
             milestone.setCreatedAt(parseGitLabTimestamp(dto.createdAt()));
         }
-        if (dto.updatedAt() != null) {
-            milestone.setUpdatedAt(parseGitLabTimestamp(dto.updatedAt()));
+        if (incomingUpdatedAt != null) {
+            milestone.setUpdatedAt(incomingUpdatedAt);
         }
 
         milestone.setRepository(repository);

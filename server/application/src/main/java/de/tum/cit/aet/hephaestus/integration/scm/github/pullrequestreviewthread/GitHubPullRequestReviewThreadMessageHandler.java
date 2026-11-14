@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewthread
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.integration.core.ProviderStateVersion;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
@@ -124,7 +125,12 @@ public class GitHubPullRequestReviewThreadMessageHandler
                 Instant resolvedAt = event.updatedAt() != null
                         ? event.updatedAt()
                         : prDto.updatedAt() != null ? prDto.updatedAt() : Instant.now();
-                threadProcessor.resolve(threadId, resolvedBy, resolvedAt, event.updatedAt(), context);
+                threadProcessor.resolve(
+                        threadId,
+                        resolvedBy,
+                        resolvedAt,
+                        ProviderStateVersion.atStoredPrecision(event.updatedAt()),
+                        context);
             }
             case GitHubEventAction.PullRequestReviewThread.UNRESOLVED -> {
                 // Thread ID is derived from the first comment. If no comments exist, we cannot
@@ -139,7 +145,7 @@ public class GitHubPullRequestReviewThreadMessageHandler
                                     : "unknown");
                     return;
                 }
-                threadProcessor.unresolve(threadId, event.updatedAt(), context);
+                threadProcessor.unresolve(threadId, ProviderStateVersion.atStoredPrecision(event.updatedAt()), context);
             }
             default ->
                 log.debug(
