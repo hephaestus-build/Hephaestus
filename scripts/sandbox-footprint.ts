@@ -40,13 +40,15 @@ import { asRecord, asString, asStringArray, isRecord, parseJson } from "./lib/js
 import { exitStatus, output, run, succeeds } from "./lib/process.ts";
 import {
 	BUDGETS,
+	chartReviewLimits,
+	DISK_VOLUMES,
 	footprintReadCalls,
 	largest,
 	parseSample,
 	positiveInteger,
 	REPORT_MAP_LIMIT,
-	reviewLimits,
 	SAMPLE_MS,
+	templateFlags,
 	verdict,
 	type Sample,
 } from "./lib/sandbox-footprint-report.ts";
@@ -80,17 +82,11 @@ const latencyMs = positiveInteger(options["latency-ms"], "--latency-ms");
 const workSeconds = positiveInteger(options["work-seconds"], "--work-seconds");
 const budgetSeconds = positiveInteger(options["budget-seconds"], "--budget-seconds");
 const runId = `fp-${randomUUID().slice(0, 8)}`;
-const templateLimits = reviewLimits(
-	await readFile(path.join(import.meta.dirname, "../deploy/chart/hephaestus/values.yaml"), "utf8"),
-);
+const templateLimits = await chartReviewLimits();
 const limits = {
 	memory: options.memory ?? templateLimits.memory,
 	cpus: options.cpus ?? templateLimits.cpus,
 };
-
-/** The emptyDir volumes and the environment of the review SandboxTemplate (sandbox-templates.yaml). */
-const DISK_VOLUMES = ["/workspace", "/tmp"];
-const TEMPLATE_ENVIRONMENT = { HOME: "/tmp/home", XDG_CONFIG_HOME: "/tmp/home/.config" };
 const GIT_SECURITY = [
 	["core.hooksPath", "/nonexistent"],
 	["core.fsmonitor", "false"],
@@ -668,7 +664,7 @@ function environment(sessionId: string): string[] {
 	for (const [key, value] of Object.entries(specEnvironment)) {
 		env[key] = String(value);
 	}
-	Object.assign(env, gitEnvironment(), TEMPLATE_ENVIRONMENT);
+	Object.assign(env, gitEnvironment());
 	const gateway = gatewayUrl();
 	env.LLM_PROXY_URL = `${gateway}/internal/llm`;
 	env.LLM_PROXY_TOKEN = "footprint-token";
@@ -688,7 +684,7 @@ function podFlags(name: string, volumes: string[]): string[] {
 	const flags = [
 		"--name",
 		name,
-		"--read-only",
+		...templateFlags(volumes, limits),
 		"--cap-drop",
 		"ALL",
 		"--security-opt",
@@ -697,12 +693,6 @@ function podFlags(name: string, volumes: string[]): string[] {
 		"1000:1000",
 		"--group-add",
 		"1000",
-		"--memory",
-		limits.memory,
-		"--memory-swap",
-		limits.memory,
-		"--cpus",
-		limits.cpus,
 		"--pids-limit",
 		"256",
 		"-w",
@@ -712,9 +702,6 @@ function podFlags(name: string, volumes: string[]): string[] {
 		flags.push("--add-host", "host.docker.internal:host-gateway");
 	} else {
 		flags.push("--network", fixtureNetwork);
-	}
-	for (const [index, target] of DISK_VOLUMES.entries()) {
-		flags.push("--mount", `type=volume,src=${volumes[index] ?? ""},dst=${target},volume-nocopy`);
 	}
 	return flags;
 }

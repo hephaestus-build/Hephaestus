@@ -2,6 +2,8 @@
  * The pure parts of the sandbox footprint benchmark (`scripts/sandbox-footprint.ts`): what a sampler
  * line must hold, how the report bounds its maps, and when a run counts as a measurement.
  */
+import { readFile } from "node:fs/promises";
+
 import { parse } from "yaml";
 
 import { asString, at, isRecord, parseJson } from "./json.ts";
@@ -290,6 +292,43 @@ export function reviewLimits(valuesYaml: string): { memory: string; cpus: string
 		memory: `${memory.amount}${suffix}`,
 		cpus: cpu.milli === "m" ? String(Number(cpu.amount) / 1000) : cpu.amount,
 	};
+}
+
+/** The review template's limits as the chart's own `values.yaml` sets them: the limits the benchmark runs under. */
+export async function chartReviewLimits(): Promise<{ memory: string; cpus: string }> {
+	return reviewLimits(
+		await readFile(new URL("../../deploy/chart/hephaestus/values.yaml", import.meta.url), "utf8"),
+	);
+}
+
+/** The emptyDir volumes of the review SandboxTemplate, in the order that the benchmark creates them. */
+export const DISK_VOLUMES = ["/workspace", "/tmp"] as const;
+
+/** The template's environment that the agent image reads. The driver's sandbox kind is not among it. */
+const TEMPLATE_ENVIRONMENT = { HOME: "/tmp/home", XDG_CONFIG_HOME: "/tmp/home/.config" };
+
+/**
+ * The Docker flags that give a benchmark container the review SandboxTemplate's root filesystem, volumes,
+ * environment and limits. `kubernetes-chart-render.test.ts` compares them with the rendered template.
+ */
+export function templateFlags(
+	volumes: readonly string[],
+	limits: { memory: string; cpus: string },
+): string[] {
+	return [
+		"--read-only",
+		"--memory",
+		limits.memory,
+		"--memory-swap",
+		limits.memory,
+		"--cpus",
+		limits.cpus,
+		...DISK_VOLUMES.flatMap((target, index) => [
+			"--mount",
+			`type=volume,src=${volumes[index] ?? ""},dst=${target},volume-nocopy`,
+		]),
+		...Object.entries(TEMPLATE_ENVIRONMENT).flatMap(([key, value]) => ["--env", `${key}=${value}`]),
+	];
 }
 
 /** A whole number above zero, or an error that names the option. */

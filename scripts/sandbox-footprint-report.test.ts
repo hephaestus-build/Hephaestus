@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { test } from "node:test";
 
 import {
+	chartReviewLimits,
 	footprintReadCalls,
 	isSample,
 	largest,
@@ -67,12 +66,9 @@ const template = (memory: string, cpu: string) =>
 	`sandbox:\n  templates:\n    review:\n      resources:\n        limits: { cpu: ${cpu}, memory: ${memory} }\n`;
 
 await test("the benchmark takes the review template's limits from the chart's values", async () => {
-	const values = await readFile(
-		path.join(import.meta.dirname, "../deploy/chart/hephaestus/values.yaml"),
-		"utf8",
-	);
 	// The chart owns the numbers; this proves only that its values stay readable.
-	assert.match(reviewLimits(values).memory, /^\d+[kmg]$/u);
+	const chart = await chartReviewLimits();
+	assert.match(chart.memory, /^\d+[kmg]$/u);
 	assert.deepEqual(reviewLimits(template("1536Mi", "500m")), { memory: "1536m", cpus: "0.5" });
 	assert.throws(() => reviewLimits(template("2G", "1")), /Ki, Mi or Gi/u);
 	assert.throws(() => reviewLimits(template("2Gi", "1.5")), /cores or millicores/u);

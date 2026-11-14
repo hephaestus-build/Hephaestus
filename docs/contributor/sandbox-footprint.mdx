@@ -19,7 +19,9 @@ Each review runs in one container, as the review `SandboxTemplate` defines it in
 The root filesystem is read-only. `/workspace` and `/tmp` are writable disk volumes, and `HOME` is `/tmp/home`.
 The container limits come from `sandbox.templates.review.resources.limits` in the chart's `values.yaml`.
 A review that exceeds the memory limit is killed and fails the run.
+
 `--memory` and `--cpus` override the limits for a trial.
+A chart render test fails when the template's mounts, environment, or limits differ from the fixture's.
 
 The fixture runs the image's compiled gateway entrypoints in the order that the review kind runs them.
 It does not run the sandbox's driver loop.
