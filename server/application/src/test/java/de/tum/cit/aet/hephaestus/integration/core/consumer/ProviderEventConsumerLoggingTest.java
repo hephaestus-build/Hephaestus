@@ -41,8 +41,8 @@ class ProviderEventConsumerLoggingTest extends BaseUnitTest {
 
     @ParameterizedTest
     @CsvSource({
-        "1,55P03,false",
-        "2,55P03,false",
+        "1,53300,false",
+        "2,53300,false",
         "1,private-payload-canary@example.test,false",
         "1,08006,true",
         "2,08001,true"
