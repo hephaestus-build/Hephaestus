@@ -896,8 +896,12 @@ describe("a member", () => {
 		renderRouteAtWithRouter("/w/acme");
 
 		// The gate waits for the state, so the page does not render without the notice and then move.
-		// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that the page does not render before the state arrives
-		await act(async () => new Promise<void>((resolve) => setTimeout(resolve, 300)));
+		await act(async () => {
+			const elapsed = deferred();
+			// oxlint-disable-next-line no-restricted-globals -- proves that the page does not render before the state arrives
+			setTimeout(elapsed.resolve, 300);
+			await elapsed.promise;
+		});
 		expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
 		held.resolve();
 

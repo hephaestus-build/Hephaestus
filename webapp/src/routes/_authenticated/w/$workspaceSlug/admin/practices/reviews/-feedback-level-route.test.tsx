@@ -520,8 +520,10 @@ describe("feedback approval level", () => {
 			decision.resolve();
 
 			await waitFor(() => expect(approved).toStrictEqual([oldest.id]));
-			// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that the route does not move afterwards
-			await new Promise<void>((resolve) => setTimeout(resolve, 100));
+			const elapsed = deferred();
+			// oxlint-disable-next-line no-restricted-globals -- proves that the route does not move afterwards
+			setTimeout(elapsed.resolve, 100);
+			await elapsed.promise;
 			expect(router.state.location.search).not.toHaveProperty("detail");
 			await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
@@ -577,8 +579,10 @@ describe("feedback approval level", () => {
 					screen.queryByRole("button", { name: "Approve and open next", hidden: true }),
 				).toBeNull(),
 			);
-			// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that the route does not move afterwards
-			await new Promise<void>((resolve) => setTimeout(resolve, 100));
+			const elapsed2 = deferred();
+			// oxlint-disable-next-line no-restricted-globals -- proves that the route does not move afterwards
+			setTimeout(elapsed2.resolve, 100);
+			await elapsed2.promise;
 			expect(stackInSearch(router.state.location.search.detail)).toStrictEqual(opened);
 			screen.getByRole("dialog", { name: summary });
 		});

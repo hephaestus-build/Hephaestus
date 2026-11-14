@@ -20,6 +20,7 @@ import type environment from "@/environment";
 import { server } from "@/mocks/server";
 import { installPreloadErrorReload } from "@/runtime/preload-error";
 
+import { deferred } from "@/test/async";
 import {
 	type BrowserFaults,
 	installBrowserFaults,
@@ -82,8 +83,10 @@ async function renderOutsideAct(faults: BrowserFaults, content: ReactNode) {
 	const root = createRoot(document.createElement("div"), rootErrorHandlers(faults));
 	try {
 		root.render(content);
-		// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- the root reports a render error after its commit with no signal to await
-		await new Promise<void>((resolve) => setTimeout(resolve, 50));
+		const elapsed = deferred();
+		// oxlint-disable-next-line no-restricted-globals -- the root reports a render error after its commit with no signal to await
+		setTimeout(elapsed.resolve, 50);
+		await elapsed.promise;
 	} finally {
 		root.unmount();
 		Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", actEnvironment);
@@ -292,11 +295,15 @@ describe("how a failed request is reported", () => {
 			dispatchEvent(new ErrorEvent("error", { error: new TypeError("x") }));
 			await hide();
 			await vi.waitFor(() => expect(reports).toHaveLength(1));
-			// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that the second hide sends no second report within this window
-			await new Promise<void>((resolve) => setTimeout(resolve, 50));
+			const elapsed2 = deferred();
+			// oxlint-disable-next-line no-restricted-globals -- proves that the second hide sends no second report within this window
+			setTimeout(elapsed2.resolve, 50);
+			await elapsed2.promise;
 			await hide();
-			// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that the second hide sends no second report within this window
-			await new Promise<void>((resolve) => setTimeout(resolve, 50));
+			const elapsed3 = deferred();
+			// oxlint-disable-next-line no-restricted-globals -- proves that the second hide sends no second report within this window
+			setTimeout(elapsed3.resolve, 50);
+			await elapsed3.promise;
 
 			expect(reports).toHaveLength(1);
 		} finally {
@@ -318,8 +325,10 @@ describe("how a failed request is reported", () => {
 			).catch(noop);
 		}
 		await hide();
-		// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that nothing is reported within this window
-		await new Promise<void>((resolve) => setTimeout(resolve, 50));
+		const elapsed4 = deferred();
+		// oxlint-disable-next-line no-restricted-globals -- proves that nothing is reported within this window
+		setTimeout(elapsed4.resolve, 50);
+		await elapsed4.promise;
 
 		expect(reports).toStrictEqual([]);
 	});

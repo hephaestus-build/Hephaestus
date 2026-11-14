@@ -696,8 +696,10 @@ async function settledSheet(detail: string[]): Promise<string> {
 		ROUTE_RENDER_WAIT,
 	);
 	// One more turn for the reads that land after the first ones, such as a review's verdicts.
-	// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- the late reads have no completion signal; this lets them land
-	await new Promise<void>((resolve) => setTimeout(resolve, 300));
+	const elapsed = deferred();
+	// oxlint-disable-next-line no-restricted-globals -- the late reads have no completion signal; this lets them land
+	setTimeout(elapsed.resolve, 300);
+	await elapsed.promise;
 	const markup = sheetMarkup(sheet);
 	cleanup();
 	return markup;

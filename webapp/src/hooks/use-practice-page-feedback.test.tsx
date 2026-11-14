@@ -273,8 +273,10 @@ describe("usePracticePageFeedback", () => {
 
 		expect(result.current.state).toStrictEqual({ status: "ready" });
 		expect(result.current.cards).toStrictEqual([]);
-		// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that no read starts on the next turn
-		await new Promise<void>((resolve) => setTimeout(resolve, 0));
+		const elapsed = deferred();
+		// oxlint-disable-next-line no-restricted-globals -- proves that no read starts on the next turn
+		setTimeout(elapsed.resolve, 0);
+		await elapsed.promise;
 		expect(reads).toStrictEqual([]);
 	});
 
