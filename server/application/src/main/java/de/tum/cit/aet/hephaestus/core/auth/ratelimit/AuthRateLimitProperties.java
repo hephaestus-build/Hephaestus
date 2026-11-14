@@ -3,23 +3,23 @@ package de.tum.cit.aet.hephaestus.core.auth.ratelimit;
 import io.github.bucket4j.BucketConfiguration;
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.context.properties.bind.DefaultValue;
 
 /**
  * Rate-limit knobs for sensitive and resource-intensive endpoints, bound to {@code hephaestus.auth.rate-limit.*}.
  *
  * <p>Each limit is a token bucket of {@code capacity} tokens that refills the full capacity once
- * per {@code period} (interval refill — a fresh budget every window, not a trickle). Defaults match
- * the security-hardening spec (ADR 0017 follow-up):
+ * per {@code period} (interval refill — a fresh budget every window, not a trickle). {@code application.yml}
+ * holds every value and its environment variable. This record holds no defaults: a missing value stops startup, so
+ * a deleted line cannot loosen a limit.
  *
  * <ul>
- *   <li>{@code GET /oauth2/authorization/*} — 20/min, keyed by client IP</li>
- *   <li>{@code POST /auth/refresh} — 60/min, keyed by account (JWT sub; IP fallback)</li>
- *   <li>{@code POST /auth/client/token|refresh|logout} — 30/min, keyed by client IP</li>
- *   <li>User-view selection and normal-app reads — 120/min, keyed by admin account</li>
- *   <li>{@code DELETE /user} — 3/hour, keyed by account</li>
- *   <li>{@code POST /user/exports} — 10/hour, keyed by account</li>
- *   <li>{@code POST /web-vitals} and {@code POST /browser-faults} — 30/minute, keyed by account, IP fallback</li>
+ *   <li>{@code GET /oauth2/authorization/*} — keyed by client IP</li>
+ *   <li>{@code POST /auth/refresh} — keyed by account (JWT sub; IP fallback)</li>
+ *   <li>{@code POST /auth/client/token|refresh|logout} — keyed by client IP</li>
+ *   <li>User-view selection and normal-app reads — keyed by admin account</li>
+ *   <li>{@code DELETE /user} — keyed by account</li>
+ *   <li>{@code POST /user/exports} — keyed by account</li>
+ *   <li>{@code POST /web-vitals} and {@code POST /browser-faults} — keyed by account, IP fallback</li>
  * </ul>
  *
  * <p>Set {@code enabled=false} to bypass the filter entirely (e.g. load tests). The limits are
@@ -33,37 +33,41 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param enabled Turns on rate limits for sign-in, session and other sensitive endpoints. Turn it off only for load
  *     tests.
  */
-@ConfigurationProperties(prefix = "hephaestus.auth.rate-limit")
+@ConfigurationProperties(prefix = AuthRateLimitProperties.PREFIX)
 public record AuthRateLimitProperties(
-        @DefaultValue("true") boolean enabled,
-        @DefaultValue Limit oauthAuthorization,
-        @DefaultValue Limit refresh,
-        @DefaultValue Limit clientSession,
-        @DefaultValue Limit userView,
-        @DefaultValue Limit deleteUser,
-        @DefaultValue Limit export,
-        @DefaultValue Limit mentorTurns,
-        @DefaultValue Limit reviewRequest,
-        @DefaultValue Limit syncTrigger,
-        @DefaultValue Limit publicActivity,
-        @DefaultValue Limit browserReports) {
+        Boolean enabled,
+        Limit oauthAuthorization,
+        Limit refresh,
+        Limit clientSession,
+        Limit userView,
+        Limit deleteUser,
+        Limit export,
+        Limit mentorTurns,
+        Limit reviewRequest,
+        Limit syncTrigger,
+        Limit publicActivity,
+        Limit browserReports) {
+    static final String PREFIX = "hephaestus.auth.rate-limit";
+
     public AuthRateLimitProperties {
-        // Bind nulls (a partially-specified YAML block) to the spec defaults so a misconfigured
-        // sub-key never silently disables a limit.
-        oauthAuthorization = oauthAuthorization != null ? oauthAuthorization : Limit.of(20, Duration.ofMinutes(1));
-        refresh = refresh != null ? refresh : Limit.of(60, Duration.ofMinutes(1));
-        clientSession = clientSession != null ? clientSession : Limit.of(30, Duration.ofMinutes(1));
-        userView = userView != null ? userView : Limit.of(120, Duration.ofMinutes(1));
-        deleteUser = deleteUser != null ? deleteUser : Limit.of(3, Duration.ofHours(1));
-        // 10/hour: generous for legit "download my data" (POST + a few download polls) but caps a
-        // session from spamming async bundle assemblies (each persisting a BYTEA blob).
-        export = export != null ? export : Limit.of(10, Duration.ofHours(1));
-        mentorTurns = mentorTurns != null ? mentorTurns : Limit.of(20, Duration.ofMinutes(10));
-        reviewRequest = reviewRequest != null ? reviewRequest : Limit.of(10, Duration.ofHours(1));
-        syncTrigger = syncTrigger != null ? syncTrigger : Limit.of(10, Duration.ofHours(1));
-        publicActivity = publicActivity != null ? publicActivity : Limit.of(60, Duration.ofMinutes(1));
-        // A page reports when it hides, so a reader who switches tabs often still stays far below this.
-        browserReports = browserReports != null ? browserReports : Limit.of(30, Duration.ofMinutes(1));
+        required(enabled, "enabled");
+        required(oauthAuthorization, "oauth-authorization");
+        required(refresh, "refresh");
+        required(clientSession, "client-session");
+        required(userView, "user-view");
+        required(deleteUser, "delete-user");
+        required(export, "export");
+        required(mentorTurns, "mentor-turns");
+        required(reviewRequest, "review-request");
+        required(syncTrigger, "sync-trigger");
+        required(publicActivity, "public-activity");
+        required(browserReports, "browser-reports");
+    }
+
+    private static void required(Object value, String key) {
+        if (value == null) {
+            throw new IllegalArgumentException(PREFIX + "." + key + " is not set");
+        }
     }
 
     /**
@@ -72,9 +76,7 @@ public record AuthRateLimitProperties(
      * @param capacity Most requests that one key may send within one period. Must be at least 1.
      * @param period   Refill window of the limit. Must be positive.
      */
-    public record Limit(
-            @DefaultValue("20") long capacity,
-            @DefaultValue("1m") Duration period) {
+    public record Limit(long capacity, Duration period) {
         public Limit {
             if (capacity < 1) {
                 throw new IllegalArgumentException("rate-limit capacity must be >= 1, got: " + capacity);
@@ -82,10 +84,6 @@ public record AuthRateLimitProperties(
             if (period == null || period.isZero() || period.isNegative()) {
                 throw new IllegalArgumentException("rate-limit period must be positive, got: " + period);
             }
-        }
-
-        static Limit of(long capacity, Duration period) {
-            return new Limit(capacity, period);
         }
 
         /**
