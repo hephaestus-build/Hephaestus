@@ -3043,6 +3043,47 @@ tests:
               summary: The kernel killed a container for its memory
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  - name: a container whose anonymous memory stays near its limit fires, a peak shorter than 10 minutes does not
+    interval: 1m
+    input_series:
+      # 3 GiB limits. The server holds 2.7 GiB (90 %) from minute 5. The webapp holds 90 % for minutes 0 to 9 only.
+      - series: 'container_spec_memory_limit_bytes{namespace="hephaestus",pod="hephaestus-server-1",container="server"}'
+        values: "3221225472x30"
+      - series: 'container_memory_rss{namespace="hephaestus",pod="hephaestus-server-1",container="server"}'
+        values: "1932735283x4 2899102925x26"
+      - series: 'container_spec_memory_limit_bytes{namespace="hephaestus",pod="hephaestus-webapp-1",container="webapp"}'
+        values: "3221225472x30"
+      - series: 'container_memory_rss{namespace="hephaestus",pod="hephaestus-webapp-1",container="webapp"}'
+        values: "2899102925x9 1073741824x21"
+      # The pod-level cgroup carries no container name and is ignored.
+      - series: 'container_spec_memory_limit_bytes{namespace="hephaestus",pod="hephaestus-server-1",container=""}'
+        values: "3221225472x30"
+      - series: 'container_memory_rss{namespace="hephaestus",pod="hephaestus-server-1",container=""}'
+        values: "3006477107x30"
+      # A container with no limit reports 0 and is ignored.
+      - series: 'container_spec_memory_limit_bytes{namespace="hephaestus",pod="hephaestus-metrics-1",container="metrics"}'
+        values: "0x30"
+      - series: 'container_memory_rss{namespace="hephaestus",pod="hephaestus-metrics-1",container="metrics"}'
+        values: "2899102925x30"
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: HephaestusContainerMemoryHigh
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: HephaestusContainerMemoryHigh
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: HephaestusContainerMemoryHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: hephaestus
+              pod: hephaestus-server-1
+              container: server
+            exp_annotations:
+              summary: A container's anonymous memory stayed above 85 % of its limit for 10 minutes
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: a commit link queue that stops shrinking fires while a shrinking queue stays quiet
     interval: 1m
     input_series:

@@ -40,7 +40,7 @@ Check the rendered requests against the allocatable resources of your nodes befo
 
 | To get | Change | Also needs |
 | --- | --- | --- |
-| More reviews at once | `sandbox.reviewMemory`: 512 MiB more for each review, plus the RuntimeClass overhead | That memory on the sandbox nodes. Each review also takes about 18 MiB of the server's memory and three database connections of its pool. |
+| More reviews at once | `sandbox.reviewMemory`: 512 MiB more for each review, plus the RuntimeClass overhead | That memory on the sandbox nodes. Each review also takes three database connections of the server's pool. |
 | More conversation turns at once | `sandbox.conversationTurns`, or with `auto` a larger `sandbox.budget` | 384 MiB and 100m CPU on the sandbox nodes for each turn ([Sandbox capacity budget](./helm-chart#sandbox-capacity-budget)) |
 | More API capacity, and reception during a restart | `server.replicas` | A server request for each replica, and its database connections. More servers do not add reviews or turns. |
 | Larger repositories | `server.gitCache.sizeLimit` | That much free ephemeral storage on each server's node |
@@ -144,10 +144,23 @@ When all pooled connections are busy, a caller waits up to 45 seconds for one, t
 ## Memory headroom
 
 When the JVM starts, the buildpack's memory calculator sets the Java memory from the container's memory limit.
-The default headroom (`BPL_JVM_HEAD_ROOM`) is 0 %, and the chart exposes no value for it.
-Thus, a higher memory limit also gives the heap more memory at the next start.
-Measure the server's total memory use before you change its memory limit.
+It subtracts the headroom, one 1 MiB stack per thread, metaspace, the code cache, and 128 MiB of direct memory.
+The heap gets the rest.
 See the [Paketo memory calculator](https://paketo.io/docs/reference/java-reference/#memory-calculator).
+
+| Value | Calculator input | Default | Why |
+| --- | --- | --- | --- |
+| `server.jvm.headRoomPercent` | `BPL_JVM_HEAD_ROOM` | `15` | Native memory that the calculator does not count, such as the garbage collector's structures, grows with the heap. Under load it held about 290 MiB beside a 1 GiB heap. `0` restores the calculator's default. |
+| `server.jvm.threadCount` | `BPL_JVM_THREAD_COUNT` | `200` | A server under five reviews and a sync burst ran at most 153 platform threads. Its virtual threads ran on 7 to 13 carrier threads. |
+
+With the defaults and the 3 GiB limit, the server's heap maximum is about 1,914 MiB. Before this headroom, it was 2,167 MiB.
+A higher memory limit also gives the heap more memory at the next start.
+With no headroom, the garbage collector grows the heap until the container exceeds its limit, and the kernel kills it with no Java error.
+`HephaestusContainerMemoryHigh` fires before that point ([Alert rules](./alert-rules)).
+Measure the server's total memory use before you lower its memory limit or its headroom.
+
+A socket call that blocks can pin its carrier thread, so the scheduler can add carriers up to its ceiling of gateway connections plus 256.
+`jvm_threads_live_threads` shows the count. If it comes near `server.jvm.threadCount`, raise the value.
 
 ## Disk
 

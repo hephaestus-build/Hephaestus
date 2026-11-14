@@ -35,6 +35,7 @@ The alert or the objective tells the operator when the answer needs work.
 | Do model calls wait for their pool? | `llm_pool_permit_wait_seconds`, `llm_pool_upstream_throttled_total` | `HephaestusConversationModelWaitLong`, `HephaestusReviewModelWaitLong` |
 | Did a server lose its model calls in flight? | `llm_pool_permits_expired_total`, `llm_pool_lease_renewal_failures_total` | `HephaestusModelPermitsExpired`, `HephaestusModelPermitRenewalFailing` |
 | Do erasure and retention run, and do they finish? | `privacy_job_completed_total`, by `exported_job` and `outcome` | `HephaestusPrivacyJobFailing`, `HephaestusPrivacyJobNotRunning` |
+| Is a container near its memory limit? | cAdvisor | `HephaestusContainerMemoryHigh` |
 | Did the kernel kill a container for its memory? | kube-state-metrics | `HephaestusContainerOomKilled` |
 | How long does a model call take, how many tokens does it use, and how does it end? | `gen_ai_client_operation_duration_seconds`, `gen_ai_client_tokens_total`, `gen_ai_client_calls_total` by `outcome` | None |
 | Which calls does the proxy refuse before a provider sees them? | `llm_proxy_refused_total`, by `refusal` | None |

@@ -136,7 +136,7 @@ Alertmanager reaches its receivers on ports 443, 465 and 587 of `networkPolicy.e
 Silences live only until Alertmanager restarts.
 
 The stack needs no host path and no cluster-wide access, so it does not run the node and cluster exporters.
-Thus, the stack does not load the groups `hephaestus-kubernetes` and `hephaestus-pull-deploy`: they read kube-state-metrics, the kubelet's volume statistics, node-exporter, and cert-manager.
+Thus, the stack does not load the groups `hephaestus-kubernetes` and `hephaestus-pull-deploy`: they read kube-state-metrics, the kubelet's volume statistics and cAdvisor metrics, node-exporter, and cert-manager.
 Without these series, `HephaestusDeployMetricsMissing` would fire at all times.
 
 To use those groups, run the exporters in a namespace that allows host paths. Scrape them, and evaluate the [rule file](./alert-rules), with your own Prometheus or vmalert.

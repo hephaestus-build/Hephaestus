@@ -718,8 +718,7 @@ counts. A smaller request in the review template runs more reviews in the same m
 {{- end -}}
 
 {{/*
-The reviews that one server runs at once: the sandbox nodes' reviews. Each costs the server about 18 MiB of threads
-and heap (estimated), which server.resources holds.
+The reviews that one server runs at once: the sandbox nodes' reviews.
 */}}
 {{- define "hephaestus.serverReviews" -}}
 {{- include "hephaestus.clusterReviews" . -}}
@@ -1000,9 +999,6 @@ drain. docs/admin/kubernetes.mdx § Sandbox prerequisites.
 # Also the review capacity: a server claims no more reviews than it may run sandboxes.
 - name: SANDBOX_MAX_CONCURRENT
   value: {{ include "hephaestus.serverReviews" . | quote }}
-# The buildpack sizes the heap from this count: its default of 250 for the server, and 8 more per review.
-- name: BPL_JVM_THREAD_COUNT
-  value: {{ add 250 (mul 8 (int (include "hephaestus.serverReviews" .))) | quote }}
 - name: HEPHAESTUS_AGENT_DRAIN_TIMEOUT
   value: {{ printf "%ds" (int .Values.server.drainTimeoutSeconds) | quote }}
 - name: HEPHAESTUS_SANDBOX_KUBERNETES_NAMESPACE

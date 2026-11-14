@@ -896,6 +896,20 @@ groups:
         annotations:
           summary: The kernel killed a container for its memory
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # Anonymous memory is what the kernel cannot reclaim, so at the limit it kills the container. The page cache does
+      # not count. The pod-level cgroup has no container name, and POD is the pause container.
+      - alert: HephaestusContainerMemoryHigh
+        expr: >-
+          max by (namespace, pod, container) (container_memory_rss{container!="",container!="POD"})
+          / on (namespace, pod, container)
+          max by (namespace, pod, container) (container_spec_memory_limit_bytes{container!="",container!="POD"} > 0)
+          > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: A container's anonymous memory stayed above 85 % of its limit for 10 minutes
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusServerDown
         expr: >-
           kube_deployment_status_replicas_available == 0

@@ -186,7 +186,14 @@ server:
   # rebuilds it.
   gitCache:
     sizeLimit: 70Gi
-  # The server's API and sync part, and about 18 MiB for each review that it runs at once (estimated).
+  # The inputs of the buildpack's memory calculator, which sizes the heap from the memory limit at each start.
+  # docs/admin/sizing.mdx § Memory headroom gives the measurements behind both defaults.
+  jvm:
+    # The share of the limit kept for native memory that the calculator does not count. With none, the heap grows
+    # until the kernel kills the container.
+    headRoomPercent: 15
+    # The threads whose 1 MiB stacks the calculator reserves: the measured peak plus a margin.
+    threadCount: 200
   resources:
     requests: { cpu: 500m, memory: 3Gi, ephemeral-storage: 512Mi }
     limits: { cpu: "4", memory: 3Gi, ephemeral-storage: 72Gi }
