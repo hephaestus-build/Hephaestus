@@ -143,7 +143,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
                     try (var permit = admit(worker, pool, AgentRunBand.BATCH, 1)) {
                         assertThat(permit.isRevoked()).isFalse();
                         peak.accumulateAndGet(active.incrementAndGet(), Math::max);
-                        Thread.sleep(20);
+                        Thread.sleep(20); // NOPMD - each worker holds its permit long enough for the grants to overlap
                         active.decrementAndGet();
                     }
                     return null;

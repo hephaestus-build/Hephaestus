@@ -929,7 +929,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                     Boolean.class))) {
                 if (System.nanoTime() > deadline)
                     throw new AssertionError("Erasure did not wait for the capture fence");
-                Thread.sleep(20);
+                Thread.sleep(20); // NOPMD - polling interval of a bounded wait for a condition with no event to await
             }
             var tx = new TransactionTemplate(transactions);
             tx.executeWithoutResult(status -> {

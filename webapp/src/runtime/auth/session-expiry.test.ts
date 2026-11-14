@@ -15,7 +15,6 @@ import {
 import { SESSION_COOLDOWN_MS, refreshAccessToken } from "./session-refresh";
 
 import { hasText } from "@/lib/text";
-import { sleep } from "@/test/async";
 
 vi.mock(import("@/environment"), async (importOriginal) => {
 	const actual = await importOriginal();
@@ -83,7 +82,8 @@ const PRACTICES = "http://localhost:8080/workspaces/acme/practices";
 
 /** Recovery chains an identity read and a renewal; both answer well within this wait. */
 async function settled(): Promise<void> {
-	await sleep(50);
+	// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- recovery chains an identity read and a renewal with no completion signal
+	await new Promise<void>((resolve) => setTimeout(resolve, 50));
 }
 
 describe("handlePossibleSessionExpiry", () => {

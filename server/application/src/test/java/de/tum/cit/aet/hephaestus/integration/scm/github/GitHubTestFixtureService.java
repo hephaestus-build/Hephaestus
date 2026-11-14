@@ -158,7 +158,7 @@ public class GitHubTestFixtureService {
                             message,
                             retryDelayMs);
                     try {
-                        Thread.sleep(retryDelayMs);
+                        Thread.sleep(retryDelayMs); // NOPMD - retry backoff against the live GitHub API
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
                         log.error("Interrupted while waiting to retry repository deletion");
@@ -702,7 +702,7 @@ public class GitHubTestFixtureService {
                             message,
                             retryDelayMs);
                     try {
-                        Thread.sleep(retryDelayMs);
+                        Thread.sleep(retryDelayMs); // NOPMD - retry backoff against the live GitHub API
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
                         log.error("Interrupted while waiting to retry team deletion");

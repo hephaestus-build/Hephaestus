@@ -12,7 +12,7 @@ import {
 } from "@/hooks/use-practice-page-feedback";
 import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
-import { deferred, sleep } from "@/test/async";
+import { deferred } from "@/test/async";
 
 describe("nextRating", () => {
 	it("keeps the resolution and the comment when a rating replaces another", () => {
@@ -273,7 +273,8 @@ describe("usePracticePageFeedback", () => {
 
 		expect(result.current.state).toStrictEqual({ status: "ready" });
 		expect(result.current.cards).toStrictEqual([]);
-		await sleep(0);
+		// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that no read starts on the next turn
+		await new Promise<void>((resolve) => setTimeout(resolve, 0));
 		expect(reads).toStrictEqual([]);
 	});
 

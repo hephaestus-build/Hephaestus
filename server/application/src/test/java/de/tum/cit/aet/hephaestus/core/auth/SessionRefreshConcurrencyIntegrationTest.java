@@ -309,7 +309,7 @@ class SessionRefreshConcurrencyIntegrationTest extends RealAuthIntegrationTest {
                     Long.class,
                     backend.get());
             if (waiting != null && waiting > 0) return;
-            Thread.sleep(20);
+            Thread.sleep(20); // NOPMD - polling interval of a bounded wait for a condition with no event to await
         }
         fail("the second operation never waited for the first transaction");
     }

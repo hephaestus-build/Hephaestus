@@ -32,7 +32,7 @@ class GitRepositoryLockManagerTest extends BaseUnitTest {
 
         CompletableFuture<Object> reader =
                 CompletableFuture.supplyAsync(() -> locks.withWriteLock(KEY, abandoned::get, () -> "ran"));
-        Thread.sleep(300);
+        Thread.sleep(300); // NOPMD - proves over this window that the reader keeps waiting for the lock
         assertThat(reader)
                 .as("the reader waits while the capture holds the mirror")
                 .isNotDone();

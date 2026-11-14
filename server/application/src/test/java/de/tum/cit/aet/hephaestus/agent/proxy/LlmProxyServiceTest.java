@@ -674,7 +674,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     for (int comment = 0; comment < 10; comment++) {
                         body.write(": scheduled\n\n".getBytes(StandardCharsets.UTF_8));
                         body.flush();
-                        Thread.sleep(150);
+                        Thread.sleep(150); // NOPMD - the stub spaces its keep-alive comments, which the proxy must pass through
                     }
                     body.write(
                             ("data: {\"choices\":[{\"delta\":{\"content\":\"late answer\"}}]}\n\n" + "data: [DONE]\n\n")
@@ -1140,7 +1140,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                                     + "data: {\"choices\":[{\"delta\":{\"con")
                             .getBytes(StandardCharsets.UTF_8));
                     body.flush();
-                    Thread.sleep(3_000);
+                    Thread.sleep(3_000); // NOPMD - the stub stalls mid-stream, which the proxy's idle timeout is tested against
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
                 } catch (IOException proxyLeft) {
@@ -1183,7 +1183,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     body.write("data: {\"choices\":[{\"delta\":{\"content\":\"Let me\"}}]}\r\r"
                             .getBytes(StandardCharsets.UTF_8));
                     body.flush();
-                    Thread.sleep(3_000);
+                    Thread.sleep(3_000); // NOPMD - the stub stalls mid-stream, which the proxy's idle timeout is tested against
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
                 } catch (IOException proxyLeft) {

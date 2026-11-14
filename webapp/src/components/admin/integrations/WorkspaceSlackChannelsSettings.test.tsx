@@ -3,8 +3,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { SlackMonitoredChannel } from "@/api/types.gen";
 
-import { sleep } from "@/test/async";
-
 import {
 	WorkspaceSlackChannelsSettings,
 	type WorkspaceSlackChannelsSettingsProps,
@@ -80,7 +78,8 @@ describe("WorkspaceSlackChannelsSettings — reversible row actions swallow reje
 			await waitFor(() => expect(onUpdateConsent).toHaveBeenCalledOnce());
 			// Let unhandled rejections surface on the next event-loop turn while React finishes closing the menu.
 			await act(async () => {
-				await sleep(0);
+				// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- an unhandled rejection surfaces on the next event-loop turn
+				await new Promise<void>((resolve) => setTimeout(resolve, 0));
 			});
 			expect(onRejection).not.toHaveBeenCalled();
 		} finally {
@@ -101,7 +100,8 @@ describe("WorkspaceSlackChannelsSettings — reversible row actions swallow reje
 
 			await waitFor(() => expect(onRegisterChannel).toHaveBeenCalledOnce());
 			await act(async () => {
-				await sleep(0);
+				// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- an unhandled rejection surfaces on the next event-loop turn
+				await new Promise<void>((resolve) => setTimeout(resolve, 0));
 			});
 			expect(onRejection).not.toHaveBeenCalled();
 		} finally {

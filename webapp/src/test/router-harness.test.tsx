@@ -43,6 +43,7 @@ async function leaveANavigationLoading(after: number) {
 	await waitFor(() => {
 		expect(router.state.location.pathname).toBe("/w/beta/activity");
 	});
+	// oxlint-disable-next-line no-restricted-globals -- the harness resolves onboarding after the caller's delay, which its tests measure
 	setTimeout(() => {
 		onboarding.resolve();
 	}, after);

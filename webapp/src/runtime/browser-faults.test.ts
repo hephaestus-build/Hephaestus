@@ -7,7 +7,7 @@ import type { BrowserFaultsReport } from "@/api/types.gen";
 import { zBrowserFaultsReport } from "@/api/zod.gen";
 import type environment from "@/environment";
 import { server } from "@/mocks/server";
-import { deferred, sleep } from "@/test/async";
+import { deferred } from "@/test/async";
 
 import { errorTypeOf, framesOf, installBrowserFaults } from "./browser-faults";
 
@@ -203,7 +203,8 @@ describe("installBrowserFaults", () => {
 		await hide();
 		await hide();
 		// A second request would reach the server within this time.
-		await sleep(50);
+		// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that no second request is sent within this window
+		await new Promise<void>((resolve) => setTimeout(resolve, 50));
 		expect(sent).toHaveLength(1);
 
 		answer.resolve();

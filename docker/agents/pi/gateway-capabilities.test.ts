@@ -49,6 +49,7 @@ void test("a work deadline stops a busy capability wait without another request"
 		syncBuiltinESMExports();
 	});
 	const stop = new AbortController();
+	// oxlint-disable-next-line no-restricted-globals -- fake timers are on (t.mock.timers); this moves on the test clock
 	setTimeout(() => stop.abort(), 1000);
 	let calls = 0;
 	t.mock.method(globalThis, "fetch", async () => {

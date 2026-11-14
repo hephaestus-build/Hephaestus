@@ -25,7 +25,7 @@ import {
 	reviewHandlers,
 	feedbackCountHandlers,
 } from "@/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-reviews-server";
-import { deferred, sleep } from "@/test/async";
+import { deferred } from "@/test/async";
 import { levelsOpenedBy } from "@/test/detail-stack";
 import {
 	loadRouteCode,
@@ -520,7 +520,8 @@ describe("feedback approval level", () => {
 			decision.resolve();
 
 			await waitFor(() => expect(approved).toStrictEqual([oldest.id]));
-			await sleep(100);
+			// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that the route does not move afterwards
+			await new Promise<void>((resolve) => setTimeout(resolve, 100));
 			expect(router.state.location.search).not.toHaveProperty("detail");
 			await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
@@ -576,7 +577,8 @@ describe("feedback approval level", () => {
 					screen.queryByRole("button", { name: "Approve and open next", hidden: true }),
 				).toBeNull(),
 			);
-			await sleep(100);
+			// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that the route does not move afterwards
+			await new Promise<void>((resolve) => setTimeout(resolve, 100));
 			expect(stackInSearch(router.state.location.search.detail)).toStrictEqual(opened);
 			screen.getByRole("dialog", { name: summary });
 		});

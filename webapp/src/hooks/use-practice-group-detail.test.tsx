@@ -7,7 +7,6 @@ import { describe, expect, it, vi } from "vitest";
 import { EMPTY_REVIEW_FEED, type ReviewFeedState } from "@/components/profile/reviews";
 import { server } from "@/mocks/server";
 import { practiceStandingOf } from "@/stories/practice-profile-story-mock-data";
-import { sleep } from "@/test/async";
 
 import { usePracticeGroupDetail } from "./use-practice-group-detail";
 
@@ -116,7 +115,8 @@ describe("usePracticeGroupDetail", () => {
 
 		expect(result.current.practice?.slug).toBe("write-tests");
 		expect(result.current.feed).toStrictEqual(EMPTY_REVIEW_FEED);
-		await sleep(0);
+		// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that no read starts on the next turn
+		await new Promise<void>((resolve) => setTimeout(resolve, 0));
 		expect(reviews).not.toHaveBeenCalled();
 	});
 });

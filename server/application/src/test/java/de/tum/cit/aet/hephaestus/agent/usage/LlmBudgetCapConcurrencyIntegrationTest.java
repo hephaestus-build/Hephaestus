@@ -165,7 +165,7 @@ class LlmBudgetCapConcurrencyIntegrationTest extends AbstractWorkspaceIntegratio
 
     private static void sleep(long millis) {
         try {
-            Thread.sleep(millis);
+            Thread.sleep(millis); // NOPMD - polling interval of a bounded wait for a condition with no event to await
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(e);

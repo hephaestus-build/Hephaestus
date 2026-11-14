@@ -14,7 +14,7 @@ import {
 	EARLIER_REVIEWS_WORKSPACE,
 	TILES_BY_WINDOW,
 } from "@/stories/practices-across-the-workspace-story-data";
-import { deferred, sleep } from "@/test/async";
+import { deferred } from "@/test/async";
 import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 /** The note's title as it renders, with its period, so its absence is checked on the real words. */
@@ -272,7 +272,8 @@ describe("Practices across the workspace", () => {
 			focusManager.setFocused(false);
 			focusManager.setFocused(true);
 		});
-		await sleep(100);
+		// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that a refocus does not read the overview again
+		await new Promise<void>((resolve) => setTimeout(resolve, 100));
 
 		expect(overviewReads()).toHaveLength(1);
 		focusManager.setFocused(undefined);

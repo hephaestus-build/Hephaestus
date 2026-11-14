@@ -159,13 +159,13 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
         MentorEntry first = entryService.append(workspace.getId(), main.getId(), MentorLedgerFixtures.heph("One"));
         assertThat(lastAnswerAt()).isEqualTo(stored(first));
 
-        Thread.sleep(5);
+        Thread.sleep(5); // NOPMD - the next answer needs a later timestamp, which needs real elapsed time
         MentorConversation thread = conversations.openThread(workspace.getId(), first.getId());
         MentorEntry inThread =
                 entryService.append(workspace.getId(), thread.getId(), MentorLedgerFixtures.heph("In a thread"));
         assertThat(lastAnswerAt()).as("an answer in a thread").isEqualTo(stored(inThread));
 
-        Thread.sleep(5);
+        Thread.sleep(5); // NOPMD - the next answer needs a later timestamp, which needs real elapsed time
         submit(main, "A question is not an answer.");
         entryService.append(
                 workspace.getId(),

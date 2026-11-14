@@ -448,6 +448,27 @@
 			"rules": { "unicorn/filename-case": "off" }
 		},
 		{
+			// Options replace rather than merge, so the test files restate the `src/**` globals.
+			"files": ["src/**/*.test.ts", "src/**/*.test.tsx"],
+			"rules": {
+				"no-restricted-globals": [
+					"error",
+					{
+						"name": "fetch",
+						"message": "Server data goes through the generated client and TanStack Query."
+					},
+					{
+						"name": "XMLHttpRequest",
+						"message": "Server data goes through the generated client and TanStack Query."
+					},
+					{
+						"name": "setTimeout",
+						"message": "A test waits for an event, not for elapsed time: fake timers, vi.waitFor, expect.poll or a promise the code resolves. Suppress with the reason only when the elapsed time is the behaviour under test, or when fake timers are on."
+					}
+				]
+			}
+		},
+		{
 			// jest-dom is not registered in the Vitest project (`vite.config.ts` sets up `setup-msw.ts`
 			// alone), so its matchers throw `Invalid Chai property` at runtime with `tsc` perfectly happy.
 			"files": ["**/*.test.ts", "**/*.test.tsx"],

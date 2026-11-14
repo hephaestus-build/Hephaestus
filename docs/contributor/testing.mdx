@@ -243,6 +243,15 @@ When a test flakes:
 4. On the end date, the owner fixes or deletes the test.
 
 `vp run check` fails on a skip that names no issue, owner and end date, and on an expired quarantine.
+
+A test waits for an event, not for elapsed time.
+A fixed sleep makes a test slow when the event comes early and flaky when it comes late.
+Lint refuses `setTimeout` in a TypeScript test, and the PMD test rules refuse `Thread.sleep` and `TimeUnit.sleep` in a Java test.
+Wait with fake timers, `vi.waitFor`, `expect.poll`, Awaitility or a latch.
+
+When the elapsed time is the behaviour under test, suppress the rule on that line and write the reason:
+`// oxlint-disable-next-line no-restricted-globals -- <reason>` or `// NOPMD - <reason>`.
+Main code follows the same rule for an empty catch block and a debt marker such as `TODO`.
 A skip that depends on the environment, such as missing live credentials, is not a quarantine.
 
 A local test server does not own its port.

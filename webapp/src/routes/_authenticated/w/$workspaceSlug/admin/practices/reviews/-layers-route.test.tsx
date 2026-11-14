@@ -30,7 +30,7 @@ import {
 	reviewHandlers,
 	feedbackCountHandlers,
 } from "@/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-reviews-server";
-import { deferred, sleep } from "@/test/async";
+import { deferred } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
@@ -696,7 +696,8 @@ async function settledSheet(detail: string[]): Promise<string> {
 		ROUTE_RENDER_WAIT,
 	);
 	// One more turn for the reads that land after the first ones, such as a review's verdicts.
-	await sleep(300);
+	// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- the late reads have no completion signal; this lets them land
+	await new Promise<void>((resolve) => setTimeout(resolve, 300));
 	const markup = sheetMarkup(sheet);
 	cleanup();
 	return markup;

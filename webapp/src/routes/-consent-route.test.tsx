@@ -9,7 +9,6 @@ import { WORDING_VERSION } from "@/components/auth/consent-wording";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { consentOutstanding } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
-import { sleep } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 const notice = {
@@ -111,7 +110,8 @@ describe("a notice answered elsewhere", () => {
 			() => expect(router.state.location.pathname).toBe("/settings"),
 			ROUTE_RENDER_WAIT,
 		);
-		await sleep(200);
+		// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that the route stays at /settings
+		await new Promise<void>((resolve) => setTimeout(resolve, 200));
 		expect(router.state.location.pathname).toBe("/settings");
 	});
 
@@ -130,7 +130,8 @@ describe("a notice answered elsewhere", () => {
 			() => expect(router.state.location.pathname).toBe("/settings"),
 			ROUTE_RENDER_WAIT,
 		);
-		await sleep(200);
+		// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that the route stays at /settings
+		await new Promise<void>((resolve) => setTimeout(resolve, 200));
 		expect(router.state.location.pathname).toBe("/settings");
 	});
 });
