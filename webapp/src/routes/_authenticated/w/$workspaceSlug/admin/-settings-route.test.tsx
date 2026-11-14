@@ -256,6 +256,28 @@ describe("a suspended workspace", () => {
 		expect(screen.queryByText("Acme is suspended", { exact: false })).toBeNull();
 	});
 
+	it("leaves a suspended workspace that the list still names once the reader no longer administers it", async () => {
+		server.use(
+			http.get("*/user", () => HttpResponse.json({ ...currentUser, appRole: "USER" })),
+			http.get("*/workspaces/acme/members/me", () => HttpResponse.json(ownMembership("MEMBER"))),
+			// The first list is older than the role; the server no longer lists the workspace.
+			http.get(
+				"*/workspaces",
+				() =>
+					HttpResponse.json([
+						workspaceListItem("acme", { displayName: "Acme", status: "SUSPENDED" }),
+					]),
+				{ once: true },
+			),
+			http.get("*/workspaces", () => HttpResponse.json([])),
+		);
+		const { router } = renderRouteAtWithRouter("/w/acme/admin/settings");
+		await waitFor(() => {
+			expect(router.state.location.pathname).toBe("/");
+		}, ROUTE_RENDER_WAIT);
+		expect(screen.queryByText("Acme is suspended", { exact: false })).toBeNull();
+	});
+
 	it("says why a resume failed and keeps the workspace suspended", async () => {
 		serveSuspended();
 		server.use(
@@ -1337,21 +1359,22 @@ describe("instance administrator workspace settings", () => {
 	});
 
 	it("opens a suspended workspace's administration on its resume, from any address in it", async () => {
-		serveTarget("SUSPENDED");
+		const target = serveTarget("SUSPENDED");
 		const resumed: unknown[] = [];
 		server.use(
 			http.patch("*/workspaces/tutors/status", async ({ request }) => {
 				resumed.push(await request.json());
-				return HttpResponse.json({ status: "ACTIVE" });
+				const active = { ...target, status: "ACTIVE" };
+				server.use(http.get("*/workspaces/tutors", () => HttpResponse.json(active)));
+				return HttpResponse.json(active);
 			}),
 		);
 		const { router } = renderRouteAtWithRouter("/w/tutors/admin/members");
 		await screen.findByText("Tutors is suspended", { exact: false }, ROUTE_RENDER_WAIT);
 		expect(router.state.location.pathname).toBe("/w/tutors/admin/settings");
 		await userEvent.click(screen.getByRole("button", { name: "Resume workspace" }));
-		await waitFor(() => {
-			expect(resumed).toStrictEqual([{ status: "ACTIVE" }]);
-		});
+		await screen.findByRole("heading", { name: "Capabilities" }, ROUTE_RENDER_WAIT);
+		expect(resumed).toStrictEqual([{ status: "ACTIVE" }]);
 	});
 
 	it("withdraws refused instance publication policy instead of showing cached public status", async () => {

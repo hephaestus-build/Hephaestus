@@ -1,9 +1,11 @@
 import { createFileRoute, Outlet, redirect, useMatch, useMatches } from "@tanstack/react-router";
 import { hasText } from "@/lib/text";
+import { hasMinimumWorkspaceRole } from "@/lib/workspace-roles";
 
 import {
 	getPublicActivityOnboardingOptions,
 	getWorkspaceOptions,
+	listWorkspacesQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 import type { WorkspaceListItem } from "@/api/types.gen";
 import { ModelLinkHostsContext } from "@/components/common/model-links";
@@ -18,6 +20,7 @@ import {
 	memberOnboardingGateOptions,
 	onboardingGateApplies,
 	resolveCurrentUser,
+	resolveWorkspaceMembership,
 	workspaceListGateOptions,
 } from "@/runtime/auth/guard";
 import { getUserViewSession } from "@/runtime/user-view/session";
@@ -30,12 +33,29 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
 	// Child guards receive membership or a verified administration target at navigation.
 	// Components observe live workspace facts through `useWorkspaceAccess`.
 	beforeLoad: async ({ context, params, location, preload }) => {
-		const workspaces = await context.queryClient
+		let workspaces = await context.queryClient
 			.query(workspaceListGateOptions())
 			.catch(() => undefined);
-		const workspace = workspaces?.find(
+		let workspace = workspaces?.find(
 			(candidate) => candidate.workspaceSlug === params.workspaceSlug,
 		);
+		if (workspace?.status === "SUSPENDED") {
+			const membership = await resolveWorkspaceMembership(
+				context.queryClient,
+				params.workspaceSlug,
+			);
+			if (!hasMinimumWorkspaceRole(membership?.role, "ADMIN")) {
+				// The list is older than the role: the server lists a suspended workspace only to its admins.
+				await context.queryClient.invalidateQueries({ queryKey: listWorkspacesQueryKey() });
+				workspaces = await context.queryClient
+					.query(workspaceListGateOptions())
+					.catch(() => undefined);
+				workspace = workspaces?.find(
+					(candidate) =>
+						candidate.workspaceSlug === params.workspaceSlug && candidate.status !== "SUSPENDED",
+				);
+			}
+		}
 		const settingsPath = `/w/${encodeURIComponent(params.workspaceSlug)}/admin/settings`;
 		// Only an admin finds a suspended workspace, and its settings are the one page it still answers.
 		const leaveSuspended = (status: WorkspaceListItem["status"]) => {
@@ -105,7 +125,9 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
 		}
 
 		// The reader followed a link and lands elsewhere, so say so. A preload is no arrival.
-		const fallback = defaultWorkspace(workspaces);
+		const fallback = defaultWorkspace(
+			workspaces.filter((candidate) => candidate.workspaceSlug !== params.workspaceSlug),
+		);
 		const fallbackSlug = fallback?.workspaceSlug;
 		if (!preload) {
 			noticeCannotOpenWorkspace(

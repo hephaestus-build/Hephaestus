@@ -7,6 +7,8 @@ import { Spinner } from "@/components/ui/spinner";
 
 export interface SuspendedWorkspaceCardProps {
 	workspaceName: string;
+	/** A GitHub workspace can be suspended by GitHub, which then also resumes it. */
+	github: boolean;
 	resuming: boolean;
 	/** Why the last resume failed, in the server's words. */
 	resumeError?: string;
@@ -19,6 +21,7 @@ export interface SuspendedWorkspaceCardProps {
  */
 export function SuspendedWorkspaceCard({
 	workspaceName,
+	github,
 	resuming,
 	resumeError,
 	onResume,
@@ -37,10 +40,12 @@ export function SuspendedWorkspaceCard({
 						While it is suspended, it syncs nothing, runs no practice reviews, and sends no
 						feedback. Its members cannot open it. Its data stays.
 					</p>
-					<p>
-						If GitHub suspended the Hephaestus app for this workspace, unsuspend the app in GitHub
-						instead. The workspace then resumes by itself. A resume here would not last.
-					</p>
+					{github && (
+						<p>
+							If GitHub suspended the Hephaestus app, unsuspend it in GitHub. The workspace then
+							resumes by itself, and Hephaestus refuses a resume here until then.
+						</p>
+					)}
 				</div>
 				{resumeError !== undefined && (
 					<Alert variant="destructive">

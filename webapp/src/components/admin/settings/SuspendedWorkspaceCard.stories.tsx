@@ -12,6 +12,7 @@ const meta = {
 	tags: ["autodocs"],
 	args: {
 		workspaceName: "Applied Software Engineering",
+		github: true,
 		resuming: false,
 		onResume: fn(),
 	},
@@ -39,9 +40,20 @@ export const Resuming: Story = {
 	},
 };
 
+/** A GitLab workspace: no provider suspends it, so the card says nothing about GitHub. */
+export const GitLab: Story = {
+	args: { github: false },
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByText(/GitHub/u)).toBeNull();
+	},
+};
+
 /** The server refused the resume and says why. The admin can try again. */
 export const ResumeFailed: Story = {
-	args: { resumeError: "This workspace is being deleted, so it cannot become active again." },
+	args: {
+		resumeError:
+			"GitHub has suspended the Hephaestus app for this workspace. Unsuspend the app in the GitHub settings of the organization or account. The workspace then resumes by itself.",
+	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("alert")).toHaveTextContent(/could not resume the workspace/iu);
 		await expect(canvas.getByRole("button", { name: "Resume workspace" })).toBeEnabled();
