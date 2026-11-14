@@ -314,8 +314,10 @@ The `server` runtime role inspects GitLab tokens daily at **03:00 UTC**.
 This is independent of repository sync and webhook registration.
 A token within `hephaestus.webhook.token-rotation.threshold-days` of expiry (default 7 days) self-rotates with configured validity (default 90 days).
 It needs GitLab `api` or `self_rotate` scope and an instance version with self-rotation support.
+
 The server leases each workspace token check and holds no database transaction during GitLab calls.
-It stores an answer only if the lease is still valid and nobody paused, resumed or replaced the token during the call.
+It stores a rotated token only if the lease is still valid and nobody paused, resumed or replaced the token during the call.
+It reports a failed check only while its lease is valid and the token is unchanged.
 
 :::caution[CAUTION: Do not share a token that Hephaestus rotates]
 

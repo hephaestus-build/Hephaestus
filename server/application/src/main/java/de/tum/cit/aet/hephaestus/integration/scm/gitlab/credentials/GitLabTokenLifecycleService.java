@@ -157,12 +157,13 @@ public class GitLabTokenLifecycleService {
                             && response.getStatusCode().value() == 401
                     ? Signal.REFUSED
                     : rotationAttempted || expiry ? Signal.EXPIRING : Signal.NONE;
-            writes.executeWithoutResult(status -> recordFailure(check, info, result, rotationAttempted, signal));
-            // Provider responses and exception messages can contain a token.
+            // Provider responses and exception messages can contain a token. Log before the recovery write, which can
+            // itself fail, so an attempted rotation is always visible.
             log.warn(
                     "GitLab token inspection or rotation failed: workspaceId={}, rotationAttempted={}",
                     workspaceId,
                     attempted);
+            writes.executeWithoutResult(status -> recordFailure(check, info, result, rotationAttempted, signal));
         }
     }
 
@@ -212,9 +213,11 @@ public class GitLabTokenLifecycleService {
                         connection,
                         "GITLAB_TOKEN_ROTATION_UNCERTAIN",
                         "Rotation was attempted but its result could not be stored. Verify the token before rotating it again.");
-            // Audit a discarded result on its original row, but never mark a replacement credential as broken.
+            // Audit a discarded result on its original row, but never mark a replacement credential as broken. After
+            // the lease, another server owns the check of this token and reports its health.
             if (connection.getState() != IntegrationState.ACTIVE
-                    || connection.getCredentialsGeneration() != check.fence().credentialsGeneration()) return;
+                    || connection.getCredentialsGeneration() != check.fence().credentialsGeneration()
+                    || !clock.instant().isBefore(check.fence().validUntil())) return;
             if (info != null
                     && connection.getLifecycleGeneration() == check.fence().lifecycleGeneration()
                     && connection.getConfig() instanceof GitLabConfig config)

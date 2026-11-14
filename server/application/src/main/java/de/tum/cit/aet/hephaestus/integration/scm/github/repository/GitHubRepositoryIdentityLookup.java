@@ -45,6 +45,8 @@ public class GitHubRepositoryIdentityLookup implements RepositoryIdentityLookup,
      */
     @Override
     public Optional<RepositoryIdentity> resolve(long workspaceId, String fullPath) {
+        // A path that names no repository needs no credential read.
+        if (GitHubRepositoryNameParser.parse(fullPath).isEmpty()) return Optional.empty();
         var connection = connections
                 .findActiveBearerConnection(
                         workspaceId,

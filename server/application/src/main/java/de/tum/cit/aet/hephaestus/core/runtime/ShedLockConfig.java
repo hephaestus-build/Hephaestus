@@ -4,6 +4,7 @@ import java.util.UUID;
 import javax.sql.DataSource;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.provider.jdbctemplate.JdbcTemplateLockProvider;
+import net.javacrumbs.shedlock.provider.sql.DatabaseProduct;
 import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
 import net.javacrumbs.shedlock.support.Utils;
 import org.springframework.context.annotation.Bean;
@@ -39,6 +40,7 @@ public class ShedLockConfig {
         // Unlock matches locked_by. An expired acquisition must not release its successor on the same server.
         return configuration -> new JdbcTemplateLockProvider(JdbcTemplateLockProvider.Configuration.builder()
                         .withJdbcTemplate(jdbc)
+                        .withDatabaseProduct(DatabaseProduct.POSTGRES_SQL)
                         .usingDbTime()
                         .withLockedByValue(Utils.getHostname() + "/" + UUID.randomUUID())
                         .build())
