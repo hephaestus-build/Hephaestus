@@ -178,7 +178,7 @@ export const ReplaceKey: Story = {
 		connectionLabel: "Acme Wiki",
 		tokenStatus: healthyToken,
 	},
-	play: async ({ args, canvas, userEvent }) => {
+	play: async ({ args, canvas }) => {
 		const replace = canvas.getByRole("button", { name: "Replace key" });
 		await expect(replace).toBeDisabled();
 		await userEvent.type(canvas.getByLabelText("Replace API key"), "ol_api_new");
