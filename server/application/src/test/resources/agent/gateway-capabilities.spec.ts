@@ -3,7 +3,10 @@ import { syncBuiltinESMExports } from "node:module";
 import test from "node:test";
 import { setImmediate } from "node:timers/promises";
 
-import { discoverCapabilities, retryAfterMs } from "./gateway-capabilities.ts";
+import {
+	discoverCapabilities,
+	retryAfterMs,
+} from "../../../main/resources/agent/gateway-capabilities.ts";
 
 const HEADERS = {
 	authorization: "Bearer sandbox-token",

@@ -192,30 +192,25 @@ export function loadProviderConfig(cwd = DEFAULT_WORKSPACE_ROOT): ProviderConfig
 /** A provider config complete enough to register: it names the protocol and the model. */
 export type RegisteredProviderConfig = ProviderConfig & { apiProtocol: string; modelId: string };
 
-/** The headers of a run's claim, the only headers a runner adds to its gateway calls for a sandbox's driver. */
-const CLAIM_HEADERS = new Set(["x-agent-run", "x-agent-epoch"]);
-
 /**
- * The claim of the run that a runner works for, from `LLM_PROXY_CLAIM`: a JSON object of the run's claim headers that
- * the sandbox's driver passes. Absent outside a sandbox driver's run, so the runner sends no claim; anything else than
- * the claim's two headers with text values is refused.
+ * The claim of the run that the sandbox's driver started a program for, from `LLM_PROXY_CLAIM`: a JSON object of
+ * exactly the run's two claim headers, each with a text value (review-measure.ts writes it). The gateway bills each call
+ * to that run and refuses it once the claim is gone, so a program without a claim is refused here, before any call.
  */
-export function parseProxyClaim(value: string | undefined): Readonly<Record<string, string>> {
+export function parseProxyClaim(
+	value: string | undefined,
+): Readonly<{ "x-agent-run": string; "x-agent-epoch": string }> {
 	if (value === undefined || value === "") {
-		return {};
+		throw new Error("LLM_PROXY_CLAIM is missing: the program runs only for a sandbox's run");
 	}
 	const parsed: unknown = JSON.parse(value);
-	if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-		throw new Error("LLM_PROXY_CLAIM is not an object of the run's claim headers");
-	}
-	const claim: Record<string, string> = {};
-	for (const [name, header] of Object.entries(parsed)) {
-		if (!CLAIM_HEADERS.has(name) || typeof header !== "string" || header === "") {
-			throw new Error("LLM_PROXY_CLAIM names only the run's claim headers, each with a value");
+	if (isRecord(parsed) && Object.keys(parsed).length === 2) {
+		const { "x-agent-run": run, "x-agent-epoch": epoch } = parsed;
+		if (typeof run === "string" && hasText(run) && typeof epoch === "string" && hasText(epoch)) {
+			return { "x-agent-run": run, "x-agent-epoch": epoch };
 		}
-		claim[name] = header;
 	}
-	return claim;
+	throw new Error("LLM_PROXY_CLAIM names exactly the run's claim headers, each with a value");
 }
 
 /**

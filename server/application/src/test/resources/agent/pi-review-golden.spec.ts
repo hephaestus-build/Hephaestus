@@ -229,6 +229,7 @@ function runScenario(name: string): Map<string, string> {
 					PI_PRACTICE_OUTPUT_TOKENS: "24000",
 					LLM_PROXY_URL: "https://unused.invalid",
 					LLM_PROXY_TOKEN: "test-token",
+					LLM_PROXY_CLAIM: '{"x-agent-run":"run-1","x-agent-epoch":"1"}',
 				},
 				encoding: "utf8",
 				timeout: 30_000,

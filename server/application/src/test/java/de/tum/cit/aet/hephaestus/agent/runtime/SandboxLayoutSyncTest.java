@@ -35,7 +35,7 @@ class SandboxLayoutSyncTest extends BaseUnitTest {
 
     @Test
     void shouldExitTheGatewayWrapperWithTheCodesAndGraceTheServerReads() throws IOException {
-        String gateway = Files.readString(repoFile("docker/agents/pi/gateway-run.ts"), StandardCharsets.UTF_8);
+        String gateway = resource("agent/gateway-run.js");
 
         assertThat(constant(gateway, "EXIT_UPLOAD_FAILED"))
                 .isEqualTo(Integer.toString(SandboxLayout.EXIT_UPLOAD_FAILED));

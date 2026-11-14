@@ -371,7 +371,7 @@ export default defineConfig({
 			]),
 			"gate:agent-tests": group(["test:agents"]),
 			"test:agents": run(
-				`node --test ${nodeTestFiles} server/application/src/test/resources/agent/*.spec.ts docker/agents/practice-scripts/*.test.ts docker/agents/practice-scripts/lib/core/**/*.test.ts docker/agents/practice-scripts/kits/**/*.test.ts docker/agents/pi/*.test.ts`,
+				`node --test ${nodeTestFiles} server/application/src/test/resources/agent/*.spec.ts docker/agents/practice-scripts/*.test.ts docker/agents/practice-scripts/lib/core/**/*.test.ts docker/agents/practice-scripts/kits/**/*.test.ts`,
 			),
 			// The chart suites alone, for a chart change. test:tooling already runs both in the normal
 			// graph; the render suite needs the Helm CLI that .github/actions/setup-helm pins.

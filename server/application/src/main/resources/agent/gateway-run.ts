@@ -8,7 +8,8 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import type { FileEntry } from "@earendil-works/pi-coding-agent";
 
-import { claimHeaders, present } from "./gateway-capabilities.ts";
+import { present } from "./gateway-capabilities.ts";
+import { parseProxyClaim } from "./pi-provider.ts";
 
 // The server follows SIGTERM with SIGKILL after its stop timeout; the child gets this much of it and
 // the upload of whatever out/ holds by then gets the rest.
@@ -660,6 +661,7 @@ export async function collectTraces(
 }
 
 async function main() {
+	const claim = parseProxyClaim(process.env.LLM_PROXY_CLAIM);
 	const [command, ...args] = process.argv.slice(2);
 	const endpoint = process.env.SANDBOX_RUNTIME_URL;
 	const token = process.env.LLM_PROXY_TOKEN;
@@ -713,9 +715,8 @@ async function main() {
 			throw new Error("Could not package sandbox result");
 		}
 		try {
-			// A sandbox's run reports how its runner ended with the result; a review Job's Pod reports it itself.
 			await upload(new URL(`${endpoint}/result`), token, archive, uploadDeadline, undefined, {
-				...claimHeaders(process.env.LLM_PROXY_CLAIM),
+				...claim,
 				[EXIT_CODE_HEADER]: String(exitCode),
 				[TIMED_OUT_HEADER]: String(workTimeout.signal.aborted),
 			});

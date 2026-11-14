@@ -668,6 +668,7 @@ function environment(sessionId: string): string[] {
 	const gateway = gatewayUrl();
 	env.LLM_PROXY_URL = `${gateway}/internal/llm`;
 	env.LLM_PROXY_TOKEN = "footprint-token";
+	env.LLM_PROXY_CLAIM = JSON.stringify({ "x-agent-run": sessionId, "x-agent-epoch": "1" });
 	env.SANDBOX_RUNTIME_URL = `${gateway}/internal/llm/runtime/${sessionId}`;
 	const deadline = Date.now() + workSeconds * 1000;
 	env.SANDBOX_WORK_DEADLINE_MS = String(deadline);

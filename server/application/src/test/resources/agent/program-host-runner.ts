@@ -340,6 +340,7 @@ export async function runRunner(
 				PI_PRACTICE_OUTPUT_TOKENS: "48000",
 				LLM_PROXY_URL: "https://unused.invalid",
 				LLM_PROXY_TOKEN: "job-token",
+				LLM_PROXY_CLAIM: '{"x-agent-run":"run-1","x-agent-epoch":"1"}',
 				...env,
 			},
 			stdio: [

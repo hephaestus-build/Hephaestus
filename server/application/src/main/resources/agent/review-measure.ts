@@ -1,7 +1,7 @@
 // review-measure.ts — a review's measurement in its own sandbox: the driver's REVIEW kind.
 //
-// The image keeps the programs that a review Job's Pod ran, and the kind runs them in the same order, in one
-// container: the initializer downloads and extracts the captured workspace, then the run program starts the runner
+// The kind runs the image's review programs in order, in one container (gateway-init.ts, gateway-run.ts): the
+// initializer downloads and extracts the captured workspace, then the run program starts the runner
 // under its work deadline and uploads what it wrote. The runner starts tools and programs in this same container.
 // The server measures the result when it arrives, so the run is done when its upload is confirmed.
 
@@ -13,7 +13,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import type { KindRunner, RunContext, RunOutcome } from "./driver.ts";
 
-/** Where the image keeps the review programs (docker/agents/pi). */
+/** Where the image keeps the review programs and the Pi SDK. */
 const SDK = "/opt/pi-sdk";
 /** The sandbox's /workspace volume, over the image's read-only root. */
 const WORKSPACE = "/workspace";
@@ -189,7 +189,7 @@ export const measureReview: KindRunner = async (run): Promise<RunOutcome> => {
 	}
 	const env = measureEnvironment(run, context);
 	// A sandbox also serves its review's next attempt. Each attempt's /workspace starts from its own captured workspace,
-	// as each review Job's empty volume did, never from what an earlier attempt extracted or wrote there.
+	// never from what an earlier attempt extracted or wrote there.
 	await emptyDirectory(WORKSPACE);
 	if (!existsSync(SDK_LINK)) {
 		symlinkSync(`${SDK}/node_modules`, SDK_LINK);

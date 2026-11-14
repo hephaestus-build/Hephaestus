@@ -207,7 +207,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
     }
 
     /**
-     * The attempt's result arrived: the steps after a review Job's sandbox run on it now, outside any transaction, and
+     * The attempt's result arrived: the steps after a review's sandbox run on it now, outside any transaction, and
      * they end the attempt, hand it on to its composition, or requeue it. Its inputs and its session go after them.
      */
     void measured(SandboxRun run, SandboxResult result) {
@@ -239,7 +239,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
 
     /**
      * Its result already ended the attempt, or handed it on; a run that sent none hands its attempt on, and spends a
-     * retry, as a review Job's lost sandbox does.
+     * retry, as a lost sandbox does.
      */
     @Override
     public boolean end(SandboxRun run, Outcome outcome) {

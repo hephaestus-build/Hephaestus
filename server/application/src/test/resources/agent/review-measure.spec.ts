@@ -8,7 +8,7 @@ import path from "node:path";
 import test from "node:test";
 import type { RunContext } from "../../../main/resources/agent/driver.ts";
 
-import { extract, extractArguments } from "../../../../../../docker/agents/pi/gateway-init.ts";
+import { extract, extractArguments } from "../../../main/resources/agent/gateway-init.ts";
 import {
 	emptyDirectory,
 	measureEnvironment,

@@ -91,17 +91,21 @@ void test("a sandbox's run calls the gateway's model routes with the sandbox tok
 	});
 });
 
-void test("a runner reads only its run's claim headers from LLM_PROXY_CLAIM, and none outside a sandbox's run", () => {
-	assert.deepEqual(parseProxyClaim(undefined), {});
+void test("a program reads exactly its run's claim headers from LLM_PROXY_CLAIM, and refuses to run without them", () => {
 	assert.deepEqual(parseProxyClaim('{"x-agent-run":"r","x-agent-epoch":"3"}'), {
 		"x-agent-run": "r",
 		"x-agent-epoch": "3",
 	});
 	for (const refused of [
+		undefined,
+		"",
+		"{}",
+		'{"x-agent-run":"r"}',
+		'{"x-agent-run":"r","x-agent-epoch":"3","authorization":"Bearer t"}',
 		'{"authorization":"Bearer t"}',
-		'{"x-agent-run":3}',
+		'{"x-agent-run":3,"x-agent-epoch":"3"}',
 		"[]",
-		'{"x-agent-run":""}',
+		'{"x-agent-run":"","x-agent-epoch":"3"}',
 	]) {
 		assert.throws(() => parseProxyClaim(refused), /LLM_PROXY_CLAIM/u);
 	}

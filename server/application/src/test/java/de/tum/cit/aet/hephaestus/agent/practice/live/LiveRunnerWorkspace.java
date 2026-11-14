@@ -382,6 +382,9 @@ final class LiveRunnerWorkspace {
         environment.put("PI_RUNNER_CWD", SandboxLayout.WORKSPACE_ROOT);
         environment.put("LLM_PROXY_URL", proxy.toString());
         environment.put("LLM_PROXY_TOKEN", jobToken);
+        // Neither the stand-in proxy nor a review attempt's token reads the claim; the runner refuses to start
+        // without one.
+        environment.put("LLM_PROXY_CLAIM", "{\"x-agent-run\":\"live-run\",\"x-agent-epoch\":\"1\"}");
         List<String> command = spec.command();
         if (command.isEmpty()) throw new IllegalArgumentException("The live runner has no command");
         return new GenericContainer<>(DockerImageName.parse(spec.image()))
