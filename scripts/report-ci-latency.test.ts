@@ -538,15 +538,24 @@ void test("cancellation attribution requires exact trees and causal timestamps",
 			.cause,
 		"predecessor_drop",
 	);
-	assert.equal(
+	assert.deepEqual(
 		classifyCancellation(
 			run,
 			jobs,
 			[run, ahead, root],
 			[removedAhead(ahead.head_sha, "stack_invalidated"), removedAhead(root.head_sha, "manual")],
-		).cause,
-		"manual",
+		),
+		{ cause: "manual", removal: removedAhead(root.head_sha, "manual") },
 		"a cascade is attributed to its root removal",
+	);
+	assert.deepEqual(
+		classifyCancellation(
+			run,
+			jobs,
+			[run, ahead],
+			[{ ...manual, reason: "stack_invalidated" }, removedAhead(ahead.head_sha, "failed_checks")],
+		),
+		{ cause: "predecessor_drop", removal: removedAhead(ahead.head_sha, "failed_checks") },
 	);
 	assert.deepEqual(
 		classifyCancellation(run, jobs, [run], [{ ...manual, reason: "stack_invalidated" }]),
@@ -744,6 +753,45 @@ esac
 			["number=1", "number=2"],
 			"only the cancelled group and its nearest merged predecessor need timeline reads",
 		);
+		// A cascade removal on the cancelled group keeps the walk going to the root removal ahead.
+		const cascade = queueTimelinePage(
+			[{ createdAt: removed, reason: "stack_invalidated", beforeCommit: { oid: head } }],
+			false,
+			"cascade",
+		);
+		const manualAhead = queueTimelinePage(
+			[{ createdAt: removed, reason: "manual", beforeCommit: { oid: ancestorHeads[0] } }],
+			false,
+			"manual",
+		);
+		for (const [ahead, cause] of [
+			[manualAhead, /Manual removal \(this entry or one ahead\) \| 1/u],
+			[merged, /Predecessor drop \(an entry ahead dropped out\) \| 1/u],
+		] as const) {
+			await writeFile(calls, "");
+			await writeFile(
+				path.join(directory, "gh"),
+				`#!/bin/sh
+printf '%s\\n' "$*" >> "$CI_REPORT_API_LOG"
+case "$*" in
+  *event=merge_group*) printf '%s\\n' '${longChain}' ;;
+  */runs/1/attempts/1/jobs*) printf '%s\\n' '${jobs}' ;;
+  *number=1*) printf '%s\\n' '${cascade}' ;;
+  *number=2*) printf '%s\\n' '${ahead}' ;;
+  *graphql*) exit 99 ;;
+  *) printf '%s\\n' '[{"workflow_runs":[]}]' ;;
+esac
+`,
+				{ mode: 0o755 },
+			);
+			const walked = invoke();
+			assert.equal(walked.status, 0, walked.stderr);
+			assert.match(walked.stdout, cause);
+			assert.deepEqual((await readFile(calls, "utf8")).match(/number=\d+/gu), [
+				"number=1",
+				"number=2",
+			]);
+		}
 		await writeFile(
 			path.join(directory, "gh"),
 			`#!/bin/sh

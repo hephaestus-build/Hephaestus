@@ -337,7 +337,7 @@ export function renderLatencyBudget(
 		"| Cause | Cancelled groups |",
 		"|---|---:|",
 		`| Native worker failure | ${cancellations.causes.worker_failure} |`,
-		`| Predecessor drop (an entry ahead failed or conflicted) | ${cancellations.causes.predecessor_drop} |`,
+		`| Predecessor drop (an entry ahead dropped out) | ${cancellations.causes.predecessor_drop} |`,
 		`| Manual removal (this entry or one ahead) | ${cancellations.causes.manual} |`,
 		`| Timeout | ${cancellations.causes.timeout} |`,
 		`| Unknown | ${cancellations.causes.unknown} |`,
