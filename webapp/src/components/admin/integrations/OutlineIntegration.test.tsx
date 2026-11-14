@@ -414,7 +414,13 @@ describe("Outline integration — token lifecycle", () => {
 		server.use(
 			http.put("*/workspaces/demo/connections/outline/token", async ({ request }) => {
 				replaced.push(await request.json());
-				return HttpResponse.json({ ...healthyToken, last4: "c0de" });
+				const replacedToken = { ...healthyToken, last4: "c0de" };
+				server.use(
+					http.get("*/workspaces/demo/connections/outline/token", () =>
+						HttpResponse.json(replacedToken),
+					),
+				);
+				return HttpResponse.json(replacedToken);
 			}),
 			http.patch("*/workspaces/demo/connections/7/status", async ({ request }) => {
 				statusChanges.push(await request.json());
