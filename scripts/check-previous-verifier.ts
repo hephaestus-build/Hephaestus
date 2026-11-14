@@ -35,7 +35,7 @@ interface Published {
 
 /**
  * Tooling below this release compares a fixed chart image list and refuses every chart with another
- * image set. A host on it follows the manual steps in docs/admin/upgrade.mdx and applies this release
+ * image set. A host on it follows the manual steps in docs/admin/upgrade-to-1-0.mdx and applies this release
  * first, so its verifier proves nothing about a later release.
  */
 const OLDEST_VERIFIER = "v1.0.0-rc.5";

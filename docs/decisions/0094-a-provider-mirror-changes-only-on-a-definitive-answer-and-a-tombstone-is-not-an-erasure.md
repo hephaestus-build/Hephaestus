@@ -70,7 +70,7 @@ A rule that main does not satisfy yet says "1.0 target".
     Enforced by: `PersonDataRecoveryIntegrationTest#shouldReapplyAnErasureLostByARestoreBeforeProcessingStarts`, `PersonDataRecoveryStartupIntegrationTest#shouldBindTheRecoveryProfileAndCompleteBeforeSchedulersAndConsumersStart`.
 16. **An erasure survives a backup restore.** The `erasure-recovery` profile reapplies every erasure after the recovery point. It reapplies disconnects, workspace purges and person erasures, also of accounts that their owners deleted.
     The operator lists them in a version 2 manifest outside the database. The profile runs with background work off and refuses to start beside it, so the purge needs no quiescence guard.
-    [Backup and restore](../admin/backup-restore.mdx#reapply-erasure-decisions-before-processing-resumes) owns the procedure.
+    [Reapply erasures after a restore](../admin/erasure-recovery.md) owns the procedure.
     Enforced by: `ErasureRecoveryRestoreIntegrationTest#shouldPurgeAgainAWorkspaceThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldDisconnectAgainAConnectionThatARestoreBroughtBack`, `PersonDataRecoveryIntegrationTest#shouldRefuseToRecoverBesideBackgroundWork`.
 
 ## What changed, and why

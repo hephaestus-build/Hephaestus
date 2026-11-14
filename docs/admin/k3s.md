@@ -347,7 +347,7 @@ This includes PostgreSQL data on a default one-host installation.
 Verify a recovery set first if you must keep the data.
 :::
 
-1. Complete [Decommission](./production-operations-runbook#decommission), including provider disconnects and any required final backup.
+1. Complete [Decommission an instance](./decommission), including provider disconnects and any required final backup.
 2. Disable the reconciler timer, if installed, as [Operating it](./pull-based-deployment#operating-it) describes.
 3. Remove the release, as [Undo](./kubernetes#undo) describes.
 4. On the dedicated k3s server, run `sudo /usr/local/bin/k3s-uninstall.sh`.

@@ -25,7 +25,7 @@ For a security incident, follow [Security policy](https://github.com/hephaestus-
 
 ## Contain the incident
 
-1. Ask operators to use the [first-response controls](../admin/production-operations-runbook#first-response-and-kill-switch-map) for the observed symptom.
+1. Ask operators to use the [first-response controls](../admin/contain-an-incident) for the observed symptom.
 2. Hold further Production promotion approvals.
 3. Ask each affected operator to pause reconciliation with [Operating it](../admin/pull-based-deployment#operating-it).
 4. Pause automatic Staging promotions with **freeze** in [Release / Promote](../admin/pull-based-deployment#operating-it).
@@ -109,7 +109,7 @@ It does not verify other runtime roles, the database.
 The operator's separate recovery checks establish their state.
 
 The operator restores normal feedback and network access only after the recovery checks pass.
-The [first-response controls](../admin/production-operations-runbook#first-response-and-kill-switch-map) own those reverse actions.
+The [first-response controls](../admin/contain-an-incident#undo) own those reverse actions.
 
 After incident acceptance, the release maintainer lets Staging follow `main` again with [Operating it](../admin/pull-based-deployment#operating-it).
 

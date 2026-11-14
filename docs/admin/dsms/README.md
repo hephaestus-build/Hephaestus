@@ -27,7 +27,7 @@ Do not publish unresolved placeholders as a valid privacy notice.
 | Recipients and transfers | `[exact providers, roles, regions, contracts, subprocessors, transfer safeguards, renewal dates]`, using the [processor checklist](./processor-checklist.md). |
 | Retention | `[duration or review/deletion trigger for every category]`, including stores with no automatic expiry, active Slack threads, unavailable repositories, exports, suppression keys, logs and backups. |
 | Security and recovery | `[access owners, key management, backup destination and expiry, restore test, incident response and breach procedure]`. Verify the configured stack. Source code does not prove operational controls. |
-| Rights | `[verified request intake, secure delivery, response owner, exceptions and completion evidence]`. Use the shipped Person data procedure, not ad hoc SQL. |
+| Rights | `[verified request intake, secure delivery, response owner, exceptions and completion evidence]`. Use [Answer an access or erasure request](../person-data-requests.md), not ad hoc SQL. |
 
 1. Help a requester identify their records under Art. 12(2).
 2. If the person does not know their stable provider IDs, resolve them from verified source-profile/work links.
@@ -47,37 +47,6 @@ Do not publish unresolved placeholders as a valid privacy notice.
     It applies to qualifying consent- or contract-based automated processing.
     It must respect other people's rights.
     A JSON download does not make all public-task processing subject to Art. 20.
-
-## Answering an access request
-
-An Art. 15 reply includes confirmation of processing and access to the person's data.
-It also includes this information about the processing:
-
-- Purposes.
-- Categories.
-- Recipients.
-- Retention periods or criteria.
-- Rights.
-- The complaint route.
-- Available source information.
-- Applicable automated-decision information.
-- Transfer safeguards.
-
-Use verified deployment facts.
-A JSON download alone does not complete the reply.
-See the [EDPB right-of-access guidelines](https://www.edpb.europa.eu/documents/guideline/guidelines-012022-on-data-subject-rights-right-of-access_en).
-
-Export field allowlists omit credential fields and other people's profiles.
-They do not redact every name, secret, or third-party detail in source text.
-
-1. Before delivery, review shared-source and free-text content for other people's rights under Art. 15(4).
-2. If disclosure would adversely affect another person's rights or freedoms, document the concrete risk.
-3. In that case, use targeted redaction of the delivery copy instead of refusal of the whole request.
-   Do not change the frozen selection or canonical records to prepare that copy.
-4. Use a verified recipient.
-5. Use secure transfer.
-6. Set an expiry for the delivery copy.
-7. Record any justified limits in the reply.
 
 ## Files
 
