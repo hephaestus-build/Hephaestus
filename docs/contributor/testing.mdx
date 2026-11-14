@@ -304,6 +304,15 @@ Otherwise, its first case pays for Vitest's transform of the lazy route modules,
 No test raises its own timeout. The lint refuses `vi.setConfig`.
 A test waits for the event that it needs, not for a fixed time.
 
+## Web app coverage
+
+`vp run test:webapp` measures the unit coverage of `webapp/src` and writes a summary beside the unit test reports.
+CI keeps the summary with those reports.
+The `coverage.thresholds` in `webapp/vite.config.ts` set a floor for statements, branches, functions and lines.
+The run fails when coverage falls below a floor.
+When coverage rises, raise the floors to the new values, rounded down to whole percent.
+The floors are set by hand: Vitest's `autoUpdate` would rewrite the config on every local run.
+
 ## Flaky tests
 
 A flaky test fails and then passes on the same commit.
