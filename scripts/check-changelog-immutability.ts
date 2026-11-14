@@ -6,7 +6,7 @@ import nodePath from "node:path";
 
 import { CHANGELOG_DIRECTORY, NEXT_CHANGELOG_DIRECTORY, migrationTime } from "./lib/changelog.ts";
 import { isSet } from "./lib/env.ts";
-import { asArray, asRecord, asString } from "./lib/json.ts";
+import { asArray, asRecord, asString, isRecord } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 const directory = `${CHANGELOG_DIRECTORY}/`;
@@ -18,12 +18,91 @@ const baselineRelease = "v1.0.0-rc.1";
 export interface ChangelogSnapshot {
 	blobs: ReadonlyMap<string, string>;
 	master: string;
+	/** The content of a changelog file in this snapshot. */
+	read: (path: string) => string;
 }
 
 const parser = new XMLParser({
 	ignoreAttributes: false,
 	isArray: (name) => name === "include" || name === "includeAll",
 });
+
+// Every element is a list, so a change set with one child and one with many read the same way.
+const changeSetParser = new XMLParser({
+	ignoreAttributes: false,
+	isArray: (_name, _path, _leaf, isAttribute) => !isAttribute,
+});
+
+const children = (parent: Record<string, unknown>, name: string): unknown[] => {
+	const value = parent[name];
+	return Array.isArray(value) ? value : [];
+};
+
+const asRecordOrEmpty = (value: unknown): Record<string, unknown> => (isRecord(value) ? value : {});
+
+const sqlText = (value: unknown): string => {
+	const text = typeof value === "string" ? value : asRecordOrEmpty(value)["#text"];
+	return typeof text === "string" ? text : "";
+};
+
+const hasContent = (value: unknown): boolean =>
+	typeof value === "string"
+		? value.trim() !== ""
+		: Object.keys(asRecordOrEmpty(value)).some((key) => !key.startsWith("@_"));
+
+/** A statement that changes rows, outside comments and dollar-quoted function bodies. */
+const changesRows = (sql: string): boolean =>
+	sql
+		.replaceAll(/--[^\n]*/gu, "")
+		.replaceAll(/\/\*[\s\S]*?\*\//gu, "")
+		.replaceAll(/\$(?<tag>[A-Za-z_]*)\$[\s\S]*?\$\k<tag>\$/gu, "")
+		.split(";")
+		.map((statement) => statement.trim())
+		.some(
+			(statement) =>
+				/^(?:update|delete|insert|merge|truncate)\b/iu.test(statement) ||
+				(/^with\b/iu.test(statement) && /\b(?:update|delete|insert)\b/iu.test(statement)),
+		);
+
+/**
+ * Raw SQL and custom changes have no inverse that Liquibase can derive, so each states its rollback: real statements,
+ * or a `<stop>` that names the backup to restore. A data correction also states which rows are wrong and halts on a
+ * database whose columns it cannot read. docs/contributor/database-migration.mdx § Data corrections owns the rule.
+ */
+export function recoveryProblems(file: string, xml: string): string[] {
+	SyntaxValidator.validate(xml);
+	const document = asRecordOrEmpty(changeSetParser.parse(xml));
+	const root = asRecordOrEmpty(children(document, "databaseChangeLog")[0]);
+	return children(root, "changeSet").flatMap((value) => {
+		const set = asRecordOrEmpty(value);
+		const id = typeof set["@_id"] === "string" ? set["@_id"] : "";
+		const raw = ["sql", "sqlFile", "customChange"].filter((name) => children(set, name).length > 0);
+		if (raw.length === 0) {
+			return [];
+		}
+		const problems: string[] = [];
+		if (!children(set, "rollback").some(hasContent)) {
+			problems.push(
+				`${raw.join(" and ")} without a <rollback>. Write the reverse statements, or <rollback><stop> that names the backup to restore.`,
+			);
+		}
+		if (children(set, "sql").some((sql) => changesRows(sqlText(sql)))) {
+			if (!children(set, "comment").some(hasContent)) {
+				problems.push(
+					"a data correction without a <comment> that states which rows are wrong and why.",
+				);
+			}
+			const halts = children(set, "preConditions").some((conditions) => {
+				const onFail = asRecordOrEmpty(conditions)["@_onFail"];
+				return hasContent(conditions) && (onFail === undefined || onFail === "HALT");
+			});
+			if (!halts) {
+				problems.push("a data correction without a HALT precondition on the columns it reads.");
+			}
+		}
+		return problems.map((problem) => `${file} change set ${id}: ${problem}`);
+	});
+}
 
 const canonical = (value: unknown) =>
 	JSON.stringify(
@@ -181,6 +260,7 @@ export function violations(
 			if (previous !== undefined && file <= previous) {
 				throw new Error(`New migration sorts before existing history: ${file} <= ${previous}`);
 			}
+			errors.push(...recoveryProblems(file, after.read(file)));
 		} catch (error) {
 			errors.push(error instanceof Error ? error.message : String(error));
 		}
@@ -204,7 +284,8 @@ function snapshot(revision: string): ChangelogSnapshot {
 			blobs.set(path, blob);
 		}
 	}
-	return { blobs, master: blobs.has(master) ? git("show", `${commit}:${master}`) : "" };
+	const read = (path: string) => git("show", `${commit}:${path}`);
+	return { blobs, master: blobs.has(master) ? read(master) : "", read };
 }
 
 if (import.meta.main) {

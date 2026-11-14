@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { type ChangelogSnapshot, violations } from "./check-changelog-immutability.ts";
+import {
+	type ChangelogSnapshot,
+	recoveryProblems,
+	violations,
+} from "./check-changelog-immutability.ts";
 
 const directory = "server/application/src/main/resources/db/changelog/";
 const master = "server/application/src/main/resources/db/master.xml";
@@ -11,6 +16,7 @@ const include = (file: string): string =>
 const automatic =
 	'<includeAll path="./changelog/next" relativeToChangelogFile="true" errorIfMissingOrEmpty="false" endsWithFilter=".xml" maxDepth="1"/>';
 const xml = (content: string): string => `<databaseChangeLog>${content}</databaseChangeLog>`;
+const readEmpty = (): string => xml("");
 const current = (): ChangelogSnapshot => ({
 	...original(),
 	master: xml(include("old.xml") + automatic),
@@ -23,6 +29,7 @@ function original(): ChangelogSnapshot {
 			[`${directory}old.xml`, "old-blob"],
 		]),
 		master: xml(include("old.xml")),
+		read: readEmpty,
 	};
 }
 
@@ -138,6 +145,7 @@ const rc1 = (): ChangelogSnapshot => ({
 			include("1793168406889_changelog.xml") +
 			automatic,
 	),
+	read: readEmpty,
 });
 const legacy = (): ChangelogSnapshot => changed(rc1(), laterNext, "later");
 const baselined = (): ChangelogSnapshot => ({
@@ -148,6 +156,7 @@ const baselined = (): ChangelogSnapshot => ({
 		[laterNext, "later"],
 	]),
 	master: xml(include("1.0.0/baseline.xml") + automatic),
+	read: readEmpty,
 });
 const check = (before: ChangelogSnapshot, after: ChangelogSnapshot) =>
 	violations(before, after, rc1);
@@ -217,4 +226,69 @@ void test("an unreadable release tag fails the replacement", () => {
 			throw new Error("no tag");
 		}),
 	);
+});
+
+const changeSet = (body: string): string =>
+	xml(`<changeSet id="1794580948952-1" author="hephaestus">${body}</changeSet>`);
+const correction = "<sql>UPDATE agent_action SET state = 'CANCELLED' WHERE kind = 'EMAIL';</sql>";
+const halt =
+	'<preConditions onFail="HALT"><columnExists tableName="agent_action" columnName="state"/></preConditions>';
+const stop = "<rollback><stop>Restore the backup taken before the upgrade.</stop></rollback>";
+
+void test("a new change set with raw SQL or a custom change states its rollback", () => {
+	const file = `${directory}next/20261115000000-new.xml`;
+	const added = (content: string) =>
+		violations(current(), { ...changed(current(), file, "new"), read: () => content });
+	for (const raw of [
+		"<sql>CREATE INDEX i ON t (c);</sql>",
+		'<sqlFile path="x.sql"/>',
+		'<customChange class="x.Backfill"/>',
+	]) {
+		assert.match(added(changeSet(raw)).join("\n"), /without a <rollback>/u, raw);
+		assert.match(added(changeSet(`${raw}<rollback/>`)).join("\n"), /without a <rollback>/u, raw);
+		assert.deepEqual(added(changeSet(`${raw}${stop}`)), [], raw);
+	}
+	assert.deepEqual(added(changeSet('<createIndex tableName="t" indexName="i"/>')), []);
+	assert.deepEqual(
+		added(changeSet("<sql>CREATE INDEX i ON t (c);</sql><rollback>DROP INDEX i;</rollback>")),
+		[],
+	);
+});
+
+void test("a data correction states which rows are wrong, halts on the columns it reads and names the backup", () => {
+	const problems = recoveryProblems("f.xml", changeSet(correction)).join("\n");
+	assert.match(problems, /without a <rollback>/u);
+	assert.match(problems, /without a <comment>/u);
+	assert.match(problems, /without a HALT precondition/u);
+	assert.match(
+		recoveryProblems(
+			"f.xml",
+			changeSet(`${halt.replace("HALT", "MARK_RAN")}<comment>Rows</comment>${correction}${stop}`),
+		).join("\n"),
+		/without a HALT precondition/u,
+	);
+	assert.deepEqual(
+		recoveryProblems(
+			"f.xml",
+			changeSet(`${halt}<comment>Queued copies of the old notice.</comment>${correction}${stop}`),
+		),
+		[],
+	);
+	// A function body that updates rows is not a data correction.
+	assert.deepEqual(
+		recoveryProblems(
+			"f.xml",
+			changeSet(
+				`<sql splitStatements="false">CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $_$ BEGIN UPDATE t SET c = 1; RETURN NEW; END $_$;</sql>${stop}`,
+			),
+		),
+		[],
+	);
+});
+
+void test("the guard refuses the role-notice correction that reached main without its safeguards", () => {
+	const file = `${directory}next/20261114013648-harvest-role-change-notifications.xml`;
+	const problems = recoveryProblems(file, readFileSync(file, "utf8"));
+	assert.equal(problems.filter((problem) => problem.includes("-1:")).length, 3);
+	assert.equal(problems.length, 5);
 });
