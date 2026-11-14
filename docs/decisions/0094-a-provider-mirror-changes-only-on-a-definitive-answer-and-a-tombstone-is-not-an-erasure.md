@@ -46,7 +46,7 @@ A rule that main does not satisfy yet says "1.0 target".
 5. **A row keeps its identity across rename and transfer.** Sync keys a repository by `(native_id, provider_id)`, never by name. A rename re-keys the mirror row and every monitor of it. A transfer to another owner heals on the next reconcile.
    Enforced by: `GitHubDataSyncServiceTest#shouldTrackStableIdInsteadOfReusedNameWhenUnavailableOrHealthy` and `#shouldKeepRetainedWorkVisibleAfterAnotherWorkspaceResolvesARename`.
 6. **Every login lookup names one provider instance.** The database holds `uq_organization_provider_login` and `uk_user_provider_login`. A GitHub lookup may name the type, because GitHub has one instance. A GitLab lookup names the provider id.
-   1.0 target: delete `UserRepository.findByLogin`, which returns the first match across providers, and move its callers to the provider id. Move `GitLabIssueTypeSyncService` to the provider id. No pull request delivers it yet.
+   1.0 target: delete `UserRepository.findByLogin`, which returns the first match across providers, and move its callers to the provider id. No pull request delivers it yet.
    Enforced by: `IntegrationSubjectBoundariesTest#noUnscopedFindByLogin`, for organizations only.
 7. **A drift tombstone is reversible.** It sets `deleted_at`, and the next upsert of the row clears it. A Slack tombstone also erases the message text, so it cannot be undone. An archived Outline document is not deleted.
    Enforced by: `GitLabDeletionSweepSelfHealIntegrationTest#tombstonedIssueIsRevivedWhenTheUpstreamUpsertSeesItAgain`, `SlackHistoryReconcilerIntegrationTest#shouldEraseTheTextOfADeletedMessageAndKeepEverythingElse`, `OutlineDocumentSyncIntegrationTest#archivedDocument_isNotTombstonedByAbsence_realPostgresRoundTrip`.
