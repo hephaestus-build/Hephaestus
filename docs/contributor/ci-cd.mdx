@@ -535,7 +535,7 @@ The token goes to the one job of `merge-group-cancel.yml`.
 That job runs on `ubuntu-slim`, with no checkout and no action, so no other code holds the token.
 Each callback only grants the permission and calls the workflow, so its token never reaches a step.
 Each workflow keeps `permissions: {}` at the top level.
-`ACTIONS_WRITE_GRANTS` in `scripts/ci-contract*.test.ts` lists each other job with this permission, and the reason.
+`ACTIONS_WRITE_GRANTS` in `scripts/ci-contract-support.ts` lists each other job with this permission, and the reason.
 
 The cancel job needs a runner, so a busy runner pool adds its wait to the eviction time.
 
@@ -1377,7 +1377,7 @@ Right after a merge, that run is still building, so the pull request builds ever
   Some workflows do not cancel, because a run cancelled halfway leaves state that no later run replaces.
   That state is a deploy, a teardown, a commit, or an approval.
   The policy runs only after a successful `pull-request.yml` run, so a cancelled run leaves no verdict, and that workflow cancels.
-  `UNCANCELLED_PULL_REQUEST_RUNS` in `scripts/ci-contract*.test.ts` lists the workflows that do not cancel, with their reasons.
+  `UNCANCELLED_PULL_REQUEST_RUNS` in `scripts/ci-contract-support.ts` lists the workflows that do not cancel, with their reasons.
 
   The test evaluates each group. It fails when a workflow lacks the rule or when one pull request cancels another.
   It also fails when a run can cancel a run on `main` or in the merge queue.

@@ -269,6 +269,30 @@ void test("focused Node tests include changed tests and existing source companio
 	);
 });
 
+void test("a split suite runs whole when its shared helpers or a workflow change", () => {
+	const contract = [
+		"scripts/ci-contract-images.test.ts",
+		"scripts/ci-contract-kubernetes.test.ts",
+		"scripts/ci-contract-merge-queue.test.ts",
+		"scripts/ci-contract-release.test.ts",
+		"scripts/ci-contract-server.test.ts",
+		"scripts/ci-contract-supply-chain.test.ts",
+		"scripts/ci-contract.test.ts",
+	];
+	assert.deepEqual(focusedTests(["scripts/ci-contract-support.ts"]), contract);
+	assert.deepEqual(focusedTests(["scripts/kubernetes-chart-render-support.ts"]), [
+		"scripts/kubernetes-chart-render-database.test.ts",
+		"scripts/kubernetes-chart-render-monitoring.test.ts",
+		"scripts/kubernetes-chart-render-sandboxes.test.ts",
+		"scripts/kubernetes-chart-render-web.test.ts",
+		"scripts/kubernetes-chart-render.test.ts",
+	]);
+	const workflow = focusedTests([".github/workflows/cicd.yml"]);
+	for (const file of contract) {
+		assert.ok(workflow.includes(file), file);
+	}
+});
+
 const repository = path.resolve(import.meta.dirname, "..");
 
 async function installCli(directory: string): Promise<void> {
