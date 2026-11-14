@@ -14,7 +14,7 @@ import org.springframework.transaction.TransactionExecutionListener;
 
 /**
  * Times every transaction from begin to commit or rollback, the longest time it can hold a pooled connection, tagged by
- * its boundary. A commit that fails is reported as a rollback. Spring Boot registers this listener with the auto-configured transaction manager.
+ * its boundary. A commit that fails is reported as a rollback. Spring Boot's {@code TransactionManagerCustomizers} register this listener with the transaction manager.
  */
 @Component
 public class TransactionDurations implements TransactionExecutionListener {
