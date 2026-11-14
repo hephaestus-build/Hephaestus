@@ -81,6 +81,22 @@ class JobEvidenceSweepIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldRemoveTheShellThatAnEarlierFailedSweepLeftWithoutAnEndedMarker() throws IOException {
+        // A sweep that failed part-way removed the checkout and left the rest of the folder, with no marker beside it.
+        var ended = job(ReviewJobStatus.FAILED);
+        Path shell = folder(ended, ended.getRunId());
+        Files.delete(shell.resolve("context/source.txt"));
+        Files.delete(shell.resolve("context"));
+        Files.createDirectories(shell.resolve(".archives"));
+        Files.writeString(shell.resolve(".archives/inputs.tar"), "x".repeat(1024 * 1024));
+        assertThat(shell.resolveSibling(shell.getFileName() + ".ended")).doesNotExist();
+
+        reconciler.reconcile();
+
+        assertThat(shell).doesNotExist();
+    }
+
+    @Test
     void shouldRemoveTheMeasuringFolderOfAReviewWhoseCompositionRuns() throws IOException {
         // The job's run moved on to the composition, so the measuring folder is named after a run it no longer has.
         var composing = job(ReviewJobStatus.RUNNING);
