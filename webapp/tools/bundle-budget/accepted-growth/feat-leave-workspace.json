@@ -1,0 +1,10 @@
+{
+	"accepted": [
+		{
+			"load": "src/routes/_authenticated/settings.tsx?tsr-split=component",
+			"gzipBytes": 85487,
+			"acceptedBy": "branch feat/leave-workspace",
+			"reason": "User settings lists your workspaces and lets you leave one, with a confirmation that shows the server's reason. The section and its leave call are measured, with no new package."
+		}
+	]
+}
