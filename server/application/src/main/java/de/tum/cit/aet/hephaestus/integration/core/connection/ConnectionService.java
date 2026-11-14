@@ -381,7 +381,7 @@ public class ConnectionService {
             Objects.requireNonNull(entityManager).refresh(c);
             if (c.getState() != IntegrationState.ACTIVE
                     || c.getConfig() instanceof ConnectionConfig.GitHubAppConfig
-                    || (expected != null && !expected.matches(c, clock.instant()))) {
+                    || (expected != null && !expected.matches(c))) {
                 return Optional.empty();
             }
             boolean replacedExisting = c.hasCredentials();
@@ -394,14 +394,12 @@ public class ConnectionService {
         });
     }
 
-    /** The credential and lifecycle that authorized an irreversible provider call, valid only during its logical lease. */
-    public record CredentialFence(
-            long connectionId, long credentialsGeneration, long lifecycleGeneration, Instant validUntil) {
-        public boolean matches(Connection connection, Instant now) {
+    /** The credential and lifecycle that authorized an irreversible provider call. */
+    public record CredentialFence(long connectionId, long credentialsGeneration, long lifecycleGeneration) {
+        public boolean matches(Connection connection) {
             return connection.getId() == connectionId
                     && connection.getCredentialsGeneration() == credentialsGeneration
-                    && connection.getLifecycleGeneration() == lifecycleGeneration
-                    && now.isBefore(validUntil);
+                    && connection.getLifecycleGeneration() == lifecycleGeneration;
         }
     }
 

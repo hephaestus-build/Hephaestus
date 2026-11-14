@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials;
 
+import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
@@ -21,14 +22,11 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
-import net.javacrumbs.shedlock.core.LockConfiguration;
-import net.javacrumbs.shedlock.core.LockProvider;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
@@ -40,14 +38,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
-/** Token HTTP calls run without a database transaction; a logical lease serializes scheduler and initialization checks. */
+/** Token HTTP calls run without a database transaction; a cluster lock serializes scheduler and initialization checks. */
 @Service
 @ConditionalOnServerRole
 @ConditionalOnProperty(name = "hephaestus.integration.gitlab.enabled", havingValue = "true")
 @Slf4j
 public class GitLabTokenLifecycleService {
-    // Two 15 s HTTP calls, pool acquisition and short writes fit below this lease. A late answer is fenced out.
-    static final Duration CHECK_LEASE = Duration.ofMinutes(5);
     private final ConnectionService connections;
     private final ConnectionCommands commands;
     private final GitLabTokenRotationClient rotationClient;
@@ -55,7 +51,7 @@ public class GitLabTokenLifecycleService {
     private final GitLabCredentialHealth health;
     private final WebhookProperties properties;
     private final Clock clock;
-    private final LockProvider leases;
+    private final ClusterLock locks;
     private final TransactionTemplate reads;
     private final TransactionTemplate writes;
 
@@ -70,7 +66,7 @@ public class GitLabTokenLifecycleService {
             GitLabCredentialHealth health,
             WebhookProperties properties,
             Clock clock,
-            LockProvider leases,
+            ClusterLock locks,
             PlatformTransactionManager transactions) {
         this.connections = connections;
         this.commands = commands;
@@ -79,7 +75,7 @@ public class GitLabTokenLifecycleService {
         this.health = health;
         this.properties = properties;
         this.clock = clock;
-        this.leases = leases;
+        this.locks = locks;
         this.reads = new TransactionTemplate(transactions);
         this.reads.setReadOnly(true);
         this.reads.setTimeout(30);
@@ -90,19 +86,16 @@ public class GitLabTokenLifecycleService {
     public void check(long workspaceId) {
         if (TransactionSynchronizationManager.isActualTransactionActive())
             throw new IllegalStateException("GitLab token inspection requires no active database transaction");
-        Instant started = clock.instant();
-        var lease =
-                leases.lock(new LockConfiguration(started, "gitlab-token-" + workspaceId, CHECK_LEASE, Duration.ZERO));
-        if (lease.isEmpty()) return;
-        try {
-            var snapshot = reads.execute(status -> snapshot(workspaceId, started.plus(CHECK_LEASE)));
+        // A session lock has no expiry, unlike a lease: a holder that stalls before its rotation request keeps it. A
+        // successor that rotated first would otherwise let the stalled request reuse the revoked token, and GitLab
+        // answers that reuse by revoking the whole token family. A process that dies drops the lock.
+        locks.run("gitlab-token-" + workspaceId, Duration.ZERO, () -> {
+            var snapshot = reads.execute(status -> snapshot(workspaceId));
             if (snapshot != null) inspect(snapshot);
-        } finally {
-            lease.get().unlock();
-        }
+        });
     }
 
-    private @Nullable Check snapshot(long workspaceId, Instant validUntil) {
+    private @Nullable Check snapshot(long workspaceId) {
         var candidate = connections.findActive(workspaceId, IntegrationKind.GITLAB);
         if (candidate.isEmpty() || !(candidate.get().getConfig() instanceof GitLabConfig config)) return null;
         var connection = candidate.get();
@@ -114,10 +107,7 @@ public class GitLabTokenLifecycleService {
                         tokenService.serverUrlOf(config.serverUrl()),
                         token.get().token()),
                 new CredentialFence(
-                        connection.getId(),
-                        connection.getCredentialsGeneration(),
-                        connection.getLifecycleGeneration(),
-                        validUntil),
+                        connection.getId(), connection.getCredentialsGeneration(), connection.getLifecycleGeneration()),
                 config);
     }
 
@@ -213,11 +203,9 @@ public class GitLabTokenLifecycleService {
                         connection,
                         "GITLAB_TOKEN_ROTATION_UNCERTAIN",
                         "Rotation was attempted but its result could not be stored. Verify the token before rotating it again.");
-            // Audit a discarded result on its original row, but never mark a replacement credential as broken. After
-            // the lease, another server owns the check of this token and reports its health.
+            // Audit a discarded result on its original row, but never mark a replacement credential as broken.
             if (connection.getState() != IntegrationState.ACTIVE
-                    || connection.getCredentialsGeneration() != check.fence().credentialsGeneration()
-                    || !clock.instant().isBefore(check.fence().validUntil())) return;
+                    || connection.getCredentialsGeneration() != check.fence().credentialsGeneration()) return;
             if (info != null
                     && connection.getLifecycleGeneration() == check.fence().lifecycleGeneration()
                     && connection.getConfig() instanceof GitLabConfig config)
@@ -250,7 +238,7 @@ public class GitLabTokenLifecycleService {
     private Optional<Connection> current(Check check, boolean lock) {
         return (lock ? held(check) : readConnection(check))
                 .filter(connection -> connection.getState() == IntegrationState.ACTIVE
-                        && check.fence().matches(connection, clock.instant()));
+                        && check.fence().matches(connection));
     }
 
     private static boolean isExpiring(@Nullable LocalDate expiry, LocalDate today, int threshold) {

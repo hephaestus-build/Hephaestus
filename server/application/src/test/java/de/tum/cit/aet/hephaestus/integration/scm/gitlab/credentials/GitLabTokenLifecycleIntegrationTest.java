@@ -46,6 +46,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
@@ -532,7 +534,7 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     @Test
-    void shouldLeaseBothInitializationAndScheduledChecksWithoutHoldingADatabaseLock() {
+    void shouldLockBothInitializationAndScheduledChecksWithoutHoldingATransaction() {
         var connection = connection("leased");
         long workspace = connection.getWorkspace().getId();
         when(rotation.getTokenInfo(forWorkspace(workspace))).thenAnswer(invocation -> {
@@ -547,6 +549,36 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
         verify(rotation, never()).rotateToken(any(), any());
         assertThat(connections.findActiveGitLabConfig(workspace).orElseThrow().tokenMetadata())
                 .isNotNull();
+    }
+
+    @Test
+    void shouldKeepAnotherServerFromCheckingWhileAStalledHolderIsAboutToRotate() throws Exception {
+        var connection = connection("stalled-old");
+        long workspace = connection.getWorkspace().getId();
+        when(rotation.getTokenInfo(forWorkspace(workspace)))
+                .thenReturn(new GitLabTokenRotationClient.TokenInfo(
+                        1, "test", LocalDate.now(ZoneOffset.UTC).plusDays(1)));
+        when(rotation.rotateToken(forWorkspace(workspace), any())).thenAnswer(invocation -> {
+            // A long stall outlives any time-based lease on this name. A check on another connection still cannot
+            // start.
+            jdbc.update(
+                    "UPDATE shedlock SET lock_until = timezone('utc', CURRENT_TIMESTAMP) - INTERVAL '1 second' WHERE name = ?",
+                    "gitlab-token-" + workspace);
+            try (var successor = Executors.newSingleThreadExecutor()) {
+                successor.submit(() -> lifecycle.check(workspace)).get(20, TimeUnit.SECONDS);
+            }
+            return new GitLabTokenRotationClient.RotatedToken(
+                    "stalled-rotated", LocalDate.now(ZoneOffset.UTC).plusDays(90));
+        });
+        lifecycle.check(workspace);
+        verify(rotation, times(1)).getTokenInfo(forWorkspace(workspace));
+        verify(rotation, times(1)).rotateToken(forWorkspace(workspace), any());
+        assertThat(connections
+                        .findActiveBearerToken(workspace, IntegrationKind.GITLAB)
+                        .orElseThrow()
+                        .token())
+                .isEqualTo("stalled-rotated");
+        assertThat(uncertainties(connection)).isZero();
     }
 
     @Test
@@ -579,20 +611,20 @@ class GitLabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     @Test
-    void shouldRefuseAnExpiredCredentialFenceBeforeChangingTheStoredToken() {
-        var connection = connection("expired-lease");
+    void shouldRefuseAStaleCredentialFenceBeforeChangingTheStoredToken() {
+        var connection = connection("stale-fence");
         var stored = current(connection);
         long workspace = stored.getWorkspace().getId();
-        var expired = new ConnectionService.CredentialFence(
-                stored.getId(), stored.getCredentialsGeneration(), stored.getLifecycleGeneration(), Instant.EPOCH);
+        var stale = new ConnectionService.CredentialFence(
+                stored.getId(), stored.getCredentialsGeneration() - 1, stored.getLifecycleGeneration());
         assertThat(connections.rotateBearerToken(
-                        workspace, IntegrationKind.GITLAB, new BearerToken("late-result", null), expired))
+                        workspace, IntegrationKind.GITLAB, new BearerToken("late-result", null), stale))
                 .isEmpty();
         assertThat(connections
                         .findActiveBearerToken(workspace, IntegrationKind.GITLAB)
                         .orElseThrow()
                         .token())
-                .isEqualTo("expired-lease");
+                .isEqualTo("stale-fence");
         assertThat(current(connection).getVersion()).isEqualTo(stored.getVersion());
     }
 
