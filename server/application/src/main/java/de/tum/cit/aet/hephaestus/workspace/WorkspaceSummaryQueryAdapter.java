@@ -38,6 +38,12 @@ class WorkspaceSummaryQueryAdapter implements WorkspaceSummaryQuery {
                 .collect(Collectors.toMap(WorkspaceSummary::id, summary -> summary));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Long> findActiveIdBySlug(String slug) {
+        return workspaceRepository.findActiveIdBySlug(slug).map(WorkspaceIdData::id);
+    }
+
     private static WorkspaceSummary summary(Workspace workspace) {
         return new WorkspaceSummary(workspace.getId(), workspace.getWorkspaceSlug(), workspace.getDisplayName());
     }

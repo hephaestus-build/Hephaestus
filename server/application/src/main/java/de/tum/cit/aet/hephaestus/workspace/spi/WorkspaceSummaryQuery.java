@@ -10,6 +10,8 @@ public interface WorkspaceSummaryQuery {
 
     boolean exists(long workspaceId);
 
+    Optional<Long> findActiveIdBySlug(String slug);
+
     /** Keyed by id; an unknown id is absent. */
     Map<Long, WorkspaceSummary> findAllByIds(Collection<Long> workspaceIds);
 
