@@ -46,7 +46,8 @@ class StoredSystemSecretsTest extends BaseUnitTest {
     private static StoredSystemSecret stored(String name, SystemSecrets secrets) {
         var secret = new StoredSystemSecret();
         ReflectionTestUtils.setField(secret, "name", name);
-        ReflectionTestUtils.setField(secret, "sealedValue", secrets.seal(new byte[32], StoredSystemSecret.binding(name)));
+        ReflectionTestUtils.setField(
+                secret, "sealedValue", secrets.seal(new byte[32], StoredSystemSecret.binding(name)));
         return secret;
     }
 }
