@@ -2,7 +2,7 @@
 One SandboxTemplate for each sandbox kind, in the sandbox namespace. The agent-sandbox controller
 (docs/admin/kubernetes.mdx § The agent-sandbox controller) creates a sandbox's Pod from its kind's
 template when a SandboxClaim names the kind's warm pool. A sandbox is one container, the agent image,
-whose entrypoint is the agent loop. The kind is the loop's parameter.
+whose entrypoint is the agent loop. The loop learns each run's kind from the gateway's assignment.
 
 A claim adds the sandbox token and the gateway address as environment variables, so each sandbox
 starts cold. The warm pools hold no sandboxes.
