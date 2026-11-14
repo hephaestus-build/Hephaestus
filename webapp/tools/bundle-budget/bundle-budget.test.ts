@@ -108,9 +108,10 @@ describe("componentViolations", () => {
 
 	it("passes the owner's other package in a lazy module of a package that the owner holds", () => {
 		// The chart mode shares the panel's chunk, which also holds the panel's wrapper package.
-		const withWrapper = lazyCharts.map((built) =>
-			built.fileName === "charts.js" ? { ...built, packages: ["recharts", "react-charts"] } : built,
-		);
+		const withWrapper = [
+			...lazyCharts.filter((built) => built.fileName !== "charts.js"),
+			chunk({ fileName: "charts.js", packages: ["recharts", "react-charts"] }),
+		];
 		expect(
 			componentViolations(measure(withWrapper), { recharts: PANEL, "react-charts": PANEL }),
 		).toStrictEqual([]);
