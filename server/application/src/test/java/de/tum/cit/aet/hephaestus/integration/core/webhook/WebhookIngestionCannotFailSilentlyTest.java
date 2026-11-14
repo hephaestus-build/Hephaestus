@@ -11,9 +11,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.beans.factory.support.SimpleBeanDefinitionRegistry;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.availability.ApplicationAvailabilityAutoConfiguration;
 import org.springframework.boot.context.properties.bind.Binder;
@@ -30,39 +34,42 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.env.StandardEnvironment;
+import org.springframework.context.annotation.AnnotationBeanNameGenerator;
+import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.type.filter.AnnotationTypeFilter;
+import org.springframework.core.type.filter.AssignableTypeFilter;
+import org.springframework.core.type.filter.TypeFilter;
+import org.springframework.stereotype.Component;
 
 /**
  * The shipped configuration, checked as the deployment sees it.
  *
- * <p>Every assertion here corresponds to a way an ingestion outage went unnoticed or spread: a health signal
- * that took every Pod out of rotation at once, a storage bound below what loss costs, bounds that overcommit
- * the volume, and a receiver admitting payloads the broker will not carry.
+ * <p>A health contributor reports a dependency, such as the provider event consumer. When it fails, every server
+ * shares that failure, so readiness that read it would take every server out of rotation at once, and no server would
+ * be left to answer a provider's delivery with the 503 that makes the provider send it again.
  *
- * <p>The readiness assertions drive the shipped {@code management.*} keys through the same
- * autoconfiguration a deployment does. The defect they exist to catch was a property path that binds
- * to nothing, and reading the value back out of the YAML reports that bug as fixed.
+ * <p>The contributors are the application's own {@link HealthIndicator} components, found on the classpath, so a new
+ * one is checked without an edit here. The readiness assertions drive the shipped {@code management.*} keys through
+ * the same autoconfiguration a deployment does. The defect they exist to catch was a property path that binds to
+ * nothing, and reading the value back out of the YAML reports that bug as fixed.
  */
 class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
 
-    /**
-     * Health contributors of the shipped roles, as bean name to the contributor name Spring derives from it.
-     * Always present, on every role: {@code readinessState}.
-     */
-    private static final Map<String, String> CONTRIBUTOR_BEANS = Map.of(
-            "integrationConsumerHealthIndicator",
-            "integrationConsumer",
-            "practiceReviewHealthIndicator",
-            "practiceReview",
-            "kubernetesSandboxHealthIndicator",
-            "kubernetesSandbox",
-            "hephTurnDispatcher",
-            "hephTurnDispatcher");
+    /** The application's health contributors, as bean name to the contributor name Spring derives from it. */
+    private static final Map<String, String> CONTRIBUTOR_BEANS = applicationHealthContributors();
+
+    @Test
+    void shouldFindTheApplicationsHealthContributorsWhenItScansTheClasspath() {
+        // An empty scan would let every assertion below pass on nothing.
+        assertThat(CONTRIBUTOR_BEANS)
+                .as("the inbox consumer's contributor, whose failure must not unready a receiver")
+                .containsEntry("integrationConsumerHealthIndicator", "integrationConsumer");
+    }
 
     @Test
     void readinessAsksOnlyWhetherThisPodCanServe() {
-        // A broker outage would unready every Pod at once and leave no Pod to serve or receive; a failed sandbox
-        // proof stops sandboxes, not the API.
+        // A database or provider outage would unready every Pod at once and leave no Pod to serve or receive.
         healthContext(CONTRIBUTOR_BEANS.keySet())
                 .run(context -> assertThat(
                                 context.getBean(HealthEndpointGroups.class).get("readiness"))
@@ -79,7 +86,7 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
 
     @Test
     void livenessAsksOnlyWhetherTheProcessRuns() {
-        // A broker in liveness turns a slow disk into a restart loop that drops the deliveries in flight.
+        // A dependency in liveness turns a slow database into a restart loop that drops the deliveries in flight.
         ApplicationContextRunner runner = new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
                         ApplicationAvailabilityAutoConfiguration.class,
@@ -103,13 +110,7 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(
-            strings = {
-                "integrationConsumerHealthIndicator",
-                "practiceReviewHealthIndicator",
-                "kubernetesSandboxHealthIndicator",
-                "hephTurnDispatcher"
-            })
+    @MethodSource("contributorBeans")
     void aFailingContributorLeavesReadinessUpAndHealthDown(String contributor) {
         healthContext(
                         CONTRIBUTOR_BEANS.keySet(),
@@ -121,7 +122,7 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
                     var readiness = endpoint.healthForPath("readiness");
                     assertNotNull(readiness);
                     assertThat(readiness.getStatus()).isEqualTo(Status.UP);
-                    // ADR 0008's webhook-server-down alert reads the whole health endpoint, which still knows.
+                    // The whole health endpoint still reports the failure to an operator.
                     assertThat(endpoint.health().getStatus()).isEqualTo(Status.DOWN);
                 });
     }
@@ -135,10 +136,30 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
                 .isGreaterThan(GitHubWebhookRedelivery.WINDOW);
     }
 
+    static Stream<String> contributorBeans() {
+        return CONTRIBUTOR_BEANS.keySet().stream();
+    }
+
     /**
-     * The shipped {@code management.*} keys driving real health autoconfiguration, with one stub
-     * contributor per bean name the given runtime role would have contributed.
+     * The {@link HealthIndicator} components under the application's package. Spring names a contributor after its
+     * bean, without the {@code HealthIndicator} suffix.
      */
+    private static Map<String, String> applicationHealthContributors() {
+        var scanner = new ClassPathScanningCandidateComponentProvider(false);
+        TypeFilter indicator = new AssignableTypeFilter(HealthIndicator.class);
+        TypeFilter component = new AnnotationTypeFilter(Component.class);
+        scanner.addIncludeFilter((reader, factory) -> indicator.match(reader, factory) && component.match(reader, factory));
+        var names = new AnnotationBeanNameGenerator();
+        var registry = new SimpleBeanDefinitionRegistry();
+        Map<String, String> contributors = new TreeMap<>();
+        for (BeanDefinition candidate : scanner.findCandidateComponents("de.tum.cit.aet.hephaestus")) {
+            String bean = names.generateBeanName(candidate, registry);
+            contributors.put(bean, bean.replaceFirst("HealthIndicator$", ""));
+        }
+        return contributors;
+    }
+
+    /** The shipped {@code management.*} keys driving real health autoconfiguration, with one stub per contributor. */
     private static ApplicationContextRunner healthContext(Set<String> contributorBeans) {
         return healthContext(contributorBeans, Map.of());
     }
