@@ -334,7 +334,7 @@ Use one of these composite annotations on the test class (or method) rather than
 | --------------------------------------------------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@LiveLlmTest`    | `HEPHAESTUS_LIVE_LLM_API_KEY`        | Tests that drive a real OpenAI-compatible endpoint. Set `HEPHAESTUS_LIVE_LLM_BASE_URL`, `HEPHAESTUS_LIVE_LLM_API_KEY`, and `HEPHAESTUS_LIVE_LLM_MODEL` explicitly. Read through `LiveLlmCredentials.fromEnv()`. |
 | `@LiveGitHubTest` | `GH_APP_INSTALLATION_ID`             | Tests that hit github.com through the installed GitHub App. `BaseGitHubLiveIntegrationTest` runs an extra runtime check on private-key material.                                                                |
-| `@LiveGitLabTest` | `HEPHAESTUS_LIVE_GITLAB_TOKEN_FILE`       | GitLab CE commit identity re-resolution.                                                                                                                                                                |
+| `@LiveGitLabTest` | `HEPHAESTUS_LIVE_GITLAB_TOKEN_FILE`       | GitLab CE commit identity re-resolution, and real webhook delivery into the provider event inbox.                                                                                                       |
 
 The annotations use `Execution(SAME_THREAD)`. Gradle also runs one test JVM at a time.
 
@@ -375,6 +375,21 @@ A successful transfer response describes the project before its asynchronous tra
 GitLab retains scheduled group deletions for its configured retention period ([Groups API](https://docs.gitlab.com/api/groups/#schedule-a-group-for-deletion)).
 The provider mutations use GitLab's [Users API](https://docs.gitlab.com/api/users/), [Commits API](https://docs.gitlab.com/api/commits/) and [project transfer API](https://docs.gitlab.com/api/projects/#transfer-a-project-to-a-new-namespace).
 
+
+### GitLab webhook delivery proof
+
+`GitLabWebhookDeliveryLiveTest` uses the same GitLab CE fixture, setup credential and JVM settings as the commit identity proof.
+It creates a group, a project and a non-admin group token, and connects a workspace with that token.
+GitLab then sends its own events for a new issue and a retitled merge request to the connection's route on the test server.
+The test claims the stored events and checks the mirrored work, the handled inbox rows, and GitLab's record of each accepted delivery.
+
+Set `HEPHAESTUS_LIVE_GITLAB_WEBHOOK_HOST` to the address at which the fixture reaches the test JVM, for example the gateway of the fixture's Docker network.
+GitLab refuses a hook to a local address, so the test adds that address and the server's port to the instance's outbound allowlist.
+It restores the earlier allowlist, and deletes the hook, the token and the group, also when the test fails.
+
+The test registers a project hook.
+Hephaestus itself registers a group hook, but GitLab offers group hooks only in its Premium and Ultimate tiers, so CE cannot prove that step.
+A project hook sends the same project events to the same connection route.
 ### Authoring a new live test
 
 1. Pick the correct meta-annotation. If the environment variable does not exist yet, add an annotation alongside the existing provider annotations.
