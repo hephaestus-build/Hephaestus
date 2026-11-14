@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import java.time.Clock;
 import java.util.List;
 import java.util.Objects;
@@ -169,10 +170,7 @@ public class RevocationAwareJwtDecoder implements JwtDecoder {
     private static boolean isRefreshRequest() {
         if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
             var request = attributes.getRequest();
-            return "POST".equals(request.getMethod())
-                    && "/auth/refresh"
-                            .equals(request.getRequestURI()
-                                    .substring(request.getContextPath().length()));
+            return "POST".equals(request.getMethod()) && "/auth/refresh".equals(ApiPath.relative(request));
         }
         return false;
     }

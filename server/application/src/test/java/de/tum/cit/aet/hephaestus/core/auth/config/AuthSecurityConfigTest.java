@@ -110,8 +110,8 @@ class AuthSecurityConfigTest extends BaseUnitTest {
         OAuth2AuthorizationRequestResolver resolver =
                 AuthSecurityConfig.pkceResolver(new InMemoryClientRegistrationRepository(github));
 
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/oauth2/authorization/github");
-        request.setServletPath("/oauth2/authorization/github");
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/oauth2/authorization/github");
+        request.setServletPath("/api/oauth2/authorization/github");
         OAuth2AuthorizationRequest authorizationRequest = resolver.resolve(request);
 
         assertThat(authorizationRequest).isNotNull();

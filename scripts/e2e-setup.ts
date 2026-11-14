@@ -186,7 +186,7 @@ async function jsonRequest(url: string, init: RequestInit, context: string): Pro
 }
 
 async function login(config: Config): Promise<string> {
-	const response = await fetch(`${config.appUrl}/auth/dev-login`, {
+	const response = await fetch(`${config.appUrl}/api/auth/dev-login`, {
 		method: "POST",
 		headers: { "content-type": "application/json" },
 		body: JSON.stringify({ username: config.username, admin: true }),
@@ -548,7 +548,7 @@ async function main(): Promise<void> {
 	let jwt = await login(config);
 	const api: Api = async (method, path, body, headers) =>
 		jsonRequest(
-			`${config.appUrl}${path}`,
+			`${config.appUrl}/api${path}`,
 			{
 				method,
 				headers: {

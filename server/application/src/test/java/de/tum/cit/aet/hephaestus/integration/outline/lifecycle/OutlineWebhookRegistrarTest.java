@@ -87,7 +87,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
                 repairs,
                 outlineApiClient,
                 CREDENTIAL,
-                new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(externalUrl), "/api")),
+                new PublicApiUrls(AuthPropertiesFixture.withIssuer(URI.create(externalUrl))),
                 connectionQueries,
                 ClusterLocks.free(),
                 meters);
@@ -229,7 +229,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
                         repairs,
                         outlineApiClient,
                         credential(""),
-                        new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(API_ORIGIN), "/api")),
+                        new PublicApiUrls(AuthPropertiesFixture.withIssuer(URI.create(API_ORIGIN))),
                         connectionQueries,
                         ClusterLocks.free(),
                         meters)

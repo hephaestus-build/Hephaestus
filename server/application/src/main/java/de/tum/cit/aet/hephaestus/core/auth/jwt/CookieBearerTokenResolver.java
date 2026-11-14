@@ -2,13 +2,13 @@ package de.tum.cit.aet.hephaestus.core.auth.jwt;
 
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
-import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
@@ -25,9 +25,9 @@ public class CookieBearerTokenResolver implements BearerTokenResolver {
      * and authorization still decides whether they are reachable at all.
      */
     private static final RequestMatcher IDENTITY_FREE = new OrRequestMatcher(
-            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.GET, "/identity-providers"),
-            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/dev-login"),
-            PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.GET, "/auth/dev-login/client"));
+            ApiPath.matchers().matcher(HttpMethod.GET, "/identity-providers"),
+            ApiPath.matchers().matcher(HttpMethod.POST, "/auth/dev-login"),
+            ApiPath.matchers().matcher(HttpMethod.GET, "/auth/dev-login/client"));
 
     private final String cookieName;
     private final DefaultBearerTokenResolver headerResolver = new DefaultBearerTokenResolver();

@@ -71,7 +71,7 @@ class AuthRateLimitStoreIntegrationTest extends BaseIntegrationTest {
     }
 
     private static MockHttpServletResponse signIn(AuthRateLimitFilter filter, String clientIp) throws Exception {
-        var request = new MockHttpServletRequest("GET", "/oauth2/authorization/github");
+        var request = new MockHttpServletRequest("GET", "/api/oauth2/authorization/github");
         request.setRemoteAddr(clientIp);
         var response = new MockHttpServletResponse();
         filter.doFilter(request, response, mock(FilterChain.class));

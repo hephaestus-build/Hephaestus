@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.tuple;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.WorkspaceSubdomainProperties;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionField;
 import de.tum.cit.aet.hephaestus.practices.PracticeReleaseChoice;
@@ -257,8 +258,7 @@ class CatalogAdminControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .isEqualTo("YOURS")
                 .returnResult();
         URI location = Objects.requireNonNull(response.getResponseHeaders().getLocation());
-        String applicationPath =
-                location.getRawPath().substring(authProperties.apiBasePath().length());
+        String applicationPath = Objects.requireNonNull(ApiPath.relative(location.getRawPath()));
         client.get()
                 .uri(applicationPath)
                 .headers(TestAuthUtils.withCurrentUser())

@@ -81,8 +81,8 @@ the type check on its own. Lint holds tests to the web app's Vitest policy: narr
   An admin reaches them through one **Review details** link.
 - **A generation guards everything shown.** Sign-in, sign-out, a rejected refresh, an instance change
   or a revoked site move it. Late results are dropped and views reset in the same tick.
-- **Links go to the web app origin, never the API server.** Locally they differ (bare Spring server vs.
-  Vite). Production serves the API under `/api` of the web app origin.
+- **Links go to the web app origin, never the API server.** Every server serves the API under `/api` of its origin.
+  Locally the web app can run on Vite, so a development build may name its own web app origin.
 - **Production has no `key`, no loopback, no host permission until granted.** Check the built
   `manifest.json` after touching `wxt.config.ts`.
 - **Never call `GET …/practices/feedback/practice-page`** — reading it delivers feedback.

@@ -227,7 +227,7 @@ describe("Slack channel-message choices on the settings page", () => {
 			assert(target !== undefined);
 			const authorization = new URL(target);
 			expect(authorization.origin + authorization.pathname).toBe(
-				"http://localhost:8080/auth/login",
+				"http://localhost:3000/api/auth/login",
 			);
 			expect(authorization.searchParams.get("provider")).toBe("slack");
 			expect(authorization.searchParams.get("mode")).toBe("link");

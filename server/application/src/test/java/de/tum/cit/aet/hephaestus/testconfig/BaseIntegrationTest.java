@@ -25,6 +25,7 @@ import org.springframework.test.context.TestPropertySource;
 @Import({
     AuditedRequestCheck.class,
     AuditedEchoController.class,
+    ApiWebTestClient.class,
     TestSecurityConfig.class,
     TestAsyncConfiguration.class,
     RecordingScmEventListener.class,

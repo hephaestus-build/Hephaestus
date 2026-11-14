@@ -16,6 +16,7 @@ import {
 import { toast } from "@/lib/toast";
 
 import { client } from "@/api/client.gen";
+import environment from "@/environment";
 import { clearDrafts } from "@/lib/composer-drafts";
 import { server, unansweredRequests } from "@/mocks/server";
 import { FakeEventSource } from "@/test/fake-event-source";
@@ -28,9 +29,9 @@ vi.mock("@/components/common/CodeEditor", async () => import("./code-editor.mock
 // The generated hey-api client resolves request paths against `baseUrl` (it does
 // `new URL(path, baseUrl)`); with no baseUrl a relative path like `/user` throws
 // "Failed to parse URL". In the app `client.setConfig` runs in `main.tsx`, which the
-// test bundle never imports — so configure an absolute base here. The MSW handlers use
+// test bundle never imports — so configure the app's base here. The MSW handlers use
 // `*/path` wildcards, so this host is matched regardless of its exact value.
-client.setConfig({ baseUrl: "http://localhost:8080" });
+client.setConfig({ baseUrl: environment.serverUrl });
 
 // jsdom has no ResizeObserver; Base UI's anchor positioning observes elements to keep a popup
 // pinned to its trigger. A stub that never fires is enough — no assertion depends on the measurements.

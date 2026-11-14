@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.auth.consent;
 
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
@@ -22,7 +23,9 @@ class ConsentGateInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         Long accountId = CurrentAccount.idOrNull();
-        if (accountId == null || isAllowedBeforeConsent(request.getMethod(), request.getRequestURI())) {
+        // Only the API holds the account's application data; the error page and the other roots are not gated.
+        String path = ApiPath.relative(request);
+        if (accountId == null || path == null || isAllowedBeforeConsent(request.getMethod(), path)) {
             return true;
         }
         if (!service.hasCompletedCurrentNotice(accountId)) {
@@ -35,8 +38,7 @@ class ConsentGateInterceptor implements HandlerInterceptor {
     static boolean isAllowedBeforeConsent(String method, String path) {
         // Public sign-in bootstrap must also work when another account's browser cookie is
         // present. Consent still gates the account's application data after it signs in.
-        return path.equals("/error")
-                || (method.equals("GET")
+        return (method.equals("GET")
                         && (path.equals("/user")
                                 || path.equals("/user/consent")
                                 || path.equals("/auth/csrf")

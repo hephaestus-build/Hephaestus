@@ -26,23 +26,15 @@ class LoginProviderAdminControllerCallbackTest extends BaseUnitTest {
 
     @Test
     void shouldShowConfiguredCallbackWithApiPrefixWhenRequestUsesTenantHost() {
-        String redirectUri = redirectUriFor("/api");
+        String redirectUri = redirectUri();
         assertThat(redirectUri).isEqualTo("http://localhost:8080/api/login/oauth2/code/github");
     }
 
-    @Test
-    void shouldShowConfiguredCallbackWithoutPrefixWhenRequestUsesTenantHost() {
-        String redirectUri = redirectUriFor("");
-        assertThat(redirectUri).isEqualTo("http://localhost:8080/login/oauth2/code/github");
-    }
-
-    private static String redirectUriFor(String apiBasePath) {
+    private static String redirectUri() {
         LoginProviderService service = mock(LoginProviderService.class);
         when(service.listAll()).thenReturn(List.of(provider()));
         var controller = new LoginProviderAdminController(
-                service,
-                AuthPropertiesFixture.withApiBasePath(apiBasePath),
-                new PublicApiUrls(AuthPropertiesFixture.withApiBasePath(apiBasePath)));
+                service, AuthPropertiesFixture.defaults(), new PublicApiUrls(AuthPropertiesFixture.defaults()));
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setScheme("https");

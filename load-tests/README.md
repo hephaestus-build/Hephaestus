@@ -58,11 +58,10 @@ export AUTH_TOKENS=...,... WORKSPACE_SLUG=capacity-test STAGES=1:2m,5:3m,15:3m,3
 vp run test:load:heph
 ```
 
-To load a server on this machine, k6 must use the host network, and the server serves the API at
-its root:
+To load a server on this machine, k6 must use the host network:
 
 ```bash
-export LOAD_TEST_NETWORK=host API_PREFIX= BASE_URL=http://127.0.0.1:8080
+export LOAD_TEST_NETWORK=host BASE_URL=http://127.0.0.1:8080
 ```
 
 `BASE_URL` is the externally reachable application root (without `/api`); every scenario uses it.

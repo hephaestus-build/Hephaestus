@@ -9,6 +9,7 @@ import { consentOutstanding, unauthenticatedUser } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 import { consentIsPending } from "@/runtime/auth/guard";
+import { apiPathOf } from "@/test/api-path";
 import { loadRouteCode, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
 beforeAll(
@@ -47,7 +48,7 @@ describe("consent gate", () => {
 	it("decides from the identity, so no read leaves before the answer is known", async () => {
 		const requested: string[] = [];
 		const record = ({ request }: { request: Request }) => {
-			requested.push(new URL(request.url).pathname);
+			requested.push(apiPathOf(request.url));
 		};
 		server.use(...consentOutstanding);
 		server.events.on("request:start", record);

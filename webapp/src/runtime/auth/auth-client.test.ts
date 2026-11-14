@@ -114,7 +114,7 @@ function setCookie(raw: string) {
 }
 
 function req(method: string): Request {
-	return new Request("http://localhost:8080/user", { method });
+	return new Request("http://localhost:3000/api/user", { method });
 }
 
 describe("authClient.login — returnTo forwarding (safeReturnTo guard)", () => {
@@ -127,7 +127,7 @@ describe("authClient.login — returnTo forwarding (safeReturnTo guard)", () => 
 		const [target] = assigned;
 		assert(hasText(target));
 		const url = new URL(target);
-		expect(`${url.origin}${url.pathname}`).toBe("http://localhost:8080/auth/login");
+		expect(`${url.origin}${url.pathname}`).toBe("http://localhost:3000/api/auth/login");
 		expect(url.searchParams.get("provider")).toBe("gitlab");
 		expect(url.searchParams.get("returnTo")).toBe("/settings/account");
 	});

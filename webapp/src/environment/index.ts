@@ -42,9 +42,7 @@ const SECURE_XSRF_COOKIE_NAME = "__Host-XSRF-TOKEN";
 const defaults: RuntimeEnvVars = {
 	APPLICATION_VERSION: "DEV",
 	APPLICATION_CLIENT_URL: import.meta.env.DEV ? "http://localhost:4200" : window.location.origin,
-	APPLICATION_SERVER_URL: import.meta.env.DEV
-		? "http://localhost:8080"
-		: `${window.location.origin}/api`,
+	APPLICATION_SERVER_URL: `${window.location.origin}/api`,
 	XSRF_COOKIE_NAME: SECURE_XSRF_COOKIE_NAME,
 	DEPLOYMENT_ENVIRONMENT: import.meta.env.DEV ? "local" : "unknown",
 	TANSTACK_DEVTOOLS_ENABLED: import.meta.env.DEV ? "true" : "false",

@@ -1,13 +1,5 @@
 [
 	{
-		"rule": "path-alias",
-		"file": "deploy/chart/hephaestus/templates/route.yaml",
-		"text": "- type: URLRewrite",
-		"digest": "ea167dc39fa715386bdddb851693d47c90c7745a7e3dae320397ccb2fe473e0b",
-		"count": 1,
-		"owner": "#4179 API prefix"
-	},
-	{
 		"rule": "docs-redirect",
 		"file": "docs/docusaurus.config.ts",
 		"text": "redirects: [",

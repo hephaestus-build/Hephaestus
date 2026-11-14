@@ -26,7 +26,7 @@ class CookieBearerTokenResolverTest extends BaseUnitTest {
 
     @Test
     void shouldIgnoreCredentialsOnlyOnPublicDiscoveryGet() {
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/identity-providers");
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/identity-providers");
         request.setCookies(new Cookie(COOKIE_NAME, COOKIE_TOKEN));
         request.addHeader("Authorization", "Bearer " + HEADER_TOKEN);
         assertThat(resolver.resolve(request)).isNull();
@@ -37,7 +37,8 @@ class CookieBearerTokenResolverTest extends BaseUnitTest {
 
     @Test
     void shouldIgnoreCredentialsWhenADevSignInStartsAndOnlyThere() {
-        for (String[] signIn : new String[][] {{"POST", "/auth/dev-login"}, {"GET", "/auth/dev-login/client"}}) {
+        for (String[] signIn :
+                new String[][] {{"POST", "/api/auth/dev-login"}, {"GET", "/api/auth/dev-login/client"}}) {
             MockHttpServletRequest request = new MockHttpServletRequest(signIn[0], signIn[1]);
             request.setCookies(new Cookie(COOKIE_NAME, COOKIE_TOKEN));
             request.addHeader("Authorization", "Bearer " + HEADER_TOKEN);
@@ -47,11 +48,11 @@ class CookieBearerTokenResolverTest extends BaseUnitTest {
         }
 
         for (String[] other : new String[][] {
-            {"GET", "/auth/dev-login"},
-            {"POST", "/auth/dev-login/client"},
-            {"GET", "/auth/dev-login/client/other"},
-            {"POST", "/auth/refresh"},
-            {"GET", "/user"}
+            {"GET", "/api/auth/dev-login"},
+            {"POST", "/api/auth/dev-login/client"},
+            {"GET", "/api/auth/dev-login/client/other"},
+            {"POST", "/api/auth/refresh"},
+            {"GET", "/api/user"}
         }) {
             MockHttpServletRequest request = new MockHttpServletRequest(other[0], other[1]);
             request.setCookies(new Cookie(COOKIE_NAME, COOKIE_TOKEN));

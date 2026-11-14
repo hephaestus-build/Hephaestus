@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.workspace.context;
 
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import java.lang.reflect.Method;
 import java.util.LinkedHashSet;
+import java.util.List;
 import org.springframework.boot.webmvc.autoconfigure.WebMvcRegistrations;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.AnnotatedElementUtils;
@@ -9,8 +11,12 @@ import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 /**
- * Registers a custom {@link RequestMappingHandlerMapping} that automatically prefixes
- * workspace-scoped controllers with {@code /workspaces/{workspaceSlug}}.
+ * Registers the {@link RequestMappingHandlerMapping} that prefixes workspace-scoped controllers with
+ * {@code /workspaces/{workspaceSlug}} and places every application route under {@link ApiPath#PREFIX}.
+ *
+ * <p>The API prefix is chosen by path, not by handler type as {@code PathMatchConfigurer#addPathPrefix} would: the
+ * routes that keep their own root are path families that the Gateway also routes by path. Framework handlers, such as
+ * the error controller and the OpenAPI description, keep their own paths.
  */
 @Configuration
 public class WorkspaceScopedWebMvcConfiguration implements WebMvcRegistrations {
@@ -24,6 +30,11 @@ public class WorkspaceScopedWebMvcConfiguration implements WebMvcRegistrations {
 
         private static final String WORKSPACE_PREFIX = "/workspaces/{workspaceSlug}";
 
+        private static final String APPLICATION_PACKAGE = "de.tum.cit.aet.hephaestus.";
+
+        /** Provider webhooks and the sandbox gateway's connector; neither is part of the API. */
+        private static final List<String> OWN_ROOTS = List.of("/webhooks/", "/internal/");
+
         @Override
         protected void registerHandlerMethod(Object handler, Method method, RequestMappingInfo mapping) {
             RequestMappingInfo effective = mapping;
@@ -34,7 +45,21 @@ public class WorkspaceScopedWebMvcConfiguration implements WebMvcRegistrations {
 
                 effective = normalizePaths(workspacePrefix.combine(mapping));
             }
+            if (effective != null && isApiRoute(method.getDeclaringClass(), effective)) {
+                effective = RequestMappingInfo.paths(ApiPath.PREFIX)
+                        .options(getBuilderConfiguration())
+                        .build()
+                        .combine(effective);
+            }
             super.registerHandlerMethod(handler, method, effective);
+        }
+
+        private static boolean isApiRoute(Class<?> handlerType, RequestMappingInfo mapping) {
+            if (!handlerType.getName().startsWith(APPLICATION_PACKAGE) || mapping.getPathPatternsCondition() == null) {
+                return false;
+            }
+            return mapping.getPathPatternsCondition().getPatternValues().stream()
+                    .noneMatch(pattern -> OWN_ROOTS.stream().anyMatch(pattern::startsWith));
         }
 
         private boolean isWorkspaceScoped(Class<?> handlerType) {

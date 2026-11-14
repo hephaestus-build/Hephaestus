@@ -1,10 +1,10 @@
 package de.tum.cit.aet.hephaestus.core.auth.web;
 
+import de.tum.cit.aet.hephaestus.core.web.ApiPath;
 import java.util.List;
 import java.util.stream.Stream;
 import org.springframework.http.HttpMethod;
 import org.springframework.modulith.NamedInterface;
-import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
@@ -17,8 +17,7 @@ public final class PublicActivityReadRequestMatcher {
                     "/public/workspaces/*/activity/people/*/work")
             .stream()
             .flatMap(path -> Stream.of(HttpMethod.GET, HttpMethod.HEAD)
-                    .<RequestMatcher>map(
-                            method -> PathPatternRequestMatcher.withDefaults().matcher(method, path)))
+                    .<RequestMatcher>map(method -> ApiPath.matchers().matcher(method, path)))
             .toList());
 
     private PublicActivityReadRequestMatcher() {}

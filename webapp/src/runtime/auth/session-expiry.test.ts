@@ -78,7 +78,7 @@ function serveSession({ user = 200, refresh = 204 }: { user?: number; refresh?: 
 	return calls;
 }
 
-const PRACTICES = "http://localhost:8080/workspaces/acme/practices";
+const PRACTICES = "http://localhost:3000/api/workspaces/acme/practices";
 
 describe("handlePossibleSessionExpiry", () => {
 	it("leaves a refused browser report alone, so a hidden tab keeps its session", async () => {
@@ -87,7 +87,10 @@ describe("handlePossibleSessionExpiry", () => {
 
 		for (const report of ["web-vitals", "browser-faults"]) {
 			await expect(
-				handlePossibleSessionExpiry(res(401, `http://localhost:8080/${report}`), makeQueryClient()),
+				handlePossibleSessionExpiry(
+					res(401, `http://localhost:3000/api/${report}`),
+					makeQueryClient(),
+				),
 			).resolves.toBe(false);
 		}
 
@@ -235,7 +238,7 @@ describe("handlePossibleSessionExpiry", () => {
 		const qc = makeQueryClient();
 		const invalidate = vi.spyOn(qc, "invalidateQueries");
 
-		await handlePossibleSessionExpiry(res(401, "http://localhost:8080/workspaces/acme"), qc);
+		await handlePossibleSessionExpiry(res(401, "http://localhost:3000/api/workspaces/acme"), qc);
 
 		expect(calls).toStrictEqual({ user: 1, refresh: 0 });
 		expect(assigned).toHaveLength(0);
@@ -248,17 +251,17 @@ describe("handlePossibleSessionExpiry", () => {
 		const qc = makeQueryClient();
 		const invalidate = vi.spyOn(qc, "invalidateQueries");
 
-		await handlePossibleSessionExpiry(res(401, "http://localhost:8080/workspaces/acme"), qc);
+		await handlePossibleSessionExpiry(res(401, "http://localhost:3000/api/workspaces/acme"), qc);
 
 		expect(assigned).toHaveLength(0);
 		expect(invalidate).not.toHaveBeenCalled();
 	});
 
 	it.each([
-		["the GET /user probe", "/", "http://localhost:8080/user"],
+		["the GET /user probe", "/", "http://localhost:3000/api/user"],
 		["the GET /api/user probe (prod /api base path)", "/", "http://localhost/api/user"],
 		["/api/auth/* endpoints (prod /api base path)", "/", "http://localhost/api/auth/refresh"],
-		["/auth/* endpoints (refresh must not recurse)", "/", "http://localhost:8080/auth/refresh"],
+		["/auth/* endpoints (refresh must not recurse)", "/", "http://localhost:3000/api/auth/refresh"],
 		["any request while already on /login", "/login", PRACTICES],
 	])("does NOT handle a 401 from %s", async (_name, pathname, url) => {
 		const calls = serveSession();
@@ -276,7 +279,7 @@ describe("handlePossibleSessionExpiry", () => {
 		serveSession({ user: 401, refresh: 401 });
 		const { assigned } = stubLocation("//evil.example.com");
 		await handlePossibleSessionExpiry(
-			res(401, "http://localhost:8080/workspaces/acme"),
+			res(401, "http://localhost:3000/api/workspaces/acme"),
 			makeQueryClient(),
 		);
 		const [target] = assigned;
@@ -288,7 +291,7 @@ describe("handlePossibleSessionExpiry", () => {
 	it.each([200, 204, 403, 500])("ignores non-401 status %i", async (status) => {
 		const { assigned } = stubLocation("/dashboard");
 		const handled = await handlePossibleSessionExpiry(
-			res(status, "http://localhost:8080/workspaces/acme"),
+			res(status, "http://localhost:3000/api/workspaces/acme"),
 			makeQueryClient(),
 		);
 		expect(handled).toBe(false);

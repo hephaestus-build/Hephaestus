@@ -13,78 +13,64 @@ public final class AuthPropertiesFixture {
 
     private AuthPropertiesFixture() {}
 
-    /** Production defaults (no proxy prefix, no seeded providers). */
+    /** Production defaults (no seeded providers). */
     public static AuthProperties defaults() {
-        return build("", Map.of(), Duration.ofMinutes(5));
+        return build(Map.of(), Duration.ofMinutes(5));
     }
 
-    /** Defaults with the given {@code apiBasePath} (the constructor normalizes it). */
-    public static AuthProperties withApiBasePath(String apiBasePath) {
-        return build(apiBasePath, Map.of(), Duration.ofMinutes(5));
-    }
-
-    /** Defaults with the configured public API origin and prefix. */
-    public static AuthProperties withApiBase(URI issuer, String apiBasePath) {
-        return build(issuer, apiBasePath, Map.of(), Duration.ofMinutes(5), List.of(), true);
+    /** Defaults with the configured public origin. */
+    public static AuthProperties withIssuer(URI issuer) {
+        return build(issuer, Map.of(), Duration.ofMinutes(5), List.of(), true);
     }
 
     /** Defaults with the given recent-sign-in window. */
     public static AuthProperties withStepUpMaxAge(Duration stepUpMaxAge) {
-        return build("", Map.of(), stepUpMaxAge);
+        return build(Map.of(), stepUpMaxAge);
     }
 
     /** Defaults with the given installed Chrome extension ids. */
     public static AuthProperties withBrowserExtensionIds(List<String> ids) {
-        return build("", Map.of(), Duration.ofMinutes(5), ids);
+        return build(Map.of(), Duration.ofMinutes(5), ids);
     }
 
     /** Defaults with the given seeded login providers. */
     public static AuthProperties withLoginProviders(Map<String, AuthProperties.LoginProviderSeed> loginProviders) {
-        return build("", loginProviders, Duration.ofMinutes(5));
+        return build(loginProviders, Duration.ofMinutes(5));
     }
 
     private static AuthProperties build(
-            String apiBasePath, Map<String, AuthProperties.LoginProviderSeed> providers, Duration stepUpMaxAge) {
-        return build(apiBasePath, providers, stepUpMaxAge, List.of());
+            Map<String, AuthProperties.LoginProviderSeed> providers, Duration stepUpMaxAge) {
+        return build(providers, stepUpMaxAge, List.of());
     }
 
     private static AuthProperties build(
-            String apiBasePath,
             Map<String, AuthProperties.LoginProviderSeed> providers,
             Duration stepUpMaxAge,
             List<String> browserExtensionIds) {
-        return build(apiBasePath, providers, stepUpMaxAge, browserExtensionIds, true);
+        return build(providers, stepUpMaxAge, browserExtensionIds, true);
     }
 
     public static AuthProperties withoutAssurance() {
-        return build("", Map.of(), Duration.ofMinutes(5), List.of(), false);
+        return build(Map.of(), Duration.ofMinutes(5), List.of(), false);
     }
 
     private static AuthProperties build(
-            String apiBasePath,
             Map<String, AuthProperties.LoginProviderSeed> providers,
             Duration stepUpMaxAge,
             List<String> browserExtensionIds,
             boolean assuranceEnforced) {
         return build(
-                URI.create("http://localhost:8080"),
-                apiBasePath,
-                providers,
-                stepUpMaxAge,
-                browserExtensionIds,
-                assuranceEnforced);
+                URI.create("http://localhost:8080"), providers, stepUpMaxAge, browserExtensionIds, assuranceEnforced);
     }
 
     private static AuthProperties build(
             URI issuer,
-            String apiBasePath,
             Map<String, AuthProperties.LoginProviderSeed> providers,
             Duration stepUpMaxAge,
             List<String> browserExtensionIds,
             boolean assuranceEnforced) {
         return new AuthProperties(
                 issuer,
-                apiBasePath,
                 "hephaestus-spa",
                 Duration.ofHours(24),
                 AuthProperties.DEFAULT_COOKIE_NAME,
