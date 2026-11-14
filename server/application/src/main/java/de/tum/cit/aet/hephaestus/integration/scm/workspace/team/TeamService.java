@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.workspace.settings.WorkspaceTea
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -54,7 +55,10 @@ public class TeamService {
         Set<Long> hiddenMemberIds = workspaceMembershipService.findHiddenUserIdsByWorkspaceId(workspaceId);
         Set<Long> monitoredRepoIds = repositoryRepository.findMonitoredRepositoryIds(workspaceId);
 
-        List<Team> teams = teamRepository.findWithCollectionsByOrganizationIgnoreCaseAndProviderId(
+        List<Team> teams = teamRepository.findWithRepoPermissionsByOrganizationIgnoreCaseAndProviderId(
+                scope.accountLogin(), scope.providerId());
+        // Fills the memberships of the teams above in this transaction; without it each team loads them on its own.
+        teamRepository.findWithMembershipsByOrganizationIgnoreCaseAndProviderId(
                 scope.accountLogin(), scope.providerId());
 
         Set<Long> teamIds = teams.stream().map(Team::getId).collect(Collectors.toSet());
@@ -65,6 +69,26 @@ public class TeamService {
                 .map(team -> convertToDTO(
                         team, hiddenTeamIds, hiddenRepoIds, monitoredRepoIds, labelFiltersByTeam, hiddenMemberIds))
                 .toList();
+    }
+
+    /** One team of the workspace as the team list shows it, or empty when the team is not in the workspace. */
+    @Transactional(readOnly = true)
+    public Optional<TeamInfoDTO> teamInfo(Workspace workspace, Long teamId) {
+        Long workspaceId = workspace.getId();
+        return teamRepository
+                .findWithRepoPermissionsById(teamId)
+                .filter(team -> belongsToWorkspace(team, workspace))
+                .map(team -> {
+                    // Fills the team's memberships in this transaction, in their own query.
+                    teamRepository.findWithMembershipsById(teamId);
+                    return convertToDTO(
+                            team,
+                            workspaceTeamSettingsService.getHiddenTeamIds(workspaceId),
+                            workspaceTeamSettingsService.getHiddenRepositoryIds(workspaceId),
+                            repositoryRepository.findMonitoredRepositoryIds(workspaceId),
+                            Map.of(teamId, workspaceTeamSettingsService.getTeamLabelFilters(workspaceId, teamId)),
+                            workspaceMembershipService.findHiddenUserIdsByWorkspaceId(workspaceId));
+                });
     }
 
     @Transactional

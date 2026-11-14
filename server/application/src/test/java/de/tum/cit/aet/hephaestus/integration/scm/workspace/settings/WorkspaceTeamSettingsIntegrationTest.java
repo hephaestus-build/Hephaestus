@@ -8,13 +8,17 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryInfoDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamInfoDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembership;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembershipRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermission;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermissionRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.testconfig.SqlRequestTrace;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
@@ -73,6 +77,12 @@ class WorkspaceTeamSettingsIntegrationTest extends AbstractWorkspaceIntegrationT
 
     @Autowired
     private TeamRepositoryPermissionRepository permissionRepository;
+
+    @Autowired
+    private TeamMembershipRepository membershipRepository;
+
+    @Autowired
+    private SqlRequestTrace requests;
 
     private final AtomicLong nativeIds = new AtomicLong(200_000);
 
@@ -148,6 +158,30 @@ class WorkspaceTeamSettingsIntegrationTest extends AbstractWorkspaceIntegrationT
         assertThat(listed.repositories())
                 .noneSatisfy(info -> assertThat(info.id()).isEqualTo(unmonitored.getId()));
         assertThat(listed.labels()).extracting(LabelInfoDTO::id).doesNotContain(unmonitoredLabel.getId());
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldListTeamsWithAConstantNumberOfReadsAndNoReadThatPairsRepositoriesWithMembers() {
+        staff(team, repository);
+        var small = requests.measure(webTestClient, client -> listedTeams(client));
+        Team second = createTeam("web", team.getOrganization());
+        Team third = createTeam("data", team.getOrganization());
+        staff(second, createRepository(team.getOrganization() + "/web"));
+        staff(third, createRepository(team.getOrganization() + "/data"));
+
+        var larger = requests.measure(webTestClient, client -> listedTeams(client));
+
+        assertThat(larger.statements())
+                .as("one team=%s, three teams=%s", small.statements(), larger.statements())
+                .isEqualTo(small.statements());
+        // One read of both collections returns a row for every pair of permission and membership.
+        assertThat(larger.sql())
+                .noneMatch(sql -> sql.contains("team_repository_permission") && sql.contains("team_membership"));
+        for (TeamInfoDTO shown : List.of(listedTeam(), addLabel())) {
+            assertThat(shown.repositories()).extracting(RepositoryInfoDTO::id).containsExactly(repository.getId());
+            assertThat(shown.members()).hasSize(2);
+        }
     }
 
     @Test
@@ -414,6 +448,29 @@ class WorkspaceTeamSettingsIntegrationTest extends AbstractWorkspaceIntegrationT
                 .expectStatus()
                 .isOk()
                 .expectBody(Void.class);
+    }
+
+    /** Gives a team one monitored repository and two members. */
+    private void staff(Team staffed, Repository monitored) {
+        if (!monitored.getId().equals(repository.getId())) monitor(workspace, monitored);
+        permissionRepository.save(
+                new TeamRepositoryPermission(staffed, monitored, TeamRepositoryPermission.PermissionLevel.WRITE));
+        membershipRepository.save(new TeamMembership(
+                staffed, persistUser("team-member-" + System.nanoTime()), TeamMembership.Role.MEMBER));
+        membershipRepository.save(new TeamMembership(
+                staffed, persistUser("team-maintainer-" + System.nanoTime()), TeamMembership.Role.MAINTAINER));
+    }
+
+    private List<TeamInfoDTO> listedTeams(WebTestClient client) {
+        return Objects.requireNonNull(client.get()
+                .uri("/workspaces/{slug}/teams", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBodyList(TeamInfoDTO.class)
+                .returnResult()
+                .getResponseBody());
     }
 
     private TeamInfoDTO listedTeam() {

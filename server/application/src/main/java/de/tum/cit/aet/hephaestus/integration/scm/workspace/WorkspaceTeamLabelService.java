@@ -2,13 +2,13 @@ package de.tum.cit.aet.hephaestus.integration.scm.workspace;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamInfoDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserTeamsDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.settings.WorkspaceTeamSettingsService;
+import de.tum.cit.aet.hephaestus.integration.scm.workspace.team.TeamService;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -33,18 +33,21 @@ public class WorkspaceTeamLabelService {
     private final ScmMemberRepository workspaceMembershipRepository;
     private final WorkspaceTeamSettingsService workspaceTeamSettingsService;
     private final WorkspaceTeamScopeResolver workspaceTeamScopeResolver;
+    private final TeamService teamService;
 
     public WorkspaceTeamLabelService(
             WorkspaceRepository workspaceRepository,
             TeamRepository teamRepository,
             ScmMemberRepository workspaceMembershipRepository,
             WorkspaceTeamSettingsService workspaceTeamSettingsService,
-            WorkspaceTeamScopeResolver workspaceTeamScopeResolver) {
+            WorkspaceTeamScopeResolver workspaceTeamScopeResolver,
+            TeamService teamService) {
         this.workspaceRepository = workspaceRepository;
         this.teamRepository = teamRepository;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.workspaceTeamSettingsService = workspaceTeamSettingsService;
         this.workspaceTeamScopeResolver = workspaceTeamScopeResolver;
+        this.teamService = teamService;
     }
 
     private Predicate<Team> inScope(Workspace workspace) {
@@ -81,10 +84,7 @@ public class WorkspaceTeamLabelService {
                 .isEmpty()) {
             return Optional.empty();
         }
-        return teamRepository
-                .findWithCollectionsById(teamId)
-                .filter(inScope(workspace))
-                .map(team -> createTeamInfoDTOWithWorkspaceSettings(workspace, team));
+        return teamService.teamInfo(workspace, teamId);
     }
 
     public Optional<TeamInfoDTO> addLabelToTeam(WorkspaceContext workspaceContext, Long teamId, Long labelId) {
@@ -96,13 +96,11 @@ public class WorkspaceTeamLabelService {
         log.debug(
                 "Removing label from team: labelId={}, teamId={}, workspaceId={}", labelId, teamId, workspace.getId());
 
-        return teamRepository
-                .findWithCollectionsById(teamId)
-                .filter(inScope(workspace))
-                .map(team -> {
-                    workspaceTeamSettingsService.removeLabelFilter(workspace, teamId, labelId);
-                    return createTeamInfoDTOWithWorkspaceSettings(workspace, team);
-                });
+        if (teamRepository.findById(teamId).filter(inScope(workspace)).isEmpty()) {
+            return Optional.empty();
+        }
+        workspaceTeamSettingsService.removeLabelFilter(workspace, teamId, labelId);
+        return teamService.teamInfo(workspace, teamId);
     }
 
     public Optional<TeamInfoDTO> removeLabelFromTeam(WorkspaceContext workspaceContext, Long teamId, Long labelId) {
@@ -110,18 +108,6 @@ public class WorkspaceTeamLabelService {
     }
 
     // Helper Methods
-
-    private TeamInfoDTO createTeamInfoDTOWithWorkspaceSettings(Workspace workspace, Team team) {
-        Long workspaceId = workspace.getId();
-        boolean isHidden = workspaceTeamSettingsService.isTeamHidden(workspaceId, team.getId());
-        Set<Label> workspaceLabels = workspaceTeamSettingsService.getTeamLabelFilters(workspaceId, team.getId());
-        Set<Long> hiddenRepoIds = workspaceTeamSettingsService.getHiddenRepositoryIds(workspaceId);
-        Set<Long> hiddenMemberIds = workspaceMembershipRepository.findHiddenUserIdsByWorkspaceId(workspaceId);
-        Set<Long> monitoredRepoIds = workspaceTeamSettingsService.getMonitoredRepositoryIds(workspaceId);
-
-        return TeamInfoDTO.fromTeamWithScopeSettings(
-                team, isHidden, workspaceLabels, hiddenRepoIds, monitoredRepoIds, hiddenMemberIds);
-    }
 
     private Workspace requireWorkspace(String slug) {
         if (isBlank(slug)) {
