@@ -8,7 +8,9 @@
 			},
 			"directions": [
 				"The diff changes 2 production source file(s) and 0 test file(s), by path.",
-				"Whether the repository already has a test target does not decide this practice: judge the changed behaviour against the tests in this diff."
+				"Whether the repository already has a test target does not decide this practice: judge the changed behaviour against the tests in this diff. A statement about the tests in this change rests on the diff: cite its file list, and do not name the checkout as searched for it.",
+				"To claim that no test elsewhere in the repository exercises the changed code, search the whole checkout with the grep tool, not a shell command, using the next direction's pattern, and name these symbols in the claim and in lookedFor.",
+				"\\bCartView\\b|\\brefresh\\b|\\bsaveDraft\\b|\\bReport\\b"
 			]
 		}
 	],
@@ -21,7 +23,9 @@
 			},
 			"directions": [
 				"The diff changes 13 production source file(s) and 2 test file(s), by path: web/cart.test.ts, AppTests/CartTests.swift.",
-				"Whether the repository already has a test target does not decide this practice: judge the changed behaviour against the tests in this diff."
+				"Whether the repository already has a test target does not decide this practice: judge the changed behaviour against the tests in this diff. A statement about the tests in this change rests on the diff: cite its file list, and do not name the checkout as searched for it.",
+				"To claim that no test elsewhere in the repository exercises the changed code, search the whole checkout with the grep tool, not a shell command, using the next direction's pattern, and name these symbols in the claim and in lookedFor.",
+				"\\btotal\\b|\\bload\\b|\\bLoad\\b|\\bApp\\b|\\bCart\\b"
 			]
 		}
 	],
@@ -34,7 +38,7 @@
 			},
 			"directions": [
 				"The diff changes 2 production source file(s) and 0 test file(s), by path.",
-				"Whether the repository already has a test target does not decide this practice: judge the changed behaviour against the tests in this diff."
+				"Whether the repository already has a test target does not decide this practice: judge the changed behaviour against the tests in this diff. A statement about the tests in this change rests on the diff: cite its file list, and do not name the checkout as searched for it."
 			]
 		}
 	],
@@ -47,7 +51,9 @@
 			},
 			"directions": [
 				"The diff changes 1 production source file(s) and 0 test file(s), by path.",
-				"Whether the repository already has a test target does not decide this practice: judge the changed behaviour against the tests in this diff."
+				"Whether the repository already has a test target does not decide this practice: judge the changed behaviour against the tests in this diff. A statement about the tests in this change rests on the diff: cite its file list, and do not name the checkout as searched for it.",
+				"To claim that no test elsewhere in the repository exercises the changed code, search the whole checkout with the grep tool, not a shell command, using the next direction's pattern, and name these symbols in the claim and in lookedFor.",
+				"\\btotal\\b"
 			]
 		}
 	],
@@ -60,7 +66,7 @@
 			},
 			"directions": [
 				"The diff changes 1 production source file(s) and 0 test file(s), by path.",
-				"Whether the repository already has a test target does not decide this practice: judge the changed behaviour against the tests in this diff."
+				"Whether the repository already has a test target does not decide this practice: judge the changed behaviour against the tests in this diff. A statement about the tests in this change rests on the diff: cite its file list, and do not name the checkout as searched for it."
 			]
 		}
 	],

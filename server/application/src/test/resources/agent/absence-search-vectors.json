@@ -890,5 +890,154 @@
 		"consulted": true,
 		"tied": false,
 		"claimed": true
+	},
+	{
+		"name": "a diff that shows no test file is a statement about the change",
+		"patterns": [],
+		"subject": "a test in the change",
+		"texts": [
+			"scanning the complete 20-line diff shows no test file and no added test that exercises the new behavior"
+		],
+		"consulted": false,
+		"claimed": false,
+		"tied": true
+	},
+	{
+		"name": "no test in the same change is a statement about the change",
+		"patterns": [],
+		"subject": "a test in the change",
+		"texts": [
+			"No test in the same change exercises this behaviour"
+		],
+		"consulted": false,
+		"claimed": false,
+		"tied": true
+	},
+	{
+		"name": "a diff that contains no test file or test is a statement about the change",
+		"patterns": [],
+		"subject": "a test in the change",
+		"texts": [
+			"The diff contains no test file, no hand-written test, no assertion, skip or disable"
+		],
+		"consulted": false,
+		"claimed": false,
+		"tied": true
+	},
+	{
+		"name": "an enumeration after the diff's verb stays bounded to the change",
+		"patterns": [],
+		"subject": "a test in the change",
+		"texts": [
+			"The diff touches no test file, no assertion, no test annotation, no skip"
+		],
+		"consulted": false,
+		"claimed": false,
+		"tied": true
+	},
+	{
+		"name": "a test file and a test hunk are not a test that tests something",
+		"patterns": [],
+		"subject": "a test in the change",
+		"texts": [
+			"contains no test file, test hunk, or removed or altered assertion"
+		],
+		"consulted": false,
+		"claimed": false,
+		"tied": true
+	},
+	{
+		"name": "a repository-wide test claim needs a search that names it",
+		"patterns": [
+			"(?i)PasswordPolicy"
+		],
+		"subject": "a test of the new behavior",
+		"texts": [
+			"No test anywhere in the repository exercises PasswordPolicy."
+		],
+		"consulted": false,
+		"claimed": true,
+		"tied": true
+	},
+	{
+		"name": "a test claim about code the change adds is still a repository claim",
+		"patterns": [
+			"(?i)PasswordPolicy"
+		],
+		"subject": "a test of the new behavior",
+		"texts": [
+			"The change adds code that no test covers."
+		],
+		"consulted": false,
+		"claimed": true,
+		"tied": false
+	},
+	{
+		"name": "a repository-wide test claim that no search names",
+		"patterns": [
+			"(?i)Test"
+		],
+		"subject": "a test of the new behavior",
+		"texts": [
+			"No other tests test this method."
+		],
+		"consulted": false,
+		"claimed": true,
+		"tied": false
+	},
+	{
+		"name": "a test that tests a named symbol is a repository claim",
+		"patterns": [],
+		"subject": "a test of the changed code",
+		"texts": [
+			"No other test tests PasswordPolicy."
+		],
+		"consulted": false,
+		"claimed": true,
+		"tied": false
+	},
+	{
+		"name": "an object from the change does not bound a claim about other tests",
+		"patterns": [],
+		"subject": "a test of the changed code",
+		"texts": [
+			"No other test covers the methods from this change."
+		],
+		"consulted": false,
+		"claimed": true,
+		"tied": false
+	},
+	{
+		"name": "no other test stays a claim after a bounded enumeration",
+		"patterns": [],
+		"subject": "a test of the changed code",
+		"texts": [
+			"The diff adds no test, no other test covers the parser."
+		],
+		"consulted": false,
+		"claimed": true,
+		"tied": false
+	},
+	{
+		"name": "a merge request that contains no test is a statement about the change",
+		"patterns": [],
+		"subject": "a test of the changed code",
+		"texts": [
+			"The merge request contains no test that exercises the parser."
+		],
+		"consulted": false,
+		"claimed": false,
+		"tied": true
+	},
+	{
+		"name": "a test that tests named methods is a repository claim",
+		"patterns": [],
+		"subject": "a test of the changed code",
+		"texts": [
+			"No other test tests methods on PasswordPolicy."
+		],
+		"consulted": false,
+		"claimed": true,
+		"tied": false
 	}
 ]
