@@ -1,8 +1,14 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
-import { XMLParser } from "fast-xml-parser";
 import { SyntaxValidator } from "fast-xml-validator";
 
+import {
+	type ChangelogElement,
+	attribute,
+	changelogParser as parser,
+	elements,
+	text,
+} from "./lib/changelog.ts";
 import { isRecord } from "./lib/json.ts";
 import { STOP_EVERY_ROLE_HEADING, stopEveryRoleEntries } from "./lib/migration-guide.ts";
 import { BASELINE_RELEASE, latestReleaseOf } from "./lib/previous-release.ts";
@@ -22,39 +28,7 @@ export interface CompatibilityInput {
 	readonly contractions: ReadonlySet<string>;
 }
 
-type Element = Record<string, unknown>;
-
-// Every element is a list, so a change set with one change and one with many read the same way.
-const parser = new XMLParser({
-	ignoreAttributes: false,
-	isArray: (_name, _path, _leaf, isAttribute) => !isAttribute,
-});
-
-// An element with only text, such as a plain `<sql>`, parses to its text.
-const elements = (parent: Element, name: string): Element[] => {
-	const value = parent[name];
-	return Array.isArray(value)
-		? value.flatMap((entry) => {
-				if (typeof entry === "string") {
-					return [{ "#text": entry }];
-				}
-				return isRecord(entry) ? [entry] : [];
-			})
-		: [];
-};
-
-const attribute = (element: Element, name: string): string => {
-	const value = element[`@_${name}`];
-	return typeof value === "string" ? value : "";
-};
-
-function text(element: Element): string {
-	const value = element["#text"];
-	if (Array.isArray(value)) {
-		return value.filter((part) => typeof part === "string").join("\n");
-	}
-	return typeof value === "string" ? value : "";
-}
+type Element = ChangelogElement;
 
 const hasDefault = (column: Element): boolean =>
 	Object.keys(column).some((key) => key.startsWith("@_defaultValue"));

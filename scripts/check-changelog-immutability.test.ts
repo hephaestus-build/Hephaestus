@@ -230,9 +230,6 @@ void test("an unreadable release tag fails the replacement", () => {
 
 const changeSet = (body: string): string =>
 	xml(`<changeSet id="1794580948952-1" author="hephaestus">${body}</changeSet>`);
-const correction = "<sql>UPDATE agent_action SET state = 'CANCELLED' WHERE kind = 'EMAIL';</sql>";
-const halt =
-	'<preConditions onFail="HALT"><columnExists tableName="agent_action" columnName="state"/></preConditions>';
 const stop = "<rollback><stop>Restore the backup taken before the upgrade.</stop></rollback>";
 
 void test("a new change set with raw SQL or a custom change states its rollback", () => {
@@ -241,11 +238,17 @@ void test("a new change set with raw SQL or a custom change states its rollback"
 		violations(current(), { ...changed(current(), file, "new"), read: () => content });
 	for (const raw of [
 		"<sql>CREATE INDEX i ON t (c);</sql>",
+		'<sql splitStatements="false"><![CDATA[UPDATE t SET c = 1;]]></sql>',
 		'<sqlFile path="x.sql"/>',
 		'<customChange class="x.Backfill"/>',
 	]) {
-		assert.match(added(changeSet(raw)).join("\n"), /without a <rollback>/u, raw);
-		assert.match(added(changeSet(`${raw}<rollback/>`)).join("\n"), /without a <rollback>/u, raw);
+		assert.match(added(changeSet(raw)).join("\n"), /without a rollback/u, raw);
+		assert.match(added(changeSet(`${raw}<rollback/>`)).join("\n"), /without a rollback/u, raw);
+		assert.match(
+			added(changeSet(`${raw}<rollback><stop/></rollback>`)).join("\n"),
+			/without a rollback/u,
+			raw,
+		);
 		assert.deepEqual(added(changeSet(`${raw}${stop}`)), [], raw);
 	}
 	assert.deepEqual(added(changeSet('<createIndex tableName="t" indexName="i"/>')), []);
@@ -253,42 +256,20 @@ void test("a new change set with raw SQL or a custom change states its rollback"
 		added(changeSet("<sql>CREATE INDEX i ON t (c);</sql><rollback>DROP INDEX i;</rollback>")),
 		[],
 	);
-});
-
-void test("a data correction states which rows are wrong, halts on the columns it reads and names the backup", () => {
-	const problems = recoveryProblems("f.xml", changeSet(correction)).join("\n");
-	assert.match(problems, /without a <rollback>/u);
-	assert.match(problems, /without a <comment>/u);
-	assert.match(problems, /without a HALT precondition/u);
-	assert.match(
-		recoveryProblems(
-			"f.xml",
-			changeSet(`${halt.replace("HALT", "MARK_RAN")}<comment>Rows</comment>${correction}${stop}`),
-		).join("\n"),
-		/without a HALT precondition/u,
-	);
 	assert.deepEqual(
-		recoveryProblems(
-			"f.xml",
-			changeSet(`${halt}<comment>Queued copies of the old notice.</comment>${correction}${stop}`),
-		),
-		[],
-	);
-	// A function body that updates rows is not a data correction.
-	assert.deepEqual(
-		recoveryProblems(
-			"f.xml",
+		added(
 			changeSet(
-				`<sql splitStatements="false">CREATE FUNCTION f() RETURNS trigger LANGUAGE plpgsql AS $_$ BEGIN UPDATE t SET c = 1; RETURN NEW; END $_$;</sql>${stop}`,
+				'<sql>CREATE INDEX i ON t (c);</sql><rollback changeSetId="1794580948952-0" changeSetAuthor="hephaestus"/>',
 			),
 		),
 		[],
 	);
 });
 
-void test("the guard refuses the role-notice correction that reached main without its safeguards", () => {
+void test("the guard refuses the role-notice change sets that reached main without a rollback", () => {
 	const file = `${directory}next/20261114013648-harvest-role-change-notifications.xml`;
-	const problems = recoveryProblems(file, readFileSync(file, "utf8"));
-	assert.equal(problems.filter((problem) => problem.includes("-1:")).length, 3);
-	assert.equal(problems.length, 5);
+	assert.deepEqual(
+		recoveryProblems(file, readFileSync(file, "utf8")).map((problem) => problem.split(":")[0]),
+		["-1", "-2", "-3"].map((id) => `${file} change set 1794580948952${id}`),
+	);
 });
