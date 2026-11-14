@@ -204,6 +204,7 @@ Use [Recover the live installation](#recover-the-live-installation) for a live r
    Follow [Prove silence](./production-operations-runbook#silent-deployment-checklist) before opening any external destination.
 
 The restored database has the role passwords that it had at the backup.
+After a loss of the cluster, the old `DATABASE_ADMIN_PASSWORD` is only in the copy that [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) step 2 keeps.
 The migration Job of step 8 sets the passwords of `hephaestus_owner` and `hephaestus_app` from the Secret again.
 If `DATABASE_ADMIN_PASSWORD` changed since the backup, put the old value back in the Secret before step 3.
 Rehearse a restore on a copy of the instance before you need one.
