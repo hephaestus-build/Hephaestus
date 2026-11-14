@@ -56,7 +56,7 @@ export function recoveryProblems(file: string, xml: string): string[] {
 		const rollbacks = elements(set, "rollback");
 		const silentStop = rollbacks
 			.flatMap((rollback) => elements(rollback, "stop"))
-			.some((stop) => text(stop).trim() === "");
+			.some((stop) => text(stop).trim() === "" && attribute(stop, "message").trim() === "");
 		if (raw.length === 0 || (rollbacks.some(reverses) && !silentStop)) {
 			return [];
 		}

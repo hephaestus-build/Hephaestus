@@ -250,6 +250,13 @@ void test("a new change set with raw SQL or a custom change states its rollback"
 			raw,
 		);
 		assert.deepEqual(added(changeSet(`${raw}${stop}`)), [], raw);
+		assert.deepEqual(
+			added(
+				changeSet(`${raw}<rollback><stop message="Restore the pre-upgrade backup."/></rollback>`),
+			),
+			[],
+			raw,
+		);
 	}
 	assert.deepEqual(added(changeSet('<createIndex tableName="t" indexName="i"/>')), []);
 	assert.deepEqual(
