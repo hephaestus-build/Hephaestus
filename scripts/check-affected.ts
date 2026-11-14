@@ -90,7 +90,7 @@ export function isReleaseNote(file: string): boolean {
 	return /^\.changeset\/(?!README\.md$)[^/]+\.md$/u.test(file);
 }
 
-/** A migration-guide fragment, which `gate:changesets` verifies with its changeset. */
+/** A migration-guide fragment: `gate:changesets` checks it with its changeset, and `gate:docs-pages` checks its upgrade page. */
 export function isMigrationFragment(file: string): boolean {
 	return /^\.migration\/(?!README\.md$)[^/]+\.md$/u.test(file);
 }
@@ -105,7 +105,10 @@ export function scopesFor(paths: string[]): Scope[] {
 	}
 	const scopes = new Set<Scope>();
 	for (const file of paths) {
-		if (isReleaseNote(file) || isMigrationFragment(file)) {
+		if (isMigrationFragment(file)) {
+			scopes.add("changesets");
+			scopes.add("docs");
+		} else if (isReleaseNote(file)) {
 			scopes.add("changesets");
 		} else if (file === FEEDBACK_WRITING_GUIDE) {
 			scopes.add("docs");

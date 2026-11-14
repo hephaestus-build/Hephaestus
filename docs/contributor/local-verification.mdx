@@ -132,8 +132,9 @@ Do not run `vp hooks enable`: it points every worktree back at the generated dis
 A worktree on a branch from before the tracked launcher runs its old hook directly, so it needs `vp` on `PATH` until you rebase it.
 
 The pre-push hook runs `vp run check:push` with one task worker.
-It runs only for a push to GitHub, because these are the checks of a pull request.
+It runs only for a push to GitHub, because these are the checks of a pull request: the remote's name or URL must contain `github.com`.
 A push to another remote, such as a validation mirror, skips them and says so.
+An SSH host alias that hides `github.com`, such as `git@github-work:org/repo`, also skips them. Pull request CI still runs every check.
 It compares the same paths as `check:affected` and runs selected format, lint, TypeScript and prose checks.
 It does not write source files.
 `git push --no-verify` skips the hook.

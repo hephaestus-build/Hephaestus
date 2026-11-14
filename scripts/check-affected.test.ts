@@ -311,7 +311,7 @@ await test("maps scopes to the documented commands", () => {
 
 await test("release notes select their validation without expanding an unrelated change", () => {
 	assert.deepEqual(scopesFor([".changeset/fix-feedback.md"]), ["changesets"]);
-	assert.deepEqual(scopesFor([".migration/fix-feedback.md"]), ["changesets"]);
+	assert.deepEqual(scopesFor([".migration/fix-feedback.md"]), ["changesets", "docs"]);
 	assert.deepEqual(scopesFor([".migration/README.md"]), ["full"]);
 	assert.deepEqual(scopesFor(["webapp/src/a.tsx", ".changeset/fix-feedback.md"]), [
 		"changesets",

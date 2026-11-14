@@ -103,7 +103,7 @@ export function pushScopes(paths: string[] | undefined): Exclude<Scope, "full">[
 }
 
 /**
- * Why the push checks cover what they cover, for the hook's first line: a lane that sees every scope
+ * Why the push checks cover what they cover, for the hook's first line: a contributor who sees every scope
  * selected can tell which file did it, or that no merge base was found.
  */
 export function pushScopeReason(paths: string[] | undefined): string {
@@ -360,15 +360,16 @@ async function main(): Promise<void> {
 	let paths: string[] | undefined;
 	let since = "";
 	try {
-		since = ` since ${mergeBase(base).slice(0, 10)}, the merge base with ${base}`;
+		const shared = mergeBase(base);
 		paths = changedPaths(base);
+		since = ` since ${shared.slice(0, 10)}, the merge base with ${base}`;
 	} catch {
 		console.log(
 			`No usable merge base with ${base}; selecting all scoped checks and frontend unit projects without fetching.`,
 		);
 	}
 	console.log(
-		`Push checks for ${paths === undefined ? "every" : String(paths.length)} changed paths${since}: ${pushScopeReason(paths)}.`,
+		`Push checks for ${paths === undefined ? "every changed path" : `${paths.length} changed ${paths.length === 1 ? "path" : "paths"}`}${since}: ${pushScopeReason(paths)}.`,
 	);
 	// First, because it takes milliseconds and otherwise fails only in the merge queue.
 	if (paths?.some((file) => file.startsWith(`${NEXT_CHANGELOG_DIRECTORY}/`)) === true) {
