@@ -57,7 +57,13 @@ class NoteWordingTest {
     }
 
     @Test
-    void shouldAskBackANoteThatStartsWithAFieldLabel() {
+    void shouldAskBackANoteThatStartsWithAHeadingOrFieldLabel() {
+        assertThat(NoteWording.problems("Problem: the catch drops the cause.", SLUGS))
+                .singleElement()
+                .asString()
+                .contains("field label");
+        assertThat(NoteWording.problems("The developer names two causes: a timeout and a parse error.", SLUGS))
+                .isEmpty();
         assertThat(NoteWording.problems("Evidence: the catch drops the cause.", SLUGS))
                 .singleElement()
                 .asString()
