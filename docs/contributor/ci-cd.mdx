@@ -627,6 +627,7 @@ The required checks are job names, so a display name does not change them.
 | `scorecard.yml`                       | Push to main, branch-protection change, weekly                                | Publishes the OpenSSF Scorecard                                                                                                                                                                                                  |
 | `semgrep.yml`                         | Pull request, push to main                                                    | Tests and scans the repository's own TLS rule pack                                                                                                                                                                               |
 | `kubernetes-nightly.yml`              | Nightly, manual                                                               | Runs every Kubernetes leg and the sandbox footprint benchmark on the newest main build that passed CI, with its chart and agent image. Reports a failure on one tracking issue                                              |
+| `chart-upgrade.yml` | Nightly through `kubernetes-nightly.yml`, manual | Installs the latest published release with its own chart and images, then upgrades it to a candidate with the candidate chart |
 | `extension-provider-slots.yml` | Nightly, manual | Checks the actual extension adapter against six public GitHub and GitLab report layouts and keeps each result |
 | `platform-pins.yml` | PR touching platform pins or their validator | Verifies the installer checksum and the images that both upstream charts render |
 | `rescan-images.yml`                   | Daily, manual                                                                | Rescans main's published images against the release vulnerability policy and keeps one tracking issue in step with the findings. A second job rescans the latest published release's images and reports drift on the vulnerability response issue|
@@ -811,6 +812,12 @@ Use `ci:full` to reproduce the queue legs on a PR, including the separate roll j
 The nightly run adds arm64 and eviction. A failed nightly eviction fails the Kubernetes stage.
 Its existing `Report a failure` job opens or updates the issue "The nightly Kubernetes run failed" and links the run.
 The release evidence preflight also requires that the newest nightly run on `main` passed its cluster legs within 48 hours (`scripts/check-nightly-kubernetes.ts`).
+
+The nightly run also upgrades the chart of the latest published release to the newest main build (`chart-upgrade.yml`, `scripts/chart-upgrade-drill.ts`).
+The previous release installs with its own chart, images and scripts.
+A release whose migration guide says **Stop every role** takes the three phases of the stopped upgrade.
+Any other release takes one rolling upgrade.
+Dispatch `chart-upgrade.yml` with a commit whose images exist to run it on a branch.
 
 The release also runs eviction against its captured candidate images before final publication.
 [Release qualification and recovery](release-management.mdx#release-qualification-and-recovery) defines its gate and failure recovery.
