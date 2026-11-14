@@ -2,7 +2,7 @@ import { noop } from "@tanstack/react-query";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import type { FirstLoginConsent } from "@/api/types.gen";
 import { WORDING_VERSION } from "@/components/auth/consent-wording";
@@ -10,7 +10,12 @@ import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { consentOutstanding } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
 import { sleep } from "@/test/async";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter, loadRouteCode } from "@/test/router-harness";
+
+beforeAll(
+	async () => loadRouteCode("/", "/consent", "/about", "/settings"),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 const notice = {
 	completed: false,

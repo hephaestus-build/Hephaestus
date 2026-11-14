@@ -12,12 +12,20 @@ import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
 import { applyUserViewHeaders, clearUserView } from "@/runtime/user-view/session";
 import { ConversationFake } from "@/test/conversation-server";
 import { FakeEventSource } from "@/test/fake-event-source";
-import { ROUTE_RENDER_WAIT, renderRouteAt, testQueryClient } from "@/test/router-harness";
+import {
+	ROUTE_RENDER_WAIT,
+	renderRouteAt,
+	testQueryClient,
+	loadRouteCode,
+} from "@/test/router-harness";
 import { storeUserView } from "@/test/user-view";
 
 let queryClient: ReturnType<typeof testQueryClient>;
 
-beforeAll(() => client.interceptors.request.use(applyUserViewHeaders));
+beforeAll(async () => {
+	client.interceptors.request.use(applyUserViewHeaders);
+	await loadRouteCode("/w/engineering/conversation");
+}, ROUTE_RENDER_WAIT.timeout);
 beforeEach(() => {
 	queryClient = testQueryClient();
 	storeUserView();

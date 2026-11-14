@@ -462,6 +462,13 @@
 						"toHaveTextContent": "Not registered here. Assert on `el.textContent`.",
 						"toHaveClass": "Not registered here. Assert on `el.className`."
 					}
+				],
+				// A longer budget hides a slow setup and still fails under load.
+				"vitest/no-restricted-vi-methods": [
+					"error",
+					{
+						"setConfig": "A longer timeout hides slow setup and still fails under load. Wait for the event the test needs, and do slow setup in `beforeAll`, such as `loadRouteCode` for a route test (docs/contributor/testing.mdx § Web app route tests)."
+					}
 				]
 			}
 		}

@@ -1,7 +1,7 @@
 import { noop, QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { listWorkspacesQueryKey } from "@/api/@tanstack/react-query.gen";
 import { ROUTER_SEARCH } from "@/lib/router-search";
@@ -10,9 +10,22 @@ import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 import { deferred } from "@/test/async";
+import { loadRouteCode, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
-// `router.load()` lazily imports each matched route's module, so a case pays its transform cost.
-vi.setConfig({ testTimeout: 15_000 });
+beforeAll(
+	async () =>
+		loadRouteCode(
+			"/w/acme",
+			"/w/acme/activity",
+			"/w/acme/conversation",
+			"/w/acme/practice-profile",
+			"/w/acme/onboarding",
+			"/w/acme/teams",
+			"/workspaces/new",
+			"/login",
+		),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 const DEEP_LINK = "/w/foreign/conversation?thread=65ee0cb0-99dd-4b0f-86cb-bc8bfb5bbbed";
 // The fixture workspace does not review practices, so its home is Activity.

@@ -1,11 +1,13 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type PathParams } from "msw";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { UpdateNotificationPreferences, UpdateUserSettings } from "@/api/types.gen";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, renderRouteAt, loadRouteCode } from "@/test/router-harness";
+
+beforeAll(async () => loadRouteCode("/settings"), ROUTE_RENDER_WAIT.timeout);
 
 // The page is not workspace-scoped, so the reader belongs to no workspace here.
 beforeEach(() => {

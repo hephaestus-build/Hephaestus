@@ -77,7 +77,7 @@ reportVisitVitals(router, TanstackQuery.getContext().queryClient);
 installPreloadErrorReload(router, faults);
 
 client.interceptors.response.use((response) => {
-	handlePossibleSessionExpiry(response, TanstackQuery.getContext().queryClient);
+	void handlePossibleSessionExpiry(response, TanstackQuery.getContext().queryClient);
 	return response;
 });
 

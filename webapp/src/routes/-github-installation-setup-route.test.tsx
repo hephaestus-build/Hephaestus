@@ -1,12 +1,14 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import type { GitHubInstallationClaim } from "@/api/types.gen";
 import { unauthenticatedUser } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, renderRouteAt, loadRouteCode } from "@/test/router-harness";
+
+beforeAll(async () => loadRouteCode("/github/installations/4242/setup"), ROUTE_RENDER_WAIT.timeout);
 
 const APPROVAL_NOTICE =
 	"An instance administrator must approve this installation before Hephaestus can use it.";

@@ -28,7 +28,6 @@ export const unansweredRequestDebt: ReadonlySet<string> = new Set([
 	"src/routes/_authenticated/-admin-users-route.test.tsx",
 	"src/routes/_authenticated/-settings-linked-accounts-route.test.tsx",
 	"src/routes/_authenticated/-settings-slack-preferences-route.test.tsx",
-	"src/routes/_authenticated/-user-view-route.test.tsx",
 	"src/routes/_authenticated/w/$workspaceSlug/-activity-route.test.tsx",
 	"src/routes/_authenticated/w/$workspaceSlug/-cannot-open-workspace-route.test.tsx",
 	"src/routes/_authenticated/w/$workspaceSlug/-conversation-availability-route.test.tsx",

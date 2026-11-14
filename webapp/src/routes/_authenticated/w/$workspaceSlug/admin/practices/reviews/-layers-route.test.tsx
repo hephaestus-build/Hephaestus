@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 import { resultSummary } from "@/components/admin/practice-reviews/result-words";
 
 import {
@@ -30,13 +30,20 @@ import {
 	reviewHandlers,
 	feedbackCountHandlers,
 } from "@/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-reviews-server";
-import { deferred, sleep } from "@/test/async";
+import { deferred, nextFrame } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-// Mounting the real route pulls in the whole admin layout and its lazy modules; the timeout is a
-// deadlock backstop, not a budget these renders were meant to fit inside.
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(
+	async () =>
+		loadRouteCode(
+			"/w/acme/admin/practices/reviews",
+			"/w/acme/admin/practices/reviews/results",
+			"/w/acme/admin/practices/reviews/feedback",
+			"/w/acme/admin/practices/reviews/overview",
+		),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 function readsOldReview(url: URL) {
 	return (
@@ -688,15 +695,20 @@ function sheetMarkup(sheet: HTMLElement): string {
 
 /** The sheet in front once it has settled: its record read and nothing left loading. */
 async function settledSheet(detail: string[]): Promise<string> {
-	renderRouteAtWithRouter(`${REVIEWS}?detail=${encodeURIComponent(JSON.stringify(detail))}`);
+	const { queryClient, router } = renderRouteAtWithRouter(
+		`${REVIEWS}?detail=${encodeURIComponent(JSON.stringify(detail))}`,
+	);
 	const sheet = await frontSheet(detail.length);
 	await within(sheet).findAllByRole("heading", { level: 2 }, ROUTE_RENDER_WAIT);
-	await waitFor(
-		() => expect(sheet.querySelector('[data-slot="skeleton"]')).toBeNull(),
-		ROUTE_RENDER_WAIT,
-	);
-	// One more turn for the reads that land after the first ones, such as a review's verdicts.
-	await sleep(300);
+	const settled = () => {
+		expect(sheet.querySelector('[data-slot="skeleton"]')).toBeNull();
+		expect(queryClient.isFetching()).toBe(0);
+		expect(router.state.status).toBe("idle");
+	};
+	await waitFor(settled, ROUTE_RENDER_WAIT);
+	// A read that the last render enabled, such as a review's verdicts, has started one frame later.
+	await nextFrame();
+	await waitFor(settled, ROUTE_RENDER_WAIT);
 	const markup = sheetMarkup(sheet);
 	cleanup();
 	return markup;

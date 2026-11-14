@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import {
 	adminGetInstanceSettingsQueryKey,
@@ -11,7 +11,9 @@ import {
 import { problemType } from "@/lib/problem-detail";
 import { server } from "@/mocks/server";
 import { deferred } from "@/test/async";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, renderRouteAt, loadRouteCode } from "@/test/router-harness";
+
+beforeAll(async () => loadRouteCode("/admin/settings", "/admin/users"), ROUTE_RENDER_WAIT.timeout);
 
 const settings = (revision: number) => ({
 	silentModeEngaged: true,

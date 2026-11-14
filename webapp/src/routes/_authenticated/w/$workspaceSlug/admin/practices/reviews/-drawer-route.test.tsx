@@ -1,7 +1,8 @@
+import { QueryClient } from "@tanstack/react-query";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "@/lib/toast";
 
 import {
@@ -43,11 +44,18 @@ import { server } from "@/mocks/server";
 import { reviewHandlers } from "@/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-reviews-server";
 import { deferred, pending } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-// Mounting the real route pulls in the whole admin layout and its lazy modules; the timeout is a
-// deadlock backstop, not a budget these renders were meant to fit inside.
-vi.setConfig({ testTimeout: 20_000 });
+beforeAll(
+	async () =>
+		loadRouteCode(
+			"/w/acme/admin/practices/reviews",
+			"/w/acme/admin/practices/reviews/results",
+			"/w/acme/admin/practices/reviews/problems",
+			"/w/acme/admin/practices/reviews/overview",
+		),
+	ROUTE_RENDER_WAIT.timeout,
+);
 
 const REVIEWS = "/w/acme/admin/practices/reviews";
 const OVERVIEW = `${REVIEWS}/overview`;
@@ -688,6 +696,11 @@ function lineageOf(review: ReviewDetail, item = review.item): ReviewLineage {
 
 const unavailable = (detail: string) => HttpResponse.json({ status: 503, detail }, { status: 503 });
 
+// These cases keep retry admission and execute retries without wall-clock backoff.
+function traceQueryClient() {
+	return new QueryClient({ defaultOptions: { queries: { retry: false, retryDelay: 0 } } });
+}
+
 describe("a review's trace while the review runs", () => {
 	const RUNNING_ID = "3f2b6c1e-8a4d-4f0b-9c7e-2d5a1b0c9e84";
 	const base = reviewDetail(LINEAGE_REVIEW_ID);
@@ -719,7 +732,7 @@ describe("a review's trace while the review runs", () => {
 				() => reply(),
 				() => HttpResponse.json(review),
 			);
-			renderRouteAtWithRouter(`${REVIEWS}?detail=trace:review:${RUNNING_ID}`);
+			renderRouteAtWithRouter(`${REVIEWS}?detail=trace:review:${RUNNING_ID}`, traceQueryClient());
 			await screen.findByRole("group", { name: "How this came about" }, ROUTE_RENDER_WAIT);
 			reply = () => unavailable("Trace temporarily unavailable");
 			await vi.advanceTimersByTimeAsync(ACTIVE_REVIEW_POLL_MS);
@@ -767,7 +780,10 @@ describe("a review's trace while the review runs", () => {
 					),
 				),
 			);
-			const { router } = renderRouteAtWithRouter(`${REVIEWS}?detail=trace:review:${RUNNING_ID}`);
+			const { router } = renderRouteAtWithRouter(
+				`${REVIEWS}?detail=trace:review:${RUNNING_ID}`,
+				traceQueryClient(),
+			);
 			await screen.findByRole("group", { name: "How this came about" }, ROUTE_RENDER_WAIT);
 			lineages.set(RUNNING_ID, async () => {
 				await release.promise;
@@ -806,6 +822,7 @@ describe("a review's trace while the review runs", () => {
 			);
 			const { router, queryClient } = renderRouteAtWithRouter(
 				`${REVIEWS}?detail=trace:review:${RUNNING_ID}`,
+				traceQueryClient(),
 			);
 			await screen.findByRole("group", { name: "How this came about" }, ROUTE_RENDER_WAIT);
 			await vi.waitFor(() =>
@@ -858,7 +875,7 @@ describe("a review's trace while the review runs", () => {
 				() => HttpResponse.json(lineageOf(review)),
 				() => reply(),
 			);
-			renderRouteAtWithRouter(`${REVIEWS}?detail=trace:review:${RUNNING_ID}`);
+			renderRouteAtWithRouter(`${REVIEWS}?detail=trace:review:${RUNNING_ID}`, traceQueryClient());
 			await screen.findByRole("group", { name: "How this came about" }, ROUTE_RENDER_WAIT);
 			await vi.waitFor(() =>
 				expect(requestsTo(`/practices/reviews/${RUNNING_ID}`).length).toBeGreaterThan(0),

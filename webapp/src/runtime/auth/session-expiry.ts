@@ -38,7 +38,10 @@ function isExemptFromSessionExpiry(pathname: string, url: string): boolean {
 	return false;
 }
 
-export function handlePossibleSessionExpiry(response: Response, queryClient: QueryClient): boolean {
+export async function handlePossibleSessionExpiry(
+	response: Response,
+	queryClient: QueryClient,
+): Promise<boolean> {
 	if (response.status !== 401) {
 		return false;
 	}
@@ -47,7 +50,7 @@ export function handlePossibleSessionExpiry(response: Response, queryClient: Que
 	if (isExemptFromSessionExpiry(pathname, response.url)) {
 		return false;
 	}
-	void recoverOrLogout(queryClient, window.location.pathname + window.location.search);
+	await recoverOrLogout(queryClient, window.location.pathname + window.location.search);
 	return true;
 }
 
