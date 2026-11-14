@@ -5,7 +5,7 @@ import process from "node:process";
 import { currentReleaseIdentity, releaseIdentityFor } from "./lib/release-identities.ts";
 
 import { isSet, requiredEnv } from "./lib/env.ts";
-import { upgradeFromOf } from "./lib/previous-release.ts";
+import { BASELINE_RELEASE, latestReleaseOf, upgradeFromOf } from "./lib/previous-release.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import { parseVersion } from "./lib/release-version.ts";
 
@@ -90,10 +90,15 @@ if (
 	candidateApplication !== undefined &&
 	postgres !== undefined
 ) {
-	if (parseVersion(suppliedPreviousVersion) === undefined) {
+	const parsedPrevious = parseVersion(suppliedPreviousVersion);
+	if (parsedPrevious === undefined) {
 		throw new Error("Previous version must be X.Y.Z or X.Y.Z-rc.N");
 	}
-	previousApplication = previousApplicationReference(suppliedPreviousVersion);
+	// A promotion names the previous stable release, 0.95.1, for its notes. The 1.0 baseline refuses every 0.x
+	// database, so the upgrade starts from the baseline's release instead, as upgradeFromOf chooses.
+	previousApplication = previousApplicationReference(
+		parsedPrevious.major === 0 ? BASELINE_RELEASE.slice(1) : suppliedPreviousVersion,
+	);
 } else {
 	const requestedPrevious = nonEmpty(process.env.REQUESTED_PREVIOUS);
 	const previous = requestedPrevious ?? upgradeFromOf("HEAD") ?? "";
@@ -109,6 +114,14 @@ if (
 	postgres = `${postgresRepository}:${candidate}`;
 }
 
+// The supported path starts at the previous stable release, or at the baseline's release. Installations that follow
+// the candidates run the latest published release, so its rows are seeded too when it is a different release.
+const latest = latestReleaseOf("HEAD")?.slice(1);
+const latestApplication =
+	latest !== undefined && latest !== previousApplication.version
+		? previousApplicationReference(latest)
+		: undefined;
+
 const output = requiredEnv(process.env, "GITHUB_OUTPUT");
 appendFileSync(
 	output,
@@ -116,6 +129,13 @@ appendFileSync(
 		`previous-app=${immutable(previousApplication.reference, previousApplication.repository)}`,
 		`previous-version=${previousApplication.version}`,
 		`previous-agent=${immutable(`${previousApplication.agentRepository}:${previousApplication.version}`, previousApplication.agentRepository)}`,
+		...(latestApplication === undefined
+			? ["latest-app=", "latest-version=", "latest-agent="]
+			: [
+					`latest-app=${immutable(latestApplication.reference, latestApplication.repository)}`,
+					`latest-version=${latestApplication.version}`,
+					`latest-agent=${immutable(`${latestApplication.agentRepository}:${latestApplication.version}`, latestApplication.agentRepository)}`,
+				]),
 		`candidate-app=${immutable(candidateApplication, applicationRepository)}`,
 		`postgres=${immutable(postgres, postgresRepository)}`,
 		"",

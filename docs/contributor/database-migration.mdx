@@ -297,6 +297,8 @@ The 1.0 cutover dropped every earlier pending contraction, so the table is empty
    It reads the tags, so the job checks out the full history.
 4. **Seeded release upgrade** — `release-upgrade.yml` upgrades the previous supported release.
    Until 1.0.0 publishes, that release is 1.0.0-rc.1.
+   It then also upgrades from the latest published release, if that is a different release.
+   Installations that follow the candidates run that release.
    It compares the fingerprint of the upgraded schema with a fresh install.
    It checks readiness, seeded relationships, the practice catalog and authenticated reads.
    Release publication depends on this upgrade. The same procedure runs weekly.
@@ -316,7 +318,7 @@ as triggers, partitioning and partial-index predicates. Verify those through dat
 
 ### Previous release on the new schema
 
-After the upgrade from the previous stable release, the driver runs the previous release in two ways:
+After each upgrade, the driver runs the release that the upgrade started from in two ways:
 
 1. **Previous server on the new schema.** The previous release starts while the candidate runs.
    It runs the server and its agent runtime in one process, with the Docker sandbox and its own agent image.
