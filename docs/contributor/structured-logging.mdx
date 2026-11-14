@@ -24,6 +24,20 @@ A normal return from a degraded state is INFO.
 Do not log each item at INFO when a lifecycle event or batch summary already records the outcome.
 Keep an actionable failure visible at WARN or ERROR.
 
+### Retries
+
+A failure that the work retries is not yet the outcome of the operation.
+
+- Log each retry at WARN, with the attempt count.
+- Log the verdict at ERROR, once per operation: the retry budget is exhausted, or the failure is not retryable.
+- A transient outage that retries without a limit stays at WARN. Its metric and alert show that it lasts.
+- Log in the retry framework's hook: Reactor's `doBeforeRetry` and `onRetryExhaustedThrow`, a Resilience4j `onRetry` event, a Spring `RetryListener`, or the scheduler's `ErrorHandler`. Do not count attempts by hand.
+- `TransientFailures` decides what is transient. Do not write a second list.
+
+The provider-event inbox follows this rule: each failed delivery is a WARN, and the dead letter is the one ERROR.
+A scheduled job's next run is its retry, so a transient failure of one run is a WARN.
+Any other failure of a run is an ERROR.
+
 ## Use the existing framework facilities
 
 Use SLF4J's fluent API for events operators need to query. Keep a stable `event.name`, a short

@@ -81,6 +81,15 @@ The operation values are `handle`, `write-fence` and `capture-for-replay`.
 
 Expected inbox write-fence contention uses `integration.message.retry` at `DEBUG`, with its reason and event ID. It returns the event to the inbox without spending its failure budget.
 
+A failed delivery is a retry, so `integration.message.failed` is a `WARN` with its delivery count.
+The verdict is the one `ERROR`: `integration.message.captured`, when the event becomes a dead letter.
+A transient outage, such as a database that is down, retries the event without a limit and stays at `WARN`.
+`integration.message.timed_out` is a `WARN` when the handler stopped and its event returns to the inbox, and an `ERROR` when the handler did not stop.
+
+A failed run of a scheduled job logs `scheduled.job.failed`.
+The next run retries the job, so a transient failure is a `WARN` with `error.transient` set to `true`.
+Any other failure is an `ERROR` with its stack trace.
+
 Run production at `INFO`.
 `DEBUG` on framework, client or driver packages can write request content, provider responses and container settings that no guard above covers.
 
