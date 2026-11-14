@@ -17,6 +17,7 @@ import {
 import { toast } from "@/lib/toast";
 
 import { client } from "@/api/client.gen";
+import { rememberTourOffered } from "@/components/tour/tour-start";
 import environment from "@/environment";
 import { clearDrafts } from "@/lib/composer-drafts";
 import { server, unansweredRequests } from "@/mocks/server";
@@ -128,9 +129,12 @@ if (typeof globalThis.EventSource !== "function") {
 let currentFile: Readonly<RunnerTestFile> | undefined;
 let fileSentUnansweredRequest = false;
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
-// A request that an earlier test left in flight belongs to that test, not to this one.
 beforeEach(() => {
+	// A request that an earlier test left in flight belongs to that test, not to this one.
 	unansweredRequests.length = 0;
+	// A first visit to the Practice profile offers its tour over the page. Every test is a returning
+	// reader unless it clears this itself, as the first-visit cases do.
+	rememberTourOffered();
 });
 afterEach(({ task }) => {
 	server.resetHandlers();

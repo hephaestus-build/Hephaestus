@@ -40,7 +40,12 @@ export function PracticeFocusFooter({
 			<p className="text-sm text-muted-foreground">{sentence}</p>
 			{/* The action button of Reviews of your work, with words, at the width of the footer on a
 			    phone, where the footer stacks: the one way to the other page is easy to see and to hit. */}
-			<ActionButton className="w-full sm:w-auto" aria-label={accessibleLabel} onClick={onSwitch}>
+			<ActionButton
+				data-tour-slot="focus-switch"
+				className="w-full sm:w-auto"
+				aria-label={accessibleLabel}
+				onClick={onSwitch}
+			>
 				{label}
 				<ArrowRightIcon aria-hidden />
 			</ActionButton>

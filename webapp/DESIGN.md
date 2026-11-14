@@ -293,6 +293,8 @@ A scene in the guided tour teaches one change, so it can take longer than a tran
 It plays once on arrival and never loops.
 The person can continue before it ends and can play it again.
 Under reduced motion, its final state shows from the start.
+The tour's guide moves to the next lit part by `transform` only, and the spotlight's cutout follows the part.
+Under reduced motion, both jump.
 
 **The Storybook suite runs under `prefers-reduced-motion: reduce`** — `vitest.config.storybook.ts`
 sets it on the Playwright context so play functions are deterministic. Every `motion-reduce:` rule is therefore the branch under test.

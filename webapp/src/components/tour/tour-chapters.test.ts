@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import type { PracticeFeedbackCardEntry } from "@/components/practice-vocabulary/PracticeFeedbackCard";
 
+import { exampleProfile } from "./example-profile";
 import { ownCardForTour, suggestedChapter } from "./tour-chapters";
-import { exampleCard } from "./tour-example";
 
-const open = exampleCard(new Date("2026-11-02T10:00:00Z"));
+const [example] = exampleProfile(new Date("2026-11-02T10:00:00Z")).feedbackCards;
+if (example === undefined) {
+	throw new Error("The example has an open card");
+}
+const open: PracticeFeedbackCardEntry = { ...example, state: "open" };
 const card = (override: Partial<PracticeFeedbackCardEntry>): PracticeFeedbackCardEntry => ({
 	...open,
 	...override,

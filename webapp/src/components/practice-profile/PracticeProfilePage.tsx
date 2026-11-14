@@ -2,6 +2,7 @@
 import type { ReactNode } from "react";
 
 import type { GroupRef, PracticeStanding, ProfileReviewRef } from "@/api/types.gen";
+import { InfoLines, InfoTip } from "@/components/common/InfoTip";
 import type { LoadState } from "@/components/common/panel-state";
 import {
 	PracticeTabsList,
@@ -12,6 +13,7 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Section } from "@/components/layout/Section";
 import { isOpenFeedback } from "@/components/practice-vocabulary/feedback-state-defs";
+import { GROUP_COLORS_NOTE } from "@/components/practice-vocabulary/group-visuals";
 import {
 	type FeedbackRatingProps,
 	PracticeFeedbackCard,
@@ -71,6 +73,28 @@ export interface PracticeProfilePageProps {
 	 */
 	firstCardOffer?: ReactNode;
 }
+
+/**
+ * When a card appears and goes, beside the cards. Each card counts its own way out with the server's
+ * number, so no number here can disagree with it.
+ */
+const CARDS_INFO = (
+	<InfoTip
+		label="About feedback cards"
+		lead="A card appears when reviews find the same problem in at least two pieces of your work."
+	>
+		<InfoLines
+			lines={[
+				{
+					term: "It resolves",
+					text: "when enough pieces of your work in a row, reviewed after it, come back clean.",
+				},
+				{ term: "Feedback on one piece of work", text: "stays on that work." },
+				{ term: "Group colors", text: GROUP_COLORS_NOTE },
+			]}
+		/>
+	</InfoTip>
+);
 
 /** Two cards' worth of skeleton while the cards load: what fits above the fold under the header. */
 const SKELETON_CARD_COUNT = 2;
@@ -164,7 +188,12 @@ export function PracticeProfilePage({
 				isLoading={isLoading}
 				tourAction={tourAction}
 			/>
-			<Section data-tour-slot="feedback" size="lg" title="Your recurring feedback patterns">
+			<Section
+				data-tour-slot="feedback"
+				size="lg"
+				title="Your recurring feedback patterns"
+				info={CARDS_INFO}
+			>
 				<Tabs
 					value={feedbackTab}
 					onValueChange={(next) => {

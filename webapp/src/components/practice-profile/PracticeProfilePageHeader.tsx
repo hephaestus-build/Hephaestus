@@ -5,11 +5,11 @@ import { cn } from "cn";
 
 import type { ProfileReviewRef } from "@/api/types.gen";
 import { DotSeparator } from "@/components/common/DotSeparator";
+import { InfoLines, InfoTip } from "@/components/common/InfoTip";
 import { InlineLink } from "@/components/common/InlineLink";
 import { statusToneClass } from "@/components/common/status-def";
 import { useNow } from "@/components/common/use-now";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
-import { useSectionOpen } from "@/components/layout/section-folds";
 import { countsTogether } from "@/components/practice-vocabulary/feedback-text";
 import {
 	isActiveReview,
@@ -25,7 +25,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { asDate, formatDayTime } from "@/lib/dates";
 
 import { ALL_PRACTICE_GROUPS_LEVEL, REVIEWS_LEVEL } from "./practice-profile-search";
-import { PracticeProfileGuide } from "./PracticeProfileGuide";
 
 export interface PracticeProfilePageHeaderProps {
 	/**
@@ -51,22 +50,48 @@ export interface PracticeProfilePageHeaderProps {
 	tourAction?: ReactNode;
 }
 
-/**
- * What a first visit needs to know, in the page's own voice: what is reviewed. How a piece of
- * feedback ends is in "How to read this page", under it. Everything below the fold is the record
- * this sentence introduces.
- */
 export const PRACTICE_PROFILE_TITLE = "Practice profile";
 
+/**
+ * What a first visit needs to know, in the page's own voice: what is reviewed. Each part of the page
+ * explains itself in an (i) beside it, and the guided tour shows how the parts connect.
+ */
 export const PRACTICE_PROFILE_INTRO =
 	"Hephaestus reviews your work against the practices your workspace cares about. What it records appears here.";
 
-/**
- * Where this browser keeps whether the reader opened or closed "How to read this page". It starts
- * closed, because the page itself says what a first visit needs, and then stays as the reader left
- * it.
- */
-export const GUIDE_FOLD_KEY = "practice-profile:how-to-read";
+/** Who can see what on the Practice profile. The (i) beside the intro and the guided tour both say it, from here. */
+export const PROFILE_AUDIENCE =
+	"Your Practice profile is yours. Feedback on a pull request is visible to everyone who can see that pull request. Workspace admins can see all practice reviews, and instance admins can open a read-only view.";
+
+/** Who can see the page: a fact the reader keeps, so it stays beside the intro (onboarding rule 9). */
+const AUDIENCE_INFO = (
+	<InfoTip label="Who can see this page">
+		<p>{PROFILE_AUDIENCE}</p>
+	</InfoTip>
+);
+
+/** What the ring and its counts mean, beside them. The registry's sentence for each standing stays on its badge. */
+const STANDING_INFO = (
+	<InfoTip
+		label="About your standing"
+		// Over the summary's link, which covers the whole box for a pointer.
+		className="relative z-10"
+		lead="Your standing on a practice comes from your recent reviewed work. It is not a grade."
+	>
+		<InfoLines
+			lines={[
+				{
+					term: "The ring",
+					text: "counts your practices by standing. Gray means nothing to judge yet.",
+				},
+				{
+					term: "A practice",
+					text: "is one way of working that your workspace cares about. Related practices form a practice group.",
+				},
+			]}
+		/>
+	</InfoTip>
+);
 
 export function PracticeProfilePageHeader({
 	latestReview,
@@ -77,7 +102,6 @@ export function PracticeProfilePageHeader({
 	isLoading = false,
 	tourAction,
 }: PracticeProfilePageHeaderProps) {
-	const [guideOpen, setGuideOpen] = useSectionOpen(GUIDE_FOLD_KEY, { defaultOpen: false });
 	return (
 		<header className="flex flex-col gap-3">
 			<div className="flex min-w-0 flex-col gap-2">
@@ -91,9 +115,11 @@ export function PracticeProfilePageHeader({
 						)}
 					</div>
 				</div>
-				<p className="max-w-2xl text-sm text-muted-foreground">{PRACTICE_PROFILE_INTRO}</p>
+				<p className="max-w-2xl text-sm text-muted-foreground">
+					{PRACTICE_PROFILE_INTRO} {AUDIENCE_INFO}
+				</p>
 			</div>
-			<PracticeProfileGuide open={guideOpen} onOpenChange={setGuideOpen} action={tourAction} />
+			{tourAction !== undefined && <div className="-ml-2.5 flex">{tourAction}</div>}
 			{/* One link names the destination and covers the card with a pseudo-element, so the whole
 			    card is the pointer path while the words stay the keyboard path. The words turn highlight
 			    blue while the card is hovered, as every inline link on the practice surfaces does on
@@ -106,9 +132,11 @@ export function PracticeProfilePageHeader({
 					}
 					counts={counts}
 					isLoading={isLoading}
+					info={STANDING_INFO}
 					className="group/panel relative transition-colors hover:bg-sidebar"
 				>
 					<InlineLink
+						data-tour-slot="see-all-groups"
 						render={<DetailStackLink entry={ALL_PRACTICE_GROUPS_LEVEL} />}
 						className="inline-flex w-full items-center gap-1.5 text-sm font-medium whitespace-nowrap group-hover/panel:text-highlight group-hover/panel:underline after:absolute after:inset-0 sm:w-auto sm:shrink-0 sm:self-center"
 					>

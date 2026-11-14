@@ -84,8 +84,8 @@ export async function openJourney(page: Page, role: WorkspaceMembership["role"])
 		}
 	});
 	await context.addInitScript(() => {
-		// A returning reader has closed the practice profile's reading guide.
-		localStorage.setItem("hephaestus:section-folded:practice-profile:how-to-read", "true");
+		// A returning reader, to whom the practice profile has already offered its tour.
+		localStorage.setItem("hephaestus:guided-tour:practice-profile:offered", "1");
 		window.journeyShifts = [];
 		// oxlint-disable-next-line unicorn/consistent-function-scoping -- `addInitScript` sends this function's source to the page, so its helpers must be inside it.
 		const landmark = (node: Node | null) => {

@@ -1,25 +1,20 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
 
-import { forgetSectionFold } from "@/components/layout/section-folds";
+import { settledPopup } from "@/stories/overlay";
 import { conversation, document, pullRequest } from "@/stories/practice-profile-story-mock-data";
 import { expectNoPageOverflow, expectTargetSize } from "@/stories/reflow";
 import { inStoryYear } from "@/stories/story-clock";
 
-import { GUIDE_FOLD_KEY, PracticeProfilePageHeader } from "./PracticeProfilePageHeader";
+import { PracticeProfilePageHeader, PROFILE_AUDIENCE } from "./PracticeProfilePageHeader";
 
-/** The ring's legend, apart from the list of points in "How to read this page". */
+/** The ring's legend. */
 const LEGEND = "Practices by standing";
 
 const meta = {
 	component: PracticeProfilePageHeader,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
-	// Each story starts from a first visit, so none inherits a guide another story opened.
-	beforeEach: () => {
-		forgetSectionFold(GUIDE_FOLD_KEY);
-		return () => forgetSectionFold(GUIDE_FOLD_KEY);
-	},
 	args: {
 		latestReview: {
 			reviewId: "5d1e2a3b-0000-4000-8000-000000000909",
@@ -174,32 +169,36 @@ export const Empty: Story = {
 };
 
 /**
- * The title, the introduction, "How to read this page" and the destination stand while the counts
+ * The title, the introduction with who can see the page, and the destination stand while the counts
  * load; only the chip and the counts wait, and no count is shown as zero in the meantime.
  */
 export const Loading: Story = {
 	args: { isLoading: true },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("heading", { level: 1 })).toHaveTextContent("Practice profile");
-		await expect(canvas.getByRole("button", { name: "How to read this page" })).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Who can see this page" })).toBeVisible();
 		await expect(canvas.queryByText("16 practices in 5 groups")).toBeNull();
 		await expect(canvas.queryByRole("list", { name: LEGEND })).toBeNull();
 		await expect(canvas.getByRole("link", { name: "See all practice groups" })).toBeVisible();
 	},
 };
 
-/**
- * "How to read this page" starts closed, because the page says what a first visit needs. The reader
- * can open it and close it again.
- */
-export const GuideOpensAndCloses: Story = {
+/** Who can see the page stays beside the intro, a place that does not go away. */
+export const SaysWhoCanSeeIt: Story = {
 	play: async ({ canvas, userEvent }) => {
-		const toggle = canvas.getByRole("button", { name: "How to read this page" });
-		await expect(toggle).toHaveAttribute("aria-expanded", "false");
-		await userEvent.click(toggle);
-		await expect(toggle).toHaveAttribute("aria-expanded", "true");
-		await userEvent.click(toggle);
-		await expect(toggle).toHaveAttribute("aria-expanded", "false");
+		await userEvent.click(canvas.getByRole("button", { name: "Who can see this page" }));
+		await expect(within(await settledPopup()).getByText(PROFILE_AUDIENCE)).toBeVisible();
+	},
+};
+
+/** The ring says what it counts beside it, and reaches the (i) over the link that covers the box. */
+export const ExplainsTheRing: Story = {
+	play: async ({ canvas, userEvent }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "About your standing" }));
+		const panel = within(await settledPopup());
+		await expect(panel.getByText(/It is not a grade\./u)).toBeVisible();
+		await expect(panel.getByText(/Gray means nothing to judge yet/u)).toBeVisible();
+		await expect(panel.getByText(/Related practices form a practice group/u)).toBeVisible();
 	},
 };
 

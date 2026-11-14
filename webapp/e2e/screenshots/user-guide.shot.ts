@@ -72,9 +72,9 @@ async function open(
 	});
 	// The reader's theme choice, which the app reads before the first paint.
 	await context.addCookies([{ name: THEME_COOKIE, value: colorScheme, url: BASE_URL }]);
-	// A returning reader has closed the practice profile's reading guide, so the image shows the page.
+	// A returning reader, to whom the practice profile has already offered its tour, so the image shows the page.
 	await context.addInitScript(() =>
-		localStorage.setItem("hephaestus:section-folded:practice-profile:how-to-read", "true"),
+		localStorage.setItem("hephaestus:guided-tour:practice-profile:offered", "1"),
 	);
 	// Nothing outside the app and its fixture API: no avatar or other picture of a real person.
 	await context.route(

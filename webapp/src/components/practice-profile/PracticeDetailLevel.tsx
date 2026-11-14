@@ -305,9 +305,14 @@ export function PracticeDetailLevel({
 				className="gap-4"
 			>
 				<PracticeTabsRail>
-					<PracticeTabsList aria-label="Practice">
+					<PracticeTabsList aria-label="Practice" data-tour-slot="practice-tabs">
 						{tabs.map((candidate) => (
-							<PracticeTabsTrigger key={candidate} value={candidate} count={counts[candidate]}>
+							<PracticeTabsTrigger
+								key={candidate}
+								value={candidate}
+								count={counts[candidate]}
+								data-tour-slot={`tab-${candidate}`}
+							>
 								{TAB_LABELS[candidate]}
 							</PracticeTabsTrigger>
 						))}

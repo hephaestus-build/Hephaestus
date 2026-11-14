@@ -96,6 +96,7 @@ export function PracticesAcrossTheWorkspacePage({
 				<>
 					{earlierReviews && <EarlierReviewsCounted />}
 					<Section
+						data-tour-slot="figures"
 						size="lg"
 						title="Your figures"
 						description={
@@ -133,6 +134,7 @@ export function PracticesAcrossTheWorkspacePage({
 					</Section>
 
 					<Section
+						data-tour-slot="splits"
 						size="lg"
 						title={ALL_PRACTICE_GROUPS}
 						aria-busy={overview === undefined || undefined}

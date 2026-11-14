@@ -8,19 +8,18 @@ import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLi
 import { newestFirst } from "@/components/practice-profile/practice-feedback-cards";
 import {
 	ALL_PRACTICE_GROUPS_LEVEL,
+	type PracticeTab,
 	REVIEWS_LEVEL,
 } from "@/components/practice-profile/practice-profile-search";
-import { PROFILE_AUDIENCE } from "@/components/practice-profile/PracticeProfileGuide";
-import {
-	PracticeProfilePage,
-	type PracticeProfilePageProps,
-} from "@/components/practice-profile/PracticeProfilePage";
+import type { PracticeProfilePageProps } from "@/components/practice-profile/PracticeProfilePage";
+import { PROFILE_AUDIENCE } from "@/components/practice-profile/PracticeProfilePageHeader";
 import {
 	firstRunApplies,
 	firstRunWords,
 	ProfileFirstRun,
 } from "@/components/practice-profile/ProfileFirstRun";
 import { isOpenFeedback } from "@/components/practice-vocabulary/feedback-state-defs";
+import { TREND_EXPLAINED } from "@/components/practice-vocabulary/practice-trend-presentation";
 import type { PracticeFeedbackCardEntry } from "@/components/practice-vocabulary/PracticeFeedbackCard";
 import { reviewEventPhrases } from "@/components/practice-vocabulary/review-event-defs";
 import {
@@ -30,57 +29,87 @@ import {
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { ITEM_KIND, itemKindNoun, type ItemProvider } from "@/lib/item-kinds";
 
-import { EXAMPLE_GROUPS, EXAMPLE_PRACTICES, exampleCard } from "./tour-example";
+import type { ExampleProfile } from "./example-profile";
+import { EXAMPLE_GROUPS, EXAMPLE_PRACTICES } from "./tour-example";
 import {
-	CardScene,
 	DestinationsScene,
+	FlowOverviewScene,
+	GroupStandingScene,
 	GroupsScene,
 	HandOverScene,
 	LevelsScene,
 	ObservationsScene,
 	PatternScene,
 	PracticesScene,
-	PracticeTabsScene,
-	PRACTICE_TABS,
 	practiceNames,
 	PROFILE_PARTS,
 	ProfileScene,
-	SplitScene,
 	STANDING_DEFS,
 	StandingsScene,
 	TREND_DEFS,
 	WorkScene,
 } from "./tour-scenes";
+import { EXAMPLE_CAPTION, type ExampleView } from "./TourExampleLayer";
 
-/** A part of a real component that a step highlights. The component names it with `data-tour-slot`. */
+/** A part of a real component that a step lights. The component names it with `data-tour-slot`. */
 export type TourSlot =
 	| "chip"
 	| "ring"
+	| "see-all-groups"
 	| "feedback"
 	| "pattern"
 	| "why"
 	| "next-step"
 	| "resolves"
 	| "mark"
-	| "rate";
+	| "rate"
+	| "row"
+	| "standing"
+	| "trend"
+	| "changes"
+	| "row-link"
+	| "practice-tabs"
+	| "tab-results"
+	| "tab-guide"
+	| "focus-switch"
+	| "figures"
+	| "splits";
+
+/**
+ * Where a step points: a part of the reader's own page, of the example page, or of the topmost level
+ * open over the example; or the strip of example page beside the open levels. `card` narrows the part
+ * to one feedback card.
+ */
+export type TourSpot =
+	| { on: "page" | "example"; slot: TourSlot; card?: string }
+	| { on: "level"; slot: TourSlot }
+	| { on: "beside-levels" };
 
 export interface TourStep {
 	id: string;
 	title: string;
-	/** Everything the step teaches, in words: the stage is a picture, out of reach of a screen reader. */
+	/** Everything the step teaches, in words: a picture is out of reach of a screen reader. */
 	body: ReactNode;
-	stage: ReactElement;
-	/** Steps with one key share one mounted stage, so the highlight moves instead of the page. */
-	stageKey: string;
-	/** Says what the stage shows: the reader's own data, an example, or a schematic. */
-	caption: string;
-	slot?: TourSlot;
+	/** A scene the guide shows in its own window, in the middle of the screen. */
+	scene?: ReactElement;
+	/** Steps with one key share one mounted scene. */
+	sceneKey?: string;
+	/** Says what a scene shows: the reader's own data, an example, or a schematic. */
+	caption?: string;
+	/** Whether the scene plays something that the reader may want to see again. */
+	plays?: boolean;
+	/** The scene holds real links, so the reader can reach it. Every other scene is inert. */
+	live?: boolean;
+	/** The part the step lights, with the guide beside it. */
+	spot?: TourSpot;
+	/** Room around the lit part, in pixels. */
+	padding?: number;
+	/** A pointer presses the lit part, for the press that Next makes here on the reader's behalf. */
+	clickHint?: boolean;
+	/** The example the step stands on, in place of the reader's page, under its caption. */
+	example?: ExampleView;
 	/** Where the step stands in the chain from work to profile. */
 	station?: number;
-	/** Whether the stage plays something that the reader may want to see again. */
-	plays?: boolean;
-	/** The stage holds real links, so the reader can reach it. Every other stage is inert. */
-	live?: boolean;
 }
 
 export interface TourChapter {
@@ -103,13 +132,10 @@ export interface TourFacts {
 	provider?: ItemProvider;
 	page: PracticeProfilePageProps;
 	practicesByGroup: Record<string, PracticeStanding[] | undefined>;
-	/** When this tour opened, so the example's dates are recent. */
-	openedAt: Date;
 }
 
 const YOUR_PAGE = "Your Practice profile, with your real data";
-const EXAMPLE = "Example, not your work";
-const SCHEMATIC = "Schematic of the panels, not the real ones";
+const SCHEMATIC = "Schematic, not the real panels";
 
 /**
  * The card that the reader's own Your profile steps can stand on: open, with work to point at, and
@@ -186,7 +212,7 @@ function reviewStartWords(facts: TourFacts): ReactNode {
 	);
 }
 
-/** What an inert stage shows, for a screen reader. Sighted readers have it in the stage already. */
+/** What a picture shows, for a screen reader. Sighted readers have it in the picture already. */
 function MeaningsForScreenReaders({ items }: { items: readonly (readonly [string, string])[] }) {
 	return (
 		<ul className="sr-only">
@@ -229,10 +255,10 @@ function whereYouAreNow(facts: TourFacts): TourStep | undefined {
 			</>
 		),
 		caption: "Your real state",
-		stageKey: "now",
+		sceneKey: "now",
 		station: 4,
 		live: true,
-		stage: (
+		scene: (
 			<div className="flex flex-col gap-3">
 				{open > 0 && <p className="text-sm font-medium">{cards}</p>}
 				{applies ? (
@@ -262,6 +288,7 @@ function howItWorks(facts: TourFacts): TourChapter {
 	const { practices, groups, firstRun } = facts.page;
 	const noun = itemKindNoun(ITEM_KIND.pullRequest, 1, facts.provider);
 	const real = practiceNames(practices);
+	const picked = practices.find((each) => each.whyItMatters != null) ?? practices.at(0);
 	const realGroups = groups
 		.map((group: GroupRef) => ({
 			name: group.name,
@@ -276,6 +303,21 @@ function howItWorks(facts: TourFacts): TourChapter {
 		question: "How does my work become feedback?",
 		steps: [
 			{
+				id: "overview",
+				title: "From your work to your profile",
+				body: (
+					<p>
+						Hephaestus reviews your work against the practices of {facts.workspaceName}. The way has
+						five stations: your work, the practices, the observations, the feedback, and your
+						Practice profile. The next steps go through them one at a time.
+					</p>
+				),
+				caption: "The five stations",
+				sceneKey: "overview",
+				scene: <FlowOverviewScene noun={noun} />,
+				plays: true,
+			},
+			{
 				id: "work",
 				title: "It starts with your work",
 				body: (
@@ -284,9 +326,9 @@ function howItWorks(facts: TourFacts): TourChapter {
 						{reviewStartWords(facts)}
 					</>
 				),
-				caption: EXAMPLE,
-				stageKey: "work",
-				stage: <WorkScene noun={noun} provider={facts.provider} />,
+				caption: EXAMPLE_CAPTION,
+				sceneKey: "work",
+				scene: <WorkScene noun={noun} provider={facts.provider} />,
 				station: 0,
 			},
 			{
@@ -301,9 +343,14 @@ function howItWorks(facts: TourFacts): TourChapter {
 							: `${facts.workspaceName} has not chosen any practices yet.`}
 					</p>
 				),
-				caption: real.length > 0 ? `The practices of ${facts.workspaceName}` : EXAMPLE,
-				stageKey: "practices",
-				stage: <PracticesScene names={real.length > 0 ? real : EXAMPLE_PRACTICES} />,
+				caption: real.length > 0 ? `The practices of ${facts.workspaceName}` : EXAMPLE_CAPTION,
+				sceneKey: "practices",
+				scene: (
+					<PracticesScene
+						names={real.length > 0 ? real : EXAMPLE_PRACTICES}
+						picked={real.length > 0 ? picked : undefined}
+					/>
+				),
 				station: 1,
 				plays: true,
 			},
@@ -316,9 +363,10 @@ function howItWorks(facts: TourFacts): TourChapter {
 						practice.
 					</p>
 				),
-				caption: realGroups.length > 0 ? `The practice groups of ${facts.workspaceName}` : EXAMPLE,
-				stageKey: "groups",
-				stage: <GroupsScene groups={realGroups.length > 0 ? realGroups : EXAMPLE_GROUPS} />,
+				caption:
+					realGroups.length > 0 ? `The practice groups of ${facts.workspaceName}` : EXAMPLE_CAPTION,
+				sceneKey: "groups",
+				scene: <GroupsScene groups={realGroups.length > 0 ? realGroups : EXAMPLE_GROUPS} />,
 				station: 1,
 				plays: true,
 			},
@@ -332,9 +380,9 @@ function howItWorks(facts: TourFacts): TourChapter {
 						Could not determine.
 					</p>
 				),
-				caption: EXAMPLE,
-				stageKey: "observations",
-				stage: <ObservationsScene />,
+				caption: EXAMPLE_CAPTION,
+				sceneKey: "observations",
+				scene: <ObservationsScene provider={facts.provider} />,
 				station: 2,
 				plays: true,
 			},
@@ -346,7 +394,7 @@ function howItWorks(facts: TourFacts): TourChapter {
 						<p>
 							On the work, as a comment about that one piece of work. On your Practice profile, as a
 							feedback card about a repeated problem. In a conversation, Hephaestus can show
-							feedback when it fits what you ask.
+							feedback when it fits what you ask. If something is unclear, ask Hephaestus.
 						</p>
 						{approval && (
 							<p>
@@ -356,10 +404,11 @@ function howItWorks(facts: TourFacts): TourChapter {
 						)}
 					</>
 				),
-				caption: "The three places",
-				stageKey: "destinations",
-				stage: <DestinationsScene />,
+				caption: "The three places, as a schematic",
+				sceneKey: "destinations",
+				scene: <DestinationsScene noun={noun} />,
 				station: 3,
+				plays: true,
 			},
 			{
 				id: "pattern",
@@ -372,9 +421,9 @@ function howItWorks(facts: TourFacts): TourChapter {
 						more it needs.
 					</p>
 				),
-				caption: EXAMPLE,
-				stageKey: "pattern",
-				stage: <PatternScene provider={facts.provider} />,
+				caption: EXAMPLE_CAPTION,
+				sceneKey: "pattern",
+				scene: <PatternScene provider={facts.provider} />,
 				station: 3,
 				plays: true,
 			},
@@ -389,35 +438,24 @@ function howItWorks(facts: TourFacts): TourChapter {
 					</>
 				),
 				caption: "What your Practice profile holds",
-				stageKey: "profile",
-				stage: <ProfileScene />,
+				sceneKey: "profile",
+				scene: <ProfileScene />,
 				station: 4,
+				plays: true,
 			},
 			...(now === undefined ? [] : [now]),
 		],
 	};
 }
 
-function yourProfile(facts: TourFacts): TourChapter {
-	const { practices, feedbackCards, latestReview, ratingProps } = facts.page;
+function yourProfile(facts: TourFacts, example: ExampleProfile): TourChapter {
+	const { practices, feedbackCards, latestReview, feedbackTab } = facts.page;
 	const own = ownCardForTour(feedbackCards);
-	const card = own ?? exampleCard(facts.openedAt, facts.provider);
-	const rating = own === undefined ? undefined : ratingProps?.(own.feedbackId);
-	const caption = own === undefined ? EXAMPLE : "One of your open cards";
+	// The reader's card is on their page while the tab lists open cards; on another tab, the example
+	// stands in, as it does without a card.
+	const ownOnPage = own !== undefined && feedbackTab !== "resolved";
 	const open = feedbackCards.filter((each) => isOpenFeedback(each.state)).length;
 	const words = standingWords(practices);
-	const page = (
-		<PracticeProfilePage
-			{...facts.page}
-			feedbackTab="open"
-			onFeedbackTabChange={undefined}
-			onOpenGroup={undefined}
-			onOpenPractice={undefined}
-			ratingProps={undefined}
-			firstRun={facts.page.firstRun}
-		/>
-	);
-	const onPage = { stage: page, stageKey: "page", caption: YOUR_PAGE };
 	const reviewInFlight =
 		latestReview === undefined && facts.page.firstRun?.activeReview !== undefined;
 	const noReviewWords = reviewInFlight
@@ -426,85 +464,87 @@ function yourProfile(facts: TourFacts): TourChapter {
 	const chipWords =
 		latestReview === undefined
 			? noReviewWords
-			: "The chip beside the title names your newest review. Select it on your page to open every review of your work.";
-	const onCard = {
-		stage: <CardScene card={card} rating={rating} />,
-		stageKey: `card:${card.feedbackId}`,
-		caption,
-	};
+			: "The chip beside the title names your newest review. Select it to open every review of your work.";
+	const onCard = (slot: TourSlot): Pick<TourStep, "spot" | "example" | "padding"> =>
+		ownOnPage
+			? { spot: { on: "page", slot, card: own.feedbackId }, padding: 6 }
+			: {
+					spot: { on: "example", slot, card: example.feedbackCards[0]?.feedbackId },
+					example: { page: "profile" },
+					padding: 6,
+				};
+	const nouns = itemKindNoun(ITEM_KIND.pullRequest, 2, facts.provider);
 	return {
 		id: "your-profile",
 		name: "Your profile",
 		question: "What am I looking at, and what do I do with it?",
 		steps: [
 			{
-				...onPage,
 				id: "chip",
-				slot: "chip",
 				title: "Your newest review",
 				body: <p>{chipWords}</p>,
+				spot: { on: "page", slot: "chip" },
+				padding: 6,
 			},
 			{
-				...onPage,
 				id: "ring",
-				slot: "ring",
 				title: "Where you stand",
 				body: (
 					<>
 						<p>
 							The ring counts your practices by standing. Your standing comes from your recent
-							reviewed work, and it is not a grade. Gray means there is nothing to judge yet.
+							reviewed work, and it is not a grade. Gray means there is nothing to judge yet. The
+							(i) beside the count says the same, whenever you need it.
 						</p>
 						{words !== "" && <p>Your practices now: {words}.</p>}
 					</>
 				),
+				spot: { on: "page", slot: "ring" },
+				padding: 6,
 			},
 			{
-				...onPage,
 				id: "feedback",
-				slot: "feedback",
 				title: "Your feedback",
 				body: (
 					<p>
 						{open > 0
 							? `You have ${plural(open, "open card", "open cards")} here, newest first. Each card is one pattern seen across your work.`
-							: "Cards appear here when reviews find the same problem in at least two pieces of your work. You have no open card now."}
+							: "Cards appear here when reviews find the same problem in at least two pieces of your work. You have no open card now."}{" "}
+						The (i) beside the heading says when a card appears and goes.
 					</p>
 				),
+				spot: { on: "page", slot: "feedback" },
+				padding: 6,
 			},
 			{
-				...onCard,
+				...onCard("pattern"),
 				id: "pattern",
-				slot: "pattern",
 				title: "One card is one pattern",
 				body: (
 					<p>
-						{own === undefined
-							? `This card is an example, not about your work. Its practice and ${itemKindNoun(ITEM_KIND.pullRequest, 2, facts.provider)} are made up. `
-							: `This is one of your open cards: “${own.headline}”. `}
+						{ownOnPage
+							? `This is one of your open cards: “${own.headline}”. `
+							: `This card is an example, not about your work. Its practice and ${nouns} are made up. `}
 						The headline says in one line what keeps coming up. Above it are the practice and its
 						group.
 					</p>
 				),
 			},
 			{
-				...onCard,
+				...onCard("why"),
 				id: "why",
-				slot: "why",
 				title: "Why it was raised",
 				body: <p>What the reviews saw, with links to the work, so you can check it yourself.</p>,
 			},
 			{
-				...onCard,
+				...onCard("next-step"),
 				id: "next-step",
-				slot: "next-step",
 				title: "The one thing to try next",
 				body: <p>One concrete thing to try in your next piece of work.</p>,
 			},
 			{
-				...onCard,
+				...onCard("resolves"),
 				id: "resolves",
-				slot: "resolves",
 				title: "How a card goes away",
 				body: (
 					<p>
@@ -514,27 +554,24 @@ function yourProfile(facts: TourFacts): TourChapter {
 				),
 			},
 			{
-				...onCard,
+				...onCard("mark"),
 				id: "mark",
-				slot: "mark",
 				title: "You can mark it yourself",
 				body: (
 					<p>
-						If you fixed the problem, or it does not fit your work, say so on the card on your page.
-						The picture here does not respond. The card moves to Marked by you, and your next work
-						confirms it.
+						If you fixed the problem, or it does not fit your work, say so on the card. The card
+						moves to Marked by you, and your next work confirms it.
 					</p>
 				),
 			},
 			{
-				...onCard,
+				...onCard("rate"),
 				id: "rate",
-				slot: "rate",
 				title: "Tell Hephaestus what you think",
 				body: (
 					<p>
-						On a card on your page, Helpful and Not helpful say whether the feedback helped you. If
-						you think it is wrong, select Disagree. Workspace admins read your sentence.
+						Helpful and Not helpful say whether the feedback helped you. If you think it is wrong,
+						select Disagree. Workspace admins read your sentence.
 					</p>
 				),
 			},
@@ -542,17 +579,26 @@ function yourProfile(facts: TourFacts): TourChapter {
 	};
 }
 
-function goingDeeper(facts: TourFacts): TourChapter {
-	const { groups } = facts.page;
-	const firstGroup = groups.find((group) => (facts.practicesByGroup[group.slug] ?? []).length > 0);
-	const firstPractice =
-		firstGroup === undefined ? undefined : facts.practicesByGroup[firstGroup.slug]?.[0];
+/** The example with a practice open over its group, on one of the practice's tabs. */
+function inPractice(practiceTab: PracticeTab): ExampleView {
+	return { page: "profile", levels: ["groups", "group", "practice"], practiceTab };
+}
+
+function goingDeeper(example: ExampleProfile): TourChapter {
+	const groupPractices = example.practicesByGroup[example.group.slug] ?? [];
+	const standing = example.groupStandings[example.group.slug]?.standing ?? "NOT_OBSERVED";
 	const levels = [
 		"Practice profile",
 		"All practice groups",
-		firstGroup?.name ?? "One practice group",
-		firstPractice?.name ?? "One practice",
+		example.group.name,
+		example.practice.name,
 	];
+	const groups = { page: "profile", levels: ["groups"] } as const;
+	const inGroup = { page: "profile", levels: ["groups", "group"] } as const;
+	const trendLabels = TREND_DEFS.map((def) => def.label).join(", ");
+	const standingLabels = STANDING_DEFS.filter((def) => def.label !== "No standing yet")
+		.map((def) => def.label)
+		.join(", ");
 	return {
 		id: "going-deeper",
 		name: "Going deeper",
@@ -560,7 +606,7 @@ function goingDeeper(facts: TourFacts): TourChapter {
 		steps: [
 			{
 				id: "levels",
-				title: "Each click opens one more panel",
+				title: "Each press opens one more panel",
 				body: (
 					<p>
 						A panel slides in over the page. To go back, select a position on the path above its
@@ -568,18 +614,65 @@ function goingDeeper(facts: TourFacts): TourChapter {
 					</p>
 				),
 				caption: SCHEMATIC,
-				stageKey: "levels",
-				stage: <LevelsScene levels={levels} />,
+				sceneKey: "levels",
+				scene: <LevelsScene levels={levels} />,
 				plays: true,
 			},
 			{
-				id: "standings",
-				title: "All practice groups: your standing and trend",
+				id: "see-all",
+				title: "See all practice groups",
+				body: (
+					<p>
+						From here on, the tour opens the real panels over an example profile, not over yours.
+						See all practice groups opens the first panel: every group with your standing in it.
+						Next opens it here.
+					</p>
+				),
+				example: { page: "profile" },
+				spot: { on: "example", slot: "see-all-groups" },
+				padding: 8,
+				clickHint: true,
+			},
+			{
+				id: "groups-row",
+				title: "All practice groups",
+				body: <p>One row for each group. The next steps read the first row.</p>,
+				example: groups,
+				spot: { on: "level", slot: "row" },
+				padding: 4,
+			},
+			{
+				id: "standing",
+				title: "Standing in a group",
+				body: (
+					<p>
+						Where you stand in this group: {standingLabels}. It comes from your recent reviewed work
+						in its practices. Select a label on your page to read what it means.
+					</p>
+				),
+				example: groups,
+				spot: { on: "level", slot: "standing" },
+				padding: 6,
+			},
+			{
+				id: "trend",
+				title: "Trend in a group",
+				body: (
+					<p>
+						{TREND_EXPLAINED} It reads {trendLabels}.
+					</p>
+				),
+				example: groups,
+				spot: { on: "level", slot: "trend" },
+				padding: 6,
+			},
+			{
+				id: "labels",
+				title: "What each label means",
 				body: (
 					<>
 						<p>
-							One row for each group, with your standing and your trend in it. A trend compares your
-							latest reviewed work with the work before it.
+							Every standing and every trend, with the words its label shows when you select it.
 						</p>
 						<MeaningsForScreenReaders
 							items={[...STANDING_DEFS, ...TREND_DEFS].map(
@@ -588,25 +681,144 @@ function goingDeeper(facts: TourFacts): TourChapter {
 						/>
 					</>
 				),
-				caption: "What each label means",
-				stageKey: "standings",
-				stage: <StandingsScene />,
+				caption: "The labels of the page, with their meanings",
+				sceneKey: "labels",
+				scene: <StandingsScene />,
+				example: groups,
+			},
+			{
+				id: "changes",
+				title: "What changed since your last review",
+				body: <p>Each row says which practices moved, and where the group stands now.</p>,
+				example: groups,
+				spot: { on: "level", slot: "changes" },
+				padding: 6,
+			},
+			{
+				id: "adds-up",
+				title: "A group adds up its practices",
+				body: (
+					<p>
+						Each practice of a group has its own standing. The group’s ring shows them together, one
+						part for each practice, and the group’s standing follows from them.
+					</p>
+				),
+				caption: EXAMPLE_CAPTION,
+				sceneKey: "adds-up",
+				scene: (
+					<GroupStandingScene
+						groupName={example.group.name}
+						practices={groupPractices}
+						standing={standing}
+					/>
+				),
+				example: groups,
+			},
+			{
+				id: "open-group",
+				title: "Open group",
+				body: (
+					<p>
+						Open group opens the next panel: the group with all its practices. Next opens it here.
+					</p>
+				),
+				example: groups,
+				spot: { on: "level", slot: "row-link" },
+				padding: 6,
+				clickHint: true,
+			},
+			{
+				id: "group",
+				title: "One group and its practices",
+				body: (
+					<p>
+						Each practice of the group, with your standing and trend in it. Open practice opens the
+						detail.
+					</p>
+				),
+				example: inGroup,
+				spot: { on: "level", slot: "row" },
+				padding: 4,
 			},
 			{
 				id: "practice",
 				title: "One practice has its own tabs",
 				body: (
-					<>
-						<p>
-							Feedback and Observations, and Guide where the practice has something to explain. The
-							Guide is a good place to start when a card is unclear.
-						</p>
-						<MeaningsForScreenReaders items={PRACTICE_TABS} />
-					</>
+					<p>
+						Feedback holds the card for this practice, if there is one. Observations and Guide
+						follow, where the practice has something to explain.
+					</p>
 				),
-				caption: SCHEMATIC,
-				stageKey: "tabs",
-				stage: <PracticeTabsScene />,
+				example: inPractice("feedback"),
+				spot: { on: "level", slot: "practice-tabs" },
+				padding: 6,
+			},
+			{
+				id: "observations",
+				title: "Observations",
+				body: (
+					<p>
+						Every observation of this practice on your work, newest first, with its outcome. Open
+						one for its evidence.
+					</p>
+				),
+				example: inPractice("results"),
+				spot: { on: "level", slot: "tab-results" },
+				padding: 6,
+			},
+			{
+				id: "guide",
+				title: "Guide",
+				body: (
+					<p>
+						Why the practice matters and what good looks like. A good place to start when a card is
+						unclear.
+					</p>
+				),
+				example: inPractice("guide"),
+				spot: { on: "level", slot: "tab-guide" },
+				padding: 6,
+			},
+			{
+				id: "close",
+				title: "Back to the page",
+				body: (
+					<p>
+						A press on the page beside the panels closes them all. Escape closes one at a time. Next
+						does it here.
+					</p>
+				),
+				example: inPractice("guide"),
+				spot: { on: "beside-levels" },
+				padding: 0,
+				clickHint: true,
+			},
+			{
+				id: "reviews-chip",
+				title: "Every review",
+				body: (
+					<p>
+						Back on the page, the chip beside the title opens one more panel: every review of your
+						work. Next opens it here.
+					</p>
+				),
+				example: { page: "profile" },
+				spot: { on: "example", slot: "chip" },
+				padding: 6,
+				clickHint: true,
+			},
+			{
+				id: "reviews",
+				title: "Reviews",
+				body: (
+					<p>
+						Each reviewed piece of work and what the review recorded. Open one to see every practice
+						it checked. After you change your work, you can request another review here.
+					</p>
+				),
+				example: { page: "profile", levels: ["reviews"] },
+				spot: { on: "level", slot: "row" },
+				padding: 4,
 			},
 			{
 				id: "try",
@@ -617,9 +829,9 @@ function goingDeeper(facts: TourFacts): TourChapter {
 					</p>
 				),
 				caption: "Real links to your own data",
-				stageKey: "try",
+				sceneKey: "try",
 				live: true,
-				stage: (
+				scene: (
 					<HandOverScene>
 						<InlineLink
 							render={<DetailStackLink entry={ALL_PRACTICE_GROUPS_LEVEL} />}
@@ -643,24 +855,39 @@ function goingDeeper(facts: TourFacts): TourChapter {
 }
 
 function acrossTheWorkspace(facts: TourFacts): TourChapter {
+	const across = { page: "across" } as const;
 	return {
 		id: "across-the-workspace",
 		name: "Across the workspace",
 		question: "How does the workspace look as a whole, and who can see me?",
 		steps: [
 			{
+				id: "figures",
+				title: "Your figures beside the workspace",
+				body: (
+					<p>
+						Practices across the workspace is a page of its own, in the sidebar. On it, your own
+						figures stand beside the range where most developers of the workspace are. This example
+						is made up.
+					</p>
+				),
+				example: across,
+				spot: { on: "example", slot: "figures" },
+				padding: 6,
+			},
+			{
 				id: "split",
 				title: "How the workspace splits on each group",
 				body: (
 					<p>
-						Practices across the workspace shows how many developers have each standing, for each
-						practice group. Your Practice profile never compares you with other developers. This
-						page is where you can look, when you want to.
+						The page shows how many developers have each standing, for each practice group. Your
+						Practice profile never compares you with other developers. This page is where you can
+						look, when you want to.
 					</p>
 				),
-				caption: EXAMPLE,
-				stageKey: "split",
-				stage: <SplitScene />,
+				example: across,
+				spot: { on: "example", slot: "splits" },
+				padding: 6,
 			},
 			{
 				id: "counts",
@@ -672,23 +899,39 @@ function acrossTheWorkspace(facts: TourFacts): TourChapter {
 						workspace, and then the page does not count you.
 					</p>
 				),
-				caption: EXAMPLE,
-				stageKey: "split",
-				stage: <SplitScene />,
+				example: across,
+				spot: { on: "example", slot: "splits" },
+				padding: 6,
+			},
+			{
+				id: "group",
+				title: "One group across the workspace",
+				body: <p>The split for each practice of the group. Nobody is named.</p>,
+				example: { page: "across", level: true },
+				spot: { on: "level", slot: "row" },
+				padding: 4,
+			},
+			{
+				id: "switch",
+				title: "From the workspace to your own standing",
+				body: (
+					<p>
+						At the foot of each panel, one press takes you to the same group on your own profile.
+						From there, one press takes you back.
+					</p>
+				),
+				example: { page: "across", level: true },
+				spot: { on: "level", slot: "focus-switch" },
+				padding: 6,
 			},
 			{
 				id: "try",
 				title: "See it for your workspace",
-				body: (
-					<p>
-						This link closes the tour and opens the page. From a group there, one link takes you to
-						your own standing in that group, and from your profile one link takes you back.
-					</p>
-				),
+				body: <p>This link closes the tour and opens the page.</p>,
 				caption: "A real link",
-				stageKey: "try-across",
+				sceneKey: "try-across",
 				live: true,
-				stage: (
+				scene: (
 					<HandOverScene>
 						<InlineLink
 							render={
@@ -709,6 +952,19 @@ function acrossTheWorkspace(facts: TourFacts): TourChapter {
 	};
 }
 
-export function tourChapters(facts: TourFacts): TourChapter[] {
-	return [howItWorks(facts), yourProfile(facts), goingDeeper(facts), acrossTheWorkspace(facts)];
+export function tourChapters(facts: TourFacts, example: ExampleProfile): TourChapter[] {
+	return [
+		howItWorks(facts),
+		yourProfile(facts, example),
+		goingDeeper(example),
+		acrossTheWorkspace(facts),
+	];
+}
+
+/** The caption of a step that points at a part rather than showing a scene. */
+export function spotCaption(step: TourStep): string | undefined {
+	if (step.spot === undefined) {
+		return step.caption;
+	}
+	return step.spot.on === "page" ? YOUR_PAGE : EXAMPLE_CAPTION;
 }

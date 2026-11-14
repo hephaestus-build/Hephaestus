@@ -1,3 +1,4 @@
+import { InfoTip } from "@/components/common/InfoTip";
 import { definitionFor } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 
@@ -9,13 +10,19 @@ export interface StandingBasisNoteProps {
 }
 
 /**
- * Beside a standing that rests only on earlier reviews, says so in its own words. The words are
- * the whole message: no hover or tap opens more, so pointer, keyboard and touch read the same, and
- * on a narrow screen they wrap rather than being cut.
+ * Beside a standing that rests only on earlier reviews, says so in its own words, which wrap on a
+ * narrow screen rather than being cut. The (i) after them holds the registry's whole sentence: what
+ * such a standing leaves out, and whether the original criteria are still known.
  */
 export function StandingBasisNote({ basis }: StandingBasisNoteProps) {
 	if (!isEarlierBasis(basis)) {
 		return null;
 	}
-	return <StatusBadge wrap def={definitionFor(STANDING_BASIS_DEFS, basis)} />;
+	const def = definitionFor(STANDING_BASIS_DEFS, basis);
+	return (
+		<span className="inline-flex max-w-full items-center gap-0.5">
+			<StatusBadge wrap def={def} />
+			<InfoTip label="About this standing" lead={def.description} />
+		</span>
+	);
 }

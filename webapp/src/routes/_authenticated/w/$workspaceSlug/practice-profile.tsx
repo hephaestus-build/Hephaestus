@@ -8,9 +8,12 @@ import {
 	stripSearchParams,
 } from "@tanstack/react-router";
 import { CompassIcon } from "lucide-react";
-import { lazy, type ReactNode, Suspense, useState, useTransition } from "react";
+import { lazy, type ReactNode, Suspense, useEffect, useState, useTransition } from "react";
 
-import { getOwnResultOptions } from "@/api/@tanstack/react-query.gen";
+import {
+	getOwnResultOptions,
+	getPublicActivityOnboardingOptions,
+} from "@/api/@tanstack/react-query.gen";
 import type { GroupRef, ResultDetail, ResultList } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { combinePanelStates, queryLoadState } from "@/components/common/panel-state";
@@ -58,6 +61,7 @@ import {
 	ReviewResultDetails,
 } from "@/components/profile/ReviewResultRow";
 import type { TourChapterId } from "@/components/tour/tour-chapters";
+import { rememberTourOffered, TOUR_START_PROPS, tourOffered } from "@/components/tour/tour-start";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { REVIEW_PAGE_SIZE, usePracticeGroupDetail } from "@/hooks/use-practice-group-detail";
@@ -130,7 +134,11 @@ function TourOffer({
 function PracticeProfile() {
 	// A user view reads the developer's page and answers nothing on their behalf.
 	const readOnly = useAuth().userView !== undefined;
-	const [tour, setTour] = useState<{ startChapter?: TourChapterId } | null>(null);
+	const [tour, setTour] = useState<{ startChapter?: TourChapterId; firstVisit?: true } | null>(
+		null,
+	);
+	// Read once: whether this browser still owes the reader the first visit's offer of the tour.
+	const [offerDue, setOfferDue] = useState(() => !tourOffered());
 	const [tourLoading, startTourTransition] = useTransition();
 	const workProvider = useWorkProvider();
 	// From the reader's own membership: an admin read here would ask an admin for a passkey step-up.
@@ -158,9 +166,17 @@ function PracticeProfile() {
 		...standings
 	} = usePracticeStandings(workspaceSlug);
 	const { overview, ...overviewQuery } = usePracticeProfileOverview(workspaceSlug);
-	const workspaceName =
-		useActiveWorkspaceSlug().workspaces.find((each) => each.workspaceSlug === workspaceSlug)
-			?.displayName ?? workspaceSlug;
+	const workspace = useActiveWorkspaceSlug().workspaces.find(
+		(each) => each.workspaceSlug === workspaceSlug,
+	);
+	const workspaceName = workspace?.displayName ?? workspaceSlug;
+	// The workspace layout asks a member of a workspace that publishes its activity whether to appear
+	// there; this is the same read. The tour's offer waits until that question is answered.
+	const publicActivityAsked = workspace?.publishesPublicActivity === true && !readOnly;
+	const publicActivity = useQuery({
+		...getPublicActivityOnboardingOptions({ path: { slug: workspaceSlug } }),
+		enabled: publicActivityAsked,
+	});
 	// The cards: read here, which is also what delivers the unread ones — so the read waits for a
 	// definite "this workspace reviews practices", or it would mark feedback delivered for a reader
 	// the answer below is about to send away.
@@ -217,6 +233,28 @@ function PracticeProfile() {
 		feedback.state,
 	]);
 
+	// The first visit offers the tour once, on its menu, when the page has loaded. Not for a reader who
+	// came to act on something: a link that opens a level or a card goes straight to it. Not over the
+	// question about public activity, which comes first. Never in a user view, which reads someone
+	// else's page. Once it opens, the tour holds its own state, so a later change here cannot close it.
+	if (
+		offerDue &&
+		tour === null &&
+		!readOnly &&
+		page.status === "ready" &&
+		detailStack.length === 0 &&
+		search.feedbackCard === undefined &&
+		(!publicActivityAsked || publicActivity.data?.seen === true)
+	) {
+		setOfferDue(false);
+		setTour({ firstVisit: true });
+	}
+	const firstVisitOpen = tour?.firstVisit === true;
+	useEffect(() => {
+		if (firstVisitOpen) {
+			rememberTourOffered();
+		}
+	}, [firstVisitOpen]);
 	// Only a definite "off" redirects: the surface exists only where practices review the work, and
 	// sending someone away before the answer arrives would bounce them out of a workspace that does.
 	if (featureState.practicesEnabled === false) {
@@ -325,8 +363,10 @@ function PracticeProfile() {
 	} satisfies PracticeProfilePageProps;
 
 	const startTour = (chapter?: TourChapterId) => {
+		setOfferDue(false);
 		startTourTransition(() => setTour({ startChapter: chapter }));
 	};
+	const closeTour = () => setTour(null);
 
 	return (
 		<>
@@ -349,6 +389,7 @@ function PracticeProfile() {
 							pending={tourLoading}
 							variant="quiet"
 							size="sm"
+							{...TOUR_START_PROPS}
 							onClick={() => startTour()}
 							onPointerEnter={preloadTour}
 							onFocus={preloadTour}
@@ -370,7 +411,7 @@ function PracticeProfile() {
 			<CatchBoundary
 				getResetKey={() => (tour === null ? "closed" : "open")}
 				onCatch={() => {
-					setTour(null);
+					closeTour();
 					toast.error("The tour could not load. Reload the page to try again.");
 				}}
 				errorComponent={() => null}
@@ -385,7 +426,8 @@ function PracticeProfile() {
 							page={pageProps}
 							practicesByGroup={practicesByGroup}
 							startChapter={tour.startChapter}
-							onClose={() => setTour(null)}
+							firstVisit={tour.firstVisit}
+							onClose={closeTour}
 						/>
 					)}
 				</Suspense>

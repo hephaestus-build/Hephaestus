@@ -30,6 +30,12 @@ export interface DetailDrawerStackProps<TKind extends string = string> {
 	 * footer every level of a surface shares, so no level has to carry it.
 	 */
 	footer?: (entry: DetailStackEntry<TKind>) => ReactNode;
+	/**
+	 * Shows the levels without letting anyone reach them, for the guided tour, which opens and closes
+	 * them and draws its own controls above them: no backdrop, no focus, nothing closes them from
+	 * inside, and they leave the accessibility tree, where the tour's words say what they show.
+	 */
+	inert?: boolean;
 }
 
 /**
@@ -58,6 +64,7 @@ export function DetailDrawerStack<TKind extends string>({
 	onClose,
 	footer,
 	children,
+	inert = false,
 }: DetailDrawerStackProps<TKind>) {
 	const [closing, setClosing] = useState<{ depth: number; key: string } | null>(null);
 
@@ -73,7 +80,8 @@ export function DetailDrawerStack<TKind extends string>({
 		setClosing(key === undefined ? null : { depth, key });
 	};
 
-	useFocusReturn(stack.length > 0);
+	// An inert stack never took focus, so it has none to give back.
+	useFocusReturn(!inert && stack.length > 0);
 
 	// Mounting is the arrival `useArrived` needs; a component left mounted on `null` has already
 	// spent its first render.
@@ -92,13 +100,18 @@ export function DetailDrawerStack<TKind extends string>({
 			setClosingDepth={setClosingDepth}
 			onClose={onClose}
 			footer={footer}
+			inert={inert}
 		>
 			{children}
 		</DetailDrawerLevelView>
 	);
 }
 
-interface DetailDrawerLevelViewProps<TKind extends string> extends DetailDrawerStackProps<TKind> {
+interface DetailDrawerLevelViewProps<TKind extends string> extends Omit<
+	DetailDrawerStackProps<TKind>,
+	"inert"
+> {
+	inert: boolean;
 	depth: number;
 	parentEntered: boolean;
 	closingDepth: number | null;
@@ -116,6 +129,7 @@ function DetailDrawerLevelView<TKind extends string>({
 	onClose,
 	footer,
 	children,
+	inert,
 }: DetailDrawerLevelViewProps<TKind>) {
 	const entry = stack[depth];
 	const arrived = useArrived();
@@ -132,9 +146,11 @@ function DetailDrawerLevelView<TKind extends string>({
 		<Drawer
 			// Base UI shuts a parent's children anyway; this keeps the React tree in step.
 			open={arrived && parentEntered && (closingDepth === null || depth < closingDepth)}
+			modal={!inert}
 			swipeDirection="right"
 			onOpenChange={(next, details) => {
-				if (next) {
+				// An inert stack belongs to its caller, which alone opens and closes its levels.
+				if (next || inert) {
 					return;
 				}
 				// Every way out is the same way out: Escape, a press outside, a swipe and the panel's
@@ -157,7 +173,14 @@ function DetailDrawerLevelView<TKind extends string>({
 				}
 			}}
 		>
-			<DrawerContent size="detail" dimWhenNested={false} data-detail-depth={depth}>
+			<DrawerContent
+				size="detail"
+				dimWhenNested={false}
+				data-detail-depth={depth}
+				inert={inert}
+				initialFocus={inert ? false : undefined}
+				finalFocus={inert ? false : undefined}
+			>
 				{children(entry, { depth, nested: depth > 0 })}
 				{footer?.(entry)}
 				{child && (
@@ -171,6 +194,7 @@ function DetailDrawerLevelView<TKind extends string>({
 						setClosingDepth={setClosingDepth}
 						onClose={onClose}
 						footer={footer}
+						inert={inert}
 					>
 						{children}
 					</DetailDrawerLevelView>

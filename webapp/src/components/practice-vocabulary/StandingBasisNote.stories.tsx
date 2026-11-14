@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent } from "storybook/test";
+import { expect, within } from "storybook/test";
+
+import { settledPopup } from "@/stories/overlay";
 
 import { StandingBasisNote } from "./StandingBasisNote";
 
@@ -17,25 +19,30 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** The words are the whole note: nothing to hover, tap or focus, and no tooltip opens. */
+/**
+ * The words say the point and wrap on a narrow screen. The (i) after them holds the rest of the
+ * registry's sentence: what such a standing leaves out.
+ */
 export const EarlierReviews: Story = {
-	play: async ({ canvas }) => {
-		const mark = canvas.getByText("Based on earlier reviews, the criteria might have changed");
-		await expect(mark).toBeVisible();
-		await expect(canvas.queryByRole("button")).toBeNull();
-		await userEvent.hover(mark);
-		await expect(canvas.queryByRole("tooltip")).toBeNull();
-	},
-};
-
-/** The reviews recorded no practice version: the same words, as the criteria may differ either way. */
-export const CriteriaUnknown: Story = {
-	args: { basis: "EARLIER_REVIEWS_CRITERIA_UNKNOWN" },
-	play: async ({ canvas }) => {
+	play: async ({ canvas, userEvent }) => {
 		await expect(
 			canvas.getByText("Based on earlier reviews, the criteria might have changed"),
 		).toBeVisible();
-		await expect(canvas.queryByRole("button")).toBeNull();
+		await userEvent.click(canvas.getByRole("button", { name: "About this standing" }));
+		await expect(
+			within(await settledPopup()).getByText(/No trend or feedback quotes are shown/u),
+		).toBeVisible();
+	},
+};
+
+/** The reviews recorded no practice version: the same words, and the (i) says the version is gone. */
+export const CriteriaUnknown: Story = {
+	args: { basis: "EARLIER_REVIEWS_CRITERIA_UNKNOWN" },
+	play: async ({ canvas, userEvent }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "About this standing" }));
+		await expect(
+			within(await settledPopup()).getByText(/The original criterion version is unavailable/u),
+		).toBeVisible();
 	},
 };
 
