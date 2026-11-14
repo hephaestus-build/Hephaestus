@@ -66,7 +66,7 @@ class ReviewJobInitializationFailureDatabaseTest {
         PracticeMigrationFixture.execute(database, """
                 INSERT INTO agent_run
                     (id,workspace_id,kind,band,concurrency_key,state,attempt,lease_epoch,stop_reason,started_at,ended_at)
-                VALUES ('%s',%d,'REVIEW','BATCH','review:%s','ENDED',0,2,'COMPLETED',now(),now());
+                VALUES ('%s',%d,'REVIEW','BATCH','review:%s','ENDED',0,2,'FAILED',now(),now());
                 INSERT INTO review_job
                     (id,review_id,workspace_id,submitted_at,status,processing_status,trace_id,input,config_snapshot,
                      run_id,capture,completed_at)
