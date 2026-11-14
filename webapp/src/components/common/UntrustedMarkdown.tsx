@@ -5,9 +5,8 @@ import { useSpinDelay } from "spin-delay";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
- * The Markdown stack (the parser, the HTML tree tools and the renderer) is the largest library on
- * the pages that show feedback. A page fetches it the first time it shows Markdown, not with its
- * own code.
+ * The Markdown stack (the parser, the HTML tree tools and the renderer) loads the first time a page
+ * shows Markdown, so a page without formatted text does not carry it.
  */
 const UntrustedMarkdownRenderer = lazy(async () => {
 	const renderer = await import("@/components/common/UntrustedMarkdownRenderer");

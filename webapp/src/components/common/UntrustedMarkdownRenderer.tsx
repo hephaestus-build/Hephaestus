@@ -11,7 +11,7 @@ import {
 } from "react";
 import { Block, type BlockProps, Streamdown } from "streamdown";
 
-import styles from "./UntrustedMarkdown.module.css";
+import styles from "./UntrustedMarkdownRenderer.module.css";
 
 import { InlineLink } from "@/components/common/InlineLink";
 import { MarkdownCode } from "@/components/common/MarkdownCode";
