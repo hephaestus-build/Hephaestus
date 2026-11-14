@@ -1,10 +1,12 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.delivery;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -31,6 +33,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopy;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackGate;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackProviderReadback;
 import de.tum.cit.aet.hephaestus.practices.metrics.PracticeMetrics;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
@@ -54,6 +57,7 @@ class FeedbackSendServiceTest {
     final FeedbackSendTransactions transactions = mock(FeedbackSendTransactions.class);
     final FeedbackTargetResolver targets = mock(FeedbackTargetResolver.class);
     final SummaryWriter writer = mock(SummaryWriter.class);
+    final FeedbackGate gate = mock(FeedbackGate.class);
     final UUID id = UUID.randomUUID();
     final UUID copyId = UUID.randomUUID();
     final ActionAttempt owner = new ActionAttempt(
@@ -97,7 +101,8 @@ class FeedbackSendServiceTest {
                 mock(PostedCopyCorrector.class),
                 new FeedbackReadbackMeters(meters),
                 mock(FeedbackProviderReadback.class),
-                mock(FeedbackOwnCopyEditor.class));
+                mock(FeedbackOwnCopyEditor.class),
+                gate);
     }
 
     FeedbackCopy copy(FeedbackCopyState state) {
@@ -120,6 +125,26 @@ class FeedbackSendServiceTest {
         when(transactions.claim(eq(1L), eq(id), eq(owner)))
                 .thenReturn(new FeedbackSendTransactions.Attempt(
                         feedback, FeedbackSendAction.POST, List.of(copy(state)), 1));
+    }
+
+    @Test
+    void shouldSyncTheSourcesBeforeTheClaimSoTheLockedCheckReadsACurrentMirror() {
+        attempt(FeedbackCopyState.PLANNED);
+
+        sender.send(owner);
+
+        var order = inOrder(gate, transactions);
+        order.verify(gate).syncSources(1L, id);
+        order.verify(transactions).claim(eq(1L), eq(id), eq(owner));
+    }
+
+    @Test
+    void shouldLeaveSourcesThatCannotBeSyncedToTheOutboxRetryInsteadOfWithholding() {
+        var unreachable = new IllegalStateException("The provider cannot be reached");
+        doThrow(unreachable).when(gate).syncSources(1L, id);
+
+        assertThatThrownBy(() -> sender.send(owner)).isSameAs(unreachable);
+        verify(transactions, never()).claim(anyLong(), any(), any());
     }
 
     @Test
@@ -233,7 +258,8 @@ class FeedbackSendServiceTest {
                 mock(PostedCopyCorrector.class),
                 new FeedbackReadbackMeters(meters),
                 mock(FeedbackProviderReadback.class),
-                mock(FeedbackOwnCopyEditor.class));
+                mock(FeedbackOwnCopyEditor.class),
+                gate);
     }
 
     @Test

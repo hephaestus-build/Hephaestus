@@ -1,9 +1,9 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceFingerprint;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
-import de.tum.cit.aet.hephaestus.evidence.capture.CaptureContribution;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
@@ -37,6 +38,8 @@ public class ScmSourceFingerprints implements ItemFingerprintReader {
     private final ScmItemService source;
     private final ScmItemAccess items;
     private final RepositoryRefState refs;
+    private final ScmWorkCapture capture;
+    private final ScmItemTransactions transactions;
 
     @Override
     public boolean supports(ItemRef item) {
@@ -77,28 +80,43 @@ public class ScmSourceFingerprints implements ItemFingerprintReader {
         }
         if (!records.isEmpty()) {
             var read = occasion != null && holds(item, snapshot, occasion) ? occasion : null;
-            fingerprints.putAll(
-                    ItemSource.recordFingerprints(this::captureFromMirror, snapshot, records, read, mapper));
+            fingerprints.putAll(ItemSource.recordFingerprints(
+                    (pinned, request) -> source.capture(pinned, request, ScmCapturePreparation.fromMirror()),
+                    snapshot,
+                    records,
+                    read,
+                    mapper));
         }
         return Map.copyOf(fingerprints);
     }
 
     /**
-     * A capture from the synced mirror. A source that reads the clone answers without the reviewed commits when the
-     * mirror lacks them, for example with only the references that the title names. That answer is not what the
-     * review's capture read, so the source counts as unreadable: the comparison is unverifiable, never a change.
+     * Fetches the reviewed repository when a record source reads the clone, as a capture does before its transaction.
+     * Another server may have captured the result, or this server may have evicted its mirror.
      */
-    private CaptureContribution captureFromMirror(ItemSnapshot pinned, CaptureRequest request) {
-        var mirror = ScmCapturePreparation.fromMirror();
-        var contribution = source.capture(pinned, request, mirror);
-        var unread = mirror.unavailableReason();
-        if (unread == null) return contribution;
-        var cleanup = contribution.cleanup();
-        try (cleanup) {
-            return CaptureContribution.unavailable(request.sources(), unread);
-        } catch (Exception failure) {
-            throw new IllegalStateException("Could not release the current source read", failure);
-        }
+    @Override
+    public void sync(ItemRef item, Set<SourceKind> kinds, @Nullable UUID occasion) {
+        if (!ScmWorkCapture.retains(item.kind())) return;
+        var records = kinds.stream()
+                .filter(kind -> !SourceFingerprint.contentAddressed(kind))
+                .collect(Collectors.toSet());
+        if (records.isEmpty()) return;
+        var current = source.current(item);
+        if (current.isEmpty()) return;
+        var snapshot = current.orElseThrow();
+        var read = occasion != null && holds(item, snapshot, occasion) ? occasion : null;
+        var request = new CaptureRequest(
+                new UUID(0, 0),
+                new UUID(0, 0),
+                0,
+                records,
+                ClasspathSourceCatalogRegistry.CURRENT_VERSION_VALUE,
+                3,
+                null,
+                records,
+                read);
+        if (!capture.readsClone(item.kind(), request)) return;
+        capture.fetch(transactions.read(() -> capture.reviewedRepository(snapshot, read)));
     }
 
     /**

@@ -11,7 +11,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
+import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceFingerprint;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemEventService;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
@@ -20,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
@@ -39,25 +43,35 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRe
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryLockManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitTransportFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ScmTokenSource;
+import de.tum.cit.aet.hephaestus.practices.result.ResultFreshness;
+import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import org.eclipse.jgit.api.errors.InvalidRemoteException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -164,6 +178,7 @@ class ScmItemFetchIntegrationTest extends BaseIntegrationTest {
     private final List<Boolean> transactionAtProvider = new CopyOnWriteArrayList<>();
 
     private ScmItemService sources;
+    private ScmSourceFingerprints reader;
 
     @BeforeEach
     void setUp() {
@@ -183,6 +198,15 @@ class ScmItemFetchIntegrationTest extends BaseIntegrationTest {
         when(tree.resolve(any(), eq("refs/heads/main"))).thenReturn(COMMIT);
         when(tree.inventory(any(), eq(COMMIT)))
                 .thenReturn(List.of(new ScmFileVersions.Entry("src/a.ts", "100644", "d".repeat(40))));
+        var built = pipeline(git);
+        sources = built.sources();
+        reader = built.reader();
+    }
+
+    private record Pipeline(ScmItemService sources, ScmSourceFingerprints reader) {}
+
+    /** The item source and its fingerprint reader on {@code git}, with this test's provider double. */
+    private Pipeline pipeline(GitRepositoryManager git) {
         var access = new ScmRepositoryAccess(connectionService, items, repositories, List.of(tokens), git);
         var preparer = new ReviewRepositoryPreparer(git, pulls, connectionService, List.of(tokens), repositories);
         // Built on the provider double, so that linked work reads this test's mirror rather than a disabled one.
@@ -203,7 +227,7 @@ class ScmItemFetchIntegrationTest extends BaseIntegrationTest {
                 fence,
                 mapper,
                 Clock.systemUTC());
-        sources = new ScmItemService(
+        var service = new ScmItemService(
                 items,
                 access,
                 repositories,
@@ -216,6 +240,7 @@ class ScmItemFetchIntegrationTest extends BaseIntegrationTest {
                 capture,
                 itemTransactions,
                 Clock.systemUTC());
+        return new Pipeline(service, new ScmSourceFingerprints(service, items, refs, capture, itemTransactions));
     }
 
     @Test
@@ -258,13 +283,15 @@ class ScmItemFetchIntegrationTest extends BaseIntegrationTest {
                 new CaptureRequest(
                         UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(LinkedWorkItemContentSource.KIND), "3.0.0", 3));
 
-        assertThat(captured.completeness()).containsKey(LinkedWorkItemContentSource.KIND);
+        assertThat(captured.stateOverrides().get(LinkedWorkItemContentSource.KIND))
+                .isEqualTo(new SourceCaptureState.Unavailable(SourceAbsenceReason.REPOSITORY_FETCH_FAILED));
         assertThat(transactionAtProvider).containsExactly(false, false);
     }
 
     @Test
-    void shouldReadLinkedWorkFingerprintsFromTheMirrorWithoutFetchingUntilACaptureSyncsIt() {
+    void shouldReadLinkedWorkFingerprintsFromTheMirrorWithoutFetchingUntilASyncFillsIt() {
         var mirrored = new AtomicBoolean(false);
+        when(git.isRepositoryCloned(any())).thenAnswer(call -> mirrored.get());
         when(git.commitExists(any(), anyString())).thenAnswer(call -> mirrored.get());
         doAnswer(call -> {
                     transactionAtProvider.add(TransactionSynchronizationManager.isActualTransactionActive());
@@ -274,7 +301,6 @@ class ScmItemFetchIntegrationTest extends BaseIntegrationTest {
                 .when(git)
                 .ensureRepository(any(), anyString(), any());
         var pullRef = pullRequestItem(fixture());
-        var reader = new ScmSourceFingerprints(sources, items, refs);
         var kinds = Set.of(LinkedWorkItemContentSource.KIND);
         var locked = new TransactionTemplate(transactions);
 
@@ -283,15 +309,85 @@ class ScmItemFetchIntegrationTest extends BaseIntegrationTest {
         assertThat(beforeSync).doesNotContainKey(LinkedWorkItemContentSource.KIND);
         assertThat(transactionAtProvider).isEmpty();
 
+        reader.sync(pullRef, kinds, null);
+        var afterSync = locked.execute(status -> reader.fingerprints(pullRef, kinds, null, mapper));
+
+        assertThat(transactionAtProvider).containsExactly(false, false);
         var captured = sources.capture(
                 sources.pin(pullRef, null),
                 new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 1, kinds, "3.0.0", 3));
-        var capturedFingerprint = SourceFingerprint.of(mapper, LinkedWorkItemContentSource.KIND, captured);
-        var afterSync = locked.execute(status -> reader.fingerprints(pullRef, kinds, null, mapper));
+        assertThat(afterSync)
+                .containsEntry(
+                        LinkedWorkItemContentSource.KIND,
+                        SourceFingerprint.of(mapper, LinkedWorkItemContentSource.KIND, captured));
+    }
 
-        assertThat(capturedFingerprint).isNotNull();
-        assertThat(afterSync).containsEntry(LinkedWorkItemContentSource.KIND, capturedFingerprint);
-        assertThat(transactionAtProvider).containsExactly(false, false);
+    @Test
+    void shouldRefuseToSyncTheReviewedRepositoryWhenTheCallerHoldsATransaction() {
+        var pullRef = pullRequestItem(fixture());
+        var kinds = Set.of(LinkedWorkItemContentSource.KIND);
+
+        assertThatThrownBy(() -> new TransactionTemplate(transactions).execute(status -> {
+                    reader.sync(pullRef, kinds, null);
+                    return null;
+                }))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("outside a database transaction");
+        assertThat(transactionAtProvider).isEmpty();
+    }
+
+    @Test
+    void shouldStoreNoLinkedWorkFingerprintWhenTheCaptureFetchFailsSoAFullReadCannotFindAChange() {
+        doAnswer(call -> {
+                    throw new GitRepositoryManager.RepositoryFetchException(new InvalidRemoteException("unreachable"));
+                })
+                .when(git)
+                .ensureRepository(any(), anyString(), any());
+        doAnswer(call -> {
+                    call.<Consumer<String>>getArgument(3).accept("Fixes #12");
+                    return null;
+                })
+                .when(git)
+                .forEachCommitMessage(any(), anyString(), anyString(), any());
+        var pullRef = pullRequestItem(fixture());
+        var kinds = Set.of(LinkedWorkItemContentSource.KIND);
+        var captured = sources.capture(
+                sources.pin(pullRef, null),
+                new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 1, kinds, "3.0.0", 3));
+        var recorded = new HashMap<SourceKind, String>();
+        var fingerprint = SourceFingerprint.of(mapper, LinkedWorkItemContentSource.KIND, captured);
+        if (fingerprint != null) recorded.put(LinkedWorkItemContentSource.KIND, fingerprint);
+
+        // Later this server's mirror holds the range, and its commit names an issue that the title does not.
+        when(git.isRepositoryCloned(any())).thenReturn(true);
+        when(git.commitExists(any(), anyString())).thenReturn(true);
+        var full = new TransactionTemplate(transactions)
+                .execute(status -> reader.fingerprints(pullRef, kinds, null, mapper));
+
+        assertThat(recorded).isEmpty();
+        assertThat(full).containsKey(LinkedWorkItemContentSource.KIND);
+        assertThat(ResultFreshness.compare(recorded, Objects.requireNonNull(full)))
+                .isNotEqualTo(Currentness.STALE);
+    }
+
+    @Test
+    void shouldKeepTheDiffFingerprintWhenThisServerHasNoMirror(@TempDir Path root) {
+        var noMirror = new GitRepositoryManager(
+                new GitRepositoryProperties(true, 2, 64 * 1024 * 1024, 1L << 40),
+                new GitRepositoryLockManager(),
+                new FabricLayout(root.resolve("fabric").toString()),
+                GitTransportFixtures.guarded(),
+                mock(RepositoryRefState.class),
+                GitTransportFixtures.copyFence());
+        var cold = pipeline(noMirror).reader();
+        var pullRef = pullRequestItem(fixture());
+        var kinds = Set.of(PullRequestContentSource.DIFF, LinkedWorkItemContentSource.KIND);
+
+        var read = new TransactionTemplate(transactions)
+                .execute(status -> cold.fingerprints(pullRef, kinds, null, mapper));
+
+        assertThat(read).containsKey(PullRequestContentSource.DIFF).doesNotContainKey(LinkedWorkItemContentSource.KIND);
+        assertThat(transactionAtProvider).isEmpty();
     }
 
     @Test

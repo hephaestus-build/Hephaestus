@@ -160,6 +160,7 @@ class ReviewRepositoryPreparerIntegrationTest extends BaseIntegrationTest {
         when(tokens.serverUrl(workspaceId)).thenReturn(Optional.of(serverUrl));
         when(tokens.accessToken(workspaceId)).thenReturn(Optional.of("private-token"));
         var git = mock(GitRepositoryManager.class);
+        when(git.isRepositoryCloned(any())).thenReturn(true);
         when(git.commitExists(any(), anyString())).thenReturn(true);
         preparer = new ReviewRepositoryPreparer(git, pullRequests, connections, List.of(tokens), repositories);
     }

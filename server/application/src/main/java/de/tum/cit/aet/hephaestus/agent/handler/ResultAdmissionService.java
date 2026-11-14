@@ -51,6 +51,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -62,6 +63,7 @@ import tools.jackson.databind.node.ObjectNode;
 /** Admission is fenced by workspace, review, job, server and exact execution attempt. */
 @Service
 @ConditionalOnServerRole
+@Slf4j
 public class ResultAdmissionService {
     public static final String INADMISSIBLE_REASON_CODE = "inadmissible_results";
     public static final String INTERRUPTED_AFTER_ADMISSION =
@@ -106,7 +108,24 @@ public class ResultAdmissionService {
         this.staging = staging;
     }
 
+    /**
+     * Starts one practice if the sources its capture read still hold. The locked check reads only this server's mirror,
+     * so the mirror is synced first, with no transaction: another server may have captured the work. If the provider
+     * cannot be reached, the check finds the sources unverifiable and withholds the practice as
+     * {@code READINESS_REFUSED}, which is true. The practice has no current result then, so the item's next readiness
+     * edge measures it again.
+     */
     public PracticeStartResponseDTO start(AdmissionIdentity identity, PracticeStartRequestDTO request) {
+        try {
+            jobs.findByIdAndWorkspaceId(identity.jobId(), identity.workspaceId())
+                    .ifPresent(job -> assignments.syncSources(job, request.practiceSlug()));
+        } catch (RuntimeException unreachable) {
+            log.warn(
+                    "Practice start could not sync its sources: jobId={}, practiceSlug={}, errorType={}",
+                    identity.jobId(),
+                    request.practiceSlug(),
+                    unreachable.getClass().getName());
+        }
         return Objects.requireNonNull(transactions.execute(status -> {
             var job = ownedJob(identity);
             if (isAdmitted(job)) throw new AdmissionConflictException();

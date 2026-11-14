@@ -146,6 +146,18 @@ public class ProductItemQuery {
         }
     }
 
+    /**
+     * Brings this server's copy of what {@link #fingerprints} reads up to date with the provider. It may call the
+     * provider, so it runs with no transaction; the locked read after it stays local.
+     */
+    public void sync(ItemRef item, Set<SourceKind> kinds, @Nullable UUID occasion) {
+        if (kinds.isEmpty()) return;
+        var readers = fingerprintReaders.stream()
+                .filter(reader -> reader.supports(item))
+                .toList();
+        if (readers.size() == 1) readers.getFirst().sync(item, kinds, occasion);
+    }
+
     public sealed interface CurrentWorkVersion
             permits CurrentWorkVersion.Known, CurrentWorkVersion.Unknown, CurrentWorkVersion.Removed {
         record Known(String value) implements CurrentWorkVersion {}

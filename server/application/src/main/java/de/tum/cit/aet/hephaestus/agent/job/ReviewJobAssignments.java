@@ -77,6 +77,14 @@ public class ReviewJobAssignments {
         return freshness.start(job.getWorkspaceId(), assignment.id(), job.getId(), job.getAttempt());
     }
 
+    /** {@link ReviewFreshness#syncSources} for the practice that {@link #start} starts; it runs with no transaction. */
+    public void syncSources(ReviewJob job, String practiceSlug) {
+        load(job).stream()
+                .filter(row -> row.practiceSlug().equals(practiceSlug))
+                .findFirst()
+                .ifPresent(assignment -> freshness.syncSources(job.getWorkspaceId(), assignment.id()));
+    }
+
     public boolean publicReviewed(ReviewJob job) {
         return reviews.publicReviewedAt(job.getWorkspaceId(), job.getReviewId()).isPresent();
     }

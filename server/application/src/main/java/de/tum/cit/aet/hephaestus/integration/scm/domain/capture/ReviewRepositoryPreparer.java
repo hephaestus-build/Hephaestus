@@ -153,11 +153,16 @@ public class ReviewRepositoryPreparer {
                     .ifPresent(ref -> git.fetchRemoteCommit(key, remote.cloneUrl(), ref, range.head(), token));
     }
 
-    /** The pinned range in the mirror that {@link #fetch} synced; it reads only the database and the mirror. */
+    /**
+     * The pinned range in the mirror that {@link #fetch} synced; it reads only the database and the mirror. A mirror that
+     * is not on this server, as after an eviction, does not hold the range.
+     */
     public PreparedReview prepare(ScmCaptureContext capture) {
         var key = authorized(capture.pinned(), capture.work()).key();
         var range = range(capture.work());
-        if (!git.commitExists(key, range.head()) || !git.commitExists(key, range.target()))
+        if (!git.isRepositoryCloned(key)
+                || !git.commitExists(key, range.head())
+                || !git.commitExists(key, range.target()))
             throw new ItemCaptureException(
                     ItemCaptureCode.VERSION_UNAVAILABLE, "Pinned review diff range is unavailable");
         return new PreparedReview(key, range.head(), range.target());

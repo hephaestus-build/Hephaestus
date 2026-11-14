@@ -18,6 +18,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -93,6 +94,18 @@ public class ReviewFreshnessService implements ReviewFreshness {
         assignment.setStatus(ReviewPracticeStatus.WITHHELD);
         assignment.setReason(reason);
         return false;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public void syncSources(long workspaceId, ReviewAssignmentId id) {
+        var review = reviews.findByIdAndWorkspaceId(id.reviewId(), workspaceId).orElse(null);
+        if (review == null || review.getKind() == ReviewKind.SCAN) return;
+        practices.findByWorkspaceIdAndReviewIdOrderByPracticeIdAsc(workspaceId, id.reviewId()).stream()
+                .filter(row -> row.getPracticeId() == id.practiceId())
+                .findFirst()
+                .ifPresent(assignment ->
+                        freshness.sync(workspaceId, id.itemId(), occasion(review), assignment.getCaptureDecision()));
     }
 
     private static @Nullable UUID occasion(Review review) {

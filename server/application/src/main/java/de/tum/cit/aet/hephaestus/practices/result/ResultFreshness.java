@@ -41,8 +41,8 @@ public class ResultFreshness {
     }
 
     /**
-     * The freshness of these results, with the reason that an unverifiable one cannot be checked and when each was last
-     * verified, for a caller that has already read their active items.
+     * The freshness of these results, with the reason that an unverifiable one cannot be checked and when each capture
+     * read the work, for a caller that has already read their active items.
      */
     public Map<UUID, Freshness> freshness(long workspaceId, Collection<Result> rows, Map<Long, ItemRef> activeItems) {
         return freshnessFor(workspaceId, claims(rows), activeItems);
@@ -137,17 +137,61 @@ public class ResultFreshness {
                     ? Map.<SourceKind, String>of()
                     : items.fingerprints(item, kinds, group.getKey().occasion());
             for (var result : group.getValue()) {
-                var verifiedAt = capturedAt.get(result.id());
+                var readAt = capturedAt.get(result.id());
                 states.put(
                         result.id(),
                         result.endedAt() != null || item == null
-                                ? Freshness.stale(verifiedAt)
+                                ? Freshness.stale(readAt)
                                 : frozen.contains(result.id())
-                                        ? Freshness.current(verifiedAt)
-                                        : freshness(expected.getOrDefault(result.id(), Map.of()), current, verifiedAt));
+                                        ? Freshness.current(readAt)
+                                        : freshness(expected.getOrDefault(result.id(), Map.of()), current, readAt));
             }
         }
         return Map.copyOf(states);
+    }
+
+    /**
+     * Brings this server's copy of what a freshness read of these results reads up to date with the provider, so that a
+     * locked read after it does not answer from a mirror that another server filled or that this one evicted. It may
+     * call the provider, so it runs with no transaction. A scan reads its frozen scope and needs nothing.
+     */
+    public void sync(long workspaceId, Collection<Result> rows) {
+        var owned = rows.stream()
+                .filter(result -> result.getWorkspaceId() == workspaceId)
+                .toList();
+        if (owned.isEmpty()) return;
+        var byCapture = practices
+                .sourceCaptures(
+                        workspaceId,
+                        owned.stream().map(Result::getReviewId).distinct().toArray(UUID[]::new),
+                        owned.stream().map(Result::getItemId).distinct().toArray(Long[]::new))
+                .stream()
+                .filter(capture -> capture.reviewKind() != ReviewKind.SCAN)
+                .collect(Collectors.toMap(
+                        capture -> new CaptureKey(capture.reviewId(), capture.practiceId(), capture.itemId()),
+                        capture -> capture));
+        var scopes = new HashSet<ReadScope>();
+        for (var result : owned) {
+            var capture =
+                    byCapture.get(new CaptureKey(result.getReviewId(), result.getPracticeId(), result.getItemId()));
+            if (capture == null) continue;
+            var kinds = fingerprints(capture.decision()).keySet();
+            if (!kinds.isEmpty()) scopes.add(new ReadScope(result.getItemId(), kinds, capture.occasion()));
+        }
+        if (scopes.isEmpty()) return;
+        var refs = items.findAll(
+                workspaceId, scopes.stream().map(ReadScope::itemId).distinct().toList());
+        for (var scope : scopes) {
+            var item = refs.get(scope.itemId());
+            if (item != null) items.sync(item, scope.kinds(), scope.occasion());
+        }
+    }
+
+    /** {@link #sync(long, Collection)} for the sources that one capture fingerprinted, before {@link #check}. */
+    public void sync(long workspaceId, long itemId, @Nullable UUID occasion, @Nullable JsonNode facts) {
+        var kinds = fingerprints(facts).keySet();
+        if (kinds.isEmpty()) return;
+        items.find(workspaceId, itemId).ifPresent(item -> items.sync(item, kinds, occasion));
     }
 
     private record CaptureKey(UUID reviewId, long practiceId, long itemId) {}

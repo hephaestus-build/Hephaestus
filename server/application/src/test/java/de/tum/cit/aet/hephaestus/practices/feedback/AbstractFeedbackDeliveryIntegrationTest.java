@@ -171,7 +171,8 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
                 corrector,
                 new FeedbackReadbackMeters(new SimpleMeterRegistry()),
                 mock(FeedbackProviderReadback.class),
-                mock(FeedbackOwnCopyEditor.class)));
+                mock(FeedbackOwnCopyEditor.class),
+                gate));
     }
 
     protected Sender sender(FeedbackSendService service) {
