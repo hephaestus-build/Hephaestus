@@ -670,9 +670,28 @@
 				"resources",
 				"databasePool",
 				"drainTimeoutSeconds",
-				"inboxClaimers"
+				"inboxClaimers",
+				"jvm"
 			],
 			"properties": {
+				"jvm": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["headRoomPercent", "threadCount"],
+					"properties": {
+						"headRoomPercent": {
+							"type": "integer",
+							"minimum": 0,
+							"maximum": 50,
+							"description": "The percent of the server's memory limit that the buildpack's memory calculator keeps out of the JVM's budget, for native memory that it does not count (BPL_JVM_HEAD_ROOM)."
+						},
+						"threadCount": {
+							"type": "integer",
+							"minimum": 1,
+							"description": "The threads whose stacks the buildpack's memory calculator reserves before it sizes the heap (BPL_JVM_THREAD_COUNT)."
+						}
+					}
+				},
 				"databasePool": {
 					"type": "object",
 					"additionalProperties": false,

@@ -1975,40 +1975,40 @@ const reviewWidth = (layers: Layer[]) => {
 	};
 };
 
-const serverCapacity = (reviewCount: number) => {
-	const server = workload(
-		rendered([
-			...layersFor("small"),
-			{
-				sandbox: { reviewMemory: memoryFor(reviewCount), conversationTurns: 8, budget: null },
-			},
-		]),
-		"server",
-	);
+/** The buildpack memory calculator's inputs on the server container. */
+const memoryCalculator = (layers: Layer[]) => {
+	const server = workload(rendered(layers), "server");
 	return {
+		headRoom: envValue(server, "BPL_JVM_HEAD_ROOM"),
 		threads: envValue(server, "BPL_JVM_THREAD_COUNT"),
-		sandboxes: envValue(server, "SANDBOX_MAX_CONCURRENT"),
 	};
 };
 
-await test("what the server holds for its reviews follows the reviews that the sandbox nodes hold", () => {
-	// The buildpack's 250 threads of the server, and 8 more per review.
-	assert.deepEqual(serverCapacity(1), {
-		threads: "258",
-		sandboxes: "1",
-	});
-	assert.deepEqual(serverCapacity(16), {
-		threads: "378",
-		sandboxes: "16",
-	});
-	assert.deepEqual(serverCapacity(32), {
-		threads: "506",
-		sandboxes: "32",
-	});
-	assert.deepEqual(serverCapacity(64), {
-		threads: "762",
-		sandboxes: "64",
-	});
+await test("the server keeps headroom for native memory and reserves its measured threads", () => {
+	// With no headroom, the calculator gives the heap all the rest of the limit, and native memory pushes the
+	// container past it. The thread count does not follow the reviews: their work runs on virtual threads.
+	const defaults = { headRoom: "15", threads: "200" };
+	for (const name of profiles) {
+		assert.deepEqual(memoryCalculator(layersFor(name)), defaults, name);
+	}
+	assert.deepEqual(
+		memoryCalculator([
+			...layersFor("small"),
+			{ sandbox: { reviewMemory: memoryFor(64), conversationTurns: 8, budget: null } },
+		]),
+		defaults,
+	);
+	assert.deepEqual(
+		memoryCalculator([...layersFor("small"), { sandbox: { enabled: false } }]),
+		defaults,
+	);
+	assert.deepEqual(
+		memoryCalculator([
+			...layersFor("cluster"),
+			{ server: { jvm: { headRoomPercent: 20, threadCount: 300 } } },
+		]),
+		{ headRoom: "20", threads: "300" },
+	);
 });
 
 await test("the server runs the reviews that the sandbox nodes hold, and the quota holds no more", () => {

@@ -105,14 +105,19 @@ spec:
               value: prod
             # The buildpack's 10M direct-memory default sits below this role's HTTP footprint.
             {{- if $sandbox.enabled }}
-            # A blocked socket call pins its carrier on Java 21, so the scheduler needs a carrier for each
-            # gateway connection.
+            # A blocked socket call pins its carrier on Java 21, so the scheduler may need a carrier for each
+            # gateway connection. This is a ceiling, not the usual count: docs/admin/sizing.mdx § Memory headroom.
             - name: JAVA_TOOL_OPTIONS
               value: -XX:MaxDirectMemorySize=128M -Djdk.virtualThreadScheduler.maxPoolSize={{ add (int $sandbox.gateway.maxConnections) 256 }}
             {{- else }}
             - name: JAVA_TOOL_OPTIONS
               value: -XX:MaxDirectMemorySize=128M
             {{- end }}
+            # The buildpack's memory calculator sizes the heap from these and the limit: values.yaml § server.jvm.
+            - name: BPL_JVM_HEAD_ROOM
+              value: {{ .Values.server.jvm.headRoomPercent | quote }}
+            - name: BPL_JVM_THREAD_COUNT
+              value: {{ .Values.server.jvm.threadCount | quote }}
             - name: GIT_MAX_CACHE_BYTES
               value: {{ include "hephaestus.gitCacheBytes" (dict "gitCache" .Values.server.gitCache "role" "server") | quote }}
             # Practice reviews and conversation turns run only with their sandboxes.
