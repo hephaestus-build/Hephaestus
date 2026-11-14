@@ -153,6 +153,15 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         // The same manifest is safe after a restart.
         recover(manifest);
         assertThat(state()).isEqualTo(IntegrationState.UNINSTALLED);
+
+        // A later backup holds the connection reconnected on the same row, beside this recovery's audit history.
+        var history = jdbc.queryForList("SELECT * FROM connection_audit WHERE workspace_id = ?", workspace.getId());
+        backup.with("connection_audit", history).restore();
+        assertThat(state()).isEqualTo(IntegrationState.ACTIVE);
+        recover(manifest);
+        assertThat(state())
+                .as("an earlier recovery's audit row does not make the disconnect look recorded")
+                .isEqualTo(IntegrationState.UNINSTALLED);
     }
 
     @Test
@@ -260,6 +269,13 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
                        AND t.table_type = 'BASE TABLE'
                      ORDER BY c.table_name
                     """, String.class);
+        }
+
+        /** The same backup, with the rows of one table as a later backup holds them. */
+        Backup with(String table, List<Map<String, Object>> tableRows) {
+            var changed = new LinkedHashMap<>(rows);
+            changed.put(table, tableRows);
+            return new Backup(jdbc, workspaceId, changed, generated);
         }
 
         void restore() throws SQLException {

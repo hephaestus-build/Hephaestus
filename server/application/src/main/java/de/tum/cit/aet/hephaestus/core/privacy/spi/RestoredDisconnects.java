@@ -4,8 +4,8 @@ package de.tum.cit.aet.hephaestus.core.privacy.spi;
 public interface RestoredDisconnects {
 
     /**
-     * Erases the connection's local data and disconnects it without calling its provider; the provider removal it
-     * records runs once provider egress is open again.
+     * Erases the connection's local data, releases its credential and disconnects it. The provider removal that it
+     * records is tried after commit and retried until provider egress is open again; the erasure never waits for it.
      *
      * @return whether it erased: false when the restore has no such connection in the workspace or it is disconnected
      *     already

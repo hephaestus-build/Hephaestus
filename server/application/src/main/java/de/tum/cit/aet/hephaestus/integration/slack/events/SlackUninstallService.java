@@ -72,6 +72,8 @@ public class SlackUninstallService {
                             teamId,
                             uninstallCorrelationId(teamId, eventType, eventId),
                             "Slack " + eventType + " received"));
+            // The content purge below erases what the connection mirrored, as a disconnect does.
+            connectionService.recordErasure(changed);
             if ("tokens_revoked".equalsIgnoreCase(eventType)) {
                 attention.report(
                         changed.getId(),

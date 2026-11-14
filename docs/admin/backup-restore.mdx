@@ -220,6 +220,7 @@ A missing or invalid manifest, a manifest of version 1, an unknown provider inst
 1. From the restricted incident record, prepare a JSON manifest of every erasure after the chosen recovery point.
    The server's log events `workspace.purged` (with `workspace.id`) and `connection.erased` (with `connection.id` and `workspace.id`) cross-check the record.
    List each disconnected connection with its workspace ID and connection ID, and each purged workspace with its ID.
+   Include each `connection.erased` event that a provider caused, such as a Slack app uninstall.
    List each erased person, including an account deleted by its owner, under `people`.
    Include each person's account ID, when known, and all known exact native identities.
    Use numeric user IDs for GitHub and GitLab.
@@ -277,7 +278,8 @@ The manifest uses this structure:
 }
 ```
 
-A disconnect erases the connection's local data and records the removal of what it installed at the provider. That removal runs after provider egress opens again.
+A disconnect erases the connection's local data, releases its credential and records the removal of what it installed at the provider.
+That removal is tried at once and fails while provider egress is closed. The server retries it after egress opens again, and the erasure does not wait for it.
 A purge deletes the workspace's data, as the original purge did. It does not wait for work that the restore brought back, because no background work runs.
 A connection or workspace that the restored database does not have, or that is erased already, needs nothing more.
 The administrator must be active and have instance-admin rights in the restored database. Only `people` needs the administrator.
