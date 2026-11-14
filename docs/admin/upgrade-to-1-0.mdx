@@ -4,6 +4,8 @@ description: Cut over from the last 1.0 release candidate to 1.0.0, or reach the
 page_type: how-to
 ---
 
+import MigrationEntries from "@site/src/components/MigrationEntries";
+
 1.0 starts the [1.x upgrade guarantee](./compatibility-policy#upgrade-guarantee).
 The cutover to 1.0.0 is a stopped upgrade: [ADR 0070](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0070-1-0-is-a-cutover-release.md) records why.
 No role of the previous release runs beside a 1.0 role.
@@ -89,7 +91,6 @@ The migration guide owns each change. This table gives the names.
 
 | Where | Before | After | Migration entry |
 | --- | --- | --- | --- |
-| Site file | Fixed `server.databasePool.maximumPoolSize` or `postgresql.parameters.max_connections` | Automatic values or fixed values that hold the target chart’s full connection budget | *Check database connection limits for review recovery* |
 | Site file | `config.monitoring` | `config.sync`, with the same four child settings | *Rename scheduled sync settings* |
 | Site file | `config.auth.bootstrapAdmins`, `config.auth.browserExtensionIds`, `config.auth.passkeys.allowedOrigins`, `config.outline.allowedOrigins` as strings | The same keys as YAML arrays | *Convert chart list values to arrays* |
 | Site file | `conversationLoop.turns` | `sandbox.conversationTurns`, a count for the whole installation | *Stop every role before moving conversation turns to sandboxes* |
@@ -105,10 +106,12 @@ The migration guide owns each change. This table gives the names.
 | Image outside the chart | `HEPHAESTUS_RUNTIME_WORKER_ENABLED`, the `worker` Spring profile and `HEPHAESTUS_WORKER_DRAIN_TIMEOUT` | `AGENT_ENABLED=true`, `HEPHAESTUS_AGENT_DRAIN_TIMEOUT` and the sandbox settings on the server | *Move the worker values to the server and the sandboxes* |
 | Custom agent image | An image from an earlier release | An image that you rebuilt from this release | *Rebuild custom agent images* and *Rebuild a custom agent image* |
 
+<MigrationEntries after="1.0.0-rc.7" group="values" />
+
 The table covers the changes after the release candidate `1.0.0-rc.5`.
 A host on an earlier candidate also needs the entries of the later candidates.
 
-Eight more checks need a read before the window:
+These checks need a read before the window:
 
 - API callers of the team routes move to the new contract: *Update team API callers*.
 - Custom API clients read error responses in the problem format: *Read problem responses from the top level*.
@@ -116,13 +119,14 @@ Eight more checks need a read before the window:
 - A production server needs a root HTTPS issuer. See *Use a root HTTPS API issuer in production*.
 - Slack connections need the canonical callback on the Slack app: *Use the canonical Slack workspace callback*.
 - Each chat model needs an output limit. The server reads missing limits from the provider when it starts. Check that no model in **AI providers** is marked **Limits missing** ([Model limits](./ai-providers#model-limits)). See *Stop every role before moving model usage to one row for each call*.
-- *Stop every role before the repository enumeration upgrade*: every replica must record repository access events in the same connection revision. Stop all servers before starting the new release.
 - Duplicate repository monitor names stop the migration: run the query of *Stop every role before enforcing unique repository monitor names*.
 - A practice identifier can collide with a reserved route name: run the preflight of *Check practice identifiers before upgrading*.
+- Provider events move to the PostgreSQL inbox: see *Drain the webhook streams before the upgrade*. Before you start 1.0, follow [the provider event inbox cutover](./webhook-ingestion-operations.mdx).
+
+<MigrationEntries after="1.0.0-rc.7" group="other" />
 
 These migration entries also apply to a host that upgrades to 1.0:
 
-- *Stop every role before changing role-notice delivery*: use the procedure in that entry.
 - *Stop every role before replacing live Slack replies*: stop all replicas and keep a verified pre-upgrade backup. Existing replies with an unknown Slack outcome stay unconfirmed.
 - *Refresh the internal PostgreSQL certificate*: on one host, restart PostgreSQL after cert-manager issues the new certificate.
 - *Stop every role before correcting unknown issue comment counts*: the migration changes stored issue comment counts of zero to unknown.
@@ -134,7 +138,6 @@ These migration entries also apply to a host that upgrades to 1.0:
 - *Move the GitHub webhook byte bound into the stream map*: remove the whole `webhook` block from every values file. This chart has no `webhook` key and refuses one.
 - *GitHub synchronization is incremental*: remove `HEPHAESTUS_SYNC_INCREMENTAL_ENABLED` from your configuration.
 - *Change the model call queries that read `class` or `queue`*: your own queries and alerts read the `band` label.
-- *Change the queries that read the agent queue and claim meters*: your own queries, alerts and dashboards read the `agent_run_*` meters.
 - *Decide whether GitHub App installations need an instance admin's approval*: by default, an instance admin adopts each new installation.
 - *Use the canonical webhook receiver base*: remove `WEBHOOK_EXTERNAL_URL` and `hephaestus.webhook.external-url`.
 - *Remove existing sandbox claims before starting the new workers*. Delete the remaining sandbox workloads before the new release starts.
@@ -147,8 +150,9 @@ These migration entries also apply to a host that upgrades to 1.0:
 - *Stop every role before moving conversation turns to sandboxes*. Stop the old loop before migration, remove the old workloads, and run the template isolation gate.
 - *Log records name their trace in `trace.id` and `span.id`*: update your log queries, saved searches and collector rules that read `context.traceId` or `context.spanId`.
 - *Log context uses consistent field names*: update your log queries that read `context.installation_id` or `context.proxy.apiProtocol`.
-- *Stop every role before clearing personal logins from GitHub App installation records*. The previous server cannot read an installation record without a login.
-- *Stop every role before recording failed and handed-off run outcomes*. The previous server cannot read the new run outcomes.
+- *Stop every role before the provider resource repair upgrade*: the old server cannot write the new authorization binding columns. Pending OAuth requests restart after the upgrade, and [Integration administration](./integrations.mdx#confirm-a-provider-removal) describes the removal review.
+
+<MigrationEntries after="1.0.0-rc.7" group="stopped" />
 
 ## Cut over to 1.0.0
 
@@ -266,15 +270,3 @@ Then follow the cutover above.
 Check [Sizing and scaling](./sizing) before increasing capacity.
 Its measurements state their workload and limits.
 A successful upgrade does not qualify throughput or recovery time.
-
-## Drain the webhook streams before the upgrade
-
-Follow the [provider event inbox cutover](./webhook-ingestion-operations.mdx) before you start 1.0.
-Use the provider inbox cutover procedure before starting the new server.
-
-## Stop every role before the provider resource repair upgrade
-
-Stop every server before the migration, then deploy the matching release.
-The old server cannot write the required authorization binding columns.
-Pending OAuth requests must restart after this upgrade.
-[Integration administration](./integrations.mdx#confirm-a-provider-removal) describes the removal review and instance-admin release.

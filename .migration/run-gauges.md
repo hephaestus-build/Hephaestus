@@ -1,8 +1,9 @@
 #### 🔴 Change the queries that read the agent queue and claim meters
 
+Change your own queries, alerts and dashboards that read the agent queue or claim meters to the agent run meters in the table.
 The agent run gauges replace the queue gauges, and the claim wait of a run replaces the claim latency of a job.
 The bundled alert `HephaestusAgentQueueStalled` and the **Overview** dashboard read the new names.
-If you have your own queries, alerts or dashboards on these meters, change them:
+The table names the new meter of each old one:
 
 | Old | New |
 | --- | --- |
@@ -18,6 +19,7 @@ If you have your own queries, alerts or dashboards on these meters, change them:
 Sum over the labels that you do not need.
 A held run is not due: `agent_run_due` and `agent_run_oldest_due_age_seconds` leave it out.
 
-The claim wait counts from the time that the run became due, and each claim of a returned run counts again from its new due time.
+The claim wait counts from the time that the run became due.
+Each claim of a returned run counts again from its new due time.
 The old latency counted once, from the submission of the job.
 Series with the old names stop at the upgrade.
