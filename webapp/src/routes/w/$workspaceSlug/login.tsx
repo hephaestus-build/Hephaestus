@@ -53,7 +53,7 @@ function WorkspaceLoginRoute() {
 			title={heading}
 			error={error}
 			onSignIn={(registrationId) => login(registrationId, `/w/${workspaceSlug}`)}
-			onDevSignIn={async (username) => devLogin(username, `/w/${workspaceSlug}`)}
+			onDevSignIn={(username) => devLogin(username, `/w/${workspaceSlug}`)}
 		/>
 	);
 }

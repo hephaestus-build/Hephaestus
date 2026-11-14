@@ -14,6 +14,7 @@ import {
 	recordAccountDeleted,
 } from "@/runtime/auth/account-deleted-notice";
 import { authClient } from "@/runtime/auth/auth-client";
+import { captureNavigation, restoreNavigation } from "@/test/navigation";
 import { ObserverStub } from "@/test/observers";
 import { ROUTE_RENDER_WAIT, loadRouteCode, renderRouteAtWithRouter } from "@/test/router-harness";
 
@@ -136,12 +137,30 @@ describe("contextual sign-in", () => {
 				HttpResponse.json([{ registrationId: "dev", displayName: "Dev", providerType: "DEV" }]),
 			),
 		);
-		const devLogin = vi.spyOn(authClient, "devLogin").mockResolvedValue(undefined);
-		renderRouteAtWithRouter("/login?returnTo=%2Fabout");
-		await userEvent.click(
-			await screen.findByRole("button", { name: "Continue as dev admin" }, ROUTE_RENDER_WAIT),
+		let sent: unknown;
+		server.use(
+			http.get("*/auth/csrf", () =>
+				HttpResponse.json({ token: "token", headerName: "X-XSRF-TOKEN" }),
+			),
+			http.post("*/auth/dev-login", async ({ request }) => {
+				sent = await request.json();
+				return new HttpResponse(null, { status: 204 });
+			}),
 		);
-		expect(devLogin).toHaveBeenCalledWith("dev-admin", true, "/about");
+		renderRouteAtWithRouter("/login?returnTo=%2Fabout");
+		const button = await screen.findByRole(
+			"button",
+			{ name: "Continue as dev admin" },
+			ROUTE_RENDER_WAIT,
+		);
+		const assigned = captureNavigation();
+		try {
+			await userEvent.click(button);
+			await waitFor(() => expect(assigned).toStrictEqual(["/about"]));
+			expect(sent).toStrictEqual({ username: "dev-admin", admin: true });
+		} finally {
+			restoreNavigation();
+		}
 	});
 
 	it("shows why dev sign-in failed and lets the reader retry", async () => {

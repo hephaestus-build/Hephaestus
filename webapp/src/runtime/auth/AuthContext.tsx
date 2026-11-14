@@ -60,7 +60,7 @@ function login(idpHint?: string, returnTo?: string) {
 	authClient.login(idpHint, returnTo);
 }
 
-async function devLogin(username: string, returnTo?: string) {
+function devLogin(username: string, returnTo?: string) {
 	return authClient.devLogin(username, true, returnTo);
 }
 

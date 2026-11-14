@@ -579,7 +579,7 @@ function PublicLoginOverlay() {
 			open={Boolean(open) && !isAuthenticated}
 			options={providers}
 			onSignIn={(registrationId) => login(registrationId, returnTo)}
-			onDevSignIn={async (username) => devLogin(username, returnTo)}
+			onDevSignIn={(username) => devLogin(username, returnTo)}
 			onClose={() => {
 				if (location.maskedLocation) {
 					router.history.back();
