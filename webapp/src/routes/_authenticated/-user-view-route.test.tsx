@@ -4,16 +4,22 @@ import { HttpResponse, http } from "msw";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { client } from "@/api/client.gen";
-import type { OffsetPageDtoUserViewAccount, UserViewAccount } from "@/api/types.gen";
+import type {
+	ActivityPeople,
+	OffsetPageDtoUserViewAccount,
+	UserViewAccount,
+} from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 import { problemType } from "@/lib/problem-detail";
 import { currentUser } from "@/mocks/fixtures/auth";
+import { ownMembership } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import {
 	applyUserViewHeaders,
 	clearUserView,
 	getUserViewSession,
 } from "@/runtime/user-view/session";
+import { OVERVIEW_FIXTURE } from "@/stories/practice-profile-story-mock-data";
 import { deferred } from "@/test/async";
 import { captureNavigation, restoreNavigation } from "@/test/navigation";
 import {
@@ -54,6 +60,16 @@ function usersPage(content: Wire<UserViewAccount>[]): Wire<OffsetPageDtoUserView
 	};
 }
 const users = usersPage([sam]);
+const noPeople = {
+	from: "2026-09-01T00:00:00Z",
+	to: "2026-10-01T00:00:00Z",
+	people: [],
+	automation: [],
+	coverage: { completeRepositories: 0, totalRepositories: 0 },
+	highlights: { firstContributors: [] },
+	repositories: [],
+	teams: [],
+} satisfies Wire<ActivityPeople>;
 const viewedProfile = "/w/engineering/workspace-activity?detail=person:never-signed-in";
 
 async function submitReason() {
@@ -70,6 +86,10 @@ async function submitReason() {
 }
 
 describe("view as user entry", () => {
+	beforeAll(
+		async () => loadRouteCode("/admin/workspaces/engineering/users"),
+		ROUTE_RENDER_WAIT.timeout,
+	);
 	let assigned: string[] = [];
 	beforeEach(() => {
 		assigned = captureNavigation();
@@ -77,6 +97,9 @@ describe("view as user entry", () => {
 			http.get("*/workspaces", () => HttpResponse.json([])),
 			http.get("*/workspaces/:workspaceSlug", () => HttpResponse.json(workspace)),
 			http.get("*/workspaces/:workspaceSlug/user-view/users", () => HttpResponse.json(users)),
+			http.get("*/admin/settings", () =>
+				HttpResponse.json({ silentModeEngaged: false, etag: '"0"' }),
+			),
 		);
 	});
 	afterEach(() => {
@@ -221,7 +244,23 @@ describe("user view guard", () => {
 	}, ROUTE_RENDER_WAIT.timeout);
 	beforeEach(() => {
 		storeUserView();
-		server.use(http.get("*/workspaces", () => HttpResponse.json([workspace])));
+		// The viewed account is a member. The guard lands on the practice page or the activity page.
+		server.use(
+			http.get("*/workspaces", () => HttpResponse.json([workspace])),
+			http.get("*/workspaces/:workspaceSlug/members/me", () => HttpResponse.json(ownMembership())),
+			http.get("*/workspaces/:workspaceSlug/practices/reviewed", () => HttpResponse.json([])),
+			http.get("*/workspaces/:workspaceSlug/practice-groups/standings", () =>
+				HttpResponse.json([]),
+			),
+			http.get("*/workspaces/:workspaceSlug/practices/standings", () => HttpResponse.json([])),
+			http.get("*/workspaces/:workspaceSlug/practice-profile/overview", () =>
+				HttpResponse.json(OVERVIEW_FIXTURE),
+			),
+			http.get("*/workspaces/:workspaceSlug/practices/feedback/practice-page", () =>
+				HttpResponse.json([]),
+			),
+			http.get("*/workspaces/:workspaceSlug/activity/people", () => HttpResponse.json(noPeople)),
+		);
 	});
 	afterEach(clearUserView);
 	afterAll(() => client.interceptors.request.eject(applyUserViewHeaders));

@@ -1,13 +1,15 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { getConsentStatusQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { ResearchConsent } from "@/api/types.gen";
 import { WORDING_VERSION } from "@/components/auth/consent-wording";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter, loadRouteCode } from "@/test/router-harness";
+
+beforeAll(async () => loadRouteCode("/settings", "/consent"), ROUTE_RENDER_WAIT.timeout);
 
 // The page is not workspace-scoped, so the reader belongs to no workspace here.
 beforeEach(() => {

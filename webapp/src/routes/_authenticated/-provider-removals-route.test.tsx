@@ -2,7 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { ProviderResourceRepair } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
@@ -11,7 +11,14 @@ import { currentUser } from "@/mocks/fixtures/auth";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { WorkspaceProviderRepairs } from "@/routes/_authenticated/-provider-repairs";
-import { ROUTE_RENDER_WAIT, renderRouteAt, testQueryClient } from "@/test/router-harness";
+import {
+	ROUTE_RENDER_WAIT,
+	renderRouteAt,
+	testQueryClient,
+	loadRouteCode,
+} from "@/test/router-harness";
+
+beforeAll(async () => loadRouteCode("/admin/provider-removals"), ROUTE_RENDER_WAIT.timeout);
 
 const repair: Wire<ProviderResourceRepair> = {
 	id: "39bcf165-6694-4669-bb6e-5eeb144233b8",

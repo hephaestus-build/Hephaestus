@@ -462,6 +462,13 @@
 						"toHaveTextContent": "Not registered here. Assert on `el.textContent`.",
 						"toHaveClass": "Not registered here. Assert on `el.className`."
 					}
+				],
+				// A longer budget hides a slow setup and still fails under load.
+				"vitest/no-restricted-vi-methods": [
+					"error",
+					{
+						"setConfig": "Load the route code in `beforeAll` with `loadRouteCode` (`@/test/router-harness`), or wait for the event the test needs. Do not raise the test's timeout."
+					}
 				]
 			}
 		}
