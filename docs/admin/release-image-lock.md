@@ -33,7 +33,7 @@ The signing identity is `release.yml` on `main` in `hephaestus-build/Hephaestus`
 | `hephaestus-k3s-X.Y.Z.tar.gz` and its `.sigstore.json` bundle | The installer and the platform and host configuration, in one archive. | [Install on one host](./k3s). |
 | `hephaestus-chrome-extension-X.Y.Z.zip` and its `.sigstore.json` bundle | The production Chrome extension, the ZIP that the Chrome Web Store takes. | [Get the extension package](./browser-extension#get-the-extension-package). |
 | `release-vX.Y.Z.intoto.jsonl` | The release attestation bundle. Subjects include the first-party image digests, chart manifest and package, joint lock, k3s bundle and extension package. | [Independent verification](#independent-verification). |
-| `manifest.json`, SBOMs, vulnerability and license reports, and signed `SHA256SUMS` | Per-platform release evidence. | [Operator verification](/contributor/release-management#operator-verification). |
+| `manifest.json`, SBOMs, vulnerability and license reports, and signed `SHA256SUMS` | Per-platform release evidence. | [Release evidence and SBOMs](#release-evidence-and-sboms). |
 | `source.syft.json`, `source.spdx.json`, `source.cdx.json` | The source and build inventory, separate from installed runtime packages. | [Supply-chain evidence](/contributor/release-management#supply-chain-evidence) describes its scope and signed verification. |
 | `host-smoke-k3s-amd64.json`, `host-smoke-k3s-arm64.json` | The native k3s install, repeated-install, upgrade and isolation qualification records. | Operators who check the hosts that the release passed on. |
 
@@ -78,6 +78,10 @@ set -euo pipefail
 COMMIT=$(jq -er '.commit' "$LOCK")
 jq -er '.images[] | select(.provenance == "first-party") | "\(.repository)@\(.indexDigest)"' "$LOCK" |
 while IFS= read -r image; do
+  cosign verify "$image" \
+    --certificate-identity \
+      'https://github.com/hephaestus-build/Hephaestus/.github/workflows/reusable-docker-build.yml@refs/heads/main' \
+    --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' >/dev/null
   gh attestation verify "oci://$image" --bundle-from-oci \
     --repo hephaestus-build/Hephaestus \
     --signer-workflow hephaestus-build/Hephaestus/.github/workflows/reusable-docker-build.yml \
@@ -87,13 +91,63 @@ while IFS= read -r image; do
 done
 ```
 
-Every first-party image must pass.
-The command checks its index digest, source repository, source commit, signer workflow, and hosted-runner identity.
+Every first-party image must pass both commands.
+The image build workflow signs each image index and its platform images.
+The attestation command checks its index digest, source repository, source commit, signer workflow, and hosted-runner identity.
 A reused image can keep its merge-group build provenance while a later `main` run signs the same digest.
 This does not describe a second build.
 
 These commands do not assign a Build level to upstream images or to the chart.
 [Release artifact provenance](/contributor/release-artifact-provenance) gives the assessment and its limits.
+
+## Release evidence and SBOMs
+
+`SHA256SUMS` covers the evidence files of a release, including `manifest.json` and the SBOM, vulnerability, license and policy reports of each image and platform.
+The release workflow signs it.
+The example below downloads the evidence of the application server for `linux/amd64`.
+Verify the signature and the checksums before you read any of the files:
+
+```bash
+set -euo pipefail
+VERSION=X.Y.Z
+gh release download "v$VERSION" --repo hephaestus-build/Hephaestus \
+  --pattern SHA256SUMS --pattern SHA256SUMS.sigstore.json \
+  --pattern manifest.json --pattern 'application-server-linux-amd64.*'
+cosign verify-blob \
+  --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity \
+    'https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  SHA256SUMS
+shasum -a 256 --check --ignore-missing SHA256SUMS
+jq -e --arg release "v$VERSION" '.release == $release' manifest.json >/dev/null
+```
+
+Each downloaded file must report `OK`.
+`--ignore-missing` skips only the files that you did not download.
+The manifest must name the release that you downloaded.
+
+The release workflow attests the SPDX SBOM of each first-party platform image.
+Run the following commands in the directory that holds the verified `manifest.json`:
+
+```bash
+set -euo pipefail
+jq -er '.subjects[] | select(.provenance == "first-party") | "\(.repository)@\(.digest)"' manifest.json |
+while IFS= read -r image; do
+  cosign verify-attestation "$image" --type spdxjson \
+    --certificate-identity \
+      'https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main' \
+    --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' >/dev/null
+  echo "verified $image"
+done
+```
+
+Every first-party platform image must pass.
+The release workflow checks that each attested SBOM is the image's `.spdx.json` release asset.
+These commands do not check upstream images.
+
+Run each block as a script or in a subshell.
+In an interactive shell, `set -e` closes the terminal when a check fails.
 
 ## Rollback
 
