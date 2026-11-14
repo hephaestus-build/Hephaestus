@@ -31,7 +31,7 @@ Use `--out` for another directory.
    node scripts/qual-staging-hold.ts -- node scripts/qual-<entry>.ts --target staging …
    ```
 
-The hold freezes automatic promotion on the commit that staging has applied, with a Staging promotion and `freeze` ([Pull-based deployment](../admin/pull-based-deployment.mdx)).
+The hold freezes automatic promotion on the commit that staging has applied, with a Staging promotion and `freeze` ([Pull-based deployment](../admin/pull-based-deployment)).
 It runs the command, then lifts the freeze with a promotion without `freeze`.
 It also lifts the freeze when the command fails or you interrupt it.
 `qual-bench.ts`, `qual-drills.ts`, `qual-smoke.ts` and `qual-turn-smoke.ts` refuse `--target staging` without the hold.
