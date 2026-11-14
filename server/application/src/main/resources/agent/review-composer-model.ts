@@ -1,6 +1,8 @@
 /**
  * One feedback composer conversation with the run's frozen chat model, through the gateway's model proxy. It speaks
- * the chat protocols the proxy serves and never streams. The proxy fences, bills and bounds every call.
+ * the chat protocols the proxy serves, and every request streams: a composition can take longer than the proxy lets a
+ * call send nothing, and only a stream shows it working. The gateway assembles the stream's answer, records it, and
+ * hands it over as one body ({@link Answer}). The proxy fences, bills and bounds every call.
  */
 
 /** The chat protocols the proxy serves, by their wire names. */
@@ -138,7 +140,7 @@ export class ModelSession {
 
 	#request(): Json {
 		const settings = this.#settings;
-		const body: Json = { model: settings.modelId };
+		const body: Json = { model: settings.modelId, stream: true };
 		const history = structuredClone(this.#history);
 		if (settings.protocol === "anthropic-messages") {
 			body.system = this.#system;
@@ -208,6 +210,9 @@ export class ModelSession {
 			// The gateway found the request off this composition's conversation: a fault of this loop, not of the model.
 			case "NOT_COMPOSER_REQUEST": {
 				throw new Error("The gateway refused a request that does not continue this composition");
+			}
+			case "NOT_STREAMED": {
+				throw new Error("The gateway refused a request that does not stream");
 			}
 			default: {
 				return failed("PROVIDER");

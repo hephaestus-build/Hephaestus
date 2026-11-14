@@ -1142,14 +1142,14 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             var forwarded =
                     objectMapper.readTree(Objects.requireNonNull(sent.getBody()).utf8());
             assertThat(forwarded.path("max_tokens").asLong()).isEqualTo(CHAT_OUTPUT_LIMIT);
-            // The answer reported no usage: the call ends unverifiable and holds its bound, the request's 64 bytes
+            // The answer reported no usage: the call ends unverifiable and holds its bound, the request's 78 bytes
             // and the output limit at the frozen $1 per 1M tokens.
             assertThat(calls(job)).containsExactly(new CallRow("ENDED", "UNVERIFIABLE", "UNPRICED", 0, 1));
             assertThat(jdbc.queryForObject(
                             "SELECT cost_bound_usd FROM llm_usage_event WHERE source_id = ?",
                             BigDecimal.class,
                             job.getId()))
-                    .isEqualByComparingTo("0.004160");
+                    .isEqualByComparingTo("0.004174");
         }
     }
 
@@ -1216,7 +1216,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             upstream.start();
             upstream.enqueue(json("{\"choices\":[]}"));
             ReviewJob job = reviewJob(upstream.url("/v1").toString());
-            String request = "{\"max_tokens\":16384,\"messages\":[]}";
+            String request = "{\"max_tokens\":16384,\"stream\":true,\"messages\":[]}";
 
             assertThat(callChat(proxyService(), job, request)).isEqualTo(200);
 
@@ -1236,7 +1236,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     /**
      * The cap holds each call's upper bound: a call starts only while the month's spend plus its own bound fits under
-     * the cap. The call's bound is the request's 64 bytes and the output limit at $1 per 1M tokens: $0.004160.
+     * the cap. The call's bound is the request's 78 bytes and the output limit at $1 per 1M tokens: $0.004174.
      */
     @Test
     void shouldRefuseAChatCallWhoseUpperBoundDoesNotFitUnderTheCapAndServeOneThatFits() throws Exception {
@@ -1245,12 +1245,12 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             upstream.enqueue(json("{\"choices\":[]}"));
             ReviewJob job = reviewJob(upstream.url("/v1").toString());
 
-            assertThat(callChat(proxyService(WebClient.create(), capOf("0.004159"), admittingPermits()), job))
+            assertThat(callChat(proxyService(WebClient.create(), capOf("0.004173"), admittingPermits()), job))
                     .isEqualTo(429);
             assertThat(upstream.getRequestCount()).isZero();
             assertThat(calls(job)).isEmpty();
 
-            assertThat(callChat(proxyService(WebClient.create(), capOf("0.004160"), admittingPermits()), job))
+            assertThat(callChat(proxyService(WebClient.create(), capOf("0.004174"), admittingPermits()), job))
                     .isEqualTo(200);
             assertThat(upstream.getRequestCount()).isEqualTo(1);
         }
@@ -1267,7 +1267,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             + "\"content\":\"ok\"}}],\"usage\":{\"prompt_tokens\":1000000,\"completion_tokens\":0}}";
 
     private int callChat(LlmProxyService service, ReviewJob job) throws Exception {
-        return callChat(service, job, "{\"model\":\"any\",\"messages\":[{\"role\":\"user\",\"content\":\"Review.\"}]}");
+        return callChat(
+                service, job, "{\"model\":\"any\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"Review.\"}]}");
     }
 
     private int callChat(LlmProxyService service, ReviewJob job, String json) throws Exception {

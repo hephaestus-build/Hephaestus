@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -203,6 +204,7 @@ import org.springframework.test.context.BootstrapUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.http.server.HttpServer;
 import tools.jackson.databind.JsonNode;
@@ -2753,6 +2755,126 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                 model.disposeNow();
             }
         }
+    }
+
+    @Test
+    void shouldComposeThroughAProviderThatStreamsAndRecordEachStreamedAnswerBeforeTheComposerActsOnIt()
+            throws Exception {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var calls = new CopyOnWriteArrayList<JsonNode>();
+            var admitted = new CompletableFuture<UUID>();
+            var model = HttpServer.create()
+                    .host("127.0.0.1")
+                    .port(0)
+                    .handle((request, response) -> request.receive()
+                            .aggregate()
+                            .asString()
+                            .flatMap(body -> Mono.fromFuture(admitted).flatMap(result -> {
+                                var parsed = mapper.readTree(body);
+                                calls.add(parsed);
+                                return response.header("Content-Type", "text/event-stream")
+                                        .sendString(Flux.fromIterable(sse(composerAnswer(parsed, result)))
+                                                .delayElements(Duration.ofMillis(20)))
+                                        .then();
+                            })))
+                    .bindNow();
+            try {
+                var job = jobs.findById(review.identity().jobId()).orElseThrow();
+                freezeComposeModel(job, "http://127.0.0.1:" + model.port() + "/v1");
+                UUID result = admitStaged(review.identity(), request(review))
+                        .admitted()
+                        .getFirst()
+                        .resultId();
+                review.inputs().close();
+                UUID composeRun = composeRun(job);
+                admitted.complete(result);
+                try (var gateway =
+                        new ComposeRunGateway(context, composingPolicy(true), new ReviewAttemptCustody(agentRuns))) {
+                    String token = gateway.sandbox(review.workspaceId(), subjectOf(composeRun));
+                    assertThat(gateway.drive(token)).isEqualTo("{\"ended\":204}");
+                }
+
+                assertThat(calls)
+                        .isNotEmpty()
+                        .allSatisfy(call ->
+                                assertThat(call.path("stream").asBoolean()).isTrue());
+                // Each tool call ran only after the server recorded the streamed answer that wrote it.
+                assertThat(jdbc.queryForList(
+                                "SELECT tool, used_at FROM composer_transcript_part"
+                                        + " WHERE workspace_id = ? AND run_id = ? AND kind = 'CALL' ORDER BY created_at",
+                                review.workspaceId(),
+                                composeRun))
+                        .extracting(row -> row.get("tool"), row -> row.get("used_at") != null)
+                        .containsExactly(tuple("check_package", true), tuple("publish_package", true));
+                assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(
+                                review.workspaceId(), review.reviewId()))
+                        .filteredOn(row -> row.getDestination() == FeedbackDestination.ON_WORK)
+                        .singleElement()
+                        .satisfies(row -> {
+                            assertThat(row.getState()).isEqualTo(FeedbackState.DELIVERED);
+                            assertThat(row.getComposition().path("stop").asString())
+                                    .isEqualTo("COMPLETE");
+                        });
+                assertThat(runState(composeRun)).isEqualTo("ENDED");
+                assertThat(jdbc.queryForList(
+                                "SELECT call_state, output_tokens FROM llm_usage_event"
+                                        + " WHERE workspace_id = ? AND source_id = ? AND run_id = ?",
+                                review.workspaceId(),
+                                job.getId(),
+                                composeRun))
+                        .hasSize(calls.size())
+                        .allSatisfy(row -> assertThat(row)
+                                .containsEntry("call_state", "ENDED")
+                                .containsEntry("output_tokens", 5L));
+            } finally {
+                model.disposeNow();
+            }
+        }
+    }
+
+    /** A chat completion as its provider streams it: the role, the content or each tool call, the finish, the usage. */
+    private List<String> sse(ObjectNode answer) {
+        var choice = answer.path("choices").path(0);
+        var message = choice.path("message");
+        var events = new ArrayList<String>();
+        events.add("{\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"}}]}");
+        if (message.path("content").isString())
+            events.add(mapper.createObjectNode()
+                    .set(
+                            "choices",
+                            mapper.createArrayNode()
+                                    .add(mapper.createObjectNode()
+                                            .put("index", 0)
+                                            .set(
+                                                    "delta",
+                                                    mapper.createObjectNode()
+                                                            .put(
+                                                                    "content",
+                                                                    message.path("content")
+                                                                            .asString()))))
+                    .toString());
+        int index = 0;
+        for (JsonNode call : message.path("tool_calls")) {
+            var delta = mapper.createObjectNode();
+            var written = delta.putArray("tool_calls").addObject().put("index", index++);
+            written.setAll((ObjectNode) call.deepCopy());
+            events.add(mapper.createObjectNode()
+                    .set(
+                            "choices",
+                            mapper.createArrayNode()
+                                    .add(mapper.createObjectNode()
+                                            .put("index", 0)
+                                            .set("delta", delta)))
+                    .toString());
+        }
+        events.add("{\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\""
+                + (message.has("tool_calls") ? "tool_calls" : "stop") + "\"}]}");
+        events.add(mapper.createObjectNode()
+                .set("choices", mapper.createArrayNode())
+                .set("usage", answer.path("usage"))
+                .toString());
+        events.add("[DONE]");
+        return events.stream().map(event -> "data: " + event + "\n\n").toList();
     }
 
     @Test

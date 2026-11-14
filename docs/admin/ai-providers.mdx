@@ -270,7 +270,8 @@ For a host on your private list, the test shows no cause. The server log has it.
 ### Answers arrive all at once, or fail after 2 minutes
 
 A proxy between Hephaestus and the model buffers the answer.
-The server fails a conversation call whose stream sends nothing for 2 minutes.
+Every model call of a review, a feedback composition or a conversation streams.
+The server fails a call whose stream sends nothing for 2 minutes.
 
 1. For nginx, set `proxy_buffering off` on the completions path.
 2. For other gateways, turn off response buffering for `text/event-stream`.

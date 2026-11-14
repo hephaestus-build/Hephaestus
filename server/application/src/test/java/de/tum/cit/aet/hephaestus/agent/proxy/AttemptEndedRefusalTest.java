@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * An attempt that was replaced after the gateway authenticated its call gets the same answer as one the filter refuses:
@@ -22,9 +23,9 @@ class AttemptEndedRefusalTest extends BaseUnitTest {
     @Test
     void shouldAnswerAModelCallOfAnAttemptLostAfterAuthenticationWithTheAttemptEndedText() throws Exception {
         var proxy = mock(LlmProxyService.class);
-        when(proxy.proxy(any(), any(), any(), any())).thenThrow(ProxyRoutingService.attemptEnded());
-        var gateway = MockMvcBuilders.standaloneSetup(
-                        new LlmProxyController(proxy, mock(ComposerTranscript.class), mock(ProxyAccounting.class)))
+        when(proxy.proxy(any(), any(), any(), any(), any())).thenThrow(ProxyRoutingService.attemptEnded());
+        var gateway = MockMvcBuilders.standaloneSetup(new LlmProxyController(
+                        proxy, mock(ComposerTranscript.class), mock(ProxyAccounting.class), new ObjectMapper()))
                 .setControllerAdvice(new GlobalControllerAdvice())
                 .build();
 

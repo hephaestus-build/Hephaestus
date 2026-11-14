@@ -207,16 +207,43 @@ export function compositionClient(gateway: Gateway): Client {
 				return { status: 503, body: "", refusal: null };
 			}
 			const text = await response.text().catch(() => "");
-			return {
-				status: response.status,
-				body: text,
-				refusal: response.headers.get("Hephaestus-Proxy-Refusal"),
-			};
+			const refusal = response.headers.get("Hephaestus-Proxy-Refusal");
+			if (!(response.headers.get("content-type") ?? "").includes("text/event-stream")) {
+				return { status: response.status, body: text, refusal };
+			}
+			// The gateway writes the recorded answer as the stream's last event; a stream without it is a failed call.
+			const answer = answerEvent(text);
+			return answer === null
+				? { status: 502, body: "", refusal }
+				: { status: response.status, body: answer, refusal };
 		},
 	};
 }
 
 // ------------------------------------------------------------ what the gateway answers
+
+/** The event that carries a streamed call's recorded answer: `ComposerStreamAnswer.EVENT` on the server. */
+export const ANSWER_EVENT = "hephaestus.answer";
+
+/** The data of the stream's answer event, or `null` when the stream has none. */
+export function answerEvent(stream: string): string | null {
+	let found: string | null = null;
+	for (const event of stream.split(/\r?\n\r?\n/)) {
+		let name = "";
+		const data: string[] = [];
+		for (const line of event.split(/\r?\n/)) {
+			if (line.startsWith("event:")) {
+				name = line.slice(6).trim();
+			} else if (line.startsWith("data:")) {
+				data.push(line.slice(5).replace(/^ /, ""));
+			}
+		}
+		if (name === ANSWER_EVENT) {
+			found = data.join("\n");
+		}
+	}
+	return found;
+}
 
 async function json(response: Response): Promise<unknown> {
 	const body: unknown = await response.json();

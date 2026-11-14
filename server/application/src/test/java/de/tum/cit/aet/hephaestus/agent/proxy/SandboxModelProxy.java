@@ -70,6 +70,7 @@ public final class SandboxModelProxy {
                 new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                 permits,
                 new ConversationCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)));
-        return new LlmProxyController(service, context.getBean(ComposerTranscript.class), accounting);
+        return new LlmProxyController(
+                service, context.getBean(ComposerTranscript.class), accounting, context.getBean(ObjectMapper.class));
     }
 }
