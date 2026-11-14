@@ -1,19 +1,62 @@
 ---
 title: Troubleshooting
-description: Find the cause of a failure in a self-hosted Helm deployment from what you see, fix it, and check the fix.
+description: Find the cause of a failure of a Helm installation from what you see, fix it, and check the fix.
 page_type: troubleshooting
 ---
 
-This page covers a self-hosted deployment on the Helm chart.
-Before you change anything, collect the release version, the Helm history of the release, and the events and logs of the affected Pod.
-Do not print Secret objects or credentials while you collect diagnostics.
-[Kubernetes troubleshooting](./kubernetes#troubleshooting) covers a failed first install and other symptoms of the chart.
+This page covers the symptoms of a Helm installation, at install time and while it runs.
+Before you change anything, collect the release version, `helm history` of the release, and the events and the log of the affected Pod.
+Do not print Secret objects or credentials while you collect them.
+For a first install that fails, first keep its evidence, as [A first install fails](./kubernetes#a-first-install-fails) describes.
+For a firing alert, use [Respond to an alert](./production-operations-runbook#alert-response).
+
+## Helm refuses the values: `values don't meet the specifications of the schema`
+
+**Cause:** The site values do not match the schema of the chart version that you install.
+Examples are `additional properties '<key>' not allowed` and `got array, want string`.
+
+**Fix:**
+
+1. Read the key and the expected type in the Helm message.
+2. Compare your site values with the values of the verified chart:
+
+   ```bash
+   helm show values <chart directory>
+   ```
+
+   Replace `<chart directory>` with the chart that you verified and pulled.
+
+3. Correct the key, and run the command again.
+
+**Check:** `helm template` with your site values renders without an error.
+
+## Helm stops with `<value> is required`
+
+**Cause:** The chart needs a value that has no default, such as `networkPolicy.kubernetesApi.cidr` or `route.parentRefs`.
+
+**Fix:**
+
+1. Set the value that the message names, as [Install](./kubernetes#install) describes.
+2. Run the command again.
+
+**Check:** `helm template` with your site values renders without an error.
+
+## A server restarts once during the first install
+
+**Cause:** The server started before PostgreSQL accepted connections.
+Its log shows `java.net.ConnectException`.
+
+**Fix:**
+
+1. Wait for the PostgreSQL Pod to become ready.
+2. If the server does not recover, read the events and the log of the PostgreSQL Pod.
+
+**Check:** The server Pod becomes ready without more restarts.
 
 ## Startup fails: `server.tomcat.remoteip.internal-proxies is unset while forward-headers-strategy=native in prod`
 
 **Cause:** `trustedProxies` holds only whitespace.
-The chart schema refuses an empty value.
-The server does not start in production with a blank value.
+The chart schema refuses an empty value, and the server does not start with a blank one.
 
 **Fix:**
 
@@ -26,60 +69,44 @@ The server does not start in production with a blank value.
 ## Startup fails: `An encryption key is required in production`
 
 **Cause:** The release Secret has no `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`.
-A server with the `prod` profile does not start without it.
 
 **Fix:**
 
 1. Restore the exact value of the key from your off-host copy, as [System key](./secret-custody#system-key) describes.
    Do not make a new key for an existing database.
    The server cannot read the values that the old key sealed.
-2. Restart every role, as [Restart a role](./secret-custody#restart-a-role) describes.
+2. Restart the server, as [Restart a role](./secret-custody#restart-a-role) describes.
 
 **Check:** The server Pod becomes ready, and you can sign in.
 
-## The login page has no sign-in button
+## A server stays unready
 
-**Cause:** No complete GitHub or GitLab login provider is configured.
-
-**Fix:**
-
-1. On a new instance, configure the OAuth App, as [First steps](./first-steps#1-configure-a-login-provider) describes.
-2. To change an existing provider, open **Instance administration → Login providers**.
-
-**Check:** The login page offers **Continue with GitHub** or the button of your GitLab provider.
-
-## Sign-in succeeds, but the account has no instance-admin navigation
-
-**Cause:** `config.auth.bootstrapAdmins` does not name the account by the provider's stable account identifier.
-Hephaestus promotes an account only when it signs in.
+**Cause:** The server has not finished its startup.
+Usually it waits for the database migration of its release, and logs `The database schema is behind this release`.
+After 10 minutes, it stops and restarts.
 
 **Fix:**
 
-1. Compare each entry of `config.auth.bootstrapAdmins` with the account, as [First steps](./first-steps#2-name-the-first-admin) describes.
-2. Correct the entry, and run `helm upgrade` with your site values.
-3. Sign in again.
-4. If no admin exists and the entry is correct, follow [Bootstrap and recovery](./instance-admin#bootstrap-and-recovery).
-
-**Check:** After sign-in, the sidebar shows **Instance administration**.
-
-## Helm reports `failed`, or a Pod waits for a pending change set
-
-**Cause:** The migration Job has not finished the schema change.
-A Helm failure does not prove that the Job stopped.
-
-**Fix:**
-
-1. Read the log of the migration Job:
+1. Read the server log:
 
    ```bash
-   kubectl --namespace hephaestus logs job/<migration-job>
+   kubectl --namespace <release namespace> logs deployment/<release>-server
    ```
 
-   Replace `<migration-job>` with the Job name of the Helm revision.
+2. If the log says that the schema is behind, read the log of the migration Job:
 
-2. Follow [Recover a stopped cutover](./pull-based-deployment#recover-a-stopped-cutover).
+   ```bash
+   kubectl --namespace <release namespace> logs job/<migration job>
+   ```
 
-**Check:** The migration Job completes, and the Pod of each role becomes ready.
+   Replace `<migration job>` with the Job name of the Helm revision.
+
+3. If the migration failed, follow [If migration fails](./upgrade#if-migration-fails).
+   A `failed` Helm status does not prove that the Job stopped.
+4. For `evidence.spool.cleanup.failed` or `person_data.recovery.failed`, do the action of `HephaestusMetricsUnavailable`.
+   [Respond to an alert](./production-operations-runbook#alert-response) gives it.
+
+**Check:** The migration Job completes, and the server Pod becomes ready.
 
 ## Every path returns `404`
 
@@ -90,7 +117,7 @@ A Helm failure does not prove that the Job stopped.
 1. Read the route conditions:
 
    ```bash
-   kubectl --namespace hephaestus describe httproute
+   kubectl --namespace <release namespace> describe httproute
    ```
 
 2. If the conditions show `Accepted=False NotAllowedByListeners`, set `allowedRoutes.namespaces` on the listener, as [Prepare the Gateway](./kubernetes#prepare-the-gateway) shows.
@@ -107,7 +134,32 @@ A Helm failure does not prove that the Job stopped.
 2. Check the Gateway certificate and the status of its cert-manager Certificate.
 3. On one host, follow [Certificate renewal](./k3s#certificate-renewal).
 
-**Check:** The browser opens `https://<your hostname>` without a certificate error.
+**Check:** The browser opens `https://<host>` without a certificate error.
+
+## The login page has no sign-in button
+
+**Cause:** No complete GitHub or GitLab login provider is configured.
+
+**Fix:**
+
+1. On a new instance, configure the OAuth App, as [Configure a login provider](./first-steps#1-configure-a-login-provider) describes.
+2. To change an existing provider, open **Instance administration → Login providers**.
+
+**Check:** The login page offers **Continue with GitHub** or the button of your GitLab provider.
+
+## Sign-in succeeds, but the account has no instance-admin navigation
+
+**Cause:** `config.auth.bootstrapAdmins` does not name the account by the stable account identifier of the provider.
+Hephaestus promotes an account only when it signs in.
+
+**Fix:**
+
+1. Compare each entry of `config.auth.bootstrapAdmins` with the account, as [Name the first admin](./first-steps#2-name-the-first-admin) describes.
+2. Correct the entry, and run `helm upgrade` with your site values.
+3. Sign in again.
+4. If no admin exists and the entry is correct, follow [Bootstrap and recovery](./instance-admin#bootstrap-and-recovery).
+
+**Check:** After sign-in, the sidebar shows **Instance administration**.
 
 ## GitHub deliveries return `401`
 
@@ -121,8 +173,43 @@ A Helm failure does not prove that the Job stopped.
 3. Make sure that each proxy keeps the body and the `X-Hub-Signature-256` header.
 4. Deliver the rejected event again, as [Failed deliveries and redelivery](./github-integration#failed-deliveries-and-redelivery) describes.
 
-**Check:** **Recent deliveries** on GitHub shows `2xx` for a real event.
-The initial `ping` returns `200` even with a wrong secret, so it does not prove the fix.
+**Check:** **Recent Deliveries** on GitHub shows `2xx` for a real event.
+The first `ping` returns `200` even with a wrong secret, so it does not prove the fix.
+
+## Deliveries return `503`
+
+**Cause:** The response body names one of three causes:
+
+- `store-failed`: PostgreSQL did not store the delivery in the provider event inbox in time.
+- `gate-unavailable`: the server could not read the database to decide whether to store the delivery.
+- `busy`, with `Retry-After`: large deliveries fill the memory that the receiver holds for bodies.
+
+**Fix:**
+
+1. For `store-failed`, read the server log records with `event.name=webhook.publish.failed`.
+   The message names the exception class.
+2. For `store-failed` and `gate-unavailable`, check the PostgreSQL connection, locks and volume space.
+3. For `busy`, check the database latency first, then raise `server.resources`.
+4. After the repair, recover the failed deliveries, as [Which providers deliver again](./webhook-ingestion-operations#which-providers-deliver-again) describes.
+
+**Check:** The `webhook.publish` meter counts no new `outcome=failure`, and `webhook.rejected` counts no new `reason=busy`.
+
+## Deliveries return `202`, but nothing changes in the workspace
+
+**Cause:** The connection of the delivery is not active, so the server refuses its work events.
+The server log shows `Webhook admission refused` with the provider and the reason.
+`connection-not-active` means that the connection is `PENDING`, `SUSPENDED` or `UNINSTALLED`.
+`work-event-without-source` means that a GitHub work event has no repository or no signed installation.
+`connection-route-mismatch` means that the server, the installation or the route no longer matches.
+
+**Fix:**
+
+1. Open the integration settings of the workspace, and read the state of the connection.
+2. Restore the connection, or complete its removal ([Manage workspace integrations](./integrations)).
+3. For `work-event-without-source`, check the webhook configuration of the GitHub App.
+
+**Check:** A new delivery after the fix enters the inbox, and the change appears in the workspace.
+A refused delivery is not stored, so you cannot replay it.
 
 ## Data appears only after a sync
 
@@ -137,18 +224,32 @@ Without it, updates wait for the scheduled sync.
 
 **Check:** A change to a pull request appears in the workspace without a wait for the scheduled sync.
 
-## Deliveries return `503`
+## Changes appear late in the workspace
 
-**Cause:** PostgreSQL did not commit the delivery in time.
-Each `503` has a log record with `event.name=webhook.publish.failed`.
+**Cause:** Events wait in the provider event inbox.
+No server claims them, a handler holds the order of a resource, or the workspace is suspended.
 
 **Fix:**
 
-1. Read `webhook.publish.reason` in the log records of the server.
-2. Check the PostgreSQL connection, locks, and volume space, as [Webhook ingestion operations](./webhook-ingestion-operations) describes.
-3. After the repair, recover the failed deliveries, as [Which providers deliver again](./webhook-ingestion-operations#which-providers-deliver-again) describes.
+1. Read `integration.consumer.oldest.due.seconds` for the provider ([What to alert on](./webhook-ingestion-operations#what-to-alert-on)).
+2. Check that the server Pods run and are ready, and that `server.inboxClaimers` is above 0.
+3. Do the action of `HephaestusProviderEventsWaiting` in [Respond to an alert](./production-operations-runbook#alert-response).
 
-**Check:** The `webhook.publish` meter records no new `outcome=failure`.
+**Check:** `integration.consumer.oldest.due.seconds` stays below 5 minutes.
+
+## A repository stays unmonitored after a rename
+
+**Cause:** Another monitor of the workspace holds the new name.
+The server log shows `reason=nameHeldByAnotherMonitor` with the workspace and the monitor.
+
+**Fix:**
+
+1. Compare the repository monitors of the workspace with the repository IDs of the provider.
+2. Keep the review settings and the sync progress of the monitor that you keep.
+3. Remove the stale monitor.
+4. Run the sync of the connection again.
+
+**Check:** The repository shows its new name, and its sync completes.
 
 ## Reviews record `No AI model is assigned to practice review.`
 
@@ -158,34 +259,19 @@ Each `503` has a log record with `event.name=webhook.publish.failed`.
 
 1. Assign an enabled model to practice reviews, as [Connect an AI provider](./ai-providers) describes.
 
-**Check:** On the workspace's **AI models** page, the **Practice reviews** row shows the model and does not read **Not ready**.
-
-## A server stays unready
-
-**Cause:** The server cannot watch its sandbox namespace, or its isolation probe failed.
-
-**Fix:**
-
-1. Read the probe result and the isolation tier in the server log:
-
-   ```bash
-   kubectl --namespace <release namespace> logs deployment/<release>-server
-   ```
-
-2. Find the row of [Other symptoms](./kubernetes#other-symptoms) that matches the log, and do its fix.
-3. Check the chart service account, the namespace, the quota, and NetworkPolicy, as [Sandbox prerequisites](./sandboxes#sandbox-prerequisites) describes.
-
-**Check:** The server Pod becomes ready.
+**Check:** On the **AI models** page of the workspace, the **Practice reviews** row shows the model and does not read **Not ready**.
 
 ## A sandbox Pod is refused or cannot start
 
-**Cause:** Admission policy, a quota, an image pull, or a missing [sandbox prerequisite](./sandboxes#sandbox-prerequisites) stops the Pod.
+**Cause:** An admission policy, a full quota, an image pull, or a missing [sandbox prerequisite](./sandboxes#sandbox-prerequisites) stops the Pod.
+The chart sizes the quota of each tier for the capacity of the servers.
 
 **Fix:**
 
 1. Read the events of the sandbox Pod.
 2. Read the server log.
-3. Correct the admission policy, the quota, the image pull, or the prerequisite that the events name.
+3. Correct the admission policy, the image pull, or the prerequisite that the events name.
+4. For a quota error, check a quota of your own in the sandbox namespace, or `sandbox.reviewMemory` and `sandbox.conversationTurns`.
 
 **Check:** New sandbox Pods start, and reviews leave the queue.
 
@@ -195,7 +281,7 @@ Each `503` has a log record with `event.name=webhook.publish.failed`.
 
 **Fix:**
 
-1. Compare its peak memory with its limit under the qualified workload.
+1. Compare its peak memory with its limit under the same workload.
 2. Change the resource budget, as [Sizing and scaling](./sizing) describes.
 
 **Check:** The Pod runs the same workload without an `OOMKilled` status.
@@ -206,23 +292,45 @@ Each `503` has a log record with `event.name=webhook.publish.failed`.
 
 **Fix:**
 
-1. Read queue depth and oldest age, as [Queue health](./practice-review-operations#queue-health) describes.
+1. Read the queue depth and the oldest age, as [Queue health](./practice-review-operations#queue-health) describes.
 2. Check the model provider.
 3. Check `sandbox.reviewMemory` against [Sizing and scaling](./sizing).
 
-**Check:** Queue depth and oldest age go down.
+**Check:** The queue depth and the oldest age go down.
 
 ## A practice script stopped without a candidate observation: `it ran out of time`
 
-**Cause:** The model provider is slow or limits the rate of calls.
+**Cause:** The model provider is slow or limits the rate of calls, or the script itself is slow.
 
 **Fix:**
 
-1. Read the stop reasons in [Practice review operations](./practice-review-operations).
+1. Read the stop reasons, as [Why practice scripts stop early](./practice-review-operations#the-trace-line) describes.
 2. Raise the provider limits, or use a faster model.
-3. Raise concurrency only after steps 1 and 2.
+3. Raise the timeout of the **Practice reviews** assignment only after steps 1 and 2.
 
 **Check:** New script runs end with a result.
+
+## Email does not arrive
+
+**Cause:** Email is not configured, silent mode is on, the shared attempt budget is spent, or the relay refuses or does not confirm the message.
+
+**Fix:**
+
+1. Open **Instance settings → Email**, and select **Send test email**.
+2. Read the outcome, as [Email](./production-setup#email) describes.
+3. Read `notification.email.delivery` by `kind` and `outcome`, and `action.ended` by `kind`, `state` and `reason`.
+4. List the emails that wait, without their payload:
+
+   ```sql
+   SELECT kind, state, count(*) AS actions, min(next_attempt_at) AS oldest_due
+   FROM agent_action
+   WHERE ended_at IS NULL
+   GROUP BY kind, state;
+   ```
+
+5. Do not send an `UNCERTAIN` email again by hand. The relay can already have delivered it.
+
+**Check:** **Send test email** returns `SENT`, and the relay log has its message ID.
 
 ## A volume or a node disk is full
 
@@ -235,10 +343,36 @@ Each `503` has a log record with `event.name=webhook.publish.failed`.
    The kubelet owns image garbage collection.
 3. If the PostgreSQL volume is full, read the log of the latest backup Job.
    A failed WAL archive keeps the WAL on the volume.
-4. If data or a volume is lost, use [Backup and restore](./backup-restore).
+4. If data or a volume is lost, use [Back up and restore](./backup-restore).
 
 **Check:** Each Pod of the release is ready:
 
 ```bash
-kubectl --namespace hephaestus get pods
+kubectl --namespace <release namespace> get pods
 ```
+
+## A backup Job fails with `unable to find primary cluster`
+
+**Cause:** The backup Job cannot reach the TLS server of pgBackRest on port 8432 of the PostgreSQL Service.
+Or its client certificate is not for `hephaestus-backup`, or not from `ca.crt`.
+
+**Fix:**
+
+1. Read the log of the failed backup Job.
+2. Check the client certificate of the backup, as [Backup client certificate](./secret-custody#backup-client-certificate) describes.
+3. Check that no network policy of your own blocks port 8432 in the release namespace.
+
+**Check:** The next backup Job completes, and `HephaestusBackupStale` does not fire.
+
+## GitHub repository discovery reports `workspaceChanged`, `connectionMissing` or `connectionChanged`
+
+**Cause:** The workspace, its connection or its repository access changed while GitHub listed the repositories.
+The server discards that answer and records a sync warning.
+
+**Fix:**
+
+1. Wait until the connection is stable.
+2. Restart one server, as [Restart a role](./secret-custody#restart-a-role) describes, to repeat startup discovery.
+   Do not restore an older monitor list.
+
+**Check:** Startup discovery completes on the current connection, and its repositories appear without the earlier answer.

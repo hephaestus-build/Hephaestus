@@ -129,7 +129,7 @@ Before you start the local server, set `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` and 
 Each key must contain exactly 32 UTF-8 bytes.
 For a new database, generate each value as [Secret custody](../admin/secret-custody#generation-and-rotation) describes.
 Keep these values across restarts.
-For an existing database, keep its current keys and versions and follow the [stored secret conversion procedure](../admin/upgrade#convert-stored-secrets-for-10).
+For an existing database, keep its current keys and versions.
 The server does not store plaintext credentials or JWT private keys.
 
 :::caution[Keep it local]

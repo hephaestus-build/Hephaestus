@@ -1,150 +1,162 @@
 ---
 title: Back up and restore
-description: Keep the data, keys and release identity needed to recover a Helm installation, and restore an installation from them.
+description: Back up the bundled PostgreSQL, the keys and the release identity, and restore a Helm installation from them.
 page_type: how-to
 ---
 
 Back up the database, the keys and the release identity of an instance, and restore the instance from them.
-The [operations runbook](./production-operations-runbook#backup-and-restore) has the recovery gates.
-
-## Backup policy for 1.0
-
-Scheduled off-host backups and recovery-time qualification are deferred for the 1.0 release.
-The chart leaves `postgresql.backup.enabled` false by default.
-It then takes no scheduled database backup and does not archive WAL.
-Loss of the database volume can lose all application data.
-1.0 makes no measured recovery-point or recovery-time promise.
-
-The procedures below remain available for operators who configure backups.
-Each upgrade still requires a verified recovery point.
-If backups are off, first configure the [chart backup procedure](#back-up-the-database) and verify an isolated restore.
-Do not start the upgrade without that proof.
+The chart backs up the bundled PostgreSQL with pgBackRest to an S3-compatible bucket.
+Backups are off by default. Turn them on before production: without a backup, the loss of the database volume loses all application data.
+Hephaestus states no recovery-point or recovery-time objective. Rehearse a restore to measure your own.
 
 ## What to back up
 
-| Data                                | Recovery requirement                                                                                                                                                                                         |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| PostgreSQL                          | Preserve application state, encrypted provider credentials, JWT signing keys, practice results and delivery history.                                                                                         |
-| Encryption keys and configuration   | Keep the keys and required Secret values outside the cluster as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes. The database alone cannot recover encrypted values. |
-| Signed release lock and site values | Restore the release and configuration that match the database. Verify its chart and image digests.                                                                                                           |
-| Platform recovery material          | Keep the k3s token, datastore, manifests, certificates, and storage configuration as [Platform recovery material](#platform-recovery-material) describes.                                                                                           |
+| Data | Recovery requirement |
+| --- | --- |
+| PostgreSQL | Preserve application state, encrypted provider credentials, JWT signing keys, practice results and delivery history. |
+| Encryption keys and configuration | Keep the keys and required Secret values outside the cluster as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes. The database alone cannot recover encrypted values. |
+| Signed release lock and site values | Restore the release and configuration that match the database. Verify its chart and image digests. |
+| Platform recovery material | Keep the k3s token, datastore, manifests, certificates, and storage configuration as [Platform recovery material](#platform-recovery-material) describes. |
 
-Repository mirrors and inputs for active attempts are disposable.
-The roles rebuild them from PostgreSQL and the upstream provider.
-Do not use copied attempt folders to resume an in-flight review.
+Repository mirrors and the inputs of running reviews are disposable.
+The server rebuilds them from PostgreSQL and the provider.
+Do not use copied review folders to resume a review.
 
-## Platform recovery material
-
-The application backup does not contain the Kubernetes datastore or persistent volume contents.
-Keep the k3s configuration, the installed platform manifests, and the storage layout with the recovery record.
-Keep the server token outside the host, with restricted access.
-The token decrypts confidential data in the k3s datastore.
-
-Follow the [k3s datastore backup procedure](https://docs.k3s.io/datastore/backup-restore) for the actual datastore type.
-SQLite and embedded etcd use different procedures.
-A datastore backup does not replace the PostgreSQL recovery set.
-Before relying on host recovery, rehearse both on an isolated replacement host.
-No replacement-host recovery time is qualified for 1.0.
-
-## Automated off-host backup
-
-Enable the chart's pgBackRest backup after you configure an off-host S3-compatible repository and its credentials.
-[Back up the database](#back-up-the-database) gives the chart values, backup Jobs and TLS client identity.
-Keep the repository passphrase outside the cluster.
-
-A configured schedule is not proof of a usable recovery point.
-Check WAL archival, completed backups and repository access.
-Rehearse an [isolated restore](#isolated-restore-drill), including clone lockdown, before relying on the backup.
-For an installation that uses backups, define recovery objectives with the [operations runbook](./production-operations-runbook#backup-and-restore).
-
-### Backup retention
-
-`postgresql.backup.retentionFull` sets the number of full pgBackRest backup chains to keep.
-Its default is 2.
-Erased data can remain in a backup until that backup expires under this setting and the repository expires it.
-This setting is a count, not a time limit.
-Keep the restricted erasure recovery manifest for the same window as every backup that can restore erased data, including separately retained copies.
+Keep the database, the keys and the signed release identity together as one recovery set.
+Keep the originals until a recovery is verified.
 
 ## Back up the database
 
-Backup is off by default.
-While the bundled PostgreSQL runs without it, each `helm install` and `helm upgrade` prints a warning that links to this section.
-The chart cannot see a backup that you take yourself, for example a volume snapshot. In that case, the warning stays.
-
-With `postgresql.backup.enabled=true`, the bundled PostgreSQL archives its WAL to one S3-compatible bucket with pgBackRest, as [Backup and restore](./backup-restore#automated-off-host-backup) describes.
-The repository is encrypted with `BACKUP_CIPHER_PASS`.
-A CronJob takes a full backup each Sunday at 02:15 UTC.
-Another takes a differential backup on the other days at the same time.
-[Backup retention](./backup-restore#backup-retention) defines how many full backup chains stay and how long erasure recovery decisions must be available.
-A Job of each release creates the repository's stanza, so that the WAL archive works from the install.
+With `postgresql.backup.enabled=true`, the bundled PostgreSQL archives its WAL to one S3-compatible bucket with pgBackRest.
+`BACKUP_CIPHER_PASS` encrypts the repository.
+The CronJob `<release>-postgresql-backup-full` takes a full backup each Sunday at 02:15 UTC.
+The CronJob `<release>-postgresql-backup-diff` takes a differential backup on the other days at the same time.
+`postgresql.backup.schedule.full` and `postgresql.backup.schedule.differential` change these schedules.
+Each release runs the Job `<release>-postgresql-backup-stanza-<revision>`, which creates the stanza of the repository, so that the WAL archive works from the install.
 
 The backup Jobs do not mount the PostgreSQL volume.
 They read the data directory through the pgBackRest TLS server in the PostgreSQL Pod.
 That server admits only a client certificate for the common name `hephaestus-backup` that `ca.crt` signed.
 
-To prepare backups:
+While the bundled PostgreSQL runs without backups, each `helm install` and `helm upgrade` prints a warning that links to this section.
+The chart cannot see a backup that you take yourself, for example a volume snapshot. In that case, the warning stays.
 
-1. Create the bucket for this instance alone, and an identity with read, write and delete rights in it.
+1. Create a bucket for this instance alone, and an identity with read, write and delete rights in it.
 2. Add `BACKUP_S3_KEY` and `BACKUP_S3_KEY_SECRET` to the release Secret.
-   Run `sh hephaestus-keys.sh --backups` to generate `BACKUP_CIPHER_PASS`, as [Create the Secret](./kubernetes#create-the-secret) describes.
+3. Run `sh hephaestus-keys.sh --backups` to generate `BACKUP_CIPHER_PASS`, as [Create the Secret](./kubernetes#create-the-secret) describes.
    Keep a copy of the passphrase as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes.
-3. Set `postgresql.backup.clientTlsSecret` to a TLS Secret for the common name `hephaestus-backup`.
+4. Set `postgresql.backup.clientTlsSecret` to a TLS Secret for the common name `hephaestus-backup`.
    It needs `ca.crt`, `tls.crt` and `tls.key`, signed by the PostgreSQL CA.
    The one-host platform issues `hephaestus-postgresql-backup-tls` and sets this value.
-4. Set `postgresql.backup.enabled=true` and `postgresql.backup.s3` with the bucket, the endpoint host name and the region. Set `cidr` and `port` when the endpoint is in a private address range.
-   When a private CA signs the endpoint's certificate, add it to the PostgreSQL TLS Secret as `s3-ca.crt`, and set `postgresql.backup.s3.privateCa=true`.
-5. Upgrade the release, and check that the stanza Job completed.
-
-[Backup bucket credentials](./secret-custody#backup-bucket-credentials) and [Backup cipher passphrase](./secret-custody#backup-cipher-passphrase) give the rotation of these values.
+5. Set `postgresql.backup.enabled=true` and `postgresql.backup.s3` with the bucket, the endpoint host name and the region.
+   Set `cidr` and `port` when the endpoint is in a private address range.
+6. Optional: if a private CA signs the certificate of the endpoint, add the CA to the PostgreSQL TLS Secret as `s3-ca.crt`.
+   Then set `postgresql.backup.s3.privateCa=true`.
+7. Upgrade the release.
 
 A failed WAL archive keeps the WAL on the PostgreSQL volume until the volume is full.
 The [alert rules](./alert-rules.md) watch the WAL archive, the age of the latest backup and the free space of the volume.
+[Backup bucket credentials](./secret-custody#backup-bucket-credentials) and [Backup cipher passphrase](./secret-custody#backup-cipher-passphrase) give the rotation of these values.
 
-Preserve the database, keys and signed release identity as one recovery set.
-Keep the originals until the recovery is verified.
+### Backup retention
+
+`postgresql.backup.retentionFull` sets the number of full backup chains to keep, each with its differential backups.
+Its default is 2.
+This setting is a count, not a time limit.
+Erased data can stay in a backup until pgBackRest expires that backup.
+Keep the manifest of [Reapply erasures after a restore](./erasure-recovery) as long as any backup that can restore erased data.
+This includes backup copies that you keep elsewhere.
+
+## Platform recovery material
+
+The database backup does not contain the Kubernetes datastore or the contents of other volumes.
+Keep the k3s configuration, the installed platform manifests, and the storage layout with the recovery record.
+Keep the server token outside the host, with restricted access.
+The token decrypts confidential data in the k3s datastore.
+
+Follow the [k3s datastore backup procedure](https://docs.k3s.io/datastore/backup-restore) for your datastore type.
+SQLite and embedded etcd use different procedures.
+A datastore backup does not replace the PostgreSQL recovery set.
+Rehearse both on an isolated replacement host before you rely on host recovery.
 
 ## Restore
 
-Choose the [isolated restore drill](#isolated-restore-drill) or [live recovery](#recover-the-live-installation) procedure for the intended destination.
-An isolated clone must complete lockdown before migrations or application roles start.
-Do not apply clone lockdown to the live recovery database.
-
 A restore replaces the bundled database with a backup.
 It loses every change after the backup or the time that you select.
-The restored database is readable only with the keys that sealed its values.
+Only the keys that sealed the values of the restored database can read them.
 Keep them as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes.
-Reconcile external writes, as [Reconcile external writes after restore](./production-operations-runbook#reconcile-external-writes-after-a-database-restore) describes.
 
-Before reducing application replicas, record `SHOW max_connections` and set `postgresql.parameters.max_connections` to that value.
+Choose the procedure for the destination:
+
+- [Isolated restore drill](#isolated-restore-drill): a disposable, isolated clone. It locks down the clone before any migration or server starts.
+- [Recover the live installation](#recover-the-live-installation): the production instance. Do not lock down the live database.
+
+Before you set `server.replicas` to 0, record `SHOW max_connections` and set `postgresql.parameters.max_connections` to that value.
 Keep this override until WAL replay finishes. Include it in the recovery set for a replacement host.
-Automatic connection sizing decreases with replica counts, but PostgreSQL rejects recovery below the source setting.
+The chart derives a lower connection limit when fewer servers run, but PostgreSQL refuses recovery below the source setting.
 The [PostgreSQL recovery requirements](https://www.postgresql.org/docs/18/hot-standby.html#HOT-STANDBY-ADMIN) describe this constraint.
+
+The restored database has the role passwords that it had at the backup.
+The migration Job sets the passwords of `hephaestus_owner` and `hephaestus_app` from the Secret again.
+If `DATABASE_ADMIN_PASSWORD` changed after the backup, put the old value back in the Secret before the restored PostgreSQL starts.
 
 ### Prepare replacement storage
 
 On a replacement host, restore the release keys, TLS Secrets, verified chart and site values first.
-Keep migration disabled and all application replica counts at zero.
-Keep the failed volume until recovery is verified.
+Keep migration disabled and `server.replicas` at 0.
+Keep the failed volume until the recovery is verified.
 
-Before enabling restore, provision an empty claim named `data-<release>-postgresql-0` in the release namespace.
+Before you enable the restore, provision an empty claim named `data-<release>-postgresql-0` in the release namespace.
 Use the PostgreSQL storage class, access mode and size from the site values.
 For node-local storage, bind the new volume to the replacement node.
 The restore Job needs this claim before PostgreSQL starts.
 Do not initialize a new database in it.
 
-Then follow the isolated or live recovery procedure below for the intended destination.
+Then follow the isolated or live procedure below.
+
+### Deny external egress
+
+The chart has no switch that turns off external egress.
+Narrow the egress range in your site values instead.
+With these values, the server can reach no provider, model endpoint or mail server outside the cluster:
+
+```yaml title="values.yaml"
+networkPolicy:
+  externalEgress:
+    cidr: 192.0.2.1/32
+    except: []
+  modelEndpoints: []
+  scmEndpoints: []
+  modelGatewayPorts: []
+postgresql:
+  backup:
+    s3:
+      cidr: 203.0.113.0/24 # The addresses of your bucket endpoint
+```
+
+The range `192.0.2.0/24` is reserved for documentation, so no host answers on `192.0.2.1`.
+PostgreSQL, the backup Jobs and the restore Job reach the bucket through `postgresql.backup.s3.cidr`.
+Without it, they use `networkPolicy.externalEgress`, and the restore and the WAL archive stop.
+Set it to the addresses of your bucket endpoint, and set `postgresql.backup.s3.port` if the endpoint does not use 443.
+The narrow range also stops the Alertmanager of the bundled monitoring stack from reaching receivers on the internet.
+It has an effect only where the network plugin enforces NetworkPolicies.
+
+To open egress again, upgrade with your site values without these values.
 
 ### Isolated restore drill
 
-Run the following procedure only on a disposable, isolated clone.
-It changes control settings with clone lockdown SQL.
-Use [Recover the live installation](#recover-the-live-installation) for a live recovery.
+Do this procedure only on a disposable, isolated clone.
+Run the clone on its own host or cluster, with its own database, domain and credentials.
+A different release name or namespace alone does not isolate it.
+Its lockdown SQL changes the control settings of the clone.
 
-1. Upgrade the release with `postgresql.backup.restore.enabled=true`.
+1. Add the values of [Deny external egress](#deny-external-egress) to your site values.
+   Keep them for the whole drill.
+2. Upgrade the release with `postgresql.backup.restore.enabled=true`.
    Set `postgresql.backup.restore.time` to restore the database as it was at that time, for example `2026-10-24 18:00:00+00`.
    Leave it empty to restore the latest backup and every archived WAL segment.
    While the setting is on, the server and PostgreSQL stop, and the backups pause.
-2. Wait for the Job `<release>-postgresql-backup-restore-<revision>` to complete:
+3. Wait for the Job `<release>-postgresql-backup-restore-<revision>` to complete:
 
    ```bash
    kubectl --namespace hephaestus wait --for=condition=complete \
@@ -152,17 +164,16 @@ Use [Recover the live installation](#recover-the-live-installation) for a live r
    ```
 
    The Job retries while PostgreSQL still shuts down.
-3. Keep the clone isolated before any application code starts. Deny provider and model egress independently of silent mode.
-4. Upgrade with `postgresql.backup.restore.enabled=false`, `migration.enabled=false`, and a server replica count of zero.
+4. Upgrade with `postgresql.backup.restore.enabled=false`, `migration.enabled=false` and `server.replicas=0`.
    PostgreSQL alone replays the WAL up to the target.
-   Readiness does not prove that replay finished. Wait until this command prints `f`:
+5. Wait until this command prints `f`. Readiness does not prove that the replay finished.
 
    ```bash
    kubectl -n hephaestus exec hephaestus-postgresql-0 -c postgresql -- \
      sh -c 'exec psql -Atc "SELECT pg_is_in_recovery()" -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
    ```
 
-5. Apply the lockdown SQL from the verified chart, before starting migrations or application roles:
+6. Apply the lockdown SQL from the verified chart, before any migration or server starts:
 
    ```bash
    kubectl -n hephaestus exec -i hephaestus-postgresql-0 -c postgresql -- \
@@ -170,227 +181,79 @@ Use [Recover the live installation](#recover-the-live-installation) for a live r
      < "chart-$VERSION/hephaestus/files/restore-clone-lockdown.sql"
    ```
 
-6. Read back silent mode, paused feedback and disabled conversation bindings. Keep external egress denied.
+   It turns on silent mode, pauses feedback and review triggers in each workspace, and turns off each conversation model.
+   If it prints `restore clone lockdown did not engage`, stop.
 7. Resolve provider write receipts before the server starts.
-8. Set `migration.enabled=true` and start the server alone. Verify migrations, readiness and authenticated reads.
-9. Restore the other replica counts only after the isolated checks pass.
-   Follow [Prove silence](./production-operations-runbook#silent-deployment-checklist) before opening any external destination.
+8. Upgrade with `migration.enabled=true` and `server.replicas=1`. Verify the migration, readiness and authenticated reads.
+9. To run test reviews on the clone, use only controlled providers.
+   Follow [Prove silence](./silent-deployment#prove-silence) before you open any external destination.
 
-The restored database has the role passwords that it had at the backup.
-The migration Job of step 8 sets the passwords of `hephaestus_owner` and `hephaestus_app` from the Secret again.
-If `DATABASE_ADMIN_PASSWORD` changed since the backup, put the old value back in the Secret before step 3.
 Rehearse a restore on a copy of the instance before you need one.
 
 ### Recover the live installation
 
-1. Close traffic and provider reception. Stop application roles and sandboxes, and pause reconciliation.
-   Provider deliveries that arrive while reception is closed are lost. Step 10 recovers their effect.
-2. Keep a copy of the failed data and record the chosen recovery point and expected lost writes.
-3. Check whether `DATABASE_ADMIN_PASSWORD` changed after the recovery point. If it changed, restore the matching value in the Secret before startup.
-   The migration Job sets the passwords of `hephaestus_owner` and `hephaestus_app` again.
-   Complete steps 1, 2 and 4 of the isolated drill with application replicas at zero.
-   Keep provider and model egress denied. Wait for `pg_is_in_recovery()` to return `f`.
-4. Do not apply `restore-clone-lockdown.sql` to the live recovery database.
-   Verify silent mode, delivery status, review triggers and conversation bindings against the intended live settings.
-5. Plan the provider reconciliation, as [Reconcile external writes after restore](./production-operations-runbook#reconcile-external-writes-after-a-database-restore) describes.
-6. Enable migrations and start the server alone through the `erasure-recovery` profile, as [Reapply erasure decisions before processing resumes](#reapply-erasure-decisions-before-processing-resumes) describes.
-   Do not start it without the profile first. That section owns the order of the erasure steps.
-7. Remove the profile and start the server normally. Verify readiness, authenticated reads and encrypted values.
-   Before access or delivery resumes, reapply the other post-backup decisions from the restricted incident record.
-   [Before restarting services](./backup-restore#before-restarting-services) gives the required suspension, session and consent checks.
-8. Start the worker and require its isolation probe.
-   Permit only the approved model endpoint for the controlled test while provider writes remain blocked.
-   Test an approved practice review and conversation with delivery paused.
-9. Complete **Prove silence**, **Inspect and decide**, and **Turn off silent mode deliberately** in the [silent checklist](./production-operations-runbook#silent-deployment-checklist).
-   Restore the intended live control settings, provider reception and egress. Start the remaining roles and reopen traffic after the checks pass.
-10. Verify every connected provider and feedback destination. Resume reconciliation only after its release and apply mode match the recovered deployment.
-    Then recover the deliveries after the backup as [Which providers deliver again](./webhook-ingestion-operations#which-providers-deliver-again) describes.
+A restore also reverses account suspensions, session revocations, recipient consent and deletions after the backup.
+Sessions issued after the backup must sign in again. Sessions revoked after it can become valid again.
+PostgreSQL loses the delivery history after the backup. Thus, the server cannot prevent duplicate external writes.
+Scheduled sync cannot recover every event in the gap.
 
-### Reapply erasure decisions before processing resumes
+1. Set `server.replicas=0`, remove the sandbox workloads as step 4 of [Planned node maintenance](./maintenance#planned-node-maintenance) describes, and pause reconciliation.
+   This stops traffic and provider reception.
+2. Keep a copy of the failed data. Record the chosen recovery point and the expected lost writes.
+3. Add the values of [Deny external egress](#deny-external-egress) to your site values.
+4. Do steps 2 to 5 of the [isolated restore drill](#isolated-restore-drill).
+   Do not apply `restore-clone-lockdown.sql` to the live database.
+5. Turn on silent mode in the restored database, and read it back.
+   The backup keeps the silent mode setting that it had, so it can be off.
 
-Keep the normal server Deployment stopped while PostgreSQL is restored.
-Keep public access and provider egress closed.
-Before replay or normal processing, the server must pass the `erasure-recovery` startup profile.
+   ```bash
+   kubectl -n hephaestus exec -i hephaestus-postgresql-0 -c postgresql -- \
+     sh -c 'exec psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+   UPDATE instance_settings
+   SET silent_mode_engaged = TRUE,
+       silent_mode_reason = 'Restore: silent until proved',
+       silent_mode_changed_at = now(),
+       silent_mode_changed_by_account_id = NULL,
+       version = version + 1
+   WHERE id = 1;
+   SELECT silent_mode_engaged FROM instance_settings WHERE id = 1;
+   SQL
+   ```
 
-The profile turns background work off: no scheduled task, claimer or inbox consumer runs while it is active.
-Startup stops if anything turns background work on again beside it.
-The profile then reapplies every erasure after the recovery point, in this order: disconnects, workspace purges, then people.
-Each step is idempotent, so a restart with the same manifest is safe.
-A missing or invalid manifest, a manifest of version 1, an unknown provider instance, or an incomplete erasure stops startup.
+   The last line prints `t`.
+   Check the delivery status, the review triggers and the conversation models of each workspace against the intended live settings.
+6. Upgrade with `migration.enabled=true` and `server.replicas=0`. Wait until the migration Job of the revision is `Complete`.
+7. Reapply the erasures after the recovery point, as [Reapply erasures after a restore](./erasure-recovery) describes.
+   Do this also when no erasure occurred: the manifest then declares that no erasure followed the recovery point.
+8. Upgrade with your site values, the values of step 3 and the recorded `server.replicas`.
+   Verify readiness, authenticated reads and encrypted values.
+   If a value cannot be decrypted, keep the signing keys. Diagnose a missing encryption key apart from corrupt signing data.
+9. From the restricted incident record, reapply the account suspensions, session revocations and consent withdrawals after the backup.
+   Do this before access or delivery resumes.
+10. Remove the values of step 3, and upgrade with your site values. Keep silent mode on.
+11. Recover the provider writes and deliveries of the gap, as [Reconcile provider writes after a restore](./reconcile-after-restore) describes.
+12. Prove silence and turn off silent mode, as [Prove silence, then turn off silent mode](./silent-deployment) describes.
+13. Resume reconciliation only after its release and apply mode match the recovered deployment.
 
-1. From the restricted incident record, prepare a JSON manifest of every erasure after the chosen recovery point.
-   The server's log events `workspace.purged` (with `workspace.id`) and `connection.erased` (with `connection.id` and `workspace.id`) cross-check the record.
-   List each disconnected connection with its workspace ID and connection ID, and each purged workspace with its ID.
-   Include each `connection.erased` event that a provider caused, such as a Slack app uninstall.
-   List each erased person, including an account deleted by its owner, under `people`.
-   Include each person's account ID, when known, and all known exact native identities.
-   Use numeric user IDs for GitHub and GitLab.
-   Use a user ID and team ID for Slack.
-   Use a user UUID for Outline.
-   Specify the exact provider type and server URL from the restored provider inventory.
-   Never substitute a login, display name or email.
-2. Keep the file outside the database and mount it read-only in the server Pod.
-   Restrict access to the recovery operators.
-   Do not put it in Helm values, a ConfigMap, a command-line argument or shared logs.
-   Only its mounted path goes in configuration.
-3. Keep retained server evidence volumes under access controls until recovery is complete.
-   Before reuse, their servers must reconcile their folders against the recovered receipts.
-   Keep provider egress denied.
-   Follow [A server with evidence is offline](./production-operations-runbook#a-server-with-evidence-is-offline).
-4. Reconcile external writes before the server starts.
-5. Start the server with `erasure-recovery` added to its normal active profiles.
-   Set `HEPHAESTUS_PRIVACY_RECOVERY_MANIFEST` to the mounted path.
-   Set `AGENT_ENABLED=false`.
-   Keep public access closed until normal operation resumes.
-6. Wait for server startup to complete.
-   If it stops, keep the other Deployments stopped, correct the private input or unfinished erasure, and retry.
-   Do not remove the recovery profile to bypass the failure.
-7. Remove the recovery profile and temporary manifest mount before you resume normal operation.
-   The Kubernetes procedure below restores the original Deployment.
-8. After normal server startup completes, open access and provider egress.
-   Start the other roles.
-
-The manifest uses this structure:
-
-```json
-{
-  "version": 2,
-  "restorePoint": "2026-11-01T00:00:00Z",
-  "administratorAccountId": 10,
-  "noLaterErasures": false,
-  "disconnects": [
-    {"workspaceId": 3, "connectionId": 17}
-  ],
-  "workspacePurges": [
-    {"workspaceId": 5}
-  ],
-  "people": [
-    {
-      "accountId": 42,
-      "identities": [
-        {"providerType": "GITHUB", "serverUrl": "https://github.com", "subject": "123456"},
-        {"providerType": "GITLAB", "serverUrl": "https://gitlab.example.test", "subject": "234567"},
-        {"providerType": "SLACK", "serverUrl": "https://slack.com", "subject": "U123456", "teamId": "T123456"},
-        {"providerType": "OUTLINE", "serverUrl": "https://outline.example.test", "subject": "00000000-0000-4000-8000-000000000042"}
-      ],
-      "externalCopiesRemoved": true
-    }
-  ]
-}
-```
-
-A disconnect erases the connection's local data, releases its credential and records the removal of what it installed at the provider.
-That removal is tried at once and fails while provider egress is closed. The server retries it after egress opens again, and the erasure does not wait for it.
-A purge deletes the workspace's data, as the original purge did. It does not wait for work that the restore brought back, because no background work runs.
-A connection or workspace that the restored database does not have, or that is erased already, needs nothing more.
-
-The administrator must be active and have instance-admin rights in the restored database. Only `people` needs the administrator.
-Another administrator must authorize that administrator's own erasure.
-Set `externalCopiesRemoved` to `true` only after checking the provider locators and confirming removal as the [un-deliver procedure](./production-operations-runbook#un-deliver-external-feedback-then-purge) requires.
-Recovery does not delete provider-hosted copies itself.
-
-If no erasure happened after the recovery point, the operator must declare that explicitly:
-
-```json
-{
-  "version": 2,
-  "restorePoint": "2026-11-01T00:00:00Z",
-  "noLaterErasures": true,
-  "disconnects": [],
-  "workspacePurges": [],
-  "people": []
-}
-```
-
-Empty lists without this declaration do not permit startup.
-The file itself is never stored in the database or logged.
-The existing erasure workflow temporarily keeps its frozen subject scope while a request is active.
-After completion, only its normal suppression controls and erasure receipts remain.
-Keep the manifest under the [backup retention rule](#backup-retention).
-
-### Mount the manifest for a Kubernetes recovery
-
-The chart uses the `prod` profile and a startup probe.
-A large erasure manifest can take longer than that probe permits.
-Use this temporary Deployment patch while normal workloads and public access remain stopped.
-It preserves the readiness probe and removes the startup and liveness probes until recovery completes.
-It extends the rollout progress deadline to one day.
-
-The mounted Secret contains private identities.
-Restrict its namespace access to recovery operators.
-This Secret procedure requires a manifest below 1 MiB.
-For a larger manifest, mount a protected read-only volume at the same path instead of a Secret.
-
-Set `NAMESPACE`, `SERVER_DEPLOYMENT` and `ERASURE_MANIFEST` to the namespace, server Deployment and private manifest file.
-
-```bash
-umask 077
-server_recovery_dir=$(mktemp -d)
-erasure_secret="${SERVER_DEPLOYMENT}-erasure-recovery"
-kubectl -n "$NAMESPACE" get deployment "$SERVER_DEPLOYMENT" -o json > "$server_recovery_dir/before.json"
-kubectl -n "$NAMESPACE" create secret generic "$erasure_secret" --from-file="manifest.json=$ERASURE_MANIFEST"
-server_container=$(jq -r '.spec.template.spec.containers[0].name' "$server_recovery_dir/before.json")
-jq -n --arg container "$server_container" --arg secret "$erasure_secret" '
-  {spec: {replicas: 1, progressDeadlineSeconds: 86400, template: {spec: {
-    containers: [{name: $container, startupProbe: null, livenessProbe: null,
-      env: [
-        {name: "SPRING_PROFILES_ACTIVE", value: "prod,erasure-recovery"},
-        {name: "HEPHAESTUS_PRIVACY_RECOVERY_MANIFEST", value: "/var/run/hephaestus/erasure-recovery/manifest.json"},
-        {name: "AGENT_ENABLED", value: "false"}],
-      volumeMounts: [{name: "erasure-recovery", mountPath: "/var/run/hephaestus/erasure-recovery", readOnly: true}]}],
-    volumes: [{name: "erasure-recovery", secret: {secretName: $secret, defaultMode: 288}}]
-  }}}}' > "$server_recovery_dir/recovery-patch.json"
-kubectl -n "$NAMESPACE" patch deployment "$SERVER_DEPLOYMENT" --type=strategic --patch-file="$server_recovery_dir/recovery-patch.json"
-kubectl -n "$NAMESPACE" rollout status deployment "$SERVER_DEPLOYMENT" --timeout=60m
-```
-
-A command timeout does not stop the Pod.
-If recovery exceeds one hour, repeat only the wait command.
-If it approaches one day, extend the progress deadline before it expires.
-If the deadline has expired, wait for the recovery Pod's readiness with `kubectl wait --for=condition=Ready pod <pod-name> --timeout=60m`.
-A failed startup logs `person_data.recovery.failed` with a closed `person_data.recovery.reason` code.
-It does not log the manifest or an exception that can quote its identities.
-
-After recovery succeeds, restore the original Deployment specification, which has zero replicas from the maintenance stop.
-Wait for its recovery Pod to stop before you remove the Secret.
-Then start the normal server.
-
-```bash
-jq '{spec: .spec}' "$server_recovery_dir/before.json" > "$server_recovery_dir/restore-patch.json"
-kubectl -n "$NAMESPACE" patch deployment "$SERVER_DEPLOYMENT" --type=merge --patch-file="$server_recovery_dir/restore-patch.json"
-server_selector=$(jq -r '.spec.selector.matchLabels | to_entries | map(.key + "=" + .value) | join(",")' "$server_recovery_dir/before.json")
-kubectl -n "$NAMESPACE" wait --for=delete pod -l "$server_selector" --timeout=5m
-kubectl -n "$NAMESPACE" delete secret "$erasure_secret"
-kubectl -n "$NAMESPACE" scale deployment "$SERVER_DEPLOYMENT" --replicas=1
-kubectl -n "$NAMESPACE" rollout status deployment "$SERVER_DEPLOYMENT" --timeout=15m
-```
-
-Keep the original private manifest under the backup retention rule.
-
-### Before restarting services
-
-A restore reverses account suspensions, session revocations, recipient consent and deletions as well as application data.
-Sessions issued after the snapshot must sign in again.
-Sessions revoked after it can become valid again.
-Ingest deduplication cannot prevent external duplicates after PostgreSQL loses delivery history.
-Scheduled sync cannot recover all events in the gap.
-
-1. Reapply post-backup security and privacy decisions before access or delivery resumes.
-   [Reapply erasure decisions before processing resumes](#reapply-erasure-decisions-before-processing-resumes) owns the erasures.
-2. Keep the signing keys. Diagnose missing encryption keys separately from corrupt signing data.
-3. Recover the provider gap, as [Reconcile external writes after restore](./production-operations-runbook#reconcile-external-writes-after-a-database-restore) describes.
-4. Restore with the backup's signed release lock. Then upgrade.
-
-Do not restore into an older application version.
+Restore with the signed release lock of the backup, then upgrade. Do not restore into an older release.
 
 ## Check that it worked
+
+After you turn on backups:
 
 1. Run `kubectl --namespace hephaestus get jobs`.
    The stanza Job and the latest backup Job are `Complete`.
 2. Check that `HephaestusBackupStale` does not fire ([Alert rules](./alert-rules)).
 3. Restore the latest backup on a clone, as [Isolated restore drill](#isolated-restore-drill) describes.
 
+After a restore:
+
+1. `SELECT pg_is_in_recovery()` prints `f`, as step 5 of the isolated restore drill shows.
+2. The migration Job of the revision is `Complete`, and its log has `Database migration completed`.
+3. `kubectl --namespace hephaestus get pods` shows each server Pod ready.
+4. Sign in to Hephaestus. A sign-in needs the restored JWT signing keys, which only the matching encryption key decrypts.
+
 ## Unsupported PostgreSQL versions
 
 Use the PostgreSQL version and image of the verified release.
-The [compatibility policy](./compatibility-policy) owns the supported versions and upgrade prerequisites.
+The [compatibility policy](./compatibility-policy) states the supported versions and upgrade prerequisites.

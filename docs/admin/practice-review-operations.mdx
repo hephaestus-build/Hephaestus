@@ -1,571 +1,164 @@
 ---
 title: Practice review operations
-description: Deployment variables, queue health, retention, and fixed limits for practice review.
+description: The chart values, fixed settings, health signals and limits of practice review on a deployed instance.
 page_type: reference
 ---
 
-Use this reference to configure the runtime and monitor a deployed instance. Workspace admins
-should start with [Practice Review](./practice-review.mdx).
+This page lists what an operator can see and change about practice review on an instance that runs on the Helm chart.
+The values come from the chart's `values.yaml` and the server's `application.yml`.
+Workspace admins choose coverage, models and feedback mode in the web app, as [Practice review](./practice-review.mdx) describes.
 
-Public feedback addresses the author’s work.
-`PUBLIC_SUBJECT_INELIGIBLE` means the recorded developer or its support does not qualify for that public copy.
-Reviewer results remain recorded for the reviewer.
-Private feedback must pass its own evidence, recipient and delivery checks.
+## Chart values
 
-## Deployment configuration
+These chart values change how practice review runs.
+[Helm chart reference](./helm-chart) gives the defaults and the other values.
 
-Server configuration metadata defines property names, types, and defaults.
-The rendered Helm chart determines which configuration reaches each role.
-Agent execution alone does not enable repository collection.
-Each workspace enables practice review and selects its own coverage.
+| Value | Effect on practice review |
+| --- | --- |
+| `sandbox.enabled` | Turns the review runtime on. Without it, the server runs no practice review and no conversation turn. |
+| `sandbox.reviewMemory` | The memory that the sandbox nodes give review Pods. The number of reviews that run at once is this value divided by the request of one review sandbox. [Sandbox sizes](./sandboxes#sandbox-sizes) gives the calculation. |
+| `sandbox.templates.review.resources` | The requests and limits of each review sandbox Pod. |
+| `sandbox.gateway.maxConnections` | The connections that the server's sandbox gateway holds open. A review holds about 54, and 170 at most. |
+| `server.gitCache.sizeLimit` | The size of the volume that holds repository mirrors and attempt folders on each server. |
+| `server.drainTimeoutSeconds` | How long a stopping server finishes its running reviews. A review that still runs at the end stops and runs again. |
 
-1. Enable the agent runtime on the server.
-2. Enable `GIT_CHECKOUT_ENABLED` for repository access.
-3. Give every server container its own storage under `HEPHAESTUS_FABRIC_ROOT` for repository mirrors and attempt inputs.
-4. Set campaign, request-rate, retry, and retention limits appropriate to the deployment's budget and governance policy.
+Reviews run as sandbox Pods in the sandbox namespace (`sandbox.namespace`).
+The chart's NetworkPolicies let a sandbox reach only the gateway port of the servers: no DNS, no Kubernetes API and no database.
+Model calls and source reads go through that gateway.
+[Sandboxes](./sandboxes) gives the prerequisites and the templates.
+
+## Fixed settings
+
+The chart has no value for these settings.
+Each one explains a review that starts late, is refused, or stops early.
+
+| Setting | Fixed value |
+| --- | --- |
+| Quiet window | 2 minutes after the newest event, and at most 10 minutes after the first event |
+| Reviews that one person can request by hand | 5 for each workspace in one hour |
+| Model calls for each practice | 36 |
+| Output tokens for each practice | 48,000 |
+| Model use of one review attempt | Twice the sum of its practices' budgets. Past it, the model proxy refuses the next call with `403`. |
+| Attempts of a review after a retryable failure | 5 |
+
+The timeout of the workspace's **Practice reviews** model assignment limits the whole review run.
+A workspace admin sets it on the **AI models** page.
+A workspace admin can also change two defaults for the workspace.
+**Review settings → How reviews start → Time between reviews (minutes)** is 15 by default.
+**Sending feedback → Post feedback after merge** is off by default.
 
 ### Quiet window
 
 Events on the same work wait in one quiet window, so that one review covers a burst of pushes and edits.
-The window closes `ITEM_EVENT_LEDGER_QUIET_WINDOW` after the newest event. The default is 2 minutes.
-It stays open at most `ITEM_EVENT_LEDGER_QUIET_WINDOW_CAP` after the first event. The default is 10 minutes.
-Merged, closed, a submitted pull request review, a closed or deleted issue, and an archived document do not wait.
+A merge, a close, a submitted pull request review, a closed or deleted issue, and an archived document do not wait.
 
-While the window is open, the event waits with `QUIET_WINDOW`.
-When the window closes, one review runs at the newest event. The older events are withheld with `COALESCED`.
-An event waits longer in two cases:
+The item event records why an event waits or does not start a review:
 
-- An earlier review of the same work still measures a practice that the event selects. The event waits with `REVIEW_IN_PROGRESS` until that review ends.
-  A newer push or edit stops that review if it has not started. No sandbox starts.
-  The review shows as Replaced, and the next review of the work runs its practices too.
-- A practice needs the work's checks (its checks source is Required or Complete) and the checks have not finished.
-  The review withholds that practice with the reason `CHECKS_PENDING`, `CHECKS_AWAITING_APPROVAL` or `NO_CHECKS_REPORTED`.
-  The next event on the work, such as the checks event when they finish, selects it again.
-  A practice that reads the checks as Optional never waits for them.
+| Reason | Meaning |
+| --- | --- |
+| `QUIET_WINDOW` | The window is open. When it closes, one review runs at the newest event. |
+| `COALESCED` | A newer event of the same window started the review. |
+| `REVIEW_IN_PROGRESS` | An earlier review of the same work still measures a practice that the event selects. |
+| `CHECKS_PENDING`, `CHECKS_AWAITING_APPROVAL`, `NO_CHECKS_REPORTED` | A practice needs the work's checks, and the checks have not finished. The next event on the work selects the practice again. |
+| `ALREADY_CURRENT` | Each practice that the event selects already has a current observation. |
 
-An event that selects only practices that already have a current observation is withheld with `ALREADY_CURRENT`.
-Opened, ready and a review request measure every practice that they select, current or not.
+[Select a review](/contributor/practice-review-pipeline#select-a-review) explains the selection.
 
-### Work budgets
+### Temporary evidence on the server {/*#temporary-evidence-and-restarts*/}
 
-Each practice gets a fresh model session and a work budget of its own.
+Each server keeps its copies of reviewed work under `/data/git-repos`.
+The copies are a cache. A missing mirror is cloned again on the next sync or review.
 
-An item review accepts any number of practices, and its runner sets its own pace.
-No setting limits the number of practices at once.
-
-The server starts item-review practices without a current observation first, then the ones with the oldest last verdict.
-The runner starts the next practice in that order when both of these conditions are true:
-
-- No running session waits for a first byte from a model call.
-- The Pod has memory for one more script process, and the runner's heap has room for one more session.
-
-Thus, the review widens while the provider answers, and it stops widening when a call has to wait.
-A new session holds the next start until its first model call, for at most 10 seconds.
-The runner always starts a practice when no session runs.
-Results and the admission request use practice order, independent of completion order.
-
-The review's technical details show **Input from cache** for every protocol.
-The fact shows the percentage of all input tokens read from cache and the total input count, across all attempts.
-Total input includes ordinary input, cache reads and cache writes.
-For example, **7.7% of 26,000 tokens** includes 24,000 ordinary input tokens and 2,000 cache reads.
-
-No recorded input shows **No usage recorded**.
-When both cache counts are zero, the fact shows **None reported**.
-This can mean no cache use or that the provider does not report it.
-A positive percentage below 0.1% shows **Under 0.1%**.
-The figure does not measure feedback quality.
-
-OpenAI Responses keeps provider-default cache retention and sends no five-minute override.
-Completions providers use their own cache policy.
-Use the percentage of input read from cache to compare reviews on the same provider.
-
-With concurrent evaluation, each practice reserves an equal share of its set's calls and output tokens before evaluation starts.
-The runner assigns any remainder in catalog order.
-A practice cannot spend another practice's reservation.
-Unused reservations remain unused.
-Each model request is capped at the practice's remaining output tokens.
-
-Public practice scripts prepare evidence and open reviews. They make no direct model calls.
-
-Higher concurrency can cover more practices before the deadline when model response time limits progress.
-It also increases peak memory use and simultaneous model requests.
-The model proxy still paces upstream requests.
-A provider limit or model contention can reduce the benefit.
-
-Scan reviews use a serial group pool.
-A deadline stops active sessions and leaves queued practices `NOT_REACHED` with reason `DEADLINE`.
-The runner retains completed results for admission.
-The debug report and logs include the most sessions that ran at once, and the time for each practice.
-
-`PRACTICE_REVIEW_PRACTICE_MODEL_CALLS` (default 36) and `PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS` (default 48000) set what each practice can spend.
-The model proxy also holds each review attempt to twice that budget for all its practices together.
-Past it, the proxy refuses the attempt's next model call with `403`.
-
-A practice script that calls `ctx.review()` opens review sessions, and their calls count against the budget of that practice.
-[AI usage](./ai-providers.mdx#ai-usage) owns model usage and prices.
-[Practice scripts](#practice-scripts) tells you how to read what each practice script did.
-
-The defaults cap excessive work at several times a set's normal use.
-A review spends what its practices need, and no more.
-Each set has its own budget, independent of previous sets' spend.
-Near the budget limit, the model receives a request to record its current results.
-Each reservation ends after the call that spends its budget.
-The serial set ends after the call that spends its pool.
-
-The review's sandbox writes the feedback after the review is measured, in a run of its own, with the same model.
-These calls count against the workspace's model budget like the review's own calls.
-Each feedback session makes at most the model calls of one practice's turn for each practice that it decides, and at most three practices' worth.
-`hephaestus.practice-review.composition-timeout` bounds the time that the run spends on it (default 10 minutes, at least 1 minute).
-The step also ends 1 minute before the stale-job sweep would end the attempt, about 14 minutes after the assignment's timeout.
-The whole review can therefore take that much longer than the timeout of its **Practice reviews** assignment.
-
-Feedback that the composition cannot write is withheld with the most specific reason:
-
-- **No AI** when the workspace's AI choice no longer permits the model.
-- **Evidence not permitted** when the captured work was erased.
-- A refusal from the server when the review on the work cannot be published.
-- **Not composed** for every other cause.
-  For example, the budget ran out, or the model decided nothing.
-
-These causes withhold at once, because another attempt would meet them again.
-A review whose results were admitted keeps them, whatever happens to its feedback.
-The `agent.job.composition.stopped` metric below counts each cause.
-
-A passing cause withholds nothing. Examples are a provider outage, an unexpected failure, or the composition timeout.
-Under load, the model calls wait for the shared call limit, so the time can run out on calls that never ran.
-
-A new attempt of the same job then writes only the feedback that is still open.
-It starts no sandbox and uses the job's retry limit with its usual backoff.
-The attempt at the retry limit withholds what a passing cause leaves open.
-If that attempt is lost too, up to three attempts after the limit only withhold what is open.
-If those end too, the review closes as Partial with Composition unconfirmed.
-A handed-on attempt that the developer's AI choice, the budget or a missing model would refuse also only withholds, with that reason.
-
-A sandbox that cannot prepare its workspace runs again in a new attempt, within the same shared retry limit.
-This failure occurs before any model call, so it is a failure of the infrastructure, not of the review.
-A failure that repeats on every attempt uses all attempts of the retry limit, five by default, before the job fails.
-The server log names it with its exit code.
-
-After the last attempt, the job keeps the initializer's exit code and the last 20 lines of its log under `capture.initializationFailure`.
-Known credential formats in those lines are masked.
-The lines can name repository paths.
-[Kubernetes § Troubleshooting](./kubernetes#troubleshooting) shows how to read them.
-A failure before the sandbox starts is logged with its stage, its kind, such as a repository operation, and the exception types.
-
-1. For a model that reasons at length, raise the output tokens.
-
-The timeout of the workspace's **Practice reviews** assignment is the whole-run safety ceiling.
-It can stop a productive review and leave later practices `NOT_REACHED`.
-These budgets do not reserve time for each practice.
-
-A session stops after five minutes without a model or tool event.
-A call that waits for its first byte does not count, because the proxy answers or refuses every waiting call.
-On the serial path, two consecutive stalls end measurement with its recorded results.
-
-A timeout below 61 seconds runs at 61 seconds.
-Each practice script runs inside the same timeout, with no time reserved before the review, as the [workspace ABI](/contributor/agent/agent-workspace-abi#practice-script-validation-and-limits) describes.
-
-`PRACTICE_REVIEW_SAMPLING_TEMPERATURE` sets the sampling temperature for practice-review model calls, not Hephaestus calls.
-If unset, the provider default applies.
-A low temperature does not guarantee repeatable judgments.
-Do not set `0` for an open model whose vendor advises against greedy decoding.
-Such a model can repeat the same tool call until the review stops that practice.
-Use the model's recommended sampling or the provider default.
-
-Before you change an environment variable:
-
-1. Read the [server configuration](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/application.yml).
-2. Read the [configuration reference](./configuration-reference) and the rendered chart.
-3. Use a value that the selected model supports.
-4. Confirm that the deployment forwards the setting.
-5. Evaluate changes against representative cases.
-
-Unknown variables or variables that the deployment does not forward cannot configure the application.
-Repository mirrors and attempt folders are disposable container-local storage, not a shared evidence store.
-Each container keeps bare mirrors under its own `HEPHAESTUS_FABRIC_ROOT`, which defaults to `/data/git-repos`.
-The chart gives each server its own repository-cache storage.
-A missing mirror is cloned again on the next sync or review.
-
-Git runs in-process through JGit, with no `git` binary or second image.
-Commit ingestion and review preparation use the server's mirrors, under one root.
-Attempt folders use the same root.
-Sandbox inputs and results pass through the server's authenticated sandbox gateway.
-
-Preparation failures record the stage and a known failure type without exception text.
-File and database failure types remain visible when preparation wraps the cause.
-
-A closed preparation reason distinguishes unavailable reviewed work, source authority, pinned ranges, and input contracts.
-Required source collection and folder rendering have separate reasons.
-The terminal job retains the attempt, stage, type and reason in `metadata.preparation_failure`.
-Other metadata fields stay unchanged.
-
-Structured preparation logs and spans carry the same reason without exception text.
-An unclassified reason remains explicit.
-A diagnostic type does not grant a retry.
-Eligibility and retry limits are unchanged.
-Earlier failures without a retained cause cannot be classified retrospectively.
-
-PostgreSQL retains admitted results and their citation verification results.
-Delivery does not require the server's source files.
-[ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#evidence-admission-and-deletion) defines the storage and cleanup contract.
-
-### Temporary evidence and restarts
-
-Temporary copies use the existing evidence home. The server records their workspace and takes a file lease before it writes source content.
-
-A capture keeps its existing PostgreSQL admission session until its last temporary copy is physically removed.
-Nested preparation uses that session. A returned snapshot retains it until close succeeds.
-
-A failed close leaves the copy registered for reconciliation. It does not release admission while the files remain.
-
-| Copy | Location below `HEPHAESTUS_FABRIC_ROOT` | Owner and removal |
+| Copy | Location below `/data/git-repos` | Removal |
 | --- | --- | --- |
-| Review capture spools and context-loader Git snapshots | `.evidence-spool/<workspaceId>/copy-*/content` | Workspace, file lease and capture admission. Close removes the copy. Failed removal is retried. |
-| Legacy tools context-transfer archive | JVM temporary directory, `heph-load-*.tar` | The tools response deletes this archive after transfer. It has no workspace receipt or restart reconciliation. This path remains a custody gap until the tools runtime retires the archive. |
-| Git mirrors and verified checkout caches, including unfinished cache builds | The workspace repository mirror and its `hephaestus-checkouts` directory | Repository ownership. Repository removal and mirror eviction remove the cache. These copies retain upstream Git history under the repository policy. |
-| Frozen attempt inputs and unfinished preparation | `jobs/<workspaceId>/<jobId>/...` | The existing `person_evidence_copy` receipt and attempt-folder lease. |
-| Review input archives and gateway selections | The attempt's `.archives` directory | The same receipt and folder lease, including when the gateway process is lost. |
+| Capture spools and context snapshots | `.evidence-spool/<workspaceId>/` | When the capture closes. The server retries a failed removal. |
+| Repository mirrors and checkout caches | The mirror of each repository and its `hephaestus-checkouts` directory | When the workspace stops monitoring the repository, or when the cache is full |
+| Attempt inputs and input archives | `jobs/<workspaceId>/<jobId>/` | One hour after the attempt ends, and at startup |
 
-On startup, the server removes spool entries whose file leases have no live owner, and the former root-level `git-snapshot-*` copies.
-This cleanup runs before the evidence home admits new work. It does not wait for attempt retention.
-An unreadable directory or failed removal stops startup.
-An active file lease is preserved.
-
-A running server retries failed closes in the existing evidence reconcile pass.
-They count toward `evidence_reconcile_failures_total` and prevent the last-success signal from advancing.
-Follow [Evidence cleanup is stalled](./production-operations-runbook#alert-response).
-An offline volume still needs the access controls in [Data retention](./data-retention).
-
-The [temporary-copy contract](../contributor/practice-review-pipeline#temporary-copy-custody) defines admission and file-lock ownership.
-Spool cleanup failures log `event.name=evidence.spool.cleanup.failed` and `error.type`, without exception messages or copied file content.
-
-Source authorization is not a deployment switch.
-The active source contract fixes which governed sources each purpose can use.
-Integrations only determine which authorized sources are available.
-See [Source governance](./dsms/item-source-governance.md).
+At startup, the server removes abandoned spool copies before it admits work.
+If it cannot read a directory or remove a copy, it logs `event.name=evidence.spool.cleanup.failed` and does not start.
+Treat the volume as sensitive storage.
+[Temporary copy custody](/contributor/practice-review-pipeline#temporary-copy-custody) explains the ownership of each copy.
 
 ## Running instance
 
-For workspace model readiness, coverage, feedback mode, spend, and review activity, see [Practice review](./practice-review.mdx).
+A server is ready when it can serve its API.
+Readiness does not include practice review, so a ready server can still run no reviews.
+
+### Review health
+
+An authorized request to `/actuator/health` on the [management listener](./monitoring.md#scrape-metrics) shows the `practiceReview` component:
+
+| Status | Detail | Meaning |
+| --- | --- | --- |
+| `UP` | `reviewsEnabled=false` | `sandbox.enabled` is false. The server runs no reviews. |
+| `UP` | `reviewsEnabled=true` | The server can run reviews. |
+| `OUT_OF_SERVICE` | `reason=SOURCE_AUTHORIZATION_EXPIRED` | A source-use decision for automated practice review has expired. [Source governance](./dsms/item-source-governance.md) describes these decisions. |
+| `OUT_OF_SERVICE` | `reason=GIT_CHECKOUT_DISABLED` | Repository checkout is off. The chart always turns it on, so this status does not occur on the chart. |
+
+A workspace without a model for practice review does not change the server's health.
+Its reviews show the refusal under **Practices → Practice reviews → Reviews**, and `practice.review.refused` counts it.
 
 ### Queue health
 
-A server claims work that already started before fresh reviews.
-One kind is a review on a later attempt, such as one that a drain put back.
-The other is a review whose results were admitted and whose feedback is still open.
-Within each group, the oldest job comes first.
+The server exports these meters.
+[Metrics](./metrics.md) gives the Prometheus names, and [Alert rules](./alert-rules.md) gives the rules that read them.
 
-The job queue exposes its own metrics.
-Use them for alerts instead of application logs.
+| Meter | Meaning |
+| --- | --- |
+| `agent.run.oldest_due_age_seconds` | By `kind` and `band`: the time since the oldest due run became due. A due run is queued, has no hold, and its `available_at` has passed. `0` when no run is due. Growth that continues means that the reviews have no capacity. |
+| `agent.run.due` | By `kind` and `band`: queued runs that can start now. |
+| `agent.run.runs` | Runs that have not ended, by `kind`, `band`, `state` (`queued` or `leased`) and `hold_reason` (`none`, `budget` or `sandbox_room`). `state="queued",hold_reason="budget"` separates a workspace that spent its budget from an idle instance. |
+| `agent.run.sampler.failure` | Samples that failed. The gauges then keep their last values. |
+| `agent.run.claim.wait` | By `kind` and `band`: the time from a run's `available_at` to its claim. A run that returns to the queue waits again from its new `available_at`. |
+| `agent.job.infra.retry.requeued` | Attempts that run again after a retryable failure, by `cause`: `preparation`, `sandbox`, `server_unreachable` or `provider_unreachable`. |
+| `agent.run.reaped` | Runs that the server took back. `kind=review,outcome=attempts_exhausted` counts reviews that failed because each attempt's holder stopped. |
+| `agent.job.composition.stopped` | Destinations whose feedback the server did not write, by `cause` and `outcome`. |
+| `agent.job.retention.stripped`, `agent.job.retention.deleted` | Rows that the retention sweep pruned. |
+| `llm.budget.exhausted`, `llm.budget.blocked` | A crossed budget cap, and work that a cap refused. `surface="model_call"` counts model calls of a running job that the model proxy refused. |
+| `practice.review.refused` | Refused reviews, by `phase` (`submission` or `execution`) and `reason`. |
+| `agent.review.practice_scripts` | One count for each practice in the report of a review attempt, by `status`: `ok`, `withheld`, `failed`, `not_reached` or `not_finished`. |
 
-- **`agent.run.oldest_due_age_seconds`** — by `kind` and `band`: the time since the oldest due run became due.
-  A due run is queued, has no hold, and its `available_at` has passed.
-  It is `0` when no run is due.
-  Sustained growth needs an alert.
-  A count of due runs alone does not distinguish a temporary burst from a persistent backlog.
-- **`agent.run.due`** — by `kind` and `band`: queued runs that can start now.
-- **`agent.run.runs`** — runs that have not ended, by `kind`, `band`, `state` and `hold_reason`.
-  `state` is `queued` or `leased`.
-  `hold_reason` is `none`, `budget` or `sandbox_room`. A leased run always has `none`.
-  A held run is not due. `state="queued",hold_reason="budget"` separates a workspace that spent its budget from an idle instance.
-  `state="leased"` counts the runs that servers drive now.
-- **`agent.run.sampler.failure`** — failed samples.
-  Gauges keep their last-good value instead of a false empty-queue report.
-- **`agent.run.claim.wait`** — by `kind` and `band`: the time from a run's `available_at` to its claim.
-  The server records it after the claim commits.
-  A run that returns to the queue waits again from its new `available_at`.
-- **`agent.job.infra.retry.requeued`** — attempts that run again after a retryable failure, tagged by `cause`.
-  `preparation`: the attempt failed before its sandbox started.
-  `sandbox`: the sandbox could not start, initialize or finish.
-  `server_unreachable` and `provider_unreachable`: the sandbox could not reach the server's gateway or the model provider.
-- **`agent.run.reaped{kind=review,outcome=attempts_exhausted}`** — reviews that failed because the holder of each attempt stopped renewing its lease.
-- **`agent.job.delivery.recovered`** — deliveries stopped by an executor crash and successfully retried.
-- **`agent.job.composition.stopped`** — destinations whose feedback the server did not write, tagged by `cause` and `outcome`.
-  `withheld` counts a recorded withholding, and `handed_on` counts an attempt handed on to compose again.
-  `refused` counts a withholding that the server refused. The attempt is handed on to record it again.
-  `unrecorded` counts a review whose runs ended before they confirmed each destination, so it closed as Partial.
-  Its cause is `deadline` when the run expired, including while queued, or `retries_exhausted` when the retry limit ended it.
-  The causes that withhold at once are `no_ai`, `budget`, `deadline`, `model_refused`, `context_window`, `publication_refused`, `no_decision`, `inputs_gone`, `inputs_erased` and `retries_exhausted`.
-  The passing causes are `provider`, `routing_unavailable` and `unexpected`.
-- **`agent.job.retention.stripped`** / **`agent.job.retention.deleted`** — rows pruned by the retention sweep.
-- **`llm.budget.exhausted`** / **`llm.budget.blocked`** — a crossed cap and work refused at a cap.
-- **`llm.budget.blocked`** with `surface="model_call"` — model calls of a running job that the LLM proxy refused at a cap, tagged by `cap`.
-  `instance` names the shared-model budget, and `byo` names the provider cap.
-  An admin raises it.
-  These exclude issue opening and closing.
-- **`practice.review.refused`** — refused reviews, tagged by `phase` (`submission` or `execution`) and `reason`.
-  Submission refusals cannot establish the item version (`VERSION_UNAVAILABLE` or `SOURCE_NOT_READY`).
-  Execution refusals occur during claim or execution.
-  Refusal counters measure attempts, including rolled-back transactions.
-  The event trace shows committed outcomes.
-- **Delivery uncertainty** appears on feedback and copy records.
-  Inspect Unconfirmed feedback and UNCERTAIN sends before considering a retry.
-  Unknown visibility never authorizes automatic posting.
+A growing share of `failed`, `not_reached` or `not_finished` in `agent.review.practice_scripts` means that scripts stop before they return a result.
 
-1. Query `/actuator/health/readiness` on the [management listener](./monitoring.md#scrape-metrics), or `/readyz` on the application port, for aggregate readiness.
+## Why practice scripts stop early {/*#the-trace-line*/}
 
-An authorized response includes the **`practiceReview`** component. It is not part of readiness.
-A server with the agent runtime reports `OUT_OF_SERVICE` with `GIT_CHECKOUT_DISABLED` when repository checkout is disabled.
-It reports `SOURCE_AUTHORIZATION_EXPIRED` when an automated-review source authorization has expired.
+Each practice of a review runs one script: its practice script, or the built-in review.
+The review's sheet under **Practice reviews → Reviews** has one trace line for each practice that ran a script.
+The line starts with how the script ended:
 
-Missing model assignments are workspace-specific.
-They stay visible under **Practices → Practice reviews → Reviews** and in the refusal counter.
-They do not change the server's health.
-Gauges have periodic samples.
-Timers and counters record their corresponding events.
-Metric names in the instrumented code are authoritative for dashboards and alerts.
+| The line starts with | Meaning | Fix |
+| --- | --- | --- |
+| **… returned a candidate observation** | The script returned a valid candidate observation. Admission can still withhold it. | None. |
+| **… stopped without a candidate observation** | The script stopped, for the reason that the line gives, such as `it raised an error` or `it ran out of time`. | For an error, select **Edit the script**, and [test the script locally](./practice-scripts.mdx#test-a-script-locally). For time or budget, see below. |
+| **The review ended before … started** | The attempt ran out of time or budget, or was cancelled, before it reached this practice. | See below. |
+| **… did not finish** | The review's report does not name the script, for example because the sandbox stopped. | See below. If it continues, read the sandbox log that the job keeps. |
 
-### Practice scripts
-
-Each practice of a review runs one script: its practice script, or the built-in script when it has none.
-For each review, Hephaestus records how each script ran.
-Workspace admins see it on the review's sheet.
-Open the review under **Practice reviews → Reviews**.
-
-- **The trace line.** Under **Every practice**, each practice that ran a script has one line.
-  An admin also sees the line under **What it saw** in a review on their own Practice profile.
-- **The section Practice scripts.** It follows **Every practice** on the same sheet.
-
-[Write a practice script](./practice-scripts.mdx) tells how to write and try a script.
-
-#### The trace line
-
-The line starts with how the script ended.
-It names the script: **Practice script** or **Built-in**.
-Then it has at most one link that fixes the cause.
-On the Practice profile, the line also has **Details**, which opens the review's section **Practice scripts**.
-
-A script that returned a candidate observation has not yet passed admission.
-The server can still withhold that candidate observation, as [What admission checks](./practice-scripts.mdx#return-a-result) tells.
-
-For `undeclared_source_cited`, compare the cited source with the pinned practice's Reads block.
-For a scan, use the Scan Reads block.
-Add a source to Reads only if the practice needs it. Otherwise, correct the script or citation.
-A source used only to check Applies when does not grant the review session access to it.
-
-The refused candidate records no observation and supplies no feedback about the developer's work.
-It does not establish that evidence is missing or that the work has a defect.
-The [glossary](/contributor/practice-review-glossary#admission-reasons) owns this reason.
-
-| The line starts with                          | What it means                                                                                                                                                                                                                                                                                                                               | What to do                                                                                                                                                                                                                                 |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **… returned a candidate observation**        | The script ran to its end and returned a valid candidate observation. The line can say how: from its code alone or through the review.                                                                                                                                                    | Nothing.                                                                                  |
-| **… stopped without a candidate observation** | The script stopped. The line gives the reason, such as `it raised an error`, `it ran out of time`, `what it returned is not a candidate observation`, or `it is not a script the review can run`. The practice has no observation in this review.                                                                                           | For a script error, select **Edit the script**. The review's section shows the first line of the error. To reproduce it, [run the script on the same change](./practice-scripts.mdx#test-a-script-locally). For time or budget, see below. |
-| **The review ended before … started**         | The attempt ran out of time or budget, or was cancelled, before it reached this practice.                                                                                                                                                                                                                                                   | Same as for a script that ran out of time.                                                                                                                                                                                                 |
-| **… did not finish**                          | The review's report does not name the script, for example because the container stopped.                                                                                                                                                                                                                                                    | Same as for a script that ran out of time. If it continues, read the container logs that the job record keeps.                                                                                                                             |
-
-A built-in review that stopped without a candidate observation can give one of two more exact reasons:
-
-- `its candidate observation was refused because it had not read the evidence it needed`. The evidence check refused a candidate observation that cited or needed a source that the session did not read completely.
-- `its review session ended without an accepted candidate observation`. The session ended, and no refusal of a wrongly formed call was counted. Reviews recorded by earlier releases also show this reason.
-
-For a built-in review, `a model answered in the wrong format` means that the tool refused at least one call of the wrong shape and the evidence check refused no candidate observation.
-A practice script always shows the reason that it stopped for.
-
-A script that ran out of time or budget, or did not finish, links **Why scripts stop early**.
-It opens this section.
-The practices of a review run one after the other in the time of the **Practice reviews** assignment.
-If many practices in one review run out of time, raise the timeout of that assignment on **AI models**.
+The practices of a review share the timeout of the **Practice reviews** assignment.
+If many practices of one review run out of time, raise that timeout on the **AI models** page.
 Otherwise, make the slow script faster.
-[Limits](./practice-scripts.mdx#limits) gives the time and token limits of a script.
+[Limits](./practice-scripts.mdx#limits) gives the limits of a script.
 
-[Upgrade a script from an earlier release](./practice-scripts.mdx#upgrade-a-script-from-an-earlier-release) tells what to do.
+A script that fails, is withheld or is not reached gives its practice no result in that review.
+It is not a claim about the developer's work.
+[Admission reasons](/contributor/practice-review-glossary#admission-reasons) defines the reasons that admission records.
 
-#### The review's practice scripts
+## Fixed limits
 
-The section **Practice scripts** is on the review's sheet, after **Every practice** and the review's delivery checks.
-It has one row for each practice of the review:
+- **Repository capture.**
+  A capture holds every file at the reviewed commit and the Git history that it can reach.
+  A checkout with its mirrored history over 8 GiB refuses the whole repository.
+  The server never captures a smaller tree.
+  Submodules are not fetched, and Git LFS files stay pointers.
+  Size the Git cache volume for the repositories that the workspaces monitor.
+- **Outline documents.**
+  A review reads the documents linked from the work, then a few more that a search finds.
+  A conversation answer reads at most 15 documents, and at most 4,000 characters of each.
+- **Deleted work.**
+  When reconciliation finds that work is gone at the provider, a review of it stops without a result.
+  If the work comes back, the next sync clears the mark.
+- **Prompts.**
+  The prompts ship with the release. No screen changes them.
 
-| Column            | What it shows                                                                                                                                                                                                                                                                                                                                                                                  |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Practice**      | The practice. It links to the practice. A practice that the workspace no longer has shows its identifier and **Not a current practice**.                                                                                                                                                                                                                                                       |
-| **Run**           | How the script ended. Examples are **Returned a candidate observation**, **Withheld**, **Failed: ran out of time**, **Not reached** and **Did not finish**. Below it is the same fix link as in the trace line. A practice that the workspace no longer has, or that runs the built-in script, shows no **Edit the script**. For a script that failed, the first line of the error comes last. |
-| **Review calls**  | The model calls of the practice's review sessions, as the review runner counted them. It is not the billed count: the proxy bills these calls for the whole review. A dash means no calls. **Not recorded** means that the review is from an earlier release, or that the runner did not report the practice.                                                                                  |
-| **Time**          | How long the script ran, such as `4.2 s` or `2 min 5 s`. A run shorter than 0.1 seconds shows `< 0.1 s`. A script that did not run, was not reached, or did not finish shows a dash.                                                                                                                                                                                                           |
-
-The section shows no cost.
-Its note says `Spend is on AI usage.`
-**Technical** on the review's sheet shows the review's **Model** with an icon for its tier.
-Its **Review model calls** and token counts include the review sessions that scripts open with `ctx.review()`.
-Its **Cost** is what the review's attempts cost.
-
-A script that failed, was withheld, or was not reached gives its practice no result in that review.
-It never becomes a claim about the developer's work.
-
-#### Practice script metrics
-
-One metric counts practice script events on the server:
-
-- **`agent.review.practice_scripts`** — one count for each practice that the report of a review attempt records, tagged by `status`: `ok`, `withheld`, `failed`, `not_reached` or `not_finished`.
-  It counts built-in scripts and practice scripts.
-  An admitted practice that a complete report does not name counts as `not_finished`.
-  A missing report adds no count.
-  A truncated report adds no count for the practices that it does not name.
-  An entry that is not valid adds no count.
-  It counts when the attempt's results are stored.
-  A growing share of `failed`, `not_reached` or `not_finished` needs attention.
-
-[Queue health](#queue-health) lists `llm.budget.blocked` with `surface="model_call"`, which counts the model calls that a budget or a cap refused.
-
-### Log correlation
-
-The application emits one JSON object per log line.
-Server logs use correlation keys under `mdc`.
-Run the filter tools on a protected operator workstation.
-
-1. Filter the logs:
-
-```bash
-# All log lines for one agent job
-kubectl -n hephaestus logs -l app.kubernetes.io/component=server --all-containers --tail=-1 \
-  | jq -cR 'fromjson? | select(.mdc."job.id" == "<job-uuid>")'
-
-# All errors for one workspace
-kubectl -n hephaestus logs -l app.kubernetes.io/component=server --all-containers --tail=-1 \
-  | jq -cR 'fromjson? | select(.mdc."workspace.id" == "<workspace-id>" and .level == "ERROR")'
-```
-
-A deployment with its own log collector can use the same `mdc` fields for dashboards and alerts.
-The collector's label names are deployment-specific.
-
-### Delivery recovery
-
-Preparation persists the exact feedback, supporting basis and physical copy records before provider access.
-Each on-work send owns a lease and stable copy write identity.
-There is no second projection transaction that must reconstruct the feedback ledger after posting.
-
-A copy write fence can mean the provider accepted the request before the receipt arrived.
-FOUND readback records the existing copy. ABSENT records proved failure. UNKNOWN keeps visibility Unconfirmed.
-Automatic recovery never repeats a POST from unknown visibility.
-Only an explicit admin retry after proved absence can reopen the write, subject to current policy and approval.
-
-A confirmed historical copy is never posted again.
-
-When one sibling is posted and another is unknown, the parent remains Unconfirmed.
-The confirmed sibling's appearance time remains recorded.
-Copy-level errors explain failed or withheld siblings without inventing another parent delivery state.
-
-Before a new write, the server checks source version, developer, consent, scope, feedback mode and exact approval.
-A failure does not erase the supporting result.
-A correction waits for any started POST to settle before the send changes to RETRACT.
-Unsupported provider correction keeps the actual posted appearance and its recorded reason.
-
-GitHub and GitLab attach line notes to the selected diff lines.
-The [delivery contract](../contributor/practice-review-pipeline#compose-feedback) defines GitLab positions, confirmed-rejection fallback and uncertain writes.
-
-Existing ordinary comments retain their original placement.
-
-Historical write keys, markers, sides and provider references stay immutable.
-Never clear a fence or edit an internal send row to force a retry.
-Use the [review controls](./practice-review.mdx#approve-reject-and-retry) after authoritative lookup proves absence.
-
-### Retention
-
-Payload expiry is independent of terminal job deletion and product review history.
-A row lifetime shorter than its payload lifetime is invalid.
-Treat every server fabric root as sensitive storage.
-
-The [durable retention](#scans-and-durable-retention) section owns default windows.
-The [data map](./dsms/personal-data-map.md) owns source-person erasure and physical custody.
-Scope selection follows account membership and the monitored repository.
-Separate feedback pieces retain their own words and responses after a runtime job expires.
-
-## Limits you should know about
-
-Configuration metadata describes deployment settings.
-The source catalog defines capture semantics.
-These behaviors matter independently of configured capacity:
-
-- **A claim that the repository lacks something needs a search for that thing.**
-  Admission withholds such a result as `absence_not_searched` when no search of the whole checkout names it.
-  Many such reasons on honest results point to searches with syntax that names nothing.
-  A search that is cut earns no receipt, and that reason is `consulted_source_unread`.
-  A search that found matches also needs the result to say what they are, or the reason is `absence_hits_unexplained`.
-- **Background task cadences are fixed in code.**
-  Their thresholds can be configurable even if their poll schedules are not.
-- **Feedback preparation recovery has a bounded window.**
-  The sweeper selects recent completed pull request and issue reviews with missing preparation marks.
-  It does not automatically recover older unfinished preparation.
-  A successful empty result is complete.
-  Recovery does not rerun the model.
-- **Retryable occurrences eventually lapse.**
-  A misconfigured workspace can accumulate retries and then become quiet when their deadline passes.
-- **Unreferenced terminal item events expire** after their configured window.
-  Referenced product history remains available after runtime cleanup.
-- **Repository capture includes every regular and executable file at the reviewed commit**.
-  This includes binary content and large files.
-  It includes sanitized Git history reachable from that commit, mirrored branches, and tags.
-  Native bash, Git, ripgrep, and file-discovery tools are available.
-  File count and content size do not truncate the tree.
-  Symbolic links become regular files with the link target, without traversal of the link.
-  Submodules are not hydrated.
-  Their presence and excluded unsafe paths cause a partial-capture report.
-  A snapshot entry that is not a regular file or directory fails capture.
-  Capture keeps committed Git LFS pointers instead of downloads.
-  Model-facing output limits do not bound capture storage.
-  The captured worktree and Git metadata are read-only, with no repository credentials or upstream configuration.
-  Reviews use an isolated internal Docker network.
-  The server's authenticated sandbox gateway must be reachable on it.
-- **Repository preparation is bounded per snapshot and per walk.**
-  The server uses JGit for capture.
-  This needs no sandbox admission and does not count against `SANDBOX_MAX_CONCURRENT`.
-  `GIT_MAX_CONCURRENT_INGESTIONS` (default 2) caps captured commits that a container writes to PostgreSQL simultaneously.
-  A checkout plus mirrored history over `GIT_MAX_SNAPSHOT_BYTES` (default 8 GiB) causes refusal of the whole repository.
-  Measurement occurs before the snapshot is written.
-  Refusal fails the operation and never selects a smaller tree.
-  The mirror itself has no measurement against this limit.
-  A commit-history walk reads pages of 256 commits.
-  It pauses after 32 pages that needed capture.
-  Pages whose commits were all previously captured do not count.
-  The next sync cycle resumes from captured commits.
-- **Linked Outline documents are retrieval-limited, and the Hephaestus and review paths do not agree.**
-  A review first resolves documents linked from the work, then adds a small number by search.
-  Hephaestus searches the whole corpus for the words of the question.
-  It reads at most 15 documents and truncates each one to 4,000 characters.
-  Neither path can report that it found everything.
-  Neither substitutes for the other in diagnosis of missing context.
-- **Work that has been deleted at the provider yields a review with no evidence, not an empty one.**
-  After reconciliation finds work missing upstream, evidence capture reports its sources as unavailable.
-  The review stops without a result about that work.
-  If the work reappears, the next ordinary sync clears the mark.
-  A later review reads the work again.
-- **No screen edits what the model is told.**
-  Each practice's criteria shape what Hephaestus observes.
-  A prompt that ships with the release shapes its text.
-  A prompt change is a code change.
-
-1. Provision storage for the mirror, captured content, and per-job staging.
-2. Check that each captured repository snapshot fits the fixed 8 GiB limit.
-3. Size the storage for the repositories you monitor.
-
-The Helm chart exposes no value to increase the snapshot limit.
-
-## Rollback
-
-Return to a previous release only through [Upgrade § Rollback](./upgrade#rollback).
-
-## Observation text availability
-
-Operator review views keep the outcome, practice, reviewed work and delivery history when source access cannot be verified.
-They withhold the observation summary, rationale and evidence in that state.
-The API returns `summary: null`, as specified by the [ReviewResult contract](https://github.com/hephaestus-build/Hephaestus/blob/main/server/openapi.yaml).
-Private practice-page and conversation feedback bodies remain unavailable to operators.
-
-## Scans and durable retention
-
-A scan freezes the monitored default branch before practice filters.
-At most one scan per workspace and one execution job per review can be active.
-Each bounded file job retains its own attempt. Durable membership retains every reached or unreached practice/file pair.
-
-Default inventory limits are one million entries and 268,435,456 metadata bytes.
-Enumeration has a five-minute deadline. A scan has a 24-hour deadline.
-A limit or source failure does not mark repository files removed.
-The [scan guide](./practice-scans.mdx) owns report counts, comparison and the removal guard.
-
-[Data retention](./data-retention) gives the retention of jobs, item events, results, usage records and evidence-copy receipts.
-No result expires while retained feedback still cites it.
-Aggregate reports remain with expired-proof availability after raw scan proof expires.
-
-An unknown priced cost is not zero spend.
-Unknown provider visibility permits readback, never automatic repeat posting.
-See [review delivery](./practice-review.mdx#approve-reject-and-retry) for safe admin retry.
+[Data retention](./data-retention) gives how long jobs, item events, results and usage records stay.
+[Scans](./practice-scans.mdx) gives the limits of a scan.

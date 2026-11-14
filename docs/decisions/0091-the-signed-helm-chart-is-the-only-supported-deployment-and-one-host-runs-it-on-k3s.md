@@ -87,7 +87,7 @@ Where the other parts of ADR 0041 went:
 - § Sandbox Gateway, § Bash and the sandbox boundary, § Roles: ADR 0081 rules 1, 5 and 6.
 - § Kubernetes batch and interactive execution, the 2026-10-24 execution, workers and network parts: ADR 0079 and ADR 0081.
 - The 2026-10-24 deployment, state, backups and migrations parts: rules 4 to 13 here, and the admin guide.
-- The migration state table: [the 0.95.0 move guide](../admin/compose-to-kubernetes.mdx).
+- The migration state table: [the 0.95.0 move guide](https://github.com/hephaestus-build/Hephaestus/blob/v0.95.0/docs/admin/compose-to-kubernetes.mdx).
 
 ## Consequences
 

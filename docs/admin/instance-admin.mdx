@@ -19,6 +19,26 @@ and recent authentication activity.
 2. Use the [instance checks of First steps](./first-steps#5-check-the-instance) to resolve missing configuration.
 3. Use the [configuration readiness reference](./configuration-readiness).
 
+### Update checks
+
+The **Release** card shows the release that this server reports from its lock ([runtime identity handoff](./release-image-lock#runtime-identity-handoff)).
+It also shows whether GitHub published a newer release, with a link to its notes and whether it has schema migrations.
+A failed, rate-limited, disabled or incomplete check shows as that state, never as up to date.
+
+The server checks one minute after it starts, then once a day.
+After a failure, it tries again after 15 minutes, and doubles the wait up to one day.
+Each check is one unauthenticated HTTPS GET to `https://api.github.com/repos/hephaestus-build/Hephaestus/releases/latest` with the user agent `Hephaestus-release-check`.
+It sends no version, credential, workspace data or configuration. GitHub sees the source IP address and the time.
+
+On an air-gapped host, set `config.releaseCheckEnabled: false` in `site.yaml`, and upgrade the release with it.
+The card then shows the release without a check.
+
+The card also shows when this instance first started its release.
+**Show release history** lists the last ten releases that the server started, newest first.
+`deploymentEnvironment` in `site.yaml` names the deployment, such as `production` or `staging`, on the card, in log lines and in traces.
+Use lowercase letters, digits, `.`, `_` or `-`, at most 64 characters: the server does not start with another value.
+If you do not set it, the instance reports `local`.
+
 ## Users
 
 You cannot demote yourself or remove the last instance admin.
@@ -151,16 +171,10 @@ In those tables, **No price set** counts the uses that have usage without a pric
 The person-data console handles access and erasure requests, including people who have never signed
 in.
 
-Do not substitute a display name for a provider ID.
-
-1. Select an account ID or exact provider identities.
-2. Preview the resolved person and workspace scope before you request an export or erasure.
+To answer a request, follow [Answer an access or erasure request](./person-data-requests).
 
 The [personal-data map](./dsms/personal-data-map.md#git-repository-history-and-short-lived-attempts)
 states the scope of database, attempt-copy and provider-mirror erasure.
-If a workspace is installed on the person's own GitHub or GitLab account, the provider login stays as the name and
-namespace of that workspace. Erasure, an uninstall of the app and a workspace purge keep it. Tell the person this
-before you request the erasure.
 
 Use the [data-protection documentation](./dsms) for identity verification, scope, retention, and
 external-copy obligations. This console is separate from a member's own
@@ -171,14 +185,29 @@ external-copy obligations. This console is separate from a member's own
 New instances start with silent mode on.
 It blocks new writes to GitHub, GitLab, and Slack, and all email.
 Inbound events, sync, practice reviews, and result storage continue.
-The [kill-switch map](./production-operations-runbook#first-response-and-kill-switch-map) lists what silent mode stops and what it does not stop.
+[Contain an incident](./contain-an-incident) lists what silent mode stops and what it does not stop.
 
 A stale settings view cannot turn off a newer silent mode setting.
 If you turn silent mode off, Hephaestus does not replay feedback withheld while it was on.
-For incidents, deployment checks, and recovery, follow the [production operations runbook](./production-operations-runbook).
+After a deployment with silent mode on, follow [Prove silence, then turn off silent mode](./silent-deployment).
 
 1. Open **Instance administration → Instance settings** to inspect or change silent mode.
 2. Before you turn it off, read the current state.
+
+## Call the API
+
+Hephaestus has no API tokens.
+A script calls the API with the access token of your own browser session:
+
+1. Sign in to Hephaestus in a browser.
+2. In the developer tools of the browser, find the cookie `__Host-HEPHAESTUS_AT` of the instance.
+3. Put its value in a shell variable, for example `HEPHAESTUS_TOKEN`, and not in a command line or a file.
+4. Send it in the header `Authorization: Bearer $HEPHAESTUS_TOKEN` to `https://<host>/api/…`.
+
+The token has all the rights of your account.
+It stops working when you sign out, when the browser renews it, and at the latest after 24 hours.
+If a call answers `401`, copy the cookie again.
+Keep the token out of logs, tickets and shared files.
 
 ## Bootstrap and recovery
 

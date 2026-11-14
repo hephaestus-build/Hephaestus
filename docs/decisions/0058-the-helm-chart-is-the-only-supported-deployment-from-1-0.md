@@ -170,7 +170,7 @@ When the staging host runs k3s, previews can return as one namespace for each pu
 
 ### Gates before v1.0.0
 
-Amended on 2026-11-08: The [backup policy for 1.0](../admin/backup-restore.mdx#backup-policy-for-10) amends gates 12 and 13.
+Amended on 2026-11-08: The [backup policy for 1.0](https://github.com/hephaestus-build/Hephaestus/blob/a58182514dd45571eb64d89bdbb61463c42ba57c/docs/admin/backup-restore.mdx#backup-policy-for-10) amends gates 12 and 13.
 Qualification of recovery objectives and recovery from total host loss is deferred for 1.0.
 The restore checks in gates 10, 11 and 14, webhook loss check in gate 12, and key custody in gate 15 remain required.
 Upgrade restore points remain required.

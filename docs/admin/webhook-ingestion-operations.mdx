@@ -1,50 +1,53 @@
 ---
 title: Webhook ingestion operations
-description: Metrics, retention, and recovery for the webhook receiver and its provider event inbox.
+description: What the webhook receiver stores, how failed deliveries come back, which meters and alerts watch it, and how long events stay.
 page_type: reference
 ---
 
-The server receives webhooks.
-It stores each verified delivery in the provider event inbox, a PostgreSQL table, before it answers.
-This page explains what to monitor, configure, and do after a failure.
+This page lists what the webhook receiver of the server stores, its answers, its meters and alerts, and the retention of the provider event inbox.
+The inbox is a PostgreSQL table that holds each verified delivery until a server handles it.
 [Ingest durability](/contributor/ingest-durability#the-database-inbox) explains the design.
-
-GitHub counts a delivery as failed when the receiver answers with an error or takes longer than 10 seconds.
-It never retries a failed delivery on its own, but it keeps deliveries from the past three days and can [redeliver](https://docs.github.com/en/webhooks/testing-and-troubleshooting-webhooks/redelivering-webhooks) them.
-Hephaestus asks GitHub to redeliver failed deliveries of its GitHub App automatically. See [Failed GitHub deliveries](#failed-github-deliveries).
-Hephaestus does not redeliver GitLab, Slack and Outline deliveries that the receiver did not accept.
-The reconciliation sync recovers their effect over `SYNC_TIMEFRAME_DAYS` days.
 
 ## What the receiver stores
 
-The receiver verifies a delivery, then stores one event for each workspace whose subscription matches it, in one transaction.
-It reads the subscriptions in that transaction.
-A workspace that starts to monitor a repository therefore gets every event that the receiver stores after the change commits.
+The receiver verifies a delivery and stores one event for each workspace whose subscription matches it.
+It answers `202` only after PostgreSQL commits the events, and it answers within 2 seconds.
 A GitHub App installation event also gets one event with no workspace, because it can create the workspace.
 
-The receiver answers `202` only after the transaction commits.
-If PostgreSQL does not commit within 2 seconds, the receiver answers `503`. Each statement of the transaction stops after 1.5 seconds.
-The receiver thus answers inside Slack's 3-second window, also while the database pool is exhausted.
-A transaction that still commits after a `503` is harmless: the provider's retry or redelivery adds no event.
+A delivery that arrives again with the same identifier adds no event:
 
-- A delivery that arrives again with the same identifier adds no event.
-  GitHub uses `X-GitHub-Delivery`, and Slack its `event_id`.
-  GitLab uses a hash of the body, the event UUID and the event kind, for each connection.
-- Each `503` has a log record with `event.name=webhook.publish.failed` and `webhook.publish.reason=store-failed`.
-- What each provider does after a `503` is in [Which providers deliver again](#which-providers-deliver-again).
+| Provider | Identifier |
+| --- | --- |
+| GitHub | `X-GitHub-Delivery` |
+| Slack | `event_id` |
+| GitLab | A hash of the body, the event UUID and the event kind, for each connection |
 
 Each server claims due events from the inbox.
-A claim leases one event for 2 minutes, and the handling server renews the lease every 30 seconds.
 A workspace handles the events of one resource, such as a repository or a Slack channel, one at a time and in arrival order.
-[Replay a failed webhook event](./webhook-replay.mdx) has the retries, the dead letters and their replay.
+`server.inboxClaimers` sets how many events one server handles at once. The default is 8.
+[Replay a failed webhook event](./webhook-replay.mdx) gives the retries, the dead letters and their replay.
+
+## Receiver answers
+
+| Answer | Cause | Log record |
+| --- | --- | --- |
+| `202` | The inbox stored the delivery. A duplicate, or a delivery that no active connection admits, adds no event. | `Stored <kind> webhook`, or `Webhook admission refused` with the reason |
+| `503` with the detail `store-failed` | PostgreSQL did not store the delivery in time. | `event.name=webhook.publish.failed`. The message names the exception class. |
+| `503` with the detail `gate-unavailable` | The publish gate of the provider could not read the database. | `Publish gate for kind=<kind> unavailable` |
+| `503` with the detail `busy` and `Retry-After: 30` | Large deliveries fill the memory that the receiver holds for them. See [Payload size](#payload-size). | None. `webhook.rejected` counts `reason=busy`. |
+| `408` with the detail `too-slow` | The body did not arrive within 30 seconds. | None. `webhook.rejected` counts `reason=too-slow`. |
+
+A transaction that commits after a `503` adds no event when the provider sends the delivery again.
 
 ## Failed GitHub deliveries
 
-When PostgreSQL is slow or down, the receiver cannot store a delivery in time, and GitHub records the delivery as failed.
-Every 10 minutes, the server reads the GitHub App's recent deliveries from the
-[GitHub App webhook API](https://docs.github.com/en/rest/apps/webhooks).
-For each event with no successful delivery, it asks GitHub to redeliver the latest attempt once the next redelivery is due.
-This is the procedure that GitHub [recommends](https://docs.github.com/en/webhooks/using-webhooks/automatically-redelivering-failed-deliveries-for-a-github-app-webhook).
+GitHub records a delivery as failed when the receiver answers with an error or takes longer than 10 seconds.
+GitHub does not retry a failed delivery.
+It keeps deliveries of the past three days, and it can [redeliver](https://docs.github.com/en/webhooks/testing-and-troubleshooting-webhooks/redelivering-webhooks) them.
+
+Every 10 minutes, the server reads the GitHub App's recent deliveries from the [GitHub App webhook API](https://docs.github.com/en/rest/apps/webhooks).
+For each event with no successful delivery, it asks GitHub to redeliver the latest attempt when the next redelivery is due.
+GitHub [recommends](https://docs.github.com/en/webhooks/using-webhooks/automatically-redelivering-failed-deliveries-for-a-github-app-webhook) this procedure.
 
 How far a run reads back:
 
@@ -57,108 +60,79 @@ How far a run reads back:
   Thus, a server that stops on a Friday evening recovers the deliveries of the weekend when it starts on Monday.
 - A run reads at most 10,000 deliveries. Older ones are not redelivered, and the run counts `outcome=truncated`.
 
-- Runs never overlap, also across server replicas: each run holds a lock for 9 minutes.
-  A run sends requests for at most 5 minutes, and at most 5 a second.
-  It stops after GitHub refuses 5 requests in a row.
-  Due redeliveries that do not fit wait for the next run, the oldest events first.
-- If the newest 10 redeliveries all failed, the receiver is not taking deliveries.
-  A run then sends only 3 redeliveries, to probe it, and counts `outcome=paused`.
-  The other events keep their attempts until a probe succeeds.
-- If GitHub answers `403` or `429` to a request, the run stops, and the rest wait for the next run.
-- An event whose latest answer was a client error (`4xx`) is not redelivered. The receiver refused it on purpose, for example for a bad signature or an oversized payload.
-- An event gets at most six attempts: the original and five redeliveries.
-  The redeliveries are due 0, 10, 20, 40 and 80 minutes after the original delivery.
-  The gaps double, so the attempts outlast a database stall of up to 80 minutes.
-  A stall that still lasts gets few requests.
-- A redelivery keeps its `X-GitHub-Delivery` identifier.
-  The inbox stores a delivery once for each workspace and identifier.
-  A redelivery of a stored delivery thus adds no event.
-  The inbox keeps a handled event for 3 days, as long as GitHub keeps a delivery.
-  `hephaestus.integration.consumer.replay-window` sets this time.
-- A slow database can still store a delivery after GitHub stopped waiting for it. Its redelivery then adds no event.
-- Silent mode does not stop redelivery. A redelivery sends nothing to people. It only asks GitHub to send the event to the receiver again.
+How a run redelivers:
 
-The job needs the GitHub App credentials and runs in the server role.
-An event that failed all six attempts is counted in `github.webhook.unrecovered` for 2 hours after its last attempt.
+- One run at a time works across all server replicas. A run sends requests for at most 5 minutes, and at most 5 each second.
+- A run stops after GitHub refuses 5 requests in a row, or after GitHub answers `403` or `429`. The other events wait for the next run, the oldest first.
+- If the newest 10 redeliveries all failed, a run sends only 3 redeliveries as probes and counts `outcome=paused`.
+- An event whose latest answer was a `4xx` is not redelivered. The receiver refused it on purpose, for example for a bad signature.
+- An event gets at most six attempts: the original and five redeliveries.
+  The redeliveries are due 0, 10, 20, 40 and 80 minutes after the original.
+- A redelivery keeps its `X-GitHub-Delivery` identifier, so a redelivery of a stored delivery adds no event.
+- Silent mode does not stop redelivery. A redelivery only asks GitHub to send the event to the receiver again.
+
+The job needs the GitHub App ID and private key.
+`github.webhook.unrecovered` counts an event that failed all six attempts, for 2 hours after its last attempt.
 Redeliver such an event in the GitHub App settings under **Advanced** → **Recent Deliveries**, within three days.
-For an outage longer than three days, only the reconciliation sync recovers the effect of the lost events.
+After three days, only the reconciliation sync recovers its effect.
 
 ## Which providers deliver again
 
 | Provider | Delivers a failed event again | What else recovers it |
 | --- | --- | --- |
 | GitHub | Hephaestus asks GitHub to redeliver, on the schedule above. | Manual redelivery for three days, then reconciliation. |
-| GitLab | No. GitLab does not retry a failed webhook. It disables a hook after 4 failures in a row, for 1 minute up to 24 hours, and for good after 40. See [GitLab webhooks](https://docs.gitlab.com/user/project/integrations/webhooks/). | Reconciliation over `SYNC_TIMEFRAME_DAYS` days. |
-| Slack | Yes. Slack retries 3 times: at once, after 1 minute and after 5 minutes. With [Delayed Events](https://docs.slack.dev/apis/events-api/) turned on in the Slack app, it also retries every hour for 24 hours. The receiver answers Slack within 2 seconds and stores a retry once, by its `event_id`. | Reconciliation of monitored channels. |
+| GitLab | No. GitLab does not retry a failed webhook. It disables a hook after 4 failures in a row, for 1 minute up to 24 hours, and permanently after 40. See [GitLab webhooks](https://docs.gitlab.com/user/project/integrations/webhooks/). | Reconciliation over `config.sync.timeframeDays` days. |
+| Slack | Yes. Slack retries 3 times: at once, after 1 minute and after 5 minutes. With [Delayed Events](https://docs.slack.dev/apis/events-api/) on in the Slack app, it also retries every hour for 24 hours. | Reconciliation of monitored channels. |
 | Outline | No. Outline waits 5 seconds and does not retry. It disables a subscription when 80 % of its deliveries in 24 hours fail. | Reconciliation of the Outline connection. |
 
 ## What to alert on
 
-The server exports these Micrometer meters on its private management listener.
-[Scrape metrics](./monitoring.md#scrape-metrics) has the port and the scrape configuration.
-[Alert rules](./alert-rules.md) gives the shipped rules that read them.
+The server exports these meters on its private management listener.
+[Scrape metrics](./monitoring.md#scrape-metrics) gives the port and the scrape configuration.
+[Alert rules](./alert-rules.md) gives the thresholds of the shipped alerts.
+[Alert response](./production-operations-runbook#alert-response) gives the action for each alert.
 
-| Metric | Type | What it means |
-| --- | --- | --- |
-| `webhook.publish` | counter | Deliveries that the receiver stored (`outcome=success`) or could not store (`outcome=failure`), by `stream`, which names the provider. A failure is a delivery that the provider records as failed. |
-| `integration.consumer.backlog` | gauge | Events in the inbox, by `provider` and `state`: `QUEUED`, `LEASED` or `DEAD`. |
-| `integration.consumer.oldest.due.seconds` | gauge (s) | Seconds since the oldest due event of a `provider` became due. 0 when none is due. |
-| `integration.consumer.backlog.sampler.failures` | counter | Passes that could not read the backlog. The gauges keep their last values. |
-| `integration.consumer.retry` | counter | Attempts that failed and wait for a retry, by `kind`. |
-| `integration.consumer.poison` | counter | Events that became dead letters, by `kind`. |
-| `integration.message.dropped` | counter | Attempts stopped by the write fence, by provider kind and reason: `erased-during-processing` or `lease-lost`. Erased events do not retry. |
-| `integration.consumer.inbox.retention.failures` | counter | Retention passes that failed. |
-| `github.webhook.redelivery` | counter | Redelivery requests that GitHub accepted (`requested`) or refused (`refused`). Runs that could not read the deliveries (`unavailable`), only probed a failing receiver (`paused`), or stopped listing at a bound (`truncated`). |
-| `github.webhook.unrecovered` | gauge | GitHub events that failed all six attempts, the last one in the past two hours. Above zero means events that Hephaestus did not receive. |
+| Meter | Type | What it counts | Shipped alert |
+| --- | --- | --- | --- |
+| `webhook.publish` | counter | Deliveries that the inbox stored (`outcome=success`) or did not store (`outcome=failure`), by `stream`, which names the provider. | `HephaestusWebhookPublishFailing` |
+| `webhook.rejected` | counter | Deliveries that the receiver refused, by `provider` and `reason`, such as `busy`, `too-slow` or `connection-not-active`. | `HephaestusWebhookReceiverBusy` (`reason=busy`) |
+| `integration.consumer.oldest.due.seconds` | gauge (s) | Seconds since the oldest due event of a `provider` became due. 0 when none is due. | `HephaestusProviderEventsWaiting` |
+| `integration.message.lag` | timer | How long an event waited in the inbox before its first handling, by `kind`. | `HephaestusEventsDelayed` |
+| `integration.message.process.duration` | timer | How long the handling of one event took, by `kind` and `outcome`: `completed`, `failed`, `retried`, `dropped` or `timed_out`. | `HephaestusConsumerHandlerTimedOut` (`outcome=timed_out`) |
+| `integration.consumer.backlog` | gauge | Events in the inbox, by `provider` and `state`: `QUEUED`, `LEASED` or `DEAD`. | None |
+| `integration.consumer.backlog.sampler.failures` | counter | Passes that could not read the backlog. The gauges keep their last values. | `HephaestusProviderEventBacklogUnsampled` |
+| `integration.consumer.retry` | counter | Attempts that failed and wait for a retry, by `kind`. | `HephaestusConsumerRetryStalled` |
+| `integration.consumer.poison` | counter | Events that became dead letters, by `kind`. | `HephaestusConsumerPoison` |
+| `integration.message.dropped` | counter | Attempts that the write fence stopped, by `kind` and `reason`: `erased-during-processing` or `lease-lost`. | None |
+| `integration.consumer.inbox.retention.failures` | counter | Retention passes that failed. | `HephaestusInboxRetentionFailing` |
+| `github.webhook.redelivery` | counter | Redelivery requests that GitHub accepted (`requested`) or refused (`refused`). Runs that could not read the deliveries (`unavailable`), only probed a failing receiver (`paused`), or stopped listing at a bound (`truncated`). | `HephaestusWebhookRedeliveryNotRunning` (`refused`, `unavailable`), `HephaestusWebhookRedeliveryTruncated` (`truncated`), `HephaestusWebhookRedeliveriesRequested` (`requested`) |
+| `github.webhook.unrecovered` | gauge | GitHub events that failed all six attempts, the last one in the past two hours. | `HephaestusWebhookEventsUnrecovered` |
 
-1. Alert when `integration.consumer.oldest.due.seconds` stays above a few minutes.
-   No server claims, or a handler holds a resource's order.
-   The events of a suspended workspace are not claimed but count here, so a long suspension also shows.
-2. Alert when `webhook.publish` counts failures. The database refuses deliveries.
-3. Read the `DEAD` backlog after a `HephaestusConsumerPoison` alert, and replay the dead letters after the fix.
-
-An `erased-during-processing` drop is the expected result of erasing an event while its handler runs.
-Do not replay it. The payload and its steps are gone.
-For repeated `lease-lost` drops without a restart, inspect lease renewal failures and database latency.
+The events of a suspended workspace are not claimed, but they count in `integration.consumer.oldest.due.seconds`.
+An `erased-during-processing` drop is the expected result of an erasure while a handler runs. Do not replay it.
 
 ## How long the inbox keeps an event
 
-| Event | Kept for | Setting |
-| --- | --- | --- |
-| Handled | 3 days after its handling | `hephaestus.integration.consumer.replay-window` (`HEPHAESTUS_INTEGRATION_CONSUMER_REPLAY_WINDOW`) |
-| Dead letter | 30 days after its failure | `hephaestus.integration.consumer.dead-retention` (`HEPHAESTUS_INTEGRATION_CONSUMER_DEAD_RETENTION`) |
-| Queued or leased | Until it is handled or becomes a dead letter | — |
+| Event | Kept for |
+| --- | --- |
+| Handled | 3 days after its handling |
+| Dead letter | 30 days after its failure |
+| Queued or leased | Until it is handled or becomes a dead letter |
+
+The chart does not change these periods.
+The handled events cover the three days in which GitHub can redeliver, so a late redelivery is not handled twice.
+Plan PostgreSQL space for 3 days of webhook traffic, plus the dead letters of 30 days.
 
 One server deletes the ended events every hour.
-The handled events cover the three days in which GitHub can redeliver, so a late redelivery is not handled twice.
 Deleting a workspace deletes its events.
-Erasing a person deletes the events that name them. An event that a server handles at that moment stays, and its retention removes it.
+Erasing a person deletes the events that name them. An event that a server handles at that moment stays until its retention removes it.
 
 ## Payload size
 
-The receiver accepts webhook deliveries up to 25 MiB, matching GitHub's delivery cap (`hephaestus.webhook.http.max-payload-bytes`).
+The receiver accepts deliveries up to 25 MiB, the GitHub delivery cap.
 The inbox stores the body as it arrived.
 
 The receiver holds each delivery in its heap until the inbox stores it, and a body costs several times its size.
-So it bounds what large deliveries hold at once, from its heap.
-A delivery of 256 KiB or less does not count, and it never waits.
-A larger one that does not fit waits for 1.5 seconds.
-Then the receiver answers `503` with `Retry-After`, and counts `webhook_rejected_total{reason="busy"}`.
-To hold more at once, raise `server.resources`.
-
-A delivery's body must arrive within 30 seconds, or the receiver answers `408` and counts `webhook_rejected_total{reason="too-slow"}`.
-No provider waits that long for an answer.
-
-## Known limits
-
-- **A very large sync window does not finish.**
-  The daily sync of a GitHub repository reads only the work that changed since its last complete run.
-  It reads at most 10,000 pull requests and 25,000 issues.
-  If more changed, for example after a long outage, the sync of that repository stops with an error.
-  The next run reads the same window again, so it can stop again.
-  The repository's resource sync table shows the error ([Read sync errors](./integrations#read-sync-errors)).
-
-## Where these settings live
-
-The server reads all of them ([Server runtime](./runtime-roles.mdx)).
-`gate:env` checks the rendered configuration.
+A delivery of 256 KiB or less never waits.
+A larger delivery that does not fit in the heap budget waits for 1.5 seconds, and then gets the `busy` answer.
+To hold more at once, raise the memory in `server.resources`.
