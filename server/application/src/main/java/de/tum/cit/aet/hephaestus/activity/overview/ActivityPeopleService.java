@@ -228,16 +228,16 @@ public class ActivityPeopleService {
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 10)
     public CursorPageDTO<PublicActivityWorkDTO> publicPersonWork(
-            long workspace,
+            long workspaceId,
             String login,
             ActivityPeopleRangeParams params,
             Set<String> repositoryKeys,
             ActivityWorkFilterParams page,
             boolean contributorsWithoutAccount) {
-        var repositories = queries.publicRepositories(workspace, visibility.confirmedAfter());
-        var selected = select(workspace, null, repositoryKeys, List.of(), repositories);
+        var repositories = queries.publicRepositories(workspaceId, visibility.confirmedAfter());
+        var selected = select(workspaceId, null, repositoryKeys, List.of(), repositories);
         var scope = ActivityScope.published(
-                workspace, selected.repositoryIds(), withoutAccount(contributorsWithoutAccount));
+                workspaceId, selected.repositoryIds(), withoutAccount(contributorsWithoutAccount));
         var contributor = publicContributor(scope, login);
         var kinds = page.kinds() == null || page.kinds().isEmpty()
                 ? PublicActivityPersonDetailDTO.SUPPORTED_KINDS

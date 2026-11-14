@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -28,6 +29,7 @@ import org.springframework.web.server.ResponseStatusException;
 /** What a person does with their own reports and their sharing choice. */
 @Service
 @ConditionalOnServerRole
+@WorkspaceAgnostic("A person's own product feedback reports, from every workspace they sent one from")
 class MyReportsService {
 
     private final ProductFeedbackFilingRepository filings;

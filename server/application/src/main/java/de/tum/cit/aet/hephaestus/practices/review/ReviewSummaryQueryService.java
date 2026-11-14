@@ -75,9 +75,9 @@ public class ReviewSummaryQueryService {
                 .orElseThrow(() -> new EntityNotFoundException("Review", id.toString()));
     }
 
-    public Page<ReviewSummaryDTO> list(long ws, ReviewFilterParams filter, Pageable page) {
-        var found = reviews.search(ws, filter, page);
-        var summaries = summaries(ws, found.getContent());
+    public Page<ReviewSummaryDTO> list(long workspaceId, ReviewFilterParams filter, Pageable page) {
+        var found = reviews.search(workspaceId, filter, page);
+        var summaries = summaries(workspaceId, found.getContent());
         return found.map(review -> Objects.requireNonNull(summaries.get(review.getId())));
     }
 
