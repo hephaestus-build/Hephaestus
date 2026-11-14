@@ -1,9 +1,9 @@
 /**
  * The sandbox isolation gate: proves on a live cluster that a sandbox from a SandboxTemplate reaches the
  * gateway port and nothing else, holds no Kubernetes token, runs as a non-root user and, on the default
- * runtime, in a user namespace of its own; and that the sandbox namespace refuses a Pod that the Restricted
- * Pod Security Standard refuses. The CI cluster legs run it against the chart's templates
- * (docs/admin/sandboxes.md § Sandbox isolation gate).
+ * runtime, in a user namespace of its own and under a PID limit; and that the sandbox namespace refuses
+ * a Pod that the Restricted Pod Security Standard refuses. The CI cluster legs run it against the chart's
+ * templates (docs/admin/sandboxes.md § Sandbox isolation gate).
  *
  * It clones the template, with its Pod spec, labels and policies, and changes only the command, so
  * that the container waits instead of running a loop. It claims two sandboxes from the clone, so each
@@ -49,7 +49,29 @@ export interface Inside {
 	publicDns: boolean;
 	/** When the Kubernetes API stopped answering the container after its start: `closed after <n> ms`, or `open`. */
 	firstApi: string | null;
+	/** The PID limit check, or null where the probe did not run it (gVisor). */
+	pids: Pids | null;
 }
+
+/**
+ * How the container's tasks grew: whether a new thread or process was refused, and how many tasks the
+ * container held at the end.
+ */
+export interface Pids {
+	refused: boolean;
+	held: number;
+}
+
+/**
+ * The most tasks that a sandbox Pod may hold: the kubelet's `podPidsLimit` of the one-host platform.
+ *
+ * The kubelet sets the limit on the Pod's cgroup. The container has a cgroup namespace of its own one
+ * level below, so its `pids.max` reads `max` whatever the Pod's limit is. The probe therefore starts
+ * threads until the kernel refuses one. Under gVisor, the threads of a sandbox are tasks of gVisor's
+ * kernel and do not count against the node's limit; its processes do, and at the limit gVisor ends the
+ * whole sandbox. So the probe cannot see the limit from inside a gVisor sandbox and does not try.
+ */
+export const PID_BOUND = 4096;
 
 /** The listener port that sandbox B opens for sandbox A to try. */
 export const PEER_PORT = 9099;
@@ -67,6 +89,7 @@ const fs = require("node:fs");
 const net = require("node:net");
 const dgram = require("node:dgram");
 const os = require("node:os");
+const childProcess = require("node:child_process");
 const spec = JSON.parse(process.argv[1]);
 const reach = (host, port) => new Promise((done) => {
   const socket = net.connect({ host, port, timeout: 3000 });
@@ -83,6 +106,35 @@ const resolve = (server) => new Promise((done) => {
   socket.on("error", () => { clearTimeout(timer); socket.close(); done(false); });
   socket.send(query, 53, server);
 });
+const tasks = () => fs.readdirSync("/proc").filter((name) => /^[0-9]+$/.test(name)).reduce((sum, pid) => {
+  try { return sum + Number(/^Threads:\s+([0-9]+)/m.exec(fs.readFileSync("/proc/" + pid + "/status", "utf8"))[1]); } catch { return sum; }
+}, 0);
+// Each child starts the given number of libuv pool threads at its first file call, and aborts when
+// the kernel refuses one. A child that neither reports nor ends in five seconds counts as refused.
+const CHILD = 'require("node:fs").stat("/", () => { process.stdout.write("ready\\n"); setInterval(() => {}, 1 << 30); });';
+const pidLimit = async (bound) => {
+  const children = [];
+  let refused = false;
+  let held = tasks();
+  while (!refused && held <= bound) {
+    const threads = Math.max(1, Math.min(1024, bound - held + 1));
+    refused = !(await new Promise((done) => {
+      const child = childProcess.spawn(process.execPath, ["-e", CHILD], { env: { UV_THREADPOOL_SIZE: String(threads) }, stdio: ["ignore", "pipe", "ignore"] });
+      if (child.pid === undefined) { child.on("error", () => {}); done(false); return; }
+      children.push(child);
+      const timer = setTimeout(() => done(false), 5000);
+      child.stdout.once("data", () => { clearTimeout(timer); done(true); });
+      child.on("exit", () => { clearTimeout(timer); done(false); });
+    }));
+    held = tasks();
+  }
+  await Promise.all(children.map((child) => new Promise((done) => {
+    if (child.exitCode !== null || child.signalCode !== null) { done(); return; }
+    child.on("exit", done);
+    child.kill("SIGKILL");
+  })));
+  return { refused, held };
+};
 const status = (key) => {
   const line = fs.readFileSync("/proc/self/status", "utf8").split("\n").find((l) => l.startsWith(key + ":"));
   return line ? line.slice(key.length + 1).trim() : null;
@@ -107,6 +159,8 @@ const status = (key) => {
     out.reached[target.name] = reached;
   }));
   [out.dns, out.publicDns] = await Promise.all([resolve(spec.dns), resolve("1.1.1.1")]);
+  // Last, because no new process or thread starts in the container while the limit is reached.
+  out.pids = spec.pidBound === null ? null : await pidLimit(spec.pidBound);
   console.log(JSON.stringify(out));
 })();
 `;
@@ -199,7 +253,16 @@ export function parseInside(value: unknown): Inside {
 		dns: report.dns === true,
 		publicDns: report.publicDns === true,
 		firstApi: text(report.firstApi),
+		pids: parsePids(report.pids),
 	};
+}
+
+function parsePids(value: unknown): Pids | null {
+	if (value === null || value === undefined) {
+		return null;
+	}
+	const pids = asRecord(value, "pids");
+	return { refused: pids.refused === true, held: Number(pids.held) };
 }
 
 /**
@@ -321,8 +384,11 @@ export function insideFailures(inside: Inside, targets: Target[], gvisor: boolea
 		if (!inside.kernel.includes("gvisor")) {
 			failures.push(`kernel ${inside.kernel} is not gVisor`);
 		}
-	} else if (inside.uidMap === null || inside.uidMap === HOST_USERS_MAP) {
-		failures.push("no user namespace of its own");
+	} else {
+		if (inside.uidMap === null || inside.uidMap === HOST_USERS_MAP) {
+			failures.push("no user namespace of its own");
+		}
+		failures.push(...pidFailures(inside.pids));
 	}
 	for (const target of targets) {
 		const reached = inside.reached[target.name] === true;
@@ -385,6 +451,17 @@ export function podSecurityFailures(refusal: string | null, enforce: string | un
 	return [
 		`refused a Pod that the Restricted Pod Security Standard refuses, but not by Pod Security admission (${label}): ${answer}`,
 	];
+}
+
+/** A sandbox's tasks must stop at {@link PID_BOUND}: the kernel refuses one before the container holds more. */
+function pidFailures(pids: Pids | null): string[] {
+	if (pids === null) {
+		return ["recorded no check of the PID limit"];
+	}
+	if (!pids.refused || pids.held > PID_BOUND) {
+		return [`holds ${pids.held} tasks with no PID limit of ${PID_BOUND} or lower`];
+	}
+	return [];
 }
 
 /**
@@ -551,7 +628,7 @@ export async function isolationGate(options: GateOptions): Promise<Inside> {
 			"node",
 			"-e",
 			PROBE,
-			JSON.stringify({ targets, dns, firstApi: FIRST_API }),
+			JSON.stringify({ targets, dns, firstApi: FIRST_API, pidBound: gvisor ? null : PID_BOUND }),
 		]);
 		const inside = parseInside(parseJson(raw.trim().split("\n").at(-1) ?? ""));
 		for (const failure of insideFailures(inside, targets, gvisor)) {

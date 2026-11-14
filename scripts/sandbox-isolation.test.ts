@@ -11,6 +11,8 @@ import {
 	namespacedName,
 	parseAddress,
 	podSecurityFailures,
+	parseInside,
+	PID_BOUND,
 	specFailures,
 	type Target,
 	unrestrictedPod,
@@ -108,6 +110,7 @@ const inside: Inside = {
 	dns: false,
 	publicDns: false,
 	firstApi: "closed after 120 ms",
+	pids: { refused: true, held: 3102 },
 };
 
 void test("from inside, a sandbox reaches the gateway alone, as a non-root user with no token", () => {
@@ -147,6 +150,41 @@ void test("from inside, a sandbox reaches the gateway alone, as a non-root user 
 		insideFailures({ ...inside, uidMap: "0 0 4294967295", kernel: "4.19.0-gvisor" }, targets, true),
 		[],
 	);
+});
+
+void test("a sandbox's tasks stop at the PID bound, except under gVisor, where the probe cannot see the node's limit", () => {
+	assert.equal(PID_BOUND, 4096);
+	assert.deepEqual(
+		insideFailures({ ...inside, pids: { refused: false, held: 4104 } }, targets, false),
+		["holds 4104 tasks with no PID limit of 4096 or lower"],
+	);
+	// A refusal above the bound means a limit above it.
+	assert.deepEqual(
+		insideFailures({ ...inside, pids: { refused: true, held: 5000 } }, targets, false),
+		["holds 5000 tasks with no PID limit of 4096 or lower"],
+	);
+	assert.deepEqual(insideFailures({ ...inside, pids: null }, targets, false), [
+		"recorded no check of the PID limit",
+	]);
+	const gvisor = { ...inside, uidMap: "0 0 4294967295", kernel: "4.19.0-gvisor", pids: null };
+	assert.deepEqual(insideFailures(gvisor, targets, true), []);
+});
+
+void test("the probe's report of the PID check is validated", () => {
+	const report = {
+		uid: 1000,
+		gid: 1000,
+		kernel: "6.12.0",
+		reached: {},
+		pids: { refused: true, held: 3102 },
+	};
+	assert.deepEqual(parseInside(report).pids, { refused: true, held: 3102 });
+	assert.deepEqual(parseInside({ ...report, pids: { refused: "yes", held: 3102 } }).pids, {
+		refused: false,
+		held: 3102,
+	});
+	assert.equal(parseInside({ ...report, pids: null }).pids, null);
+	assert.equal(parseInside({ ...report, pids: undefined }).pids, null);
 });
 
 void test("the gate's template keeps the Pod spec, labels and policies and changes only the command", () => {

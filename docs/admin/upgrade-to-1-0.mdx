@@ -149,6 +149,7 @@ These migration entries also apply to a host that upgrades to 1.0:
 - *Log context uses consistent field names*: update your log queries that read `context.installation_id` or `context.proxy.apiProtocol`.
 - *Stop every role before clearing personal logins from GitHub App installation records*. The previous server cannot read an installation record without a login.
 - *Stop every role before recording failed and handed-off run outcomes*. The previous server cannot read the new run outcomes.
+- *Set a PID limit for each sandbox Pod*: set the kubelet's `podPidsLimit` to 4096 or lower on each sandbox node. The one-host platform already sets it.
 
 ## Cut over to 1.0.0
 
