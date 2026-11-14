@@ -11,6 +11,7 @@ import { test, type TestContext } from "node:test";
 import {
 	focusedTests,
 	frontendCommands,
+	pushScopeReason,
 	pushScopes,
 	pushTasks,
 	runUnlessStalled,
@@ -522,4 +523,21 @@ void test("a push of shipped code without a changeset stops before any check run
 	} finally {
 		await rm(f.directory, { recursive: true, force: true });
 	}
+});
+
+void test("a migration fragment selects the changeset checks, and the first line names what escalated", () => {
+	// The docs-drift branch that ran every suite: docs, two tooling checks and two migration fragments.
+	const docsDrift = [
+		".migration/durable-compose-claim.md",
+		"docs/admin/alert-rules.md",
+		"scripts/check-alert-rules.ts",
+		"scripts/check-docs-pages.test.ts",
+	];
+	assert.deepEqual(pushScopes([".migration/durable-compose-claim.md"]), ["changesets"]);
+	assert.equal(pushScopeReason(docsDrift), "scopes agents, changesets, docs");
+	assert.match(
+		pushScopeReason([...docsDrift, "README.md"]),
+		/^all scopes \(.*\), because README\.md selects them$/u,
+	);
+	assert.match(pushScopeReason(undefined), /because no merge base was found$/u);
 });

@@ -4,7 +4,14 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { changedPaths, parseBase, pathFilters, scopesFor, type Scope } from "./check-affected.ts";
+import {
+	changedPaths,
+	mergeBase,
+	parseBase,
+	pathFilters,
+	scopesFor,
+	type Scope,
+} from "./check-affected.ts";
 import { NEXT_CHANGELOG_DIRECTORY } from "./lib/changelog.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { repositoryCli } from "./lib/process.ts";
@@ -93,6 +100,24 @@ export function pushScopes(paths: string[] | undefined): Exclude<Scope, "full">[
 		}
 	}
 	return [...selected].toSorted();
+}
+
+/**
+ * Why the push checks cover what they cover, for the hook's first line: a lane that sees every scope
+ * selected can tell which file did it, or that no merge base was found.
+ */
+export function pushScopeReason(paths: string[] | undefined): string {
+	if (paths === undefined) {
+		return `all scopes (${allScopes.join(", ")}), because no merge base was found`;
+	}
+	const scopes = pushScopes(paths);
+	if (scopes.length === allScopes.length) {
+		const escalating = paths.find((file) => pushScopes([file]).length === allScopes.length);
+		if (escalating !== undefined) {
+			return `all scopes (${scopes.join(", ")}), because ${escalating} selects them`;
+		}
+	}
+	return scopes.length === 0 ? "no scopes" : `scopes ${scopes.join(", ")}`;
 }
 
 export function pushTasks(paths: string[] | undefined): string[] {
@@ -333,13 +358,18 @@ export async function runUnlessStalled(
 async function main(): Promise<void> {
 	const base = parseBase(process.argv.slice(2));
 	let paths: string[] | undefined;
+	let since = "";
 	try {
+		since = ` since ${mergeBase(base).slice(0, 10)}, the merge base with ${base}`;
 		paths = changedPaths(base);
 	} catch {
 		console.log(
 			`No usable merge base with ${base}; selecting all scoped checks and frontend unit projects without fetching.`,
 		);
 	}
+	console.log(
+		`Push checks for ${paths === undefined ? "every" : String(paths.length)} changed paths${since}: ${pushScopeReason(paths)}.`,
+	);
 	// First, because it takes milliseconds and otherwise fails only in the merge queue.
 	if (paths?.some((file) => file.startsWith(`${NEXT_CHANGELOG_DIRECTORY}/`)) === true) {
 		let queued: string[] = [];
