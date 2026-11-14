@@ -2345,3 +2345,36 @@ void test("a turn's call waits while its worker restarts, and its run's end stop
 	await assert.rejects(httpTurnApi({ ...endpoint, patience: ended }).context());
 	assert.ok(ended.aborted);
 });
+
+void test("a turn's call that its worker took but never answered ends with its run, and is not repeated", async () => {
+	let requests = 0;
+	const silent = createServer((request) => {
+		requests += 1;
+		request.resume();
+	});
+	silent.listen(0, "127.0.0.1");
+	await once(silent, "listening");
+	try {
+		const address = silent.address();
+		assert.ok(isRecord(address) && typeof address.port === "number");
+		const run = new AbortController();
+		const read = httpTurnApi({
+			base: `http://127.0.0.1:${address.port}/turn/turn-1`,
+			headers: {},
+			label: "turn turn-1",
+			patience: run.signal,
+		}).context();
+		await sleep(300);
+		const ended = Date.now();
+		const reason = new Error("the run's lease ended");
+		run.abort(reason);
+
+		await assert.rejects(read, (error) => error === reason);
+		assert.ok(Date.now() - ended < 2000, "the call ended with its run, not at its timeout");
+		assert.equal(requests, 1);
+	} finally {
+		silent.closeAllConnections();
+		silent.close();
+		await once(silent, "close");
+	}
+});

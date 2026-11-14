@@ -377,7 +377,10 @@ export function httpTurnApi(
 								...(body === undefined ? {} : { "content-type": "application/json" }),
 							},
 							body: body === undefined ? undefined : JSON.stringify(body),
-							signal: AbortSignal.any([signal, timeout].filter((part) => part !== undefined)),
+							// The run's end also ends a call in flight: nothing is left to answer for.
+							signal: AbortSignal.any(
+								[endpoint.patience, signal, timeout].filter((part) => part !== undefined),
+							),
 						});
 					},
 					AbortSignal.any([endpoint.patience, ...(signal === undefined ? [] : [signal])]),

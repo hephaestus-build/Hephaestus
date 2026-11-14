@@ -335,7 +335,8 @@ export async function runScope(
 					},
 					body,
 				}),
-			context.limits.gatewayPatience(),
+			// A start that waits for the gateway stops with the measurement, so a failed sibling ends the run at once.
+			AbortSignal.any([context.limits.gatewayPatience(), context.limits.measuringEnded]),
 		);
 		if (!current) {
 			skippedPractices.add(slug);
