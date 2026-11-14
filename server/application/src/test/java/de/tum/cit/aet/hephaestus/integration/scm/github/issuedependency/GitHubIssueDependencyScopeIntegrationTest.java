@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderFix
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -55,6 +56,8 @@ import org.springframework.web.reactive.function.client.ClientResponse;
 import reactor.core.publisher.Mono;
 
 class GitHubIssueDependencyScopeIntegrationTest extends BaseIntegrationTest {
+    @Autowired
+    private IdentityProviderLookup providerLookup;
 
     @Autowired
     private IdentityProviderRepository providers;
@@ -424,7 +427,7 @@ class GitHubIssueDependencyScopeIntegrationTest extends BaseIntegrationTest {
         return new GitHubIssueDependencySyncService(
                 issues,
                 repositories,
-                providers,
+                providerLookup,
                 syncTargets,
                 boundary,
                 syncProperties,

@@ -3,12 +3,11 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.commit;
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
@@ -60,7 +59,7 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
     private final GitRepositoryManager gitRepositoryManager;
     private final GitHubAppTokenService tokenService;
     private final RepositoryRepository repositoryRepository;
-    private final IdentityProviderRepository identityProviderRepository;
+    private final IdentityProviderLookup identityProviders;
     private final CommitRepository commitRepository;
     private final CommitDetailsPersister persister;
     private final CommitAuthorResolver authorResolver;
@@ -73,7 +72,7 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
             GitRepositoryManager gitRepositoryManager,
             GitHubAppTokenService tokenService,
             RepositoryRepository repositoryRepository,
-            IdentityProviderRepository identityProviderRepository,
+            IdentityProviderLookup identityProviders,
             CommitRepository commitRepository,
             CommitDetailsPersister persister,
             CommitAuthorResolver authorResolver,
@@ -91,7 +90,7 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
         this.gitRepositoryManager = gitRepositoryManager;
         this.tokenService = tokenService;
         this.repositoryRepository = repositoryRepository;
-        this.identityProviderRepository = identityProviderRepository;
+        this.identityProviders = identityProviders;
         this.commitRepository = commitRepository;
         this.persister = persister;
         this.authorResolver = authorResolver;
@@ -117,9 +116,8 @@ public class GitHubPushMessageHandler extends AbstractIntegrationMessageHandler<
             return;
         }
 
-        var providerId = identityProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL)
-                .map(IdentityProvider::getId);
+        var providerId =
+                identityProviders.findId(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL);
         if (providerId.isEmpty()) {
             log.warn("Skipped push event: reason=githubProviderNotFound, repoName={}", repoName);
             return;

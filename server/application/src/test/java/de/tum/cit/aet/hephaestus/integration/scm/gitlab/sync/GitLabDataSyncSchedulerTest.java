@@ -25,11 +25,10 @@ import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncContextProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
@@ -115,7 +114,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
     private ObjectProvider<GitLabRateLimitTracker> rateLimitTrackerProvider;
 
     @Mock
-    private ConnectionRepository connectionRepository;
+    private ConnectionQueries connectionQueries;
 
     @Mock
     private SyncJobService syncJobService;
@@ -158,7 +157,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
                 rateLimitTrackerProvider,
                 syncProps,
                 synchronousExecutor,
-                connectionRepository,
+                connectionQueries,
                 syncJobService,
                 deletionSweepService,
                 initializationService,
@@ -225,9 +224,8 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
     @Test
     void shouldRecordJobWhenActiveConnectionExists() {
         Connection connection = activeGitLabConnection();
-        when(connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                        WORKSPACE_ID, IntegrationKind.GITLAB, IntegrationState.ACTIVE))
-                .thenReturn(Optional.of(connection));
+        when(connectionQueries.findActive(WORKSPACE_ID, IntegrationKind.GITLAB))
+                .thenAnswer(ignored -> Optional.of(snapshotFixture(connection)));
 
         scheduler.syncDataCron();
 
@@ -244,9 +242,8 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
     @Test
     void shouldRunBodyThroughJobTemplate() {
         Connection connection = activeGitLabConnection();
-        when(connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                        WORKSPACE_ID, IntegrationKind.GITLAB, IntegrationState.ACTIVE))
-                .thenReturn(Optional.of(connection));
+        when(connectionQueries.findActive(WORKSPACE_ID, IntegrationKind.GITLAB))
+                .thenAnswer(ignored -> Optional.of(snapshotFixture(connection)));
         doAnswer(inv -> {
                     Consumer<SyncJobHandle> body = inv.getArgument(1);
                     body.accept(syncJobHandle);
@@ -264,8 +261,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
 
     @Test
     void shouldRunUnrecordedWhenNoActiveConnection() {
-        when(connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                        eq(WORKSPACE_ID), eq(IntegrationKind.GITLAB), eq(IntegrationState.ACTIVE)))
+        when(connectionQueries.findActive(eq(WORKSPACE_ID), eq(IntegrationKind.GITLAB)))
                 .thenReturn(Optional.empty());
 
         scheduler.syncDataCron();
@@ -277,9 +273,8 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
     @Test
     void shouldSkipScopeOnJobConflictWithoutFailingCron() {
         Connection connection = activeGitLabConnection();
-        when(connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                        WORKSPACE_ID, IntegrationKind.GITLAB, IntegrationState.ACTIVE))
-                .thenReturn(Optional.of(connection));
+        when(connectionQueries.findActive(WORKSPACE_ID, IntegrationKind.GITLAB))
+                .thenAnswer(ignored -> Optional.of(snapshotFixture(connection)));
         doThrow(new SyncJobConflictException(existingActiveJob(connection)))
                 .when(syncJobService)
                 .run(any(), any());
@@ -705,5 +700,10 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
                 null);
         ReflectionTestUtils.setField(job, "id", 500L);
         return job;
+    }
+
+    private static ConnectionQueries.ConnectionSnapshot snapshotFixture(Connection connection) {
+        return new ConnectionQueries.ConnectionSnapshot(
+                connection.getId(), connection.getVersion(), connection.getConfig());
     }
 }

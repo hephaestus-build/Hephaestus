@@ -1,11 +1,9 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync;
 
 import de.tum.cit.aet.hephaestus.activity.spi.ActivityLedgerRepair;
-import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncContextProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
@@ -109,7 +107,7 @@ public class GitLabDataSyncScheduler {
     private final ObjectProvider<GitLabRateLimitTracker> rateLimitTrackerProvider;
     private final SyncSchedulerProperties syncSchedulerProperties;
     private final Executor monitoringExecutor;
-    private final ConnectionRepository connectionRepository;
+    private final ConnectionQueries connectionQueries;
     private final SyncJobService syncJobService;
     private final GitLabDeletionSweepService deletionSweepService;
     private final GitLabWorkspaceInitializationService initializationService;
@@ -128,7 +126,7 @@ public class GitLabDataSyncScheduler {
             ObjectProvider<GitLabRateLimitTracker> rateLimitTrackerProvider,
             SyncSchedulerProperties syncSchedulerProperties,
             @Qualifier("monitoringExecutor") Executor monitoringExecutor,
-            ConnectionRepository connectionRepository,
+            ConnectionQueries connectionQueries,
             SyncJobService syncJobService,
             GitLabDeletionSweepService deletionSweepService,
             GitLabWorkspaceInitializationService initializationService,
@@ -146,7 +144,7 @@ public class GitLabDataSyncScheduler {
         this.rateLimitTrackerProvider = rateLimitTrackerProvider;
         this.syncSchedulerProperties = syncSchedulerProperties;
         this.monitoringExecutor = monitoringExecutor;
-        this.connectionRepository = connectionRepository;
+        this.connectionQueries = connectionQueries;
         this.syncJobService = syncJobService;
         this.deletionSweepService = deletionSweepService;
         this.initializationService = initializationService;
@@ -211,7 +209,7 @@ public class GitLabDataSyncScheduler {
 
     /**
      * Wraps {@link #syncScope} in the {@code SyncJobService} template when the scope has an ACTIVE
-     * GitLab {@link Connection} — the cron's per-scope fan-out is the {@code SCHEDULED}/
+     * GitLab {@link ConnectionQueries.ConnectionSnapshot} — the cron's per-scope fan-out is the {@code SCHEDULED}/
      * {@code RECONCILIATION} trigger path. A scope without an ACTIVE
      * connection (e.g. a stale sync target left over from a disconnected workspace) still syncs,
      * just without a job row — the sync-target enumeration and the connection registry are not
@@ -222,9 +220,8 @@ public class GitLabDataSyncScheduler {
      * than racing it; the manual job's own completion will bring watermarks current.
      */
     private void syncScopeWithJobRecording(SyncSession session) {
-        Optional<Connection> connection =
-                connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                        session.scopeId(), IntegrationKind.GITLAB, IntegrationState.ACTIVE);
+        Optional<ConnectionQueries.ConnectionSnapshot> connection =
+                connectionQueries.findActive(session.scopeId(), IntegrationKind.GITLAB);
         if (connection.isEmpty()) {
             syncScope(session);
             return;
@@ -234,7 +231,7 @@ public class GitLabDataSyncScheduler {
             syncJobService.run(
                     new SyncJobRequest(
                             session.scopeId(),
-                            connection.get().getId(),
+                            connection.get().id(),
                             IntegrationKind.GITLAB,
                             SyncJobType.RECONCILIATION,
                             SyncJobTrigger.SCHEDULED,
@@ -244,7 +241,7 @@ public class GitLabDataSyncScheduler {
             log.info(
                     "Skipped scheduled GitLab sync, already an active sync job: scopeId={}, connectionId={}",
                     session.scopeId(),
-                    connection.get().getId());
+                    connection.get().id());
         }
     }
 

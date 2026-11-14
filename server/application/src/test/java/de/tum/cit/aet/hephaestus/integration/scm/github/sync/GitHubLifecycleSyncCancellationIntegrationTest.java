@@ -12,7 +12,9 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationTokenProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -70,6 +72,11 @@ import org.springframework.scheduling.concurrent.ConcurrentTaskExecutor;
 
 /** Real lifecycle trigger, full repository bodies and row writes; only provider responses are controlled. */
 class GitHubLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIntegrationTest {
+    @Autowired
+    private ConnectionQueries connectionQueries;
+
+    @Autowired
+    private SourceProviderNamespaces providerNamespaces;
 
     @Autowired
     private ConnectionRepository connectionRepository;
@@ -317,7 +324,7 @@ class GitHubLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                 new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of()));
         GitHubDataSyncService service = new GitHubDataSyncService(
                 properties,
-                gitProviderRepository,
+                providerNamespaces,
                 syncTargets,
                 mock(OrganizationMembershipListener.class),
                 repositoryRepository,
@@ -344,12 +351,12 @@ class GitHubLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
         StaticListableBeanFactory beans = new StaticListableBeanFactory();
         beans.addBean("service", service);
         beans.addBean("targets", syncTargets);
-        beans.addBean("connections", connectionRepository);
+        beans.addBean("connections", connectionQueries);
         beans.addBean("jobs", jobs);
         GitHubWorkspaceDataSyncTrigger trigger = new GitHubWorkspaceDataSyncTrigger(
                 beans.getBeanProvider(GitHubDataSyncService.class),
                 beans.getBeanProvider(SyncTargetProvider.class),
-                beans.getBeanProvider(ConnectionRepository.class),
+                beans.getBeanProvider(ConnectionQueries.class),
                 beans.getBeanProvider(SyncJobService.class),
                 beans.getBeanProvider(WorkspaceRepositoryMonitorService.class),
                 new ConcurrentTaskExecutor(Runnable::run));

@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -24,19 +24,19 @@ public class GitLabWorkspaceLinkService {
     private final WorkspaceRepository workspaceRepository;
     private final OrganizationRepository organizationRepository;
     private final WorkspaceActorSelector actorSelector;
-    private final IdentityProviderRepository identityProviderRepository;
+    private final SourceProviderNamespaces providerNamespaces;
     private final RepositoryToMonitorRepository monitorRepository;
 
     public GitLabWorkspaceLinkService(
             WorkspaceRepository workspaceRepository,
             OrganizationRepository organizationRepository,
             WorkspaceActorSelector actorSelector,
-            IdentityProviderRepository identityProviderRepository,
+            SourceProviderNamespaces providerNamespaces,
             RepositoryToMonitorRepository monitorRepository) {
         this.workspaceRepository = workspaceRepository;
         this.organizationRepository = organizationRepository;
         this.actorSelector = actorSelector;
-        this.identityProviderRepository = identityProviderRepository;
+        this.providerNamespaces = providerNamespaces;
         this.monitorRepository = monitorRepository;
     }
 
@@ -98,7 +98,7 @@ public class GitLabWorkspaceLinkService {
                                 .filter(workspace -> workspace.getOrganizationId() == null)
                                 .map(workspace -> groupPath.equalsIgnoreCase(workspace.getAccountLogin()))
                                 .orElse(false)))
-                .flatMap(identityProviderRepository::findById);
+                .flatMap(providerNamespaces::findForMirror);
     }
 
     /**

@@ -1,9 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceDataSyncTrigger;
@@ -38,7 +36,7 @@ import org.springframework.stereotype.Component;
  *
  * <p><b>Sync-observability job recording:</b> {@link #syncAllRepositories(long)}
  * is the {@code LIFECYCLE} trigger entry point (called on Connection activation). When the
- * workspace has an ACTIVE GitLab {@link Connection}, the sync body runs inside
+ * workspace has an ACTIVE GitLab {@link ConnectionQueries.ConnectionSnapshot}, the sync body runs inside
  * {@link SyncJobService}'s {@code INITIAL}/{@code LIFECYCLE} job template; otherwise it runs
  * unrecorded (fallback — a workspace can reach this path fractionally before its Connection flips
  * to ACTIVE). A {@link SyncJobConflictException} (already an active job on this connection) skips
@@ -56,17 +54,17 @@ public class GitLabWorkspaceDataSyncTrigger implements WorkspaceDataSyncTrigger 
 
     private final GitLabWorkspaceInitializationService gitLabInitService;
     private final WorkspaceRepository workspaceRepository;
-    private final ConnectionRepository connectionRepository;
+    private final ConnectionQueries connectionQueries;
     private final SyncJobService syncJobService;
 
     public GitLabWorkspaceDataSyncTrigger(
             GitLabWorkspaceInitializationService gitLabInitService,
             WorkspaceRepository workspaceRepository,
-            ConnectionRepository connectionRepository,
+            ConnectionQueries connectionQueries,
             SyncJobService syncJobService) {
         this.gitLabInitService = gitLabInitService;
         this.workspaceRepository = workspaceRepository;
-        this.connectionRepository = connectionRepository;
+        this.connectionQueries = connectionQueries;
         this.syncJobService = syncJobService;
     }
 
@@ -77,9 +75,8 @@ public class GitLabWorkspaceDataSyncTrigger implements WorkspaceDataSyncTrigger 
 
     @Override
     public void syncAllRepositories(long workspaceId) {
-        Optional<Connection> connection =
-                connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                        workspaceId, IntegrationKind.GITLAB, IntegrationState.ACTIVE);
+        Optional<ConnectionQueries.ConnectionSnapshot> connection =
+                connectionQueries.findActive(workspaceId, IntegrationKind.GITLAB);
         if (connection.isEmpty()) {
             syncAllRepositoriesBody(workspaceId, () -> false);
             return;
@@ -89,7 +86,7 @@ public class GitLabWorkspaceDataSyncTrigger implements WorkspaceDataSyncTrigger 
             syncJobService.run(
                     new SyncJobRequest(
                             workspaceId,
-                            connection.get().getId(),
+                            connection.get().id(),
                             IntegrationKind.GITLAB,
                             SyncJobType.INITIAL,
                             SyncJobTrigger.LIFECYCLE,
@@ -113,7 +110,7 @@ public class GitLabWorkspaceDataSyncTrigger implements WorkspaceDataSyncTrigger 
             log.info(
                     "Skipped GitLab lifecycle sync, already an active sync job: workspaceId={}, connectionId={}",
                     workspaceId,
-                    connection.get().getId());
+                    connection.get().id());
         }
     }
 

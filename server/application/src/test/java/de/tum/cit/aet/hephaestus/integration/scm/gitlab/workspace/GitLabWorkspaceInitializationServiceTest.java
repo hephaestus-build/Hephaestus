@@ -21,7 +21,7 @@ import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
@@ -156,7 +156,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                         workspaceRepository,
                         organizationRepository,
                         actorSelector,
-                        mock(IdentityProviderRepository.class),
+                        mock(SourceProviderNamespaces.class),
                         repositoryToMonitorRepository),
                 repositoryMonitors,
                 actorSelector,

@@ -1,10 +1,9 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.sync.status;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.framework.CronSchedules;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionSyncDetails;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionSyncStateProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -39,7 +38,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class GitHubConnectionSyncStateProvider implements ConnectionSyncStateProvider {
 
-    private final ConnectionRepository connectionRepository;
+    private final ConnectionQueries connectionQueries;
     private final ScopedRateLimitTracker rateLimitTracker;
     private final GitHubInstallationSuspensionTracker suspensionTracker;
     private final SyncSchedulerProperties syncSchedulerProperties;
@@ -49,7 +48,7 @@ public class GitHubConnectionSyncStateProvider implements ConnectionSyncStatePro
     private final Clock clock;
 
     public GitHubConnectionSyncStateProvider(
-            ConnectionRepository connectionRepository,
+            ConnectionQueries connectionQueries,
             ScopedRateLimitTracker rateLimitTracker,
             GitHubInstallationSuspensionTracker suspensionTracker,
             SyncSchedulerProperties syncSchedulerProperties,
@@ -57,7 +56,7 @@ public class GitHubConnectionSyncStateProvider implements ConnectionSyncStatePro
             RepositoryRepository repositoryRepository,
             ScmResourceCountReader countReader,
             Clock clock) {
-        this.connectionRepository = connectionRepository;
+        this.connectionQueries = connectionQueries;
         this.rateLimitTracker = rateLimitTracker;
         this.suspensionTracker = suspensionTracker;
         this.syncSchedulerProperties = syncSchedulerProperties;
@@ -75,14 +74,16 @@ public class GitHubConnectionSyncStateProvider implements ConnectionSyncStatePro
     @Override
     public ConnectionSyncDetails describe(IntegrationRef ref, long connectionId) {
         long workspaceId = ref.workspaceId();
-        Connection connection = connectionRepository.findById(connectionId).orElse(null);
+        ConnectionQueries.ConnectionView connection = connectionQueries
+                .findReferenced(new IntegrationRef(IntegrationKind.GITHUB, workspaceId, null, connectionId))
+                .orElse(null);
 
         // App-installation workspaces have a vendor-managed webhook (registered at install time), so we
         // report TRUE. PAT connections have no webhook signal we track, so webhookRegistered stays null
         // (unknown) rather than a claimed FALSE.
         Boolean webhookRegistered = null;
         Long installationId = null;
-        if (connection != null && connection.getConfig() instanceof ConnectionConfig.GitHubAppConfig appConfig) {
+        if (connection != null && connection.config() instanceof ConnectionConfig.GitHubAppConfig appConfig) {
             webhookRegistered = Boolean.TRUE;
             installationId = appConfig.installationId();
         }

@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
@@ -48,6 +49,8 @@ import tools.jackson.databind.node.ObjectNode;
 
 @RecordApplicationEvents
 class GitHubCheckEventsIntegrationTest extends BaseIntegrationTest {
+    @Autowired
+    private IdentityProviderLookup providerLookup;
 
     private static final String CHECKED_SHA = "67700adac0c0f02df77fdf1bf037273e7b056aa9";
     private static final String OTHER_SHA = "1".repeat(40);
@@ -288,7 +291,7 @@ class GitHubCheckEventsIntegrationTest extends BaseIntegrationTest {
         when(checkRuns.read(anyLong(), eq(repository.getNameWithOwner()), eq(CHECKED_SHA)))
                 .thenReturn(Optional.of(new HeadCheckRuns(CHECKED_SHA, List.of(passed), true, Instant.now(), null)));
         var reread = new GitHubHeadCheckRunsReread(
-                gitProviderRepository,
+                providerLookup,
                 repositoryRepository,
                 pullRequestRepository,
                 checkRuns,

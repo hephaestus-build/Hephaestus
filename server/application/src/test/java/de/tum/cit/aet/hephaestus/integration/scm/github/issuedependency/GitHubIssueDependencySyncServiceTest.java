@@ -10,9 +10,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncMetadata;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -33,14 +33,14 @@ class GitHubIssueDependencySyncServiceTest {
 
     @Test
     void shouldFailBeforeTransportAndTimestampWhenCanonicalGitHubProviderIsMissing() {
-        var providers = mock(IdentityProviderRepository.class);
+        var providers = mock(IdentityProviderLookup.class);
         var repositories = mock(RepositoryRepository.class);
         var targets = mock(SyncTargetProvider.class);
         var clients = mock(GitHubGraphQlClientProvider.class);
         when(targets.getSyncMetadata(1L))
                 .thenReturn(Optional.of(new SyncMetadata(1L, "Workspace", "owner", null, null, null, null)));
         when(targets.getRepositoryNamesForScope(1L)).thenReturn(List.of("owner/repo"));
-        when(providers.findByTypeAndServerUrl(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL))
+        when(providers.findId(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL))
                 .thenReturn(Optional.empty());
         var service = new GitHubIssueDependencySyncService(
                 mock(IssueRepository.class),

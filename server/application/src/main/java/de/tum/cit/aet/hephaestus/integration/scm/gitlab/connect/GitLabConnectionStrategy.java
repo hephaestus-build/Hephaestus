@@ -2,9 +2,9 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.connect;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.identity.GitLabWorkspaceInstance;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
@@ -34,14 +34,14 @@ import org.springframework.stereotype.Component;
 public class GitLabConnectionStrategy implements ConnectionStrategy {
 
     private final ScmWorkspaceContentEraser contentEraser;
-    private final ConnectionRepository connections;
+    private final ConnectionQueries connections;
     private final WorkspaceRepository workspaces;
     private final GitLabWorkspaceInstance instance;
     private final GitLabPreflightService preflight;
 
     public GitLabConnectionStrategy(
             ScmWorkspaceContentEraser contentEraser,
-            ConnectionRepository connections,
+            ConnectionQueries connections,
             WorkspaceRepository workspaces,
             GitLabWorkspaceInstance instance,
             GitLabPreflightService preflight) {
@@ -65,12 +65,12 @@ public class GitLabConnectionStrategy implements ConnectionStrategy {
         }
         String serverUrl = instance.require(null);
         var previous = connections
-                .findByWorkspaceIdAndKindAndInstanceKey(request.workspaceId(), IntegrationKind.GITLAB, serverUrl)
-                .filter(connection -> connection.getState() == IntegrationState.UNINSTALLED)
+                .findReferenced(new IntegrationRef(IntegrationKind.GITLAB, request.workspaceId(), serverUrl))
+                .filter(connection -> connection.state() == IntegrationState.UNINSTALLED)
                 .orElseThrow(
                         () -> new IllegalArgumentException(
                                 "This workspace has no disconnected GitLab connection. Create a GitLab workspace to connect one."));
-        if (!(previous.getConfig() instanceof ConnectionConfig.GitLabConfig config)) {
+        if (!(previous.config() instanceof ConnectionConfig.GitLabConfig config)) {
             throw new IllegalStateException("The disconnected GitLab connection has no group configuration.");
         }
         var workspace = workspaces

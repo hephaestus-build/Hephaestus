@@ -6,15 +6,20 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProviderInstanceRegistered;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -22,6 +27,7 @@ import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -55,6 +61,12 @@ class ConnectionConsumerCommandsIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ApplicationEvents events;
+
+    @Autowired
+    private ConnectionQueries queries;
+
+    @PersistenceContext
+    private @Nullable EntityManager entityManager;
 
     @Test
     void shouldRefuseAnotherWorkspacesAnswerAndRefreshTheLockedConnection() {
@@ -150,6 +162,14 @@ class ConnectionConsumerCommandsIntegrationTest extends BaseIntegrationTest {
                         UUID.randomUUID().toString(),
                         "ALL → SELECTED"))
                 .isInstanceOf(IllegalTransactionStateException.class);
+        assertThatThrownBy(() -> service.holdLifecycleLock(workspaceId, connection.getId()))
+                .isInstanceOf(IllegalTransactionStateException.class);
+        assertThatThrownBy(() -> service.findHeldConnection(workspaceId, connection.getId()))
+                .isInstanceOf(IllegalTransactionStateException.class);
+        assertThatThrownBy(() -> service.configurationInState(workspaceId, connection.getId(), IntegrationState.ACTIVE))
+                .isInstanceOf(IllegalTransactionStateException.class);
+        assertThatThrownBy(() -> service.replaceHeldConfig(connection, connection.getConfig()))
+                .isInstanceOf(IllegalTransactionStateException.class);
     }
 
     @Test
@@ -161,6 +181,54 @@ class ConnectionConsumerCommandsIntegrationTest extends BaseIntegrationTest {
                 .contains(new IdentityProviderLookup.Provider(id, IdentityProviderType.GITLAB, spelling));
         assertThat(events.stream(PersonProviderInstanceRegistered.class).filter(event -> event.providerId() == id))
                 .isEmpty();
+    }
+
+    @Test
+    void shouldKeepTheConfigReplacementAndItsAdmissionReadInTheHeldWorkspace() {
+        var connection = activeConnection();
+        var foreign = activeConnection();
+        long workspaceId = connection.getWorkspace().getId();
+        service.holdLifecycleLock(workspaceId, connection.getId());
+        var held = service.findHeldConnection(workspaceId, connection.getId()).orElseThrow();
+        assertThat(service.findHeldConnection(foreign.getWorkspace().getId(), connection.getId()))
+                .isEmpty();
+        assertThat(service.configurationInState(workspaceId, connection.getId(), IntegrationState.ACTIVE))
+                .contains(connection.getConfig());
+        assertThat(service.configurationInState(
+                        foreign.getWorkspace().getId(), connection.getId(), IntegrationState.ACTIVE))
+                .isEmpty();
+        var replacement =
+                new ConnectionConfig.SlackConfig(connection.getInstanceKey(), "Updated by owner", null, Set.of());
+        service.replaceHeldConfig(held, replacement);
+        connections.flush();
+        assertThat(queries.findReferenced(
+                                new IntegrationRef(IntegrationKind.SLACK, workspaceId, null, connection.getId()))
+                        .map(ConnectionQueries.ConnectionView::config))
+                .contains(replacement);
+        assertThat(queries.findReferenced(new IntegrationRef(
+                                IntegrationKind.SLACK, foreign.getWorkspace().getId(), null, foreign.getId()))
+                        .map(ConnectionQueries.ConnectionView::config))
+                .contains(foreign.getConfig());
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void shouldResolveTheMirrorReferenceInEachWritersOwnPersistenceContext() {
+        var writer = new TransactionTemplate(transactions);
+        long id = Objects.requireNonNull(writer.execute(status -> namespaces.createIdentityProvider(
+                IdentityProviderType.GITLAB, "https://writer-" + UUID.randomUUID() + ".example.test")));
+        var independent = new TransactionTemplate(transactions);
+        independent.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        writer.executeWithoutResult(status -> {
+            var outer = namespaces.referenceForMirror(id);
+            independent.executeWithoutResult(inner -> {
+                var reference = namespaces.referenceForMirror(id);
+                assertThat(reference).isNotSameAs(outer);
+                assertThat(Objects.requireNonNull(entityManager).contains(reference))
+                        .isTrue();
+                assertThat(reference.getId()).isEqualTo(id);
+            });
+        });
     }
 
     private Connection activeConnection() {

@@ -9,9 +9,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -55,7 +55,7 @@ class GitHubSubIssueSyncServiceTest extends BaseUnitTest {
     private RepositoryRepository repositoryRepository;
 
     @Mock
-    private IdentityProviderRepository identityProviderRepository;
+    private IdentityProviderLookup identityProviders;
 
     @Mock
     private SyncTargetProvider syncTargetProvider;
@@ -91,7 +91,7 @@ class GitHubSubIssueSyncServiceTest extends BaseUnitTest {
         service = new GitHubSubIssueSyncService(
                 issueRepository,
                 repositoryRepository,
-                identityProviderRepository,
+                identityProviders,
                 syncTargetProvider,
                 graphQlClientProvider,
                 syncProperties,

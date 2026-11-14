@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.PeopleRegistry;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -19,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.graphql.FragmentMergingDocumentSource;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener;
@@ -153,6 +155,12 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
 
     @Autowired
     private ConnectionRepository connections;
+
+    @Autowired
+    private ConnectionCommands connectionCommands;
+
+    @Autowired
+    private ConnectionQueries connectionQueries;
 
     @Autowired
     private MembershipRepository memberships;
@@ -309,7 +317,8 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
         projection = new GitLabSelectedMembershipProjection(
                 workspaces,
                 monitors,
-                connections,
+                connectionCommands,
+                connectionQueries,
                 actorSelector,
                 roster,
                 collaboratorSync,

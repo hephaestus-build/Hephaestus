@@ -5,10 +5,10 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationAttentionService;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
@@ -56,7 +56,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
     private final RepositoryToMonitorRepository repositoryToMonitorRepository;
     private final RepositoryRepository repositoryRepository;
     private final UserRepository userRepository;
-    private final IdentityProviderRepository gitProviderRepository;
+    private final IdentityProviderLookup identityProviders;
 
     private final WorkspaceSlugService workspaceSlugService;
     private final MembershipService workspaceMembershipService;
@@ -75,7 +75,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
             RepositoryToMonitorRepository repositoryToMonitorRepository,
             RepositoryRepository repositoryRepository,
             UserRepository userRepository,
-            IdentityProviderRepository gitProviderRepository,
+            IdentityProviderLookup identityProviders,
             WorkspaceSlugService workspaceSlugService,
             MembershipService workspaceMembershipService,
             PeopleRegistry people,
@@ -90,7 +90,7 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
         this.repositoryRepository = repositoryRepository;
         this.userRepository = userRepository;
-        this.gitProviderRepository = gitProviderRepository;
+        this.identityProviders = identityProviders;
         this.workspaceSlugService = workspaceSlugService;
         this.workspaceMembershipService = workspaceMembershipService;
         this.people = people;
@@ -616,10 +616,9 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
         }
 
         String prefix = oldLogin + "/";
-        Long providerId = Objects.requireNonNull(gitProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL)
-                .orElseThrow(() -> new IllegalStateException("IdentityProvider for GitHub not found"))
-                .getId());
+        Long providerId = identityProviders
+                .findId(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL)
+                .orElseThrow(() -> new IllegalStateException("IdentityProvider for GitHub not found"));
         var repositories =
                 repositoryRepository.findByNameWithOwnerStartingWithIgnoreCaseAndProviderId(prefix, providerId);
         if (repositories.isEmpty()) {
@@ -729,10 +728,9 @@ public class GitHubLifecycleListener implements IntegrationLifecycleListener {
     }
 
     private long githubProviderId() {
-        return Objects.requireNonNull(gitProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
-                .orElseThrow(() -> new IllegalStateException("IdentityProvider for GitHub not found"))
-                .getId());
+        return identityProviders
+                .findId(IdentityProviderType.GITHUB, "https://github.com")
+                .orElseThrow(() -> new IllegalStateException("IdentityProvider for GitHub not found"));
     }
 
     private boolean isBlank(@Nullable String value) {

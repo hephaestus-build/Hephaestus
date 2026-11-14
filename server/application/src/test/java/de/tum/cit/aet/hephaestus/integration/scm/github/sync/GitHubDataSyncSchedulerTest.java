@@ -19,10 +19,10 @@ import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties.BackfillProperties;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties.FilterProperties;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncContextProvider;
@@ -89,7 +89,7 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
     private RateLimitTracker rateLimitTracker;
 
     @Mock
-    private ConnectionRepository connectionRepository;
+    private ConnectionQueries connectionQueries;
 
     @Mock
     private SyncJobService syncJobService;
@@ -123,7 +123,7 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
                 properties,
                 rateLimitTracker,
                 Runnable::run, // synchronous executor — deterministic assertions, no timing flakiness
-                connectionRepository,
+                connectionQueries,
                 syncJobService,
                 headCheckRunsReread);
 
@@ -166,9 +166,8 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
 
         @Test
         void activeConnectionPresent_recordsReconciliationScheduledJobAndRunsBody() {
-            when(connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                            WORKSPACE_ID, IntegrationKind.GITHUB, IntegrationState.ACTIVE))
-                    .thenReturn(Optional.of(activeGithubConnection()));
+            when(connectionQueries.findActive(WORKSPACE_ID, IntegrationKind.GITHUB))
+                    .thenAnswer(ignored -> Optional.of(snapshotFixture(activeGithubConnection())));
             when(syncTargetProvider.getSyncSessions(IntegrationKind.GITHUB)).thenReturn(List.of(session()));
             doAnswer(invocation -> {
                         Consumer<Object> body = invocation.getArgument(1);
@@ -197,9 +196,8 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
 
         @Test
         void activeSyncJobAlreadyRunning_skipsScopeWithoutRunningBodyOrThrowing() {
-            when(connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                            WORKSPACE_ID, IntegrationKind.GITHUB, IntegrationState.ACTIVE))
-                    .thenReturn(Optional.of(activeGithubConnection()));
+            when(connectionQueries.findActive(WORKSPACE_ID, IntegrationKind.GITHUB))
+                    .thenAnswer(ignored -> Optional.of(snapshotFixture(activeGithubConnection())));
             when(syncTargetProvider.getSyncSessions(IntegrationKind.GITHUB)).thenReturn(List.of(session()));
 
             SyncJob activeJob = new SyncJob(
@@ -225,8 +223,7 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
 
         @Test
         void noActiveGithubConnection_runsUnrecordedFallback() {
-            when(connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                            WORKSPACE_ID, IntegrationKind.GITHUB, IntegrationState.ACTIVE))
+            when(connectionQueries.findActive(WORKSPACE_ID, IntegrationKind.GITHUB))
                     .thenReturn(Optional.empty());
             when(syncTargetProvider.getSyncSessions(IntegrationKind.GITHUB)).thenReturn(List.of(session()));
 
@@ -307,5 +304,10 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
             // is the difference between a degraded pass and a false clean bill of health.
             verify(handle).reportWarnings();
         }
+    }
+
+    private static ConnectionQueries.ConnectionSnapshot snapshotFixture(Connection connection) {
+        return new ConnectionQueries.ConnectionSnapshot(
+                connection.getId(), connection.getVersion(), connection.getConfig());
     }
 }

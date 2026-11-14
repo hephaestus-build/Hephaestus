@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.core.security.MissingCredentialKeyException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -18,7 +19,10 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** The record of an unreadable credential, against the real statements and row locks. */
@@ -41,6 +45,9 @@ class CredentialReaderIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private CredentialBundleConverter credentialBundleConverter;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Test
     void shouldRecordTheCiphertextItCannotReadAndClearItWhenItReadsAgain() {
@@ -124,6 +131,48 @@ class CredentialReaderIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(read).contains(healthyToken);
         assertThatThrownBy(() -> connectionService.findActiveBearerToken(unreadable.getId(), IntegrationKind.GITLAB))
                 .isInstanceOf(CredentialUnreadableException.class);
+    }
+
+    @ParameterizedTest(name = "missing credential key: {0}")
+    @ValueSource(booleans = {false, true})
+    void shouldCommitTheCallersWriteAfterACredentialSnapshotCannotBeRead(boolean missingKey) {
+        User owner = persistUser("snapshot-owner-" + System.nanoTime());
+        Workspace unreadable = createWorkspace(
+                "snapshot-bad-" + System.nanoTime(), "Snapshot", "snapshot-org", AccountType.ORG, owner);
+        Workspace healthy = createWorkspace(
+                "snapshot-good-" + System.nanoTime(), "Snapshot", "snapshot-org", AccountType.ORG, owner);
+        var writer = missingKey
+                ? new CredentialBundleConverter(OTHER_KEY, Integer.MAX_VALUE, null, null, false)
+                : new CredentialBundleConverter(OTHER_KEY, false);
+        activeGitLabConnection(unreadable, TOKEN, writer);
+        var healthyToken = new BearerToken("synthetic-snapshot-healthy", null);
+        activeGitLabConnection(healthy, healthyToken, credentialBundleConverter);
+        Class<? extends RuntimeException> expected =
+                missingKey ? MissingCredentialKeyException.class : CredentialUnreadableException.class;
+        Optional<ConnectionService.BearerConnection> snapshot = transactionTemplate.execute(status -> {
+            assertThatThrownBy(() -> connectionService.findActiveBearerConnection(
+                            unreadable.getId(),
+                            IntegrationKind.GITLAB,
+                            config ->
+                                    config instanceof ConnectionConfig.GitLabConfig gitLab ? gitLab.serverUrl() : null))
+                    .isInstanceOf(expected);
+            var current = connectionRepository
+                    .findActive(healthy.getId(), IntegrationKind.GITLAB)
+                    .orElseThrow();
+            current.setDisplayName("Committed after credential failure");
+            connectionRepository.saveAndFlush(current);
+            return connectionService.findActiveBearerConnection(
+                    healthy.getId(),
+                    IntegrationKind.GITLAB,
+                    config -> config instanceof ConnectionConfig.GitLabConfig gitLab ? gitLab.serverUrl() : null);
+        });
+        assertThat(snapshot)
+                .contains(new ConnectionService.BearerConnection("https://gitlab.example.com", healthyToken));
+        assertThat(jdbc.queryForObject(
+                        "SELECT display_name FROM connection WHERE workspace_id = ? AND kind = 'GITLAB' AND state = 'ACTIVE'",
+                        String.class,
+                        healthy.getId()))
+                .isEqualTo("Committed after credential failure");
     }
 
     /** The record is written by the reader's own worker, so the row is read until it carries it. */

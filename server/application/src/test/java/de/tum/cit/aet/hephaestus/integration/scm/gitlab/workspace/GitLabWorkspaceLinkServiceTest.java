@@ -9,8 +9,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -45,7 +45,7 @@ class GitLabWorkspaceLinkServiceTest extends BaseUnitTest {
     private WorkspaceActorSelector actorSelector;
 
     @Mock
-    private IdentityProviderRepository identityProviderRepository;
+    private SourceProviderNamespaces providerNamespaces;
 
     @Mock
     private RepositoryToMonitorRepository monitorRepository;
@@ -57,11 +57,7 @@ class GitLabWorkspaceLinkServiceTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         service = new GitLabWorkspaceLinkService(
-                workspaceRepository,
-                organizationRepository,
-                actorSelector,
-                identityProviderRepository,
-                monitorRepository);
+                workspaceRepository, organizationRepository, actorSelector, providerNamespaces, monitorRepository);
         IdentityProvider gitLab = TestEntities.gitProvider(PROVIDER_ID, IdentityProviderType.GITLAB);
         group = new Organization();
         group.setId(5L);
@@ -83,7 +79,7 @@ class GitLabWorkspaceLinkServiceTest extends BaseUnitTest {
         lenient()
                 .when(organizationRepository.findByLoginIgnoreCaseAndProviderId(GROUP, PROVIDER_ID))
                 .thenReturn(Optional.of(group));
-        lenient().when(identityProviderRepository.findById(PROVIDER_ID)).thenReturn(Optional.of(gitLab));
+        lenient().when(providerNamespaces.findForMirror(PROVIDER_ID)).thenReturn(Optional.of(gitLab));
     }
 
     @Test

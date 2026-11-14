@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -94,6 +95,24 @@ class ConnectionQueriesIntegrationTest extends BaseIntegrationTest {
                 .isTrue();
         assertThat(queries.hasConnectionInState(other.getId(), IntegrationKind.OUTLINE, IntegrationState.SUSPENDED))
                 .isFalse();
+        assertThat(queries.findReferenced(new IntegrationRef(IntegrationKind.SLACK, mine.getId(), null, foreignId)))
+                .isEmpty();
+        assertThat(queries.findReferenced(
+                        new IntegrationRef(IntegrationKind.OUTLINE, mine.getId(), null, active.getId())))
+                .isEmpty();
+        assertThat(queries.findReferenced(
+                                new IntegrationRef(IntegrationKind.OUTLINE, mine.getId(), "wrong-key", paused.getId()))
+                        .map(ConnectionQueries.ConnectionView::id))
+                .contains(paused.getId());
+        assertThat(queries.findReferenced(
+                                new IntegrationRef(IntegrationKind.OUTLINE, mine.getId(), paused.getInstanceKey()))
+                        .map(ConnectionQueries.ConnectionView::id))
+                .contains(paused.getId());
+        assertThat(queries.findReferenced(new IntegrationRef(IntegrationKind.OUTLINE, mine.getId(), null)))
+                .isEmpty();
+        assertThat(queries.findReferenced(new IntegrationRef(IntegrationKind.SLACK, mine.getId(), null))
+                        .map(ConnectionQueries.ConnectionView::id))
+                .contains(active.getId());
         assertThat(session.getStatistics().getEntityCount()).isZero();
     }
 }

@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
@@ -67,6 +68,9 @@ import org.springframework.scheduling.concurrent.ConcurrentTaskExecutor;
 
 /** Runs the real initialization repository loop and job transactions; provider responses are controlled. */
 class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIntegrationTest {
+    @Autowired
+    private ConnectionQueries connectionQueries;
+
     @Autowired
     private GitLabProjectAdmission projectAdmission;
 
@@ -558,8 +562,7 @@ class GitLabLifecycleSyncCancellationIntegrationTest extends AbstractWorkspaceIn
                 actorSelector,
                 new ConcurrentTaskExecutor(new SyncTaskExecutor()),
                 projectAdmission);
-        return new GitLabWorkspaceDataSyncTrigger(
-                initialization, workspaceRepository, connectionRepository, jobService);
+        return new GitLabWorkspaceDataSyncTrigger(initialization, workspaceRepository, connectionQueries, jobService);
     }
 
     private Repository monitoredRepository(String name, long nativeId) {

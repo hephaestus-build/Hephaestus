@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ConnectionCommands {
     private final ConnectionRepository connectionRepository;
     private final ConnectionAuditRepository auditRepository;
+    private final ConnectionService connections;
 
     @PersistenceContext
     private @Nullable EntityManager entityManager;
@@ -62,6 +63,32 @@ public class ConnectionCommands {
                 .findAndLockLifecycleConnection(connectionId, workspaceId)
                 .isEmpty()) return Optional.empty();
         return connectionRepository.findByIdAndWorkspaceId(connectionId, workspaceId);
+    }
+
+    /** Holds the scoped lifecycle row for the rest of the caller's write transaction. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void holdLifecycleLock(long workspaceId, long connectionId) {
+        connectionRepository.acquireLifecycleLock(connectionId, workspaceId);
+    }
+
+    /** The scoped aggregate used by an existing write after its lifecycle lock is held. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Connection> findHeldConnection(long workspaceId, long connectionId) {
+        return connections.findInWorkspace(workspaceId, connectionId);
+    }
+
+    /** Admission reads the database configuration, rather than a cached aggregate, under its lifecycle lock. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<ConnectionConfig> configurationInState(
+            long workspaceId, long connectionId, IntegrationState state) {
+        return connectionRepository.findConfigInState(connectionId, workspaceId, state);
+    }
+
+    /** Persists the replacement beside the provider cleanup it records, under the caller's held lock. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void replaceHeldConfig(Connection connection, ConnectionConfig replacement) {
+        connection.setConfig(replacement);
+        connectionRepository.save(connection);
     }
 
     /** Records an administrative change beside the write, in the transaction that holds the connection. */

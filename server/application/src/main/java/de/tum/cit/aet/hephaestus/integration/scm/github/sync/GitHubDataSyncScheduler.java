@@ -1,10 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.sync;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncContextProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
@@ -98,7 +96,7 @@ public class GitHubDataSyncScheduler {
     private final SyncSchedulerProperties syncSchedulerProperties;
     private final RateLimitTracker rateLimitTracker;
     private final Executor monitoringExecutor;
-    private final ConnectionRepository connectionRepository;
+    private final ConnectionQueries connectionQueries;
     private final SyncJobService syncJobService;
     private final GitHubHeadCheckRunsReread headCheckRunsReread;
 
@@ -114,7 +112,7 @@ public class GitHubDataSyncScheduler {
             SyncSchedulerProperties syncSchedulerProperties,
             RateLimitTracker rateLimitTracker,
             @Qualifier("monitoringExecutor") Executor monitoringExecutor,
-            ConnectionRepository connectionRepository,
+            ConnectionQueries connectionQueries,
             SyncJobService syncJobService,
             GitHubHeadCheckRunsReread headCheckRunsReread) {
         this.headCheckRunsReread = headCheckRunsReread;
@@ -129,7 +127,7 @@ public class GitHubDataSyncScheduler {
         this.syncSchedulerProperties = syncSchedulerProperties;
         this.rateLimitTracker = rateLimitTracker;
         this.monitoringExecutor = monitoringExecutor;
-        this.connectionRepository = connectionRepository;
+        this.connectionQueries = connectionQueries;
         this.syncJobService = syncJobService;
     }
 
@@ -233,7 +231,7 @@ public class GitHubDataSyncScheduler {
     }
 
     /**
-     * Resolves the workspace's ACTIVE GitHub {@link Connection} (if any) and wraps the scope sync in
+     * Resolves the workspace's ACTIVE GitHub {@link ConnectionQueries.ConnectionSnapshot} (if any) and wraps the scope sync in
      * {@link SyncJobService#run} as a {@code RECONCILIATION}/{@code SCHEDULED} job row, so the daily
      * cron shows up in the connection's job history. Workspaces without an ACTIVE
      * GitHub connection (shouldn't normally reach here, since {@code getSyncSessions} already filters
@@ -244,9 +242,8 @@ public class GitHubDataSyncScheduler {
      * so the manual job's progress/outcome isn't clobbered.
      */
     private void syncScope(SyncSession session) {
-        Optional<Connection> connection =
-                connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                        session.scopeId(), IntegrationKind.GITHUB, IntegrationState.ACTIVE);
+        Optional<ConnectionQueries.ConnectionSnapshot> connection =
+                connectionQueries.findActive(session.scopeId(), IntegrationKind.GITHUB);
         if (connection.isEmpty()) {
             runScopeSyncBody(session, null, SyncJobType.RECONCILIATION);
             return;
@@ -256,7 +253,7 @@ public class GitHubDataSyncScheduler {
             syncJobService.run(
                     new SyncJobRequest(
                             session.scopeId(),
-                            connection.get().getId(),
+                            connection.get().id(),
                             IntegrationKind.GITHUB,
                             SyncJobType.RECONCILIATION,
                             SyncJobTrigger.SCHEDULED,

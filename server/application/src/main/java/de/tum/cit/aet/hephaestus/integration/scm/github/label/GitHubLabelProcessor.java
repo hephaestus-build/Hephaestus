@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.label;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.LabelIdUtils;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
@@ -46,15 +46,15 @@ public class GitHubLabelProcessor {
     private static final Logger log = LoggerFactory.getLogger(GitHubLabelProcessor.class);
 
     private final LabelRepository labelRepository;
-    private final IdentityProviderRepository gitProviderRepository;
+    private final SourceProviderNamespaces providerNamespaces;
     private final ApplicationEventPublisher eventPublisher;
 
     public GitHubLabelProcessor(
             LabelRepository labelRepository,
-            IdentityProviderRepository gitProviderRepository,
+            SourceProviderNamespaces providerNamespaces,
             ApplicationEventPublisher eventPublisher) {
         this.labelRepository = labelRepository;
-        this.gitProviderRepository = gitProviderRepository;
+        this.providerNamespaces = providerNamespaces;
         this.eventPublisher = eventPublisher;
     }
 
@@ -102,7 +102,7 @@ public class GitHubLabelProcessor {
             // CRITICAL: Use getReferenceById to get a proxy bound to the current session.
             // context.provider() returns a proxy from the outer session (REQUIRES_NEW suspends it),
             // which causes "Illegally attempted to associate proxy with two open sessions".
-            label.setProvider(gitProviderRepository.getReferenceById(Objects.requireNonNull(context.providerId())));
+            label.setProvider(providerNamespaces.referenceForMirror(Objects.requireNonNull(context.providerId())));
         }
         label.setName(dto.name()); // name is always required
         if (dto.color() != null) {

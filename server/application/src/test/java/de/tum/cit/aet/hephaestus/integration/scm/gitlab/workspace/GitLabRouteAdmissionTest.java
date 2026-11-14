@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -15,12 +16,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
@@ -78,8 +79,8 @@ class GitLabRouteAdmissionTest {
     private static final long PROJECT_A = 100L;
     private static final long PROJECT_B = 200L;
 
-    private final ConnectionRepository connectionRepository = mock(ConnectionRepository.class);
-    private final IdentityProviderRepository identityProviderRepository = mock(IdentityProviderRepository.class);
+    private final ConnectionCommands connectionCommands = mock(ConnectionCommands.class);
+    private final IdentityProviderLookup identityProviders = mock(IdentityProviderLookup.class);
     private final RepositoryRepository repositoryRepository = mock(RepositoryRepository.class);
     private final RepositoryToMonitorRepository monitors = mock(RepositoryToMonitorRepository.class);
     private final WorkspaceScopeFilter scopeFilter = mock(WorkspaceScopeFilter.class);
@@ -108,8 +109,8 @@ class GitLabRouteAdmissionTest {
         GitLabProperties properties = mock(GitLabProperties.class);
         when(properties.defaultServerUrl()).thenReturn(ORIGIN + "/");
         admission = new GitLabRouteAdmission(
-                connectionRepository,
-                identityProviderRepository,
+                connectionCommands,
+                identityProviders,
                 repositoryRepository,
                 monitors,
                 scopeFilter,
@@ -126,8 +127,8 @@ class GitLabRouteAdmissionTest {
         provider.setId(PROVIDER_ID);
         provider.setType(IdentityProviderType.GITLAB);
         provider.setServerUrl(ORIGIN + "/");
-        when(identityProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITLAB, ORIGIN + "/"))
-                .thenReturn(Optional.of(provider));
+        when(identityProviders.findId(IdentityProviderType.GITLAB, ORIGIN + "/"))
+                .thenReturn(Optional.of(Objects.requireNonNull(provider.getId())));
         ReflectionTestUtils.setField(workspace, "id", WORKSPACE_ID);
         workspace.setAccountLogin(GROUP);
         when(scopeFilter.isWorkspaceAllowed(workspace)).thenReturn(true);
@@ -135,10 +136,9 @@ class GitLabRouteAdmissionTest {
         when(connection.getState()).thenReturn(IntegrationState.ACTIVE);
         when(connection.getWorkspace()).thenReturn(workspace);
         when(connection.getConfig()).thenReturn(config(ORIGIN, GROUP_ID));
-        when(connectionRepository.findConfigInState(CONNECTION_ID, WORKSPACE_ID, IntegrationState.ACTIVE))
+        when(connectionCommands.configurationInState(WORKSPACE_ID, CONNECTION_ID, IntegrationState.ACTIVE))
                 .thenReturn(Optional.of(config(ORIGIN, GROUP_ID)));
-        when(connectionRepository.findByIdAndWorkspaceId(CONNECTION_ID, WORKSPACE_ID))
-                .thenReturn(Optional.of(connection));
+        when(connectionCommands.findHeldConnection(WORKSPACE_ID, CONNECTION_ID)).thenReturn(Optional.of(connection));
     }
 
     @Nested
@@ -156,7 +156,7 @@ class GitLabRouteAdmissionTest {
             assertThat(admitted).isTrue();
             assertThat(seen.get()).isEqualTo(route);
             assertThat(GitLabRouteAdmission.current()).isEmpty();
-            verify(connectionRepository).acquireLifecycleLock(CONNECTION_ID, WORKSPACE_ID);
+            verify(connectionCommands).holdLifecycleLock(WORKSPACE_ID, CONNECTION_ID);
         }
 
         @Test
@@ -169,7 +169,7 @@ class GitLabRouteAdmissionTest {
 
             when(connection.getState()).thenReturn(IntegrationState.SUSPENDED);
             assertNotAdmitted(WORKSPACE_ID, h -> {});
-            when(connectionRepository.findByIdAndWorkspaceId(CONNECTION_ID, WORKSPACE_ID))
+            when(connectionCommands.findHeldConnection(WORKSPACE_ID, CONNECTION_ID))
                     .thenReturn(Optional.empty());
             assertNotAdmitted(WORKSPACE_ID, h -> {});
         }
@@ -184,8 +184,9 @@ class GitLabRouteAdmissionTest {
 
         @Test
         void shouldLetAFailedLookupPropagateSoTheDeliveryIsRedelivered() {
-            when(connectionRepository.acquireLifecycleLock(CONNECTION_ID, WORKSPACE_ID))
-                    .thenThrow(new IllegalStateException("database unavailable"));
+            doThrow(new IllegalStateException("database unavailable"))
+                    .when(connectionCommands)
+                    .holdLifecycleLock(WORKSPACE_ID, CONNECTION_ID);
             Runnable handling = mock(Runnable.class);
 
             assertThatThrownBy(() -> admission.admit(WORKSPACE_ID, message(NEUTRAL_EVENT, h -> {}), handling))
@@ -486,7 +487,7 @@ class GitLabRouteAdmissionTest {
 
             assertThat(admission.admitRepository(route, repository(PROJECT_A, GROUP + "/a")))
                     .isFalse();
-            verify(connectionRepository).acquireLifecycleLock(CONNECTION_ID, WORKSPACE_ID);
+            verify(connectionCommands).holdLifecycleLock(WORKSPACE_ID, CONNECTION_ID);
             verify(repositoryMonitors, never()).monitorAllowed(any(), any());
         }
     }

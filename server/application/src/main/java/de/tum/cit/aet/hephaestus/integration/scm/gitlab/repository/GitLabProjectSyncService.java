@@ -4,8 +4,8 @@ import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants.extractEntityId;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -53,7 +53,7 @@ public class GitLabProjectSyncService {
     private final GitLabProjectProcessor projectProcessor;
     private final GitLabGroupProcessor groupProcessor;
     private final GitLabProperties gitLabProperties;
-    private final IdentityProviderRepository gitProviderRepository;
+    private final SourceProviderNamespaces providerNamespaces;
     private final GitLabProjectAdmission admission;
 
     public GitLabProjectSyncService(
@@ -62,7 +62,7 @@ public class GitLabProjectSyncService {
             GitLabProjectProcessor projectProcessor,
             GitLabGroupProcessor groupProcessor,
             GitLabProperties gitLabProperties,
-            IdentityProviderRepository gitProviderRepository,
+            SourceProviderNamespaces providerNamespaces,
             GitLabExceptionClassifier exceptionClassifier,
             GitLabProjectAdmission admission) {
         this.graphQlClientProvider = graphQlClientProvider;
@@ -72,7 +72,7 @@ public class GitLabProjectSyncService {
         this.projectProcessor = projectProcessor;
         this.groupProcessor = groupProcessor;
         this.gitLabProperties = gitLabProperties;
-        this.gitProviderRepository = gitProviderRepository;
+        this.providerNamespaces = providerNamespaces;
     }
 
     /**
@@ -82,8 +82,8 @@ public class GitLabProjectSyncService {
      * @throws IllegalStateException if no GitLab provider is found
      */
     private IdentityProvider resolveProvider() {
-        return gitProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITLAB, gitLabProperties.defaultServerUrl())
+        return providerNamespaces
+                .findForMirror(IdentityProviderType.GITLAB, gitLabProperties.defaultServerUrl())
                 .orElseThrow(() -> new IllegalStateException("IdentityProvider not found for type=GITLAB, serverUrl="
                         + gitLabProperties.defaultServerUrl()));
     }

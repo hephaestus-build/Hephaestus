@@ -1,10 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.workspace;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncProgress;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
@@ -35,7 +33,7 @@ import org.springframework.stereotype.Component;
  * consumed via {@link ObjectProvider} because there is a known circular reference between the sync
  * service and the workspace activation layer (the sync service injects {@link SyncTargetProvider}
  * which in turn lives in the workspace module). Lazy lookup breaks the cycle without forcing the
- * workspace caller to know about the cycle. {@link ConnectionRepository} and {@link SyncJobService}
+ * workspace caller to know about the cycle. {@link ConnectionQueries} and {@link SyncJobService}
  * have no such documented cycle, but are looked up the same defensive way for consistency with the
  * rest of this class. Active-connection writes never bypass {@link SyncJobService}; if the control
  * plane is unavailable, the sync is skipped rather than run unfenced.
@@ -50,7 +48,7 @@ public class GitHubWorkspaceDataSyncTrigger implements WorkspaceDataSyncTrigger 
 
     private final ObjectProvider<GitHubDataSyncService> dataSyncServiceProvider;
     private final ObjectProvider<SyncTargetProvider> syncTargetProvider;
-    private final ObjectProvider<ConnectionRepository> connectionRepositoryProvider;
+    private final ObjectProvider<ConnectionQueries> connectionQueriesProvider;
     private final ObjectProvider<SyncJobService> syncJobServiceProvider;
     private final ObjectProvider<WorkspaceRepositoryMonitorService> repositoryMonitorServiceProvider;
     private final AsyncTaskExecutor monitoringExecutor;
@@ -58,13 +56,13 @@ public class GitHubWorkspaceDataSyncTrigger implements WorkspaceDataSyncTrigger 
     public GitHubWorkspaceDataSyncTrigger(
             ObjectProvider<GitHubDataSyncService> dataSyncServiceProvider,
             ObjectProvider<SyncTargetProvider> syncTargetProvider,
-            ObjectProvider<ConnectionRepository> connectionRepositoryProvider,
+            ObjectProvider<ConnectionQueries> connectionQueriesProvider,
             ObjectProvider<SyncJobService> syncJobServiceProvider,
             ObjectProvider<WorkspaceRepositoryMonitorService> repositoryMonitorServiceProvider,
             @Qualifier("monitoringExecutor") AsyncTaskExecutor monitoringExecutor) {
         this.dataSyncServiceProvider = dataSyncServiceProvider;
         this.syncTargetProvider = syncTargetProvider;
-        this.connectionRepositoryProvider = connectionRepositoryProvider;
+        this.connectionQueriesProvider = connectionQueriesProvider;
         this.syncJobServiceProvider = syncJobServiceProvider;
         this.repositoryMonitorServiceProvider = repositoryMonitorServiceProvider;
         this.monitoringExecutor = monitoringExecutor;
@@ -76,14 +74,14 @@ public class GitHubWorkspaceDataSyncTrigger implements WorkspaceDataSyncTrigger 
     }
 
     /**
-     * Resolves the workspace's ACTIVE GitHub {@link Connection} and, when both it and {@link
+     * Resolves the workspace's ACTIVE GitHub {@link ConnectionQueries.ConnectionSnapshot} and, when both it and {@link
      * SyncJobService} are available, records the lifecycle sync as an {@code INITIAL}/{@code
      * LIFECYCLE} job. A workspace without an active Connection still uses the bootstrap fallback;
      * an active Connection never runs untracked. An already-active job skips this run.
      */
     @Override
     public void syncAllRepositories(long workspaceId) {
-        Optional<Connection> connection = findActiveConnection(workspaceId);
+        Optional<ConnectionQueries.ConnectionSnapshot> connection = findActiveConnection(workspaceId);
         if (connection.isEmpty()) {
             dataSyncServiceProvider.getObject().syncAllRepositories(workspaceId);
             return;
@@ -105,9 +103,9 @@ public class GitHubWorkspaceDataSyncTrigger implements WorkspaceDataSyncTrigger 
      */
     @Override
     public void syncOnStartup(long workspaceId, boolean fullSync) {
-        Optional<Connection> connection = findActiveConnection(workspaceId);
+        Optional<ConnectionQueries.ConnectionSnapshot> connection = findActiveConnection(workspaceId);
         Optional<Long> appInstallation = connection
-                .map(Connection::getConfig)
+                .map(ConnectionQueries.ConnectionSnapshot::config)
                 .filter(ConnectionConfig.GitHubAppConfig.class::isInstance)
                 .map(ConnectionConfig.GitHubAppConfig.class::cast)
                 .map(ConnectionConfig.GitHubAppConfig::installationId);
@@ -129,16 +127,18 @@ public class GitHubWorkspaceDataSyncTrigger implements WorkspaceDataSyncTrigger 
         });
     }
 
-    private Optional<Connection> findActiveConnection(long workspaceId) {
-        ConnectionRepository connectionRepository = connectionRepositoryProvider.getIfAvailable();
-        return connectionRepository == null
+    private Optional<ConnectionQueries.ConnectionSnapshot> findActiveConnection(long workspaceId) {
+        ConnectionQueries connectionQueries = connectionQueriesProvider.getIfAvailable();
+        return connectionQueries == null
                 ? Optional.empty()
-                : connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                        workspaceId, IntegrationKind.GITHUB, IntegrationState.ACTIVE);
+                : connectionQueries.findActive(workspaceId, IntegrationKind.GITHUB);
     }
 
     private void runLifecycleJob(
-            long workspaceId, Connection connection, SyncJobType type, Consumer<SyncJobHandle> body) {
+            long workspaceId,
+            ConnectionQueries.ConnectionSnapshot connection,
+            SyncJobType type,
+            Consumer<SyncJobHandle> body) {
         SyncJobService syncJobService = syncJobServiceProvider.getIfAvailable();
         if (syncJobService == null) {
             log.warn("Skipped lifecycle sync: reason=syncJobServiceUnavailable, workspaceId={}", workspaceId);
@@ -147,12 +147,7 @@ public class GitHubWorkspaceDataSyncTrigger implements WorkspaceDataSyncTrigger 
         try {
             syncJobService.run(
                     new SyncJobRequest(
-                            workspaceId,
-                            connection.getId(),
-                            IntegrationKind.GITHUB,
-                            type,
-                            SyncJobTrigger.LIFECYCLE,
-                            null),
+                            workspaceId, connection.id(), IntegrationKind.GITHUB, type, SyncJobTrigger.LIFECYCLE, null),
                     body);
         } catch (SyncJobConflictException e) {
             log.info(
@@ -173,18 +168,17 @@ public class GitHubWorkspaceDataSyncTrigger implements WorkspaceDataSyncTrigger 
     }
 
     private void syncTarget(SyncTargetProvider.SyncTarget target) {
-        ConnectionRepository connectionRepository = connectionRepositoryProvider.getIfAvailable();
+        ConnectionQueries connectionQueries = connectionQueriesProvider.getIfAvailable();
         SyncJobService syncJobService = syncJobServiceProvider.getIfAvailable();
-        if (connectionRepository == null || syncJobService == null) {
+        if (connectionQueries == null || syncJobService == null) {
             log.warn(
                     "Skipped single-target sync: reason=controlPlaneUnavailable, workspaceId={}, syncTargetId={}",
                     target.scopeId(),
                     target.id());
             return;
         }
-        Optional<Connection> connection =
-                connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                        target.scopeId(), IntegrationKind.GITHUB, IntegrationState.ACTIVE);
+        Optional<ConnectionQueries.ConnectionSnapshot> connection =
+                connectionQueries.findActive(target.scopeId(), IntegrationKind.GITHUB);
         if (connection.isEmpty()) {
             log.debug(
                     "Skipped single-target sync: reason=noActiveConnection, workspaceId={}, syncTargetId={}",
@@ -196,7 +190,7 @@ public class GitHubWorkspaceDataSyncTrigger implements WorkspaceDataSyncTrigger 
             syncJobService.run(
                     new SyncJobRequest(
                             target.scopeId(),
-                            connection.get().getId(),
+                            connection.get().id(),
                             IntegrationKind.GITHUB,
                             SyncJobType.INITIAL,
                             SyncJobTrigger.LIFECYCLE,

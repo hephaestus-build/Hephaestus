@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProvisioningListener;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationService;
@@ -36,6 +37,8 @@ import tools.jackson.databind.ObjectMapper;
 
 @ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 class GitHubInstallationMessageHandlerIntegrationTest extends BaseIntegrationTest {
+    @Autowired
+    private IdentityProviderLookup providerLookup;
 
     private GitHubInstallationMessageHandler handler;
 
@@ -77,7 +80,7 @@ class GitHubInstallationMessageHandlerIntegrationTest extends BaseIntegrationTes
                 provisioningListener,
                 organizationService,
                 appTokens,
-                gitProviderRepository,
+                providerLookup,
                 deserializer,
                 transactionTemplate);
     }
