@@ -1228,10 +1228,50 @@ public class JobEvidenceFiles implements SandboxResultListener {
                 }
             }
             for (Path trace : traces) if (!cleanTrace(trace)) remaining++;
+            removeEmptyJobFolders();
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);
         }
         return remaining;
+    }
+
+    /**
+     * Removes each job folder that holds nothing more: no attempt, staging copy or transcript. A capture holds the job's
+     * lease while it creates the folder, so the folder is removed only under that lease.
+     */
+    private void removeEmptyJobFolders() throws IOException {
+        try (var workspaces = Files.list(layout.jobsRoot())) {
+            for (Path workspace : workspaces.toList()) {
+                if (!workspace.getFileName().toString().matches("[0-9]+")
+                        || !Files.isDirectory(workspace, LinkOption.NOFOLLOW_LINKS)) continue;
+                try (var jobFolders = Files.list(workspace)) {
+                    for (Path jobFolder : jobFolders.toList()) {
+                        if (!isEmptyDirectory(jobFolder)) continue;
+                        UUID jobId;
+                        try {
+                            jobId = UUID.fromString(jobFolder.getFileName().toString());
+                        } catch (IllegalArgumentException notAJobFolder) {
+                            continue;
+                        }
+                        var acquired = EvidenceFolderLease.tryAcquire(
+                                layout.root(), Long.parseLong(workspace.getFileName().toString()), jobId);
+                        if (acquired.isEmpty()) continue;
+                        try (var lease = acquired.get()) {
+                            if (isEmptyDirectory(jobFolder)) Files.deleteIfExists(jobFolder);
+                        } catch (DirectoryNotEmptyException written) {
+                            // A capture wrote into it after the check; the next pass sees what it holds.
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static boolean isEmptyDirectory(Path folder) throws IOException {
+        if (!Files.isDirectory(folder, LinkOption.NOFOLLOW_LINKS)) return false;
+        try (var entries = Files.list(folder)) {
+            return entries.findAny().isEmpty();
+        }
     }
 
     private boolean removeUnderRuntime(Path root) throws IOException {

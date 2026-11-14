@@ -94,6 +94,22 @@ class JobEvidenceSweepIntegrationTest extends BaseIntegrationTest {
         reconciler.reconcile();
 
         assertThat(shell).doesNotExist();
+        // Nothing of the job is left, so its folder goes in the same pass.
+        assertThat(shell.getParent()).doesNotExist();
+    }
+
+    @Test
+    void shouldKeepAJobFolderWhileItHoldsATranscriptThatIsStillKept() throws IOException {
+        var ended = job(ReviewJobStatus.FAILED);
+        Path attempt = folder(ended, ended.getRunId());
+        Path transcript = attempt.resolveSibling(attempt.getFileName() + ".trace");
+        Files.createDirectories(transcript);
+        Files.writeString(transcript.resolve("record.json"), "{}");
+
+        reconciler.reconcile();
+
+        assertThat(attempt).doesNotExist();
+        assertThat(transcript.resolve("record.json")).exists();
     }
 
     @Test
@@ -151,6 +167,7 @@ class JobEvidenceSweepIntegrationTest extends BaseIntegrationTest {
 
         void assertOnlyTheRunningAttemptKeepsItsFolder() {
             assertThat(failed).doesNotExist();
+            assertThat(failed.getParent()).doesNotExist();
             assertThat(composed).doesNotExist();
             assertThat(superseded).doesNotExist();
             assertThat(running.resolve("context/source.txt")).exists();
