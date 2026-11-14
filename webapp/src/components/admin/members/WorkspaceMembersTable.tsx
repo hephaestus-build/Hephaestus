@@ -247,9 +247,9 @@ interface MemberActionsProps {
 }
 
 /**
- * Remove for a current member, Add back for one who left. While the change is out, the trigger
- * stays focusable, so the confirmation dialog can return focus to it: Base UI's menu trigger has no
- * focusable disabled state, and a disabled button drops focus to the page. The item waits instead.
+ * Remove for a current member, Add back for one who left. While the change is out, the trigger is a
+ * pending button: it does not open, and it stays focusable, so the confirmation dialog can return
+ * focus to it. A natively disabled button would drop focus to the page.
  */
 function MemberActions({ member, onRemove, onAddBack }: MemberActionsProps) {
 	const trigger = useRef<HTMLButtonElement>(null);
@@ -279,7 +279,6 @@ function MemberActions({ member, onRemove, onAddBack }: MemberActionsProps) {
 				<DropdownMenuGroup>
 					<DropdownMenuItem
 						variant={left ? "default" : "destructive"}
-						disabled={pending}
 						onClick={() => {
 							if (trigger.current !== null) {
 								act(member, trigger.current);

@@ -159,7 +159,10 @@ export const Submitting: Story = {
 		await acceptTerms();
 		await answer(/Yes, allow research use/u);
 		await userEvent.click(screen.getByRole("button", { name: "Save and continue" }));
-		await expect(screen.getByRole("button", { name: "Saving…" })).toHaveAttribute("aria-disabled", "true");
+		await expect(screen.getByRole("button", { name: "Saving…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expectGenuinelyDisabled(screen.getByRole("button", { name: "Sign out" }));
 	},
 };

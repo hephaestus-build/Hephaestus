@@ -79,7 +79,10 @@ export const Answered: Story = {
 export const Saving: Story = {
 	args: { choice: "CLOUD", isSaving: true },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Saving…" })).toHaveAttribute("aria-disabled", "true");
+		await expect(canvas.getByRole("button", { name: "Saving…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(canvas.getByRole("radio", { name: NO_AI })).toBeDisabled();
 	},
 };

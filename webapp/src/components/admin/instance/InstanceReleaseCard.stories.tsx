@@ -163,7 +163,10 @@ export const RateLimited: Story = {
 export const Checking: Story = {
 	args: { state: ready({}, { status: "pending" }) },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Checking…" })).toHaveAttribute("aria-disabled", "true");
+		await expect(canvas.getByRole("button", { name: "Checking…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 
@@ -295,7 +298,10 @@ export const RefreshRetrying: Story = {
 		}),
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Retrying…" })).toHaveAttribute("aria-disabled", "true");
+		await expect(canvas.getByRole("button", { name: "Retrying…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(canvas.getByText("v1.2.3")).toBeVisible();
 	},
 };
