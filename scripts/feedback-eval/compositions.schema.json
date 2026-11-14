@@ -14,7 +14,7 @@
 		"text": { "type": "string", "minLength": 1 },
 		"disposition": { "enum": ["RAISE", "BELOW_BAR", "ALREADY_SAID", "NO_MATERIAL_CHANGE"] },
 		"code": {
-			"enum": ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "D1", "D2", "Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9"]
+			"enum": ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "D1", "D2", "Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10"]
 		},
 		"citation": {
 			"type": "object",
