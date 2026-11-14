@@ -43,6 +43,9 @@ class MentorConversationAccessAdapter implements MentorConversationAccess {
     }
 
     private static LedgerEntry snapshot(MentorEntry entry) {
-        return new LedgerEntry(entry.getId(), entry.getKind(), entry.isRedacted(), entry.getPayload());
+        // A copy: the entity's own node would carry a consumer's change back into the ledger.
+        var payload = entry.getPayload();
+        return new LedgerEntry(
+                entry.getId(), entry.getKind(), entry.isRedacted(), payload == null ? null : payload.deepCopy());
     }
 }
