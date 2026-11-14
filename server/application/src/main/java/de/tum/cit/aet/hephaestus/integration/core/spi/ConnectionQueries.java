@@ -21,10 +21,6 @@ public interface ConnectionQueries {
 
     boolean hasConnectionInState(long workspaceId, IntegrationKind kind, IntegrationState state);
 
-    Optional<InstallationSnapshot> findActiveInstallationSnapshot(long installationId);
-
-    record InstallationSnapshot(Long connectionId, Long workspaceId, long lifecycleGeneration, Long version) {}
-
     record ConnectionSnapshot(long id, long version, ConnectionConfig config) {}
 
     record ConnectionView(

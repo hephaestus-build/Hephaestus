@@ -49,13 +49,6 @@ public class ConnectionQuery implements ConnectionQueries {
     }
 
     @Override
-    @WorkspaceAgnostic(
-            "Installation reconciliation captures its workspace before provider I/O and revalidates before writes")
-    public Optional<InstallationSnapshot> findActiveInstallationSnapshot(long installationId) {
-        return connections.findActiveInstallationSnapshot(Long.toString(installationId));
-    }
-
-    @Override
     public Optional<ConnectionSnapshot> findActive(long workspaceId, IntegrationKind kind) {
         return connections.findViewsInState(workspaceId, kind, IntegrationState.ACTIVE, Limit.of(1)).stream()
                 .findFirst();

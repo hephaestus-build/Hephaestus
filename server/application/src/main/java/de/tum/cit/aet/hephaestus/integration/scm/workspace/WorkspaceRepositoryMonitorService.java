@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionMaintenanceQueries;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
@@ -72,6 +73,7 @@ public class WorkspaceRepositoryMonitorService {
     private final ConnectionService connectionService;
     private final ConnectionQueries connectionQueries;
     private final ConnectionCommands connectionCommands;
+    private final ConnectionMaintenanceQueries maintenanceQueries;
     private final TransactionTemplate transactionTemplate;
     private final TransactionTemplate readTransactionTemplate;
     private final ManualRepositoryMonitorService manualAdds;
@@ -85,6 +87,7 @@ public class WorkspaceRepositoryMonitorService {
             ConnectionService connectionService,
             ConnectionQueries connectionQueries,
             ConnectionCommands connectionCommands,
+            ConnectionMaintenanceQueries maintenanceQueries,
             List<InstallationSuspensionTracker> suspensionTrackerList,
             List<InstallationRepositoryEnumerator> installationEnumeratorList,
             List<WorkspaceDataSyncTrigger> dataSyncTriggerList,
@@ -100,6 +103,7 @@ public class WorkspaceRepositoryMonitorService {
         this.connectionService = connectionService;
         this.connectionQueries = connectionQueries;
         this.connectionCommands = connectionCommands;
+        this.maintenanceQueries = maintenanceQueries;
         this.eventPublisher = eventPublisher;
         this.transactionTemplate = transactionTemplate;
         this.readTransactionTemplate = new TransactionTemplate(
@@ -361,7 +365,7 @@ public class WorkspaceRepositoryMonitorService {
             return false;
         }
         var captured = readTransactionTemplate.execute(
-                status -> connectionQueries.findActiveInstallationSnapshot(installationId));
+                status -> maintenanceQueries.findActiveInstallationSnapshot(installationId));
         if (captured == null || captured.isEmpty()) return false;
         var authority = captured.orElseThrow();
         var snapshots = enumerator.enumerate(installationId);
@@ -401,7 +405,7 @@ public class WorkspaceRepositoryMonitorService {
     }
 
     private void discardedEnumeration(
-            long installationId, ConnectionQueries.InstallationSnapshot authority, String reason) {
+            long installationId, ConnectionMaintenanceQueries.InstallationSnapshot authority, String reason) {
         log.info(
                 "Skipped repository enumeration result: reason={}, installationId={}, workspaceId={}, connectionId={}",
                 reason,
