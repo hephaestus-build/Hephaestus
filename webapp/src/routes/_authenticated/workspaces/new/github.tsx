@@ -5,10 +5,10 @@ import type { ReactNode } from "react";
 
 import { getProvidersOptions } from "@/api/@tanstack/react-query.gen";
 import { DocLink } from "@/components/common/DocLink";
+import { InstallActionSkeleton } from "@/components/create-workspace/CreateWorkspaceSkeletons";
 import { GitHubIcon } from "@/components/icons/brand";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { pageHead } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
 
@@ -29,11 +29,7 @@ function GitHubSetupPage() {
 
 	let installAction: ReactNode;
 	if (isLoading) {
-		installAction = (
-			<div className="flex justify-center py-4">
-				<Spinner />
-			</div>
-		);
+		installAction = <InstallActionSkeleton />;
 	} else if (hasText(appUrl)) {
 		installAction = (
 			<a
