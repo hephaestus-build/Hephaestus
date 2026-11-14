@@ -75,8 +75,11 @@ export const PreviewOfAPullRequest: Story = {
 	play: async ({ canvas }) => {
 		// Every preview is called "Preview", so the pill has to say which pull request it is of and
 		// take the reader there. Queried by the visible text, which is what names the link: an
-		// accessible name that omits it is one a speech-input user cannot say.
-		const link = await canvas.findByRole("link", { name: "Preview · PR #2042" });
+		// accessible name that omits it is one a speech-input user cannot say. The link opens a new
+		// tab, so its name ends with the words that say so.
+		const link = await canvas.findByRole("link", {
+			name: "Preview · PR #2042 (opens in a new tab)",
+		});
 		await expect(link).toHaveAttribute(
 			"href",
 			"https://github.com/hephaestus-build/Hephaestus/pull/2042",
