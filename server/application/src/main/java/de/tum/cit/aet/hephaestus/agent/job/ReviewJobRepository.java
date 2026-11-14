@@ -569,7 +569,7 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("runId") UUID runId,
             @Param("diagnosis") String diagnosis);
 
-    /** The evidence sweep calls it on its own, with no transaction of its own around it. */
+    /** Its own transaction: a caller may run outside one. */
     @Transactional
     @Modifying(flushAutomatically = true)
     @Query(

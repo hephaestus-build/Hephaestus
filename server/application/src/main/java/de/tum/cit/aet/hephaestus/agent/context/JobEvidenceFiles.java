@@ -1115,8 +1115,8 @@ public class JobEvidenceFiles implements SandboxResultListener {
                     }
                     Path recordFile = staging.resolve(TRACE_RECORD);
                     Files.writeString(recordFile, record.toString(), StandardOpenOption.CREATE_NEW);
-                    // The sweep counts the retention from this timestamp, as it counts the grace from an ended marker,
-                    // and ends it sooner when the record states an earlier expiry.
+                    // The sweep counts the retention from this timestamp, and ends it sooner when the record states an
+                    // earlier expiry.
                     Files.setLastModifiedTime(recordFile, FileTime.from(now));
                     Files.move(staging, trace, StandardCopyOption.ATOMIC_MOVE);
                 } finally {
@@ -1195,10 +1195,13 @@ public class JobEvidenceFiles implements SandboxResultListener {
                 Optional<EvidenceFolderLease> acquired;
                 try {
                     acquired = leaseJob(root);
-                    // Only a running attempt holds its own folder for long. Any other held folder stays and counts.
+                    // The lease is the job's, not the folder's: a later run of the job can hold it while a folder that
+                    // no attempt reads waits. This server removes such a folder under its runtime's shared lease; a
+                    // folder that it cannot remove stays and counts.
                     if (acquired.isEmpty()) {
                         var holder = recordedJob(root);
-                        if (holder.isEmpty() || !readsFolder(root, holder.get())) remaining++;
+                        if ((holder.isEmpty() || !readsFolder(root, holder.get())) && !removeUnderRuntime(root))
+                            remaining++;
                         continue;
                     }
                 } catch (RuntimeException exception) {
@@ -1229,6 +1232,16 @@ public class JobEvidenceFiles implements SandboxResultListener {
             throw new UncheckedIOException(exception);
         }
         return remaining;
+    }
+
+    private boolean removeUnderRuntime(Path root) throws IOException {
+        Path jobDirectory = Objects.requireNonNull(root.getParent());
+        Path workspaceDirectory = Objects.requireNonNull(jobDirectory.getParent());
+        return EvidenceFolderLease.removeAsOwner(
+                layout.root(),
+                Long.parseLong(Objects.requireNonNull(workspaceDirectory.getFileName()).toString()),
+                UUID.fromString(Objects.requireNonNull(jobDirectory.getFileName()).toString()),
+                () -> deleteAttempt(root));
     }
 
     /**

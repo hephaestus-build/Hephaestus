@@ -545,3 +545,11 @@ The Docker driver keeps its tmpfs mounts.
 
 Reviews and Heph run on one agent runtime, on Kubernetes only. The Docker sandbox backend goes before 1.0.
 The Sandbox Gateway, the job folder, evidence admission and the sandbox boundary of this decision stay.
+
+## Update — 2026-11-14: ended attempts leave at the next sweep
+
+The one-hour grace for ended attempts is gone.
+No reader needs the folder of an attempt that no longer runs: a retry and a composition each take a folder of their own run, and a server rebuilds a running attempt's folder from its recorded inputs.
+A sweep, at restart and in each reconcile pass, now removes every attempt folder except the one that its job's running attempt reads.
+A folder that the sweep cannot remove counts as a failure of the pass, so the stalled-reconcile alert sees it.
+The grace kept a full repository checkout for each ended attempt for an hour, which filled a server's Git cache until Kubernetes evicted the server.

@@ -587,7 +587,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRemoveExpiredEndedAttemptsWithoutServerScheduling() {
+    void shouldRemoveEndedAttemptsWithoutServerScheduling() {
         var layout = new FabricLayout(root.toString());
         var preparing = new JobEvidenceFiles(layout, jobs, clock, personCopies(), mock(AttemptInputs.class));
         byte[] bytes = "evidence".getBytes(StandardCharsets.UTF_8);
@@ -701,6 +701,26 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         later.cleanEndedAttempts();
         assertThat(read(files, ended, "context/quote", sha)).isEmpty();
         verify(jobs).expireCaptureInventory(ended.getId(), 1L, 0, LEASE);
+    }
+
+    @Test
+    void shouldRemoveAnUnreadFolderUnderTheRuntimesSharedLeaseAndCountOneThatItCannotRemove() {
+        var layout = new FabricLayout(root.toString());
+        byte[] bytes = "evidence".getBytes(StandardCharsets.UTF_8);
+        String sha = ProvenanceDigest.sha256Hex(bytes);
+        var files = new JobEvidenceFiles(layout, jobs, clock, personCopies(), mock(AttemptInputs.class));
+        var ended = endedAttempt(files, bytes);
+        var runtime =
+                EvidenceFolderLease.tryAcquire(layout.root(), 1L, ended.getId()).orElseThrow();
+        try (runtime) {
+            // An exclusive holder owns the job's folders: the sweep leaves the folder, and the pass counts it.
+            assertThat(files.cleanEndedAttempts()).isEqualTo(1);
+            assertThat(read(files, ended, "context/quote", sha)).contains(bytes);
+            // A runtime that shares its lease with removals lets the sweep remove what no attempt reads.
+            runtime.shareWithRemovals();
+            assertThat(files.cleanEndedAttempts()).isZero();
+            assertThat(read(files, ended, "context/quote", sha)).isEmpty();
+        }
     }
 
     @Test

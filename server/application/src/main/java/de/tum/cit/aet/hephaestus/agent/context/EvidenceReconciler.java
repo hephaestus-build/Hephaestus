@@ -56,9 +56,10 @@ public class EvidenceReconciler {
     }
 
     /**
-     * One pass. The timer and the erasure wake-up never run two passes at once. A pass succeeds only when no erased
-     * or deleted job's folder remains on this server; each one that remains counts as a failure, and the last success
-     * stays where it was, so the stalled-reconcile alert sees an erasure that does not reach this server.
+     * One pass. The timer and the erasure wake-up never run two passes at once. A pass succeeds only when no folder
+     * remains on this server that no running attempt reads, erased and deleted jobs' folders included; each one that
+     * remains counts as a failure, and the last success stays where it was, so the stalled-reconcile alert sees an
+     * erasure that does not reach this server and a folder that cleanup cannot remove.
      */
     public synchronized void reconcile() {
         int remaining = step(() -> copies.removeErasedFolders().remaining())
