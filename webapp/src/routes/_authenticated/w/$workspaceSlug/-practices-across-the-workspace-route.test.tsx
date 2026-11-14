@@ -304,4 +304,29 @@ describe("Practices across the workspace", () => {
 			ROUTE_RENDER_WAIT,
 		);
 	});
+
+	it("reads its data when a link to it is pointed at, and opens whole", async () => {
+		const { router } = renderRouteAtWithRouter(PROFILE);
+		await waitFor(() => expect(router.state.status).toBe("idle"), ROUTE_RENDER_WAIT);
+		requests = [];
+
+		// What hover intent on a link to the page does.
+		await act(async () => {
+			await router.preloadRoute({
+				to: "/w/$workspaceSlug/practices-across-the-workspace",
+				params: { workspaceSlug: "acme" },
+			});
+		});
+		await waitFor(() => {
+			expect(overviewReads()).toHaveLength(1);
+			expect(tileWindows()).toStrictEqual(["DAYS_30"]);
+		});
+
+		await act(async () => {
+			await router.navigate({ to: PAGE });
+		});
+		screen.getByRole("button", { name: "Open group Packaging work for review" });
+		expect(overviewReads()).toHaveLength(1);
+		expect(tileWindows()).toStrictEqual(["DAYS_30"]);
+	});
 });

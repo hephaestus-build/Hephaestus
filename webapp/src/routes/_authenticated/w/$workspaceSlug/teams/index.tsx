@@ -10,9 +10,18 @@ import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { pageHead } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
 import { NoWorkspaceContainer } from "@/routes/-NoWorkspaceContainer";
+import { prefetchPageRead } from "@/runtime/tanstack-query/prefetch-page-read";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/teams/")({
 	head: pageHead("Teams"),
+	loader: ({ context, params }) => {
+		if (context.workspace) {
+			prefetchPageRead(
+				context.queryClient,
+				getAllTeamsOptions({ path: { workspaceSlug: params.workspaceSlug } }),
+			);
+		}
+	},
 	component: TeamsContainer,
 });
 

@@ -40,6 +40,7 @@ import {
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { pageHead } from "@/lib/page-title";
 import { keepSameSubject } from "@/runtime/tanstack-query/keep-same-subject";
+import { prefetchPageRead } from "@/runtime/tanstack-query/prefetch-page-read";
 
 /** The reader's own group and practice levels live in their Practice profile, which this level links to. */
 const LEVEL_KINDS = ["practice-group"] as const;
@@ -52,6 +53,16 @@ const searchSchema = z
 	})
 	.extend(detailStackSchema(LEVEL_KINDS).shape);
 
+/** The page's two reads, shared by its loader and its component so both hit one cache entry each. */
+const overviewRead = (workspaceSlug: string) => ({
+	...getPracticeWorkspaceOverviewOptions({ path: { workspaceSlug } }),
+	staleTime: ACROSS_WORKSPACE_STALE_MS,
+});
+const tilesRead = (workspaceSlug: string, window: (typeof WINDOW_VALUES)[number]) => ({
+	...getPracticeWorkspaceTilesOptions({ path: { workspaceSlug }, query: { window } }),
+	staleTime: ACROSS_WORKSPACE_STALE_MS,
+});
+
 export const Route = createFileRoute(
 	"/_authenticated/w/$workspaceSlug/practices-across-the-workspace",
 )({
@@ -61,6 +72,16 @@ export const Route = createFileRoute(
 	search: {
 		middlewares: [stripSearchParams({ window: DEFAULT_WINDOW })],
 	},
+	// No loader deps: a window change is a search change on this page, which reads the other window
+	// itself and shows the current figures marked stale meanwhile.
+	loader: ({ context, params, location }) => {
+		if (context.workspace?.practicesEnabled !== true) {
+			return;
+		}
+		const { window } = searchSchema.pick({ window: true }).parse(location.search);
+		prefetchPageRead(context.queryClient, overviewRead(params.workspaceSlug));
+		prefetchPageRead(context.queryClient, tilesRead(params.workspaceSlug, window));
+	},
 });
 
 function PracticesAcrossTheWorkspace() {
@@ -69,18 +90,13 @@ function PracticesAcrossTheWorkspace() {
 	const featureState = useWorkspaceFeatures(workspaceSlug);
 	const enabled = featureState.practicesEnabled === true;
 	// The splits and the open feedback read no window, so a window change never reads them again.
-	const query = useQuery({
-		...getPracticeWorkspaceOverviewOptions({ path: { workspaceSlug } }),
-		enabled,
-		staleTime: ACROSS_WORKSPACE_STALE_MS,
-	});
+	const query = useQuery({ ...overviewRead(workspaceSlug), enabled });
 	// One request per window. Another window of this workspace stands in, marked stale; another
 	// workspace's never does.
 	const tilesQuery = useQuery({
-		...getPracticeWorkspaceTilesOptions({ path: { workspaceSlug }, query: { window } }),
+		...tilesRead(workspaceSlug, window),
 		enabled,
 		placeholderData: keepSameSubject({ workspaceSlug }),
-		staleTime: ACROSS_WORKSPACE_STALE_MS,
 	});
 	const stack = parseDetailStack(detail, LEVEL_KINDS);
 	// The marked practice belongs to the group level and leaves the address with it.
