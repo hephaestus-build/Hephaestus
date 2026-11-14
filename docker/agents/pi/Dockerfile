@@ -24,7 +24,7 @@ COPY --from=agent-runtime driver.ts driver-kinds.ts driver-isolation.ts sandbox-
     gateway-capabilities.ts gateway-init.ts gateway-run.ts \
     review-composer.ts review-composer-gateway.ts review-composer-model.ts ./
 COPY --from=agent-runtime turn.ts conversation-host-protocol.ts context-folder.ts pi-agent-sandbox.ts pi-diagnostics.ts \
-    pi-diagnostics.json pi-error-text.ts pi-provider.ts pi-text.ts ./
+    pi-diagnostics.json pi-error-text.ts pi-provider.ts pi-text.ts gateway-connection.ts ./
 RUN pnpm exec tsc -p tsconfig.build.json
 
 COPY practice-scripts/package.json practice-scripts/child.ts practice-scripts/build.ts practice-scripts/tsconfig.build.json /opt/practice-scripts/

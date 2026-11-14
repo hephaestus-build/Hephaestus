@@ -50,6 +50,7 @@ import {
 	type TurnModel,
 } from "./conversation-host-protocol.ts";
 import type { KindRunner, RunContext } from "./driver.ts";
+import { untilGatewayTakes } from "./gateway-connection.ts";
 import {
 	SANDBOX_RESOURCE_LOADER_OPTIONS,
 	SANDBOX_SETTINGS_MANAGER_OPTIONS,
@@ -341,6 +342,8 @@ export interface TurnEndpoint {
 	headers: Readonly<Record<string, string>>;
 	/** The turn as log lines and errors name it. */
 	label: string;
+	/** Ends with the turn's run, at its lost lease or its deadline: until then a call waits out a refused connection. */
+	patience: AbortSignal;
 }
 
 /**
@@ -360,21 +363,30 @@ export function httpTurnApi(
 		signal?: AbortSignal,
 		timeoutMs: number | null = REQUEST_TIMEOUT_MS,
 	): Promise<Response> {
-		const timeout = timeoutMs === null ? undefined : AbortSignal.timeout(timeoutMs);
 		let response: Response | undefined;
 		for (const delayMs of [unknownKeyDelayMs, null]) {
 			try {
-				response = await fetch(`${endpoint.base}/${path}`, {
-					method,
-					headers: {
-						...endpoint.headers,
-						...(body === undefined ? {} : { "content-type": "application/json" }),
+				// A refused connection reached no worker, so the call connects again while its run lasts.
+				response = await untilGatewayTakes(
+					async () => {
+						const timeout = timeoutMs === null ? undefined : AbortSignal.timeout(timeoutMs);
+						return fetch(`${endpoint.base}/${path}`, {
+							method,
+							headers: {
+								...endpoint.headers,
+								...(body === undefined ? {} : { "content-type": "application/json" }),
+							},
+							body: body === undefined ? undefined : JSON.stringify(body),
+							signal: AbortSignal.any([signal, timeout].filter((part) => part !== undefined)),
+						});
 					},
-					body: body === undefined ? undefined : JSON.stringify(body),
-					signal: AbortSignal.any([signal, timeout].filter((part) => part !== undefined)),
-				});
+					AbortSignal.any([endpoint.patience, ...(signal === undefined ? [] : [signal])]),
+				);
 			} catch (error) {
-				throw signal?.aborted === true ? error : transient(errorText(error));
+				// A run that ended stops the wait for good: there is nothing left to repeat the call for.
+				throw signal?.aborted === true || endpoint.patience.aborted
+					? error
+					: transient(errorText(error));
 			}
 			if (response.status !== 401 || delayMs === null) {
 				break;
@@ -1748,6 +1760,7 @@ export function turnRunner({ cwd, agentDir }: TurnDirectories = SANDBOX_DIRECTOR
 					base: `${gateway.url}/internal/agent/runs/${id}`,
 					headers: gateway.headers,
 					label: `turn run ${id}`,
+					patience: signal,
 				},
 				(reason) => haltTurn(id, state, reason),
 			);

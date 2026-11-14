@@ -1,3 +1,4 @@
+import { untilGatewayTakes } from "./gateway-connection.ts";
 import { diagnose, errorKind } from "./pi-diagnostics.ts";
 import { errorText } from "./pi-error-text.ts";
 import {
@@ -60,10 +61,23 @@ function admissionServerError(message: string): Error {
 	return error;
 }
 export type AdmissionFetch = (body: string, signal: AbortSignal) => Promise<Response>;
-async function postAdmission(body: string, send: AdmissionFetch): Promise<unknown> {
+async function postAdmission(
+	body: string,
+	send: AdmissionFetch,
+	patience: AbortSignal,
+): Promise<unknown> {
 	let response: Response;
 	try {
-		response = await send(body, AbortSignal.timeout(ADMISSION_ATTEMPT_TIMEOUT_MS));
+		// A refused connection reached no server; each new connection gets its own attempt timeout.
+		response = await untilGatewayTakes(
+			async () => send(body, AbortSignal.timeout(ADMISSION_ATTEMPT_TIMEOUT_MS)),
+			patience,
+			(waits) => {
+				if (Number.isInteger(Math.log2(waits))) {
+					diagnose("gateway.waiting", { waits });
+				}
+			},
+		);
 	} catch (error) {
 		if (isTimeoutAbort(error)) {
 			// The server is still verifying; a second attempt would only queue the same work behind it.
@@ -103,10 +117,18 @@ async function postAdmission(body: string, send: AdmissionFetch): Promise<unknow
 	}
 }
 
-async function sendRecorded(request: unknown, send: AdmissionFetch): Promise<unknown> {
+/**
+ * @param patience ends with the work that the call serves. Until then a refused connection waits for the gateway;
+ * after it, a refused connection counts as one unreachable attempt.
+ */
+async function sendRecorded(
+	request: unknown,
+	send: AdmissionFetch,
+	patience: AbortSignal,
+): Promise<unknown> {
 	const body = JSON.stringify(request);
 	const response: unknown = await retrying(
-		async () => postAdmission(body, send),
+		async () => postAdmission(body, send, patience),
 		(error) => error instanceof AdmissionUnreachableError,
 		{ attempts: ADMISSION_ATTEMPTS },
 		(attempt, error, delayMs) => {
@@ -121,24 +143,33 @@ async function sendRecorded(request: unknown, send: AdmissionFetch): Promise<unk
 	return response;
 }
 
-export async function admit(request: unknown, send: AdmissionFetch): Promise<Admission> {
-	return parseAdmission(await sendRecorded(request, send));
+export async function admit(
+	request: unknown,
+	send: AdmissionFetch,
+	patience: AbortSignal,
+): Promise<Admission> {
+	return parseAdmission(await sendRecorded(request, send, patience));
 }
 
 export async function stagePractice(
 	practiceSlug: string,
 	request: unknown,
 	send: AdmissionFetch,
+	patience: AbortSignal,
 ): Promise<void> {
 	const receipt = z.object({
 		practiceSlug: z.literal(practiceSlug),
 		digest: z.string().regex(/^[0-9a-f]{64}$/u),
 	});
-	receipt.parse(await sendRecorded(request, send));
+	receipt.parse(await sendRecorded(request, send, patience));
 }
 
 /** The gateway records a replaced practice before the runner skips its session. */
-export async function startPractice(practiceSlug: string, send: AdmissionFetch): Promise<boolean> {
+export async function startPractice(
+	practiceSlug: string,
+	send: AdmissionFetch,
+	patience: AbortSignal,
+): Promise<boolean> {
 	const receipt = z.object({ practiceSlug: z.literal(practiceSlug), current: z.boolean() });
-	return receipt.parse(await sendRecorded({ practiceSlug }, send)).current;
+	return receipt.parse(await sendRecorded({ practiceSlug }, send, patience)).current;
 }

@@ -122,6 +122,7 @@ try {
 		base: `${second}/internal/agent/runs/${config.runId}`,
 		headers,
 		label: "restart-proof",
+		patience: new AbortController().signal,
 	});
 	let admissions = 0;
 	const end = await runTurn(worker, runModels({ url: relayUrl, headers }, AGENT_DIR), 10, {

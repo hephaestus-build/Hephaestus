@@ -241,11 +241,14 @@ await test("repeated lost responses stop as an infrastructure interruption witho
 });
 
 for (const providerCase of [
+	{ api: "openai-completions", provider },
 	{ api: "openai-responses", provider: openAIResponsesApi() },
 	{ api: "anthropic-messages", provider: anthropicMessagesApi() },
 ] as const) {
-	await test(`${providerCase.api} waits for a connection, then preserves a provider failure`, async () => {
+	await test(`${providerCase.api} waits for a connection, sends the same request again, then preserves a provider failure`, async () => {
 		let calls = 0;
+		// The wait sends the provider's own request again: its body must be one that can be read twice.
+		const bodies: unknown[] = [];
 		const native = (...args: Parameters<typeof providerCase.provider.streamSimple>) =>
 			providerCase.provider.streamSimple(...args);
 		const output = await waitForGateway(native, Date.now() + 5000)(
@@ -253,8 +256,9 @@ for (const providerCase of [
 			context,
 			{
 				...options,
-				fetch: async () => {
+				fetch: async (_input, init) => {
 					calls += 1;
+					bodies.push(init?.body);
 					if (calls === 1) {
 						throw new TypeError("fetch failed", { cause: { code: "ECONNREFUSED" } });
 					}
@@ -265,6 +269,8 @@ for (const providerCase of [
 		const events = await eventsFrom(output);
 		const result = await output.result();
 		assert.equal(calls, 2);
+		assert.equal(typeof bodies[0], "string");
+		assert.equal(bodies[1], bodies[0]);
 		assert.equal(events.filter((event) => event.type === "error").length, 1);
 		assert.equal(result.stopReason, "error");
 	});

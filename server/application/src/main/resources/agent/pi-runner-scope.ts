@@ -95,6 +95,8 @@ export interface ScopeLimits {
 	measureEnd: number;
 	/** Aborts when the run stops measuring. */
 	measuringEnded: AbortSignal;
+	/** Until it aborts, a gateway call waits out a refused connection (gateway-connection.ts). */
+	gatewayPatience: () => AbortSignal;
 }
 
 /** What the job knows about each practice, by its slug. */
@@ -319,18 +321,21 @@ export async function runScope(
 	}
 	const slugs: string[] = [];
 	for (const slug of requestedSlugs) {
-		const current = await startPractice(slug, async (body, signal) =>
-			fetch(`${proxy.url}/start-practice`, {
-				method: "POST",
-				signal,
-				headers: {
-					authorization: `Bearer ${proxy.token}`,
-					...proxy.claim,
-					"content-type": "application/json",
-					...(hasText(process.env.TRACEPARENT) ? { traceparent: process.env.TRACEPARENT } : {}),
-				},
-				body,
-			}),
+		const current = await startPractice(
+			slug,
+			async (body, signal) =>
+				fetch(`${proxy.url}/start-practice`, {
+					method: "POST",
+					signal,
+					headers: {
+						authorization: `Bearer ${proxy.token}`,
+						...proxy.claim,
+						"content-type": "application/json",
+						...(hasText(process.env.TRACEPARENT) ? { traceparent: process.env.TRACEPARENT } : {}),
+					},
+					body,
+				}),
+			context.limits.gatewayPatience(),
 		);
 		if (!current) {
 			skippedPractices.add(slug);

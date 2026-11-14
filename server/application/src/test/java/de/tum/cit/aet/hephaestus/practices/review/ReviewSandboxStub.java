@@ -22,6 +22,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
@@ -52,6 +54,8 @@ final class ReviewSandboxStub implements SandboxClaims {
     private final Map<String, Claim> claims = new ConcurrentHashMap<>();
     private final Set<String> measured = ConcurrentHashMap.newKeySet();
     private volatile Runnable beforeStart = () -> {};
+    private final AtomicBoolean loseGateway = new AtomicBoolean();
+    private volatile Consumer<String> afterLostAttempt = runId -> {};
 
     ReviewSandboxStub(ObjectMapper mapper) {
         this.mapper = mapper;
@@ -60,6 +64,18 @@ final class ReviewSandboxStub implements SandboxClaims {
     void prepare(Runnable betweenCaptureAndStart) {
         calls.clear();
         beforeStart = betweenCaptureAndStart;
+    }
+
+    /**
+     * The next measurement loses its server after its first practice starts, as a hard restart of the only replica
+     * does: the runner waits out the refused gateway until its work ends, exits retryable, and uploads that exit once
+     * the server is back. The sandbox then pulls the review's next attempt.
+     *
+     * @param afterUpload reads what the lost attempt left, given its run's id
+     */
+    void loseGatewayDuringNextMeasurement(Consumer<String> afterUpload) {
+        afterLostAttempt = afterUpload;
+        loseGateway.set(true);
     }
 
     @Override
@@ -109,17 +125,25 @@ final class ReviewSandboxStub implements SandboxClaims {
                     Integer.toString(run.path("epoch").asInt()));
             String base = gateway + "/internal/agent/runs/" + runId;
             send(base + "/context", headers, null);
-            measure(gateway + "/internal/llm", base + "/runtime", headers);
+            boolean completed = measure(gateway + "/internal/llm", base + "/runtime", headers);
             var ended = send(
                     base + "/end",
                     headers,
                     mapper.writeValueAsBytes(mapper.createObjectNode().put("outcome", "completed")));
             calls.add(new Call("end", ended.statusCode(), new String(ended.body(), StandardCharsets.UTF_8)));
+            if (!completed) {
+                measured.remove(claim.name());
+                afterLostAttempt.accept(runId);
+            }
         }
     }
 
-    /** The runner's review: {@code runReviewJob} in {@code pi-runner.ts}, with a fixed judgement. */
-    private void measure(String proxy, String runtime, Map<String, String> token)
+    /**
+     * The runner's review: {@code runReviewJob} in {@code pi-runner.ts}, with a fixed judgement.
+     *
+     * @return whether it measured, rather than lost its server
+     */
+    private boolean measure(String proxy, String runtime, Map<String, String> token)
             throws IOException, InterruptedException {
         Map<String, byte[]> workspace =
                 untar(send(runtime + "/workspace", token, null).body());
@@ -138,6 +162,10 @@ final class ReviewSandboxStub implements SandboxClaims {
             var started = post(
                     proxy + "/start-practice", token, mapper.createObjectNode().put("practiceSlug", slug));
             if (!mapper.readTree(started).path("current").asBoolean()) continue;
+            if (loseGateway.compareAndSet(true, false)) {
+                upload(runtime, token, Map.of(), SandboxLayout.EXIT_SERVER_UNREACHABLE);
+                return false;
+            }
             var completion = mapper.createObjectNode().put("model", "review").put("max_tokens", 16);
             completion.putArray("messages").addObject().put("role", "user").put("content", "Review " + slug);
             post(proxy + "/chat/completions", token, completion);
@@ -156,12 +184,19 @@ final class ReviewSandboxStub implements SandboxClaims {
 
         // As the runner does, a review whose practices each started or were withheld at their start writes its result,
         // which is empty when every start was withheld.
-        byte[] output = tar(Map.of("result.json", mapper.writeValueAsBytes(admission(task, results))));
+        upload(runtime, token, Map.of("result.json", mapper.writeValueAsBytes(admission(task, results))), 0);
+        return true;
+    }
+
+    /** What gateway-run does after the runner exits: it uploads the output with the runner's exit. */
+    private void upload(String runtime, Map<String, String> token, Map<String, byte[]> files, int exitCode)
+            throws IOException, InterruptedException {
+        byte[] output = tar(files);
         var upload = HttpRequest.newBuilder(URI.create(runtime + "/result"));
         token.forEach(upload::header);
         var uploaded = http.send(
                 upload.header("Content-Type", "application/x-tar")
-                        .header("x-sandbox-exit-code", "0")
+                        .header("x-sandbox-exit-code", Integer.toString(exitCode))
                         .header("x-sandbox-timed-out", "false")
                         .header(
                                 "Content-Digest",
