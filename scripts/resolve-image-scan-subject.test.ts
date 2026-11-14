@@ -403,6 +403,8 @@ void test(
 						IMAGES: JSON.stringify(["application-server", "webapp"]),
 						WEBAPP_DIGEST: `sha256:${artifact}`,
 						BUILDPACKS_DIGEST: `sha256:${buildpacks}`,
+						BUILDPACKS_OUTCOME: "success",
+						BAKE_OUTCOME: "success",
 					},
 				},
 			);
@@ -437,10 +439,14 @@ void test(
 						IMAGES: JSON.stringify(["webapp", "postgres"]),
 						WEBAPP_DIGEST: `sha256:${artifact}`,
 						BUILDPACKS_DIGEST: "",
+						POSTGRES_DIGEST: "",
+						BUILDPACKS_OUTCOME: "skipped",
+						BAKE_OUTCOME: "success",
 					},
 				},
 			);
 			assert.notEqual(missing.status, 0);
+			assert.match(missing.stdout, /::error::No digest produced for postgres/u);
 			assert.deepEqual(
 				readdirSync(path.join(directory, "digests"), {
 					encoding: "utf8",
@@ -452,6 +458,27 @@ void test(
 					path.join("webapp", "linux-arm64", artifact),
 				],
 			);
+			// A failed build names its own error, so the export does not blame a missing digest.
+			rmSync(path.join(directory, "digests"), { recursive: true, force: true });
+			const failed = spawnSync(
+				"bash",
+				["-e", "-c", String(step("build", "Export digests").get("run"))],
+				{
+					encoding: "utf8",
+					env: {
+						...process.env,
+						RUNNER_TEMP: directory,
+						PLATFORM_PAIR: "linux-arm64",
+						IMAGES: JSON.stringify(["application-server"]),
+						BUILDPACKS_DIGEST: "",
+						BUILDPACKS_OUTCOME: "failure",
+						BAKE_OUTCOME: "",
+					},
+				},
+			);
+			assert.notEqual(failed.status, 0);
+			assert.match(failed.stdout, /::notice::application-server did not build/u);
+			assert.doesNotMatch(failed.stdout, /No digest produced/u);
 		} finally {
 			rmSync(directory, { recursive: true, force: true });
 		}
