@@ -72,12 +72,17 @@ public final class WorkspaceTestFixtures {
             GitLabWorkspaceBuilder builder,
             String serverUrl) {
         Workspace saved = workspaceRepository.save(builder.build());
+        connectGitLab(connectionRepository, saved, serverUrl);
+        return saved;
+    }
+
+    /** Gives {@code workspace} an active GitLab connection to {@code serverUrl}. */
+    public static void connectGitLab(ConnectionRepository connectionRepository, Workspace workspace, String serverUrl) {
         ConnectionConfig.GitLabConfig cfg = new ConnectionConfig.GitLabConfig(serverUrl, 42L, null, Set.of(), null);
-        Connection connection = new Connection(saved, IntegrationKind.GITLAB, serverUrl, cfg);
-        connection.setDisplayName(saved.getAccountLogin());
+        Connection connection = new Connection(workspace, IntegrationKind.GITLAB, serverUrl, cfg);
+        connection.setDisplayName(workspace.getAccountLogin());
         ReflectionTestUtils.setField(connection, "state", IntegrationState.ACTIVE);
         connectionRepository.save(connection);
-        return saved;
     }
 
     /**

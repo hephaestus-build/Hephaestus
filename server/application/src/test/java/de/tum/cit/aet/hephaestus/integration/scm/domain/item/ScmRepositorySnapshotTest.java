@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRe
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
+import de.tum.cit.aet.hephaestus.integration.scm.spi.ScmTokenSource;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import java.util.List;
@@ -36,7 +37,10 @@ class ScmRepositorySnapshotTest extends BaseUnitTest {
         when(items.require(ref)).thenReturn(ref);
         when(rows.findById(3L)).thenReturn(Optional.of(repository));
         when(access.authorize(1, repository)).thenReturn(new IntegrationRef(IntegrationKind.GITHUB, 1, null));
-        when(access.prepare(1, repository)).thenReturn(key);
+        var remote = new ScmRepositoryAccess.Remote(
+                key, "https://scm.example/owner/repository.git", mock(ScmTokenSource.class));
+        when(access.remote(ref)).thenReturn(remote);
+        when(access.remote(1, repository)).thenReturn(remote);
         when(tree.resolve(key, "refs/heads/" + branch)).thenReturn("a".repeat(40));
         when(tree.inventory(key, "a".repeat(40))).thenReturn(List.of());
         var service = new ScmItemService(
@@ -50,6 +54,7 @@ class ScmRepositorySnapshotTest extends BaseUnitTest {
                 mock(ScmFileVersions.class),
                 new ObjectMapper(),
                 mock(ScmWorkCapture.class),
+                new ScmItemTransactions(),
                 Clock.systemUTC());
         var snapshot = service.pin(ref, null);
         assertThat(snapshot.state()).containsEntry("defaultBranch", branch);

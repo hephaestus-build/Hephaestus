@@ -18,8 +18,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Isolation;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 /** A dated-work listing retains the membership and versions established by its first read. */
@@ -47,6 +48,7 @@ public class ScmWorkItemLister implements ItemLister {
     private final ScmWorkItemIndex work;
     private final ObjectMapper mapper;
     private final ScmItemQueryRepository queries;
+    private final PlatformTransactionManager transactions;
 
     @Override
     public ItemKind containerKind() {
@@ -63,12 +65,18 @@ public class ScmWorkItemLister implements ItemLister {
         return container.kind().equals(containerKind());
     }
 
-    @Transactional(isolation = Isolation.REPEATABLE_READ)
+    /** Pins the repository first, since its pin syncs the mirror outside any transaction, then lists in one snapshot. */
     @Override
     public ItemPage list(ItemListRequest request) {
         if (!supports(request.container()) || !memberKinds().contains(request.memberKind()))
             throw new IllegalArgumentException("Unsupported SCM work listing");
         sources.pin(request.container(), request.version());
+        var snapshot = new TransactionTemplate(transactions);
+        snapshot.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
+        return Objects.requireNonNull(snapshot.execute(status -> page(request)));
+    }
+
+    private ItemPage page(ItemListRequest request) {
         long repositoryId = Objects.requireNonNull(request.container().sourceId());
         Cursor cursor;
         if (request.cursor() == null) {

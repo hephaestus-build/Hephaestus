@@ -17,16 +17,20 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.IssueContentSour
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.LinkedWorkItemContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.RepositoryTreeContentSource;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ReviewRepositoryPreparer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ReviewThreadContentSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCaptureContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCapturePreparation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCapturedWork;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -57,6 +61,10 @@ public class ScmWorkCapture {
     private final LinkedWorkItemContentSource linked;
     private final RepositoryTreeContentSource repositoryTree;
     private final ScmCaptureContributors contributors;
+    private final GitRepositoryManager git;
+    private final ReviewRepositoryPreparer preparer;
+    private final ScmWorkLookup workLookup;
+    private final PullRequestReviewRepository reviews;
     private final ItemEventService events;
     private final PersonDataWriteFence fence;
     private final ObjectMapper mapper;
@@ -65,6 +73,45 @@ public class ScmWorkCapture {
     /** The item kinds whose event reviews read only what their occasion retained. */
     static boolean retains(ItemKind kind) {
         return kind.equals(ScmItemEvents.PULL_REQUEST) || kind.equals(ScmItemEvents.PULL_REQUEST_REVIEW);
+    }
+
+    /**
+     * Whether a capture of pull request work under {@code request} reads the clone of its reviewed repository, which it
+     * fetches before its transaction. {@link ScmCapturePreparation#prepare} refuses a read that no fetch preceded.
+     */
+    boolean readsClone(ItemKind kind, CaptureRequest request) {
+        var sources = request.sources();
+        return retains(kind)
+                && git.isEnabled()
+                && (PullRequestContentSource.readsClone(sources, request.permittedSources())
+                        || LinkedWorkItemContentSource.readsClone(sources)
+                        || RepositoryTreeContentSource.readsClone(sources));
+    }
+
+    /** The reviewed repository of {@code pinned}: the occasion's work for an event review, else the current work. */
+    ReviewRepositoryPreparer.Remote reviewedRepository(ItemSnapshot pinned, @Nullable UUID eventId) {
+        var item = pinned.item();
+        if (eventId != null)
+            return preparer.remote(pinned, occasion(item, eventId).work());
+        var current = currentWork(item);
+        return preparer.remote(pinned, ScmCapturedWork.of(current.work(), current.review()));
+    }
+
+    /** Fetches the reviewed repository; the caller runs it with no transaction. */
+    void fetch(ReviewRepositoryPreparer.Remote reviewed) {
+        preparer.fetch(reviewed);
+    }
+
+    record Work(Issue work, @Nullable PullRequestReview review) {}
+
+    /** The work as stored now: a review's pull request, or the issue or pull request itself. */
+    Work currentWork(ItemRef item) {
+        long sourceId = Objects.requireNonNull(item.sourceId());
+        if (item.kind().equals(ScmItemEvents.PULL_REQUEST_REVIEW)) {
+            var review = reviews.findById(sourceId).orElseThrow(ScmItemService::gone);
+            return new Work(Objects.requireNonNull(review.getPullRequest()), review);
+        }
+        return new Work(workLookup.find(item.kind(), sourceId).orElseThrow(ScmItemService::gone), null);
     }
 
     /**
@@ -138,14 +185,16 @@ public class ScmWorkCapture {
 
     /**
      * Captures {@code work} as pinned, or what {@code occasion} retained of it. Every contributor must consent,
-     * including the people only the occasion still names.
+     * including the people only the occasion still names. {@code preparation} holds the fetch that ran before the
+     * transaction.
      */
     CaptureContribution capture(
             ItemSnapshot pinned,
             CaptureRequest request,
             Issue work,
             @Nullable PullRequestReview review,
-            @Nullable ScmOccasionEvidence occasion) {
+            @Nullable ScmOccasionEvidence occasion,
+            ScmCapturePreparation preparation) {
         List<ScmCaptureConsent.Contributor> retained = occasion == null
                 ? List.of()
                 : occasion.participants().stream()
@@ -166,7 +215,7 @@ public class ScmWorkCapture {
                 pinned,
                 permittedRequest,
                 occasion != null ? occasion.work() : ScmCapturedWork.of(work, review),
-                new ScmCapturePreparation(),
+                preparation,
                 clock.instant(),
                 occasion != null ? occasion.captured() : null);
         return compose(context);

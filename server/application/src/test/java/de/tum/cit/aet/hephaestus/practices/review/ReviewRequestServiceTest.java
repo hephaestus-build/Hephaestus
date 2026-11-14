@@ -15,9 +15,11 @@ import de.tum.cit.aet.hephaestus.core.auth.spi.WorkspaceAdminAssurance;
 import de.tum.cit.aet.hephaestus.core.auth.webauthn.PasskeyRequiredException;
 import de.tum.cit.aet.hephaestus.core.exception.AccessForbiddenException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemDescriptor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
@@ -33,6 +35,7 @@ import de.tum.cit.aet.hephaestus.workspace.authorization.WorkspaceAccessService;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -46,8 +49,16 @@ class ReviewRequestServiceTest extends BaseUnitTest {
     final ReviewRequestPolicy policy = mock(ReviewRequestPolicy.class);
     final MembershipRepository memberships = mock(MembershipRepository.class);
     final WorkspaceAdminAssurance assurance = mock(WorkspaceAdminAssurance.class);
+    final ItemDescriptorRegistry descriptors = mock(ItemDescriptorRegistry.class);
     final ReviewRequestService service = new ReviewRequestService(
-            items, identities, access, reviews, policy, WorkspacePortFixtures.memberships(memberships), assurance);
+            items,
+            identities,
+            access,
+            reviews,
+            policy,
+            WorkspacePortFixtures.memberships(memberships),
+            assurance,
+            descriptors);
 
     @Test
     void authorAndAssigneeCanRequestTheirOwnItem() {
@@ -165,6 +176,9 @@ class ReviewRequestServiceTest extends BaseUnitTest {
 
     void requesting(ItemSnapshot snapshot) {
         when(items.require(1, 3)).thenReturn(snapshot.item());
+        var descriptor = mock(ItemDescriptor.class);
+        when(descriptor.roles()).thenReturn(Set.of(AboutRole.AUTHOR));
+        when(descriptors.descriptorFor(snapshot.item().kind())).thenReturn(Optional.of(descriptor));
         when(items.pin(snapshot.item(), null)).thenReturn(snapshot);
         when(policy.refusal(1, 3, 7)).thenReturn(Optional.empty());
     }

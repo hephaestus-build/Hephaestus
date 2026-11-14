@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
-import de.tum.cit.aet.hephaestus.practices.review.ReviewRequestRejected;
 import de.tum.cit.aet.hephaestus.practices.review.report.ProblemComparison;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
 import de.tum.cit.aet.hephaestus.practices.scan.dto.ScanSummaryDTO;
@@ -18,7 +17,6 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -32,7 +30,7 @@ public class ScanRequestService {
     private final ScanQueryService query;
     private final JsonMapper json;
 
-    @Transactional
+    /** Not transactional: the request pins the repository, which fetches its mirror, outside any transaction. */
     public ScanSummaryDTO start(long workspaceId, long actorId, UUID key, StartScanRequestDTO request) {
         long repository = PracticeReviewCoverageService.positiveId(request.repositoryItemId());
         var budget = request.budgetUsd();
@@ -46,6 +44,7 @@ public class ScanRequestService {
         if (request.practiceSlugs() != null
                 && selected.size() != request.practiceSlugs().size())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select practices from this workspace.");
+        // A replay carries the digest of its first request, whose ref and version the frozen scan already matched.
         var id = service.request(ReviewRequest.builder()
                 .workspaceId(workspaceId)
                 .itemId(repository)
@@ -57,23 +56,10 @@ public class ScanRequestService {
                 .requestDigest(digest(repository, request))
                 .practiceIds(selected)
                 .reuse(request.reuse() == null || request.reuse())
+                .scanRef(request.ref())
+                .expectedVersion(request.expectedVersion())
                 .build());
-        var review = reports.require(workspaceId, id);
-        // Compare request preconditions with the frozen selection so replays do not depend on today's source.
-        var ref = review.getChecks().path("ref").asString();
-        if (request.ref() != null && !request.ref().equals(ref)) {
-            var refusal = new ReviewRequestRejected(
-                    ReviewRequestRejected.Reason.REF_UNSUPPORTED, "Only the default branch supports scans.");
-            refusal.getBody().setProperty("supportedRef", ref);
-            throw refusal;
-        }
-        if (request.expectedVersion() != null && !request.expectedVersion().equals(review.getItemVersion())) {
-            var refusal = new ReviewRequestRejected(
-                    ReviewRequestRejected.Reason.VERSION_CHANGED, "The repository version changed.");
-            refusal.getBody().setProperty("currentVersion", review.getItemVersion());
-            throw refusal;
-        }
-        return query.summary(review);
+        return query.summary(reports.require(workspaceId, id));
     }
 
     private String digest(long repository, StartScanRequestDTO request) {

@@ -10,7 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ListedItem;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
@@ -18,7 +18,6 @@ import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 /** Enumerates a complete immutable tree before applying page boundaries. */
 @Component
@@ -26,8 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ScmItemLister implements ItemLister {
     private final ScmItemService items;
-    private final ScmRepositoryAccess access;
-    private final RepositoryRepository repositories;
     private final ScmGitTree tree;
     private final ScmFileVersions versions;
 
@@ -46,16 +43,15 @@ public class ScmItemLister implements ItemLister {
         return container.kind().equals(containerKind());
     }
 
-    @Transactional(readOnly = true)
     @Override
     public ItemPage list(ItemListRequest request) {
         if (!supports(request.container()) || !memberKinds().contains(request.memberKind()))
             throw new IllegalArgumentException("Unsupported SCM listing");
+        // The pin authorized the repository and synced its mirror, outside any transaction.
         ItemSnapshot pinned = items.pin(request.container(), request.version());
-        var repository = repositories
-                .findById(Objects.requireNonNull(request.container().sourceId()))
-                .orElseThrow();
-        var key = access.prepare(request.container().workspaceId(), repository);
+        var key = new RepositoryKey(
+                request.container().workspaceId(),
+                Objects.requireNonNull(request.container().sourceId()));
         var inventory = tree.inventory(key, pinned.version().value());
         String identity = request.container().workspaceId()
                 + "/"

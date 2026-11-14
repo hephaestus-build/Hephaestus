@@ -21,7 +21,6 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
 /** Git freshness reads the shared source observation; record freshness uses the capture renderer. */
@@ -38,8 +37,11 @@ public class ScmSourceFingerprints implements ItemFingerprintReader {
         return source.supports(item);
     }
 
+    /**
+     * Not transactional: a record read may fetch the reviewed repository, so each read runs in its own short transaction,
+     * or in the caller's.
+     */
     @Override
-    @Transactional(readOnly = true, noRollbackFor = ItemCaptureException.class)
     public Map<SourceKind, String> fingerprints(
             ItemRef item, Set<SourceKind> kinds, @Nullable UUID occasion, ObjectMapper mapper) {
         if (!item.kind().equals(ScmItemEvents.PULL_REQUEST)

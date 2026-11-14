@@ -127,10 +127,8 @@ public class PullRequestContentSource {
         var occasion = capture.occasion();
         // A review submitted on an older commit attests no diff of the occasion's pair: its words stay without code.
         boolean pairAttested = occasion == null || occasion.pairAttested();
-        boolean cloneRequested = pairAttested
-                && (readsClone(selectedKinds)
-                        || (selectedKinds.contains(CORE)
-                                && request.request().permittedSources().contains(DIFF)));
+        boolean cloneRequested =
+                pairAttested && readsClone(selectedKinds, request.request().permittedSources());
         boolean cloneEnabled = cloneRequested && gitRepositoryManager.isEnabled();
         if (cloneEnabled) {
             prepared = request.preparation().prepare(repositoryPreparer, capture);
@@ -249,8 +247,9 @@ public class PullRequestContentSource {
                         .toList());
     }
 
-    private static boolean readsClone(Set<SourceKind> selectedKinds) {
-        return selectedKinds.contains(DIFF);
+    /** Whether a capture of these sources reads the clone: the diff, or the core record with its commits. */
+    public static boolean readsClone(Set<SourceKind> selectedKinds, Set<SourceKind> permittedKinds) {
+        return selectedKinds.contains(DIFF) || (selectedKinds.contains(CORE) && permittedKinds.contains(DIFF));
     }
 
     private void ensureRepositoryAvailable(RepositoryKey repositoryId) {
