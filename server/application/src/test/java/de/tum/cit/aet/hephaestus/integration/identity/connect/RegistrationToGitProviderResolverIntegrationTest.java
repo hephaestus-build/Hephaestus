@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -78,14 +79,14 @@ class RegistrationToGitProviderResolverIntegrationTest extends BaseIntegrationTe
                 IntegrationKind.OUTLINE,
                 "team-" + suffix,
                 new ConnectionConfig.OutlineConfig(origin + "/", null, null, Set.of()));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connection = connections.saveAndFlush(connection);
         long id = Objects.requireNonNull(provider.getId());
         assertThat(resolver.visibleInWorkspace(id, mine.getId())).isTrue();
         assertThat(resolver.visibleInWorkspace(id, other.getId())).isFalse();
         assertThat(resolver.visibleInWorkspace(Objects.requireNonNull(wrongKind.getId()), mine.getId()))
                 .isFalse();
-        connection.setState(IntegrationState.SUSPENDED);
+        ConnectionFixtures.reachState(connection, IntegrationState.SUSPENDED);
         connections.saveAndFlush(connection);
         assertThat(resolver.visibleInWorkspace(id, mine.getId())).isFalse();
     }

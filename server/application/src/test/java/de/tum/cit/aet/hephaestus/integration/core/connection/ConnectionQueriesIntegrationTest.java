@@ -43,7 +43,7 @@ class ConnectionQueriesIntegrationTest extends BaseIntegrationTest {
                 IntegrationKind.SLACK,
                 "T-" + suffix,
                 new ConnectionConfig.SlackConfig("T-" + suffix, "Engineering", null, Set.of()));
-        active.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(active, IntegrationState.ACTIVE);
         active.setDisplayName("Engineering");
         active = connections.saveAndFlush(active);
         var paused = new Connection(
@@ -51,7 +51,7 @@ class ConnectionQueriesIntegrationTest extends BaseIntegrationTest {
                 IntegrationKind.OUTLINE,
                 "team-" + suffix,
                 new ConnectionConfig.OutlineConfig("https://docs.example.test", null, null, Set.of()));
-        paused.setState(IntegrationState.SUSPENDED);
+        ConnectionFixtures.reachState(paused, IntegrationState.SUSPENDED);
         paused.setDisplayName("Docs paused");
         paused = connections.saveAndFlush(paused);
         var foreign = new Connection(
@@ -59,7 +59,7 @@ class ConnectionQueriesIntegrationTest extends BaseIntegrationTest {
                 IntegrationKind.SLACK,
                 "foreign-" + suffix,
                 new ConnectionConfig.SlackConfig("foreign-" + suffix, "Other", null, Set.of()));
-        foreign.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(foreign, IntegrationState.ACTIVE);
         foreign = connections.saveAndFlush(foreign);
 
         long foreignId = foreign.getId();
