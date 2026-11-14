@@ -30,7 +30,10 @@ public class PersonDataRequest {
     @Column(name = "administrator_account_id")
     private @Nullable Long administratorAccountId;
 
-    /** Changes only through {@link #startErasure}, {@link #fail} and {@link #complete}. */
+    /**
+     * Changes through {@link #startErasure}, {@link #fail} and {@link #complete}, and from {@code PREVIEW} to
+     * {@code EXPIRED} through the SQL of {@link PersonDataService#expirePreviews}.
+     */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 24)
     @Setter(AccessLevel.NONE)

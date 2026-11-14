@@ -148,8 +148,9 @@ The database trigger `guard_workspace` also refuses a change of a purged workspa
 ## Person data requests
 
 `PersonDataRequest.State` owns the transition table of an erasure request.
-`PersonDataRequest` changes its state only through `startErasure`, `fail` and `complete`.
+`PersonDataRequest` changes its state through `startErasure`, `fail` and `complete`.
 These methods refuse an illegal move.
+The SQL of `PersonDataService.expirePreviews` moves only a `PREVIEW` to `EXPIRED`.
 
 ```mermaid
 stateDiagram-v2
@@ -165,7 +166,7 @@ stateDiagram-v2
     COMPLETE --> [*]
 ```
 
-A preview that passes its `expires_at` time moves to `EXPIRED`.
+After a preview passes its `expires_at` time, the next `expirePreviews` run moves it to `EXPIRED`.
 `expirePreviews` removes its scope and selections, so nobody can confirm it.
 A temporary store failure keeps the request in `ERASING` with the failure code `STORE_ERASURE_RETRY_PENDING`, and the next run retries it.
 `complete` removes the identifying scope and the selections, so the receipt keeps only counts and times.
