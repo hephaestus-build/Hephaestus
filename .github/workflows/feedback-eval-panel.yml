@@ -14,10 +14,6 @@ on:
 
 permissions: {}
 
-concurrency:
-  group: feedback-eval-panel-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 jobs:
   # The panel runs only with a configured provider: docs/contributor/ci-cd.mdx § Feedback eval
   # panel provider. A cron cannot be conditional, so a night without the variables starts no job.
@@ -26,7 +22,10 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'schedule' && vars.FEEDBACK_EVAL_BASE_URL != '' && vars.FEEDBACK_EVAL_MODEL != '') ||
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'eval:run'))
+      (github.event_name == 'pull_request' && (
+        (github.event.action == 'labeled' && github.event.label.name == 'eval:run') ||
+        (github.event.action == 'synchronize' && contains(github.event.pull_request.labels.*.name, 'eval:run'))
+      ))
     runs-on: ubuntu-slim
     timeout-minutes: 15
     permissions: {}
@@ -62,6 +61,11 @@ jobs:
     name: Model panel
     needs: [provider]
     if: needs.provider.outputs.configured == 'true'
+    # On the job, not the workflow: a run whose jobs are skipped, such as one for an unrelated label,
+    # never enters the group, so it cancels no running panel.
+    concurrency:
+      group: feedback-eval-panel-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:

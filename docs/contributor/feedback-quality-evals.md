@@ -361,10 +361,11 @@ The check reads only issues updated since the attempt started. If it fails, the 
 The cicd job keeps `feedback-eval-gate.json` as the `feedback-eval-gate` artifact for 14 days. The panel keeps it as `feedback-eval-panel`.
 The file holds each check, each measure, the model name and the SHA-256 of the endpoint. It never holds the endpoint or the key.
 
-The gate runs locally without a model:
+The gate runs locally without a model.
+With `--base`, it also compares `gate.json` with the base commit, as pull request CI does:
 
 ```bash
-node scripts/feedback-eval-gate.ts
+node scripts/feedback-eval-gate.ts --base "$(git merge-base origin/main HEAD)"
 ```
 
 ## Composition replay cases

@@ -7593,3 +7593,36 @@ void test("the feedback eval gate runs on its paths in every tier, a stacked lay
 	assert.equal(runs({ "light-tier": "true" }), false);
 	assert.equal(runs({}), false);
 });
+
+void test("only the eval:run label or a push to a labelled pull request starts the panel, and nothing else cancels it", async () => {
+	const workflow = parseDocument(
+		await readFile(".github/workflows/feedback-eval-panel.yml", "utf8"),
+	);
+	const starts = (action: string, labels: string[], label?: string) =>
+		expandExpressions(
+			`\${{ ${asString(workflow.getIn(["jobs", "provider", "if"]), "provider if")} }}`,
+			{
+				github: {
+					event_name: "pull_request",
+					event: {
+						action,
+						...(label === undefined ? {} : { label: { name: label } }),
+						pull_request: { number: 7, labels: labels.map((name) => ({ name })) },
+					},
+				},
+				vars: {},
+			},
+		) === "true";
+	// An unrelated label on a pull request that already carries eval:run starts no panel.
+	assert.equal(starts("labeled", ["eval:run", "ci:full"], "ci:full"), false);
+	assert.equal(starts("labeled", ["eval:run"], "eval:run"), true);
+	assert.equal(starts("synchronize", ["eval:run"]), true);
+	assert.equal(starts("synchronize", ["ci:full"]), false);
+	// A run whose jobs are skipped must not enter a cancelling group, so only the panel job holds one.
+	assert.equal(workflow.has("concurrency"), false);
+	assert.equal(workflow.hasIn(["jobs", "provider", "concurrency"]), false);
+	assert.equal(
+		workflow.getIn(["jobs", "panel", "concurrency", "group"]),
+		`feedback-eval-panel-\${{ github.event.pull_request.number || github.ref }}`,
+	);
+});
