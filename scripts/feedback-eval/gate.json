@@ -1,5 +1,5 @@
 {
-	"version": 2,
+	"version": 3,
 	"description": "The fixed case set, prompt clauses and floors of the feedback eval gate. docs/contributor/feedback-quality-evals.md § Feedback eval gate owns the rules.",
 	"claims": {
 		"t4-9": "fc8f950c328ed233704d136f45a5b9f73fe1eccd62ce5b57ee46bc03a626a228",
