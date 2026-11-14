@@ -1,10 +1,11 @@
 package de.tum.cit.aet.hephaestus.core.database;
 
+import jakarta.persistence.EntityManagerFactory;
 import java.io.Serial;
 import java.sql.SQLException;
-import javax.sql.DataSource;
-import org.springframework.dao.DataAccessResourceFailureException;
-import org.springframework.jdbc.datasource.ConnectionHolder;
+import org.hibernate.engine.spi.SessionImplementor;
+import org.jspecify.annotations.Nullable;
+import org.springframework.orm.jpa.EntityManagerHolder;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.transaction.support.DefaultTransactionStatus;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -13,7 +14,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * The JPA transaction manager for a database that can end a session itself: the idle-in-transaction timeout, an
  * administrator or a failover. PostgreSQL rolls the transaction back when it ends the session, so a rollback on the
  * closed connection has nothing to do; it would only replace the failure that the caller has to see with "Connection is
- * closed". A commit on a closed connection answers as a resource failure, which callers retry.
+ * closed".
  */
 public class EndedSessionTransactionManager extends JpaTransactionManager {
     @Serial
@@ -24,30 +25,33 @@ public class EndedSessionTransactionManager extends JpaTransactionManager {
         try {
             super.doRollback(status);
         } catch (RuntimeException rollbackFailure) {
-            if (!sessionEnded()) throw rollbackFailure;
+            if (!connectionClosed(currentSession())) throw rollbackFailure;
         }
     }
 
-    @Override
-    protected void doCommit(DefaultTransactionStatus status) {
+    private @Nullable SessionImplementor currentSession() {
+        EntityManagerFactory factory = getEntityManagerFactory();
+        if (factory == null
+                || !(TransactionSynchronizationManager.getResource(factory) instanceof EntityManagerHolder holder))
+            return null;
         try {
-            super.doCommit(status);
-        } catch (RuntimeException commitFailure) {
-            if (!sessionEnded()) throw commitFailure;
-            throw new DataAccessResourceFailureException(
-                    "The database ended the session of this transaction", commitFailure);
+            return holder.getEntityManager().unwrap(SessionImplementor.class);
+        } catch (RuntimeException unavailable) {
+            return null;
         }
     }
 
-    /** Whether the database connection of the current transaction is closed. */
-    private boolean sessionEnded() {
-        DataSource dataSource = getDataSource();
-        if (dataSource == null
-                || !(TransactionSynchronizationManager.getResource(dataSource) instanceof ConnectionHolder holder))
-            return false;
+    /**
+     * Whether the session holds a JDBC connection that is closed. A session that holds none borrows nothing here: the
+     * check must not take a pooled connection while the pool may be the thing that failed.
+     */
+    static boolean connectionClosed(@Nullable SessionImplementor session) {
+        if (session == null) return false;
         try {
-            return holder.getConnection().isClosed();
-        } catch (SQLException unreadable) {
+            var connection = session.getJdbcCoordinator().getLogicalConnection();
+            return connection.isPhysicallyConnected()
+                    && connection.getPhysicalConnection().isClosed();
+        } catch (SQLException | RuntimeException unreadable) {
             return false;
         }
     }

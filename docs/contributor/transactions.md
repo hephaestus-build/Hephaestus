@@ -60,8 +60,12 @@ Spring: "self-invocation (in effect, a method within the target object calling a
   The same `options` that set the lock bound (§ 6) set this limit, so Liquibase and the `LISTEN` listeners have no limit.
   PostgreSQL rolls the transaction back when it ends the session.
   `EndedSessionTransactionManager` therefore does not roll back on the closed connection, so the caller sees the `25P03` failure, not "Connection is closed".
-  A commit on the closed connection fails with a `DataAccessResourceFailureException`.
-  `TransientFailures` treats both as transient, so the inbox and the scheduled jobs retry them.
+  A transaction left idle for a minute is a defect to fix, not an outage, so `TransientFailures` does not treat `25P03` as transient.
+  The provider event inbox counts the retries and then keeps the event as a dead letter for a replay.
+  A scheduled job logs an error and runs again on its next schedule.
+  A review job fails, and its preparation failure says that a database operation failed.
+  A person-data erasure step stops with `STORE_ERASURE_FAILED` until an administrator resumes it.
+  An HTTP request answers `500`.
 
 PostgreSQL keeps row locks until the transaction ends ([Explicit locking](https://www.postgresql.org/docs/18/explicit-locking.html)).
 A slow call therefore blocks every writer of the same rows, and it holds a pooled connection.

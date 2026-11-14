@@ -25,12 +25,9 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
  */
 public final class TransientFailures {
 
-    /**
-     * Connection loss, a session ended for idling in a transaction, serialization failure, deadlock, too many
-     * connections, lock timeout, administrator shutdown.
-     */
+    /** Connection loss, serialization failure, deadlock, too many connections, lock timeout, administrator shutdown. */
     private static final Set<String> TRANSIENT_SQL_STATES =
-            Set.of("25P03", "40001", "40P01", "53300", "55P03", "57P01", "57P02", "57P03");
+            Set.of("40001", "40P01", "53300", "55P03", "57P01", "57P02", "57P03");
 
     private TransientFailures() {}
 

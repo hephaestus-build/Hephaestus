@@ -21,13 +21,12 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
-import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * The database ends a pooled session that sits idle in a transaction past the limit. The caller sees that failure as
- * a retryable one, never as a rollback error that hides it. Migrations and the LISTEN listeners have no limit.
+ * The database ends a pooled session that sits idle in a transaction past the limit. The caller sees that failure,
+ * never a rollback error that hides it. Migrations and the LISTEN listeners have no limit.
  */
 class IdleInTransactionTimeoutIntegrationTest extends BaseIntegrationTest {
     private static final String IDLE_LIMIT =
@@ -66,7 +65,7 @@ class IdleInTransactionTimeoutIntegrationTest extends BaseIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    void shouldAnswerASessionEndedForIdlingAsARetryableFailureNotAsARollbackError(boolean throughJpa) throws Exception {
+    void shouldAnswerASessionEndedForIdlingWithItsOwnFailureNotARollbackError(boolean throughJpa) throws Exception {
         var backend = new AtomicReference<Integer>();
         Throwable failure = catchThrowable(() -> transactions.executeWithoutResult(status -> {
             idleLimitOfThisTransaction("200ms");
@@ -77,22 +76,9 @@ class IdleInTransactionTimeoutIntegrationTest extends BaseIntegrationTest {
         }));
 
         assertThat(sqlStates(failure)).contains("25P03");
-        assertThat(TransientFailures.isTransient(failure)).isTrue();
-        assertEnded(Objects.requireNonNull(backend.get()));
-        assertThat(jdbc.queryForObject("SELECT 1", Integer.class)).isEqualTo(1);
-    }
-
-    @Test
-    void shouldAnswerACommitOnASessionEndedForIdlingAsAResourceFailure() throws Exception {
-        var backend = new AtomicReference<Integer>();
-        Throwable failure = catchThrowable(() -> transactions.executeWithoutResult(status -> {
-            idleLimitOfThisTransaction("200ms");
-            backend.set(Objects.requireNonNull(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class)));
-            sleep(1_000);
-        }));
-
-        assertThat(failure).isInstanceOf(DataAccessResourceFailureException.class);
-        assertThat(TransientFailures.isTransient(failure)).isTrue();
+        // A transaction left idle for a minute is a defect, not an outage: the inbox counts its retries and then keeps
+        // the event as a dead letter, and a scheduled job logs it as an error.
+        assertThat(TransientFailures.isTransient(failure)).isFalse();
         assertEnded(Objects.requireNonNull(backend.get()));
         assertThat(jdbc.queryForObject("SELECT 1", Integer.class)).isEqualTo(1);
     }
