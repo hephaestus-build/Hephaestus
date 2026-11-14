@@ -122,20 +122,23 @@ export function entryViolations(
 /**
  * Why a package that one lazy component owns loads anywhere else: with the entry, or in another load,
  * such as a route's or another component's, which would fetch it before the reader opens the owner.
- * The package's own lazy modules (its language modes, for example) are its business.
+ * The lazy modules of the packages that one owner holds (Monaco's language modes) are the owner's.
  */
 export function componentViolations(
 	measured: Measured,
 	owners: Readonly<Record<string, string>>,
 ): string[] {
+	// A lazy module of any package that the same owner holds loads only after the owner, so it may hold
+	// the owner's other packages: Monaco's language modes share the editor's chunk.
+	const ownedBy = (load: string, owner: string) =>
+		Object.entries(owners).some(([name, by]) => by === owner && load.startsWith(`${name}/`));
 	return Object.entries(owners).flatMap(([name, owner]) => [
 		...(measured.entryPackages.includes(name)
 			? [`${name} is in the entry closure; only ${owner} may load it.`]
 			: []),
 		...Object.entries(measured.lazyPackages)
 			.filter(
-				([load, packages]) =>
-					load !== owner && !load.startsWith(`${name}/`) && packages.includes(name),
+				([load, packages]) => load !== owner && !ownedBy(load, owner) && packages.includes(name),
 			)
 			.map(([load]) => `${name} loads with ${load}; only ${owner} may load it.`),
 	]);
