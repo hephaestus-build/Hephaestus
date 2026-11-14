@@ -77,3 +77,36 @@ void test("a buildpack download that does not come from the dependency binding f
 		fetched.stdout,
 	);
 });
+
+void test("the lifecycle's failure lines become one annotation, so the step names its cause", (t) => {
+	const directory = mkdtempSync(path.join(tmpdir(), "buildpack-log-"));
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	const result = spawnSync(
+		process.execPath,
+		["scripts/summarize-buildpack-log.ts", path.join(directory, "raw.log")],
+		{
+			input: [
+				"[builder]   BellSoft Liberica JRE 21.0.13: Contributing to layer",
+				"[builder] unable to invoke layer creator",
+				"[builder] unable to get dependency BellSoft Liberica JRE. see DEBUG log level",
+				"[builder] \u001B[31mERROR: \u001B[0mfailed to build: exit status 1",
+				"ERROR: failed to build: executing lifecycle: failed with status code: 51",
+				"",
+			].join("\n"),
+			encoding: "utf8",
+		},
+	);
+	assert.equal(result.status, 0, result.stderr);
+	assert.ok(
+		result.stdout.includes(
+			"::error title=Buildpacks build failed::[builder] unable to invoke layer creator%0A[builder] unable to get dependency BellSoft Liberica JRE. see DEBUG log level%0A[builder] ERROR: failed to build: exit status 1%0AERROR: failed to build: executing lifecycle: failed with status code: 51",
+		),
+		result.stdout,
+	);
+	const warning = spawnSync(
+		process.execPath,
+		["scripts/summarize-buildpack-log.ts", path.join(directory, "raw.log")],
+		{ input: "[builder] unable to read an optional file\n", encoding: "utf8" },
+	);
+	assert.doesNotMatch(warning.stdout, /::error/u);
+});

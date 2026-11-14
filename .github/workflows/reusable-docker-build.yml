@@ -365,18 +365,26 @@ jobs:
           AGENT_PI_DIGEST: ${{ steps.bake.outputs.metadata && fromJSON(steps.bake.outputs.metadata)['agent-pi']['containerimage.digest'] || '' }}
           POSTGRES_DIGEST: ${{ steps.bake.outputs.metadata && fromJSON(steps.bake.outputs.metadata).postgres['containerimage.digest'] || '' }}
           BUILDPACKS_DIGEST: ${{ steps.build-buildpacks.outputs.digest }}
+          BUILDPACKS_OUTCOME: ${{ steps.build-buildpacks.outcome }}
+          BAKE_OUTCOME: ${{ steps.bake.outcome }}
           PLATFORM_PAIR: ${{ steps.prep.outputs.platform_pair }}
         run: |
           set -euo pipefail
           missing=()
           for name in $(jq -r '.[]' <<< "$IMAGES"); do
             case "$name" in
-              application-server) digest=$BUILDPACKS_DIGEST ;;
-              webapp) digest=$WEBAPP_DIGEST ;;
-              agent-pi) digest=$AGENT_PI_DIGEST ;;
-              postgres) digest=$POSTGRES_DIGEST ;;
-              *) digest= ;;
+              application-server) digest=$BUILDPACKS_DIGEST outcome=$BUILDPACKS_OUTCOME ;;
+              webapp) digest=$WEBAPP_DIGEST outcome=$BAKE_OUTCOME ;;
+              agent-pi) digest=$AGENT_PI_DIGEST outcome=$BAKE_OUTCOME ;;
+              postgres) digest=$POSTGRES_DIGEST outcome=$BAKE_OUTCOME ;;
+              *) digest= outcome= ;;
             esac
+            if [[ "$outcome" == failure ]]; then
+              # The build step annotates its own error; a missing digest would only repeat its effect.
+              echo "::notice::$name did not build; read the build step's error above"
+              missing+=("$name")
+              continue
+            fi
             if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
               echo "::error::No digest produced for $name (got: ${digest:-<empty>})"
               missing+=("$name")
