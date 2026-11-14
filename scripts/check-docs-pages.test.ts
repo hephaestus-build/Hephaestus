@@ -209,23 +209,25 @@ await describe("screenshotProblems", async () => {
 });
 
 const note = (heading: string) => ({ file: ".migration/a.md", source: `${heading}\n\nText.\n` });
+const noPages = () => undefined;
 
 await describe("migrationNoteProblems", async () => {
 	await test("accepts a note that an upgrade page names by its heading", () => {
 		assert.deepEqual(
-			migrationNoteProblems([note("#### 🔴 Stop every role")], "See *Stop every role*."),
+			migrationNoteProblems([note("#### 🔴 Stop every role")], "See *Stop every role*.", noPages),
 			[],
 		);
 	});
 
 	await test("asks to name a note that no upgrade page names", () => {
-		assert.deepEqual(migrationNoteProblems([note("#### Rename a setting")], "Nothing here."), [
-			'.migration/a.md:1: Name "Rename a setting" on an upgrade page in docs/admin/.',
-		]);
+		assert.deepEqual(
+			migrationNoteProblems([note("#### Rename a setting")], "Nothing here.", noPages),
+			['.migration/a.md:1: Name "Rename a setting" on an upgrade page in docs/admin/.'],
+		);
 	});
 
 	await test("asks for the heading that names the note", () => {
-		assert.deepEqual(migrationNoteProblems([note("No heading")], ""), [
+		assert.deepEqual(migrationNoteProblems([note("No heading")], "", noPages), [
 			'.migration/a.md:1: Start the migration note with a "#### " heading.',
 		]);
 	});
@@ -248,6 +250,7 @@ await describe("migration note stops and links", async () => {
 			migrationNoteProblems(
 				[{ file: "n.md", source: "#### 🔴 Drain the queues\n\nStop the old servers first.\n" }],
 				named,
+				anchors,
 			).join("\n"),
 			/start its heading with "#### 🔴 Stop every role"/u,
 		);
@@ -260,9 +263,25 @@ await describe("migration note stops and links", async () => {
 					},
 				],
 				named,
+				anchors,
 			),
 			[],
 		);
+	});
+	await test("rollback and recovery text, and other wording, do not count as a stop", () => {
+		for (const [source, stops] of [
+			["Stop every runtime role first.", true],
+			["Stop all application replicas, then migrate.", true],
+			["To roll back, stop every role and restore the backup.", false],
+			["Keep PostgreSQL running and stop nothing.", false],
+		] as const) {
+			const problems = migrationNoteProblems(
+				[{ file: "n.md", source: `#### 🔴 Drain the queues\n\n${source}\n` }],
+				named,
+				anchors,
+			);
+			assert.equal(problems.length > 0, stops, source);
+		}
 	});
 	await test("each docs link and anchor in a note resolves", () => {
 		assert.deepEqual(
@@ -295,7 +314,7 @@ await describe("migration note stops and links", async () => {
 				named,
 				anchors,
 			),
-			["n.md:3: No docs page docs/admin/kubernetes.md or .mdx exists."],
+			["n.md:3: No docs page serves https://docs.hephaestus.build/admin/kubernetes#x."],
 		);
 	});
 });

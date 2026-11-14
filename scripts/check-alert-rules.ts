@@ -67,14 +67,15 @@ export const ALERT_REASON_PAGES = [
 	"docs/admin/monitoring.md",
 ];
 
-/** The alerts that no table row of the reason pages names. A row in the runbook says what to do, not why. */
+/** The alerts that no first table cell of the reason pages names. A row in the runbook says what to do, not why. */
 export function unexplainedAlerts(rules: string, pages: readonly string[]): string[] {
 	const named = new Set(
 		pages.flatMap((page) =>
 			page
 				.split("\n")
 				.filter((line) => line.startsWith("|"))
-				.flatMap((row) => row.match(/`Hephaestus\w+`/gu) ?? [])
+				// The first cell names the alerts that the row explains; a later cell can mention any alert.
+				.flatMap((row) => row.split("|")[1]?.match(/`Hephaestus\w+`/gu) ?? [])
 				.map((name) => name.slice(1, -1)),
 		),
 	);
