@@ -4,7 +4,7 @@ import path from "node:path";
 import type { Plugin } from "vite";
 
 import { BUNDLE_METADATA_FILE } from "../bundle-packages.ts";
-import { bundleMetadata, entryViolations, measure } from "./bundle-budget.ts";
+import { bundleMetadata, entryViolations, measure, routeViolations } from "./bundle-budget.ts";
 
 /**
  * Every page's cold load fetches the entry's static JavaScript before it renders. With the router
@@ -26,6 +26,9 @@ const routeOnlyPackages = [
 	"streamdown",
 ];
 
+/** Packages that load only when the component that needs them renders, never with a route's page. */
+const componentOnlyPackages = ["@monaco-editor/react", "monaco-editor"];
+
 export function bundleBudget(): Plugin {
 	let outDir = "";
 	return {
@@ -42,7 +45,10 @@ export function bundleBudget(): Plugin {
 					JSON.parse(await readFile(path.join(outDir, BUNDLE_METADATA_FILE), "utf8")),
 				);
 				const measured = measure(metadata.chunks);
-				const violations = entryViolations(measured, routeOnlyPackages);
+				const violations = [
+					...entryViolations(measured, routeOnlyPackages),
+					...routeViolations(measured, componentOnlyPackages),
+				];
 				if (violations.length > 0) {
 					throw new Error(violations.join("\n"));
 				}
