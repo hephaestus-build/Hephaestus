@@ -149,8 +149,9 @@ class GitLabWebhookDeliveryLiveTest extends BaseIntegrationTest {
 
     /** An active GitLab connection on a new workspace, with the probe project synced and monitored. */
     private long connect(GitLabWebhookFixture fixture) {
-        if (providers.findByTypeAndServerUrl(IdentityProviderType.GITLAB, fixture.server()).isEmpty())
-            providers.saveAndFlush(new IdentityProvider(IdentityProviderType.GITLAB, fixture.server()));
+        if (providers
+                .findByTypeAndServerUrl(IdentityProviderType.GITLAB, fixture.server())
+                .isEmpty()) providers.saveAndFlush(new IdentityProvider(IdentityProviderType.GITLAB, fixture.server()));
         Workspace workspace = WorkspaceTestFixtures.activeWorkspace(fixture.groupPath());
         workspace.setAccountLogin(fixture.groupPath());
         workspace = workspaces.saveAndFlush(workspace);
