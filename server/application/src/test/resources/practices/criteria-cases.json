@@ -478,9 +478,10 @@
 			"avoids-insecure-defaults-and-over-broad-permissions": "NOT_MET"
 		},
 		"files": {
-			"repo/SignIn.swift": "import Foundation\n\nfunc didSignIn(token: String) {\n    NSLog(\"Signed in with token %@\", token)\n}\n"
+			"repo/SignIn.swift": "import Foundation\n\nstruct SignInResponse: Decodable {\n    let accessToken: String\n}\n\nfunc didSignIn(_ response: SignInResponse) {\n    NSLog(\"Signed in with token %@\", response.accessToken)\n}\n",
+			"repo/docs/auth.md": "# Sign-in contract\nThe sign-in endpoint returns `accessToken`, a bearer token that authorizes every later API request for this account.\n"
 		},
-		"reason": "The only added diagnostic logs an issued token. The security practice owns that exposure. The logger practice records Does not apply and never Met, even though the call goes through a platform logger.",
+		"reason": "The only added diagnostic logs the access token that the captured sign-in contract says authorizes the account, and NSLog writes it to the system log unredacted. The security practice owns that exposure. The logger practice records Does not apply and never Met, even though the call goes through a platform logger.",
 		"workType": "pull_request"
 	},
 	{
@@ -1620,13 +1621,13 @@
 	{
 		"id": "public-client-identifier-log",
 		"expected": {
-			"avoids-insecure-defaults-and-over-broad-permissions": "MET"
+			"avoids-insecure-defaults-and-over-broad-permissions": "DOES_NOT_APPLY"
 		},
 		"files": {
 			"repo/Client.swift": "import os\nlet clientID = \"public-client-registration\"\nlet logger = Logger(subsystem: \"example.client\", category: \"auth\")\nlogger.info(\"Client: \\(clientID)\")\n",
 			"repo/docs/client.md": "# Client contract\nThe clientID identifies the public application registration. It is displayed to users and never authenticates the client. No client secret is issued.\n"
 		},
-		"reason": "Logging adds the existing inspection occasion, while the captured value is a public identifier and no credential material is exposed.",
+		"reason": "The captured contract shows the logged value is a public identifier that never authenticates, so the line touches no setting. The practice records Does not apply, never Met or a statement that the change is secure.",
 		"workType": "pull_request"
 	},
 	{
