@@ -10,11 +10,11 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
-import de.tum.cit.aet.hephaestus.mentor.MentorConversationRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorConversationAccess;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import java.io.Serial;
 import java.time.Clock;
 import java.time.Instant;
@@ -55,8 +55,8 @@ public class HephTurns {
         }
     }
 
-    private final MentorTurnRepository rows;
-    private final MentorConversationRepository conversations;
+    private final MentorTurnAccess rows;
+    private final MentorConversationAccess conversations;
     private final PersonDataWriteFence writeFence;
     private final PersonDataCopyFence copyFence;
     private final Clock clock;
@@ -77,7 +77,7 @@ public class HephTurns {
                 || !sandbox.subjectKey().startsWith("conversation:"))
             throw new IllegalArgumentException("A turn belongs to a conversation sandbox");
         UUID conversationId = UUID.fromString(sandbox.subjectKey().substring("conversation:".length()));
-        var account = conversations.findAccountIdByIdAndWorkspaceId(conversationId, sandbox.workspaceId());
+        var account = conversations.findAccountId(sandbox.workspaceId(), conversationId);
         // A suppressed or erased account can still end its run. The domain end omits its person data.
         account.ifPresent(accountId -> {
             var unused = writeFence.holdForAccountWrite(accountId);
@@ -115,7 +115,7 @@ public class HephTurns {
         T value = reader.apply(turn);
         write(run, false, held -> {
             // write() holds capture admission in this transaction, so the answer holds until it commits.
-            Instant startedAt = attemptOf(run).getStartedAt();
+            Instant startedAt = attemptOf(run).startedAt();
             if (startedAt == null || copyFence.erasedSince(MentorEntryRepository.COPIES_PERSON_DATA_STORE, startedAt))
                 throw new StaleRunException(run.fence());
             return held;
@@ -131,10 +131,10 @@ public class HephTurns {
      * @throws StopException when the attempt must stop, for a call that does not end it
      */
     public TurnAttempt held(SandboxRun run, boolean ending) {
-        MentorTurnRepository.RunAttempt held = attemptOf(run);
+        MentorTurnAccess.RunAttempt held = attemptOf(run);
         if (!ending) {
             if (stopped(held)) throw new StopException(Stop.DEVELOPER);
-            Instant deadline = held.getDeadline();
+            Instant deadline = held.deadline();
             if (deadline == null) throw new IllegalStateException("A started turn's run has a deadline");
             // The run ends a grace after the work deadline, so its holder can still end what it wrote.
             if (!clock.instant().isBefore(deadline.minus(TurnRunsAdapter.GRACE)))
@@ -142,17 +142,12 @@ public class HephTurns {
         }
         AgentRunFence fence = run.fence();
         return new TurnAttempt(
-                held.getId(),
-                fence.workspaceId(),
-                held.getAccountId(),
-                held.getConversationId(),
-                fence.epoch(),
-                fence.runId());
+                held.id(), fence.workspaceId(), held.accountId(), held.conversationId(), fence.epoch(), fence.runId());
     }
 
     /** When the run's attempt must have done its work: its run's deadline, less the grace to end what it wrote. */
     public Instant workDeadline(SandboxRun run) {
-        Instant deadline = attemptOf(run).getDeadline();
+        Instant deadline = attemptOf(run).deadline();
         if (deadline == null) throw new IllegalStateException("A started turn's run has a deadline");
         return deadline.minus(TurnRunsAdapter.GRACE);
     }
@@ -162,13 +157,13 @@ public class HephTurns {
         return sandboxes.start(run.sandbox(), run.fence()).orElseThrow(() -> new StaleRunException(run.fence()));
     }
 
-    private MentorTurnRepository.RunAttempt attemptOf(SandboxRun run) {
+    private MentorTurnAccess.RunAttempt attemptOf(SandboxRun run) {
         AgentRunFence fence = run.fence();
-        return rows.findRunAttempt(fence.workspaceId(), fence.runId(), fence.epoch())
+        return rows.runAttempt(fence.workspaceId(), fence.runId(), fence.epoch())
                 .orElseThrow(() -> new StaleRunException(fence));
     }
 
-    private static boolean stopped(MentorTurnRepository.RunAttempt held) {
-        return MentorTurn.Status.STOPPED.name().equals(held.getStatus());
+    private static boolean stopped(MentorTurnAccess.RunAttempt held) {
+        return held.status() == MentorTurn.Status.STOPPED;
     }
 }

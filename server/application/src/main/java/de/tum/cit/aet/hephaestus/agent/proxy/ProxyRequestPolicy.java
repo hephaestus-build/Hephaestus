@@ -9,7 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.DigestAdmission;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +26,7 @@ class ProxyRequestPolicy {
     private final EgressPolicy egress;
     private final DigestAdmission digests;
     private final ReviewJobRepository jobs;
-    private final MentorTurnRepository turns;
+    private final MentorTurnAccess turns;
     private final ReviewMemberAiPolicy reviews;
     private final MemberAiRoutingAdapter routing;
 
@@ -61,7 +61,7 @@ class ProxyRequestPolicy {
                         .isPresent();
             case PRODUCT_FEEDBACK_DRAFT, PROBE -> false;
             case MENTOR_TURN ->
-                turns.findAccountIdByIdAndWorkspaceId(attempt.sourceId(), workspaceId)
+                turns.findAccountId(workspaceId, attempt.sourceId())
                         .filter(account -> !digests.refuses(workspaceId, attempt.sourceId())
                                 && routing.allows(workspaceId, account, model))
                         .isPresent();

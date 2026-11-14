@@ -15,7 +15,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.DigestAdmission;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
@@ -37,7 +37,7 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
     private ReviewJobRepository jobs;
 
     @Mock
-    private MentorTurnRepository turns;
+    private MentorTurnAccess turns;
 
     @Mock
     private ReviewMemberAiPolicy reviews;
@@ -103,7 +103,7 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
 
     @Test
     void shouldUseTheDurableMentorTurnAccountNotASuppliedUserId() {
-        when(turns.findAccountIdByIdAndWorkspaceId(id, 1L)).thenReturn(Optional.of(20L));
+        when(turns.findAccountId(1L, id)).thenReturn(Optional.of(20L));
         when(routing.allows(1L, 20L, model)).thenReturn(false);
         assertThat(policy.allows(request(UsageSourceType.MENTOR_TURN))).isFalse();
         verify(routing).allows(1L, 20L, model);
@@ -136,7 +136,7 @@ class ProxyRequestPolicyTest extends BaseUnitTest {
 
     @Test
     void shouldRefuseTheNextConversationCallWhenItsCapturedDigestFactsLoseEligibility() {
-        when(turns.findAccountIdByIdAndWorkspaceId(id, 1L)).thenReturn(Optional.of(21L));
+        when(turns.findAccountId(1L, id)).thenReturn(Optional.of(21L));
         when(routing.allows(1L, 21L, model)).thenReturn(true);
         when(digests.refuses(1L, id)).thenReturn(false, true);
         var request = request(UsageSourceType.MENTOR_TURN);

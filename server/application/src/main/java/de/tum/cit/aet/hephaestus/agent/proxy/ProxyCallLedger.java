@@ -19,7 +19,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -73,7 +73,7 @@ class ProxyCallLedger {
     private final LlmUsageRecorder recorder;
     private final AgentRuns runs;
     private final ReviewJobRepository jobs;
-    private final MentorTurnRepository turns;
+    private final MentorTurnAccess turns;
     private final ProxyBudgetGate budgetGate;
     private final ObjectMapper mapper;
     private final MeterRegistry meterRegistry;
@@ -85,7 +85,7 @@ class ProxyCallLedger {
             LlmUsageRecorder recorder,
             AgentRuns runs,
             ReviewJobRepository jobs,
-            MentorTurnRepository turns,
+            MentorTurnAccess turns,
             ProxyBudgetGate budgetGate,
             ObjectMapper mapper,
             MeterRegistry meterRegistry,
@@ -211,8 +211,8 @@ class ProxyCallLedger {
     }
 
     private OpenCall turnCall(ProxyRouting.BilledAttempt attempt, long workspaceId, UUID runId, Bound bound) {
-        var admission = turns.findByIdAndWorkspaceId(attempt.sourceId(), workspaceId)
-                .flatMap(turn -> MentorTurnAdmission.read(turn.getAdmission()))
+        var admission = turns.find(workspaceId, attempt.sourceId())
+                .flatMap(turn -> MentorTurnAdmission.read(turn.admission()))
                 .orElse(null);
         FrozenCharge charge =
                 admission == null ? FrozenCharge.UNKNOWN : new FrozenCharge(admission.model(), admission.price());

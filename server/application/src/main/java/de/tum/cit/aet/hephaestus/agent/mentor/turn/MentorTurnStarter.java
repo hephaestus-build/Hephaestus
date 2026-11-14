@@ -12,8 +12,8 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUnpricedUsageBlockedException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -56,7 +56,7 @@ public class MentorTurnStarter {
     private final MentorTurnService turns;
     private final MentorAdmission admission;
     private final DigestAdmission digests;
-    private final MentorTurnRepository turnRows;
+    private final MentorTurnAccess turnRows;
     private final PersonDataWriteFence writeFence;
     private final MeterRegistry meters;
     private final LlmConnectionHealth connections;
@@ -146,9 +146,9 @@ public class MentorTurnStarter {
      * @return false when the account's person data may not be written, because an erasure suppressed it
      */
     private boolean admit(MentorTurn turn, MentorTurnAdmission admitted) {
-        if (turnRows.findByIdAndWorkspaceId(turn.getId(), turn.getWorkspaceId()).isEmpty())
+        if (turnRows.find(turn.getWorkspaceId(), turn.getId()).isEmpty())
             throw new MentorLeaseLostException(turn.getId(), turn.getAttempt());
-        boolean writable = turnRows.findAccountIdByIdAndWorkspaceId(turn.getId(), turn.getWorkspaceId())
+        boolean writable = turnRows.findAccountId(turn.getWorkspaceId(), turn.getId())
                 .map(writeFence::holdForAccountWrite)
                 .orElse(false);
         if (!writable) return false;

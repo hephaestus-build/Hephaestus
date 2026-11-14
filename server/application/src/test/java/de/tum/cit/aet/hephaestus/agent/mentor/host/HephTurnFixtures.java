@@ -10,11 +10,11 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
 import de.tum.cit.aet.hephaestus.mentor.MentorContextPathBuilder;
-import de.tum.cit.aet.hephaestus.mentor.MentorConversationRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorConversationAccess;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import java.time.Clock;
@@ -28,7 +28,7 @@ final class HephTurnFixtures {
 
     static TurnContextLoads folder(ApplicationContext beans) {
         return new TurnContextLoads(
-                beans.getBean(MentorTurnRepository.class),
+                beans.getBean(MentorTurnAccess.class),
                 beans.getBeanProvider(ContextLoader.class),
                 beans.getBean(Clock.class),
                 beans.getBean(PersonDataCopyFence.class),
@@ -41,8 +41,8 @@ final class HephTurnFixtures {
 
     static HephTurns turns(ApplicationContext beans, AgentSandboxes sandboxes, Clock clock) {
         return new HephTurns(
-                beans.getBean(MentorTurnRepository.class),
-                beans.getBean(MentorConversationRepository.class),
+                beans.getBean(MentorTurnAccess.class),
+                beans.getBean(MentorConversationAccess.class),
                 beans.getBean(PersonDataWriteFence.class),
                 beans.getBean(PersonDataCopyFence.class),
                 clock,

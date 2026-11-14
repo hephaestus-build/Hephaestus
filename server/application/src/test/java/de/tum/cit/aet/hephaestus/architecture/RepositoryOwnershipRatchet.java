@@ -63,33 +63,6 @@ final class RepositoryOwnershipRatchet {
                     "integration.scm::spi ActivityScmFacts",
                     Set.of("activity.overview.ActivityScopeResolver")),
             new Entry(
-                    "agent",
-                    "mentor.MentorConversationRepository",
-                    "DDD10",
-                    "mentor::spi MentorTurnAccess and MentorConversationAccess",
-                    Set.of("agent.mentor.host.HephTurnConfiguration", "agent.mentor.host.HephTurns")),
-            new Entry(
-                    "agent",
-                    "mentor.MentorTurnRepository",
-                    "DDD10",
-                    "mentor::spi MentorTurnAccess and MentorConversationAccess",
-                    Set.of(
-                            "agent.mentor.host.HephTurnConfiguration",
-                            "agent.mentor.host.HephTurns",
-                            "agent.mentor.host.TurnSandboxRunKind",
-                            "agent.mentor.sandbox.TurnContextLoads",
-                            "agent.mentor.turn.MentorTurnQueueSampler",
-                            "agent.mentor.turn.MentorTurnStarter",
-                            "agent.proxy.ProxyCallLedger",
-                            "agent.proxy.ProxyRequestPolicy",
-                            "agent.proxy.ProxyRoutingService")),
-            new Entry(
-                    "agent",
-                    "practices.result.ProblemRepository",
-                    "DDD15 (practices)",
-                    "practices::spi ResultEvidenceQuery",
-                    Set.of("agent.adapter.EvidenceDeliveryAuthorization")),
-            new Entry(
                     "integration",
                     "integration.scm.domain.user.UserRepository",
                     "DDD14 (identity/SCM)",
