@@ -5,7 +5,8 @@
 {{- $drain := int .Values.server.drainTimeoutSeconds }}
 {{- $connections := include "hephaestus.databaseConnectionCapacity" . | fromJson }}
 {{- $grace := ternary (add $drain 120) 45 $sandbox.enabled }}
-{{- $startupFailures := 60 }}
+{{- /* The schema wait (HEPHAESTUS_DATABASE_MIGRATION_WAIT, 10 minutes) plus two minutes to boot and finish starting. */}}
+{{- $startupFailures := 72 }}
 {{- if $sandbox.enabled }}
 {{- $api := .Values.networkPolicy.kubernetesApi }}
 {{- $_ := required "networkPolicy.kubernetesApi.cidr is required: state the API endpoint that the network plugin sees" $api.cidr }}
@@ -230,7 +231,6 @@ spec:
             {{- end }}
             - name: management
               containerPort: 9090
-          {{- /* The schema wait (HEPHAESTUS_DATABASE_MIGRATION_WAIT, 10 minutes) runs before readiness. */}}
           {{- include "hephaestus.probes" (dict "startupFailures" $startupFailures) | nindent 10 }}
           {{- include "hephaestus.preStop" . | nindent 10 }}
           resources:
