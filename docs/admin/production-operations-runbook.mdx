@@ -1,826 +1,164 @@
 ---
-title: Production operations runbook
-description: Safe deployment, incident containment, external feedback removal, and recovery after a restore.
-page_type: how-to
+title: Respond to an alert
+description: The cause, the action and the check for each alert that the Helm chart ships.
+page_type: troubleshooting
 ---
 
-This runbook is for the **instance operator**.
-
-1. Before changing state, record the instance URL, Helm release, signed release lock, incident owner, and rollback point.
-2. Keep credentials and feedback bodies out of tickets.
-
-:::caution[CAUTION: Before broad or unattended delivery]
-The operator must execute and sign off three drills on isolated, representative infrastructure.
-The [failed-migration drill](./upgrade#if-migration-fails) is on the Upgrade page.
-The restore and un-delivery drills are below.
-An operator-owned silent run requires the silent deployment checklist first.
-:::
-
-## First response and kill-switch map
-
-1. If external feedback is wrong, immediately turn on silent mode in **Instance administration → Instance settings**.
-2. If the control plane is unavailable, block provider egress at the host/network boundary.
-3. Apply the same block if a request already in progress may still write.
-4. Under either condition, stop all application servers and active sandboxes.
-5. To preserve a recovery point, also stop ingress.
-
-A switch cannot recall a request that a provider already accepted.
-
-| Control and location                                                                                                                | What it stops                                                                                                                                                                                                                                                                                | What it does not stop                                                                                                            |
-| ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **Silent mode**, instance settings                                                                                                  | New SCM, Slack, and email writes through the egress gateway. This includes edits, inline comments, approvals, reactions, Hephaestus replies, weekly digest notes, and retries. It covers all email from the notification module. Withheld email is final and does not send when silent mode is turned off. | Review compute, persistence, reads/sync, in-app feedback, or declared OAuth, webhook-registration, webhook-redelivery, and operator-alert exemptions |
-| `AGENT_ENABLED=false`, deployment environment of the servers                                                                        | Queued review runtime. Recreate affected containers to apply it                                                                                                                                                                                                                              | Already-running sandboxes, conversation turns, sync, or every external write. Not a runtime global AI stop                               |
-| Workspace **Review settings** controls: **Start from work activity**, **Start requested reviews**                                   | Their respective review entry points                                                                                                                                                                                                                                                         | Other workspaces, existing work, or external delivery already in progress                                                        |
-| Workspace/group/practice Feedback mode **Off**                                                                                      | New feedback at all destinations                                                                                                                                                                                                                                                             | Eligible reviews and stored results                                                                                              |
-| Workspace **Sending feedback → Send feedback** off                                                                                  | External practice feedback and Hephaestus delivery for that workspace                                                                                                                                                                                                                            | Measurement and in-app feedback. Not an instance restore boundary                                                                |
-| Recipient **Comments on your work** off                                                                                             | Covered feedback comments for that recipient                                                                                                                                                                                                                                                 | All other recipients, integration plumbing, or all Hephaestus activity                                                                 |
-| Every **Conversations** row turned off under the workspace's **AI models**. `HEPHAESTUS_INTEGRATION_SLACK_ENABLED=false` on applicable roles | Respective mentor/Slack features                                                                                                                                                                                                                                                             | SCM writes, other AI work, or restored database credentials                                                                      |
-| Model/connection disabled. Each funding source's budget set to zero                                                                 | Work using that model/connection or budget                                                                                                                                                                                                                                                   | Other funding sources. Already-incurred costs. Budgets are not strict reservations                                               |
-
-[Practice review](./practice-review#feedback-mode-review-scope-and-delivery) defines workspace and recipient
-controls. There is no independent per-destination toggle matrix. For an immediate all-AI stop, stop
-server and sandbox processes and deny model-provider egress. Silent mode does not stop compute.
-
-### Turn silent mode on, verify it, and turn it off
-
-The authenticated instance-admin API uses `GET /api/admin/settings` and `PATCH /api/admin/settings/silent-mode`.
-The UI handles the preconditions below.
-
-1. Turn on silent mode with `{"engaged":true,"reason":"incident reference"}`.
-2. Read back `silentModeEngaged=true`.
-3. Retain the audit event and current `ETag`.
-4. To turn it off, use `{"engaged":false,"reason":"approved release reference"}` with **the current** `If-Match` ETag.
-5. If the response is `412`, read again.
-6. After a `412`, reassess turning it off.
-7. Do not retry turning it off blindly.
-
-`428` means the required precondition is missing.
-**Restored settings can contain silent mode off**.
-The default does not override an explicit decision to turn silent mode off.
-Turning silent mode off affects all workspaces and never flushes suppressed feedback.
-
-## Check that it worked
-
-After a first response, check that silent mode holds:
-
-1. Open **Instance administration → Instance settings**.
-   Silent mode is on.
-2. Read `GET /api/admin/settings`.
-   The response has `silentModeEngaged=true`.
-
-## Silent deployment checklist
-
-1. **Contain**. For the running instance, turn on silent mode.
-2. For the running instance, read back silent mode.
-3. For a clone, use the pre-boot isolation below instead.
-4. Record exceptions.
-   Zero *content delivery* is not zero network traffic.
-
-5. **Capture rollback**. Stop ingress.
-6. Stop application writers, including active sandboxes.
-7. Save a restorable database backup with matching secrets, configuration, and signed release lock.
-8. Verify the archive.
-9. Verify the checksum.
-10. Verify the off-host copy.
-11. Record the recovery point and permitted outage/data loss.
-
-12. **Validate then deploy**. Complete the [staging migration](./upgrade#validate-the-actual-production-data).
-13. [Prepare the tested release](./upgrade#upgrade-the-host).
-14. Keep `AGENT_ENABLED=false` on the server.
-15. Keep Slack disabled and public ingress blocked.
-16. Apply the verified chart with public routes disabled, reviews disabled and Slack disabled.
-    If this is a restored database, follow the [restore startup sequence](./backup-restore#restore).
-
-17. Verify migration completion.
-18. Before you enable public routes or reviews, read back silent mode.
-
-    Pod readiness alone does not verify the brake.
-
-19. **Prove silence**. After readback, keep silent mode on.
-20. Set `AGENT_ENABLED=true` on the server.
-21. Enable the intended review/Slack settings.
-22. Upgrade the affected chart configuration.
-23. Keep restore-clone network isolation.
-24. Use controlled providers for clone drills.
-25. Run bounded reviews on controlled GitHub/GitLab work and Slack conversations for each enabled lane.
-26. Inspect practice results and `WITHHELD` / `INSTANCE_SILENCED` outcomes.
-27. Correlate provider-side object inventories and egress observations, including retries and edits to existing feedback.
-28. For Outline, verify no unplanned document writes or webhook registration.
-
-    Outline is a source integration.
-
-29. **Inspect and decide**. Inspect capture failures, withheld feedback, policy traces, queue age, and spend under small budgets.
-30. Record known integration/readiness failures caused by isolation.
-31. Remain silent if writes are unexplained, migrations fail, or spend is unaccounted for.
-32. If necessary, use recovery below.
-
-33. **Turn off silent mode deliberately**. Only after the rollout gates pass, review all workspace review scope, account consent, Hephaestus settings, and feedback mode.
-34. After the rollout gates pass, turn silent mode off with the current ETag.
-35. Prefer **Approve first** for a bounded pilot.
-36. Prove that old suppressed work stays suppressed.
-37. Prove that only a fresh eligible event can deliver.
-38. If either check fails, turn silent mode on again immediately.
-
-## End every session on the instance
-
-End every session after a suspected leak of the signing key, the database or many session cookies.
-Every person must sign in again, and installed clients must sign in again too.
-
-Connect `psql` to the application database with an operator account, then run:
-
-```sql
-\set ON_ERROR_STOP on
-BEGIN;
-LOCK TABLE account IN EXCLUSIVE MODE;
-UPDATE client_sign_in_handoff SET consumed_at = now() WHERE consumed_at IS NULL;
-UPDATE client_session SET revoked_at = now(), revoked_reason = 'ADMIN_REVOKE' WHERE revoked_at IS NULL;
-UPDATE issued_jwt SET revoked_at = now(), revoked_reason = 'ADMIN_REVOKE' WHERE revoked_at IS NULL;
-COMMIT;
-```
-
-The account table lock waits for session issuance in progress and blocks new issuance until the transaction commits.
-The updates then include the credentials that those issuers committed.
-The server checks each request against `issued_jwt`, so every session ends at once.
-If the signing key leaked, also rotate it.
-Record the action in your incident record.
-
-## Upgrade and failed-migration recovery
-
-<a id="validate-the-actual-production-data"></a>
-<a id="production-upgrade"></a>
-<a id="if-migration-fails"></a>
-
-[Upgrade](./upgrade) owns the staging rehearsal, the upgrade, and [failed-migration recovery](./upgrade#if-migration-fails).
-The silent deployment checklist above owns startup.
-
-## Backup and restore
-
-[Backup & restore](./backup-restore) owns the data inventory and the backup and restore procedures. A dump restores
-one snapshot, not an arbitrary point in time. Use **pgBackRest** for scheduled backups and WAL archiving
-([backup tooling decision](https://github.com/hephaestus-build/Hephaestus/issues/1370)).
-[Backup policy for 1.0](./backup-restore#backup-policy-for-10) states the deferred release scope.
-For an installation that uses backups, require freshness alerts and a verified restore before relying on recovery.
-
-The chart backup implementation and its schedule are in [Back up the database](./backup-restore#back-up-the-database).
-The shared redacted backup status required by [Readiness](https://github.com/hephaestus-build/Hephaestus/issues/1547),
-[Operations](https://github.com/hephaestus-build/Hephaestus/issues/1387), and
-[System Information](https://github.com/hephaestus-build/Hephaestus/issues/1548) does not exist yet.
-Those consumers must show **unknown**.
-They must not infer health from a configured timer or a passing `pgbackrest verify`.
-A passing backup is not a restore result or release gate.
-[Application metrics](./monitoring.md#scrape-metrics) do not report backup/WAL freshness or restore-rehearsal outcomes.
-
-Until the status publisher and [operator alert service](https://github.com/hephaestus-build/Hephaestus/issues/1369) exist:
-
-1. Monitor failed systemd units, WAL archive lag, and disk space.
-2. Monitor pgBackRest `info`/`verify` and the last actual drill record.
-3. Configure host or backup-tool alerts for stale backup/WAL, failed attempts, and expired or failed restore rehearsals.
-
-For backup and recovery:
-
-1. Set explicit RPO/RTO, backup schedule, retention, owner, off-host destination, and restore-test frequency.
-2. Monitor the last successful backup/WAL archive and restore drill.
-3. Test loss of the primary host.
-   On the Helm chart, retrieve the required keys without that host, as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes.
-4. Test backup failure alerts.
-5. For PITR, validate the base backup.
-6. For PITR, validate continuous WAL coverage to the selected timestamp/timeline.
-7. Where exact replay is required, include evidence storage.
-8. If the backup overlaps a [key rotation](./credential-key-rotation), preserve active **and prior** credential-encryption keys and versions.
-9. Disable rotation during recovery.
-
-Provider events wait in the PostgreSQL inbox, so the database backup holds them.
-
-### Pre-boot isolation — mandatory for every restore
-
-The supported self-host clone needs a separate host.
-A different Helm release name or namespace alone does not provide isolation.
-Silent mode permits model calls and control-plane traffic.
-A disabled Hephaestus row alone is never an isolation boundary.
-
-1. Stop ingress, all server replicas, and active sandboxes.
-2. Suspend automatic restarts/reconcilers.
-3. Use a separate host for the supported self-host clone.
-4. Give it a separate database, domain, and credentials.
-5. Do not connect it to production volumes or provider webhooks.
-6. Before any application starts, deny external traffic from application **and sandbox** networks.
-7. Allow only required isolated database/admin access.
-8. Set `AGENT_ENABLED=false` on the server.
-9. Set `HEPHAESTUS_INTEGRATION_SLACK_ENABLED=false` on Slack-capable roles.
-10. Withhold SCM write credentials, including app signing keys, PATs, and credentials encrypted **inside the restored database**.
-
-    Removal of environment seeds does not remove database-backed credentials.
-
-11. Keep network denial while inspecting those credentials.
-12. Before interactive access, turn off all conversation model rows.
-    The restore-clone lockdown does this.
-13. Arrange admin authentication under isolation before the drill.
-14. If admin authentication is unavailable, stop.
-15. Review site values and Secret key names through a protected process. Do not print credential values.
-16. Verify the chart renders each value for the role that reads it.
-17. Boot only infrastructure.
-18. Before any application role, run the [restore-clone lockdown](./backup-restore#isolated-restore-drill) against the recovered database.
-
-    Keep migration and every application role disabled until lockdown completes.
-    Application-health inspection needs an operator-owned isolated override.
-    The server submits, recovers and runs reviews.
-
-19. Keep `AGENT_ENABLED=false` on the server.
-20. Before review execution, read back silent mode and the workspace delivery pause.
-21. Record provider-readiness failures caused by isolation without restoring live write access.
-
-    Releases before silent mode require the environment, mentor/Slack shutdown, credential withholding, and network barrier throughout.
-    These controls permit restore inspection, **not** a full silent review run.
-
-22. Before such a run, upgrade.
-23. Before such a silent review run, validate the egress brake.
-
-### Reconcile external writes after a database restore
-
-A restore to time T loses the provider deliveries that arrived after T, because they were in the PostgreSQL inbox.
-A provider comment that Hephaestus wrote after T can still exist with no restored record.
-
-1. Keep silent mode on, and keep public ingress blocked.
-2. Run the migration.
-3. Start the server with the `erasure-recovery` profile, as [Reapply erasure decisions before processing resumes](./backup-restore#reapply-erasure-decisions-before-processing-resumes) describes.
-4. Check the restored provider event inbox and review jobs for work that Hephaestus delivered after T.
-   Work that was pending at T runs again when the server starts.
-5. Inventory the gap from T to the restore.
-6. Run the supported provider reconciliation within its configured monitoring window.
-7. Observe that reconciliation.
-8. Record each interval that you cannot recover.
-9. Turn off silent mode only after the [silent deployment checklist](#silent-deployment-checklist) passes.
-
-Reconciliation can restore the current source state, **not all historical events or deleted sources**.
-GitHub, GitLab, Slack, and Outline have different recovery limits.
-The [send recovery contract](./practice-review-operations#running-instance) covers interrupted writes.
-
-**Drill**
-
-1. Create a controlled delivery after the chosen restore point.
-2. Restore PostgreSQL to a point before that delivery.
-3. Follow the steps above.
-4. Verify that no provider object is duplicated.
-5. Verify that the recorded gap matches the controlled delivery.
-
-## Access and erasure for one person
-
-Use **Instance administration → Person data**.
-Only an instance admin with a recent sign-in can create a preview, download an export, or start erasure.
-Requests and replies go through the privacy contact in the instance notice.
-This page is not a data-subject request portal.
-
-1. Verify the requester's identity and authority under your privacy procedure.
-2. Enter the account ID or exact provider instance and provider user ID.
-3. For Slack, also enter the native Slack workspace ID.
-4. Add all verified identities that belong to the request.
-5. Do not match names, logins, or email addresses.
-
-   A conflicting account link stops resolution.
-   Cached Slack-to-SCM actor stamps are not identity proof.
-   The page does not infer an identity from those stamps.
-
-6. Before another preview, repair the verified link or correct the supplied exact IDs.
-7. If collected work has a cached actor stamp, include verified exact keys for both providers.
-8. If stamped work has a conflicting association, alternatively repair that association.
-9. Select **Preview data**.
-10. Check resolved identities and store counts.
-
-    Stores with no rows appear under **stores hold no rows**.
-    The preview expires after 48 hours.
-    Export and erasure use its frozen row keys.
-    Changed data needs a new preview, not an SQL supplement.
-
-11. For an access request, select **Download JSON export**.
-12. For an access request, transfer the file securely.
-13. For an access request, handle the file as personal data.
-
-    The export has a schema version and a `stores` object keyed by store name.
-    It excludes credentials and session capabilities.
-    The completed erasure receipt is not an export archive.
-
-14. For erasure, follow [Un-deliver external feedback, then purge](#un-deliver-external-feedback-then-purge) for each provider locator in the preview.
-15. For erasure of an unconfirmed write without a comment ID, inspect the linked reviewed work for summary and inline feedback.
-16. For that erasure inspection, include preserved discussions.
-
-    The application does not automatically delete provider comments already posted.
-
-17. For erasure, select **Erase data…**.
-18. For erasure, in the dialog, confirm removal of the listed provider copies.
-19. For erasure, type **ERASE**.
-20. For erasure, select **Erase data**.
-21. For erasure, keep the request URL for access after a reload.
-
-    The page follows the job until it finishes.
-    The job records progress one store at a time.
-    Evidence erasure commits in PostgreSQL without a server acknowledgement.
-    Each server reconciles its erased copies and retries failed physical cleanup.
-
-22. For erasure, if the job stops, correct the operational failure.
-23. For erasure, after correcting a stopped job's failure, select **Resume erasure…** on the same request.
-24. For erasure, do not create a second request to bypass a failed job.
-25. For erasure, before replying, check **Erasure complete** and the per-store receipt.
-
-The receipt retains the acting instance admin, operational state, times, and counts.
-It retains neither erased content nor selected subject keys.
-Completion clears working request keys.
-Expiry clears abandoned previews.
-Failed jobs retain the working keys needed to resume.
-
-Review-package provider requests hold capture admission until their outcomes have been recorded. Erasure cannot
-pass an in-flight provider request. A queued call cannot recreate feedback after its review has
-entered erasure or its job capability has been revoked.
-
-The preview freezes delivery facts, not only row IDs.
-If a provider write starts or its result changes after inspection, export and erasure reject the stale preview.
-An unconfirmed write or a migrated comment without an exact inspection locator stops the request and identifies its send or review.
-The system does not treat it as never delivered.
-
-1. If the preview is stale, create a new preview before confirming removal again.
-2. If the preview is stale, inspect the current locators before confirming removal again.
-
-   Practice results and feedback belong to the developer they describe.
-   The person's own results and feedback are exported and erased, including feedback copies in another person's conversation.
-   Another developer's results and feedback remain, even when the person commented on that work.
-   Instead, erasure removes the review's captured inputs and Hephaestus's hidden memory in affected workspaces.
-
-   Exact provider-key suppression is separate from the audit receipt.
-   It prevents further processing of the erased identity.
-   It is not a reversible workspace consent choice.
-   Provider sync can still mirror upstream records.
-
-3. Tell the requester what remains outside the active application's control:
-   - Original provider records.
-   - Provider comments not yet removed.
-   - Delivered mailbox copies.
-   - Third-party retention and [backups](./backup-restore).
-4. After a restore, follow isolation and reconciliation above before processing resumes.
-5. Do not claim selective deletion in backups.
-
-The [personal-data map](./dsms/personal-data-map) owns store-specific export, removal and residual
-retention. The operator's [record of processing](./dsms/record-of-processing.md) owns the legal record, and [Data retention](./data-retention) the periods.
-
-### Exact source bindings for person requests
-
-Connected GitHub, GitLab, Slack, and Outline sources appear in the person-request provider list, even for a person without an account.
-A connected source cannot change to a different provider instance.
-Equivalent host case and default-port spellings remain the same instance and keep processing controls.
-The upgrade registers existing source instances.
-Names, logins, email addresses, and document text are not binding proof.
-
-1. Use the source's exact native user ID.
-2. For Slack, also use the native workspace ID.
-3. To change the provider instance, create a new connection.
-4. If upgrade reports mirrored Outline documents without a provider instance, restore verified state with that exact binding before upgrading.
-
-Visible document content remains.
-
-Before erasure, save the selected account and native identities in the restricted incident record.
-After a workspace purge or a disconnect, save the workspace ID and the connection ID there too.
-The [recovery procedure](./backup-restore#reapply-erasure-decisions-before-processing-resumes) owns its format and retention.
-
-### An erasure store fails
-
-The first temporary database or connection failure keeps the request in `ERASING` with `STORE_ERASURE_RETRY_PENDING`.
-The person-data job retries once on its next pass and keeps completed store receipts.
-A repeated or permanent failure stops the request in `FAILED` with `STORE_ERASURE_FAILED`.
-The instance-admin person-data page shows the failure and permits a resume.
-
-1. Read the request and its failure code in instance administration.
-2. Correct the failed store before you resume a stopped request.
-3. Confirm that the request reaches `COMPLETE`.
-
-### A server with evidence is offline
-
-Person erasure and workspace purge mark the affected receipts `ERASED` in PostgreSQL and delete their recorded
-attempt inputs. They wait for no server acknowledgement. A server that returns later removes its erased local
-copies in its next reconcile pass. It cannot restore an erased attempt from PostgreSQL.
-
-1. Keep disconnected evidence volumes under access controls until their erased copies are removed.
-2. Before you reuse a retained volume, let its server reconcile the folders against PostgreSQL.
-   Start it with `AGENT_ENABLED=false` if it must only clean its local copies.
-3. For a pending sandbox deletion, inspect SandboxClaim `agent-<sandboxId>` and its Pod in the sandbox namespace.
-   Restore the Kubernetes API, the server's `sandboxclaims` permissions and the sandbox controller before its next retry.
-   If agent jobs remain off, delete SandboxClaim `agent-<sandboxId>` and verify that its Pod is gone.
-4. Check [Alert response](#alert-response) for failed cleanup.
-   A restart can clear a Pod's local attempt folders, but it does not prove that a separate sandbox was deleted.
-
-This does not change the normal job-folder contract:
-
-- Admission removes the admitted folder.
-- Ended attempts have a one-hour grace period.
-- Restart cleanup removes old attempts.
-
-### Git history and repository owners
-
-The JSON export's `git_repository_history` section lists repositories whose history may contain the person's commits.
-It uses exact stored provider identities and contributor references.
-The list does not prove each author string in raw Git history.
-Some Git attribution has no native provider person ID.
-
-1. Do not infer ownership from names, logins, or email addresses.
-
-   Raw Git objects in mirrors and job folders cache the upstream repository controlled by the workspace's organization.
-   Hephaestus does not rewrite them or refuse capture.
-   A rewrite changes commit IDs and breaks citations.
-   A later fetch reverses the rewrite.
-   Sync can mirror records that still exist upstream.
-
-2. If Git authorship must be erased, ask the source repository's owner to remove it there.
-3. Ask that owner to apply the repository retention procedure.
-
-Hephaestus erases what it derives and records about the person.
-The erasure job cancels affected active review attempts.
-It removes their evidence folders through the evidence-erasure hook.
-It must not report completion without proof of removal for affected copies.
-No unfiltered Git object archive enters a person export.
-
-Normal job-folder retention stays unchanged:
-
-- Admission removes the verified folder.
-- Ended attempts have a one-hour cleanup grace.
-- Restart cleanup removes abandoned folders.
-
-## Correct commit links from the provider
-
-A commit's author, committer, or contributor link can disagree with its provider, whatever the age of the commit.
-The commit link correction job asks GitHub or GitLab for each email on each repository.
-It runs by default. It asks about 50 emails every 5 minutes, and it stops when the rate limit is near.
-
-GitLab uses one request for each author email. GitHub batches the emails in one request.
-GitLab leaves emails that appear only as committer or co-author unchanged.
-
-To stop the job, set `config.commitIdentityResolutionEnabled` to `false` in your Helm values.
-Set it to `true` to resume. A default installation needs no switch.
-
-1. Read `commit_identity_pending` to see the queue. It shrinks as the provider answers.
-2. Read `commit_identity_resolutions_total` by `outcome`:
-   - `resolved`: the provider named an account, and the links now follow it.
-   - `no_account`: the provider says that no account owns the email, so the links are cleared.
-   - `erased`: the provider named an erased account, so the links were cleared.
-   - `skipped`: another attempt already finished the queue row, so no link changed.
-   - `retry` and `unanswered`: no answer came. No link changed. After 5 attempts, the email leaves the queue.
-
-`commit_identity_change` records each changed link for 90 days, with the old and new user ids.
-To undo a wrong correction, run one conditional `UPDATE` on the table and column named in `target`.
-Set the column to `old_user_id`, and match `id` to `row_id` and the column `IS NOT DISTINCT FROM new_user_id`.
-If the update changes no row, the link changed again, so leave it.
-
-After you restore an author link, restore matching `COMMIT_CREATED` Activity actors from that commit’s author.
-Match both the repository and commit ID. Change only actors `IS NOT DISTINCT FROM` the correction’s `new_user_id`.
-Leave an actor that changed again. Never restore an erased account.
-
-This restores Activity to the restored commit author, not to its earlier actor.
-A committer or contributor change does not change the commit Activity actor.
-An Activity correction with no changed commit link has no change record, so this table cannot undo it.
-
-To ask again after a provider outage, set `state` to `PENDING` and `attempts` to 0 on the `UNANSWERED` rows of `commit_identity_resolution`.
-
-If a local Activity correction fails, its source and queue result roll back together.
-The job counts one failed attempt as `retry`, then continues with other emails.
-After 5 failed attempts the row becomes `UNANSWERED`, which fires the existing unanswered alert.
-Read the `Commit identity correction failed` log for the queue ID and cause before you reset it.
-
-## Un-deliver external feedback, then purge
-
-Deleting in-app data does not delete a provider comment. If external copies must be scrubbed,
-**complete un-deliver before workspace purge, disconnect or person erasure removes their locator records**.
-
-1. Turn on silent mode.
-2. Stop active writers/sandboxes.
-3. Preserve their send state.
-4. Pause sending for the affected workspace.
-   This prevents content recreation when silent mode is later turned off.
-5. Locate the piece of feedback from the workspace review trace.
-6. With authorized read-only database access, inventory **all** copies, not only the summary.
-7. Run the query below with `psql` variables set to verified workspace and feedback IDs.
-
-   The query deliberately omits bodies.
-
-   ```sql
-   SELECT f.id, f.review_id, f.item_id, f.destination,
-          f.state, f.replaces_id, p.id AS copy_id,
-          p.kind, p.state AS copy_state, p.write_started_at, p.write_marker,
-          p.external_ref, p.external_url, p.mentor_entry_id, p.mentor_turn_id,
-          p.path, p.start_line, p.end_line, p.side, p.posted_at
-   FROM feedback f
-   LEFT JOIN feedback_copy p
-     ON p.feedback_id = f.id AND p.workspace_id = f.workspace_id
-   WHERE f.workspace_id = :'workspace_id'::bigint
-     AND f.id = :'feedback_id'::uuid;
-   ```
-
-8. For conversation copies, follow `mentor_entry_id` to the `mentor_entry` row of the Hephaestus message that showed the feedback.
-
-   `mentor_turn_id` is the turn that claimed the feedback.
-   A copy with `mentor_turn_id` and no `mentor_entry_id` has no stored Hephaestus message that showed it.
-   For that copy, find the turn's question as described below.
-   A copy from before the upgrade to one conversation per developer has neither value.
-
-   Read the message's `conversation_id`, `turn_id`, and `surface`.
-   A message with the surface `APP` has no Slack copy.
-   For a thread, follow `mentor_conversation.parent_conversation_id` to the main conversation.
-   The main conversation's `slack_team_id`, `slack_user_id`, and `slack_channel_id` identify the Slack DM.
-
-   One Slack message shows all Hephaestus messages of a turn.
-   The question of the turn is the `mentor_entry` row with the same `turn_id` and the kind `USER`.
-   Read its action in `agent_action`, where `idempotency_key` is `slack_reply:<question id>`.
-
-   The action owns its pending and terminal delivery state. An unknown write is read back by metadata and never posted again.
-   The answer entry's `slack_ts` is the confirmed Slack message reference. The entry has no separate stream or delivery state.
-
-   A digest receipt also records its posting-time Slack team and user.
-   If that identity changes before settlement, the server logs `reason=recipient_changed` and leaves the DM reference unbound.
-   The action remains `DONE` because Slack accepted the post. Do not post it again.
-
-   A reply that has not ended, or ended `UNCERTAIN`, can have a Slack copy without a recorded `slack_ts`.
-   A reply from before this upgrade can have an unconfirmed stream left in Slack.
-   Thus, the ledger query alone cannot establish complete Slack removal.
-
-9. Use the provider's paginated [conversation replies](https://docs.slack.dev/reference/methods/conversations.replies/) API to find each exact bot-authored reply and its `ts`.
-10. If provider inventory is inaccessible or ambiguous, record the gap.
-11. If provider inventory is inaccessible or ambiguous, keep removal incomplete.
-12. Follow replacement history.
-13. Check the sends of the feedback in `agent_action`, where `lane_key` is `feedback:<feedback id>`: `kind`, `state`, `attempts`, and `stop_reason`.
-14. Treat each copy in `WRITE_STARTED` state as a possible provider object, even without an `external_ref`. The same applies to each copy of a send that ended `UNCERTAIN`.
-    If the copy has a `write_marker`, search the provider for it. The application appends it to the posted body.
-15. Before deletion, verify repository/project, item, provider account, author, and content against the provider.
-16. Never infer an API object type from a numeric ID alone.
-17. Use a separate authorized operator session to delete each confirmed provider object.
-18. Do not turn off application silent mode for cleanup.
-19. Select the endpoint for the actual copy:
-
-    | Copy                                         | Provider API                                                                                                                                                                        |
-    | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-    | GitHub issue or pull-request summary comment | `DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}` — [issue comments](https://docs.github.com/en/rest/issues/comments#delete-an-issue-comment)                             |
-    | GitHub inline review comment                 | `DELETE /repos/{owner}/{repo}/pulls/comments/{comment_id}` — [review comments](https://docs.github.com/en/rest/pulls/comments#delete-a-review-comment-for-a-pull-request)           |
-    | GitLab issue or merge-request note           | `DELETE /projects/:id/issues/:issue_iid/notes/:note_id` or `DELETE /projects/:id/merge_requests/:merge_request_iid/notes/:note_id` — [notes](https://docs.gitlab.com/api/notes/)    |
-    | GitLab discussion/diff note                  | Use its discussion and note IDs — [discussions](https://docs.gitlab.com/api/discussions/#delete-a-merge-request-discussion-note)                                                    |
-    | Slack feedback or Hephaestus answer                | `chat.delete` with the exact channel and message `ts`, using a token permitted to delete that author's message — [Slack API](https://docs.slack.dev/reference/methods/chat.delete/) |
-    | Outline                                      | No current external feedback destination. Do not delete source documents as a substitute for removing feedback                                                                      |
-
-    A submitted GitHub review/approval is not an issue comment.
-    A `404` can mean hidden/inaccessible, not deleted.
-    A timeout is ambiguous.
-    External deletion does **not** mark the immutable ledger as retracted.
-    No admin removal API exists.
-    Complete in-product retraction requires the [retraction workflow](https://github.com/hephaestus-build/Hephaestus/issues/1507).
-
-20. For a submitted GitHub review/approval, use the provider-supported review dismissal/remediation flow.
-21. Report any retained content.
-22. For all providers, obey rate limits.
-23. Verify the response.
-    Slack requires `ok: true`.
-24. Read back absence with credentials known to have access.
-25. After a timeout, read before retrying.
-26. Record each ledger ID/provider reference, deletion result, verification time, and operator in the restricted incident record.
-27. Include partial failures.
-28. Do not substitute `REPLACED`, `REJECTED`, recipient resolution, or edited write fences for retraction.
-29. Before delivery resumes, verify no live copies or unresolved sends can recreate the content.
-30. If you cannot prove this, keep the workspace paused.
-31. Only then purge, if requested.
-32. Retain minimal lawful removal evidence under the incident retention policy.
-
-Deletion cannot recall email notifications, screenshots, or third-party archives.
-
-**Drill**
-
-1. Remove a summary, inline comments, and a Slack reply on controlled fixtures.
-2. Include permission denial and timeout recovery.
-3. Run the inventory again.
-4. Exercise restart/retry under containment.
-5. Verify that the incident record matches provider state.
+Each alert that the chart ships links to this page.
+Search the page for the name of the alert.
+Before you act, collect the labels of the alert, the release version, and the server log from the time of the alert.
+[Find the records of one request](./monitoring#find-the-records-of-one-request) shows how to read the log.
+[Alert rules](./alert-rules.md) gives the threshold, the window and the severity of each alert.
+
+Do not print Secret objects or credentials while you diagnose.
+Do not change application rows in the database unless a row below tells you to.
+
+If the alert shows wrong feedback or an incident in progress, first [contain the incident](./contain-an-incident).
 
 ## Alert response
 
-Use [Scrape metrics](./monitoring.md#scrape-metrics) for the private endpoint.
-[Alert rules](./alert-rules.md) gives the shipped rules and their thresholds.
-Use the instrumented metrics in [Practice review operations](./practice-review-operations#queue-health)
-and [Webhook ingestion operations](./webhook-ingestion-operations). Configure thresholds against your
-traffic and recovery objectives. Assign an owner and test the alert delivery route.
-The signal names the alerts of the shipped rules that it answers.
+### Monitoring and the server
 
-| Signal                                              | Contain and diagnose                                                                                                                                                                                                                                                                                                                                         | Recovery proof                                                                                                                                                                                  |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HephaestusPersonErasureInterrupted` | Read `person_data.erasure.failed`, then follow [An erasure store fails](#an-erasure-store-fails). If `person_data.failure_recorded=false`, restore database availability first. | The request reaches `COMPLETE`. No new count of `person_data_erasure_failures_total`. |
-| Provider event work dropped (`integration_message_dropped_total`) | Read the bounded `reason` label. `erased-during-processing` confirms that erasure stopped a late handler write. Do not retry or replay erased work. For repeated `lease-lost` drops, inspect lease renewal failures and database latency. | Erased payloads and their step records stay deleted. Other workspaces continue. |
-| Inbox fence contention (`integration_message_process_duration_seconds{outcome="retried"}`) | A renewal, a workspace operation or person erasure held a required fence. The handler transaction rolled back and the inbox retries it without spending its failure budget. For `HephaestusConsumerRetryStalled`, inspect active database transactions and locks. Check an active erasure before changing it. `HephaestusProviderEventsWaiting` detects a delayed backlog. | Other scopes can run while an event row is busy. Person erasure can delay their writes until its copy fence opens. The next handling commits once, or the erasure and lease fences drop stale work. |
-| Dead letters / repeated consumer failures (`HephaestusConsumerPoison`, `HephaestusConsumerRetryStalled`) | If the `retried` outcome rises, follow the inbox fence-contention row above. Otherwise read the `kind`, the error class and the attempt count in the log, not raw payloads. Temporary failures retry without a limit and hold later events of the same resource in that workspace. Permanent failures and exhausted unknown failures become dead letters that keep their payload. Use [Replay a failed webhook event](./webhook-replay.mdx) to inspect and replay them. | Reproduce with a sanitized fixture, fix the cause, replay one controlled dead letter under silence, then the rest. Healthy events of other resources continue meanwhile. |
-| Durable server work overdue (`HephaestusEventPublicationsOverdue`) | The `listener` label names the work, such as an email or an account export. The server retries it every five minutes without a limit. Search the server log for that listener's error and fix its cause, for example the mail server or a missing connection. Work that can no longer apply must complete in its listener. For `GitLabConnectionStateListener.onDeactivated`, check the GitLab token and provider availability. If the token cannot delete the hook, remove it as a GitLab group owner. Manual removal stops delivery but does not complete the publication while the stored token is unusable. Reconnect with a valid token or disconnect to let this listener complete. Suspended hooks are also reconciled every five minutes. Cleanup skips a connection that is ACTIVE when it takes the lifecycle lock. A provider DELETE can finish after a local timeout and affect a resumed connection. Check the hook if delivery stops. Do not delete rows from `event_publication`. | `event_publications_overdue` for that listener returns to 0, and the alert clears. |
-| A handler timed out (`HephaestusConsumerHandlerTimedOut`) | Read the `integration.message.timed_out` log: it names the route, the workspace, the delivery and the timeout. The event returned to the inbox and retries like a failure. Later events of the same resource wait for it. If `integration.handler_stopped` is `false`, the handler did not stop after its interrupt. The server then broke its liveness, so Kubernetes restarted the Pod. The event returned after the Pod ended. After the retry limit, the event is stored for replay with the error `HandlerTimeoutException`. A provider or database call that never answers is the usual cause. | Fix the call that hangs, then [replay](./webhook-replay.mdx) the stored event. Raise `hephaestus.integration.consumer.handler-timeout` only for a handler that is slow and not hung. |
-| Repository monitor name is held by another monitor | Read the `nameHeldByAnotherMonitor` warning for the workspace and native repository ID. A background add or rename skipped the conflicting monitor. | Reconcile the names against the provider’s repository IDs. Preserve the review settings and sync progress before you remove a stale monitor. Retry the provider sync. |
-| Commit link correction stops or loses emails (`HephaestusCommitIdentityResolutionStalled`, `HephaestusCommitIdentityResolutionUnanswered`) | Read `commit_identity_resolutions_total` by `outcome`. No `resolved` count with a growing `retry` count means no provider answer: check the connection that monitors the repository and the provider rate limit. Near the end of a run, a few emails that the provider never answers can also fire `HephaestusCommitIdentityResolutionUnanswered`. | A missing answer changes no link. An email that used its 5 attempts leaves the queue: see [Correct commit links from the provider](#correct-commit-links-from-the-provider) to ask again. To stop the job, set `config.commitIdentityResolutionEnabled` to `false`. |
-| Provider event retention fails (`HephaestusInboxRetentionFailing`) | Read the server log for `provider_event.retention_failed` and its `error.type`. Check the database connection, locks and permissions. Ingestion continues. | The next hourly pass succeeds and the counter stops increasing. |
-| Dead-letter alert from deployment tooling           | Identify which system owns the queue. For integration events, use [Replay a failed webhook event](./webhook-replay.mdx). Preserve IDs/configuration and restrict payload access.                                                                                                                                                                                                           | Redrive only after fixing the cause, with a bounded batch and verified delivery idempotency. Record irrecoverable events.                                                                       |
-| Rising oldest due age, stale sampler, failed jobs (`HephaestusAgentQueueStalled`, `HephaestusAgentJobsFailing`) | The alert names the `band` that waits. Read `agent_run_runs` by `state` and `hold_reason`: due, held (`budget`, `sandbox_room`) and leased runs have different causes. `agent_run_sampler_failure_total` counts the samples that failed, and the gauges keep their last values. Then check server availability with sandboxes, model assignments, database and provider health. Do not delete jobs or reset leases manually. | Oldest due age falls and new work completes. A held run shows its `hold_reason` and is not counted as healthy. |
-| A conversation turn waits for a server (`HephaestusInteractiveRunWaiting`) | A run of the interactive band that can start has waited for more than a minute. A turn that no server starts within 3 minutes ends as not started, and the person sees that the system is busy. Check that a server runs and has sandbox room: `agent_run_runs` with `band="interactive"` shows queued and leased runs, and `agent_run_due` shows how many wait. Check `agent_sandbox_dispatch_failure_total`, the sandbox quota and the model pool waits (`llm_pool_permit_wait_seconds`). A workspace that is suspended or on a hold does not count as due. | `agent_run_oldest_due_age_seconds{band="interactive"}` stays under a minute, and new turns start. |
-| Review sandboxes failing (`HephaestusReviewSandboxFailing`) | Read the server log for the sandbox failure and the initializer's exit. On Kubernetes, check the sandbox namespace's quota and events, the agent image pull, and the nodes ([Troubleshooting](./kubernetes.mdx#troubleshooting)). Do not raise the retry cap. | New attempts start their sandboxes, and `agent.job.infra.retry.requeued` with `cause=sandbox` stops increasing. |
-| The sandbox gateway refuses requests (`HephaestusSandboxGatewayRefusing`) | Read the `reason` label. `unauthenticated`, `forbidden` and `unknown_route` mean that a sandbox calls what it may not call. Read the running reviews and the server log to find the review. Cancel it if its repository drives the calls. `source_limit` means that one connection peer sent too many requests, which is not proof of a forbidden call. The gateway logs no line for it, so compare the running reviews and the Pods in the sandbox namespace. `principal_limit` can mean a wide review: read the log line `Sandbox gateway rate limit exceeded`, which names the attempt. `oversized` means a body above the bound, or a body that declares no length. `body_budget` means that the bodies in flight reached a quarter of the server's heap. Do not raise a limit before you know the caller. | The rate of `sandbox_gateway_refused_total` for that reason falls. |
-| The sandbox gateway is near its connection limit (`HephaestusSandboxGatewayConnectionsHigh`) | Compare `sandbox_gateway_connections` with the running reviews. A review holds about 54 connections at normal width and 170 at most. If the reviews explain the count, raise `sandbox.gateway.maxConnections`. If not, find the Pod that holds them. | `sandbox_gateway_connections` falls below 80 percent of the limit. |
-| The Git cache volume nears its size (`HephaestusGitCacheNearlyFull`, `HephaestusGitMirrorsEvicted`) | Raise `server.gitCache.sizeLimit`, and the matching `ephemeral-storage` limit, in the same upgrade. Check that the node has the disk. Do not delete mirrors by hand: the role does it safely. | `git_cache_bytes` stays below 80 percent of `git_cache_limit_bytes`, and `git_mirror_evictions_total` stops rising. |
-| A server cannot sync attempt keys (`HephaestusAttemptKeysNotSyncing`) | Check the server's database connection and its log line `Attempt key`. To revoke a stolen key, read its `kid` from the server's start log line `Published this server's attempt key`. Restart that server, then delete that row from `attempt_public_key`. | `attempt_key_sync_failures_total` stops rising. |
-| Review sandboxes cannot reach the server or the provider (`HephaestusReviewUnreachable`) | For `server_unreachable`, check the network policy between sandboxes and the server's sandbox gateway. For `provider_unreachable`, check the provider's status and `networkPolicy.externalEgress`. | The retries with that cause stop increasing, and reviews complete. |
-| A server error on a review's results (`HephaestusReviewServerError`) | Read the server log line `The server refused a review's results` and the server's error log at the same time: it names the exception. Report it as a defect. Do not raise the retry cap: another attempt meets the same error. | No new count of `agent_job_server_error_total`. |
-| Review preparation failing (`HephaestusReviewPreparationFailing`) | Read the server log line `Review preparation failed`: it names the stage, the kind and the reason. Check provider sync for the reviewed sources, and the database. | The retries with `cause=preparation` stop increasing. |
-| Reviews failed by lost lease holders (`HephaestusReviewHolderLost`) | Find why servers stop during attempts: out-of-memory kills, evictions, lost nodes, or drains that end before the attempt. Compare the server restarts with the failed review's attempts. | Servers run without restarts, and no review fails as an orphan. |
-| The run reaper keeps failing (`HephaestusAgentRunReaperFailing`) | Read the server's `agent.run.reaper.failed` events: `run.id` names the run and `error.type` the error. Find the review job of that run with `SELECT id, status FROM review_job WHERE run_id = '<run id>'`, and report the error as a defect. The reaper tries the run again on each pass. | `agent_run_reaper_failure_total` stops increasing. |
-| Lost model-call ledger writes (`llm.proxy.usage.accumulate.failure`) | Check the database connection and the server warning `Lost the measurement of model call`. A lost write can omit the call failure. Stored failures contain only kind and optional HTTP status, with their recording time. Do not infer success from an absent failure. | The meter stops increasing and new call completions reach the ledger. |
-| The sandbox reaper keeps failing (`HephaestusAgentSandboxReaperFailing`) | Read the server log events `agent.sandbox.reaper.failed` and `agent.sandbox.claim_delete_failed`: they name the sandbox (`sandbox.name`), its subject (`subject.key`) and the error (`error.type`). Check that the server's Role in the sandbox namespace still grants `sandboxclaims` and that the agent-sandbox controller runs (`kubectl get sandboxclaims -n <sandbox namespace>`). The reaper tries each claim again on each pass. | `agent_sandbox_reaper_failure_total` stops increasing. |
-| The sandbox dispatch keeps failing (`HephaestusAgentSandboxDispatchFailing`) | Read the server log event `agent.sandbox.dispatch.failed`: `error.type` names the error. Check that the server's Role in the sandbox namespace still grants `sandboxclaims` and that the agent-sandbox controller runs (`kubectl get sandboxclaims -n <sandbox namespace>`). The dispatch tries again at each pass, and the runs wait in the queue meanwhile. | `agent_sandbox_dispatch_failure_total` stops increasing. |
-| A sandbox's network policy did not hold (`HephaestusAgentSandboxUnisolated`) | Read the server log event `agent.sandbox.taken_back` with `sandbox.reason` `unisolated`: it names the sandbox (`sandbox.name`) and its subject (`subject.key`). The sandbox started none of its run's work, and its run goes to a new sandbox. Check that the sandbox namespace still has the chart's NetworkPolicies (`kubectl get networkpolicy -n <sandbox namespace>`) and that the network plugin of the sandbox's node enforces them. Then run the isolation gate (`node scripts/sandbox-isolation.ts`) against the template. | `agent_sandbox_revoked_total{reason="unisolated"}` stops increasing, and the isolation gate passes. |
-| An outbox action waits (`HephaestusOutboxStalled`) | Check that every server replica runs: the executor runs on each one. Read the server's `action.attempt.failed` and `action.batch.outlived` events for the kind. Find the waiting actions with `SELECT id, lane_key, state, attempts, next_attempt_at FROM agent_action WHERE kind = '<kind>' AND state IN ('ADMITTED','EXECUTING') ORDER BY next_attempt_at LIMIT 20`. An `EXECUTING` action at the head of a lane holds the actions behind it until its lease ends. Do not change the rows by hand. | `action_oldest_due_seconds` for the kind falls below 900. |
-| An outbox action ended uncertain (`HephaestusOutboxUncertain`) | Read the server's `action.ended.uncertain` event: `action.id` names the action and `action.reason` the cause. Check at the provider whether the write arrived, for example in the mail log for an email. An uncertain email is never sent again. Tell the person by another channel if the message mattered. An uncertain action stays uncertain: nothing retries it. | No new count of `action_ended_total{state="UNCERTAIN"}` in one hour. |
-| A server's evidence reconcile stopped (`HephaestusEvidenceReconcileStalled`) | Read `Evidence reconcile failed` and `Evidence reconcile left copies for the next pass` for the error and pending cleanup. `Could not remove an erased evidence sandbox` and `Could not remove an erased evidence archive` identify failed copies. Check the database connection and cache volume space and permissions, including `.evidence-spool` cleanup failures. Startup stops if abandoned copies cannot be removed. Repair the volume before restarting. Check Kubernetes API, the server's `sandboxclaims` permissions, and the sandbox controller. Verify that failed SandboxClaim `agent-<sandboxId>` and its Pod are gone after the automatic retry. A server restart does not prove sandbox deletion. | `evidence_reconcile_last_success_seconds` is less than one minute old, and each failed sandbox claim and Pod are gone. |
-| Server startup stops because abandoned evidence cannot be removed (`HephaestusMetricsUnavailable`) | Read `evidence.spool.cleanup.failed`. Restore the evidence volume's access and free space, then restart. Do not bypass orphan cleanup. [Temporary evidence and restarts](./practice-review-operations#temporary-evidence-and-restarts) lists the owned paths. | Startup completes after orphan removal, and readiness succeeds. |
-| A server cannot build a captured checkout again (`HephaestusCheckoutUnverified`) | Read the server log line `Captured checkout cannot be built here`: it names the job and the reason. `fetch_failed` means that the provider no longer has the captured commit, for example after a force-push. `unavailable` means that the workspace no longer monitors the repository or has no SCM connection. `mismatch` means that the built checkout differs from the recorded tree or checkout digest: report it with the job id. The attempt runs again and captures again on the server that runs it. | `evidence_checkout_copies_total` for these outcomes stops increasing. |
-| Reviews with unconfirmed feedback (`HephaestusReviewFeedbackUnconfirmed`) | Find why servers stop during every attempt. The review keeps its results and closes as Partial. | Servers run without restarts, and no review closes with `COMPOSITION_UNCONFIRMED`. |
-| Item reviews that end incomplete (`HephaestusReviewsIncomplete`) | Find the stop reasons with `sum by (status, reason) (increase(practice_review_ended_total{kind="item"}[6h]))`, and the items that each reason left without feedback with `sum by (state, reason) (increase(practice_review_items_ended_total{kind="item"}[6h]))`. `execution_incomplete` and `execution_failed` point to the review runtime: read `agent.job.terminal` and the sandbox exits in the server log. The diagnostics `review.side_lost` and `review.side_unreachable` name a `tools` or `programs` container that stopped. `deadline` points to slow model calls: read `llm_pool_permit_wait_seconds`. `no_sandbox_room` points to the sandbox quota. The alert does not count `readiness_refused`, `budget` or `replaced`, because the runtime did not fail. The work was not ready, the budget was used up, or the work changed during the review. Do not start the reviews again by hand. | Over six hours, at least three quarters of the item reviews that the alert counts end complete. The alert counts complete reviews, partial or failed reviews except `readiness_refused`, `budget` and `replaced`, and reviews cancelled for `no_sandbox_room`. |
-| Results marked incorrect (`HephaestusResultsMarkedIncorrect`) | Find the practices with the [outcome query](./metrics.md#feedback-trust). Read the marks' reasons in the result's history. A single practice points to its criteria. Many practices point to a change of model, of evidence capture or of the release. Do not delete marks: they are the record that withheld the feedback. | The share of incorrect marks falls below 5 % in the next seven days, or the marked results have a corrected practice or capture |
-| Readback cannot tell whether feedback reached the work (`HephaestusFeedbackReadbackUnknown`) | Find the provider with `sum by (provider) (increase(practice_feedback_readback_total{outcome="unknown"}[1d]))`. Check that provider's credentials, rate limit and reachability. Open the Unconfirmed feedback, look at the work, and use **Check delivery** after the provider answers again. Never post the feedback again by hand. | **Check delivery** confirms each copy, or proves it absent before a retry. |
-| Feedback deliveries that fail (`HephaestusFeedbackDeliveriesFailing`) | The `destination` label names where delivery failed. For `on_work`, check the provider connection of the workspace, its rate limits and the server log for the failed send. For `conversation`, read `mentor_turn_completed_total` and the turn failures. Do not post the feedback by hand: the provider would then show it twice after a retry. | Fewer than three deliveries to each destination fail in one hour. |
-| Reviews whose first feedback comes late (`HephaestusFeedbackDeliverySlow`) | Find the stage that takes the time. Read the wait of a run for its claim (`agent_run_claim_wait_seconds`, `agent_run_oldest_due_age_seconds`), the attempt durations (`agent_job_duration_seconds`) and the model pool waits (`llm_pool_permit_wait_seconds`). Then check the quiet window of the occasion. An occasion in a quiet window waits for more pushes before its review starts. | At most 30 % of the reviews in six hours post their first feedback later than 30 minutes. |
-| Feedback on the work that waits for its first copy (`HephaestusFeedbackDeliveryStalled`) | Ready feedback is not sent. Check `agent_action` for a send of that feedback (`lane_key` is `feedback:<feedback id>`) that is `ADMITTED` or `EXECUTING`, and the server log for its `action.*` events. Then check the provider connection of the workspace for a revoked credential or a rate limit. Do not post the feedback by hand. | `practice_feedback_oldest_waiting_seconds` is below two hours. |
-| Feedback send retries (`HephaestusFeedbackSendRetrying`) | Check `agent_action` for feedback sends (`DELIVER_FEEDBACK`, `EDIT_FEEDBACK` and `RETRACT_FEEDBACK`) that have not ended and have high `attempts`. Read the provider and readback events. A manual retry is a new send with its own attempts. Confirm the existing copy before any retry. | The send ends, or the cause of repeated readback is corrected. |
-| Feedback send metrics (`HephaestusFeedbackSendMetricsUnavailable`) | Check the server log for the attempts read failure and database availability. Restore the read before treating a quiet retry alert as healthy. | Each server reports a finite `practice_feedback_send_attempts` value. |
-| `UNCERTAIN` / failed send                           | Turn on silent mode if content safety is in doubt. Restore provider lookup/credentials. Never clear the write fence or create a new send to bypass uncertainty.                                                                                                                                                                                              | Existing provider objects are reconciled without duplicate creates, including inline copies.                                                                                                    |
-| Budget breach / unpriced usage (`HephaestusBudgetExhausted`, `HephaestusBudgetBlocked`) | Identify shared versus workspace-owned funding. `HephaestusBudgetBlocked` also counts the model calls of a running job that the proxy refused at a cap (`surface="model_call"`). A job that waits on its budget for 15 minutes needs the same decision as a refused admission. Pause each affected budget/model. For runaway global spend stop all AI processes/egress. Silent mode does not stop spending.                                                                                                                                                                                 | Validate usage ledger against provider billing, explain unpriced buckets and in-flight overshoot. Observe a bounded fresh run before restoring caps. Budget-held work can resume automatically. |
-| Model refusals reach callers (`HephaestusModelRefusalsReachCallers`) | Callers saw the provider's 429, 503 or 529 instead of waiting it out. Read the pool's `llm_pool_upstream_throttled_total` by `status`. A spent account or a pause longer than a call can wait needs the provider's quota or plan. A 503 with no `Retry-After` can be an outage: check the provider. A workspace credential in a shared pool also shows here | `llm_pool_upstream_absorbed_total` grows as fast as `llm_pool_upstream_throttled_total`: callers wait out each refusal. |
-| Model limit at its floor (`HephaestusModelLimitAtFloor`) | The provider refused, queued or did not answer even two calls for 30 minutes. A rising `llm_pool_limit_decreases_total{cause="refusal"}` means refusals. A rising `cause="unanswered"` means streams that ended or stalled without content: check the provider's health and any gateway in front of it. A rising `llm_pool_first_token_baseline_resets_total` means a queue: at the floor, the pool takes a new baseline instead of lowering further. For a queue, compare `gen_ai_client_operation_time_to_first_chunk_seconds` with `llm_pool_first_token_baseline`, and check the model server's own load, such as vLLM's waiting requests. Another tenant on the same server can cause it. Reviews and conversations still run, slowly | `llm_pool_limit` rises above 2 and stays there for 30 minutes. |
-| Conversation calls wait for a model (`HephaestusConversationModelWaitLong`) | Readers wait for a free call of that pool. Read `llm_pool_waiters`, `llm_pool_limit` and `llm_pool_cooldown_active` for the pool. A low limit means that the provider refuses or queues: see the rows above. A limit that is full of review calls means that the pool needs more calls, or that reviews need a pool of their own. | Conversation calls wait under 5 seconds in `llm_pool_permit_wait_seconds`, and `llm_pool_waiters{band="interactive"}` returns to 0 |
-| Review calls wait for a model (`HephaestusReviewModelWaitLong`) | A sandbox stays idle while its call waits, and its deadline keeps running. Compare `llm_pool_limit` with the running review width. Raise the pool's limit if the provider allows it, or lower the review width ([Sizing](./sizing.mdx)). Short bursts stay below the alert. | Under a quarter of review calls wait over two minutes for one hour |
-| Model permits expired or renewals failing (`HephaestusModelPermitsExpired`, `HephaestusModelPermitRenewalFailing`) | A server stopped renewing a call in flight. The pool keeps that call's debit, and its room returns one lease later. Find why the server stopped: an out-of-memory kill (`HephaestusContainerOomKilled`), an eviction, or a lost database connection. Failed renewals with no restart point to the database: check `HephaestusDatabaseConnectionTimeouts` and the server log. The count rises when the pool next admits a call, so it can come after the cause. | `llm_pool_permits_expired_total` and `llm_pool_lease_renewal_failures_total` stop rising while calls run |
-| A review stage runs past its bound (`HephaestusReviewStageSlow`) | The `stage` label names it. The bound is 30 minutes for `sandbox` and 10 minutes for the others. For `capture`, check the provider sync and its rate limits. For `sandbox`, check the model waits and the review width. For `composition`, check the model pool and the review sandboxes that are waiting to start. | A review of the same size ends each stage inside its bound |
-| Containers killed for memory (`HephaestusContainerOomKilled`) | The `pod` and `container` labels name it. Read the container's limit against [Sizing](./sizing.mdx) and its memory before the kill. A role or a stateful Pod that repeats needs a larger limit. A sandbox that repeats needs a smaller review or a larger sandbox limit. A kill loses the work in flight. The job lease and the inbox lease recover it. The alert reads every namespace. | The container runs through a full cycle of its work with no new kill |
-| Privacy jobs fail or stop (`HephaestusPrivacyJobFailing`, `HephaestusPrivacyJobNotRunning`) | Account erasure and retention are legal duties, so act on the same day. The `exported_job` label names the job. Read the server log of that sweep for the failure. `incomplete` means that the run ended with eligible work left: check for one account or export that blocks it, and for slow database statements. A job that ended no run points to a stuck lock or a stopped scheduler: check the `shedlock` row of the sweep. | `privacy_job_completed_total{outcome="success"}` rises for that job, and its backlog is empty |
-| GitHub redelivery reads only part of the deliveries (`HephaestusWebhookRedeliveryTruncated`) | A run read only part of the App's deliveries, so older failed events can leave GitHub's window unrecovered. Check `HephaestusWebhookEventsUnrecovered`, and fix the cause of the failed deliveries first. | Runs stop adding to `github_webhook_redelivery_total{outcome="truncated"}`, and `github_webhook_unrecovered` is 0 |
-| Backup stale / restore failed (`HephaestusBackupStale`) | Preserve the last good backup, check destination credentials, disk, WAL coverage and encryption-key recovery. On Kubernetes, read the log of the latest backup Job ([Troubleshooting](./kubernetes.mdx#troubleshooting)). A failed WAL archive also stops the backups. Escalate at the agreed RPO, not after the next deploy. | A new off-host backup and isolated restore succeed within measured objectives.                                                                                                                  |
-| Person erasure retry pending (`person_data.erasure.retry_pending`) | Check database availability. The request retains completed receipts and has one automatic retry. | The request reaches `COMPLETE` or reports a failure for an instance admin to resume. |
-| Person erasure stopped (`person_data.erasure.failed`) | Check the request's failure code. Temporary database failures retry once. Repeated or permanent failures require an instance admin to correct the store and resume the request. See [An erasure store fails](#an-erasure-store-fails). | The request reaches `COMPLETE`, and its identifying scope is cleared. |
-| Erasure recovery blocked startup (`person_data.recovery.failed`, then `HephaestusMetricsUnavailable`) | Keep the server stopped. Check the private manifest and the existing erasure receipts. For `MANIFEST_VERSION`, write the manifest as version 2. For `BACKGROUND_WORK`, remove the setting that turns background work on beside the profile, such as `HEPHAESTUS_BACKGROUND_WORK_ENABLED`. For `ERASURE_INCOMPLETE` on a disconnect, turn on the integration of that connection for the recovery run: without it nothing can erase its data. Do not log the manifest or bypass the recovery profile. | Complete [erasure reapplication](./backup-restore#reapply-erasure-decisions-before-processing-resumes), then recover the provider gap, as [Reconcile external writes after restore](#reconcile-external-writes-after-a-database-restore) describes, before access resumes. |
-| Provider events stay behind (`HephaestusEventsDelayed`, `HephaestusProviderEventsWaiting`) | The `kind` or `provider` label names the provider. Compare `integration_message_process_duration_seconds` with the event rate. Slow handling points to the database or the provider's API. A due event that waits while handling is fast means that no server claims. Check that the servers run and are ready. Check that `hephaestus.integration.consumer.claimers` is above 0. A long `LEASED` backlog with a handler timeout points to a handler that holds its resource's order. A suspended workspace's events also wait until it is active again. | Under 10 % of `integration_message_lag_seconds` is over 5 minutes, and `integration_consumer_oldest_due_seconds` falls. |
-| Webhook publish failures / unrecovered GitHub events (`HephaestusWebhookPublishFailing`, `HephaestusWebhookEventsUnrecovered`) | Check PostgreSQL first: the receiver fails a delivery that it cannot store in the inbox. The log names `webhook.publish.reason=store-failed`. GitHub deliveries are redelivered for up to 80 minutes after their first failure while the server runs. After an outage of the server or the database, the next run reads back to the previous run. It thus redelivers the failed deliveries of the outage. Do not restart the receiver to clear the alert. | `webhook.publish` failures stop and `github.webhook.unrecovered` returns to zero. Redeliver older GitHub deliveries in the App settings within three days, or let reconciliation recover the rest. |
-| Webhook connection admission refuses a delivery (`webhook.rejected`, reason `connection-not-active`) | Check the connection's state. `PENDING`, `SUSPENDED` and `UNINSTALLED` connections admit no work payload. The admission log names the provider and refusal reason. An inactive source App also prevents delivery to matching PAT workspaces. `work-event-without-source` means the GitHub work event has no source repository or signed installation ID. Check the App's configured webhook. `connection-route-mismatch` means the source server, signed installation or route no longer matches. | Restore the connection deliberately or complete its upstream cleanup. A new delivery after activation can enter the inbox. No rejected payload is available for replay. |
-| Webhook receiver refuses deliveries for memory (`HephaestusWebhookReceiverBusy`) | Large deliveries fill the bytes it holds at once. Check database latency first: a slow inbox write holds each delivery longer. If the database is healthy, raise `server.resources`. | Redeliver the refused GitHub deliveries in the App settings. |
-| GitHub redelivery not running (`HephaestusWebhookRedeliveryNotRunning`) | Check that the GitHub App private key and App ID are current, and that the App can read its webhook deliveries. Then read the server log for the refused requests. | `github.webhook.redelivery` reports no `refused` or `unavailable` outcome for 30 minutes. See [Failed GitHub deliveries](./webhook-ingestion-operations.mdx#failed-github-deliveries). |
-| Many GitHub redeliveries requested (`HephaestusWebhookRedeliveriesRequested`) | GitHub recorded no successful delivery for these events, so the cause can be before the receiver: the Gateway, its timeout, or an unready receiver. Read the App's **Advanced** → **Recent Deliveries** for the status of the failed deliveries. Then check the receiver's readiness and `webhook.publish` failures. | `github.webhook.redelivery` with `outcome=requested` stops increasing. |
-| No available server (`HephaestusServerDown`) | The API is down and every provider delivery fails now. Check the server Deployment's events, and its pods' readiness probe and log. A pod that waits for the schema needs the migration Job. When a server is ready again, its first run redelivers the failed GitHub deliveries of the past 71 hours. Other providers need reconciliation. | The server Deployment has an available replica, and `webhook.publish` counts successes. |
-| Unavailable server replica (`HephaestusServerUnready`) | The other server replicas serve. Read the unavailable pod's events and log, and delete it if it does not recover. | The server Deployment has no unavailable replica. |
-| Provider event backlog gauges fail (`HephaestusProviderEventBacklogUnsampled`) | Read the server log for `provider_event.backlog.sampler_failed` and its `error.type`. Check the database connection. The backlog gauges show their last values meanwhile. | `integration_consumer_backlog_sampler_failures_total` stops increasing. |
-| Agent run gauges fail (`HephaestusAgentRunsUnsampled`) | Read the server log for `agent.run.sampler_failed` and its `error.type`. Check the database connection. The run gauges show their last values meanwhile, so a stalled queue does not fire `HephaestusAgentQueueStalled` or `HephaestusInteractiveRunWaiting`. | `agent_run_sampler_failure_total` stops increasing. |
-| Outbox backlog gauges fail (`HephaestusOutboxUnsampled`) | Read the server log for `action.backlog.sampler_failed` and its `error.type`. Check the database connection. The outbox gauges show their last values meanwhile, so a stalled outbox does not fire `HephaestusOutboxStalled`. | `action_backlog_sampler_failures_total` stops increasing. |
-| Metrics target down (`HephaestusMetricsUnavailable`) | Check that the pod or container runs and is ready, and that the network policy admits the scraper. The other application alerts of that target cannot fire meanwhile. | The target's `up` is 1. |
-| Dead-man check (`HephaestusWatchdog`) | This alert always fires while the monitoring works. Route it to an outside dead-man check, not to a person. When the outside check reports that it stopped, find the broken link. Check the Alertmanager and its receiver first, then vmalert and its rule file. Then check VictoriaMetrics, its scrape, and the roles' `up` series. | The outside check receives the alert again. |
-| WAL archive failing (`HephaestusWalArchiveFailing`) | Read the PostgreSQL log for `archive-push` errors. Check the bucket's credentials, its reachability and its free space. After a change of the bucket's credentials, restart PostgreSQL. If `database_wal_archive_sample_failures_total` increases, the server cannot read the archiver: check the server's database connection first. Do not turn `archive_mode` off to clear the alert. | `database_wal_archive_failing` is 0, and a new backup succeeds. The point-in-time recovery has a gap from the first failure until the archive works again. |
-| The tenancy check reported a statement (`HephaestusTenancyViolations`) | Read the server log line `Tenancy violation (throw)` or `Tenancy violation (log)` that matches the alert's `mode`. It names the tables and the start of the statement. In `throw` mode, the check refused the statement. The request or job that ran it failed, for every workspace that uses that path. In `log` mode, the statement ran: it can have read other workspaces' rows, so look for cross-workspace access. Set `hephaestus.tenancy.enforcement` back to `throw`, its default. Use `log` and `off` only to diagnose. If the violations started with an upgrade, roll back to the previous release. Report the statement and its stack trace, so that the code binds the workspace or names the read that must reach every workspace. | `tenancy_violation_total` stops increasing, and the path that failed answers again. |
-| Browser faults rising (`HephaestusBrowserFaultsRising`) | Query the log store for `event.name` `browser.fault` with the alert's `kind`. Group by `browser.page`, `error.type` and `browser.release`. A release that differs from the server's `service.version` is a tab that still runs an older build. The release ships no source maps, so frames stay positions in the built scripts. Group by `browser.fault.frames` to find the failing script, and report those frames with `browser.release` to the maintainers. Reports from readers who are not signed in can be forged: compare them with the signed-in share. | The rate of that kind falls after the fix, and no new release shows the same frames. |
-| PostgreSQL volume filling (`HephaestusPostgresVolumeFilling`) | Check the WAL archive first: a failed archive keeps the WAL on the volume. Read the PostgreSQL log for `archive-push` errors and the log of the latest backup Job. Do not delete files from the WAL directory. Expand the volume only after the archive works, if its storage class permits expansion. | The archive pushes again, free space rises, and a new backup succeeds. |
-| Node disk filling (`HephaestusNodeDiskFilling`) | Find what fills the node: Git mirrors (`server.gitCache.sizeLimit`, `server.gitCache.sizeLimit`), review sandboxes, which have no disk limit, or images. Drain the node to move the server when a sandbox fills it. | Free space stays above the threshold, and no pod on the node is evicted for disk pressure. |
-| Certificate expiring (`HephaestusCertificateExpiring`) | Read the status and events of the Certificate and its latest CertificateRequest. Fix the issuer or the challenge. PostgreSQL reads a renewed certificate when it restarts ([Database maintenance](./maintenance.md#database-maintenance)). | cert-manager issued a new certificate, its expiry moved ahead, and the roles connect. |
-| Host does not follow its channel (`HephaestusDeployReconcileFailing`, `HephaestusDeployReconcileStale`, `HephaestusDeployMetricsMissing`, `HephaestusDeployToolingPending`) | Read `journalctl -u hephaestus-reconcile.service` for the failed run. A chart that refuses the host's values names the value. Change the site values, or wait for the fix of the release. For a stale run, check `systemctl status hephaestus-reconcile.timer`. Do not apply a release by hand around the reconciler ([Pull-based deployment](./pull-based-deployment)). | A run ends with `hephaestus_deploy_reconcile_success` 1, and `hephaestus_deploy_info` names the channel's release. |
-| Sync hints fail (`HephaestusSyncNotificationsFailing`) | Clients continue to poll REST. Check PostgreSQL connectivity and the server's `Sync notifications disconnected` or `Sync notification publish failed` records. Verify the chart's connection budget during rolling overlap. Do not replay hints or enable direct local delivery. | The listener reconnects, new changes reach local SSE streams, and no notification failure occurs for 15 minutes. |
-| API error budget burning (`HephaestusApiErrorBudgetBurnFast`, `HephaestusApiErrorBudgetBurnSlow`, `HephaestusApiErrorBudgetBurnTicket`) | Find the routes: `sum by (uri, status) (rate(http_server_requests_seconds_count{runtime_role="server",status=~"5.."}[30m]))`. Search the server log for `ERROR` records with those routes and follow their trace ids ([Correlating a request](./monitoring.md#find-the-records-of-one-request)). Check the database before the code. A deploy that started the burn is the first candidate for a rollback. | The 5xx ratio of the last 5 minutes is below 0.5 %, and the alert resolves. The ticket alert resolves only when the ratio of the last six hours is below 0.5 %. |
-| API reads slow (`HephaestusApiLatencyBudgetBurnFast`, `HephaestusApiLatencyBudgetBurnSlow`, `HephaestusApiLatencyBudgetBurnTicket`) | Find the slow routes with the same query on `http_server_requests_seconds_bucket{le="2.0"}` against the count. Check database statement statistics, connection pool waits and the node's CPU. A slow route on its own is usually a query. All routes slow at once is usually the node or the database. | The share of reads over 2 seconds in the last 5 minutes is below 0.5 %, and the alert resolves. The ticket alert resolves only when that share over the last six hours is below 0.5 %. |
-| Slow Activity reads (`HephaestusActivityLatencyBudgetBurnFast`, `HephaestusActivityLatencyBudgetBurnSlow`) | Find the slow route with `histogram_quantile(0.95, sum by (uri, le) (rate(http_server_requests_seconds_bucket{uri=~"(/public)?/workspaces/[^/]+/activity(/.*)?"}[1h])))`. Then compare it with the database pool wait (`hikaricp_connections_pending`) and the top statements by total time in `pg_stat_statements`. | 95 % of Activity reads finish within 1 second. |
-| Slow conversation answers (`HephaestusConversationFirstTokenBudgetBurnFast`, `HephaestusConversationFirstTokenBudgetBurnSlow`) | Compare the model's own first chunk (`gen_ai_client_operation_time_to_first_chunk_seconds{band="interactive"}`) with the wait for its pool (`llm_pool_permit_wait_seconds{band="interactive"}`). A slow first chunk points to the provider. A long wait points to the pool's limit. | 95 % of turns start their answer within 10 seconds. |
-| Failing conversation turns (`HephaestusConversationTurnsFailing`) | `lease_expired` means that conversation loops stopped during turns, or that their calls reached no server: check the restarts and evictions of the loop and the servers. `failed` means that the model call or the tools failed: read the server log for the failed turns, and check `gen_ai_client_calls_total{band="interactive"}` by `outcome`. | Fewer than a fifth of the turns of an hour fail. |
-| Weekly digest is not ready (`digest.enqueue.failed` or a failed `DIGEST` run) | Check the account's opt-in and Monday delivery window first. A quiet week needs no digest. For queued work, check the run's hold and conversation subject. For failed work, read its turn's closed failure cause and the background model-call outcomes. The `mentor.turn.ended` event carries `turn.surface=system`. Start-decline logs carry `turn.surface=system` and the closed refusal reason. The normal conversation admission and spending cap apply. | The next eligible digest completes. Do not revive a digest after opt-out or after its delivery window. |
-| Database connections time out (`HephaestusDatabaseConnectionTimeouts`) | Requests or jobs of the role failed. Check PostgreSQL first: a restart or a maintenance phase closes connections. Then compare `hikaricp_connections_active` with `hikaricp_connections_max` for the role. A pool that stays full points to long transactions: find them in `pg_stat_activity`. Raise the role's `databasePool.maximumPoolSize` only within the connection budget of [Sizing](./sizing.mdx). | No timeout for 15 minutes. |
-| Database connections slow to get (`HephaestusDatabasePoolSlow`) | Requests wait for a connection before they run. Find the waits with `hikaricp_connections_pending` and the role's active against its maximum connections. Then read the top statements by total time in `pg_stat_statements`, and look for long transactions in `pg_stat_activity`. | 95 % of the role's acquires take less than 50 ms for 30 minutes. |
-| Deadlocks (`HephaestusDatabaseDeadlocks`) | PostgreSQL cancelled one transaction of a deadlock. Find the two statements: the PostgreSQL log line `deadlock detected` names the processes and the relation. Two code paths that lock the same rows in a different order cause it. Report the paths with the time and the relation. | No deadlock in 15 minutes. |
-| Long-open transaction (`HephaestusDatabaseTransactionOpenLong`) | Find it: `SELECT pid, state, now() - xact_start AS open_for, application_name FROM pg_stat_activity WHERE xact_start IS NOT NULL ORDER BY xact_start LIMIT 5`. A migration during an upgrade can run this long. An `idle in transaction` session that is not a migration is a leak: end it with `SELECT pg_terminate_backend(<pid>)`, and report its `application_name`. | No transaction open for more than 5 minutes. |
-| Dead rows (`HephaestusDatabaseDeadRowsHigh`) | Autovacuum does not keep up with the table in `relname`. First clear a long-open transaction, which holds every vacuum back. Then check `last_autovacuum` in `pg_stat_user_tables` for the table, and run `VACUUM (VERBOSE) <table>` once. | The table's dead rows are below 20 % of its live rows. |
-| Transaction ID age (`HephaestusDatabaseTransactionIdAgeHigh`) | Act now: at about 2 billion, PostgreSQL stops writes. Clear any long-open transaction and prepared transaction (`pg_prepared_xacts`). Then run `VACUUM (FREEZE, VERBOSE)` on the tables with the largest `age(relfrozenxid)` in `pg_class`. | `age(datfrozenxid)` of the database is below 1 billion. |
-| Page loads slow (`HephaestusPageExperiencePoor`, `HephaestusPageExperiencePoorWeekly`) | Split `web_vital_duration_seconds_bucket{vital="lcp"}` by `page` and `region`. A slow `ttfb` points to the server or the network. A fast `ttfb` with a slow `lcp` points to the web app's bundle or images. Compare with the last web app release. | The `lcp` share within 2.5 seconds is above 75 % again over six hours, and the alert resolves. The weekly alert resolves only when that share over seven days is above 75 %, which can take days after the fix. |
-| Product feedback waits over 30 minutes (`HephaestusProductFeedbackStuck`) | Check **Product feedback → Destinations**, **Needs action**, server health, and the model’s pool and provider connection. A move of more than 30 reports also fires this alert, because filing keeps a pace of 30 per hour. It clears when the move ends. A stale draft, rate limit, or uncertain filing can hold a report. Turn on **Pause** while you diagnose a privacy risk. Restore the model or GitHub App installation and **Issues: read and write** access. Select **Retry** for stopped reports after recovery. | One private smoke report files once, the oldest waiting age falls, and **Needs action** clears for recovered reports. Keep destinations configured so cleanup continues. See [Product feedback](./product-feedback.mdx). |
-| GitHub repository enumeration reports `workspaceChanged`, `connectionMissing` or `connectionChanged` | The workspace, connection or repository access changed while GitHub was listing repositories. The server discards that answer and records a sync warning. Once the connection is stable, restart one server to repeat startup discovery. Do not restore an older monitor list. | Startup discovery completes on the current connection. Its repositories appear without applying the earlier answer. |
-| Provider removal needs confirmation (`HephaestusProviderRemovalNeedsConfirmation`) | Open **Instance administration → Provider removals**. For a surviving owner, open its integration administration page. Restore authorization if available, or confirm out of band that the old resource and uncertain operation are gone. An uncertain Slack exchange can also need this confirmation. Inspect the known team before release. Release the exact block as an instance admin. A later absence alone does not prove an earlier DELETE is spent. See [Confirm a provider removal](./integrations.mdx#confirm-a-provider-removal). | The exact retained identity is deleted after resolution or audited release. A fresh resource remains in use, and the open count falls. Erased credentials and work are not restored. |
-| Product feedback filing refused (`HephaestusProductFeedbackFilingFailing`) | Check the recorded `DESTINATION_UNAVAILABLE` or `GITHUB_REFUSED` reason. The app can be missing, suspended, or without issue permission. The private repository can have become public. Turn on **Pause**. Restore private visibility, the app installation, and **Issues: read and write** permission. Check the model if reports also lack drafts. After recovery, resume and select **Retry**. | Filing succeeds without duplicate issues, the refusal count stops increasing, and withdrawal and cleanup still work. |
-| Outbox result not recorded (`HephaestusOutboxRecordFailing`) | Find the action ID in the server log line `Stale action could not end` or `Action result could not be recorded`. Other actions go on. After `Stale action could not end`, the next executor run tries to end the action again. After `Action result could not be recorded`, the action stays `EXECUTING` and is taken again only when its `leased_until` has passed. A repeated failure for one action is a defect: report the log line to the maintainers. Do not edit the row. | `action.record.failed` stops rising. The logged action's row in `agent_action` has a `state` that is not `ADMITTED` or `EXECUTING`, a `stop_reason`, and an `ended_at`. |
-| Product feedback move refused (`HephaestusProductFeedbackMoveRefused`) | A defect, not an outage. Find the report ID in the server log line `Product feedback refused a move`. The report keeps its state and stays saved. It can hold back filing behind it. Report the log line to the maintainers. Do not edit the row. | After a fixed release, `product_feedback_steps_total{step="transition",outcome="refused"}` stops rising and the report moves on. |
+| Alert | Cause | Action | Check |
+| --- | --- | --- | --- |
+| `HephaestusWatchdog` | This alert always fires while the monitoring works. | Route it to an outside dead-man check, not to a person. When that check reports silence, check Alertmanager and its receiver first. Then check vmalert and its rule file, then VictoriaMetrics and its scrape. | The outside check receives the alert again. |
+| `HephaestusMetricsUnavailable` | The scraper cannot read a target. The Pod does not run or is not ready, or the network policy refuses the scraper. A server that stops during its startup also fires it. | Check that the Pod runs and is ready, and that `networkPolicy.metrics` names the scraper. For a server that stops during startup, read its log. `evidence.spool.cleanup.failed` means that the evidence volume needs access or space. `person_data.recovery.failed` means that the erasure manifest stops the start: see [Reapply erasures after a restore](./erasure-recovery). | The `up` series of the target is 1. While the target is down, its other alerts cannot fire. |
+| `HephaestusServerDown` | No server replica is available. The API is down, and every provider delivery fails. It also fires during an [erasure recovery](./erasure-recovery) until the recovery Pod is ready. | Read the events, the readiness probe and the log of the server Pods. A Pod that waits for the schema needs its migration Job ([A server stays unready](./troubleshooting#a-server-stays-unready)). | The server Deployment has an available replica, and `webhook.publish` counts successes. The first redelivery run of a ready server recovers the failed GitHub deliveries of the past 71 hours. Other providers need the [reconciliation sync](./webhook-ingestion-operations#which-providers-deliver-again). |
+| `HephaestusServerUnready` | One server replica stayed unavailable for 15 minutes. The other replicas serve. | Read the events and the log of the unavailable Pod. If it does not recover, delete the Pod. | The server Deployment has no unavailable replica. |
+| `HephaestusContainerOomKilled` | The kernel killed a container at its memory limit. The `pod` and `container` labels name it. The alert reads every namespace. | Compare the limit with [Sizing](./sizing) and with the memory use before the kill. For the server or PostgreSQL, raise its `resources`. For a review sandbox, raise `sandbox.templates.review.resources`. The job lease and the inbox lease recover the lost work. | The container runs a full cycle of its work with no new kill. |
+| `HephaestusSyncNotificationsFailing` | The server cannot publish or receive its sync notifications through PostgreSQL. Clients fall back to polling. | Check the PostgreSQL connection. Read the server log for `Sync notifications disconnected` or `Sync notification publish failed`. During a rolling upgrade, check the [connection budget](./sizing#database-connections). | No notification failure occurs for 15 minutes. |
+| `HephaestusTenancyViolations` | A database statement did not stay in one workspace. On the chart, the check refuses the statement, so the request or job that ran it failed. | Read the server log line `Tenancy violation (throw)`. It names the tables and the start of the statement. If the violations started with an upgrade, [roll back](./upgrade#rollback). Report the statement and its stack trace to the maintainers. | `tenancy_violation_total` stops increasing, and the failed path answers again. |
+| `HephaestusBrowserFaultsRising` | Browsers report failures of one kind. | In the log store, query `event.name` `browser.fault` with the `kind` of the alert. Group by `browser.page`, `error.type` and `browser.release`. A `browser.release` that differs from the server's `service.version` is a tab with an older build. Report `browser.fault.frames` and `browser.release` to the maintainers. Reports from readers who are not signed in can be forged. | The rate of that kind falls after the fix. |
 
-## Model pricing update
+### Database
 
-Prices are runtime catalog data, not a source-code pricing table.
-Instance prices are superseded with history.
-Workspace-owned models use inline prices.
-Missing cache rates can leave the entire call unpriced.
+| Alert | Cause | Action | Check |
+| --- | --- | --- | --- |
+| `HephaestusDatabaseConnectionTimeouts` | The server could not get a database connection in time, so requests or jobs failed. | Check PostgreSQL first: a restart or a maintenance phase closes connections. Compare `hikaricp_connections_active` with `hikaricp_connections_max`. A pool that stays full points to long transactions in `pg_stat_activity`. Raise `server.databasePool.maximumPoolSize` only within the [connection budget](./sizing#database-connections). | No timeout for 15 minutes. |
+| `HephaestusDatabasePoolSlow` | Requests wait for a connection before they run. | Read `hikaricp_connections_pending`. Read the top statements by total time in `pg_stat_statements` ([Read database statement statistics](./monitoring#read-database-statement-statistics)). Look for long transactions in `pg_stat_activity`. | 95 % of the acquires take less than 50 ms for 30 minutes. |
+| `HephaestusDatabaseDeadlocks` | PostgreSQL cancelled one transaction of a deadlock. Two code paths lock the same rows in a different order. | Find the PostgreSQL log line `deadlock detected`. It names the processes and the relation. Report the two statements, the time and the relation to the maintainers. | No deadlock in 15 minutes. |
+| `HephaestusDatabaseTransactionOpenLong` | A transaction is open for more than 5 minutes. A migration during an upgrade can take this long. | Find it: `SELECT pid, state, now() - xact_start AS open_for, application_name FROM pg_stat_activity WHERE xact_start IS NOT NULL ORDER BY xact_start LIMIT 5`. An `idle in transaction` session that is not a migration is a leak. End it with `SELECT pg_terminate_backend(<pid>)`, and report its `application_name`. | No transaction is open for more than 5 minutes. |
+| `HephaestusDatabaseDeadRowsHigh` | Autovacuum does not keep up with the table in `relname`. | First clear a long-open transaction, because it holds every vacuum back. Read `last_autovacuum` in `pg_stat_user_tables` for the table. Run `VACUUM (VERBOSE) <table>` once. | The dead rows of the table are below 20 % of its live rows. |
+| `HephaestusDatabaseTransactionIdAgeHigh` | The oldest unfrozen transaction ID is more than 1 billion old. At about 2 billion, PostgreSQL stops all writes. | Act at once. Clear each long-open transaction and each prepared transaction (`pg_prepared_xacts`). Run `VACUUM (FREEZE, VERBOSE)` on the tables with the largest `age(relfrozenxid)` in `pg_class`. | `age(datfrozenxid)` of the database is below 1 billion. |
+| `HephaestusPostgresVolumeFilling` | The PostgreSQL volume has less than 15 % free space (warning) or less than 5 % (critical). A failed WAL archive keeps the WAL on the volume. | Check the WAL archive first: read the PostgreSQL log for `archive-push` errors and the log of the latest backup Job. Do not delete files from the WAL directory. Expand the volume only after the archive works, and only if its storage class permits expansion. | The archive pushes again, free space rises, and a new backup succeeds. |
+| `HephaestusWalArchiveFailing` | PostgreSQL cannot archive its WAL, or the server cannot read the state of the archiver. | Read the PostgreSQL log for `archive-push` errors. Check the credentials, the reachability and the free space of the bucket. After a change of the bucket credentials, restart PostgreSQL. If `database_wal_archive_sample_failures_total` increases, check the database connection of the server. Do not turn `archive_mode` off. | `database_wal_archive_failing` is 0, and a new backup succeeds. Point-in-time recovery has a gap from the first failure until the archive works again. |
+| `HephaestusBackupStale` | No PostgreSQL backup completed in the last 30 hours. A failed WAL archive also stops the backups. | Read the log of the latest backup Job. Check the credentials of the destination, the disk and the WAL archive. Keep the last good backup. Escalate when the gap reaches your recovery point objective. | A new off-host backup completes, and an [isolated restore](./backup-restore#isolated-restore-drill) of it succeeds. |
 
-1. Follow [AI provider pricing](./ai-providers#4-pricing-a-model).
-2. Record the vendor/contract rate source, upstream model ID, currency, effective date, and all token buckets.
-3. Update the instance catalog or workspace-owned catalog as applicable.
-4. Confirm **USD per million tokens**, including cache read/write rates.
-5. Never mark an unknown model `NO_CHARGE` to bypass a refused call.
-6. For a new/unpriced model, create it disabled.
-7. For a new/unpriced model, price it.
-8. For a new/unpriced model, enable it.
-9. For a new/unpriced model, assign it to a purpose.
-10. For repricing, use the catalog UI.
-11. Verify that historical usage was not billed again.
-12. Verify that a controlled new call uses the intended rate snapshot.
-13. Compare a hand-calculated token-cost example and provider billing.
-14. If the rate is wrong, correct the current catalog.
-15. If the rate is wrong, keep affected models disabled.
-16. If the rate is wrong, document the accounting gap instead of rewriting historical usage.
+### Provider events and webhooks
 
-## Decommission
+[Webhook ingestion operations](./webhook-ingestion-operations) gives the meters that these alerts read.
 
-:::caution[CAUTION: Shared integrations and retained data]
-Do not delete a shared app that another instance still uses.
-Destroy data only when retention permits.
-:::
+| Alert | Cause | Action | Check |
+| --- | --- | --- | --- |
+| `HephaestusWebhookPublishFailing` | The server cannot store deliveries in the provider event inbox in PostgreSQL. Each failure answers `503`. | Check PostgreSQL first: connections, locks and volume space. Read the server log records with `event.name=webhook.publish.failed`. The message names the exception class. Do not restart the server to clear the alert. | `webhook.publish` counts no new failure. Recover the failed deliveries, as [Which providers deliver again](./webhook-ingestion-operations#which-providers-deliver-again) describes. |
+| `HephaestusWebhookReceiverBusy` | Large deliveries fill the memory that the receiver holds for bodies, so it answers `503` with `Retry-After`. | Check database latency first, because a slow inbox write holds each delivery longer. If the database is healthy, raise `server.resources`. | No new `busy` refusal. Redeliver the refused GitHub deliveries in the App settings. |
+| `HephaestusWebhookEventsUnrecovered` | GitHub events failed all six delivery attempts, so Hephaestus did not receive them. | Fix the cause of the failed deliveries first, usually `HephaestusWebhookPublishFailing` or `HephaestusServerDown`. Redeliver older deliveries under **Advanced → Recent Deliveries** of the GitHub App, within three days. | `github.webhook.unrecovered` returns to 0. After three days, only the reconciliation sync recovers the effect. |
+| `HephaestusWebhookRedeliveryNotRunning` | GitHub refuses the redelivery requests, or the server cannot read the deliveries of the GitHub App. | Check that the App ID and the private key of the GitHub App are current, and that the App can read its webhook deliveries. Read the server log for the refused requests. | `github.webhook.redelivery` reports no `refused` or `unavailable` outcome for 30 minutes ([Failed GitHub deliveries](./webhook-ingestion-operations#failed-github-deliveries)). |
+| `HephaestusWebhookRedeliveryTruncated` | Redelivery runs read only part of the deliveries of the App, so older failed events can leave the three-day window. | Check `HephaestusWebhookEventsUnrecovered`. Fix the cause of the failed deliveries first. | Runs stop adding to `github.webhook.redelivery` with `outcome=truncated`, and `github.webhook.unrecovered` is 0. |
+| `HephaestusWebhookRedeliveriesRequested` | GitHub recorded no successful delivery for more than 5 % of the deliveries. The cause can be before the server: the Gateway, its timeout, or a server that is not ready. | Read the status of the failed deliveries under **Advanced → Recent Deliveries** of the GitHub App. Check the readiness of the server and the `webhook.publish` failures. | `github.webhook.redelivery` with `outcome=requested` stops increasing. |
+| `HephaestusProviderEventsWaiting` | The oldest due event of a provider waited more than 5 minutes. No server claims, or a handler holds the order of a resource. The events of a suspended workspace also wait. | Compare `integration_message_process_duration_seconds` with the event rate. Slow handling points to the database or the provider API. If handling is fast, check that the servers run and are ready, and that `server.inboxClaimers` is above 0. A long `LEASED` backlog points to a handler that holds the order of its resource. | `integration_consumer_oldest_due_seconds` falls below 5 minutes. |
+| `HephaestusEventsDelayed` | More than 10 % of the events of a provider waited over 5 minutes. | Do the action of `HephaestusProviderEventsWaiting`. | Under 10 % of `integration_message_lag_seconds` is over 5 minutes. |
+| `HephaestusConsumerRetryStalled` | Events retry for 15 minutes. A provider API or the database fails, or a workspace operation or a person erasure holds the lock that the handler needs. | If `integration_message_process_duration_seconds` with `outcome="retried"` rises, inspect the active database transactions and locks. Check for an active erasure before you change anything. Otherwise read the `kind`, the error class and the attempt count in the server log. Do not read raw payloads. | The retries stop, and `integration_consumer_oldest_due_seconds` falls. |
+| `HephaestusConsumerPoison` | An event became a dead letter: a parsing failure, or an unknown failure after 10 attempts. It keeps its payload for replay. | Read the `kind`, the error class and `error.root_type` in the server log. Fix the cause. Then [replay one dead letter](./webhook-replay), and the rest after it succeeds. | The replayed events leave the dead-letter list. |
+| `HephaestusConsumerHandlerTimedOut` | One event took longer than the handler timeout of 30 minutes. A provider or database call that never answers is the usual cause. | Read the `integration.message.timed_out` log record. It names the route, the workspace, the delivery and the timeout. If `integration.handler_stopped` is `false`, the server broke its liveness, so Kubernetes restarted the Pod. The event returns to the inbox and retries. | Fix the call that hangs. After the retry limit, the event is a dead letter with the error `HandlerTimeoutException`: [replay it](./webhook-replay) after the fix. |
+| `HephaestusProviderEventBacklogUnsampled` | The server cannot read the inbox backlog. The backlog gauges show their last values. | Read the server log for `provider_event.backlog.sampler_failed` and its `error.type`. Check the database connection. | `integration_consumer_backlog_sampler_failures_total` stops increasing. |
+| `HephaestusInboxRetentionFailing` | The hourly cleanup of handled events and dead letters failed more than once in 24 hours. Ingestion continues. | Read the server log for `provider_event.retention_failed` and its `error.type`. Check the database connection, locks and permissions. | The next hourly pass succeeds, and the counter stops increasing. |
+| `HephaestusEventPublicationsOverdue` | Durable server work, such as an email or an account export, stayed incomplete for more than an hour. The server retries it every five minutes. The `listener` label names the work. | Search the server log for the error of that listener, and fix its cause, for example the mail server or a missing connection. For `GitLabConnectionStateListener.onDeactivated`, check the GitLab token. If the token cannot delete the hook, a GitLab group owner removes it. Then reconnect with a valid token, or disconnect. Do not delete rows from `event_publication`. | `event_publications_overdue` for that listener returns to 0. |
+| `HephaestusCommitIdentityResolutionStalled` | Commit link correction made no progress for 6 hours. No provider answers. | Read `commit_identity_resolutions_total` by `outcome`. No `resolved` with a growing `retry` means no answer: check the connection that monitors the repository and the rate limit of the provider. To stop the job, set `config.commitIdentityResolutionEnabled` to `false`. | `resolved` or `no_account` outcomes increase again. |
+| `HephaestusCommitIdentityResolutionUnanswered` | More emails used their 5 attempts than the provider answered in 6 hours. Near the end of a run, a few unanswered emails also fire it. | Read the `Commit identity correction failed` log for the queue ID and the cause. A missing answer changes no link. | After the fix, [ask again](./correct-commit-links#ask-again-after-a-provider-outage). |
+| `HephaestusProviderRemovalNeedsConfirmation` | A provider removal or authorization stayed unresolved for an hour. An uncertain Slack exchange can also need it. | Open **Instance administration → Provider removals**. Restore the authorization, or confirm out of band that the old resource is gone. Then release the block, as [Confirm a provider removal](./integrations#confirm-a-provider-removal) describes. | The open count falls. |
 
-1. Turn on silent mode.
-2. Stop writers, sandboxes, and deployment automation.
-3. If required, complete external removal before erasure.
-4. Take only final backups required by retention.
-5. Deregister webhooks.
-6. Uninstall/revoke relevant GitHub App installations.
-7. Revoke relevant GitLab tokens/hooks.
-8. Remove relevant Slack app subscriptions and tokens.
-9. Revoke relevant Outline app/API credentials and hooks.
-10. Revoke OAuth and LLM credentials.
-11. Remove DNS/TLS and alert routes.
-12. When retention permits, destroy volumes, secrets, and off-host backups.
-13. Verify that provider subscriptions and recurring AI or storage charges have stopped.
-14. Record retained legal evidence and its deletion owner/date.
+### Practice reviews and sandboxes
 
-## Operator evidence and authoritative guidance
+| Alert | Cause | Action | Check |
+| --- | --- | --- | --- |
+| `HephaestusAgentQueueStalled` | A run that can start waited for more than one hour. The alert names the `band` that waits. | Read `agent_run_runs` by `state` and `hold_reason`: due, held (`budget`, `sandbox_room`) and leased runs have different causes. Check that `sandbox.enabled` is `true` and that the servers run. Check the sandbox quota, the model assignments, the database and the provider. Do not delete jobs or reset leases. | `agent_run_oldest_due_age_seconds` falls, and new work completes. |
+| `HephaestusInteractiveRunWaiting` | A run of the interactive band, such as a conversation turn, can start and no server claimed it for more than a minute. A turn that no server starts within 3 minutes ends as not started, and the person sees that the system is busy. | Check that a server runs and has sandbox room: `agent_run_runs` with `band="interactive"` shows queued and leased runs, and `agent_run_due` shows how many wait. Check `agent_sandbox_dispatch_failure_total`, the sandbox quota and the model pool waits (`llm_pool_permit_wait_seconds`). A workspace that is suspended or on a hold does not count as due. | `agent_run_oldest_due_age_seconds{band="interactive"}` stays under a minute, and new turns start. |
+| `HephaestusAgentRunsUnsampled` | A server cannot read the run gauges. They keep their last values, so a stalled queue does not fire `HephaestusAgentQueueStalled` or `HephaestusInteractiveRunWaiting`. | Read the server log for `agent.run.sampler_failed` and its `error.type`. Check the database connection. | `agent_run_sampler_failure_total` stops increasing. |
+| `HephaestusAgentJobsFailing` | At least three agent jobs failed or timed out in one hour. | Read `agent.job.terminal` in the server log. Check the sandboxes, the model provider and the database. Do not delete jobs or reset leases. | New jobs complete. |
+| `HephaestusReviewSandboxFailing` | Review sandboxes failed to start, initialize or finish. | Read the server log for the sandbox failure and the exit of the initializer. Check the quota and the events of the sandbox namespace, the image pull of the agent image, and the nodes. Do not raise the retry cap. | `agent.job.infra.retry.requeued` with `cause=sandbox` stops increasing. |
+| `HephaestusReviewUnreachable` | Review sandboxes failed to reach the server, or every model call went unanswered. | For `server_unreachable`, check the network policies of the sandbox namespace and the sandbox gateway port of the server. For `provider_unreachable`, check the status of the provider and the egress of the server: `networkPolicy.externalEgress`, `networkPolicy.modelEndpoints` or `networkPolicy.modelGatewayPorts`. | The retries with that cause stop increasing, and reviews complete. |
+| `HephaestusReviewPreparationFailing` | Review attempts fail before their sandbox starts. | Read the server log line `Review preparation failed`. It names the stage, the kind and the reason. Check the provider sync of the reviewed sources, and the database. | The retries with `cause=preparation` stop increasing. |
+| `HephaestusReviewServerError` | The server answered the results of a review with its own error. | Read the server log line `The server refused a review's results` and the error log of the server at the same time. Report the exception to the maintainers. Do not raise the retry cap: another attempt meets the same error. | No new count of `agent_job_server_error_total`. |
+| `HephaestusReviewHolderLost` | Servers stopped during each attempt of a review, so the review failed. | Find why servers stop during attempts: out-of-memory kills, evictions, lost nodes, or drains that end before the attempt. Compare the server restarts with the attempts of the review. | Servers run without restarts, and no review fails this way. |
+| `HephaestusReviewFeedbackUnconfirmed` | Every attempt ended before it confirmed where the feedback went, so the review closed as Partial. It keeps its results. | Do the action of `HephaestusReviewHolderLost`. | No review closes with `COMPOSITION_UNCONFIRMED`. |
+| `HephaestusReviewStageSlow` | One stage of review attempts ran past its bound: 30 minutes for `sandbox`, 10 minutes for the others. The `stage` label names it. | For `capture`, check the provider sync and its rate limits. For `sandbox`, check the model waits and the review width. For `composition`, check the model pool and the sandboxes that wait to start. | A review of the same size ends each stage inside its bound. |
+| `HephaestusReviewsIncomplete` | More than a quarter of the item reviews of six hours did not end complete. The alert does not count `readiness_refused`, `budget` or `replaced`. | Find the stop reasons: `sum by (status, reason) (increase(practice_review_ended_total{kind="item"}[6h]))`. `execution_incomplete` and `execution_failed` point to the runtime: read `agent.job.terminal` and the sandbox exits. `deadline` points to slow model calls. `no_sandbox_room` points to the sandbox quota. Do not start the reviews again by hand. | Over six hours, at least three quarters of the counted item reviews end complete. |
+| `HephaestusAgentRunReaperFailing` | The run reaper cannot take back an expired run, so its work waits. | Read the `agent.run.reaper.failed` log records: `run.id` names the run and `error.type` the error. Find its job with `SELECT id, status FROM review_job WHERE run_id = '<run id>'`. Report the error to the maintainers. | `agent_run_reaper_failure_total` stops increasing. |
+| `HephaestusAgentSandboxReaperFailing` | The sandbox reaper cannot delete sandboxes that no work needs, so they hold cluster capacity. | Read `agent.sandbox.reaper.failed` and `agent.sandbox.claim_delete_failed`: they name the sandbox and the error. Check that the server's Role in the sandbox namespace grants `sandboxclaims`, and that the agent-sandbox controller runs. | `agent_sandbox_reaper_failure_total` stops increasing. |
+| `HephaestusAgentSandboxDispatchFailing` | The server cannot request the sandboxes of due runs, so their work waits. | Read `agent.sandbox.dispatch.failed` and its `error.type`. Check that the server's Role in the sandbox namespace grants `sandboxclaims`, and that the agent-sandbox controller runs. | `agent_sandbox_dispatch_failure_total` stops increasing. |
+| `HephaestusAgentSandboxUnisolated` | A sandbox could still reach the Kubernetes API 10 seconds after its start, so its network policy did not hold. The sandbox started none of its work. | Read `agent.sandbox.taken_back` with `sandbox.reason` `unisolated`. Check that the sandbox namespace has the NetworkPolicies of the chart: `kubectl --namespace <sandbox namespace> get networkpolicy`. Check that the network plugin of the node enforces them. | `agent_sandbox_revoked_total{reason="unisolated"}` stops increasing. |
+| `HephaestusSandboxGatewayRefusing` | The sandbox gateway refused many requests for one reason. The `reason` label names it. | `unauthenticated`, `forbidden` and `unknown_route` mean that a sandbox calls what it may not call: find the review in the server log and cancel it. `source_limit` means that one connection peer sent too many requests. `principal_limit` can mean a wide review: read `Sandbox gateway rate limit exceeded`. `oversized` and `body_budget` mean large bodies. Do not raise a limit before you know the caller. | The rate of `sandbox_gateway_refused_total` for that reason falls. |
+| `HephaestusSandboxGatewayConnectionsHigh` | The gateway holds more than 80 % of its connections. A review holds about 54 connections at normal width and 170 at most. | Compare `sandbox_gateway_connections` with the running reviews. If the reviews explain the count, raise `sandbox.gateway.maxConnections`. If not, find the Pod that holds them. | `sandbox_gateway_connections` falls below 80 % of the limit. |
+| `HephaestusAttemptKeysNotSyncing` | A server cannot publish or load the keys that verify sandbox credentials. | Check the database connection of the server and its `Attempt key` log lines. To revoke a stolen key, read its `kid` from the start log line `Published this server's attempt key`. Restart that server, then delete that row from `attempt_public_key`. | `attempt_key_sync_failures_total` stops increasing. |
+| `HephaestusEvidenceReconcileStalled` | Evidence cleanup failed for ten minutes, so erased evidence can remain in a folder, archive or sandbox. | Read `Evidence reconcile failed` and `Evidence reconcile left copies for the next pass`. Check the database connection and the space and permissions of the cache volume. For a failed sandbox, check the Kubernetes API, the `sandboxclaims` permission and the sandbox controller. A server restart does not prove that a sandbox is deleted. | `evidence_reconcile_last_success_seconds` is less than one minute old, and each failed SandboxClaim `agent-<sandboxId>` and its Pod are gone. |
+| `HephaestusCheckoutUnverified` | A server could not build a captured checkout again, so an attempt ended as a capture failure. | Read the log line `Captured checkout cannot be built here`. `fetch_failed` means that the provider no longer has the commit, for example after a force-push. `unavailable` means that the workspace does not monitor the repository. `mismatch` means a different tree: report it with the job ID. | `evidence_checkout_copies_total` for these outcomes stops increasing. |
+| `HephaestusGitCacheNearlyFull` | The Git cache volume stayed above 90 %, and eviction cannot free it. | Raise `server.gitCache.sizeLimit` and the matching `ephemeral-storage` limit in `server.resources` in one upgrade. Check that the node has the disk. Do not delete mirrors by hand. | `git_cache_bytes` stays below 80 % of `git_cache_limit_bytes`. |
+| `HephaestusGitMirrorsEvicted` | At least five kept mirrors were evicted in one hour, so the volume is too small for the monitored repositories. | Do the action of `HephaestusGitCacheNearlyFull`. | `git_mirror_evictions_total` stops increasing. |
+| `HephaestusNodeDiskFilling` | A node file system has less than 15 % free space. | Find what fills the node: Git mirrors (`server.gitCache.sizeLimit`), review sandboxes, or images. If a sandbox fills it, drain the node to move the server. | Free space stays above 15 %, and no Pod is evicted for disk pressure. |
+| `HephaestusResultsMarkedIncorrect` | People marked more than 5 % of the judged results of a week incorrect. | Find the practices with the [outcome query](./metrics.md#feedback-trust). Read the reasons of the marks in the history of each result. One practice points to its criteria. Many practices point to a change of model, evidence capture or release. Do not delete marks. | The share of incorrect marks falls below 5 % in the next seven days. |
 
-Keep drill evidence in the restricted deployment record.
-It must include these facts:
+### Feedback delivery and the outbox
 
-- Operator/reviewer and UTC date.
-- Release locks and isolated URL/project.
-- Provider fixtures, backup checksum, and recovery target.
-- Measured recovery point and time, and the recorded provider gap.
-- Provider counts before/after.
-- Failures and follow-up owner.
+| Alert | Cause | Action | Check |
+| --- | --- | --- | --- |
+| `HephaestusFeedbackDeliveriesFailing` | At least three deliveries to one destination failed in one hour. The `destination` label names it. | For `on_work`, check the provider connection of the workspace, its rate limits and the server log for the failed send. For `conversation`, read `mentor_turn_completed_total` and the turn failures. Do not post the feedback by hand: a retry then shows it twice. | Fewer than three deliveries to each destination fail in one hour. |
+| `HephaestusFeedbackDeliveryStalled` | Feedback on the work waited more than two hours for its first posted copy. | Find its send in `agent_action`: `lane_key` is `feedback:<feedback id>`, and `state` is `ADMITTED` or `EXECUTING`. Read the `action.*` log records. Check the provider connection for a revoked credential or a rate limit. | `practice_feedback_oldest_waiting_seconds` is below two hours. |
+| `HephaestusFeedbackDeliverySlow` | More than 30 % of the reviews of six hours posted their first feedback later than 30 minutes. | Find the slow stage: the wait for a claim (`agent_run_claim_wait_seconds`, `agent_run_oldest_due_age_seconds`), attempt duration, model pool waits (`llm_pool_permit_wait_seconds`), and the quiet window of the occasion. | At most 30 % of the reviews in six hours post their first feedback later than 30 minutes. |
+| `HephaestusFeedbackReadbackUnknown` | Readback could not tell whether feedback reached the work on a provider. | Check the credentials, the rate limit and the reachability of that provider. When the provider answers again, open the Unconfirmed feedback and select **Check delivery**. Never post the feedback again by hand. | **Check delivery** confirms each copy, or proves it absent. |
+| `HephaestusFeedbackSendRetrying` | A feedback send used at least half of its readback attempts. | Find the open sends with high `attempts` in `agent_action`: `DELIVER_FEEDBACK`, `EDIT_FEEDBACK` and `RETRACT_FEEDBACK`. Read the provider and readback log records. Confirm the existing copy before any retry. | The send ends. |
+| `HephaestusFeedbackSendMetricsUnavailable` | A server cannot read the attempts of feedback sends. | Read the server log for the failed read. Check the database. | Each server reports a finite `practice_feedback_send_attempts` value. |
+| `HephaestusOutboxStalled` | An outbox action waited for more than 15 minutes after it became due. | Check that every server replica runs. Read `action.attempt.failed` and `action.batch.outlived` for the kind. List the waiting actions: `SELECT id, lane_key, state, attempts, next_attempt_at FROM agent_action WHERE kind = '<kind>' AND state IN ('ADMITTED','EXECUTING') ORDER BY next_attempt_at LIMIT 20`. An `EXECUTING` action at the head of a lane holds the others until its lease ends. Do not change the rows. | `action_oldest_due_seconds` for the kind falls below 900. |
+| `HephaestusOutboxUnsampled` | A server cannot read the outbox backlog gauges. They keep their last values, so a stalled outbox does not fire `HephaestusOutboxStalled`. | Read the server log for `action.backlog.sampler_failed` and its `error.type`. Check the database connection. | `action_backlog_sampler_failures_total` stops increasing. |
+| `HephaestusOutboxUncertain` | An outbox action ended uncertain, so its write can have reached the provider. Nothing retries it. | Read `action.ended.uncertain`: `action.id` names the action and `action.reason` the cause. Check at the provider whether the write arrived, for example in the mail log. If the message mattered, tell the person by another channel. | No new count of `action_ended_total{state="UNCERTAIN"}` in one hour. |
+| `HephaestusOutboxRecordFailing` | The outbox could not record the result or the end of an action. | Find the action ID in the log line `Stale action could not end` or `Action result could not be recorded`. The executor tries again. A repeated failure for one action is a defect: report the log line to the maintainers. Do not edit the row. | `action.record.failed` stops increasing. |
 
-1. Repeat drills after changes to migrations, write identity, provider APIs, or backups.
+### Models and budgets
 
-- [GitLab Silent Mode](https://docs.gitlab.com/administration/silent_mode/)
-- [PostgreSQL continuous archiving](https://www.postgresql.org/docs/current/continuous-archiving.html)
-- [pgBackRest user guide](https://pgbackrest.org/user-guide.html)
-- [AWS runbook guidance](https://docs.aws.amazon.com/wellarchitected/latest/operational-excellence-pillar/ops_ready_to_support_use_runbooks.html)
-- [Google SRE launch guidance](https://sre.google/sre-book/reliable-product-launches/)
+| Alert | Cause | Action | Check |
+| --- | --- | --- | --- |
+| `HephaestusBudgetExhausted` | A workspace crossed the monthly budget cap of the instance-funded models. | Decide whether to raise the cap or pause the work. Compare the usage with the billing of the provider ([AI usage](./ai-providers#ai-usage)). Silent mode does not stop spending. | Usage stays inside the cap. Work that waits on the budget resumes on its own. |
+| `HephaestusBudgetBlocked` | Budget admission refused work for 15 minutes. With `surface="model_call"`, the proxy refused calls of a running job at a cap. | Find the budget: shared or workspace-owned. Raise it, or pause the affected model. For runaway spend, [stop model spend](./contain-an-incident#stop-model-spend). | The refusals stop. |
+| `HephaestusModelRefusalsReachCallers` | Callers saw the 429, 503 or 529 of the provider instead of waiting it out. | Read `llm_pool_upstream_throttled_total` by `status`. A spent account needs the quota or the plan of the provider. A 503 with no `Retry-After` can be an outage. A workspace credential in a shared pool also shows here. | `llm_pool_upstream_absorbed_total` grows as fast as `llm_pool_upstream_throttled_total`. |
+| `HephaestusModelLimitAtFloor` | The provider refused, queued or did not answer even two calls for 30 minutes. | A rising `llm_pool_limit_decreases_total{cause="refusal"}` means refusals. `cause="unanswered"` means streams without content: check the provider and any gateway in front of it. A rising `llm_pool_first_token_baseline_resets_total` means a queue at the model server. | `llm_pool_limit` stays above 2 for 30 minutes. |
+| `HephaestusConversationModelWaitLong` | Conversation calls wait for a free call of their pool. | Read `llm_pool_waiters`, `llm_pool_limit` and `llm_pool_cooldown_active`. A low limit means that the provider refuses or queues. A limit full of review calls means that the pool needs more calls, or reviews need their own pool. | Conversation calls wait under 5 seconds, and `llm_pool_waiters{band="interactive"}` returns to 0. |
+| `HephaestusReviewModelWaitLong` | Review calls wait more than two minutes for a free call, while the sandbox and its deadline wait. | Compare `llm_pool_limit` with the review width. Raise the limit of the pool if the provider allows it, or lower the review width ([Sizing](./sizing)). | Under a quarter of the review calls wait over two minutes for one hour. |
+| `HephaestusModelPermitsExpired` | A server stopped renewing a call in flight, usually because the server stopped. The pool frees that room one lease later. | Find why the server stopped: `HephaestusContainerOomKilled`, an eviction, or a lost database connection. | `llm_pool_permits_expired_total` stops increasing. |
+| `HephaestusModelPermitRenewalFailing` | Servers failed to renew their call permits without a restart. The database is the usual cause. | Check `HephaestusDatabaseConnectionTimeouts` and the server log. | `llm_pool_lease_renewal_failures_total` stops increasing. |
 
-## Email delivery operations
+### Conversations, product feedback and the web app
 
-`SENT` means relay acceptance, not inbox delivery.
-SMTP health must not be a liveness or readiness dependency.
-A broken email path cannot reliably report its own failure by email.
-Sustained `unavailable`, `rate_limited`, `rejected`, `unconfirmed` or `expired` outcomes require investigation.
+| Alert | Cause | Action | Check |
+| --- | --- | --- | --- |
+| `HephaestusConversationTurnsFailing` | More than a fifth of the turns of an hour failed or lost their server. | `lease_expired` means that turns stopped or reached no server: check the restarts and evictions of the servers. `failed` means that the model call or the tools failed: read the failed turns in the server log, and `gen_ai.client.calls` by `outcome`. | Fewer than a fifth of the turns of an hour fail. |
+| `HephaestusConversationFirstTokenBudgetBurnFast`, `HephaestusConversationFirstTokenBudgetBurnSlow` | Turns start their answer later than 10 seconds too often. | Compare the first chunk of the model (`gen_ai.client.operation.time_to_first_chunk`) with the wait for its pool (`llm_pool_permit_wait_seconds`). A slow first chunk points to the provider. A long wait points to the limit of the pool. | 95 % of the turns start their answer within 10 seconds. |
+| `HephaestusPageExperiencePoor`, `HephaestusPageExperiencePoorWeekly` | Fewer than 75 % of the page loads showed their main content within 2.5 seconds. | Split `web_vital_duration_seconds_bucket{vital="lcp"}` by `page` and `region`. A slow `ttfb` points to the server or the network. A fast `ttfb` with a slow `lcp` points to the bundle or the images. Compare with the last release. | The share is above 75 % again. The weekly alert resolves only when the seven-day share is above 75 %. |
+| `HephaestusProductFeedbackStuck` | A product feedback report waited more than 30 minutes. A move of more than 30 reports also fires it, because filing keeps a pace of 30 an hour. | Check **Product feedback → Destinations** and **Needs action**, the server, and the model and the GitHub App of the destination. For a privacy risk, turn on **Pause**. After recovery, select **Retry** for the stopped reports ([Recover reports that need action](./product-feedback#recover-reports-that-need-action)). | The oldest waiting age falls, and **Needs action** clears. |
+| `HephaestusProductFeedbackFilingFailing` | Filing to GitHub stopped with `DESTINATION_UNAVAILABLE` or `GITHUB_REFUSED`. The App can be missing or suspended, or the repository can be public. | Turn on **Pause**. Restore the private visibility, the App installation and the **Issues: read and write** permission. Resume, then select **Retry**. | Filing succeeds without duplicate issues. |
+| `HephaestusProductFeedbackMoveRefused` | Product feedback refused a state move. This is a defect. The report keeps its state and can hold back filing. | Find the report ID in the log line `Product feedback refused a move`. Report the line to the maintainers. Do not edit the row. | After a fixed release, the report moves on. |
 
-1. Use **Instance settings → Email → Send test email** to distinguish missing configuration, silent mode, exhausted capacity, and relay failures.
-2. For application, database, scheduler, or SMTP outages, page the operator through an **external** monitoring channel.
-3. Monitor the `notification.email.delivery` counter by bounded `kind` and `outcome`.
-   Monitor `action.ended` by `kind`, `state` and `reason` for every outbox action, email included.
-   An email that expires or loses its lease appears only in `action.ended`.
-   `HephaestusOutboxRecordFailing` fires when an action's result or end could not be recorded.
-4. Inspect the outbox backlog without selecting `payload`:
+### Privacy jobs
 
-   ```sql
-   SELECT kind, state, count(*) AS actions, min(next_attempt_at) AS oldest_due
-   FROM agent_action
-   WHERE ended_at IS NULL
-   GROUP BY kind, state;
-   ```
+| Alert | Cause | Action | Check |
+| --- | --- | --- | --- |
+| `HephaestusPersonErasureInterrupted` | A person erasure stopped, or could not record its failure state. | Read `person_data.erasure.failed`. If `person_data.failure_recorded=false`, restore the database first. Then follow [An erasure stops](./person-data-requests#an-erasure-stops). | The request shows **Erasure complete**. |
+| `HephaestusPrivacyJobFailing` | A privacy job failed or left eligible work at least twice in 26 hours. The `exported_job` label names it: `account_erasure`, `export_generation`, `export_retention` or `llm_usage_retention`. Erasure and retention are legal duties: act on the same day. | Read the server log of that job. Its lines start with `auth.account:` for `account_erasure`, `auth.export:` for the two export jobs, and `Retention:` for `llm_usage_retention`. A failed run also logs the error of its scheduled task. `incomplete` means that eligible work remains: look for one account or export that blocks it, and for slow statements. For an erasure, follow [An erasure stops](./person-data-requests#an-erasure-stops). [Data retention](./data-retention#postgresql) gives the period of each job. | `privacy_job_completed_total{outcome="success"}` increases for that job. |
+| `HephaestusPrivacyJobNotRunning` | An hourly privacy job ended no run in four hours. | Check the `shedlock` row of the job for a stuck lock. Check that the servers run. | The job ends a run. |
 
-   Actions with different keys do not wait for each other.
-   One failing email therefore does not block later email.
-   Capacity limits and backlog size still apply.
-   Each attempt rechecks current eligibility.
+### Service levels
 
-5. Alert on the age of the backlog: `now() - min(next_attempt_at)` of admitted email.
-   Each email waits for no other action, so an age beyond a minute means that no executor takes email.
-6. Investigate before notification expiry.
-7. Use a separate database-monitoring identity with least privilege.
-8. Do not resend an `UNCERTAIN` email by hand without asking the recipient: the relay may already have delivered it.
+| Alert | Cause | Action | Check |
+| --- | --- | --- | --- |
+| `HephaestusApiErrorBudgetBurnFast`, `HephaestusApiErrorBudgetBurnSlow`, `HephaestusApiErrorBudgetBurnTicket` | The API answers with server errors fast enough to spend its monthly error budget. | Find the routes: `sum by (uri, status) (rate(http_server_requests_seconds_count{runtime_role="server",status=~"5.."}[30m]))`. Follow the trace IDs of the `ERROR` records of those routes. Check the database before the code. A deploy that started the burn is the first candidate for a [rollback](./upgrade#rollback). | The 5xx ratio of 5 minutes is below 0.5 %. The ticket alert resolves only when the ratio of six hours is below 0.5 %. |
+| `HephaestusApiLatencyBudgetBurnFast`, `HephaestusApiLatencyBudgetBurnSlow`, `HephaestusApiLatencyBudgetBurnTicket` | API reads take longer than 2 seconds too often. | Find the slow routes with the same query on `http_server_requests_seconds_bucket{le="2.0"}`. Check the statement statistics, the pool waits and the CPU of the node. One slow route is usually a query. All routes slow is usually the node or the database. | The share of reads over 2 seconds is below 0.5 %. The ticket alert uses six hours. |
+| `HephaestusActivityLatencyBudgetBurnFast`, `HephaestusActivityLatencyBudgetBurnSlow` | Activity reads take longer than 1 second too often. | Find the slow route with `histogram_quantile(0.95, sum by (uri, le) (rate(http_server_requests_seconds_bucket{uri=~"(/public)?/workspaces/[^/]+/activity(/.*)?"}[1h])))`. Compare it with `hikaricp_connections_pending` and the top statements in `pg_stat_statements`. | 95 % of the Activity reads finish within 1 second. |
 
-Hephaestus records synchronous SMTP rejection.
-It does **not** claim to ingest asynchronous delivery-status notifications or provider complaints.
+### Platform and deployment
 
-Before inviting a large audience:
-
-1. Confirm the relay's quota and SPF/DKIM/DMARC alignment.
-2. Confirm the monitored reply address and bounce/complaint handling.
-3. Use a relay that suppresses hard bounces and complaints.
-4. Monitor that suppression list.
-5. Keep optional bulk mail disabled until this operational path works.
-6. Never re-enable a suppressed address without resolving the reason.
-
-See [email configuration](./production-setup#email).
-
-Unsubscribe URLs contain narrowly scoped bearer capabilities.
-A local Mailpit MIME test alone cannot prove DNS or DKIM configuration.
-
-1. Redact `/api/notifications/unsubscribe/*` in public reverse-proxy access logs.
-   Also redact `/notifications/unsubscribe/*` on the application server and for requests from earlier emails.
-2. Never retain the public confirmation page's `token` query.
-3. With a real message, validate the externally reachable HTTPS POST path.
-4. Validate DKIM coverage of both unsubscribe headers.
-
-Workspace connection alerts cover recorded Slack credential revocation and verified GitHub app
-suspension, with paired recovery. Intentional disconnection, routine token refresh, and first-time
-connection are not incidents. GitLab and Outline do not yet expose equivalent durable incident
-signals. Monitor their existing health/configuration surfaces rather than assuming email coverage.
+| Alert | Cause | Action | Check |
+| --- | --- | --- | --- |
+| `HephaestusCertificateExpiring` | A certificate of cert-manager expires in less than seven days, or has no issued certificate. | Read the status and the events of the Certificate and its latest CertificateRequest. Fix the issuer or the challenge. PostgreSQL reads a renewed certificate when it restarts ([Database maintenance](./maintenance#database-maintenance)). | cert-manager issued a new certificate, and the server connects. |
+| `HephaestusDeployReconcileFailing` | Every reconcile run of a host failed for 15 minutes. | Read `journalctl -u hephaestus-reconcile.service` for the failed run. A chart that refuses the site values names the value: change it, or wait for a fixed release. Do not apply a release by hand around the reconciler ([Watching it](./pull-based-deployment#watching-it)). | A run ends with `hephaestus_deploy_reconcile_success` 1, and `hephaestus_deploy_info` names the release of the channel. |
+| `HephaestusDeployReconcileStale` | The reconciler of a host finished no run for 40 minutes. | Run `systemctl status hephaestus-reconcile.timer`, and read the log of the last run. | A run ends, and the alert clears. |
+| `HephaestusDeployMetricsMissing` | No host reports the metrics of the reconciler. | Check the node-exporter textfile collector on each host that runs `hephaestus-reconcile.timer`. Load this rule group only where such a host is scraped. | `hephaestus_deploy_reconcile_timestamp_seconds` is present. |
+| `HephaestusDeployToolingPending` | A host runs reconciler tooling that no apply recorded. | Let the next apply record the tooling, as [Install newer reconciler tooling](./pull-based-deployment#install-newer-reconciler-tooling) describes. | `hephaestus_deploy_tooling_pending` is 0. |

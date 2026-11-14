@@ -34,7 +34,6 @@ const SAMPLE_DATA = /(?:\.stories\.tsx|\.test\.tsx?|fixtures\.ts)$/u;
 // comment — the rename excludes both.
 const HISTORICAL_ALLOWLIST = new Set([
 	"webapp/src/components/admin/practice-reviews/ReviewArtifact.tsx",
-	"docs/admin/compatibility-policy.mdx",
 	"docs/admin/release-image-lock.md",
 	"docs/decisions/0008-webhook-runtime-role.md",
 	"docs/decisions/0018-pg-partman-for-auth-event-partitioning.md",

@@ -51,7 +51,7 @@ These signals show that a capacity limit holds work back:
 
 | Signal | Meaning |
 | --- | --- |
-| `agent_queue_oldest_age_seconds`, `HephaestusAgentQueueStalled` | Reviews wait for a review sandbox. |
+| `agent_run_oldest_due_age_seconds`, `HephaestusAgentQueueStalled` | Reviews wait for a review sandbox. |
 | `mentor_turn_queued`, `mentor_turn_queue_wait_seconds` | Questions wait for a conversation turn. |
 | `hikaricp_connections_pending`, `HephaestusDatabaseConnectionTimeouts` | Server threads wait for a database connection. |
 | `HephaestusSandboxGatewayConnectionsHigh` | The sandbox gateway is near `sandbox.gateway.maxConnections`. |

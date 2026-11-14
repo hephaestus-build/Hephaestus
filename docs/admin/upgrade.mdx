@@ -1,90 +1,86 @@
 ---
 title: Upgrade
-description: Upgrade the Helm release to a new release, recover from a failed migration, and check for new releases.
+description: Upgrade the Helm release to a later release with a rolling or a stopped upgrade, and recover from a failed migration.
 page_type: how-to
 ---
 
-This page owns the upgrade and recovery of the Helm release.
-The [Compatibility Policy](./compatibility-policy) defines the guarantee and the support window.
-The release notes and [`MIGRATION.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) state the actions for each release.
-
-Pre-1.0 upgrades may require an intermediate release or manual preparation.
-The [compatibility policy](./compatibility-policy#upgrade-guarantee) defines skip-version support.
-Read the release notes of every release between yours and the target.
-In-place downgrades are unsupported.
-[Upgrade to 1.0](./upgrade-to-1-0) collects the actions on the way to 1.0.
+Upgrade a Helm installation to a later release, and recover when its migration fails.
+The [compatibility policy](./compatibility-policy#upgrade-guarantee) states which releases you can upgrade from.
+Read the release notes and the [migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) entry of every release between yours and the target.
+In-place downgrades are not supported.
+For the cutover from a 1.0 release candidate to 1.0.0, follow [Upgrade to 1.0](./upgrade-to-1-0).
 
 Expect a release candidate (`X.Y.Z-rc.N`) before major upgrades, [stopped cutovers](./pull-based-deployment#stopped-major-upgrades) and irreversible migrations.
 See the [release policy](../contributor/release-management#release-candidate-policy).
 
+## Choose a rolling or a stopped upgrade
+
+Only the previous release can run on the schema of a new release.
+A rolling upgrade keeps a ready server, and a stopped upgrade stops every server before the migration.
+
+| Situation | Upgrade |
+| --- | --- |
+| The target is the next release on a cluster that is not a one-host installation. No entry between the two releases starts with **Stop every role**. | [Rolling](#upgrade-a-schema-compatible-release) |
+| A migration guide entry between the two releases starts with **Stop every role** | [Stopped](#stopped-schema-upgrades) |
+| The upgrade skips one or more releases | [Stopped](#stopped-schema-upgrades) |
+| A one-host installation. Its installer refuses every other release change. | [Stopped](#stopped-schema-upgrades) |
+| A 1.0 release candidate to 1.0.0 | Stopped, as [Upgrade to 1.0](./upgrade-to-1-0) describes |
+
+During a stopped upgrade, no server receives provider deliveries.
+[Reception during a restart](./runtime-roles#reception-during-a-restart) says how each provider delivers them again.
+
 ## Validate the actual production data
 
-Use a restricted staging copy of production with the backup's access and retention rules.
-Running the target release's [migrate run mode](./runtime-roles#database-migrations) with the production profile runs the Liquibase update against staging.
-The update must use that exact release's changelog, contexts, PostgreSQL image/extensions, secrets, and role configuration.
+Use a restricted staging copy of production with the access and retention rules of the backup.
+Run the target release's [migrate run mode](./runtime-roles#database-migrations) with the production profile against staging.
+The update must use that exact release's changelog, contexts, PostgreSQL image and extensions, secrets, and role configuration.
 
-1. Apply [pre-boot isolation](./production-operations-runbook#pre-boot-isolation--mandatory-for-every-restore) **before** restoring secrets or starting application code.
-2. Check the [database prerequisites](./compatibility-policy#database-baseline-prerequisites) before candidate startup.
-3. If an intermediate release is required, rehearse that upgrade on the same isolated copy.
-4. Run Liquibase **update**, not just `validate` or SQL generation.
-5. Keep ingress and sandbox execution disabled.
-6. Keep external destinations denied.
-7. Do not use a test/specs profile, Hibernate `ddl-auto`, or an empty database as this proof.
-8. Record migration duration, errors, free disk/WAL growth, and locks.
-9. Record before/after checks for representative workspace relationships and encrypted-credential readability.
-10. Record before/after checks for the practice catalog and ledger row counts.
-11. Check `databasechangelog` for the expected target changesets.
-12. Check `databasechangeloglock` for a released lock.
-13. Verify application readiness.
-14. Verify authenticated reads.
-15. Set an outage budget.
-16. If the rehearsal exceeds it, abort.
-17. After fixing a migration failure, repeat against a fresh copy.
+Do these steps:
+
+1. Set an outage budget.
+2. Isolate the copy, as the [isolated restore drill](./backup-restore#isolated-restore-drill) describes, **before** you restore secrets or start application code.
+   Keep ingress and sandboxes off, and external egress denied, for the whole rehearsal.
+3. Check the [database prerequisites](./compatibility-policy#database-baseline-prerequisites) before the candidate starts.
+4. If an intermediate release is required, rehearse that upgrade on the same copy first.
+5. Run Liquibase **update**, not only `validate` or SQL generation.
+   Do not use a test profile, Hibernate `ddl-auto`, or an empty database as this proof.
+6. Verify application readiness and authenticated reads.
+7. If the rehearsal exceeds the outage budget, stop.
+8. After you fix a migration failure, repeat against a fresh copy.
+
+Record these results:
+
+- The migration duration, errors, free disk, WAL growth and locks.
+- Before and after checks of representative workspace relationships and of the readability of encrypted credentials.
+- Before and after checks of the practice catalog and the ledger row counts.
+- The expected target changesets in `databasechangelog`, and a released lock in `databasechangeloglock`.
 
 [CI migration checks](/contributor/database-migration#ci-validation) cover empty and seeded databases,
 not your production data. They do not replace this staging update.
 
-## Convert stored secrets for 1.0
+## Upgrade the release {/*#upgrade-the-host*/}
 
-Before the 1.0 migration, back up the database and encryption keys.
-Stop all database writers.
-For chart hosts, use [Stopped schema upgrades](#stopped-schema-upgrades).
-Run the [migrate run mode](./runtime-roles#database-migrations) with the existing system encryption key and the active credential key and version.
-Configure any missing keys before the migration.
-Keep the prior credential key and its version configured if stored credentials still use them.
+Check the [database prerequisites](./compatibility-policy#database-baseline-prerequisites) before you start.
 
-The migration encrypts plaintext login-provider and LLM connection secrets and seals active and inactive JWT signing keys.
-It preserves the JWT signing identities.
-For integration credentials with no key version, it tries the configured active, prior and legacy system keys.
-Only a successful authenticated decryption permits conversion to the active credential key.
-It records that key's version without changing the connection state.
-
-A missing or incorrect key stops the conversion and rolls back its writes.
-Keep writers stopped, correct the key configuration, then retry.
-Start the server after the migration succeeds.
-The server refuses plaintext secrets after the conversion.
-
-## Upgrade the host
-
-Check the [database prerequisites](./compatibility-policy#database-baseline-prerequisites) before you use the commands below.
-
-1. Pause [pull-based deployment](./pull-based-deployment#operating-it), if enabled, and wait for its active run to finish.
-2. Complete the [silent deployment checklist](./production-operations-runbook#silent-deployment-checklist), including a verified backup and a migration rehearsal.
-3. Read the target release's migration instructions and update your protected `site.yaml` and Secret as required.
-4. Verify the target release's joint lock, as [Independent verification](./release-image-lock#independent-verification) describes. Then follow [Upgrade a schema-compatible release](#upgrade-a-schema-compatible-release): verify the chart and apply the verified package with your site values.
-5. Check the migration Job and each role's readiness before traffic or provider writes resume.
-6. If Helm times out or reports a pending or failed release, follow [Recover a stopped cutover](./pull-based-deployment#recover-a-stopped-cutover).
-   A failed Helm status does not prove that the migration Job has stopped.
-7. If reconciliation is enabled, make its channel name the installed release before you resume its timer.
+1. On a pull-based one-host install, pause [reconciliation](./pull-based-deployment#operating-it), and wait for its active run to finish.
+2. Take a verified [database backup](./backup-restore#back-up-the-database), and complete [Validate the actual production data](#validate-the-actual-production-data).
+3. On the running instance, open **Instance administration → Instance settings**.
+4. Select **Turn on silent mode…**, enter the upgrade as the reason, and select **Turn on silent mode**.
+5. Read it back: the **Silent mode** card shows **On**.
+   Do not continue until it does.
+6. Read the target release's migration instructions, and update your protected `site.yaml` and Secret as they require.
+7. Verify the target release's joint lock, as [Independent verification](./release-image-lock#independent-verification) describes.
+8. Do the [rolling](#upgrade-a-schema-compatible-release) or the [stopped](#stopped-schema-upgrades) upgrade that [the table](#choose-a-rolling-or-a-stopped-upgrade) selects.
+   During a rolling upgrade, reviews continue, and silent mode withholds their feedback on the work.
+9. Check the migration Job and the readiness of the server, as [Check that it worked](#check-that-it-worked) describes.
+10. If the migration fails, or Helm times out or reports a pending or failed release, follow [If migration fails](#if-migration-fails).
+    A failed Helm status does not prove that the migration Job has stopped.
+11. Follow [Prove silence, then turn off silent mode](./silent-deployment).
+12. On a pull-based one-host install, make the channel name the installed release before you resume the timer.
 
 ## Upgrade a schema-compatible release
 
-Read the release notes and migration instructions before an upgrade.
-If any intervening release says **Stop every role**, use [Stopped schema upgrades](#stopped-schema-upgrades).
-One-host installations use that procedure for every release change.
-Do not use automatic rollback across a migration that cannot run with the previous release.
-
-For an upgrade whose schema remains compatible with the previous release, [verify the release chart](./kubernetes#verify-the-release-chart).
+[Verify the release chart](./kubernetes#verify-the-release-chart).
 Then apply the new chart, its profile, and your own values:
 
 ```bash
@@ -94,75 +90,69 @@ helm upgrade --install hephaestus "chart-$VERSION/hephaestus" -n hephaestus \
 ```
 
 The migration Job of the new revision and the new Pods start together.
-The new Pods wait for the migrated schema, and the previous release serves until they are ready.
+The new Pods wait up to 10 minutes for the migrated schema, and the previous release serves until they are ready.
 `--wait-for-jobs` fails the upgrade when the migration fails, and `--rollback-on-failure` then returns the Deployments to the previous revision.
-The timeout is longer than the 10 minutes that a new Pod waits for the schema.
 
-The server uses a rolling update. Its replacement is ready before the old Pod stops serving.
-The single-node profile reserves room for one replacement beside its draining server.
-Qualify sandbox isolation with the platform isolation gate before enabling work.
-
-An old server drains for up to `server.drainTimeoutSeconds`, and Kubernetes no longer counts it while it stops.
-The value is 30 minutes by default and 10 minutes in the single-node profile.
-Any ready server serves the sandbox calls of existing review runs. A connection that is open can finish on the old server within this interval.
+The server uses a rolling update: its replacement is ready before the old Pod stops serving.
+An old server drains for up to `server.drainTimeoutSeconds`: 30 minutes by default, and 10 minutes in the `small` profile.
+Any ready server serves the sandbox calls of running reviews. A connection that is open can finish on the old server during the drain.
 Ready replacements accept new claims.
 
 The Helm `--timeout` must cover the drain, 2 minutes of shutdown and up to 10 minutes of start.
-Past the timeout, Helm rolls the release back. If you set a longer drain, set a longer timeout.
+After the timeout, Helm rolls the release back. If you set a longer drain, set a longer timeout.
 Start the next upgrade only after the old server is gone: `kubectl --namespace hephaestus get pods -l app.kubernetes.io/component=server` shows no `Terminating` Pod.
-A review runs in its own sandbox, not in a server ([Agent runs](/contributor/agent-runs#a-review-in-its-sandbox)).
 
-For other database maintenance, use [Database maintenance](./maintenance#database-maintenance).
-
-Roll forward to fix a failed upgrade.
+To fix a failed upgrade, roll forward.
 `helm rollback` and an older image do not undo a migration: restore the database from the backup taken before the upgrade ([Restore](./backup-restore#restore)).
+
+### Sandbox capacity during upgrade
+
+A rolling upgrade runs a draining server, its replacement, and the migration and stanza Jobs at the same time.
+A supplied `sandbox.budget` must hold this peak, as [Sandbox capacity budget](./helm-chart#sandbox-capacity-budget) describes.
+Let the review drain finish before the peak.
+Do not resume review work while the Jobs or the replacement server still use the budget.
+A drain timeout does not prove that the reviews ended: check the remaining runs before you continue.
 
 ## Stopped schema upgrades
 
-Use this procedure for a one-host release change or when the migration guide says **Stop every role**.
-It takes precedence over the normal upgrade and database-maintenance procedures.
-Do not use `--rollback-on-failure`: a rollback can restart old roles against a changed schema.
+Use this procedure when [the table](#choose-a-rolling-or-a-stopped-upgrade) selects a stopped upgrade.
+Do not use `--rollback-on-failure`: a rollback can start the old server against a changed schema.
 Pause deployment automation that can change the release until this procedure is complete.
 
-Before the first phase, record the current chart, profile, site values and all three replica counts.
-Prepare PostgreSQL backups, verify the restore, and keep the matching signed release lock and encryption keys.
-After phase 1, take and verify the final restore point while all roles are stopped, before phase 2 can change the schema.
+Before phase 1, record the current chart, profile, site values and `server.replicas`.
+Prepare a PostgreSQL backup, verify its restore, and keep the matching signed release lock and encryption keys.
 Verify the new release's chart before you use it.
 Each phase is a separate `helm upgrade` with that phase's chart, profile and site values:
 
 | Phase | Chart | `migration.enabled` | `server.replicas` | Before the next phase |
 | --- | --- | --- | --- | --- |
-| 1. Stop every role | Current release | `false` | 0 | Every old role Pod, including terminating Pods, and its sandbox Pods and Jobs are gone. |
+| 1. Stop the server | Current release | `false` | 0 | Every old server Pod, including terminating Pods, and its sandbox Pods are gone. |
 | 2. Migrate | New release | `true` | 0 | The migration Job of this revision completed successfully. |
-| 3. Start the new roles | New release | `true` | Recorded count | Readiness, authenticated reads, a practice review and a conversation pass. |
+| 3. Start the server | New release | `true` | Recorded count | Readiness, authenticated reads, a practice review and a conversation pass. |
 
-Keep PostgreSQL running throughout these phases.
-Use `server.replicas=0`, not `sandbox.enabled=false`, to stop the server.
+1. Apply each phase's values after your profile and site values, so that they take precedence.
+   Use `--wait=watcher --wait-for-jobs --timeout 45m`, without automatic rollback.
+   Keep PostgreSQL running through all phases.
+   Use `server.replicas=0`, not `sandbox.enabled=false`, to stop the server.
+2. Do phase 1.
+   A server can drain for up to its configured timeout. If phase 1 times out, keep the count at zero and wait for every old Pod to stop.
+3. Remove the remaining sandbox workloads, as step 4 of [Planned node maintenance](./maintenance#planned-node-maintenance) describes.
+4. Take and verify the final restore point while the server is stopped.
+5. Do phase 2.
+   Find the migration Job of the new Helm revision. For the release `hephaestus`, its name is `hephaestus-migration-<revision>`.
+6. Save its log: `kubectl --namespace hephaestus logs job/<migration-job> -c migration > migration.log`.
+7. Require its `Complete` condition: `kubectl --namespace hephaestus wait --for=condition=complete job/<migration-job> --timeout=20m`.
+   If the Job fails or times out, do not do phase 3.
+   Keep the server stopped. Save the log and the failed change set: the chart deletes the Job after 24 hours.
+   Then follow [If migration fails](#if-migration-fails).
+8. Do phase 3.
+   Phase 3 runs another migration Job for the same release, which has no change to apply.
+9. Resume deployment automation only after its release and replica counts match the verified installation.
+   On one host, keep it paused through the final installer run of [Upgrade the host](./k3s#upgrade-the-host).
 
-Before the cutover to conversation sandboxes, stop the source release's conversation loop too.
-After every server has stopped, foreground-delete its SandboxClaims and legacy sandbox Jobs, and wait for their Pods to disappear.
-The first reaper pass of the new servers takes back each ready sandbox whose claim you deleted, and its work starts in a new sandbox.
-[Upgrade to 1.0](./upgrade-to-1-0) gives the stopped cutover procedure. The pull-based reconciler checks that procedure before migration.
-
-Apply each row's values after your profile and site values, so that they take precedence.
-Use `--wait=watcher --wait-for-jobs --timeout 45m`, without automatic rollback.
-A server can drain for up to its configured timeout. If the first phase times out, keep all counts at zero and wait for every old Pod and sandbox to stop before phase 2.
-
-In phase 2, identify the migration Job of the new Helm revision.
-Its default name is `hephaestus-migration-<revision>` for release `hephaestus`.
-Save its log with `kubectl --namespace hephaestus logs job/<migration-job> -c migration > migration.log`.
-Require its `Complete` condition: `kubectl --namespace hephaestus wait --for=condition=complete job/<migration-job> --timeout=20m`.
-A failed or timed-out Job does not permit phase 3.
-Keep all roles stopped, preserve the log and failed change set before the Job's 24-hour expiry, and follow [failed-migration recovery](./upgrade#if-migration-fails).
-
-A refusal can follow earlier committed changesets.
+A refused migration can follow changesets that it already committed.
+An image or Helm rollback does not undo them.
 Before you return to the old release, restore the matching pre-upgrade backup.
-An image or Helm rollback does not undo those changes.
-
-Phase 3 creates another migration Job for the same release.
-It has no new schema changes to apply.
-Resume deployment automation only after its release and replica counts match the verified installation.
-On one host, keep it paused through the final installer run in [Upgrade the host](./k3s#upgrade-the-host).
 
 ## Change a volume size
 
@@ -178,8 +168,9 @@ With `--rollback-on-failure`, Helm then returns to the previous revision, and no
 Kubernetes cannot shrink a volume.
 If the new size is smaller, keep the current size in your own values file, as [Storage and retention](./helm-chart#storage-and-retention) says.
 
-If the new size is larger, follow these steps for the PostgreSQL StatefulSet.
+If the new size is larger, do these steps for the PostgreSQL StatefulSet.
 The volume of PostgreSQL is `data-<release>-postgresql-0`.
+Before you start, take a backup ([Backup and restore](./backup-restore#back-up-the-database)).
 
 1. Check that the storage class allows expansion:
 
@@ -218,8 +209,6 @@ The volume of PostgreSQL is `data-<release>-postgresql-0`.
    The new StatefulSet takes over the Pods and the volumes.
    It restarts a Pod only if the upgrade also changes the Pod template.
 
-Before you change the volume of PostgreSQL, take a backup ([Backup and restore](./backup-restore#back-up-the-database)).
-
 ## Check that it worked
 
 1. Run `helm history hephaestus --namespace hephaestus`.
@@ -227,9 +216,9 @@ Before you change the volume of PostgreSQL, take a backup ([Backup and restore](
 2. Read the log of the migration Job of that revision: `kubectl --namespace hephaestus logs job/hephaestus-migration-<revision>`.
    It logs `Database migration completed`.
 3. Run `kubectl --namespace hephaestus get pods`.
-   Each role Pod of the new revision is ready.
+   Each Pod of the new revision is ready.
 4. Query `application_build_info` in Prometheus, as [Release metric](./metrics#release-metric) shows.
-   Each role reports the new `version`.
+   Each server reports the new `version`.
 
 ## If migration fails
 
@@ -240,31 +229,32 @@ Do not release a Liquibase lock by hand except as [One migration at a time](./ru
 Removal of a stale lock does not repair a failed migration.
 :::
 
-1. Keep ingress and all application writers stopped.
-2. If the host uses [pull-based deployment](./pull-based-deployment#operating-it), pause reconciliation.
-3. Preserve the error and failed changeset identity.
-4. Preserve `databasechangelog`/lock diagnostics and the target image lock.
-5. If feasible, preserve a forensic snapshot.
-6. Follow [Backup & restore](./backup-restore) to restore the pre-upgrade backup into a fresh database.
-7. Use matching PostgreSQL version/extensions, encryption keys, and the **previous signed release lock**.
-8. Reconcile external writes, as [Reconcile external writes after restore](./production-operations-runbook#reconcile-external-writes-after-a-database-restore) describes.
-9. Boot only under pre-boot isolation.
-10. Read back silent mode, and turn it on if it is off.
-11. Verify the restored schema, representative data, and readiness.
-12. Complete **Prove silence**, **Inspect and decide**, and **Turn off silent mode deliberately** in the [silent checklist](./production-operations-runbook#silent-deployment-checklist).
-13. Report actual recovery point/time and any lost writes.
-14. Preserve the failed database until investigation/retention permits removal.
-15. Promote the recovered release, with **allow-rollback** if it is older than the failed upgrade.
-    Until the channel names it, the next tick can reapply the failed upgrade.
-16. When the promotion has published the channel, re-enable the reconcile timer.
-    The promotion's version check passes when the host applies the channel.
+On a pull-based one-host install, follow [Recover a stopped cutover](./pull-based-deployment#recover-a-stopped-cutover) instead.
+It adds the steps of the reconciler to this procedure.
+
+1. Keep the server stopped.
+2. Wait until the migration Job has stopped.
+   `kubectl --namespace hephaestus get job hephaestus-migration-<revision>` shows its `Complete` or `Failed` condition.
+   After its 24-hour TTL, an absent Job has stopped only if no migration Pod remains.
+3. Save the Job log, the error and the identity of the failed changeset.
+4. Save the `databasechangelog` and lock diagnostics and the target image lock.
+5. If possible, take a forensic snapshot of the database volume.
+6. If Helm reports a `pending-*` status, roll the release back: `helm rollback hephaestus <revision> --namespace hephaestus --wait`.
+   After a stopped upgrade, use the phase-1 revision, which runs no server. After a rolling upgrade, use the previous revision.
+7. Restore the pre-upgrade backup, as [Recover the live installation](./backup-restore#recover-the-live-installation) describes.
+   Use the chart and the **previous signed release lock** of the previous release.
+   Use its PostgreSQL image and extensions, and its encryption keys.
+   That procedure starts the server with silent mode on, and ends when you turn silent mode off.
+8. Report the actual recovery point and time, and any lost writes.
+9. Keep the failed database until the investigation and your retention rules permit its removal.
+10. On a pull-based one-host install: promote the recovered release, with **allow-rollback** if it is older than the failed upgrade.
+    Until the channel names it, the next tick can apply the failed upgrade again.
+11. On a pull-based one-host install: enable the reconcile timer again when the promotion has published the channel.
+    The version check of the promotion passes when the host applies the channel.
     It fails if the timer stays off for 15 minutes.
 
-**Drill**
-
-1. Introduce a controlled migration failure only in a disposable rehearsal.
-2. Restore the old backup/release pair.
-3. Prove old-version readiness and data integrity without any provider write.
+To rehearse this procedure, cause a controlled migration failure only in a disposable rehearsal.
+Restore the old backup and release, and prove the readiness and data integrity of the old release without a provider write.
 
 ## Rollback
 
@@ -274,195 +264,4 @@ Never run a release older than the previous one against a newer schema. [Rollout
 Never reconstruct an old lock or resolve mutable image tags.
 :::
 
-To roll back, follow [If migration fails](#if-migration-fails) to restore the previous release's database, secrets, and signed lock.
-
-## Update checks
-
-**Instance administration → Overview** shows the release this server reports from its lock
-([runtime identity handoff](./release-image-lock#runtime-identity-handoff)) and whether GitHub has
-published a newer one. A failed, rate-limited, disabled or never-completed check is shown as exactly
-that, never as "up to date". For a newer release the card links its notes and the upgrade guide and
-says whether that release carries schema migrations. The flag describes the newest release only:
-read every release note between yours and it before upgrading. Nothing here verifies an artifact or
-performs an upgrade.
-
-The server asks GitHub a minute after start and then once a day. After a failure it retries after
-15 minutes, doubling up to a day, or later when GitHub names a longer wait. **Check now** ignores the
-daily cache, never delays the automatic retry, and only waits out a wait GitHub named. A restart
-forgets the last answer. A commit channel or a local build runs no release and is never checked.
-
-Each check is one unauthenticated HTTPS GET to
-`https://api.github.com/repos/hephaestus-build/Hephaestus/releases/latest` with the static user agent
-`Hephaestus-release-check` and, after the first answer, its ETag. It carries no version, credential,
-workspace data or configuration.
-GitHub sees the source IP and the time.
-
-1. On an air-gapped host, set `config.releaseCheckEnabled: false` in `site.yaml`.
-2. Apply the values with the [upgrade command](#upgrade-a-schema-compatible-release).
-
-The overview then shows the identity without a check.
-A failed check reaches only instance administration, never health or readiness.
-
-## Deployment environment and release history
-
-Set `deploymentEnvironment` in `site.yaml` to the name of the deployment, such as `production` or `staging`.
-Apply the values with the [upgrade command](#upgrade-a-schema-compatible-release).
-Use lowercase letters, digits, `.`, `_` or `-`, at most 64 characters.
-Hephaestus refuses to start with another value.
-When it is unset, the instance reports `local`.
-The webapp, the **Release** card, log lines and exported traces all use this name.
-
-The **Release** card also says when this instance first started the release that it runs.
-**Show release history** lists the last ten releases that the server started, newest first.
-The server records a release when it starts one that differs from the last recorded release.
-A restart adds nothing.
-A rollback adds the older release again.
-
-The time is when the server first started that release, not when its images were pulled.
-The history names no person.
-Each server reports its own identity in `/actuator/info` only.
-
-## Release-specific procedures
-
-### Remove the retired sync broker values before upgrading
-
-Remove `nats` and `images.nats` from every values file before rendering the target chart, including site and profile overrides.
-The chart refuses those keys. Regenerate image values from the target release lock.
-
-This procedure replaces these pending entries:
-
-- **NATS broker certificate names**.
-- **External NATS broker: NATS Server 2.11 or later**.
-- **Move the GitHub webhook byte bound into the stream map**.
-
-Their broker instructions no longer apply.
-
-Remove `hephaestus.sync.nats.*` properties and broker environment settings and credentials as the migration entry of the same name lists.
-After the upgraded server delivers sync hints through PostgreSQL, stop any external broker used only by this release.
-
-The old bundled PersistentVolumeClaim can remain after Helm removes the workload. Remove only its confirmed release-owned claim when its data is no longer needed.
-
-Some releases need a procedure of their own before the new runtime roles start.
-The [database migration instructions](./compatibility-policy#database-migrations) say when one applies.
-
-- [Prepare an older database](./liquibase-baseline-runbook.md): intermediate upgrades for older databases.
-- [Native Hibernate JSON cutover](./native-hibernate-json-cutover): the stopped-writer accounting cutover.
-- [Practice model cutover checks](./practice-model-cutover): the pilot rehearsal and a refused practice model upgrade.
-
-### Drain legacy reviews before removing gateway affinity
-
-Before this first upgrade, stop the old servers and let their [graceful drain](./runtime-roles#graceful-drain) finish.
-Follow the server stop procedure in [Planned node maintenance](./maintenance#planned-node-maintenance). Keep PostgreSQL running.
-Do not start the target servers beside old servers with an active review during this first upgrade.
-An old server held each composition's claim decision in its own memory, and an older review attempt has no published preparation checkpoint.
-A target server cannot continue either of them.
-
-Before starting the target servers, check that no review run has a live lease:
-
-```sql
-SELECT count(*) FROM agent_run
-WHERE state = 'LEASED' AND kind IN ('REVIEW', 'REVIEW_COMPOSE')
-  AND leased_until > clock_timestamp();
-```
-
-The count must be zero. If the drain deadline expired, keep the target stopped until the remaining leases expire.
-Queued work can stay queued. The target claims it and records its own decision and preparation checkpoint in PostgreSQL.
-After this first upgrade, the sandbox gateway Service has no client-IP affinity.
-Each ready server reads the same run, lease, decision and checkpoint, so later rolling upgrades keep all active work.
-
-The chart reserves three pooled connections for each concurrent review capture.
-Use `server.databasePool.maximumPoolSize=auto` or raise an explicit pool to the chart's validated floor.
-Keep `postgresql.parameters.max_connections` at the derived setting or a larger validated value.
-Helm does not check the limit of an external database.
-[Database connections](./sizing#database-connections) owns the formula and the overlap budget.
-
-### Hosts with reconciler tooling of 1.0.0-rc.4
-
-Do this procedure once, on a host with [pull-based deployment](./pull-based-deployment) whose tooling is that of 1.0.0-rc.4.
-The `tooling` link names the release whose tooling runs.
-
-1.0.0-rc.8 removes the `nats` image with the sync broker.
-The verifier of 1.0.0-rc.4 compares a fixed list of chart images, so it refuses a release that removes one.
-The verifiers from 1.0.0-rc.5 on read the images from the signed release lock and accept it.
-
-1. Promote the channel to `v1.0.0-rc.5`, and complete its migration instructions.
-2. Wait until the reconciler logs `Applied v1.0.0-rc.5`.
-   Then `/var/lib/hephaestus/tooling` names `/var/lib/hephaestus/releases/v1.0.0-rc.5`.
-3. Promote the target release.
-
-A host whose tooling is 1.0.0-rc.5 or later needs no step.
-
-### Hosts with reconciler tooling from before 1.0.0-rc.4
-
-Do this procedure once, on a host with [pull-based deployment](./pull-based-deployment).
-
-The reconciler verifies a release with the installed tooling before it adopts newer tooling.
-Tooling from before 1.0.0-rc.4 expects five chart images, and 1.0.0-rc.4 has nine.
-Thus, the old verifier stops each run with `does not pin the v1.0.0-rc.4 images`.
-The running release is not affected.
-
-Do not move the `tooling` link by hand. Each run sets it again from `applied.json`.
-
-1. Make the channel name `v1.0.0-rc.4`, without `freeze`. A frozen channel adopts the tooling, but it never verifies the release.
-2. If the host still runs an earlier release, complete the migration instructions of each release first. The second run below applies 1.0.0-rc.4.
-3. Stop the timer: `sudo systemctl stop hephaestus-reconcile.timer`. Confirm that `hephaestus-reconcile.service` no longer runs.
-4. Authenticate the release lock and record the release that it names. The script stops at the first failure and leaves `applied.json` as it was:
-
-   ```bash
-   sudo bash -s <<'SCRIPT'
-   set -euo pipefail
-   VERSION=1.0.0-rc.4
-   STATE=/var/lib/hephaestus
-   LOCK="release-v$VERSION.chart.json"
-   BASE="https://github.com/hephaestus-build/Hephaestus/releases/download/v$VERSION"
-   WORK=$(mktemp -d)
-   if systemctl is-active --quiet hephaestus-reconcile.timer; then
-     echo "Stop the timer first" >&2
-     exit 1
-   fi
-   if [ "$(jq -er .release "$STATE/applied.json")" = "v$VERSION" ]; then
-     echo "applied.json already names v$VERSION" >&2
-     exit 1
-   fi
-   curl -fsSL "$BASE/$LOCK" -o "$WORK/$LOCK"
-   curl -fsSL "$BASE/$LOCK.sigstore.json" -o "$WORK/$LOCK.sigstore.json"
-   cosign verify-blob --bundle "$WORK/$LOCK.sigstore.json" \
-     --certificate-identity 'https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main' \
-     --certificate-oidc-issuer https://token.actions.githubusercontent.com "$WORK/$LOCK"
-   commit=$(jq -er --arg release "v$VERSION" \
-     'select(.schemaVersion == 2 and .release == $release) | .commit | select(test("^[a-f0-9]{40}$"))' "$WORK/$LOCK")
-   git -C "$STATE/checkout" fetch --quiet origin "$commit"
-   cp -p "$STATE/applied.json" "$STATE/applied-before-tooling.json"
-   cp -p "$STATE/applied.json" "$STATE/applied.json.new"
-   jq --tab --arg release "v$VERSION" --arg commit "$commit" \
-     '.previous = .release | .release = $release | .commit = $commit
-      | .appliedAt = (now | strftime("%Y-%m-%dT%H:%M:%S.000Z"))' \
-     "$STATE/applied-before-tooling.json" > "$STATE/applied.json.new"
-   mv "$STATE/applied.json.new" "$STATE/applied.json"
-   SCRIPT
-   ```
-
-5. Read `/var/lib/hephaestus/applied.json`. To undo, restore `applied-before-tooling.json` to `applied.json` now, while the timer is stopped.
-6. Start the timer: `sudo systemctl start hephaestus-reconcile.timer`.
-
-The next run logs `Adopted the tooling of v1.0.0-rc.4`.
-The run after it logs `Applied v1.0.0-rc.4`: the new verifier checks the release, and a host that already runs it restarts no Pod.
-
-After the timer starts, do not restore the record. The older tooling would then apply the older chart. Use [Rollback](#rollback).
-
-Before a later release, also do [Hosts with reconciler tooling of 1.0.0-rc.4](#hosts-with-reconciler-tooling-of-100-rc4).
-
-## Sandbox capacity during upgrade
-
-A supplied `sandbox.budget` must hold both the steady-state requests and the drained-upgrade peak.
-[Sandbox capacity budget](./helm-chart#sandbox-capacity-budget) owns the formula and the values to supply.
-`auto` requires both CPU and memory values. With explicit counts, the budget is optional. A supplied budget rejects a count that exceeds either phase.
-
-Finish the review drain before the upgrade's transient peak. Do not resume review work while migration and stanza Jobs or replacement-role surge still consume that budget.
-A drain timeout does not prove that reviews have ended. Check the remaining runs and complete the stopped procedure before proceeding.
-Conversation sandboxes can remain warm within their admitted quota.
-The cutover to 1.0 still removes the source release's claims and legacy Jobs before migration, as [Upgrade to 1.0](./upgrade-to-1-0) describes.
-
-The small profile supplies its existing allocatable budget. Managed clusters have no assumed aggregate budget.
-When moving a managed cluster to `auto`, declare its allocatable CPU and memory before upgrading.
-Keep the current template requests until workload qualification supplies measured replacements.
+To roll back, follow [If migration fails](#if-migration-fails) to restore the database, secrets and signed lock of the previous release.

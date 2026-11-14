@@ -1,46 +1,30 @@
 ---
 title: Upgrade to 1.0
-description: Cut over from the last 1.0 release candidate to 1.0.0, or reach the required database baseline from an older release.
+description: Cut over from a 1.0 release candidate to 1.0.0 in one stopped upgrade.
 page_type: how-to
 ---
 
-1.0 starts the [1.x upgrade guarantee](./compatibility-policy#upgrade-guarantee).
-The cutover to 1.0.0 is a stopped upgrade: [ADR 0070](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0070-1-0-is-a-cutover-release.md) records why.
-No role of the previous release runs beside a 1.0 role.
-No role of the previous release runs on the 1.0 schema.
-Plan for one outage, from the first stopped role to the last passed check.
-
-The migration entry *Stop conversation work before enabling digest runs* requires matching runtime-contract-19 server and agent images.
-Drain and stop every server, take a verified backup, and remove the stopped release's conversation SandboxClaims.
-Then start the servers and run the sandbox isolation gate at once: its test sandboxes must reach the gateway, and the server serves the gateway.
-If a check fails, scale the servers to 0 before work resumes.
-A count of zero for conversation turns stops both requested turns and proactive digests.
+Cut over an installation from a release candidate of 1.0, from 1.0.0-rc.1 on, to 1.0.0.
+The cutover is a [stopped upgrade](./upgrade#stopped-schema-upgrades): no server of the previous release runs beside a 1.0 server or on the 1.0 schema.
+Plan one outage, from the first stopped server to the last passed check.
+[ADR 0096](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0096-1-0-is-one-stopped-cutover-from-1-0-0-rc-1-and-keeps-nothing-for-0-x.md) records why.
 
 1.0.0 carries the source and images of the last qualified release candidate.
 A host that already runs that candidate changes only its release metadata.
-It still stops every role, and it still needs the verified recovery point and the checks below.
-
-The target release's [migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) owns each required action.
-This page orders the actions of the migration entries after `1.0.0-rc.5` and names the entry of each.
-
-:::note[TODO(K5)]
-This page states no sizing number for 1.0, because the K5 measurement is not done.
-[Sizing and scaling](./sizing) has no measurement of the sandbox load of 1.0 yet.
-Do not size nodes for 1.0 from this page.
-:::
+It still stops the server, and it still needs the verified recovery point and the checks below.
 
 ## Before you start
 
 1. Find the installed release in **Instance administration → Overview**.
-2. Select the required path in [Database baseline prerequisites](./compatibility-policy#database-baseline-prerequisites).
-3. Read every migration entry between the installed release and the target release.
-   Each release candidate has its own `### v1.0.0-rc.N` section in the migration guide.
+2. Is the installed release older than 1.0.0-rc.1?
+   Then install 1.0.0-rc.1 first ([Database baseline prerequisites](./compatibility-policy#database-baseline-prerequisites)).
+3. Read every entry of the [migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) between the installed release and the target.
+   Each release candidate has its own `### v1.0.0-rc.N` section.
+   This page orders the entries of § v1.0.0-rc.6 and of the target release.
+   A host on 1.0.0-rc.5 or earlier also crosses the sections up to § v1.0.0-rc.6.
 4. Preserve the current signed release lock, chart package, site values, and required keys.
-5. Verify a restorable database backup with its matching keys before you upgrade.
-
-[Backup policy for 1.0](./backup-restore#backup-policy-for-10) states the release scope.
-Each upgrade still requires a verified recovery point.
-If you have no verified recovery point, stop before the migration.
+5. Verify a restorable database backup with its matching keys, as [Back up the database](./backup-restore#back-up-the-database) describes.
+   If you have no verified recovery point, stop.
 
 ## Prepare before the maintenance window
 
@@ -60,96 +44,200 @@ Thus, the controller must exist before the chart.
    The migration entry *Install the agent-sandbox controller before the chart* gives the commands.
    Without it, `helm upgrade` stops because it cannot find the kind `SandboxTemplate`.
 2. **Sandbox runtime.**
-   Review and conversation Pods use `sandbox.templates.runtimeClassName`, or the cluster's default runtime.
+   Review and conversation Pods use `sandbox.templates.runtimeClassName`, or the default runtime of the cluster.
    [Sandbox prerequisites](./sandboxes#sandbox-prerequisites) states the requirements for each runtime.
-   The one-host platform installs [gVisor](./k3s#the-platform-files) for the chart's sandbox templates (`sandbox.templates.runtimeClassName`).
-   Both practice reviews and conversation turns claim these templates.
+   The one-host platform installs [gVisor](./k3s#the-platform-files) for the sandbox templates of the chart.
    The installer downloads the pinned gVisor release from `storage.googleapis.com`, so the host must reach that address.
    The first run with gVisor restarts k3s once, which stops the running Pods for a short time.
    Do this during the window, as the cutover steps below describe.
 3. **NetworkPolicy enforcement.**
    The network plugin must enforce NetworkPolicy for egress and ingress.
-   The platform isolation gate qualifies that boundary before work starts.
-   [Sandbox prerequisites](./sandboxes#sandbox-prerequisites) lists its checks.
-   The [sandbox isolation gate](./sandboxes#sandbox-templates) is a script of the repository.
+   The [sandbox isolation gate](./sandboxes#sandbox-templates) qualifies that boundary before work starts. It is a script of the repository.
    Run it from a checkout of the release tag.
    It starts two sandboxes from a template, and it fails when a sandbox reaches more than the gateway.
-   Thus, it fails on a network plugin that does not enforce NetworkPolicy.
 
 A one-host installation that another tool deploys, such as [pull-based deployment](./pull-based-deployment), updates its platform with the installer's `--platform-only` mode.
 [Install only the platform](./k3s#install-only-the-platform) gives what it installs, its checks and the procedure.
+
+### Hosts with reconciler tooling of 1.0.0-rc.4
+
+Do this procedure once, on a host with [pull-based deployment](./pull-based-deployment) whose tooling is that of 1.0.0-rc.4.
+The `tooling` link names the release whose tooling runs.
+
+1.0.0-rc.8 removes the `nats` image with the sync broker.
+The verifier of 1.0.0-rc.4 compares a fixed list of chart images, so it refuses a release that removes one.
+The verifiers from 1.0.0-rc.5 on read the images from the signed release lock and accept it.
+
+1. Promote the channel to `v1.0.0-rc.5`, and complete its migration instructions.
+2. Wait until the reconciler logs `Applied v1.0.0-rc.5`.
+   Then `/var/lib/hephaestus/tooling` names `/var/lib/hephaestus/releases/v1.0.0-rc.5`.
+3. Promote the target release.
+
+A host whose tooling is 1.0.0-rc.5 or later needs no step.
+
+### Hosts with reconciler tooling from before 1.0.0-rc.4
+
+Do this procedure once, on a host with [pull-based deployment](./pull-based-deployment) that runs 1.0.0-rc.3 or earlier.
+
+The reconciler verifies a release with the installed tooling before it adopts newer tooling.
+Tooling from before 1.0.0-rc.4 expects five chart images, and 1.0.0-rc.4 has nine.
+Thus, the old verifier stops each run with `does not pin the v1.0.0-rc.4 images`.
+The running release is not affected.
+
+Do not move the `tooling` link by hand. Each run sets it again from `applied.json`.
+
+1. Make the channel name `v1.0.0-rc.4`, without `freeze`. A frozen channel adopts the tooling, but it never verifies the release.
+2. If the host runs an earlier release, complete the migration instructions of each release first. The second run below applies 1.0.0-rc.4.
+3. Stop the timer: `sudo systemctl stop hephaestus-reconcile.timer`. Confirm that `hephaestus-reconcile.service` does not run.
+4. Authenticate the release lock and record the release that it names. The script stops at the first failure and keeps `applied.json` unchanged:
+
+   ```bash
+   sudo bash -s <<'SCRIPT'
+   set -euo pipefail
+   VERSION=1.0.0-rc.4
+   STATE=/var/lib/hephaestus
+   LOCK="release-v$VERSION.chart.json"
+   BASE="https://github.com/hephaestus-build/Hephaestus/releases/download/v$VERSION"
+   WORK=$(mktemp -d)
+   if systemctl is-active --quiet hephaestus-reconcile.timer; then
+     echo "Stop the timer first" >&2
+     exit 1
+   fi
+   if [ "$(jq -er .release "$STATE/applied.json")" = "v$VERSION" ]; then
+     echo "applied.json already names v$VERSION" >&2
+     exit 1
+   fi
+   curl -fsSL "$BASE/$LOCK" -o "$WORK/$LOCK"
+   curl -fsSL "$BASE/$LOCK.sigstore.json" -o "$WORK/$LOCK.sigstore.json"
+   cosign verify-blob --bundle "$WORK/$LOCK.sigstore.json" \
+     --certificate-identity 'https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main' \
+     --certificate-oidc-issuer https://token.actions.githubusercontent.com "$WORK/$LOCK"
+   commit=$(jq -er --arg release "v$VERSION" \
+     'select(.schemaVersion == 2 and .release == $release) | .commit | select(test("^[a-f0-9]{40}$"))' "$WORK/$LOCK")
+   git -C "$STATE/checkout" fetch --quiet origin "$commit"
+   cp -p "$STATE/applied.json" "$STATE/applied-before-tooling.json"
+   cp -p "$STATE/applied.json" "$STATE/applied.json.new"
+   jq --tab --arg release "v$VERSION" --arg commit "$commit" \
+     '.previous = .release | .release = $release | .commit = $commit
+      | .appliedAt = (now | strftime("%Y-%m-%dT%H:%M:%S.000Z"))' \
+     "$STATE/applied-before-tooling.json" > "$STATE/applied.json.new"
+   mv "$STATE/applied.json.new" "$STATE/applied.json"
+   SCRIPT
+   ```
+
+5. Read `/var/lib/hephaestus/applied.json`. To undo, restore `applied-before-tooling.json` to `applied.json` now, while the timer is stopped.
+6. Start the timer: `sudo systemctl start hephaestus-reconcile.timer`.
+
+The next run logs `Adopted the tooling of v1.0.0-rc.4`.
+The run after it logs `Applied v1.0.0-rc.4`: the new verifier checks the release, and a host that already runs it restarts no Pod.
+After the timer starts, do not restore the record: the older tooling would then apply the older chart. Use [Rollback](./upgrade#rollback).
+
+### Drain legacy reviews before removing gateway affinity
+
+Before this first upgrade, stop the old servers and let their [graceful drain](./runtime-roles#graceful-drain) finish.
+Follow the server stop procedure in [Planned node maintenance](./maintenance#planned-node-maintenance). Keep PostgreSQL running.
+Do not start the target servers beside old servers with an active review during this first upgrade.
+An old server held each composition's claim decision in its own memory, and an older review attempt has no published preparation checkpoint.
+A target server cannot continue either of them.
+
+Before you start the target servers, check that no review run has a live lease:
+
+```sql
+SELECT count(*) FROM agent_run
+WHERE state = 'LEASED' AND kind IN ('REVIEW', 'REVIEW_COMPOSE')
+  AND leased_until > clock_timestamp();
+```
+
+The count must be zero. If the drain deadline expired, keep the target stopped until the remaining leases expire.
+Queued work can stay queued. The target claims it and records its own decision and preparation checkpoint in PostgreSQL.
+After this first upgrade, the sandbox gateway Service has no client-IP affinity.
+Each ready server reads the same run, lease, decision and checkpoint, so later rolling upgrades keep all active work.
 
 ### Values and keys to move
 
 The chart refuses an old name.
 Phase 1 of the window still runs the current release with your current site file and Secret, so change neither before the window.
 Before the window, prepare a copy of your site file for the target release, as step 1 of [Upgrade the host](./k3s#upgrade-the-host) describes.
-Change the Secret in step 7, after phase 1.
-The migration guide owns each change. This table gives the names.
+Change the Secret in step 8 of the cutover, after phase 1.
+A host on 1.0.0-rc.6 made these changes when it installed that release.
 
 | Where | Before | After | Migration entry |
 | --- | --- | --- | --- |
 | Site file | Fixed `server.databasePool.maximumPoolSize` or `postgresql.parameters.max_connections` | Automatic values or fixed values that hold the target chart’s full connection budget | *Check database connection limits for review recovery* |
 | Site file | `config.monitoring` | `config.sync`, with the same four child settings | *Rename scheduled sync settings* |
 | Site file | `config.auth.bootstrapAdmins`, `config.auth.browserExtensionIds`, `config.auth.passkeys.allowedOrigins`, `config.outline.allowedOrigins` as strings | The same keys as YAML arrays | *Convert chart list values to arrays* |
+| Site file | `config.conversationRetention` | `config.feedbackRetention` | *Choose the feedback retention before you upgrade* |
 | Site file | `conversationLoop.turns` | `sandbox.conversationTurns`, a count for the whole installation | *Stop every role before moving conversation turns to sandboxes* |
 | Site file | `worker.enabled`, `worker.sandbox.*`, `worker.runtime`, `worker.sandboxGateway.maxConnections`, `networkPolicy.workerGatewayPorts`, and the worker's drain, pool, git cache and resources | `sandbox.enabled`, `sandbox.*`, `sandbox.runtime`, `sandbox.gateway.maxConnections`, `networkPolicy.modelGatewayPorts`, and the same settings under `server` | *Move the worker values to the server and the sandboxes* |
 | Site file | `worker.replicas`, `worker.rolloutStrategy` | No key. `server.replicas` counts the servers. | *Move the worker values to the server and the sandboxes* |
-| Site file | `server.rolloutStrategy` | Remove the key. The server always uses a rolling update. | *Reserve room for rolling server updates* |
-| Site file | `webhook.replicas`, `webhook.resources` | None: the server receives provider webhooks | *Route provider webhooks to the server* |
+| Site file | `server.rolloutStrategy` | No key. The server always uses a rolling update. | *Reserve room for rolling server updates* |
+| Site file | The whole `webhook` block | No key. The server receives provider webhooks. | *Route provider webhooks to the server* and *Drain the webhook streams before the upgrade* |
+| Site file | `nats`, and `images.nats` in image values | No key. Regenerate the image values from the target release lock. | *Remove the retired sync broker values before upgrading* |
+| Site file | `config.durableConsumerName`, `config.consumerInactiveThreshold` | No key | *Remove broker consumer settings* |
+| Site file | `config.gitCheckoutEnabled` | No key. Git checkout is always on. | *Remove the Git checkout switch* |
+| Site file | `config.slack.redirectUri` | No key. The server derives the callback. | *Use the canonical Slack workspace callback* |
 | Profile | `small-16gib` in `HEPHAESTUS_CHART_PROFILE` and `profiles/small-16gib.yaml` | `small` and `profiles/small.yaml` | *Use the small profile on every single-node install* |
 | Server settings | `hephaestus.agent.max-retries` | `hephaestus.agent.capacity.review-retries`. `AGENT_MAX_RETRIES` still works. | *Stop every role before moving review leases to agent runs* |
-| Secret | `DATABASE_USERNAME`, `DATABASE_PASSWORD` | `DATABASE_ADMIN_USERNAME` and `DATABASE_ADMIN_PASSWORD` for the bundled PostgreSQL, and the new `DATABASE_OWNER_PASSWORD` and `DATABASE_APP_PASSWORD` | *Give each database purpose its own login* |
-| Secret | `HEPHAESTUS_CONVERSATION_LOOP_SECRET` | Remove the key. Each sandbox receives its own credential. | *Stop every role before moving conversation turns to sandboxes* |
+| Secret | `DATABASE_USERNAME`, `DATABASE_PASSWORD` | `DATABASE_ADMIN_USERNAME` and `DATABASE_ADMIN_PASSWORD` for the bundled PostgreSQL, and `DATABASE_OWNER_PASSWORD` and `DATABASE_APP_PASSWORD` | *Give each database purpose its own login* |
+| Secret | `HEPHAESTUS_CONVERSATION_LOOP_SECRET`, and the broker keys of `--external-nats` | No key. Each sandbox receives its own credential. | *Stop every role before moving conversation turns to sandboxes* and *Remove the retired sync broker values before upgrading* |
 | Image outside the chart | `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX` | `HEPHAESTUS_MENTOR_TURN_CAPACITY` on the server | *Stop every role before moving conversation turns to sandboxes* |
 | Image outside the chart | `HEPHAESTUS_RUNTIME_WORKER_ENABLED`, the `worker` Spring profile and `HEPHAESTUS_WORKER_DRAIN_TIMEOUT` | `AGENT_ENABLED=true`, `HEPHAESTUS_AGENT_DRAIN_TIMEOUT` and the sandbox settings on the server | *Move the worker values to the server and the sandboxes* |
+| Image outside the chart | `NATS_*`, `hephaestus.sync.nats.*`, `HEPHAESTUS_WEBHOOK_STREAM_*`, `HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD` | No setting | *Remove the retired sync broker values before upgrading* and *Drain the webhook streams before the upgrade* |
 | Custom agent image | An image from an earlier release | An image that you rebuilt from this release | *Rebuild custom agent images* and *Rebuild a custom agent image* |
 
-The table covers the changes after the release candidate `1.0.0-rc.5`.
-A host on an earlier candidate also needs the entries of the later candidates.
+After the upgraded server delivers sync status hints through PostgreSQL, stop an external NATS broker that only this release used.
+Helm removes the bundled NATS workload but keeps its PersistentVolumeClaim.
+Delete only the confirmed claim of this release, and only when you no longer need its data.
 
-Eight more checks need a read before the window:
+### The other migration entries
 
-- API callers of the team routes move to the new contract: *Update team API callers*.
-- Custom API clients read error responses in the problem format: *Read problem responses from the top level*.
-- The first daily run erases old feedback and results. See *Choose the feedback retention before you upgrade*.
-- A production server needs a root HTTPS issuer. See *Use a root HTTPS API issuer in production*.
-- Slack connections need the canonical callback on the Slack app: *Use the canonical Slack workspace callback*.
-- Each chat model needs an output limit. The server reads missing limits from the provider when it starts. Check that no model in **AI providers** is marked **Limits missing** ([Model limits](./ai-providers#model-limits)). See *Stop every role before moving model usage to one row for each call*.
-- *Stop every role before the repository enumeration upgrade*: every replica must record repository access events in the same connection revision. Stop all servers before starting the new release.
-- Duplicate repository monitor names stop the migration: run the query of *Stop every role before enforcing unique repository monitor names*.
-- A practice identifier can collide with a reserved route name: run the preflight of *Check practice identifiers before upgrading*.
+Each entry of § v1.0.0-rc.6 and of the target release that the table above does not name is in this table.
+**When** says where the action goes: before the window, in a step of [the cutover](#cut-over-to-100), or after the upgrade.
+Entries of § v1.0.0-rc.6 apply only to a host on 1.0.0-rc.5 or earlier.
 
-These migration entries also apply to a host that upgrades to 1.0:
-
-- *Stop every role before changing role-notice delivery*: use the procedure in that entry.
-- *Stop every role before replacing live Slack replies*: stop all replicas and keep a verified pre-upgrade backup. Existing replies with an unknown Slack outcome stay unconfirmed.
-- *Refresh the internal PostgreSQL certificate*: on one host, restart PostgreSQL after cert-manager issues the new certificate.
-- *Stop every role before correcting unknown issue comment counts*: the migration changes stored issue comment counts of zero to unknown.
-- *Use the stopped procedure for one-host release changes*: the one-host installer refuses a release change that does not follow it.
-- *Let the one-host installer reach the gVisor download*: allow `storage.googleapis.com` in the host's egress rules.
-- *Update custom practice script imports*: remove the imports that the release deletes from your custom scripts.
-- *Remove broker consumer settings*: remove `config.durableConsumerName` and `config.consumerInactiveThreshold` from every values file.
-- *Remove the Git checkout switch*: remove `config.gitCheckoutEnabled` from every values file.
-- *Move the GitHub webhook byte bound into the stream map*: remove the whole `webhook` block from every values file. This chart has no `webhook` key and refuses one.
-- *GitHub synchronization is incremental*: remove `HEPHAESTUS_SYNC_INCREMENTAL_ENABLED` from your configuration.
-- *Change the model call queries that read `class` or `queue`*: your own queries and alerts read the `band` label.
-- *Change the queries that read the agent queue and claim meters*: your own queries, alerts and dashboards read the `agent_run_*` meters.
-- *Decide whether GitHub App installations need an instance admin's approval*: by default, an instance admin adopts each new installation.
-- *Use the canonical webhook receiver base*: remove `WEBHOOK_EXTERNAL_URL` and `hephaestus.webhook.external-url`.
-- *Remove existing sandbox claims before starting the new workers*. Delete the remaining sandbox workloads before the new release starts.
-- *Public activity pages count contributors without an account instead of naming them*. To keep their names, turn on **Show contributors without an account**.
-- *Stop every role before the models for practice scripts are deleted*. The upgrade deletes the Decisions, Embeddings and Rerank connections.
-- *Remove the review poll settings and the review Job metrics*. Remove `AGENT_POLL_INTERVAL` and `AGENT_CLAIM_BATCH_SIZE`. Remove your own alerts on these metrics.
-- *Stop every role before moving conversation turn leases to agent runs*. The previous release cannot read the new turn leases.
-- *Product feedback drafts use server egress*: allow the selected instance model's provider through the server firewall. Keep a verified pre-upgrade database backup.
-- *Stop every role for the conversation loop*. This earlier entry introduced the loop. The sandbox cutover below replaces it.
-- *Stop every role before moving conversation turns to sandboxes*. Stop the old loop before migration, remove the old workloads, and run the template isolation gate.
-- *Log records name their trace in `trace.id` and `span.id`*: update your log queries, saved searches and collector rules that read `context.traceId` or `context.spanId`.
-- *Log context uses consistent field names*: update your log queries that read `context.installation_id` or `context.proxy.apiProtocol`.
-- *Stop every role before clearing personal logins from GitHub App installation records*. The previous server cannot read an installation record without a login.
-- *Stop every role before recording failed and handed-off run outcomes*. The previous server cannot read the new run outcomes.
-- *Write erasure recovery manifests as version 2*: add the disconnects and the workspace purges to each manifest.
+| Migration entry | Section | When | Action |
+| --- | --- | --- | --- |
+| *Stop every role before the provider resource repair upgrade* | Target | Before the window, and after the upgrade | Finish connection authorizations before the window, or start them again after. After the upgrade, open **Instance administration → Provider removals**, and confirm at the provider each removal before you release its block. Replace `integration_provider_teardown_total` with `integration_provider_repair_attempts_total` and `integration_provider_repair_open`. Route `HephaestusProviderRemovalNeedsConfirmation` to an instance admin. |
+| *Stop every role before clearing personal logins from GitHub App installation records* | Target | The window | Stop every server before the migration. The previous server cannot read an installation record without a login. |
+| *Stop every role before the repository enumeration upgrade* | Target | The window | Stop every server before the upgrade. Every replica must record repository access events in the same connection revision. |
+| *Stop every role before changing role-notice delivery* | Target | The window | Use the procedure in that entry. |
+| *Drain legacy reviews*, *Drain legacy reviews before removing gateway affinity* | Target | Before the window | Follow [Drain legacy reviews before removing gateway affinity](#drain-legacy-reviews-before-removing-gateway-affinity). |
+| *Check database connection limits for review recovery* | Target | Before the window | Render the target chart with your values. Set `server.databasePool.maximumPoolSize` to `auto`, or raise a fixed value to the minimum that the chart reports. Check `postgresql.parameters.max_connections` against [Database connections](./sizing#database-connections). |
+| *Stop every role before recording failed and handed-off run outcomes* | Target | The window | Stop every server before the migration. The previous server cannot read the new run outcomes. |
+| *Write erasure recovery manifests as version 2* | Target | Before the window | Add the disconnects and the workspace purges to each erasure recovery manifest, as [Erasure recovery](./erasure-recovery) describes. |
+| *Change the queries that read the agent queue and claim meters* | Target | After the upgrade | Your own queries, alerts and dashboards read the `agent_run_*` meters. |
+| *Drain the webhook streams before the upgrade* | rc.6 | Before the window, and step 4 | Before the window, replay the dead letters that you keep with the current release ([Replay a failed webhook event](./webhook-replay)). Plan PostgreSQL space for 3 days of webhook traffic. In your alert routing, remove `HephaestusStreamPollStale`, `HephaestusStreamPollMissing`, `HephaestusStreamBacklog`, `HephaestusStreamConsumerStopped`, `HephaestusWebhookStreamPastAgeBound` and `HephaestusWebhookRetentionBelowAgeBound`, and add `HephaestusProviderEventsWaiting` and `HephaestusProviderEventBacklogUnsampled`. Replace `integration_consumer_nak_total` with `integration_consumer_retry_total`. Step 4 drains the streams. |
+| *Route provider webhooks to the server* | rc.6 | Before the window | In your alert routing, replace `HephaestusWebhookReceiverDown` and `HephaestusWebhookReceiverUnready` with `HephaestusServerDown` and `HephaestusServerUnready`. Remove filters on `runtime.role` from your log queries. Outside the chart, route `/webhooks` to the server. |
+| *Use the canonical webhook receiver base* | rc.6 | Before the window | Remove `WEBHOOK_EXTERNAL_URL` and `hephaestus.webhook.external-url`. |
+| *Use the canonical Slack workspace callback* | rc.6 | Before the window | Register `https://<host>/api/oauth/callback/slack` as a Redirect URL on the Slack app. |
+| *Use a root HTTPS API issuer in production* | rc.6 | Before the window | Outside the chart, set `HEPHAESTUS_AUTH_ISSUER` to the public API root origin. The chart sets it. |
+| *Update team API callers* | rc.6 | Before the window | Move API callers of the team routes to the new contract. |
+| *Read problem responses from the top level* | rc.6 | Before the window | Make custom API clients read error responses in the problem format. |
+| *Update custom practice script imports* | rc.6 | Before the window | Remove the imports that the release deletes from your custom scripts. |
+| *Check practice identifiers before upgrading* | rc.6 | Before the window | Run the preflight query. Both counts must be zero. |
+| *Stop every role before enforcing unique repository monitor names* | rc.6 | Before the window | Run the duplicate query. Reconcile the duplicate monitors before the window. |
+| *Stop every role before moving model usage to one row for each call* | rc.6 | Before the window, and after the upgrade | Each chat model needs an output limit. After the upgrade, check that no model in **AI providers** shows **Limits missing** ([Model limits](./ai-providers#model-limits)). |
+| *Stop every role before the models for practice scripts are deleted* | rc.6 | Before the window | Note the settings of the Decisions, Embeddings and Rerank connections that you want to keep. The upgrade deletes them. |
+| *Choose the feedback retention before you upgrade* | rc.6 | Before the window | Choose the retention. The first daily run after the upgrade erases older feedback and results. |
+| *Decide whether GitHub App installations need an instance admin's approval* | rc.6 | Before the window | By default, an instance admin adopts each new installation. To keep self-service, set `config.workspaceCreationPolicy: SELF_SERVICE`. |
+| *Product feedback drafts use server egress* | rc.6 | Before the window | Allow the provider of the instance model for product feedback through the server firewall. |
+| *Let the one-host installer reach the gVisor download* | rc.6 | Before the window | Allow `storage.googleapis.com` in the egress rules of the host. |
+| *GitHub synchronization is incremental* | rc.6 | Before the window | Remove `HEPHAESTUS_SYNC_INCREMENTAL_ENABLED` from your configuration. |
+| *Remove the review poll settings and the review Job metrics* | rc.6 | Before the window | Remove `AGENT_POLL_INTERVAL` and `AGENT_CLAIM_BATCH_SIZE`, and your own alerts on the removed metrics. |
+| *Change the model call queries that read `class` or `queue`* | rc.6 | Before the window | Make your own queries and alerts read the `band` label. |
+| *Log records name their trace in `trace.id` and `span.id`* | rc.6 | Before the window | Update the log queries, saved searches and collector rules that read `context.traceId` or `context.spanId`. |
+| *Log context uses consistent field names* | rc.6 | Before the window | Update the log queries that read `context.installation_id` or `context.proxy.apiProtocol`. |
+| *NATS broker certificate names*, *External NATS broker: NATS Server 2.11 or later*, *Move the GitHub webhook byte bound into the stream map* | rc.6 | Before the window | No broker action. Remove the broker values, as the table above lists. |
+| *Install the agent-sandbox controller before the chart* | rc.6 | Step 7 | Install the controller, as [The sandbox platform](#the-sandbox-platform) describes. |
+| *Stop every role before moving conversation turns to sandboxes*, *Remove existing sandbox claims before starting the new workers* | rc.6 | Step 5 | Remove the old sandbox claims and Jobs after the servers stop. Run the sandbox isolation gate in step 12. |
+| *Stop conversation work before enabling digest runs* | rc.6 | Step 5 and step 12 | Deploy the server and agent images of one release together. Remove the old conversation claims before the servers start again. `sandbox.conversationTurns: 0` stops both turns and digests. |
+| *Stop every role for the conversation loop* | rc.6 | None | The conversation sandboxes replace the conversation loop. Do the entry above. |
+| *Refresh the internal PostgreSQL certificate* | rc.6 | Step 7 | On one host, restart PostgreSQL after cert-manager issues the new certificate. |
+| *Use the stopped procedure for one-host release changes* | rc.6 | All steps | The one-host installer refuses a release change that does not follow the stopped procedure. |
+| *Stop every role before replacing live Slack replies*, *Stop every role before moving conversation turn leases to agent runs* | rc.6 | Step 5 | Stop every server, and keep a verified backup. Replies with an unknown Slack outcome stay unconfirmed. |
+| *Stop every role before correcting unknown issue comment counts* | rc.6 | After the upgrade | Ask the administrators of each affected workspace to run its backfill. Until it finishes, those issues show an unknown comment count. |
+| *Public activity pages count contributors without an account instead of naming them* | rc.6 | After the upgrade | To keep their names, turn on **Show contributors without an account**. |
+| *Remove the retired sync broker values before upgrading* | rc.6 | After the upgrade | Remove the claim of the bundled NATS only after you confirm that nothing uses its data. |
 
 ## Cut over to 1.0.0
 
@@ -157,29 +245,32 @@ The migration entry *Stop every role to cut over to 1.0.0* points to this sectio
 
 :::caution[CAUTION: Changed schema]
 Do not use automatic Helm rollback for a stopped schema upgrade.
-An older role can corrupt data or fail against the changed schema.
-Keep every role stopped after a migration failure.
-Use [Failed-migration recovery](./upgrade#if-migration-fails).
+An older server can corrupt data or fail against the changed schema.
+Keep the server stopped after a migration failure.
+Use [If migration fails](./upgrade#if-migration-fails).
 :::
-
-Follow these steps in this order.
-Each step names the page that owns it.
 
 1. Complete [Validate the actual production data](./upgrade#validate-the-actual-production-data) on an isolated copy.
 2. Pause [pull-based deployment](./pull-based-deployment#operating-it), if enabled.
    Wait for an active run to finish.
 3. Verify the target's [signed release assets](./release-image-lock#independent-verification) and [chart](./kubernetes#verify-the-release-chart).
    Record the current chart, profile, site values and replica counts.
-4. Stop every role.
-   Stop the old conversation loop first, if present.
-   Do phase 1 of [Stopped schema upgrades](./upgrade#stopped-schema-upgrades) with the source release: `server.replicas`, `worker.replicas` and `webhook.replicas` are 0.
-   Wait until every role Pod, sandbox Pod and Job is gone.
-   Foreground-delete the old claims and legacy Jobs, as *Stop every role before moving conversation turns to sandboxes* describes.
-5. Back up the database.
+4. On a host on 1.0.0-rc.5 or earlier, drain the webhook streams just before you stop the roles.
+   Wait until `webhook_stream_consumer_pending` and `webhook_stream_consumer_ack_pending` are 0 for each stream.
+   The upgrade does not read the streams.
+   Hephaestus does not handle an event that is still in a stream when the roles stop.
+5. Stop every role.
+   Do phase 1 of [Stopped schema upgrades](./upgrade#stopped-schema-upgrades) with the source release: `server.replicas` is 0.
+   On a host on 1.0.0-rc.5 or earlier, also set `worker.replicas` and `webhook.replicas` to 0.
+   Wait until every role Pod is gone.
+   In the sandbox namespace, foreground-delete the claims with `hephaestus.build/sandbox-id` and the Jobs with `app.kubernetes.io/part-of=hephaestus`.
+   Wait until every sandbox Pod is gone.
+   The first reaper pass of the target servers takes back each ready sandbox whose claim you deleted.
+6. Back up the database.
    Verify that the backup restores, as [Backup and restore](./backup-restore#back-up-the-database) describes.
    Export the keys and keep them with the backup and the current signed release lock.
    You need this recovery point to roll back.
-6. Install the sandbox platform of the target release.
+7. Install the sandbox platform of the target release.
    On a one-host installation, run `--check-platform` and then `--platform-only` from the target bundle, as [Install only the platform](./k3s#install-only-the-platform) describes.
    On another cluster, apply `k3s-agent-sandbox.yaml` and wait for the controller:
 
@@ -188,40 +279,41 @@ Each step names the page that owns it.
    kubectl -n agent-sandbox-system rollout status deployment/agent-sandbox-controller
    ```
 
-   If this step restarts k3s, wait until PostgreSQL are ready before the next step.
-   On a one-host installation, the platform files also renew the internal PostgreSQL certificate: do *Refresh the internal PostgreSQL certificate* before you go on.
-7. Change the Secret.
+   If this step restarts k3s, wait until PostgreSQL is ready before the next step.
+   On a one-host installation, the platform files also renew the internal PostgreSQL certificate: do *Refresh the internal PostgreSQL certificate* before you continue.
+8. Change the Secret.
    First move the database logins, as step 3 of *Give each database purpose its own login* describes.
    `hephaestus-keys.sh` stops while the Secret still holds `DATABASE_USERNAME` or `DATABASE_PASSWORD`.
    Then run the target release's `hephaestus-keys.sh` so that the Secret holds every new key.
    Export the keys again and keep that copy with the restore point.
-8. Migrate.
+9. Migrate.
    Do phase 2 of [Stopped schema upgrades](./upgrade#stopped-schema-upgrades) with the target chart and your changed site values.
-   Save the migration Job's log.
+   Save the log of the migration Job.
    Require its `Complete` condition and no `ERROR` line in the log.
-   If the Job fails, keep every role stopped and go to [Roll back](#roll-back).
-9. Check the sandbox prerequisites on the migrated release:
-   - The controller is ready and the chart's `SandboxTemplate` and `SandboxWarmPool` objects exist in the sandbox namespace.
-   - The pre-pull DaemonSet is ready on every sandbox node: `kubectl --namespace hephaestus rollout status daemonset/hephaestus-agent-image`.
-     It keeps the agent image on each node, because a cold pull takes longer than the start of a sandbox.
-10. Start the server.
+   If the Job fails, keep the server stopped and go to [Roll back](#roll-back).
+10. Check the sandbox prerequisites on the migrated release:
+    - The controller is ready, and the chart's `SandboxTemplate` and `SandboxWarmPool` objects exist in the sandbox namespace.
+    - The pre-pull DaemonSet is ready on every sandbox node: `kubectl --namespace hephaestus rollout status daemonset/hephaestus-agent-image`.
+      It keeps the agent image on each node, because a cold pull takes longer than the start of a sandbox.
+11. Start the server.
     Do phase 3 of [Stopped schema upgrades](./upgrade#stopped-schema-upgrades) with the recorded server count.
-    A server starts no sandbox until its isolation probe passes.
+12. Run the sandbox isolation gate for each template, as [Sandbox templates](./sandboxes#sandbox-templates) describes.
     The gate needs a running server, because a sandbox must reach the gateway.
-    Thus, run the gate for each template now, as [Sandbox templates](./sandboxes#sandbox-templates) describes.
-    If it fails, fix the policy enforcement of the network plugin before you go on.
-11. On a one-host installation, run the target release's installer with `--version`, as [Upgrade the host](./k3s#upgrade-the-host) describes.
+    If a check fails, scale the servers to 0 before work resumes.
+    Then fix the policy enforcement of the network plugin before you continue.
+13. On a one-host installation, run the target release's installer with `--version`, as [Upgrade the host](./k3s#upgrade-the-host) describes.
     Keep deployment automation paused until it finishes.
-12. If pull-based deployment is enabled, make its channel name the installed release, then resume reconciliation.
+14. If pull-based deployment is enabled, make its channel name the installed release, then resume reconciliation.
     [Stopped major upgrades](./pull-based-deployment#stopped-major-upgrades) gives the reconciler's rules for a cutover.
-13. Load the alert rules of the target release into your Prometheus or vmalert.
+15. Load the alert rules of the target release into your Prometheus or vmalert.
     A chart upgrade brings them, but your own Prometheus does not read them until you load them ([Alert rules](./alert-rules)).
-14. Do [Check that it worked](#check-that-it-worked).
+16. Do [Check that it worked](#check-that-it-worked).
 
-What happens to a review that a server still held when it stopped is in *Stop every role before moving review leases to agent runs*.
+A review that a stopped server held goes back to the queue.
+The entry *Stop every role before moving review leases to agent runs* gives the details.
 
-Provider reception stops during the window.
-[Reception during a restart](./runtime-roles#reception-during-a-restart) explains provider recovery.
+No server receives provider deliveries during the window.
+[Reception during a restart](./runtime-roles#reception-during-a-restart) says how each provider delivers them again.
 Keep the window short.
 
 ## Roll back
@@ -229,8 +321,8 @@ Keep the window short.
 1.0 has no mixed-version window.
 An older image or `helm rollback` does not undo the migration.
 
-1. Keep every role stopped.
-2. Restore the verified backup from step 5 into the database.
+1. Keep the server stopped.
+2. Restore the verified backup from step 6 into the database.
    Restore its keys into the Secret.
    [If migration fails](./upgrade#if-migration-fails) gives the procedure.
    Use the previous release's signed lock.
@@ -241,14 +333,9 @@ An older image or `helm rollback` does not undo the migration.
 
 The migration entry of a stopped change can give its own rollback notes.
 
-## Reach the database baseline from 0.x
-
-A release before 1.0.0-rc.1 must first reach that database baseline, as [Prepare an older database for the current release](./liquibase-baseline-runbook) describes.
-Then follow the cutover above.
-
 ## Check that it worked
 
-1. Check the migration Job's log and the readiness of each enabled role.
+1. Check the log of the migration Job and the readiness of the server.
 2. Open **Instance administration → Overview** and read **Configuration readiness**.
 3. Resolve each item under **Action required**.
 4. Verify an authenticated read through the public gateway.
@@ -257,25 +344,10 @@ Then follow the cutover above.
    Watch it end with a result.
 7. Ask one question in Hephaestus and verify that the answer completes.
 8. Read the dashboards **Overview** and **Reviews and feedback**, as [Dashboards](./monitoring#open-the-dashboards) describes.
-   Reviews leave the queue, and no role is missing from the scrape.
-9. Check these alerts for the first hours: `HephaestusAgentQueueStalled`, `HephaestusAgentRunReaperFailing`, `HephaestusAgentSandboxReaperFailing`, `HephaestusReviewSandboxFailing`, `HephaestusSandboxGatewayRefusing`.
+   Reviews leave the queue, and no server is missing from the scrape.
+9. Watch these alerts for the first hours: `HephaestusAgentQueueStalled`, `HephaestusAgentRunReaperFailing`, `HephaestusAgentSandboxReaperFailing`, `HephaestusReviewSandboxFailing`, `HephaestusSandboxGatewayRefusing`.
    [Alert response](./production-operations-runbook#alert-response) gives the action for each.
-10. Did the upgrade cross *Stop every role before correcting unknown issue comment counts*?
-    Then ask the administrators of each affected workspace to run its backfill.
-    Until it finishes, those issues show an unknown comment count.
+10. Do the actions that [The other migration entries](#the-other-migration-entries) lists for after the upgrade.
 
-Check [Sizing and scaling](./sizing) before increasing capacity.
-Its measurements state their workload and limits.
+[Sizing and scaling](./sizing) states the workload and limits of its measurements.
 A successful upgrade does not qualify throughput or recovery time.
-
-## Drain the webhook streams before the upgrade
-
-Follow the [provider event inbox cutover](./webhook-ingestion-operations.mdx) before you start 1.0.
-Use the provider inbox cutover procedure before starting the new server.
-
-## Stop every role before the provider resource repair upgrade
-
-Stop every server before the migration, then deploy the matching release.
-The old server cannot write the required authorization binding columns.
-Pending OAuth requests must restart after this upgrade.
-[Integration administration](./integrations.mdx#confirm-a-provider-removal) describes the removal review and instance-admin release.

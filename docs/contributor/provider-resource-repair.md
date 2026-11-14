@@ -85,4 +85,4 @@ The capture receipt prevents an old teardown wake from recreating an already res
 A pre-cutover removal or suspended-hook cleanup without that receipt counts as an earlier uncertain call.
 A later absence cannot release its fence.
 [Integration administration](/admin/integrations#confirm-a-provider-removal) describes confirmation and release.
-[Metrics](/admin/metrics) and the [operations runbook](/admin/production-operations-runbook) describe unresolved work.
+[Metrics](/admin/metrics) and the [alert responses](/admin/production-operations-runbook#alert-response) describe unresolved work.

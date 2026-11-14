@@ -113,4 +113,4 @@ Malformed identity values stop startup.
 After an upgrade, compare `release` on each role's private management listener.
 The administration overview shows the server that it connects to.
 The instance-admin API adds the update check: `GET /admin/release` reads it and `POST /admin/release/checks` asks GitHub now.
-[Update checks](./upgrade#update-checks) describes cadence, privacy and offline operation.
+[Update checks](./instance-admin#update-checks) describes cadence, privacy and offline operation.

@@ -144,9 +144,9 @@ The installed verifier performs these checks before any candidate tooling runs.
 It applies the signed package for a release channel.
 A commit channel applies the source chart with the image pins from its signed channel.
 
-One exception applies. On a host [with tooling from before 1.0.0-rc.4](./upgrade#hosts-with-reconciler-tooling-from-before-100-rc4), you authenticate the release lock by hand.
+One exception applies. On a host [with tooling from before 1.0.0-rc.4](./upgrade-to-1-0#hosts-with-reconciler-tooling-from-before-100-rc4), you authenticate the release lock by hand.
 A release can add, remove or rename a chart image.
-For such a release, a host with older tooling follows [Hosts with reconciler tooling of 1.0.0-rc.4](./upgrade#hosts-with-reconciler-tooling-of-100-rc4) first.
+For such a release, a host with older tooling follows [Hosts with reconciler tooling of 1.0.0-rc.4](./upgrade-to-1-0#hosts-with-reconciler-tooling-of-100-rc4) first.
 
 A commit chart has no release version.
 To switch it to a release channel, pause reconciliation and apply the verified target through Database maintenance first.
@@ -347,14 +347,13 @@ After you run it, the next tick installs the release again.
 
 ### Stopped major upgrades
 
-For 0.95.x → 1.0, read [Upgrade to 1.0](./upgrade-to-1-0).
-Use the four [Database maintenance](./maintenance#database-maintenance) phases.
-Prepare the target site values before phase 2, as [Values and keys to move](./upgrade-to-1-0#values-and-keys-to-move) describes.
+A change of major release is a [stopped upgrade](./upgrade#stopped-schema-upgrades).
+Read the migration guide entry of the target release, and prepare the target site values before phase 2 as it describes.
 Pause the timer before phase 1.
 Save `/var/lib/hephaestus/applied.json` as `/var/lib/hephaestus/applied-before-cutover.json` before you change the release.
 Record the stopped phase-1 Helm revision from `helm history <release> --namespace <namespace>`.
 
-Verify the backups, record the server count, and stop the source release as [Cut over to 1.0.0](./upgrade-to-1-0#cut-over-to-100) describes.
+Verify the backups, record the server count, and stop the source release as phase 1 of [Stopped schema upgrades](./upgrade#stopped-schema-upgrades) describes.
 Use the verified source chart and its replica settings.
 Wait until every source role Pod and sandbox Pod and Job is removed.
 
@@ -364,7 +363,7 @@ A tick before that applies your edited file to the source release and starts the
 
 The reconciler checks both its applied record and the installed chart version.
 For a major transition, it requires zero server replicas in the installed values and no remaining writer workloads.
-The step from a release candidate to its major's first stable release, such as `1.0.0-rc.6` to `1.0.0`, is a major transition too.
+The step from a release candidate to the first stable release of its major is a major transition too.
 After that check, the reconciler applies the verified target chart with one server.
 
 If Helm finished before the applied record was written, the next tick checks the target identity and image pins.
@@ -384,7 +383,7 @@ The kubelet's image garbage collection removes unused images.
 
 ### Recover a stopped cutover
 
-Before you promote 1.0, set `HEPHAESTUS_WAIT_TIMEOUT` above the expected migration time.
+Before you promote a release that needs a stopped cutover, set `HEPHAESTUS_WAIT_TIMEOUT` above the expected migration time.
 Set the systemd deadline as [Settings for the chart](#settings-for-the-chart) describes.
 A Helm timeout stops its wait. It does not stop a migration Job.
 
@@ -392,29 +391,27 @@ If a stopped cutover fails or remains pending:
 
 1. Stop the timer: `sudo systemctl stop hephaestus-reconcile.timer`.
 2. Wait for the active reconciler service to finish.
-3. Read `helm history <release> --namespace <namespace>` and record the failed revision.
-4. Inspect `kubectl get job <release>-migration-<revision> --namespace <namespace>`.
-   Wait for its Complete or Failed condition before you restore data.
-   After its 24-hour TTL, an absent Job is finished only if no migration Pod remains.
-   If you must cancel it, delete that Job and wait for its Pods to disappear first.
-5. Scale every role Deployment to zero.
-   Wait for their Pods and sandboxes to stop.
-   Restore the pre-upgrade database with steps 1 to 14 of [If migration fails](./upgrade#if-migration-fails).
-   Defer its application startup and checks in steps 9 to 12 until the selected release succeeds in step 7 below.
-6. Run `helm rollback <release> <phase-1-revision> --namespace <namespace> --wait`.
-   Use the recorded source revision with zero replicas of every role.
+3. Do steps 2 to 5 of [If migration fails](./upgrade#if-migration-fails): wait until the migration Job stops, and save its evidence.
+4. Read `helm history <release> --namespace <namespace>`, and record the failed revision.
+5. Run `helm rollback <release> <phase-1-revision> --namespace <namespace> --wait`.
+   That revision runs the source release with zero servers.
+6. Restore the final restore point of the cutover with steps 2 to 5 of [Recover the live installation](./backup-restore#recover-the-live-installation).
+   Use the verified source chart and the values of the phase-1 revision.
+   Put the egress values of its step 3 in `/etc/hephaestus/chart.yaml`, because each tick applies that file.
 7. To retry the target, resume the timer.
    To return to the source release, first restore `applied-before-cutover.json` to `applied.json` if the completed target already has an applied record.
-   Then promote the signed source release with rollback enabled and resume the timer.
-8. Complete the deferred startup and checks under pre-boot isolation.
-   Then restore the server count as phase 3 describes.
+   Then do steps 10 and 11 of [If migration fails](./upgrade#if-migration-fails).
+8. When the selected release runs, stop the timer again.
+   Do steps 8 to 13 of [Recover the live installation](./backup-restore#recover-the-live-installation) with the verified chart of that release.
+   Skip its step 7: no server ran after the final restore point, so no erasure follows it.
+   Keep `/etc/hephaestus/chart.yaml` in step with the values of each step, because the next tick applies that file.
 
-A signed rollback request does not permit an automatic major release downgrade.
-A commit channel must descend from the recorded release source.
-For a recorded pre-1.0 release tag, a signed request can permit an older commit.
-For a recorded 1.0 or later release tag, use the manual recovery steps above first.
-An applied commit record has no version.
-This version boundary does not apply to it.
+A signed rollback request never restores the database.
+The reconciler refuses a channel with an older major release than the host runs.
+When the host runs a release, it also refuses an older commit, even with **allow-rollback**.
+Restore the database with the steps above first.
+When the host runs a commit, a signed rollback request can apply an older commit.
+Otherwise, a commit channel must descend from the recorded release source.
 
 ## Operating it
 

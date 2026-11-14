@@ -43,7 +43,7 @@ curl --request POST "$HEPHAESTUS_API_URL/workspaces/acme/practices/scans" \
 ```
 
 Set `HEPHAESTUS_API_URL` to the server API base URL.
-Use an access token for a workspace admin or owner.
+Use the access token of a workspace admin or owner, as [Call the API](./instance-admin#call-the-api) describes.
 Replace `acme` with the workspace slug and `123` with the monitored repository item ID.
 A null `practiceSlugs` value selects all eligible practices with scan support.
 Use a new UUID for each new request.

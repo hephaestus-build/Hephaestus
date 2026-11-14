@@ -481,7 +481,7 @@ The `tag-images` job does these steps in this order:
 The `publish-release` job then runs `scripts/check-previous-verifier.ts` against the signed draft.
 It runs the verifiers of the nearest published release and the latest stable release, from a tree with no installed packages.
 Only an immutable published release from 1.0.0-rc.4 on counts, so a pushed tag runs no code in this job.
-Older tooling follows the [manual step](../admin/upgrade#hosts-with-reconciler-tooling-from-before-100-rc4).
+Older tooling follows the [manual step](../admin/upgrade-to-1-0#hosts-with-reconciler-tooling-from-before-100-rc4).
 A host adopts new tooling only after it applies a release, so an older verifier decides.
 The job stops before publication if one refuses.
 
