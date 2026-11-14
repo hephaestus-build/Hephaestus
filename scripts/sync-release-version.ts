@@ -1,8 +1,11 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { asRecord, asString, parseJson } from "./lib/json.ts";
 import { migrationGuideSections, renderMigrationGuide } from "./lib/migration-guide.ts";
+import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
+import { CHANGELOG_HEADINGS, MIGRATION_HEADINGS, foldUnpublished } from "./lib/release-headings.ts";
 import { compareVersions, parseVersion } from "./lib/release-version.ts";
 
 const manifest = asRecord(parseJson(readFileSync("package.json", "utf8")), "package.json");
@@ -27,6 +30,25 @@ if (version.endsWith("-rc.0")) {
 	);
 }
 
+// A cut that failed after its Version PR merged burned its number. Its notes belong to the published release that
+// shipped them. Only a later published release proves a number burned, so a cut in progress and a checkout with
+// missing tags fold nothing that a release carries.
+const tags = spawnSync("git", ["tag", "--list", "v*"], {
+	encoding: "utf8",
+	maxBuffer: CAPTURE_LIMIT_BYTES,
+});
+const published = new Set(
+	tags.status === 0
+		? tags.stdout.split("\n").flatMap((tag) => (tag.startsWith("v") ? [tag.slice(1)] : []))
+		: [],
+);
+if (tags.status === 0 && existsSync("CHANGELOG.md")) {
+	writeFileSync(
+		"CHANGELOG.md",
+		foldUnpublished(readFileSync("CHANGELOG.md", "utf8"), CHANGELOG_HEADINGS, published),
+	);
+}
+
 const edits = [
 	{
 		file: "docs/admin/k3s.md",
@@ -44,7 +66,9 @@ for (const { file, re, line } of edits) {
 }
 
 const migrationFile = "MIGRATION.md";
-const migration = renderMigrationGuide(readFileSync(migrationFile, "utf8"));
+const rendered = renderMigrationGuide(readFileSync(migrationFile, "utf8"));
+const migration =
+	tags.status === 0 ? foldUnpublished(rendered, MIGRATION_HEADINGS, published) : rendered;
 const sections = migrationGuideSections(migration);
 const pendingSection = sections.find((section) => section.heading === "### Next release");
 if (!pendingSection) {
