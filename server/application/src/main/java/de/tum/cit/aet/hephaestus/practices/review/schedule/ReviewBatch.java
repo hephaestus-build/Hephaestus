@@ -14,6 +14,7 @@ import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Builder.Default;
@@ -72,6 +73,7 @@ public class ReviewBatch {
     @Default
     @Enumerated(EnumType.STRING)
     @ColumnDefault("'AWAITING_CONFIRMATION'")
+    @Setter(AccessLevel.NONE)
     @Column(name = "status", nullable = false, length = 24)
     private ReviewBatchStatus status = ReviewBatchStatus.AWAITING_CONFIRMATION;
 
@@ -127,4 +129,42 @@ public class ReviewBatch {
     @ColumnDefault("CURRENT_TIMESTAMP")
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    /** Offers work again: an admin's confirmation or resume, or a driver tick that finds nothing in the way. */
+    public void resume() {
+        moveTo(ReviewBatchStatus.RUNNING);
+        pauseReason = null;
+    }
+
+    public void pause(ReviewBatchPauseReason reason) {
+        moveTo(ReviewBatchStatus.PAUSED);
+        pauseReason = reason;
+    }
+
+    /** Every selected target was offered. */
+    public void complete(Instant now) {
+        end(ReviewBatchStatus.COMPLETED, now);
+    }
+
+    /** A scheduled batch spent its verified fixed cap: a normal end, not a pause. */
+    public void exhaustBudget(Instant now) {
+        end(ReviewBatchStatus.BUDGET_EXHAUSTED, now);
+    }
+
+    public void cancel(Instant now) {
+        end(ReviewBatchStatus.CANCELLED, now);
+    }
+
+    private void end(ReviewBatchStatus terminal, Instant now) {
+        moveTo(terminal);
+        pauseReason = null;
+        finishedAt = now;
+    }
+
+    private void moveTo(ReviewBatchStatus next) {
+        if (!status.canTransitionTo(next)) {
+            throw new IllegalStateException("A review batch cannot move from " + status + " to " + next);
+        }
+        status = next;
+    }
 }

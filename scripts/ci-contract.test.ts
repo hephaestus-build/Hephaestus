@@ -7415,7 +7415,6 @@ void test("the focused stable task selects every architecture ratchet and requir
 			);
 		}
 	}
-	assert.ok(clients.includes("LifecycleSetterArchTest.java"));
 	assert.ok(clients.includes("AfterCommitRepairArchTest.java"));
 });
 

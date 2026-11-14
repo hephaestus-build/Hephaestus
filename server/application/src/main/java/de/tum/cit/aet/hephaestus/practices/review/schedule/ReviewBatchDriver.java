@@ -76,18 +76,14 @@ public class ReviewBatchDriver {
         var ids = scope.next(
                 batch.getWorkspaceId(), batch.getId(), batch.getCursorItemId(), scan ? 1 : properties.batchSize());
         if (ids.isEmpty()) {
-            batch.setStatus(ReviewBatchStatus.COMPLETED);
-            batch.setPauseReason(null);
-            batch.setFinishedAt(clock.instant());
+            batch.complete(clock.instant());
             batch.setUpdatedAt(clock.instant());
             batches.save(batch);
             return;
         }
         var remaining = spend.remaining(batch);
         if (batch.getOrigin() == ReviewBatchOrigin.SCHEDULE && remaining.verified() && remaining.exhausted()) {
-            batch.setStatus(ReviewBatchStatus.BUDGET_EXHAUSTED);
-            batch.setPauseReason(null);
-            batch.setFinishedAt(clock.instant());
+            batch.exhaustBudget(clock.instant());
             batch.setUpdatedAt(clock.instant());
             batches.save(batch);
             return;
@@ -104,14 +100,12 @@ public class ReviewBatchDriver {
                                 ? ReviewBatchPauseReason.BUDGET_EXHAUSTED
                                 : null;
         if (reason != null) {
-            batch.setStatus(ReviewBatchStatus.PAUSED);
-            batch.setPauseReason(reason);
+            batch.pause(reason);
             batch.setUpdatedAt(clock.instant());
             batches.save(batch);
             return;
         }
-        batch.setStatus(ReviewBatchStatus.RUNNING);
-        batch.setPauseReason(null);
+        batch.resume();
         for (long itemId : ids) {
             try {
                 switch (submitter.offer(batch, itemId, remaining.remainingUsd())) {
@@ -125,8 +119,7 @@ public class ReviewBatchDriver {
                         return;
                     }
                     case ReviewBatchSubmitter.SubmissionOutcome.Paused paused -> {
-                        batch.setStatus(ReviewBatchStatus.PAUSED);
-                        batch.setPauseReason(paused.reason());
+                        batch.pause(paused.reason());
                         batch.setUpdatedAt(clock.instant());
                         batches.save(batch);
                         return;
