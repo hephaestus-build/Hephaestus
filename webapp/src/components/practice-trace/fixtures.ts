@@ -357,6 +357,8 @@ const ownResult = (
 	origin: "EVENT",
 	recordedAt: new Date("2026-08-06T10:19:00Z"),
 	currentness: "CURRENT",
+	unverifiableReason: null,
+	lastVerifiedAt: null,
 	markedIncorrectAt: null,
 	acceptedAt: null,
 	problems: [],

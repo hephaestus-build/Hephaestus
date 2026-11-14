@@ -3363,6 +3363,7 @@ export const zResultList = z.object({
 	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
 	id: z.uuid(),
 	item: zItemRef,
+	lastVerifiedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	origin: z.enum(["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]),
 	outcome: z.enum(["MET", "NOT_MET", "DOES_NOT_APPLY", "COULD_NOT_DETERMINE"]),
@@ -3373,6 +3374,7 @@ export const zResultList = z.object({
 	reviewId: z.uuid(),
 	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]).nullable(),
 	summary: z.string().nullable(),
+	unverifiableReason: z.enum(["RECORD_MISSING", "WORK_UNREADABLE"]).nullable(),
 });
 
 export const zListedScanReportItem = z.object({
@@ -3567,6 +3569,7 @@ export const zReviewBoundResult = z.object({
 	developer: zReviewDeveloper.nullable(),
 	id: z.uuid(),
 	item: zItemRef,
+	lastVerifiedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	outcome: z.enum(["MET", "NOT_MET", "DOES_NOT_APPLY", "COULD_NOT_DETERMINE"]),
 	practiceName: z.string(),
 	practiceSlug: z.string(),
@@ -3574,6 +3577,7 @@ export const zReviewBoundResult = z.object({
 	reviewId: z.uuid(),
 	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]).nullable(),
 	summary: z.string().nullable(),
+	unverifiableReason: z.enum(["RECORD_MISSING", "WORK_UNREADABLE"]).nullable(),
 });
 
 export const zFeedbackBasis = z.object({
@@ -3904,6 +3908,7 @@ export const zReviewProblem = z.object({
 	group: zGroupRef.nullable(),
 	id: z.uuid(),
 	item: zItemRef,
+	lastVerifiedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	path: z.string().nullable(),
 	practiceName: z.string(),
@@ -3920,6 +3925,7 @@ export const zReviewProblem = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullable(),
 	summary: z.string(),
+	unverifiableReason: z.enum(["RECORD_MISSING", "WORK_UNREADABLE"]).nullable(),
 });
 
 /**
@@ -4119,6 +4125,7 @@ export const zReviewResult = z.object({
 	feedback: zReviewFeedbackCounts,
 	id: z.uuid(),
 	item: zItemRef,
+	lastVerifiedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	origin: z.enum(["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]),
 	outcome: z.enum(["MET", "NOT_MET", "DOES_NOT_APPLY", "COULD_NOT_DETERMINE"]),
@@ -4133,6 +4140,7 @@ export const zReviewResult = z.object({
 	reviewId: z.uuid(),
 	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]).nullable(),
 	summary: z.string().nullable(),
+	unverifiableReason: z.enum(["RECORD_MISSING", "WORK_UNREADABLE"]).nullable(),
 });
 
 /**
@@ -6659,6 +6667,7 @@ export const zResultDetail = z.object({
 	id: z.uuid(),
 	item: zItemRef,
 	itemVersion: z.string().nullable(),
+	lastVerifiedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	origin: z.enum(["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]),
 	outcome: z.enum(["MET", "NOT_MET", "DOES_NOT_APPLY", "COULD_NOT_DETERMINE"]),
@@ -6678,6 +6687,7 @@ export const zResultDetail = z.object({
 	reviewId: z.uuid(),
 	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]).nullable(),
 	summary: z.string().nullable(),
+	unverifiableReason: z.enum(["RECORD_MISSING", "WORK_UNREADABLE"]).nullable(),
 });
 
 export const zReviewProblemDetail = z.object({
@@ -6694,6 +6704,7 @@ export const zReviewProblemDetail = z.object({
 	group: zGroupRef.nullable(),
 	id: z.uuid(),
 	item: zItemRef,
+	lastVerifiedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	path: z.string().nullable(),
 	practiceName: z.string(),
@@ -6712,6 +6723,7 @@ export const zReviewProblemDetail = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullable(),
 	summary: z.string(),
+	unverifiableReason: z.enum(["RECORD_MISSING", "WORK_UNREADABLE"]).nullable(),
 });
 
 export const zReviewResultDetail = z.object({
@@ -6734,6 +6746,7 @@ export const zReviewResultDetail = z.object({
 	id: z.uuid(),
 	item: zItemRef,
 	itemVersion: z.string().nullable(),
+	lastVerifiedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	marks: z.array(zResultMark),
 	origin: z.enum(["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]),
@@ -6754,6 +6767,7 @@ export const zReviewResultDetail = z.object({
 	reviewId: z.uuid(),
 	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]).nullable(),
 	summary: z.string().nullable(),
+	unverifiableReason: z.enum(["RECORD_MISSING", "WORK_UNREADABLE"]).nullable(),
 });
 
 export const zScanReportProblem = z.object({

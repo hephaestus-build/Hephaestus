@@ -138,15 +138,16 @@ public class ResultVisibilityPolicy {
                 purpose);
     }
 
-    public static Currentness currentness(
-            Result result, @Nullable PracticeVersion pinned, PracticeVersion current, Currentness sourceCurrentness) {
-        if (result.isMigratedHistory()) return Currentness.UNVERIFIABLE;
-        if (result.getEndedAt() != null) {
-            return Currentness.STALE;
-        }
-        if (!verifiable(result, pinned)) return Currentness.UNVERIFIABLE;
+    /** The result's freshness: its sources' freshness, unless the result or its practice says more. */
+    public static Freshness freshness(
+            Result result, @Nullable PracticeVersion pinned, PracticeVersion current, Freshness source) {
+        if (result.isMigratedHistory()) return Freshness.recordMissing();
+        if (result.getEndedAt() != null) return Freshness.stale(source.lastVerifiedAt());
+        if (!verifiable(result, pinned)) return Freshness.recordMissing();
         Objects.requireNonNull(pinned);
-        return pinned.getReviewDigest().equals(current.getReviewDigest()) ? sourceCurrentness : Currentness.STALE;
+        return pinned.getReviewDigest().equals(current.getReviewDigest())
+                ? source
+                : Freshness.stale(source.lastVerifiedAt());
     }
 
     private static boolean verifiable(Result result, @Nullable PracticeVersion pinned) {
@@ -219,12 +220,15 @@ public class ResultVisibilityPolicy {
         List<Result> eligible = owned.stream()
                 .filter(result -> {
                     Practice practice = current.get(result.getPracticeId());
+                    // The sources are checked first, so the policy checks only the result and its practice.
                     return practice != null
-                            && currentness(
-                                            result,
-                                            pinned.get(result.getPracticeVersionId()),
-                                            practice.getCurrentVersion(),
-                                            Objects.requireNonNull(sourceStates.get(result.getId())))
+                            && sourceStates.get(result.getId()) == Currentness.CURRENT
+                            && freshness(
+                                                    result,
+                                                    pinned.get(result.getPracticeVersionId()),
+                                                    practice.getCurrentVersion(),
+                                                    Freshness.current(null))
+                                            .currentness()
                                     == Currentness.CURRENT;
                 })
                 .toList();

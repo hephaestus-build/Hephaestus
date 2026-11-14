@@ -306,7 +306,7 @@ public class PracticeStandingService {
             Long workspaceId, List<ResultView> window, StandingRows rows, Instant edge, SourceReadAudience audience) {
         Set<UUID> quotable = visibilityPolicy.permitsAt(workspaceId, rowsOf(window), purpose(audience), edge);
         var currentSources = window.stream()
-                .filter(view -> view.sourceCurrentness() == Currentness.CURRENT)
+                .filter(view -> view.sourceFreshness().currentness() == Currentness.CURRENT)
                 .map(view -> view.result().getId())
                 .collect(Collectors.toSet());
         quotable = quotable.stream().filter(currentSources::contains).collect(Collectors.toSet());

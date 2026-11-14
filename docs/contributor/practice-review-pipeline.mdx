@@ -285,8 +285,14 @@ When the occasion's record expires, the comparison cannot read it, and the resul
 
 Git source fingerprints follow [ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md#freshness-by-source-fingerprints).
 
-A missing fingerprint or an unavailable current source makes the result unverifiable.
-It does not establish a change to the work.
+A freshness read never fetches from a provider: an SCM record source reads the synced mirror as it is.
+Commits are content-addressed, so the answer is exact when the mirror has the reviewed commits.
+A missing fingerprint or an unavailable current source makes the result unverifiable with the reason `WORK_UNREADABLE`, never current.
+The mirror does not have the commits when the bounded cache evicted it, or when another server captured the result.
+The next capture that syncs the mirror makes the result verifiable again.
+
+A missing capture record makes the result unverifiable with `RECORD_MISSING` ([Currentness](./practice-review-glossary.mdx#currentness)).
+Neither reason establishes a change to the work.
 The practice-start gateway records `REPLACED` for changed sources and `READINESS_REFUSED` for sources it cannot verify.
 A submitted review ends only results whose source fingerprints changed.
 

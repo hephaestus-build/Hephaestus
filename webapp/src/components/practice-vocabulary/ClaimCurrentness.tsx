@@ -1,10 +1,11 @@
 import { Badge } from "@/components/ui/badge";
-import { type Currentness, NON_CURRENT } from "./claim-currentness";
 
-export function ClaimCurrentnessBadge({ currentness }: { currentness: Currentness }) {
-	if (currentness === "CURRENT") {
+import { currentnessCopy, type Freshness } from "./claim-currentness";
+
+export function ClaimCurrentnessBadge({ freshness }: { freshness: Freshness }) {
+	const copy = currentnessCopy(freshness);
+	if (copy === undefined) {
 		return null;
 	}
-	const config = NON_CURRENT[currentness];
-	return <Badge variant={config.badgeVariant}>{config.badge}</Badge>;
+	return <Badge variant={copy.badgeVariant}>{copy.badge}</Badge>;
 }

@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.page.PracticePageFeedbackSer
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.result.Freshness;
 import de.tum.cit.aet.hephaestus.practices.result.PracticeGroupStandingService;
 import de.tum.cit.aet.hephaestus.practices.result.PracticeStandingService;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
@@ -40,7 +41,6 @@ import de.tum.cit.aet.hephaestus.practices.result.trend.TrendProperties;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewTestData;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
-import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStanding;
@@ -269,7 +269,7 @@ class PracticesAcrossWorkspaceServiceTest {
                 .developerId(developer)
                 .build();
         data.add(new ResultView(
-                row, practice, practice.getCurrentVersion(), base.review(), base.item(), Currentness.CURRENT));
+                row, practice, practice.getCurrentVersion(), base.review(), base.item(), Freshness.current(null)));
     }
 
     private static PracticeGroup group(String slug, int position) {

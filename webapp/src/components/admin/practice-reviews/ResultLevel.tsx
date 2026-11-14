@@ -19,7 +19,7 @@ import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLi
 import { Section } from "@/components/layout/Section";
 import { SectionStack } from "@/components/layout/SectionStack";
 import { ProblemList } from "@/components/practice-problems/ProblemList";
-import { NON_CURRENT } from "@/components/practice-vocabulary/claim-currentness";
+import { currentnessCopy } from "@/components/practice-vocabulary/claim-currentness";
 import {
 	deliveryOutcome,
 	withdrawalMark,
@@ -91,9 +91,9 @@ function resultFlag(result: ReviewResultDetail): ReactNode {
 	if (result.disagreements.length > 0) {
 		return <StatusBadge def={DISAGREEMENT_DEFS.DISAGREED} />;
 	}
-	if (result.currentness !== "CURRENT") {
-		const config = NON_CURRENT[result.currentness];
-		return <Badge variant={config.badgeVariant}>{config.badge}</Badge>;
+	const currentness = currentnessCopy(result);
+	if (currentness !== undefined) {
+		return <Badge variant={currentness.badgeVariant}>{currentness.badge}</Badge>;
 	}
 	return undefined;
 }
@@ -403,10 +403,7 @@ function resultNow(result: ReviewResultDetail): ReactNode {
 	if (result.disagreements.length > 0) {
 		return DISAGREEMENT_DEFS.DISAGREED.description;
 	}
-	if (result.currentness !== "CURRENT") {
-		return NON_CURRENT[result.currentness].description;
-	}
-	return undefined;
+	return currentnessCopy(result)?.description;
 }
 
 // Open questions identify uncertainty; they cannot become feedback claims.

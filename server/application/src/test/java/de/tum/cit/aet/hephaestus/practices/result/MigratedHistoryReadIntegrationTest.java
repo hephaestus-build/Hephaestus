@@ -167,6 +167,10 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo("Recorded result")
                 .jsonPath("$.currentness")
                 .isEqualTo("UNVERIFIABLE")
+                .jsonPath("$.unverifiableReason")
+                .isEqualTo("RECORD_MISSING")
+                .jsonPath("$.lastVerifiedAt")
+                .isEmpty()
                 .jsonPath("$.evidenceHidden")
                 .isEqualTo(false)
                 .jsonPath("$.evidence.citations[0].quote")
@@ -178,7 +182,9 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
                 .jsonPath("$.content[0].review.id")
                 .isEqualTo(result.getReviewId().toString())
                 .jsonPath("$.content[0].results[0].currentness")
-                .isEqualTo("UNVERIFIABLE");
+                .isEqualTo("UNVERIFIABLE")
+                .jsonPath("$.content[0].results[0].unverifiableReason")
+                .isEqualTo("RECORD_MISSING");
         var provider = providers
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
                 .orElseGet(() -> providers.saveAndFlush(

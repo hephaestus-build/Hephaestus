@@ -137,7 +137,10 @@ export function byActionability(
 }
 
 export interface ResultExceptionsProps {
-	result: Pick<ReviewResult, "currentness" | "markedIncorrectAt">;
+	result: Pick<
+		ReviewResult,
+		"currentness" | "unverifiableReason" | "lastVerifiedAt" | "markedIncorrectAt"
+	>;
 }
 
 export function ResultExceptions({ result }: ResultExceptionsProps) {
@@ -146,7 +149,7 @@ export function ResultExceptions({ result }: ResultExceptionsProps) {
 	}
 	return (
 		<span className="flex flex-wrap items-center gap-1.5">
-			<ClaimCurrentnessBadge currentness={result.currentness} />
+			<ClaimCurrentnessBadge freshness={result} />
 			{result.markedIncorrectAt !== null && <StatusBadge def={RESULT_MARK_DEFS.INCORRECT} />}
 		</span>
 	);

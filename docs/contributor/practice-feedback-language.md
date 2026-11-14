@@ -110,6 +110,7 @@ This table records only their retired names.
 | **Not reviewed** | A selected item/practice pair that a closed review did not judge or reuse. It is not an outcome. |  |
 | **Withheld candidate** | A candidate observation that [admission](./practice-review-pipeline.mdx#admit-results) did not accept. It records the reason. |  |
 | **Withheld feedback** | Feedback that the server did not deliver. Its state is `WITHHELD` and its stop reason records why. |  |
+| **Unverified observation** | An observation that Hephaestus cannot check against the current work. Its note tells why. When its record exists, the label tells since when, as in "Unverified since 3 Nov". The [currentness reasons](./practice-review-glossary.mdx#currentness) define the cases. | unknown observation, unconfirmed |
 | **Mark** | An admin record that an observation is incorrect or accepted. Removing the mark reverses it. | invalidation |
 | **Marked incorrect** | An observation that a workspace admin marked as wrong when made. It remains in history. | invalidated, deleted, retracted |
 | **Accepted** | An admin record that excludes an observation from open-problem lists. It does not change its outcome or cancel an incorrect mark. |  |

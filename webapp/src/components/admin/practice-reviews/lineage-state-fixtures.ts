@@ -757,8 +757,21 @@ const resultCases: LineageStateCase[] = [
 	),
 	withCase(
 		"unverifiable",
-		"Unverifiable: whether the work changed cannot be told",
-		chain({ results: threeResults({ currentness: "UNVERIFIABLE" }) }),
+		"Unverifiable: the record of what the review read is missing",
+		chain({
+			results: threeResults({ currentness: "UNVERIFIABLE", unverifiableReason: "RECORD_MISSING" }),
+		}),
+	),
+	withCase(
+		"unverifiable-now",
+		"Unverifiable: the current work could not be read",
+		chain({
+			results: threeResults({
+				currentness: "UNVERIFIABLE",
+				unverifiableReason: "WORK_UNREADABLE",
+				lastVerifiedAt: at("13:39:00"),
+			}),
+		}),
 	),
 	withCase(
 		"answered-earlier",

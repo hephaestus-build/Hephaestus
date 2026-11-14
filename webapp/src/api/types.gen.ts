@@ -5157,6 +5157,10 @@ export type ResultDetail = {
 	id: string;
 	item: ItemRef;
 	itemVersion: string | null;
+	/**
+	 * When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.
+	 */
+	lastVerifiedAt: Date | null;
 	markedIncorrectAt: Date | null;
 	origin: "EVENT" | "REQUEST" | "SCHEDULE" | "BACKFILL";
 	outcome: "MET" | "NOT_MET" | "DOES_NOT_APPLY" | "COULD_NOT_DETERMINE";
@@ -5169,6 +5173,10 @@ export type ResultDetail = {
 	reviewId: string;
 	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL" | null;
 	summary: string | null;
+	/**
+	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
+	 */
+	unverifiableReason: "RECORD_MISSING" | "WORK_UNREADABLE" | null;
 };
 
 export type ResultEvidence = {
@@ -5188,6 +5196,10 @@ export type ResultList = {
 	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
 	id: string;
 	item: ItemRef;
+	/**
+	 * When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.
+	 */
+	lastVerifiedAt: Date | null;
 	markedIncorrectAt: Date | null;
 	origin: "EVENT" | "REQUEST" | "SCHEDULE" | "BACKFILL";
 	outcome: "MET" | "NOT_MET" | "DOES_NOT_APPLY" | "COULD_NOT_DETERMINE";
@@ -5198,6 +5210,10 @@ export type ResultList = {
 	reviewId: string;
 	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL" | null;
 	summary: string | null;
+	/**
+	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
+	 */
+	unverifiableReason: "RECORD_MISSING" | "WORK_UNREADABLE" | null;
 };
 
 export type ResultMark = {
@@ -5340,6 +5356,10 @@ export type ReviewBoundResult = {
 	developer: ReviewDeveloper | null;
 	id: string;
 	item: ItemRef;
+	/**
+	 * When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.
+	 */
+	lastVerifiedAt: Date | null;
 	outcome: "MET" | "NOT_MET" | "DOES_NOT_APPLY" | "COULD_NOT_DETERMINE";
 	practiceName: string;
 	practiceSlug: string;
@@ -5347,6 +5367,10 @@ export type ReviewBoundResult = {
 	reviewId: string;
 	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL" | null;
 	summary: string | null;
+	/**
+	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
+	 */
+	unverifiableReason: "RECORD_MISSING" | "WORK_UNREADABLE" | null;
 };
 
 export type ReviewBucket = {
@@ -5714,6 +5738,10 @@ export type ReviewProblem = {
 	group: GroupRef | null;
 	id: string;
 	item: ItemRef;
+	/**
+	 * When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.
+	 */
+	lastVerifiedAt: Date | null;
 	markedIncorrectAt: Date | null;
 	path: string | null;
 	practiceName: string;
@@ -5726,6 +5754,10 @@ export type ReviewProblem = {
 	sourceKind: string | null;
 	startLine: null | number;
 	summary: string;
+	/**
+	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
+	 */
+	unverifiableReason: "RECORD_MISSING" | "WORK_UNREADABLE" | null;
 };
 
 export type ReviewProblemDetail = {
@@ -5738,6 +5770,10 @@ export type ReviewProblemDetail = {
 	group: GroupRef | null;
 	id: string;
 	item: ItemRef;
+	/**
+	 * When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.
+	 */
+	lastVerifiedAt: Date | null;
 	markedIncorrectAt: Date | null;
 	path: string | null;
 	practiceName: string;
@@ -5752,6 +5788,10 @@ export type ReviewProblemDetail = {
 	sourceKind: string | null;
 	startLine: null | number;
 	summary: string;
+	/**
+	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
+	 */
+	unverifiableReason: "RECORD_MISSING" | "WORK_UNREADABLE" | null;
 };
 
 /**
@@ -5853,6 +5893,10 @@ export type ReviewResult = {
 	feedback: ReviewFeedbackCounts;
 	id: string;
 	item: ItemRef;
+	/**
+	 * When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.
+	 */
+	lastVerifiedAt: Date | null;
 	markedIncorrectAt: Date | null;
 	origin: "EVENT" | "REQUEST" | "SCHEDULE" | "BACKFILL";
 	outcome: "MET" | "NOT_MET" | "DOES_NOT_APPLY" | "COULD_NOT_DETERMINE";
@@ -5864,6 +5908,10 @@ export type ReviewResult = {
 	reviewId: string;
 	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL" | null;
 	summary: string | null;
+	/**
+	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
+	 */
+	unverifiableReason: "RECORD_MISSING" | "WORK_UNREADABLE" | null;
 };
 
 export type ReviewResultCounts = {
@@ -5890,6 +5938,10 @@ export type ReviewResultDetail = {
 	id: string;
 	item: ItemRef;
 	itemVersion: string | null;
+	/**
+	 * When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.
+	 */
+	lastVerifiedAt: Date | null;
 	markedIncorrectAt: Date | null;
 	marks: Array<ResultMark>;
 	origin: "EVENT" | "REQUEST" | "SCHEDULE" | "BACKFILL";
@@ -5903,6 +5955,10 @@ export type ReviewResultDetail = {
 	reviewId: string;
 	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL" | null;
 	summary: string | null;
+	/**
+	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
+	 */
+	unverifiableReason: "RECORD_MISSING" | "WORK_UNREADABLE" | null;
 };
 
 export type ReviewRuntime = {

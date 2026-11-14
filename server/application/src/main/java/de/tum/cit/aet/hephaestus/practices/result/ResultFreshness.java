@@ -9,7 +9,9 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewPracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCaptureDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
+import de.tum.cit.aet.hephaestus.practices.spi.UnverifiableReason;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -35,12 +37,15 @@ public class ResultFreshness {
     private final ProductItemQuery items;
 
     public Map<UUID, Currentness> states(long workspaceId, Collection<Result> rows) {
-        return statesFor(workspaceId, claims(rows));
+        return currentness(freshnessFor(workspaceId, claims(rows)));
     }
 
-    /** {@link #states(long, Collection)} for a caller that has already read these results' active items. */
-    public Map<UUID, Currentness> states(long workspaceId, Collection<Result> rows, Map<Long, ItemRef> activeItems) {
-        return statesFor(workspaceId, claims(rows), activeItems);
+    /**
+     * The freshness of these results, with the reason that an unverifiable one cannot be checked and when each was last
+     * verified, for a caller that has already read their active items.
+     */
+    public Map<UUID, Freshness> freshness(long workspaceId, Collection<Result> rows, Map<Long, ItemRef> activeItems) {
+        return freshnessFor(workspaceId, claims(rows), activeItems);
     }
 
     private static List<Claim> claims(Collection<Result> rows) {
@@ -65,7 +70,17 @@ public class ResultFreshness {
             @Nullable Instant endedAt) {}
 
     public Map<UUID, Currentness> statesFor(long workspaceId, Collection<Claim> rows) {
-        return statesFor(
+        return currentness(freshnessFor(workspaceId, rows));
+    }
+
+    private static Map<UUID, Currentness> currentness(Map<UUID, Freshness> freshness) {
+        return freshness.entrySet().stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        Map.Entry::getKey, entry -> entry.getValue().currentness()));
+    }
+
+    private Map<UUID, Freshness> freshnessFor(long workspaceId, Collection<Claim> rows) {
+        return freshnessFor(
                 workspaceId,
                 rows,
                 rows.isEmpty()
@@ -75,7 +90,7 @@ public class ResultFreshness {
                                 rows.stream().map(Claim::itemId).distinct().toList()));
     }
 
-    private Map<UUID, Currentness> statesFor(long workspaceId, Collection<Claim> rows, Map<Long, ItemRef> refs) {
+    private Map<UUID, Freshness> freshnessFor(long workspaceId, Collection<Claim> rows, Map<Long, ItemRef> refs) {
         if (rows.stream().anyMatch(result -> result.workspaceId() != workspaceId))
             throw new IllegalArgumentException("Results do not belong to the workspace");
         if (rows.isEmpty()) return Map.of();
@@ -88,6 +103,7 @@ public class ResultFreshness {
                         capture -> new CaptureKey(capture.reviewId(), capture.practiceId(), capture.itemId()),
                         capture -> capture));
         var expected = new HashMap<UUID, Map<SourceKind, String>>();
+        var capturedAt = new HashMap<UUID, Instant>();
         var occasions = new HashMap<UUID, UUID>();
         var frozen = new HashSet<UUID>();
         for (var result : rows) {
@@ -106,8 +122,9 @@ public class ResultFreshness {
                     .findFirst();
             expected.put(
                     result.id(), decision.map(ResultFreshness::fingerprints).orElse(Map.of()));
+            decision.map(ResultFreshness::decidedAt).ifPresent(at -> capturedAt.put(result.id(), at));
         }
-        var states = new HashMap<UUID, Currentness>();
+        var states = new HashMap<UUID, Freshness>();
         for (var group : rows.stream()
                 .collect(Collectors.groupingBy(result -> new ReadScope(
                         result.itemId(),
@@ -119,16 +136,16 @@ public class ResultFreshness {
             var current = item == null || kinds.isEmpty()
                     ? Map.<SourceKind, String>of()
                     : items.fingerprints(item, kinds, group.getKey().occasion());
-            for (var result : group.getValue())
+            for (var result : group.getValue()) {
+                var verifiedAt = capturedAt.get(result.id());
                 states.put(
                         result.id(),
-                        result.endedAt() != null
-                                ? Currentness.STALE
-                                : item == null
-                                        ? Currentness.STALE
-                                        : frozen.contains(result.id())
-                                                ? Currentness.CURRENT
-                                                : compare(expected.getOrDefault(result.id(), Map.of()), current));
+                        result.endedAt() != null || item == null
+                                ? Freshness.stale(verifiedAt)
+                                : frozen.contains(result.id())
+                                        ? Freshness.current(verifiedAt)
+                                        : freshness(expected.getOrDefault(result.id(), Map.of()), current, verifiedAt));
+            }
         }
         return Map.copyOf(states);
     }
@@ -196,6 +213,31 @@ public class ResultFreshness {
             }
         }
         return Map.copyOf(result);
+    }
+
+    /**
+     * {@link #compare} with what is known about an unverifiable answer: a missing record can never be verified, while
+     * a source that cannot be read now can be read later.
+     */
+    static Freshness freshness(
+            Map<SourceKind, String> captured, Map<SourceKind, String> current, @Nullable Instant capturedAt) {
+        if (captured.isEmpty()) return Freshness.recordMissing();
+        var currentness = compare(captured, current);
+        return new Freshness(
+                currentness,
+                currentness == Currentness.UNVERIFIABLE ? UnverifiableReason.WORK_UNREADABLE : null,
+                capturedAt);
+    }
+
+    /** When the capture read its sources, as its readiness decision recorded it. */
+    private static @Nullable Instant decidedAt(JsonNode decision) {
+        var value = decision.path("decidedAt");
+        if (!value.isString()) return null;
+        try {
+            return Instant.parse(value.asString());
+        } catch (DateTimeParseException malformed) {
+            return null;
+        }
     }
 
     public static Currentness compare(Map<SourceKind, String> captured, Map<SourceKind, String> current) {

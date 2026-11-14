@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
+import de.tum.cit.aet.hephaestus.practices.spi.UnverifiableReason;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -80,15 +81,34 @@ class ResultVisibilityPolicyTest {
     void archivedProofIsUnverifiableForNewClaims() {
         var r = result();
         r = resultBuilder(r).evidenceVersion((short) 0).build();
-        assertThat(ResultVisibilityPolicy.currentness(
-                        r, practice.getCurrentVersion(), practice.getCurrentVersion(), Currentness.CURRENT))
-                .isEqualTo(Currentness.UNVERIFIABLE);
+        assertThat(ResultVisibilityPolicy.freshness(
+                        r,
+                        practice.getCurrentVersion(),
+                        practice.getCurrentVersion(),
+                        Freshness.current(Instant.parse("2026-11-01T10:00:00Z"))))
+                .isEqualTo(new Freshness(Currentness.UNVERIFIABLE, UnverifiableReason.RECORD_MISSING, null));
         assertThat(policy.permitsAll(1L, List.of(r), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isEmpty();
         r.end(ResultEndReason.REPLACED, r.getRecordedAt().plusSeconds(1));
-        assertThat(ResultVisibilityPolicy.currentness(
-                        r, practice.getCurrentVersion(), practice.getCurrentVersion(), Currentness.CURRENT))
+        assertThat(ResultVisibilityPolicy.freshness(
+                                r, practice.getCurrentVersion(), practice.getCurrentVersion(), Freshness.current(null))
+                        .currentness())
                 .isEqualTo(Currentness.UNVERIFIABLE);
+    }
+
+    @Test
+    void shouldKeepWhyTheSourcesAreUnverifiableAndWhenTheyWereLastVerified() {
+        var r = result();
+        var capturedAt = Instant.parse("2026-11-03T14:05:00Z");
+        var unreadable = new Freshness(Currentness.UNVERIFIABLE, UnverifiableReason.WORK_UNREADABLE, capturedAt);
+
+        assertThat(ResultVisibilityPolicy.freshness(
+                        r, practice.getCurrentVersion(), practice.getCurrentVersion(), unreadable))
+                .isEqualTo(unreadable);
+        r.end(ResultEndReason.REPLACED, r.getRecordedAt().plusSeconds(1));
+        assertThat(ResultVisibilityPolicy.freshness(
+                        r, practice.getCurrentVersion(), practice.getCurrentVersion(), unreadable))
+                .isEqualTo(Freshness.stale(capturedAt));
     }
 
     @Test
@@ -97,7 +117,8 @@ class ResultVisibilityPolicyTest {
         var old = new PracticeVersion(
                 practice, 1, new JsonMapper().valueToTree(DefinitionTestFixtures.definition()), null);
         ReflectionTestUtils.setField(old, "reviewDigest", "v6:" + "b".repeat(64));
-        assertThat(ResultVisibilityPolicy.currentness(r, old, practice.getCurrentVersion(), Currentness.CURRENT))
+        assertThat(ResultVisibilityPolicy.freshness(r, old, practice.getCurrentVersion(), Freshness.current(null))
+                        .currentness())
                 .isEqualTo(Currentness.STALE);
     }
 

@@ -10760,6 +10760,12 @@ export const ResultDetailSchema = {
 		itemVersion: {
 			type: ["string", "null"],
 		},
+		lastVerifiedAt: {
+			type: ["string", "null"],
+			format: "date-time",
+			description:
+				"When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.",
+		},
 		markedIncorrectAt: {
 			type: ["string", "null"],
 			format: "date-time",
@@ -10807,6 +10813,12 @@ export const ResultDetailSchema = {
 		summary: {
 			type: ["string", "null"],
 		},
+		unverifiableReason: {
+			type: ["string", "null"],
+			description:
+				"Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.",
+			enum: ["RECORD_MISSING", "WORK_UNREADABLE", null],
+		},
 	},
 	required: [
 		"acceptedAt",
@@ -10821,6 +10833,7 @@ export const ResultDetailSchema = {
 		"id",
 		"item",
 		"itemVersion",
+		"lastVerifiedAt",
 		"markedIncorrectAt",
 		"origin",
 		"outcome",
@@ -10833,6 +10846,7 @@ export const ResultDetailSchema = {
 		"reviewId",
 		"severity",
 		"summary",
+		"unverifiableReason",
 	],
 } as const;
 
@@ -10906,6 +10920,12 @@ export const ResultListSchema = {
 		item: {
 			$ref: "#/components/schemas/ItemRef",
 		},
+		lastVerifiedAt: {
+			type: ["string", "null"],
+			format: "date-time",
+			description:
+				"When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.",
+		},
 		markedIncorrectAt: {
 			type: ["string", "null"],
 			format: "date-time",
@@ -10945,12 +10965,19 @@ export const ResultListSchema = {
 		summary: {
 			type: ["string", "null"],
 		},
+		unverifiableReason: {
+			type: ["string", "null"],
+			description:
+				"Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.",
+			enum: ["RECORD_MISSING", "WORK_UNREADABLE", null],
+		},
 	},
 	required: [
 		"acceptedAt",
 		"currentness",
 		"id",
 		"item",
+		"lastVerifiedAt",
 		"markedIncorrectAt",
 		"origin",
 		"outcome",
@@ -10961,6 +10988,7 @@ export const ResultListSchema = {
 		"reviewId",
 		"severity",
 		"summary",
+		"unverifiableReason",
 	],
 } as const;
 
@@ -11457,6 +11485,12 @@ export const ReviewBoundResultSchema = {
 		item: {
 			$ref: "#/components/schemas/ItemRef",
 		},
+		lastVerifiedAt: {
+			type: ["string", "null"],
+			format: "date-time",
+			description:
+				"When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.",
+		},
 		outcome: {
 			type: "string",
 			enum: ["MET", "NOT_MET", "DOES_NOT_APPLY", "COULD_NOT_DETERMINE"],
@@ -11482,12 +11516,19 @@ export const ReviewBoundResultSchema = {
 		summary: {
 			type: ["string", "null"],
 		},
+		unverifiableReason: {
+			type: ["string", "null"],
+			description:
+				"Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.",
+			enum: ["RECORD_MISSING", "WORK_UNREADABLE", null],
+		},
 	},
 	required: [
 		"currentness",
 		"developer",
 		"id",
 		"item",
+		"lastVerifiedAt",
 		"outcome",
 		"practiceName",
 		"practiceSlug",
@@ -11495,6 +11536,7 @@ export const ReviewBoundResultSchema = {
 		"reviewId",
 		"severity",
 		"summary",
+		"unverifiableReason",
 	],
 } as const;
 
@@ -12641,6 +12683,12 @@ export const ReviewProblemSchema = {
 		item: {
 			$ref: "#/components/schemas/ItemRef",
 		},
+		lastVerifiedAt: {
+			type: ["string", "null"],
+			format: "date-time",
+			description:
+				"When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.",
+		},
 		markedIncorrectAt: {
 			type: ["string", "null"],
 			format: "date-time",
@@ -12684,6 +12732,12 @@ export const ReviewProblemSchema = {
 		summary: {
 			type: "string",
 		},
+		unverifiableReason: {
+			type: ["string", "null"],
+			description:
+				"Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.",
+			enum: ["RECORD_MISSING", "WORK_UNREADABLE", null],
+		},
 	},
 	required: [
 		"acceptedAt",
@@ -12695,6 +12749,7 @@ export const ReviewProblemSchema = {
 		"group",
 		"id",
 		"item",
+		"lastVerifiedAt",
 		"markedIncorrectAt",
 		"path",
 		"practiceName",
@@ -12707,6 +12762,7 @@ export const ReviewProblemSchema = {
 		"sourceKind",
 		"startLine",
 		"summary",
+		"unverifiableReason",
 	],
 } as const;
 
@@ -12759,6 +12815,12 @@ export const ReviewProblemDetailSchema = {
 		item: {
 			$ref: "#/components/schemas/ItemRef",
 		},
+		lastVerifiedAt: {
+			type: ["string", "null"],
+			format: "date-time",
+			description:
+				"When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.",
+		},
 		markedIncorrectAt: {
 			type: ["string", "null"],
 			format: "date-time",
@@ -12808,6 +12870,12 @@ export const ReviewProblemDetailSchema = {
 		summary: {
 			type: "string",
 		},
+		unverifiableReason: {
+			type: ["string", "null"],
+			description:
+				"Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.",
+			enum: ["RECORD_MISSING", "WORK_UNREADABLE", null],
+		},
 	},
 	required: [
 		"acceptedAt",
@@ -12819,6 +12887,7 @@ export const ReviewProblemDetailSchema = {
 		"group",
 		"id",
 		"item",
+		"lastVerifiedAt",
 		"markedIncorrectAt",
 		"path",
 		"practiceName",
@@ -12833,6 +12902,7 @@ export const ReviewProblemDetailSchema = {
 		"sourceKind",
 		"startLine",
 		"summary",
+		"unverifiableReason",
 	],
 } as const;
 
@@ -13095,6 +13165,12 @@ export const ReviewResultSchema = {
 		item: {
 			$ref: "#/components/schemas/ItemRef",
 		},
+		lastVerifiedAt: {
+			type: ["string", "null"],
+			format: "date-time",
+			description:
+				"When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.",
+		},
 		markedIncorrectAt: {
 			type: ["string", "null"],
 			format: "date-time",
@@ -13138,6 +13214,12 @@ export const ReviewResultSchema = {
 		summary: {
 			type: ["string", "null"],
 		},
+		unverifiableReason: {
+			type: ["string", "null"],
+			description:
+				"Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.",
+			enum: ["RECORD_MISSING", "WORK_UNREADABLE", null],
+		},
 	},
 	required: [
 		"acceptedAt",
@@ -13146,6 +13228,7 @@ export const ReviewResultSchema = {
 		"feedback",
 		"id",
 		"item",
+		"lastVerifiedAt",
 		"markedIncorrectAt",
 		"origin",
 		"outcome",
@@ -13157,6 +13240,7 @@ export const ReviewResultSchema = {
 		"reviewId",
 		"severity",
 		"summary",
+		"unverifiableReason",
 	],
 } as const;
 
@@ -13278,6 +13362,12 @@ export const ReviewResultDetailSchema = {
 		itemVersion: {
 			type: ["string", "null"],
 		},
+		lastVerifiedAt: {
+			type: ["string", "null"],
+			format: "date-time",
+			description:
+				"When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.",
+		},
 		markedIncorrectAt: {
 			type: ["string", "null"],
 			format: "date-time",
@@ -13331,6 +13421,12 @@ export const ReviewResultDetailSchema = {
 		summary: {
 			type: ["string", "null"],
 		},
+		unverifiableReason: {
+			type: ["string", "null"],
+			description:
+				"Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.",
+			enum: ["RECORD_MISSING", "WORK_UNREADABLE", null],
+		},
 	},
 	required: [
 		"acceptedAt",
@@ -13349,6 +13445,7 @@ export const ReviewResultDetailSchema = {
 		"id",
 		"item",
 		"itemVersion",
+		"lastVerifiedAt",
 		"markedIncorrectAt",
 		"marks",
 		"origin",
@@ -13362,6 +13459,7 @@ export const ReviewResultDetailSchema = {
 		"reviewId",
 		"severity",
 		"summary",
+		"unverifiableReason",
 	],
 } as const;
 

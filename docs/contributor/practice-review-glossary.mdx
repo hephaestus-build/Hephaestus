@@ -173,6 +173,23 @@ The checks event of the head is such an edge.
 A practice that reads the checks as Optional never waits.
 These reasons establish nothing about the work.
 
+## Currentness
+
+Currentness tells whether an observation still describes the work: `CURRENT`, `STALE` or `UNVERIFIABLE`.
+A freshness read compares the source fingerprints that the capture recorded with the work that this server stores now.
+It reads the repository mirror as it is and never calls a provider.
+
+An unverifiable observation has one of these reasons (`unverifiableReason`):
+
+- `RECORD_MISSING`: the record of what the review read is missing, or it comes from an earlier version of the review. No later read can verify the observation. The product shows it as an unverified observation.
+- `WORK_UNREADABLE`: the record exists, but this server cannot read the current work now. For example, the repository mirror does not have the reviewed commits, or a source is not readable. A later read can verify the observation, for example after a capture syncs the mirror. The product shows it as unverified since the time it was last verified.
+
+**Last verified** (`lastVerifiedAt`) is the time when the observation's sources were last verified against the work: the time its capture read them.
+An observation without its record has no such time.
+
+These reasons establish nothing about the work.
+Delivery withholds the feedback of an unverifiable observation as `UNCORROBORATED`.
+
 ## Legacy history reasons
 
 These values describe rows that a release before 1.0 left. No code writes them.
