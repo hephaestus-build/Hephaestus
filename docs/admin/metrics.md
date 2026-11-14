@@ -477,6 +477,23 @@ The gauge makes no claim that the server did not check:
 
 The bundled PostgreSQL archives its WAL only when `postgresql.backup.enabled` is `true`.
 
+## Database size metrics
+
+The server role reads `pg_database_size` every five minutes.
+A scrape does not query the database.
+
+| Prometheus name                          | Type    | Meaning                                                                              |
+| ---------------------------------------- | ------- | ------------------------------------------------------------------------------------ |
+| `database_size_bytes`                    | Gauge   | The bytes of the database                                                            |
+| `database_volume_capacity_bytes`         | Gauge   | The bytes of the bundled PostgreSQL volume, from `postgresql.persistence.size`       |
+| `database_size_sampler_failures_total`   | Counter | Reads of the database size that failed                                               |
+
+The size is an approximation of how full the volume is.
+It does not include the WAL, temporary files or the space of the filesystem.
+
+- Before the first read, and after a read that failed, `database_size_bytes` is `NaN`.
+- With an external database, the chart sets no volume size, and the server does not export `database_volume_capacity_bytes`.
+
 ## HTTP route metrics
 
 `http.server.requests` uses route templates, not individual workspace slugs, message IDs, or query
