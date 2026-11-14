@@ -193,8 +193,7 @@ public final class SlackConversationTestSupport {
                 .coverage(OM.valueToTree(new HostCoverage(true, null, 1, 0, 0, List.of())))
                 .recordedAt(at)
                 .build());
-        assignment.setState(ReviewItemState.JUDGED);
-        assignment.setResultId(result.getId());
+        assignment.judge(result.getId());
         reviewItems.saveAndFlush(assignment);
         return result.getId();
     }

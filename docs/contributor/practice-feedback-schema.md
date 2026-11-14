@@ -41,7 +41,28 @@ Job cleanup does not remove the product review or its results.
 
 `review_practice` freezes the definition and complete method used for each practice.
 `review_item` owns the selected practice/item pairs and their proof references.
-Its stored states are LISTED, JUDGED, REUSED and WITHHELD.
+Its stored states are LISTED, STAGED, JUDGED, REUSED and WITHHELD.
+`ReviewItemState` owns the transition table, and `ReviewItem` changes its state only through `stage`, `judge`, `reuse` and `withhold`.
+These methods refuse an illegal move.
+The one native writer moves only a staged pair to WITHHELD when its staged payload can no longer be used.
+
+```mermaid
+stateDiagram-v2
+    accTitle: Lifecycle of a review item
+    accDescr: A selected pair starts in LISTED, or in WITHHELD when its plan refuses it. A running attempt stages its candidate. Admission judges a listed or staged pair, a matching earlier result reuses a listed pair, and a refusal or failure withholds a listed or staged pair. JUDGED, REUSED and WITHHELD have no exit.
+    [*] --> LISTED: selection
+    [*] --> WITHHELD: plan refuses
+    LISTED --> STAGED: stage
+    LISTED --> JUDGED: judge
+    STAGED --> JUDGED: judge
+    LISTED --> REUSED: reuse
+    LISTED --> WITHHELD: withhold
+    STAGED --> WITHHELD: withhold
+    JUDGED --> [*]
+    REUSED --> [*]
+    WITHHELD --> [*]
+```
+
 After closure, a remaining LISTED pair is Not reviewed.
 An outcome and a membership state are different facts.
 

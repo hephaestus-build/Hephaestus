@@ -274,8 +274,7 @@ public class PracticeModelTestFixtures {
                             "explanation",
                             problemText)));
         }
-        frozen.setState(ReviewItemState.JUDGED);
-        frozen.setResultId(result.getId());
+        frozen.judge(result.getId());
         frozen.setAttemptedAt(Instant.now());
         assignment.setStatus(ReviewPracticeStatus.DONE);
         work.job().setStatus(ReviewJobStatus.COMPLETED);

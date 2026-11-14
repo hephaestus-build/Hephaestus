@@ -159,15 +159,13 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
                 if (reusable.isPresent()) {
                     detail.set(
                             "custody", json.valueToTree(reusable.orElseThrow().custody()));
-                    locked.setState(ReviewItemState.REUSED);
-                    locked.setResultId(reusable.orElseThrow().result().getId());
+                    locked.reuse(reusable.orElseThrow().result().getId());
                     assignment.setStatus(ReviewPracticeStatus.DONE);
                     reused.add(decision.practiceId());
                 }
                 locked.setDetail(detail);
                 if (refused) {
-                    locked.setState(ReviewItemState.WITHHELD);
-                    locked.setReason(decision.reason());
+                    locked.withhold(Objects.requireNonNull(decision.reason()));
                     locked.setAttemptedAt(clock.instant());
                 }
             }

@@ -11,7 +11,6 @@ import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import de.tum.cit.aet.hephaestus.core.Lifecycle;
-import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.review.schedule.ReviewBatch;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import jakarta.persistence.Entity;
@@ -21,7 +20,6 @@ import org.junit.jupiter.api.Test;
 
 class LifecycleSetterArchTest extends HephaestusArchitectureTest {
     private static final List<Debt> REMAINING = List.of(
-            new Debt(ReviewItem.class, "state", "DEBT-STATE", "S-D9: ReviewItem needs guarded lifecycle transitions"),
             new Debt(ReviewBatch.class, "status", "RUN", "S-D12: ReviewBatch needs guarded lifecycle transitions"));
 
     @Test
