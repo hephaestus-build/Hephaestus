@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { glob, readFile } from "node:fs/promises";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 import { constants, runInNewContext } from "node:vm";
 
 import { parse } from "yaml";
@@ -184,7 +185,9 @@ async function panelFallback(
 	await runInNewContext(
 		`(async () => { ${script} })()`,
 		{
-			process: { env: { GITHUB_WORKSPACE: process.cwd() } },
+			// The script imports from the workspace. On a Windows test runner an absolute path is no ESM
+			// specifier, so the workspace is given as a file URL; the Linux workflow runner takes either.
+			process: { env: { GITHUB_WORKSPACE: pathToFileURL(process.cwd()).href } },
 			context: {
 				repo: { owner: "owner", repo: "repo" },
 				serverUrl: "https://github.com",
