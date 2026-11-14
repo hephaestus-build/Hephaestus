@@ -869,6 +869,8 @@ A new copy write needs two facts about the same work and the same developer.
 First, the context of other reviews' feedback is still current.
 Second, no write of another review has an unknown outcome.
 The write fence takes the item lock first, then reads both facts in one statement.
+The write fence also holds the developer's person-data write fence.
+It commits before the provider call, and no provider call runs in a transaction.
 
 A stale context withholds the piece as Public history changed.
 An unknown outcome withholds the piece as Public delivery unresolved.

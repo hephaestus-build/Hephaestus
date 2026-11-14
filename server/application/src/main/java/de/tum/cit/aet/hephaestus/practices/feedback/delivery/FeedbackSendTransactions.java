@@ -27,10 +27,10 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -56,9 +56,16 @@ public class FeedbackSendTransactions {
     private final FeedbackPublicationContext publication;
     private final FeedbackRepository feedback;
 
+    /**
+     * The copies are in position order, the order a send writes them in. The claim locks them in id order, which a
+     * hash of the feedback decides, so a withdrawal that lands during the first write would otherwise spare a different
+     * copy on each run. The position is unique within a feedback.
+     */
     public record Attempt(Feedback feedback, FeedbackSendAction action, List<FeedbackCopy> copies, int attempts) {
         public Attempt {
-            copies = List.copyOf(copies);
+            copies = copies.stream()
+                    .sorted(Comparator.comparingInt(FeedbackCopy::getPosition))
+                    .toList();
         }
     }
 
@@ -75,7 +82,9 @@ public class FeedbackSendTransactions {
      * Commits the copies' write fences before any provider write. A new create first holds the work's item lock in its
      * own statement, the lock every create on the work takes; one later statement then reads the publication context
      * and any unresolved write of another review from the same snapshot. A receipt that commits after that snapshot
-     * can only resolve a write this decision already saw as unresolved.
+     * can only resolve a write this decision already saw as unresolved. The same transaction holds the developer's
+     * person-data write fence and commits before the provider call, so no erasure or account change waits on the
+     * provider. A refused hold withholds the feedback and returns false: the writers swallow an exception from here.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean fence(
@@ -86,10 +95,19 @@ public class FeedbackSendTransactions {
             List<CopyReceipt> completed) {
         if (!attempting.isEmpty())
             publication.itemOf(workspaceId, feedbackId).ifPresent(itemId -> itemLocks.lock(workspaceId, itemId));
+        var recipient = feedback.developerOf(feedbackId, workspaceId);
+        if (recipient.isEmpty()) return false;
+        boolean admitted = privacy.holdForAccountWrite(recipient.get());
         feedback.lockCorrectionFamily(workspaceId, feedbackId);
         var row = store.lock(workspaceId, feedbackId);
+        if (row.getDeveloperId() != recipient.get())
+            throw new IllegalStateException("The feedback changed its developer.");
         if (!owns(owner)) return false;
         record(row, completed);
+        if (!admitted) {
+            store.withhold(row, FeedbackStopReason.PERSON_SUPPRESSED);
+            return false;
+        }
         if (visibility.withdrawn(workspaceId, feedbackId)) return false;
         if (row.getComposition().hasNonNull("editOf")) {
             var previous = store.lock(
@@ -312,12 +330,6 @@ public class FeedbackSendTransactions {
         return actions.holds(owner);
     }
 
-    @Transactional
-    public <T extends @Nullable Object> T recipientWrite(long developerId, Supplier<T> write) {
-        if (!privacy.holdForAccountWrite(developerId)) throw new RecipientWriteRefused();
-        return write.get();
-    }
-
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void correction(long workspaceId, UUID feedbackId, ActionAttempt owner, UUID copyId, String state) {
         store.lock(workspaceId, feedbackId);
@@ -345,24 +357,24 @@ public class FeedbackSendTransactions {
                 && store.check(row, true).allowed();
     }
 
+    /**
+     * Admits one provider correction: holds the developer's person-data write fence in this transaction, which commits
+     * before the provider call. A refused hold withholds the feedback with {@code PERSON_SUPPRESSED}.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean holdsLease(long workspaceId, UUID feedbackId, ActionAttempt owner) {
-        store.lock(workspaceId, feedbackId);
-        return owns(owner);
-    }
-
-    public static final class RecipientWriteRefused extends RuntimeException {
-        private static final long serialVersionUID = 1L;
-
-        private RecipientWriteRefused() {
-            super("Recipient processing is suppressed.");
-        }
-    }
-
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void refuseRecipient(long workspaceId, UUID feedbackId, ActionAttempt owner) {
+    public boolean admitCorrection(long workspaceId, UUID feedbackId, ActionAttempt owner) {
+        var recipient = feedback.developerOf(feedbackId, workspaceId);
+        if (recipient.isEmpty()) return false;
+        boolean admitted = privacy.holdForAccountWrite(recipient.get());
         var row = store.lock(workspaceId, feedbackId);
-        if (owns(owner)) store.withhold(row, FeedbackStopReason.PERSON_SUPPRESSED);
+        if (row.getDeveloperId() != recipient.get())
+            throw new IllegalStateException("The feedback changed its developer.");
+        if (!owns(owner)) return false;
+        if (!admitted) {
+            store.withhold(row, FeedbackStopReason.PERSON_SUPPRESSED);
+            return false;
+        }
+        return true;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

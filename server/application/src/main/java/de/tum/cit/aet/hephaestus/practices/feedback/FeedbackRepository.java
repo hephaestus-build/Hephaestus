@@ -58,6 +58,10 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID>, JpaSp
 
     Optional<Feedback> findByIdAndWorkspaceId(UUID id, long workspaceId);
 
+    /** The developer, read without loading the row: a later lock then reads the row as the lock found it. */
+    @Query("SELECT f.developerId FROM Feedback f WHERE f.id = :id AND f.workspaceId = :workspaceId")
+    Optional<Long> developerOf(@Param("id") UUID id, @Param("workspaceId") long workspaceId);
+
     List<Feedback> findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(long workspaceId, UUID reviewId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

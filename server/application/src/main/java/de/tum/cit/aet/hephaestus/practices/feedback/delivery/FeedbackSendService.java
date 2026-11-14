@@ -29,6 +29,8 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.util.Assert;
 
 @Service
 @ConditionalOnServerRole
@@ -46,6 +48,9 @@ public class FeedbackSendService {
 
     /** Carries out one claimed send of a feedback to its work. */
     public ActionResult send(ActionAttempt owner) {
+        Assert.state(
+                !TransactionSynchronizationManager.isActualTransactionActive(),
+                "Feedback provider writes require no active transaction");
         long workspaceId = Objects.requireNonNull(owner.workspaceId());
         UUID feedbackId = FeedbackSendQueue.feedbackOf(owner.idempotencyKey());
         var attempt = transactions.claim(workspaceId, feedbackId, owner);
@@ -69,8 +74,6 @@ public class FeedbackSendService {
             }
         } catch (FeedbackTargetResolver.TargetUnavailable refusal) {
             transactions.refuseTarget(workspaceId, feedbackId, owner, refusal.reason());
-        } catch (FeedbackSendTransactions.RecipientWriteRefused refusal) {
-            transactions.refuseRecipient(workspaceId, feedbackId, owner);
         } catch (RuntimeException failure) {
             transactions.error(workspaceId, feedbackId, owner);
             log.warn("Feedback send did not settle: workspaceId={}, feedbackId={}", workspaceId, feedbackId);
@@ -129,14 +132,10 @@ public class FeedbackSendService {
                 transactions.absent(copy.getWorkspaceId(), copy.getFeedbackId(), owner, copy.getId());
             return;
         }
-        var handle = transactions.recipientWrite(attempt.feedback().getDeveloperId(), () -> {
-            if (!owner.fence().beginWrite()
-                    || !transactions.fence(
-                            copy.getWorkspaceId(), copy.getFeedbackId(), owner, List.of(copy.getId()), List.of()))
-                return null;
-            return writer.postSummary(target, content);
-        });
-        if (handle == null) return;
+        if (!owner.fence().beginWrite()
+                || !transactions.fence(
+                        copy.getWorkspaceId(), copy.getFeedbackId(), owner, List.of(copy.getId()), List.of())) return;
+        var handle = writer.postSummary(target, content);
         transactions.receipt(
                 copy.getWorkspaceId(),
                 copy.getFeedbackId(),
@@ -199,14 +198,12 @@ public class FeedbackSendService {
             return;
         }
         var publication = publication(attempt, planned);
-        var result = transactions.recipientWrite(
-                attempt.feedback().getDeveloperId(),
-                () -> writer.postPackage(
-                        target,
-                        publication,
-                        (attempting, completed) ->
-                                (attempting.isEmpty() || owner.fence().beginWrite())
-                                        && transactions.fence(workspaceId, feedbackId, owner, attempting, completed)));
+        var result = writer.postPackage(
+                target,
+                publication,
+                (attempting, completed) ->
+                        (attempting.isEmpty() || owner.fence().beginWrite())
+                                && transactions.fence(workspaceId, feedbackId, owner, attempting, completed));
         transactions.receipt(workspaceId, feedbackId, owner, result.receipts());
         transactions.withholdCopies(
                 workspaceId, feedbackId, owner, result.withheldCopyIds(), FeedbackStopReason.VOLUME_CAPPED);

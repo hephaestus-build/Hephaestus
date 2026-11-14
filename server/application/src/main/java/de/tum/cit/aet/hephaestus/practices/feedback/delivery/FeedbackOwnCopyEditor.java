@@ -89,13 +89,9 @@ public class FeedbackOwnCopyEditor {
                         workspace, feedbackId, owner, List.of(copy.getId()), FeedbackStopReason.DELIVERY_UNCONFIRMED);
                 continue;
             }
-            var update = transactions.recipientWrite(row.getDeveloperId(), () -> {
-                if (!owner.fence().beginWrite()
-                        || !transactions.fence(workspace, feedbackId, owner, List.of(copy.getId()), List.of()))
-                    return null;
-                return update(attempt, target, copy, prior);
-            });
-            if (update == null) continue;
+            if (!owner.fence().beginWrite()
+                    || !transactions.fence(workspace, feedbackId, owner, List.of(copy.getId()), List.of())) continue;
+            var update = update(attempt, target, copy, prior);
             if (!copy.getId().equals(update.copyId())
                     || (update.externalRef() != null && !prior.getExternalRef().equals(update.externalRef())))
                 throw new IllegalArgumentException("A quiet edit must keep its original provider reference.");

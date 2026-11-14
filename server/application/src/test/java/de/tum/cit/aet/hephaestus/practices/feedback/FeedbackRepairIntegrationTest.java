@@ -65,7 +65,11 @@ class FeedbackRepairIntegrationTest extends AbstractFeedbackDeliveryIntegrationT
         assertThat(feedback.findById(feedbackId).orElseThrow().getBody()).isEqualTo(original.getBody());
         assertThat(repairs.prepare(proposal, feedbackId, "checked-one")).isEqualTo(receipt);
         assertThat(repairs.status(workspace.getId(), reviewId).edits()).isEqualTo(1);
+        var observation = observeNextWrite();
         transport.sender().send(workspace.getId(), revision);
+        assertThat(observation.calls).isEqualTo(1);
+        assertThat(observation.identities).isPositive();
+        assertThat(observation.problems).isEmpty();
         var edited = copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(workspace.getId(), revision)
                 .getFirst();
         assertThat(edited.getState())

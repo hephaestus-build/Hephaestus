@@ -107,6 +107,9 @@ This is the [transactional outbox](https://microservices.io/patterns/data/transa
   An outbox action locks before its domain row: its end moves that row in the same transaction ([The outbox](./outbox.md)).
   One exception: a domain write that holds its row may cancel the pending actions of the row's lane.
   It never touches an action that runs, and an end only locks an action that runs, so the two never wait on each other.
+  A feedback provider write holds the person-data write fence in the short transaction that starts its write.
+  That transaction locks the item first, when it creates a copy, then takes the fence, then locks the feedback rows.
+  The fence is the developer's identity advisory locks and account row (`PersonDataWriteFence`).
   Sort advisory lock keys before you take them.
   PostgreSQL: "The best defense against deadlocks is generally to avoid them by being certain that all applications using a database acquire locks on multiple objects in a consistent order."
 - Use `pg_advisory_xact_lock`. It is "automatically released at the end of the transaction".
