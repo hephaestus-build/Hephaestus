@@ -20,7 +20,6 @@ import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -69,9 +68,11 @@ class GitHubGraphQlClientProviderTest extends BaseUnitTest {
 
     @Test
     void shouldReturnGuardedClientWhenPersonalAccessTokenScopeIsActive() {
-        when(tokenProvider.isScopeActive(42L)).thenReturn(true);
-        when(tokenProvider.getAuthMode(42L)).thenReturn(AuthMode.PERSONAL_ACCESS_TOKEN);
-        when(tokenProvider.getPersonalAccessToken(42L)).thenReturn(Optional.of("github-token"));
+        when(tokenProvider.access(42L))
+                .thenReturn(new InstallationTokenProvider.ScmAccess(
+                        true,
+                        new InstallationTokenProvider.ScmConnection(AuthMode.PERSONAL_ACCESS_TOKEN, null, null),
+                        "github-token"));
         HttpGraphQlClient guardedClient = mock(HttpGraphQlClient.class);
         when(clientFactory.withBearerTokenAndAttribute(
                         baseClient, "github-token", GitHubCredentialRefusalFilter.SCOPE_ID_ATTRIBUTE, 42L))

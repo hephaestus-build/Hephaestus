@@ -168,26 +168,27 @@ public class GitHubGraphQlClientProvider {
     }
 
     public String getToken(Long scopeId) {
+        var access = tokenProvider.access(scopeId);
         // Fail fast for suspended/inactive scopes - don't waste API calls
-        if (!tokenProvider.isScopeActive(scopeId)) {
+        if (!access.active()) {
             throw new IllegalStateException(
                     "Scope " + scopeId + " is not active (suspended or purged). Refusing to mint token.");
         }
 
-        AuthMode authMode = tokenProvider.getAuthMode(scopeId);
-
-        if (authMode == AuthMode.INSTALLATION_APP) {
-            Long installationId = tokenProvider
-                    .getInstallationId(scopeId)
-                    .orElseThrow(() -> new IllegalStateException("Scope " + scopeId + " has no installation id."));
+        if (access.connection().authMode() == AuthMode.INSTALLATION_APP) {
+            Long installationId = access.connection().installationId();
+            if (installationId == null) {
+                throw new IllegalStateException("Scope " + scopeId + " has no installation id.");
+            }
             InstallationToken token = appTokens.getInstallationTokenDetails(installationId);
             return token.token();
         }
 
-        return tokenProvider
-                .getPersonalAccessToken(scopeId)
-                .filter(t -> !t.isBlank())
-                .orElseThrow(() -> new IllegalStateException(
-                        "Scope " + scopeId + " is configured for PAT access but no token is stored."));
+        String token = access.personalAccessToken();
+        if (token == null || token.isBlank()) {
+            throw new IllegalStateException(
+                    "Scope " + scopeId + " is configured for PAT access but no token is stored.");
+        }
+        return token;
     }
 }

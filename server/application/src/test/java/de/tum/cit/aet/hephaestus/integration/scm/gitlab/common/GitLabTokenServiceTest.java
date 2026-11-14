@@ -9,10 +9,12 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.AuthMode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationTokenProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationTokenProvider.ScmAccess;
+import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationTokenProvider.ScmConnection;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
-import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
@@ -56,8 +58,9 @@ class GitLabTokenServiceTest extends BaseUnitTest {
 
         @Test
         void shouldReturnTokenForActiveScope() {
-            when(tokenProvider.isScopeActive(1L)).thenReturn(true);
-            when(tokenProvider.getPersonalAccessToken(1L)).thenReturn(Optional.of("glpat-test-token"));
+            when(tokenProvider.access(1L))
+                    .thenReturn(new ScmAccess(
+                            true, new ScmConnection(AuthMode.PERSONAL_ACCESS_TOKEN, null, null), "glpat-test-token"));
 
             String token = tokenService.getAccessToken(1L);
 
@@ -66,7 +69,9 @@ class GitLabTokenServiceTest extends BaseUnitTest {
 
         @Test
         void shouldThrowForInactiveScope() {
-            when(tokenProvider.isScopeActive(1L)).thenReturn(false);
+            when(tokenProvider.access(1L))
+                    .thenReturn(
+                            new ScmAccess(false, new ScmConnection(AuthMode.PERSONAL_ACCESS_TOKEN, null, null), null));
 
             assertThatThrownBy(() -> tokenService.getAccessToken(1L))
                     .isInstanceOf(IllegalStateException.class)
@@ -75,8 +80,9 @@ class GitLabTokenServiceTest extends BaseUnitTest {
 
         @Test
         void shouldThrowWhenNoTokenStored() {
-            when(tokenProvider.isScopeActive(1L)).thenReturn(true);
-            when(tokenProvider.getPersonalAccessToken(1L)).thenReturn(Optional.empty());
+            when(tokenProvider.access(1L))
+                    .thenReturn(
+                            new ScmAccess(true, new ScmConnection(AuthMode.PERSONAL_ACCESS_TOKEN, null, null), null));
 
             assertThatThrownBy(() -> tokenService.getAccessToken(1L))
                     .isInstanceOf(IllegalStateException.class)
@@ -85,8 +91,9 @@ class GitLabTokenServiceTest extends BaseUnitTest {
 
         @Test
         void shouldThrowWhenTokenIsBlank() {
-            when(tokenProvider.isScopeActive(1L)).thenReturn(true);
-            when(tokenProvider.getPersonalAccessToken(1L)).thenReturn(Optional.of("  "));
+            when(tokenProvider.access(1L))
+                    .thenReturn(
+                            new ScmAccess(true, new ScmConnection(AuthMode.PERSONAL_ACCESS_TOKEN, null, null), "  "));
 
             assertThatThrownBy(() -> tokenService.getAccessToken(1L))
                     .isInstanceOf(IllegalStateException.class)
@@ -99,21 +106,24 @@ class GitLabTokenServiceTest extends BaseUnitTest {
 
         @Test
         void shouldReturnCustomUrl() {
-            when(tokenProvider.getServerUrl(1L)).thenReturn(Optional.of("https://gitlab.example.com"));
+            when(tokenProvider.connection(1L))
+                    .thenReturn(new ScmConnection(AuthMode.PERSONAL_ACCESS_TOKEN, null, "https://gitlab.example.com"));
 
             assertThat(tokenService.resolveServerUrl(1L)).isEqualTo("https://gitlab.example.com");
         }
 
         @Test
         void shouldStripTrailingSlash() {
-            when(tokenProvider.getServerUrl(1L)).thenReturn(Optional.of("https://gitlab.example.com/"));
+            when(tokenProvider.connection(1L))
+                    .thenReturn(new ScmConnection(AuthMode.PERSONAL_ACCESS_TOKEN, null, "https://gitlab.example.com/"));
 
             assertThat(tokenService.resolveServerUrl(1L)).isEqualTo("https://gitlab.example.com");
         }
 
         @Test
         void shouldReturnDefaultUrl() {
-            when(tokenProvider.getServerUrl(1L)).thenReturn(Optional.empty());
+            when(tokenProvider.connection(1L))
+                    .thenReturn(new ScmConnection(AuthMode.PERSONAL_ACCESS_TOKEN, null, null));
 
             assertThat(tokenService.resolveServerUrl(1L)).isEqualTo("https://gitlab.com");
         }
@@ -124,7 +134,9 @@ class GitLabTokenServiceTest extends BaseUnitTest {
 
         @Test
         void shouldReturnNullWhenTokenRetrievalFails() {
-            when(tokenProvider.isScopeActive(1L)).thenReturn(false);
+            when(tokenProvider.access(1L))
+                    .thenReturn(
+                            new ScmAccess(false, new ScmConnection(AuthMode.PERSONAL_ACCESS_TOKEN, null, null), null));
 
             assertThat(tokenService.validateToken(1L)).isNull();
         }
@@ -132,9 +144,11 @@ class GitLabTokenServiceTest extends BaseUnitTest {
         @Test
         @SuppressWarnings("unchecked")
         void shouldUseCacheForRepeatedValidation() {
-            when(tokenProvider.isScopeActive(1L)).thenReturn(true);
-            when(tokenProvider.getPersonalAccessToken(1L)).thenReturn(Optional.of("glpat-test"));
-            when(tokenProvider.getServerUrl(1L)).thenReturn(Optional.empty());
+            when(tokenProvider.access(1L))
+                    .thenReturn(new ScmAccess(
+                            true, new ScmConnection(AuthMode.PERSONAL_ACCESS_TOKEN, null, null), "glpat-test"));
+            when(tokenProvider.connection(1L))
+                    .thenReturn(new ScmConnection(AuthMode.PERSONAL_ACCESS_TOKEN, null, null));
 
             // Set up WebClient mock chain
             RequestHeadersUriSpec<?> uriSpec = mock(RequestHeadersUriSpec.class);
@@ -166,7 +180,9 @@ class GitLabTokenServiceTest extends BaseUnitTest {
 
         @Test
         void shouldReturnFalseWhenInactive() {
-            when(tokenProvider.isScopeActive(1L)).thenReturn(false);
+            when(tokenProvider.access(1L))
+                    .thenReturn(
+                            new ScmAccess(false, new ScmConnection(AuthMode.PERSONAL_ACCESS_TOKEN, null, null), null));
 
             assertThat(tokenService.isTokenValid(1L)).isFalse();
         }

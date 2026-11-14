@@ -134,7 +134,8 @@ class ConnectionServiceTest extends BaseUnitTest {
                         Clock.systemUTC()),
                 mock(SourceProviderNamespaces.class),
                 Clock.fixed(Instant.parse("2026-11-03T12:00:00Z"), ZoneOffset.UTC),
-                mock(ProviderResourceRepairs.class));
+                mock(ProviderResourceRepairs.class),
+                new ActiveScmConnections(connectionRepository, mock(CredentialReader.class)));
         // Default: the connection is free. Only the disconnect fence ever asks.
         lenient().when(syncJobService.requestCancelForTeardown(anyLong())).thenReturn(Optional.empty());
         workspace = new Workspace();

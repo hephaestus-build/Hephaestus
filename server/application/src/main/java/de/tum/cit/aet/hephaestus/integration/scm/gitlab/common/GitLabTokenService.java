@@ -62,16 +62,18 @@ public class GitLabTokenService {
      * @throws IllegalStateException if scope is not active or has no token
      */
     public String getAccessToken(Long scopeId) {
-        if (!tokenProvider.isScopeActive(scopeId)) {
+        var access = tokenProvider.access(scopeId);
+        if (!access.active()) {
             throw new IllegalStateException(
                     "Scope " + scopeId + " is not active (suspended or purged). Refusing to provide token.");
         }
 
-        return tokenProvider
-                .getPersonalAccessToken(scopeId)
-                .filter(t -> !t.isBlank())
-                .orElseThrow(() -> new IllegalStateException(
-                        "Scope " + scopeId + " is configured for GitLab PAT access but no token is stored."));
+        String token = access.personalAccessToken();
+        if (token == null || token.isBlank()) {
+            throw new IllegalStateException(
+                    "Scope " + scopeId + " is configured for GitLab PAT access but no token is stored.");
+        }
+        return token;
     }
 
     /**
@@ -84,7 +86,8 @@ public class GitLabTokenService {
      * @return the server URL (never null, never blank)
      */
     public String resolveServerUrl(Long scopeId) {
-        return tokenProvider.getServerUrl(scopeId).map(this::serverUrlOf).orElseGet(properties::defaultServerUrl);
+        String configured = tokenProvider.connection(scopeId).serverUrl();
+        return configured == null ? properties.defaultServerUrl() : serverUrlOf(configured);
     }
 
     /** The server URL that a connection stores, as the API clients address it. */

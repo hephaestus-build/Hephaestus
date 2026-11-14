@@ -1,43 +1,48 @@
 package de.tum.cit.aet.hephaestus.integration.core.spi;
 
-import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
- * Provides authentication credentials for a scope (workspace).
- * <p>
- * This interface is provider-agnostic at the method level — both GitHub and GitLab
- * workspaces store personal access tokens, and both use scope IDs (workspace IDs)
- * for credential lookup. Provider-specific logic (GitHub App tokens, GitLab OAuth)
- * is handled by the respective token services that consume this SPI.
+ * Provides a scope's (workspace's) access to its source-control provider. Provider-specific token work (GitHub App
+ * tokens, GitLab validation) stays in the token services that consume this SPI.
  */
 public interface InstallationTokenProvider {
-    /** Get GitHub App installation ID for minting tokens. */
-    Optional<Long> getInstallationId(Long scopeId);
 
-    /** Get personal access token (for PAT mode — works for both GitHub and GitLab PATs). */
-    Optional<String> getPersonalAccessToken(Long scopeId);
-
-    AuthMode getAuthMode(Long scopeId);
+    /** The scope's connection settings, from one read of its active GitHub or GitLab connection. Reads no credential. */
+    ScmConnection connection(Long scopeId);
 
     /**
-     * Check if the scope is active and eligible for API operations.
-     * Returns false for suspended or purged scopes to prevent wasted API calls.
-     *
-     * @param scopeId the scope to check
-     * @return true if active, false if suspended/purged/not found
+     * The scope's access, from one read of the workspace and one of its active GitHub or GitLab connection. The stored
+     * token is read only for an active scope.
      */
-    boolean isScopeActive(Long scopeId);
+    ScmAccess access(Long scopeId);
 
     /**
-     * Get the custom server URL for a scope (for self-hosted git provider instances).
-     * <p>
-     * Returns {@link Optional#empty()} when the scope uses the provider's default URL
-     * (e.g., {@code https://gitlab.com} or {@code https://api.github.com}).
-     *
-     * @param scopeId the scope to check
-     * @return the custom server URL, or empty if using provider default
+     * @param authMode       how the scope authenticates; {@code INSTALLATION_APP} when it has no SCM connection
+     * @param installationId the GitHub App installation, in App mode
+     * @param serverUrl      the connection's self-hosted server URL; null for the provider's default
      */
-    default Optional<String> getServerUrl(Long scopeId) {
-        return Optional.empty();
+    record ScmConnection(
+            AuthMode authMode,
+            @Nullable Long installationId,
+            @Nullable String serverUrl) {
+        public static final ScmConnection NONE = new ScmConnection(AuthMode.INSTALLATION_APP, null, null);
+    }
+
+    /**
+     * @param active              false for a suspended, purged or unknown scope, which must not call the provider
+     * @param personalAccessToken the stored token of a GitHub PAT or GitLab connection of an active scope; never an
+     *                            App's stored identity
+     */
+    record ScmAccess(
+            boolean active,
+            ScmConnection connection,
+            @Nullable String personalAccessToken) {
+        /** Keeps the token out of logs and test failure output. */
+        @Override
+        public String toString() {
+            return "ScmAccess[active=" + active + ", connection=" + connection + ", personalAccessToken="
+                    + (personalAccessToken == null ? "null" : "***") + "]";
+        }
     }
 }

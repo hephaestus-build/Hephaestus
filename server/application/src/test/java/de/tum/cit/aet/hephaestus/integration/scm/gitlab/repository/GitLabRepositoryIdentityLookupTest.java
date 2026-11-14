@@ -10,6 +10,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveScmConnections;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAuditRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -104,6 +105,7 @@ class GitLabRepositoryIdentityLookupTest extends BaseUnitTest {
                 credentials,
                 mock(SourceProviderNamespaces.class),
                 Clock.systemUTC(),
-                mock(ProviderResourceRepairs.class));
+                mock(ProviderResourceRepairs.class),
+                new ActiveScmConnections(connections, credentials));
     }
 }

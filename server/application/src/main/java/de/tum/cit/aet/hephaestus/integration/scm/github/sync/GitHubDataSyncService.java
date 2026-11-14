@@ -520,7 +520,7 @@ public class GitHubDataSyncService {
      */
     public void syncAllRepositories(Long scopeId, @Nullable SyncExecutionHandle handle) {
         // Fail fast for a suspended installation so no threads are spawned for it at all.
-        Long installationId = tokenProvider.getInstallationId(scopeId).orElse(null);
+        Long installationId = tokenProvider.connection(scopeId).installationId();
         if (installationId != null && gitHubAppTokenService.isInstallationMarkedSuspended(installationId)) {
             log.info(
                     "Skipped all repository syncs: reason=installationSuspended, scopeId={}, installationId={}",
