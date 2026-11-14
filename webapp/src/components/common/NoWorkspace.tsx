@@ -25,7 +25,7 @@ export function NoWorkspace({ headingLevel = 1, creation }: NoWorkspaceProps) {
 			headingLevel={headingLevel}
 			description={
 				creation === "instance-admin-only"
-					? `${NOT_A_MEMBER} Ask an instance admin to create a workspace or add you.`
+					? `${NOT_A_MEMBER} Members come from GitHub or GitLab: ask whoever manages your organization or group to add you, or ask an instance admin to create a workspace.`
 					: NOT_A_MEMBER
 			}
 			action={
