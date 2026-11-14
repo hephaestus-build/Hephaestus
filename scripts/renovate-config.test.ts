@@ -130,7 +130,6 @@ void test("an asset update moves Trivy's URL, archive name and SHA-256 together"
 	const digests: Record<string, string> = {
 		"linux-x64": "bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf",
 		"linux-arm64": "ab9d51f86e6a5fb936f605faff6b593ac51bc378fff4d3e8b9d58358b9c367c3",
-		checksums: "802e4ac1418ed967cd3c4b901f4f71ca00b7363ede67778665a22d9f13f58c83",
 	};
 	for (const [platform, asset] of Object.entries(parsed.assets)) {
 		assert.ok(isRecord(asset));
@@ -187,9 +186,20 @@ void test("Renovate creates bounded update PRs without a manual dispatch queue",
 	// One weekly batch per group keeps at most two dependency pull requests in the merge queue.
 	assert.deepEqual(config.schedule, ["before 7am on monday"]);
 	assert.ok(isRecord(config.lockFileMaintenance));
-	assert.deepEqual(config.lockFileMaintenance.schedule, [
-		"before 7am on the first day of the month",
-	]);
+	assert.deepEqual(config.lockFileMaintenance.schedule, config.schedule);
+	// The practice-runtime rule asks for approval on its package file; the lock refresh spans every
+	// file, so the last rule exempts it, or the weekly refresh would wait on the dashboard.
+	assert.ok(Array.isArray(config.packageRules));
+	const lockRules = config.packageRules
+		.filter(isRecord)
+		.filter(
+			(rule) =>
+				Array.isArray(rule.matchUpdateTypes) &&
+				rule.matchUpdateTypes.includes("lockFileMaintenance"),
+		);
+	assert.equal(lockRules.length, 1);
+	assert.equal(lockRules[0]?.dependencyDashboardApproval, false);
+	assert.equal(config.packageRules.at(-1), lockRules[0]);
 	assert.equal(config.prHourlyLimit, 2);
 	assert.equal(config.prConcurrentLimit, 2);
 	assert.equal(config.branchConcurrentLimit, 2);

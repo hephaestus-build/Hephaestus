@@ -23,7 +23,7 @@
 	"dependencyDashboardTitle": "Dependency Dashboard",
 	"lockFileMaintenance": {
 		"enabled": true,
-		"schedule": ["before 7am on the first day of the month"]
+		"schedule": ["before 7am on monday"]
 	},
 	"rangeStrategy": "replace",
 	"constraints": { "java": "21" },
@@ -222,6 +222,11 @@
 			"matchDepNames": ["mcr.microsoft.com/playwright"],
 			"matchUpdateTypes": ["major", "minor", "patch"],
 			"enabled": false
+		},
+		{
+			"description": "Lock file maintenance spans every package file, so the practice-runtime approval would hold it. It refreshes locked versions within the declared ranges, so it runs on the weekly schedule. Last, so no earlier approval rule overrides it",
+			"matchUpdateTypes": ["lockFileMaintenance"],
+			"dependencyDashboardApproval": false
 		}
 	],
 	"customManagers": [
