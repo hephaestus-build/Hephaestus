@@ -13,6 +13,10 @@ const exclusion =
 // download means that a pin is missing, and the build would depend on that host.
 const download = /Downloading from (?<uri>\S+)/u;
 
+// The lifecycle's own failure lines. Without an annotation, the step shows only its exit status,
+// and the next step reports the missing digest instead of the cause.
+const failure = /^(?:\[\w+\]\s+)?(?:ERROR: |unable to )/u;
+
 const output = process.argv[2];
 if (!isSet(output)) {
 	throw new Error("Usage: summarize-buildpack-log.ts <raw-log-path>");
@@ -20,9 +24,14 @@ if (!isSet(output)) {
 writeFileSync(output, "");
 const counts = new Map<string, number>();
 const downloads: string[] = [];
+const failures: string[] = [];
 for await (const line of createInterface({ input: process.stdin, crlfDelay: Infinity })) {
 	appendFileSync(output, `${line}\n`);
-	const uri = download.exec(stripVTControlCharacters(line))?.groups?.uri;
+	const plain = stripVTControlCharacters(line).trim();
+	if (failure.test(plain)) {
+		failures.push(plain);
+	}
+	const uri = download.exec(plain)?.groups?.uri;
 	if (uri !== undefined && !uri.startsWith("file:")) {
 		downloads.push(uri);
 	}
@@ -53,4 +62,14 @@ for (const uri of downloads) {
 }
 if (downloads.length > 0) {
 	process.exitCode = 1;
+}
+// A line "unable to" alone can be a warning; the lifecycle prints "ERROR:" when the build fails.
+if (failures.some((line) => line.includes("ERROR: "))) {
+	// A workflow command ends at a line break, so the message escapes them (docs.github.com, workflow commands).
+	const message = failures
+		.join("\n")
+		.replaceAll("%", "%25")
+		.replaceAll("\r", "%0D")
+		.replaceAll("\n", "%0A");
+	console.log(`::error title=Buildpacks build failed::${message}`);
 }
