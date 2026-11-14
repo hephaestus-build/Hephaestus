@@ -20,6 +20,7 @@ import liquibase.database.core.PostgresDatabase;
 import liquibase.integration.spring.SpringResourceAccessor;
 import liquibase.parser.ChangeLogParserFactory;
 import liquibase.resource.ResourceAccessor;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
@@ -30,6 +31,7 @@ import org.springframework.boot.liquibase.autoconfigure.LiquibaseProperties;
 import org.springframework.boot.sql.init.dependency.AbstractBeansOfTypeDatabaseInitializerDetector;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.io.ResourceLoader;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -53,6 +55,8 @@ public final class MigratedSchemaWait implements InitializingBean {
 
     private static final Duration POLL = Duration.ofSeconds(5);
     private static final Duration REPORT_EVERY = Duration.ofMinutes(1);
+    private static final String UNREACHABLE =
+            "The database does not accept a connection yet, so the schema cannot be checked.";
 
     private final JdbcTemplate jdbc;
     private final LiquibaseProperties properties;
@@ -75,19 +79,21 @@ public final class MigratedSchemaWait implements InitializingBean {
         List<ChangeSet> expected = expected();
         long start = System.nanoTime();
         long nextReport = start;
-        List<ChangeSet> pending = pending(expected);
-        while (!pending.isEmpty()) {
+        @Nullable List<ChangeSet> pending = pendingIfReachable(expected);
+        while (pending == null || !pending.isEmpty()) {
             long now = System.nanoTime();
+            String state = pending == null ? UNREACHABLE : behind(pending);
             if (now - start >= timeout.toNanos()) {
-                throw new IllegalStateException(behind(pending) + " The wait ended after " + timeout
+                throw new IllegalStateException(state + " The wait ended after " + timeout
                         + ". Run this release's database migration, then start this process again. "
                         + "https://docs.hephaestus.build/admin/runtime-roles#database-migrations");
             }
             if (now - nextReport >= 0) {
                 log.atWarn()
-                        .addKeyValue("event.name", "database.migration.awaited")
-                        .addKeyValue("database.migration.pending", pending.size())
-                        .log("{} Waiting for the database migration", behind(pending));
+                        .addKeyValue(
+                                "event.name", pending == null ? "database.unreachable" : "database.migration.awaited")
+                        .addKeyValue("database.migration.pending", pending == null ? expected.size() : pending.size())
+                        .log("{} Waiting for the database migration", state);
                 nextReport = now + REPORT_EVERY.toNanos();
             }
             try {
@@ -96,9 +102,19 @@ public final class MigratedSchemaWait implements InitializingBean {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("Interrupted while waiting for the database migration", e);
             }
-            pending = pending(expected);
+            pending = pendingIfReachable(expected);
         }
         log.atInfo().addKeyValue("event.name", "database.migration.current").log("Database schema is current");
+    }
+
+    // On a first install the server starts beside PostgreSQL and the migration Job, so a database that does not accept
+    // a connection yet is one more reason to wait, not to stop. Null means that the database refused the connection.
+    private @Nullable List<ChangeSet> pendingIfReachable(List<ChangeSet> expected) {
+        try {
+            return pending(expected);
+        } catch (CannotGetJdbcConnectionException e) {
+            return null;
+        }
     }
 
     /** The change sets that the migration applies, with the filters Liquibase applies apart from the history. */

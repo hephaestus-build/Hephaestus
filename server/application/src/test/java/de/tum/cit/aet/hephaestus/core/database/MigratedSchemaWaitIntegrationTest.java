@@ -40,6 +40,17 @@ class MigratedSchemaWaitIntegrationTest {
                 .hasMessageContaining("The database schema is behind this release");
     }
 
+    @Test
+    void shouldWaitForADatabaseThatDoesNotAcceptAConnectionYet() {
+        // Port 1 refuses at once: the server of a first install starts before PostgreSQL accepts connections.
+        var unreachable = new TestDatabase("jdbc:postgresql://127.0.0.1:1/hephaestus", "hephaestus", "unused");
+
+        assertThatThrownBy(() -> start(unreachable).close())
+                .rootCause()
+                .hasMessageStartingWith("The database does not accept a connection yet")
+                .hasMessageContaining("The wait ended after PT1S");
+    }
+
     private static ConfigurableApplicationContext start(TestDatabase database) {
         var application = new SpringApplication(
                 Application.class,
