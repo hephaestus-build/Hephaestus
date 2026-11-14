@@ -5,7 +5,7 @@ import {
 	isSafeLegalHref,
 	isSafeLegalImageSrc,
 	LEGAL_PAGE_TITLES,
-	type resolveLegalContent,
+	type LegalContentResolver,
 } from "@/lib/legal";
 
 import { LegalPage } from "./LegalPage";
@@ -50,14 +50,14 @@ const HOSTILE_MARKDOWN = `# Hostile
 ![ok](https://tum.de/logo.png "spoof-img-title")
 `;
 
-function makeResolver(markdown: string): typeof resolveLegalContent {
+function makeResolver(markdown: string): LegalContentResolver {
 	return async () => ({
 		markdown,
 		source: "override",
 	});
 }
 
-const disclaimerResolver: typeof resolveLegalContent = async () => ({
+const disclaimerResolver: LegalContentResolver = async () => ({
 	markdown: "# fallback",
 	source: "disclaimer",
 });

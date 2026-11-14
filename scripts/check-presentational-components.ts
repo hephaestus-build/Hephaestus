@@ -20,6 +20,8 @@ const FETCHING_MODULES = [
 	"@/api/sdk.gen",
 	"@/api/client",
 	"@/api/client.gen",
+	"@/runtime/auth/auth-client",
+	"@/runtime/resolve-legal-content",
 	"~/api",
 	"~/background",
 	"~/views",

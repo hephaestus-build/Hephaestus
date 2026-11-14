@@ -55,12 +55,28 @@ function repairStateCopy(repair: ProviderResourceRepair) {
 	return "This authorization has an uncertain outcome. An instance admin must confirm its outcome at Slack before releasing this block.";
 }
 
+/** Why this console offers no release button. The instance console releases an owned block through its connection. */
+function releaseUnavailableCopy(
+	repair: ProviderResourceRepair,
+	scope: ProviderResourceRepairsProps["scope"],
+) {
+	if (repair.state === "REGISTERING") {
+		return "Wait for the authorization or registration to finish before confirming its outcome.";
+	}
+	if (scope === "instance" && repair.owners.length > 0) {
+		return "Confirm that removal is complete, then release the block in connection administration.";
+	}
+	return "An instance admin can release the block after confirming removal is complete.";
+}
+
 export interface ProviderRepairItem {
 	repair: ProviderResourceRepair;
 	releaseAvailable: boolean;
 }
 
 export interface ProviderResourceRepairsProps {
+	/** The console that renders the list. It decides where a block with an owning connection is released. */
+	scope: "instance" | "workspace";
 	state:
 		| { status: "loading" }
 		| { status: "error"; error: unknown; onRetry: () => void }
@@ -83,6 +99,7 @@ function owningPage(kind: ProviderResourceRepair["kind"]) {
 }
 
 export function ProviderResourceRepairs({
+	scope,
 	state,
 	onRelease,
 	isReleasing = false,
@@ -164,11 +181,7 @@ export function ProviderResourceRepairs({
 											Confirm removal
 										</Button>
 									) : (
-										<p>
-											{repair.state === "REGISTERING"
-												? "Wait for the authorization or registration to finish before confirming its outcome."
-												: "An instance admin can release the block after confirming removal is complete."}
-										</p>
+										<p>{releaseUnavailableCopy(repair, scope)}</p>
 									)}
 								</AlertDescription>
 							</Alert>

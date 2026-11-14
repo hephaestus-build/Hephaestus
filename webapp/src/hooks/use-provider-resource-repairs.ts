@@ -101,6 +101,7 @@ function useRepairView(
 		};
 	}
 	return {
+		scope: scope.kind,
 		state,
 		onRelease,
 		isReleasing: instanceRelease.isPending || connectionRelease.isPending,

@@ -4,14 +4,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { hasText } from "@/lib/text";
-import { authClient } from "@/runtime/auth/auth-client";
 
 /**
  * Passwordless dev/test sign-in, shown only when the server advertises the `dev` provider. It mints a
  * real admin session, so local development and the live E2E suite can authenticate without an OAuth
  * provider; the server decides whether it is offered, and does not offer it in production.
  */
-export function DevSignInForm({ returnTo }: { returnTo?: string }) {
+export function DevSignInForm({ onSignIn }: { onSignIn: (username: string) => Promise<void> }) {
 	const [username, setUsername] = useState("dev-admin");
 	const [pending, setPending] = useState(false);
 	const [signInError, setSignInError] = useState<string>();
@@ -21,7 +20,7 @@ export function DevSignInForm({ returnTo }: { returnTo?: string }) {
 		setPending(true);
 		setSignInError(undefined);
 		try {
-			await authClient.devLogin(name, true, returnTo);
+			await onSignIn(name);
 		} catch (error) {
 			setSignInError(error instanceof Error ? error.message : "Dev sign-in failed");
 			setPending(false);

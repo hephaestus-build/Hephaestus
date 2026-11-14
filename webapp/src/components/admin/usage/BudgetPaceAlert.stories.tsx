@@ -19,6 +19,7 @@ const meta = {
 	tags: ["autodocs"],
 	args: {
 		scope: "provider",
+		subjectName: null,
 		percent: 84,
 		spendUsd: 42,
 		capUsd: 50,

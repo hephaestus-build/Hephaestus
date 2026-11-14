@@ -130,6 +130,37 @@ describe("contextual sign-in", () => {
 		);
 	});
 
+	it("signs in as the dev admin and returns to the requested page", async () => {
+		server.use(
+			http.get("*/identity-providers", () =>
+				HttpResponse.json([{ registrationId: "dev", displayName: "Dev", providerType: "DEV" }]),
+			),
+		);
+		const devLogin = vi.spyOn(authClient, "devLogin").mockResolvedValue(undefined);
+		renderRouteAtWithRouter("/login?returnTo=%2Fabout");
+		await userEvent.click(
+			await screen.findByRole("button", { name: "Continue as dev admin" }, ROUTE_RENDER_WAIT),
+		);
+		expect(devLogin).toHaveBeenCalledWith("dev-admin", true, "/about");
+	});
+
+	it("shows why dev sign-in failed and lets the reader retry", async () => {
+		server.use(
+			http.get("*/identity-providers", () =>
+				HttpResponse.json([{ registrationId: "dev", displayName: "Dev", providerType: "DEV" }]),
+			),
+		);
+		vi.spyOn(authClient, "devLogin").mockRejectedValue(new Error("Dev sign-in failed (403)"));
+		renderRouteAtWithRouter("/login");
+		await userEvent.click(
+			await screen.findByRole("button", { name: "Continue as dev admin" }, ROUTE_RENDER_WAIT),
+		);
+		await screen.findByText("Dev sign-in failed (403)");
+		expect(
+			screen.getByRole<HTMLButtonElement>("button", { name: "Continue as dev admin" }).disabled,
+		).toBe(false);
+	});
+
 	it("retries provider discovery in place", async () => {
 		server.use(http.get("*/identity-providers", () => new HttpResponse(null, { status: 503 })));
 		renderRouteAtWithRouter("/login");

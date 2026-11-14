@@ -10,7 +10,11 @@ const meta = {
 	component: ProviderResourceRepairs,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
-	args: { state: { status: "ready", items: [] }, onRelease: fn(async () => undefined) },
+	args: {
+		scope: "workspace",
+		state: { status: "ready", items: [] },
+		onRelease: fn(async () => undefined),
+	},
 } satisfies Meta<typeof ProviderResourceRepairs>;
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -56,6 +60,11 @@ export const WorkspaceAdministrator: Story = {
 	args: { state: { status: "ready", items: [{ repair, releaseAvailable: false }] } },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("button", { name: "Confirm removal" })).not.toBeInTheDocument();
+		await expect(
+			canvas.getByText(
+				"An instance admin can release the block after confirming removal is complete.",
+			),
+		).toBeVisible();
 	},
 };
 export const InstanceAdministratorOnConnection: Story = {
@@ -140,6 +149,7 @@ export const Reflow: Story = {
 
 export const InstanceAdministratorOrphan: Story = {
 	args: {
+		scope: "instance",
 		state: {
 			status: "ready",
 			items: [
@@ -166,6 +176,7 @@ export const InstanceAdministratorOrphan: Story = {
 
 export const InstanceOverviewWithOwner: Story = {
 	args: {
+		scope: "instance",
 		state: {
 			status: "ready",
 			items: [
@@ -180,6 +191,12 @@ export const InstanceOverviewWithOwner: Story = {
 		await expect(
 			canvas.getByRole("link", { name: "Open connection administration" }),
 		).toHaveAttribute("href", "/w/platform/admin/integrations/outline?repairConnection=7");
+		await expect(
+			canvas.getByText(
+				"Confirm that removal is complete, then release the block in connection administration.",
+			),
+		).toBeVisible();
+		await expect(canvas.queryByText(/An instance admin can release/u)).not.toBeInTheDocument();
 	},
 };
 

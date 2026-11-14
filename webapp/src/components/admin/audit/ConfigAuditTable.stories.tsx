@@ -171,6 +171,19 @@ export const EmptyInitial: Story = {
 	args: { state: loaded([]) },
 	play: async ({ canvas }) => {
 		canvas.getByText("No settings changes yet");
+		canvas.getByText(
+			"Changes to settings, member roles, feature flags, and AI configuration will appear here.",
+		);
+	},
+};
+
+/** The instance log has the workspace column, and its empty state reads the same. */
+export const EmptyInitialInstanceLog: Story = {
+	args: { state: loaded([]), showWorkspace: true },
+	play: async ({ canvas }) => {
+		canvas.getByText(
+			"Changes to settings, member roles, feature flags, and AI configuration will appear here.",
+		);
 	},
 };
 

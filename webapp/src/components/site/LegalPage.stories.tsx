@@ -5,7 +5,7 @@ import {
 	LEGAL_PAGE_TITLES,
 	type LegalPageId,
 	type ResolvedLegalContent,
-	type resolveLegalContent,
+	type LegalContentResolver,
 } from "@/lib/legal";
 import { withStandardPage } from "@/stories/decorators";
 
@@ -59,7 +59,7 @@ const FIXTURES: Record<FixtureKey, Record<LegalPageId, string>> = {
 	},
 };
 
-function makeResolver(key: FixtureKey): typeof resolveLegalContent {
+function makeResolver(key: FixtureKey): LegalContentResolver {
 	return async (page): Promise<ResolvedLegalContent> => ({
 		markdown: FIXTURES[key][page],
 		source: key,

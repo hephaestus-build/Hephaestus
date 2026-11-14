@@ -25,6 +25,7 @@ describe("provider removal confirmation", () => {
 		const onRelease = vi.fn(async () => undefined);
 		render(
 			<ProviderResourceRepairs
+				scope="workspace"
 				state={{ status: "ready", items: [{ repair, releaseAvailable: true }] }}
 				onRelease={onRelease}
 			/>,
@@ -43,6 +44,7 @@ describe("provider removal confirmation", () => {
 		const user = userEvent.setup();
 		render(
 			<ProviderResourceRepairs
+				scope="workspace"
 				state={{ status: "ready", items: [{ repair, releaseAvailable: true }] }}
 				onRelease={async () => {
 					throw new Error("The identity changed.");
@@ -61,6 +63,7 @@ describe("provider removal confirmation", () => {
 		const onRelease = vi.fn(async () => undefined);
 		const view = render(
 			<ProviderResourceRepairs
+				scope="workspace"
 				state={{ status: "ready", items: [{ repair, releaseAvailable: true }] }}
 				onRelease={onRelease}
 			/>,
@@ -68,6 +71,7 @@ describe("provider removal confirmation", () => {
 		await user.click(screen.getByRole("button", { name: "Confirm removal" }));
 		view.rerender(
 			<ProviderResourceRepairs
+				scope="workspace"
 				state={{ status: "ready", items: [{ repair, releaseAvailable: false }] }}
 				onRelease={onRelease}
 			/>,

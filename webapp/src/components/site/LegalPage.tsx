@@ -6,8 +6,8 @@ import {
 	isSafeLegalHref,
 	isSafeLegalImageSrc,
 	type LegalPageId,
+	type LegalContentResolver,
 	type ResolvedLegalContent,
-	resolveLegalContent,
 } from "@/lib/legal";
 
 const DISCLAIMER_BANNER =
@@ -47,10 +47,10 @@ const warnedDisclaimer = new Set<LegalPageId>();
 export interface LegalPageProps {
 	page: LegalPageId;
 	title: string;
-	resolver?: typeof resolveLegalContent;
+	resolver: LegalContentResolver;
 }
 
-export function LegalPage({ page, title, resolver = resolveLegalContent }: LegalPageProps) {
+export function LegalPage({ page, title, resolver }: LegalPageProps) {
 	return (
 		<div className="mx-auto flex max-w-4xl flex-col gap-4">
 			<h1 className="text-3xl font-bold">{title}</h1>
@@ -63,7 +63,7 @@ export function LegalPage({ page, title, resolver = resolveLegalContent }: Legal
 
 interface LegalContentProps {
 	page: LegalPageId;
-	resolver: typeof resolveLegalContent;
+	resolver: LegalContentResolver;
 }
 
 function LegalContent({ page, resolver }: LegalContentProps) {
