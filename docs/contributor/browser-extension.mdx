@@ -96,8 +96,8 @@ stateDiagram-v2
     accDescr: The worker binds an unbound intent to one confirmation tab. Confirmation consumes the intent before a request leaves.
     [*] --> Absent
     Absent --> Unbound: open
-    Unbound --> Unbound: replace
-    Bound --> Unbound: replace
+    Unbound --> Unbound: open replaces it
+    Bound --> Unbound: open replaces it
     Unbound --> Bound: bind created confirmation tab
     Unbound --> Absent: forget matching ID
     Bound --> Absent: forget, discard, or window closes

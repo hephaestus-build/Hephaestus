@@ -267,6 +267,30 @@ describe("SessionStore across an instance change", () => {
 	});
 });
 
+describe("SessionStore when a new sign-in replaces a family during its refresh", () => {
+	it("revokes the replaced family and its late rotation, and keeps the new family", async () => {
+		const { store, refresh, revoke, current } = harness({
+			generation: 1,
+			epoch: 1,
+			credentials: family(A, "a", 0),
+		});
+		const reply = holdRefresh(refresh);
+		const pending = store.access();
+		await vi.waitFor(() => {
+			expect(refresh).toHaveBeenCalledOnce();
+		});
+		const { epoch } = await store.snapshot();
+		await expect(store.adopt(family(B, "b"), epoch)).resolves.toBe(true);
+		reply.resolve({ status: "ok", tokens: tokens("a2") });
+		await expect(pending).resolves.toBeUndefined();
+		expect(revoke.mock.calls).toStrictEqual([
+			[A, "refresh-a"],
+			[A, "refresh-a2"],
+		]);
+		expect(current().credentials).toStrictEqual(family(B, "b"));
+	});
+});
+
 describe("session transitions", () => {
 	const signedOut = { state: "signed-out", generation: 3, epoch: 2 } satisfies SessionState;
 	const signedIn = {

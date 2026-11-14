@@ -220,7 +220,8 @@ export class SessionStore {
 		this.#deps.onChange(changed.next.generation);
 		const replaced = changed.previous.credentials;
 		if (replaced !== undefined) {
-			await this.#deps.revoke(replaced.issuer, replaced.tokens.refreshToken);
+			// The new session is stored already, so the sign-in does not wait for the old issuer to answer.
+			void this.#deps.revoke(replaced.issuer, replaced.tokens.refreshToken);
 		}
 		return true;
 	}
