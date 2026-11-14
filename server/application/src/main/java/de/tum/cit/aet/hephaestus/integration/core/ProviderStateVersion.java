@@ -21,4 +21,18 @@ public final class ProviderStateVersion {
             @Nullable Instant incoming, @Nullable Instant stored, Instant observedAt, @Nullable Instant lastWriteAt) {
         return incoming != null && incoming.equals(stored) && lastWriteAt != null && observedAt.isAfter(lastWriteAt);
     }
+
+    /**
+     * Whether a snapshot must not replace the stored state: it is undated or not newer, and it is not a sync read that
+     * began after the last write ({@link #acceptsEqualRead}).
+     */
+    public static boolean refuses(
+            @Nullable Instant incoming,
+            @Nullable Instant stored,
+            boolean syncRead,
+            Instant observedAt,
+            @Nullable Instant lastWriteAt) {
+        boolean freshEqualRead = syncRead && acceptsEqualRead(incoming, stored, observedAt, lastWriteAt);
+        return !freshEqualRead && cannotReplace(incoming, stored);
+    }
 }

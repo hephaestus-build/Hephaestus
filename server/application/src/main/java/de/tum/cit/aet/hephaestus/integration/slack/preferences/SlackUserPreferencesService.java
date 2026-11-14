@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsen
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackPersonErasureService;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -114,10 +115,11 @@ public class SlackUserPreferencesService {
                 .findFirst()
                 .orElseThrow(() -> notFound("Slack account is not linked for this workspace."));
 
+        Instant decidedAt = Instant.now();
         if (channelMessagesAllowed) {
-            participantConsentService.recordChannelMessageOptIn(workspaceId, slackLink.providerUserKey());
-        } else {
-            participantConsentService.recordChannelMessageOptOut(workspaceId, slackLink.providerUserKey());
+            participantConsentService.recordChannelMessageOptIn(workspaceId, slackLink.providerUserKey(), decidedAt);
+        } else if (participantConsentService.recordChannelMessageOptOut(
+                workspaceId, slackLink.providerUserKey(), decidedAt)) {
             erasureService.erasePerson(workspaceId, accountId, slackLink.providerUserKey());
         }
         return toDto(connection, slackLink, channelMessagesAllowed)

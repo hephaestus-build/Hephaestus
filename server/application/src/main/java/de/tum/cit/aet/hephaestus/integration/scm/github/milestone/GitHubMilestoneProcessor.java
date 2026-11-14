@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.milestone;
 
+import de.tum.cit.aet.hephaestus.integration.core.ProviderStateVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
@@ -92,9 +93,29 @@ public class GitHubMilestoneProcessor {
 
         // Always look up by number within the repository to avoid duplicates.
         // The milestone number is unique within a repository and is the canonical identifier.
+        // The row lock makes the compare with the stored updated_at and the write after it one step.
+        milestoneRepository.lockByRepositoryIdAndNumber(repository.getId(), dto.number());
         Optional<Milestone> existingOpt =
                 milestoneRepository.findByNumberAndRepositoryId(dto.number(), repository.getId());
         boolean isNew = existingOpt.isEmpty();
+
+        // A late delivery would restore an older title, state or due date (sync-lifecycle.md).
+        // A sync read that began after the last write may settle an equal version: issue counts change without moving
+        // it.
+        if (!isNew
+                && ProviderStateVersion.refuses(
+                        dto.updatedAt(),
+                        existingOpt.get().getUpdatedAt(),
+                        context.isSync(),
+                        context.observedAt(),
+                        existingOpt.get().getLastSyncAt())) {
+            log.debug(
+                    "Skipped stale milestone update: milestoneId={}, existingUpdatedAt={}, dtoUpdatedAt={}",
+                    existingOpt.get().getId(),
+                    existingOpt.get().getUpdatedAt(),
+                    dto.updatedAt());
+            return existingOpt.get();
+        }
 
         Milestone milestone = existingOpt.orElseGet(Milestone::new);
 

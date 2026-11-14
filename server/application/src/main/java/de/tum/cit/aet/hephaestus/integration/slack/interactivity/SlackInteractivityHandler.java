@@ -6,6 +6,7 @@ import static com.slack.api.model.block.composition.BlockCompositions.markdownTe
 import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestSubscriptions;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackConsentBlocks;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackMentorService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackPersonErasureService;
@@ -17,7 +18,9 @@ import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackAppHomeService;
 import jakarta.annotation.PreDestroy;
+import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -109,13 +112,17 @@ public class SlackInteractivityHandler {
 
         for (JsonNode action : payload.path("actions")) {
             String actionId = action.path("action_id").asString("");
+            // Slack dates every block action. The date orders a consent choice against a later one that Slack
+            // delivered first; a payload without one is ordered by its arrival.
+            Instant decidedAt = Objects.requireNonNullElseGet(
+                    SlackTs.toInstant(action.path("action_ts").asString("")), Instant::now);
             switch (actionId) {
                 case SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_OUT ->
-                    handleChannelMessageOptOut(workspaceId, teamId, slackUserId, channelId, true);
+                    handleChannelMessageOptOut(workspaceId, teamId, slackUserId, channelId, decidedAt, true);
                 case SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_IN ->
-                    handleChannelMessageOptIn(workspaceId, teamId, slackUserId);
+                    handleChannelMessageOptIn(workspaceId, teamId, slackUserId, decidedAt);
                 case SlackConsentBlocks.ACTION_PARTICIPANT_OPT_OUT ->
-                    handleChannelMessageOptOut(workspaceId, teamId, slackUserId, channelId, false);
+                    handleChannelMessageOptOut(workspaceId, teamId, slackUserId, channelId, decidedAt, false);
                 case SlackMentorPosts.FEEDBACK_ACTION ->
                     mentorService.handleFeedback(
                             teamId, channelId, slackUserId, action.path("value").asString(""));
@@ -127,8 +134,17 @@ public class SlackInteractivityHandler {
     }
 
     private void handleChannelMessageOptOut(
-            long workspaceId, String teamId, String slackUserId, String channelId, boolean refreshHome) {
-        participantConsentService.recordChannelMessageOptOut(workspaceId, slackUserId);
+            long workspaceId,
+            String teamId,
+            String slackUserId,
+            String channelId,
+            Instant decidedAt,
+            boolean refreshHome) {
+        // An opt-out older than the stored choice would erase what the person allowed after it.
+        if (!participantConsentService.recordChannelMessageOptOut(workspaceId, slackUserId, decidedAt)) {
+            log.debug("slack.interactivity: skipped opt-out older than the stored choice for user {}", slackUserId);
+            return;
+        }
         Long memberId = identityResolver
                 .resolveAccountId(workspaceId, teamId, slackUserId)
                 .orElse(null);
@@ -183,8 +199,8 @@ public class SlackInteractivityHandler {
         });
     }
 
-    private void handleChannelMessageOptIn(long workspaceId, String teamId, String slackUserId) {
-        participantConsentService.recordChannelMessageOptIn(workspaceId, slackUserId);
+    private void handleChannelMessageOptIn(long workspaceId, String teamId, String slackUserId, Instant decidedAt) {
+        participantConsentService.recordChannelMessageOptIn(workspaceId, slackUserId, decidedAt);
         followUpExecutor.execute(() -> refreshHomeBestEffort(teamId, slackUserId));
     }
 

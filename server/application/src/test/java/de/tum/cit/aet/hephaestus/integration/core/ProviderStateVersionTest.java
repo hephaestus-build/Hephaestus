@@ -39,4 +39,23 @@ class ProviderStateVersionTest {
         assertThat(ProviderStateVersion.acceptsEqualRead(version, version, writtenAt.plusNanos(nanosAfterWrite), null))
                 .isFalse();
     }
+
+    @ParameterizedTest
+    @CsvSource({
+        // incoming offset from stored (s), sync read, read begun after the write, refused
+        "-1,true,true,true",
+        "0,false,true,true",
+        "0,true,false,true",
+        "0,true,true,false",
+        "1,false,false,false"
+    })
+    void shouldRefuseANotNewerSnapshotUnlessItIsASyncReadBegunAfterTheWrite(
+            long secondsAfterStored, boolean syncRead, boolean readAfterWrite, boolean refused) {
+        Instant stored = Instant.parse("2026-01-01T00:00:00Z");
+        Instant writtenAt = stored.plusSeconds(60);
+        Instant observedAt = readAfterWrite ? writtenAt.plusNanos(1) : writtenAt.minusNanos(1);
+        assertThat(ProviderStateVersion.refuses(
+                        stored.plusSeconds(secondsAfterStored), stored, syncRead, observedAt, writtenAt))
+                .isEqualTo(refused);
+    }
 }

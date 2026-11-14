@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.slack.domain;
 
+import java.time.Instant;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -36,30 +37,27 @@ public interface SlackParticipantConsentRepository
             @Param("workspaceId") long workspaceId, @Param("slackUserId") String slackUserId);
 
     /**
-     * Records the current channel-message ingestion choice.
-     * Research eligibility is determined by the native-account consent ledger, not this row.
+     * Records a channel-message ingestion choice made at {@code decidedAt}, unless a later choice is already stored.
+     * Slack can deliver an action again after a later one, and an older choice must not undo it. An equal time is the
+     * same choice again. Research eligibility is determined by the native-account consent ledger, not this row.
+     *
+     * @return 1 when the choice is now the stored one, 0 when a later choice kept it out
      */
     @Modifying
     @Transactional
     @Query(value = """
         INSERT INTO slack_participant_consent (workspace_id, slack_user_id, ingestion_opted_out, decided_at)
-        VALUES (:workspaceId, :slackUserId, true, now())
+        VALUES (:workspaceId, :slackUserId, :optedOut, :decidedAt)
         ON CONFLICT (workspace_id, slack_user_id) DO UPDATE SET
-            ingestion_opted_out = true,
-            decided_at = now()
+            ingestion_opted_out = EXCLUDED.ingestion_opted_out,
+            decided_at = EXCLUDED.decided_at
+        WHERE slack_participant_consent.decided_at <= EXCLUDED.decided_at
         """, nativeQuery = true)
-    void optOutOfIngestion(@Param("workspaceId") long workspaceId, @Param("slackUserId") String slackUserId);
-
-    @Modifying
-    @Transactional
-    @Query(value = """
-        INSERT INTO slack_participant_consent (workspace_id, slack_user_id, ingestion_opted_out, decided_at)
-        VALUES (:workspaceId, :slackUserId, false, now())
-        ON CONFLICT (workspace_id, slack_user_id) DO UPDATE SET
-            ingestion_opted_out = false,
-            decided_at = now()
-        """, nativeQuery = true)
-    void optInToIngestion(@Param("workspaceId") long workspaceId, @Param("slackUserId") String slackUserId);
+    int decide(
+            @Param("workspaceId") long workspaceId,
+            @Param("slackUserId") String slackUserId,
+            @Param("optedOut") boolean optedOut,
+            @Param("decidedAt") Instant decidedAt);
 
     /**
      * Count of individuals who have opted OUT of ingestion in this workspace. Person opt-out is workspace-scoped

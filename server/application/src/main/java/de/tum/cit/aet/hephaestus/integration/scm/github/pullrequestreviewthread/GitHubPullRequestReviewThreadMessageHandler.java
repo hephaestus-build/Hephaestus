@@ -123,7 +123,7 @@ public class GitHubPullRequestReviewThreadMessageHandler
                 Instant resolvedAt = event.updatedAt() != null
                         ? event.updatedAt()
                         : prDto.updatedAt() != null ? prDto.updatedAt() : Instant.now();
-                threadProcessor.resolve(threadId, resolvedBy, resolvedAt, context);
+                threadProcessor.resolve(threadId, resolvedBy, resolvedAt, event.updatedAt(), context);
             }
             case GitHubEventAction.PullRequestReviewThread.UNRESOLVED -> {
                 // Thread ID is derived from the first comment. If no comments exist, we cannot
@@ -138,7 +138,7 @@ public class GitHubPullRequestReviewThreadMessageHandler
                                     : "unknown");
                     return;
                 }
-                threadProcessor.unresolve(threadId, context);
+                threadProcessor.unresolve(threadId, event.updatedAt(), context);
             }
             default ->
                 log.debug(

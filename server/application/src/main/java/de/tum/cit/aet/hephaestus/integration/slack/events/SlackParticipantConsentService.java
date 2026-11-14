@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
+import java.time.Instant;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,22 +28,26 @@ public class SlackParticipantConsentService {
     }
 
     /**
-     * Persist an ingestion-only opt-out from the in-channel notice. This excludes the person's monitored-channel
+     * Persist an ingestion-only opt-out made at {@code decidedAt}. This excludes the person's monitored-channel
      * messages but deliberately does not change research participation.
+     *
+     * @return whether the opt-out is the stored choice; false when a later choice is stored or the user is blank
      */
     @Transactional
-    public void recordChannelMessageOptOut(long workspaceId, String slackUserId) {
-        if (slackUserId == null || slackUserId.isBlank()) {
-            return;
-        }
-        participantConsentRepository.optOutOfIngestion(workspaceId, slackUserId);
+    public boolean recordChannelMessageOptOut(long workspaceId, String slackUserId, Instant decidedAt) {
+        return record(workspaceId, slackUserId, true, decidedAt);
     }
 
+    /** @return whether the opt-in is the stored choice; false when a later choice is stored or the user is blank */
     @Transactional
-    public void recordChannelMessageOptIn(long workspaceId, String slackUserId) {
+    public boolean recordChannelMessageOptIn(long workspaceId, String slackUserId, Instant decidedAt) {
+        return record(workspaceId, slackUserId, false, decidedAt);
+    }
+
+    private boolean record(long workspaceId, String slackUserId, boolean optedOut, Instant decidedAt) {
         if (slackUserId == null || slackUserId.isBlank()) {
-            return;
+            return false;
         }
-        participantConsentRepository.optInToIngestion(workspaceId, slackUserId);
+        return participantConsentRepository.decide(workspaceId, slackUserId, optedOut, decidedAt) > 0;
     }
 }

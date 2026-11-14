@@ -45,6 +45,17 @@ public interface MilestoneRepository extends JpaRepository<Milestone, Long> {
             @Param("number") Integer number, @Param("repositoryId") Long repositoryId);
 
     /**
+     * Locks the milestone without loading it, so a compare with its stored state and the write after it are atomic.
+     * It must be the transaction's first read of the milestone: the caller then reads it through
+     * {@link #findByNumberAndRepositoryId}, which sees what the last writer committed.
+     */
+    @Query(
+            value = "SELECT id FROM milestone WHERE repository_id = :repositoryId AND number = :number"
+                    + " FOR NO KEY UPDATE",
+            nativeQuery = true)
+    Optional<Long> lockByRepositoryIdAndNumber(@Param("repositoryId") long repositoryId, @Param("number") int number);
+
+    /**
      * Atomically inserts a milestone if absent (race-condition safe).
      * <p>
      * Uses PostgreSQL's ON CONFLICT DO NOTHING to handle concurrent inserts

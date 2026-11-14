@@ -165,7 +165,7 @@ class ThreadItemSourceIntegrationTest extends BaseIntegrationTest {
         assertThat(source.permits(fixture.item(), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isTrue();
         var pinned = source.pin(fixture.item(), null);
-        consent.optOutOfIngestion(fixture.item().workspaceId(), "U2");
+        consent.decide(fixture.item().workspaceId(), "U2", true, Instant.now());
         assertThat(source.permits(fixture.item(), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isFalse();
         var captured = source.capture(pinned, request());
@@ -215,7 +215,7 @@ class ThreadItemSourceIntegrationTest extends BaseIntegrationTest {
                 .isTrue();
         assertThat(source.current(fixture.item())).isEmpty();
 
-        consent.optOutOfIngestion(fixture.item().workspaceId(), "U2");
+        consent.decide(fixture.item().workspaceId(), "U2", true, Instant.now());
         assertThat(source.permits(fixture.item(), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY, human))
                 .isFalse();
     }

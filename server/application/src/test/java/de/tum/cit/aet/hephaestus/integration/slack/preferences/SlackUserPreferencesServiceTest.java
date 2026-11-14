@@ -2,8 +2,10 @@ package de.tum.cit.aet.hephaestus.integration.slack.preferences;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -25,6 +27,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.events.SlackPersonErasureServ
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -122,9 +125,12 @@ class SlackUserPreferencesServiceTest extends BaseUnitTest {
         when(monitoredChannelRepository.countByWorkspaceIdAndConsentState(1L, ConsentState.ACTIVE))
                 .thenReturn(1L);
 
+        when(participantConsentService.recordChannelMessageOptOut(eq(1L), eq("U1"), any(Instant.class)))
+                .thenReturn(true);
+
         SlackUserWorkspacePreferencesDTO dto = service.updateChannelMessagesAllowed(1L, ACCOUNT_ID, false);
 
-        verify(participantConsentService).recordChannelMessageOptOut(1L, "U1");
+        verify(participantConsentService).recordChannelMessageOptOut(eq(1L), eq("U1"), any(Instant.class));
         verify(erasureService).erasePerson(1L, ACCOUNT_ID, "U1");
         assertThat(dto.channelMessagesAllowed()).isFalse();
     }
@@ -139,7 +145,7 @@ class SlackUserPreferencesServiceTest extends BaseUnitTest {
 
         service.updateChannelMessagesAllowed(1L, ACCOUNT_ID, true);
 
-        verify(participantConsentService).recordChannelMessageOptIn(1L, "U1");
+        verify(participantConsentService).recordChannelMessageOptIn(eq(1L), eq("U1"), any(Instant.class));
         // Opt-in must not erase anyone, not merely the current person.
         verify(erasureService, never()).erasePerson(anyLong(), anyLong(), anyString());
     }
