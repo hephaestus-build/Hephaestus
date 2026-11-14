@@ -110,3 +110,20 @@ await test("props named isLoading and error each need their own story", async ()
 	});
 	assert.deepEqual(missing, { [`${COMPONENTS}/Table.tsx`]: ["error"] });
 });
+
+await test("a prop that ends in Error is an error state, and a refusal story covers it", async () => {
+	const dialog = {
+		[`${COMPONENTS}/AmountDialog.tsx`]: `
+export interface AmountDialogProps { isPending: boolean; serverError?: string | null; }
+export function AmountDialog(props: AmountDialogProps) { return null; }
+`,
+	};
+	assert.deepEqual(await missingOf(dialog), { [`${COMPONENTS}/AmountDialog.tsx`]: ["error"] });
+	assert.deepEqual(
+		await missingOf({
+			...dialog,
+			[`${COMPONENTS}/AmountDialog.stories.tsx`]: "export const ServerRejection = {};",
+		}),
+		{},
+	);
+});

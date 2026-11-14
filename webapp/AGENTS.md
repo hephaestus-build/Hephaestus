@@ -223,10 +223,10 @@ It requires a sibling story for each state that a component's props carry:
 
 - **Loading:** a prop `isLoading` or `loading`, or a `status` or `state` of `"loading"`.
   `isPending` is not a signal, because on a form it means that a submit is in flight.
-- **Error:** a prop `error` or `isError`, or a `status` or `state` of `"error"`.
+- **Error:** a prop `error` or `isError`, a prop that ends in `Error` (`serverError`), or a `status` or `state` of `"error"`.
 - **Empty:** a `status` or `state` of `"empty"`.
 
-A story name says the state in its words: `Loading`, `LoadFailed`, `Unavailable`, `Empty`.
+A story name says the state in its words: `Loading`, `LoadFailed`, `Unavailable`, `Refused`, `Empty`.
 `LoadingMore` and `LoadFailed` are not the first load.
 A component whose props cannot show a state needs no story for it. Do not add a prop to get one.
 Cover a state that the parent owns in the parent's story.

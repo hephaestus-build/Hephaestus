@@ -120,7 +120,7 @@ export const Remove: Story = {
 };
 
 /** A refused save names the missing description beside it. */
-export const MissingDescription: Story = {
+export const RefusedWithoutDescription: Story = {
 	args: {
 		value: { svg: bundledGuidance.visual.svg, alt: "" },
 		altError: "Describe what the visual shows.",

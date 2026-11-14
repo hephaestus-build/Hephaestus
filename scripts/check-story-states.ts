@@ -7,7 +7,8 @@
  * exports a component whose props type, read from the declarations alone, carries:
  *
  * - **loading**: a member named `isLoading` or `loading`, or a `status`/`state` of `"loading"`;
- * - **error**: a member named `error` or `isError`, or a `status`/`state` of `"error"`;
+ * - **error**: a member named `error` or `isError`, one that ends in `Error` (`serverError`), or a
+ *   `status`/`state` of `"error"`;
  * - **empty**: a `status`/`state` of `"empty"`.
  *
  * An empty story is required only where the props name an empty state, because a story renders from
@@ -220,7 +221,10 @@ class Program {
 				continue;
 			}
 			for (const state of STATES) {
-				if (PROP_NAMES[state].includes(name)) {
+				if (
+					PROP_NAMES[state].includes(name) ||
+					(state === "error" && /^[a-z]+Error$/u.test(name))
+				) {
 					found.add(state);
 				}
 			}
@@ -333,6 +337,9 @@ const FAILURE_WORDS = [
 	"failure",
 	"failures",
 	"invalid",
+	"refused",
+	"rejected",
+	"rejection",
 	"unavailable",
 ];
 /** A name that is about loading the first time; "LoadingMore" and "LoadFailed" are other states. */
