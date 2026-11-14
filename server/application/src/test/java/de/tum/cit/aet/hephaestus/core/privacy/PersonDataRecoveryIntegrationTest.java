@@ -16,6 +16,9 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredDisconnects;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredWorkspacePurges;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -36,21 +39,18 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.support.GenericApplicationContext;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.boot.env.YamlPropertySourceLoader;
-import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredWorkspacePurges;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredDisconnects;
 
 @ExtendWith(OutputCaptureExtension.class)
 class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
@@ -82,7 +82,9 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldKeepProcessingStoppedWhenAnEmptyManifestDoesNotDeclareNoLaterErasures() throws Exception {
-        assertBlocked(manifest("{\"version\":2,\"workspacePurges\":[],\"disconnects\":[],\"restorePoint\":\"2026-01-01T00:00:00Z\",\"people\":[]}"));
+        assertBlocked(
+                manifest(
+                        "{\"version\":2,\"workspacePurges\":[],\"disconnects\":[],\"restorePoint\":\"2026-01-01T00:00:00Z\",\"people\":[]}"));
     }
 
     @Test
@@ -113,8 +115,8 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                 .load("erasure-recovery", new ClassPathResource("application-erasure-recovery.yml"));
         assertThat(sources)
                 .singleElement()
-                .satisfies(source ->
-                        assertThat(source.getProperty(ConditionalOnBackgroundWork.PROPERTY)).isEqualTo(false));
+                .satisfies(source -> assertThat(source.getProperty(ConditionalOnBackgroundWork.PROPERTY))
+                        .isEqualTo(false));
     }
 
     @Test

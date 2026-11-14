@@ -35,6 +35,8 @@ import java.sql.SQLException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -224,7 +226,8 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
     }
 
     private String status() {
-        return jdbc.queryForObject("SELECT status FROM workspace WHERE id = ?", String.class, workspace.getId());
+        return Objects.requireNonNull(
+                jdbc.queryForObject("SELECT status FROM workspace WHERE id = ?", String.class, workspace.getId()));
     }
 
     private int memberships() {
@@ -249,10 +252,13 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
             JdbcTemplate jdbc, long workspaceId, Map<String, List<Map<String, Object>>> rows, Set<String> generated) {
 
         static Backup of(JdbcTemplate jdbc, long workspaceId) {
-            var generated = Set.copyOf(jdbc.queryForList("""
+            var generated = jdbc.queryForList("""
                     SELECT table_name || '.' || column_name FROM information_schema.columns
                      WHERE table_schema = current_schema() AND is_generated = 'ALWAYS'
-                    """, String.class));
+                    """, String.class)
+                    .stream()
+                    .map(Objects::requireNonNull)
+                    .collect(Collectors.toUnmodifiableSet());
             var rows = new LinkedHashMap<String, List<Map<String, Object>>>();
             rows.put("workspace", jdbc.queryForList("SELECT * FROM workspace WHERE id = ?", workspaceId));
             for (String table : workspaceTables(jdbc)) {
@@ -268,7 +274,10 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
                      WHERE c.table_schema = current_schema() AND c.column_name = 'workspace_id'
                        AND t.table_type = 'BASE TABLE'
                      ORDER BY c.table_name
-                    """, String.class);
+                    """, String.class)
+                    .stream()
+                    .map(Objects::requireNonNull)
+                    .toList();
         }
 
         /** The same backup, with the rows of one table as a later backup holds them. */
@@ -279,7 +288,7 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         }
 
         void restore() throws SQLException {
-            var held = rows.get("connection_provider_repair").stream()
+            var held = Objects.requireNonNull(rows.get("connection_provider_repair")).stream()
                     .map(row -> row.get("repair_id"))
                     .toList();
             var administrator = PostgreSQLTestContainer.administrator();
@@ -290,10 +299,14 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
                 restore.execute("SET LOCAL session_replication_role = replica");
                 restore.execute(
                         "SET LOCAL search_path TO " + jdbc.queryForObject("SELECT current_schema()", String.class));
-                for (UUID recorded : restore.queryForList(
-                        "SELECT repair_id FROM connection_provider_repair WHERE workspace_id = ?",
-                        UUID.class,
-                        workspaceId)) {
+                for (UUID recorded : restore
+                        .queryForList(
+                                "SELECT repair_id FROM connection_provider_repair WHERE workspace_id = ?",
+                                UUID.class,
+                                workspaceId)
+                        .stream()
+                        .map(Objects::requireNonNull)
+                        .toList()) {
                     if (!held.contains(recorded))
                         restore.update("DELETE FROM provider_resource_repair WHERE id = ?", recorded);
                 }
