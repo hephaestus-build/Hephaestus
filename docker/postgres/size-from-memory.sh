@@ -53,7 +53,7 @@ if [ "${1:-}" = postgres ]; then
 			;;
 	esac
 	logging="-c log_lock_waits=on -c log_temp_files=10MB -c log_autovacuum_min_duration=1s -c log_min_error_statement=panic"
-	# $logging and $sizing hold only flags and numbers, so word splitting is safe here.
+	# shellcheck disable=SC2086 # $logging and $sizing hold only flags and numbers, so word splitting is safe.
 	set -- postgres -c shared_preload_libraries=pg_stat_statements -c wal_compression=lz4 $logging $sizing "$@"
 fi
 

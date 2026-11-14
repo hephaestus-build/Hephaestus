@@ -16,7 +16,7 @@ escape_for_js() {
     char="${input:i:1}"
     case "$char" in
       $'\n') output+="\\n" ;; $'\r') output+="\\r" ;; $'\t') output+="\\t" ;;
-      '"') output+="\\\"" ;; '\') output+="\\\\" ;; *) output+="$char" ;;
+      '"') output+="\\\"" ;; \\) output+="\\\\" ;; *) output+="$char" ;;
     esac
   done
   printf '%s' "$output"
@@ -125,7 +125,8 @@ main() {
 
   # Auto-generate deployment timestamp for preview environments
   if [[ -n "${GIT_BRANCH:-}" && -z "${DEPLOYED_AT:-}" ]]; then
-    export DEPLOYED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    DEPLOYED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    export DEPLOYED_AT
     log "Generated DEPLOYED_AT: ${DEPLOYED_AT}"
   fi
 
