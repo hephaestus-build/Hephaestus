@@ -116,7 +116,7 @@ export function WorkspacePracticeReviewBatch({
 		(batch) => batch.status === "COMPLETED" || batch.status === "CANCELLED",
 	);
 	// A first read that failed says nothing about past reviews or a running one: the error stands in
-	// for the history, and a new estimate waits until the page knows nothing is running.
+	// for the history, and a new estimate waits for the page to know that nothing is running.
 	const unknown = isError && batches.length === 0;
 
 	let current: ReactNode;

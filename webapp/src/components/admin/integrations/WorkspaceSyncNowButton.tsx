@@ -74,7 +74,7 @@ export function WorkspaceSyncNowButton({
 				{text}
 			</Button>
 			{/* Announce sync start/progress to assistive tech; a plain button-label swap is not reliably
-			announced. Empty when idle, so nothing is spoken until a run begins. Once the server has a job,
+			announced. Empty when idle, so nothing is spoken before a run begins. Once the server has a job,
 			the announcement names *that* job rather than the trigger's intent — a backfill request that
 			landed behind a running reconciliation must not report the reconciliation as a backfill. */}
 			<span role="status" aria-live="polite" className="sr-only">

@@ -20,7 +20,7 @@ const runningBackfill: SyncJob = { ...runningJob, id: 2, type: "BACKFILL" };
  * The manual-sync trigger, and the only trigger on its card. Disabled while a job is already running
  * or a trigger is in flight, so a double-click can't enqueue a second run. It owns a visually-hidden
  * `aria-live` region because a plain button-label swap is not reliably announced — the region stays
- * empty until a run begins.
+ * empty before a run begins.
  *
  * `triggeringType` is a type rather than a flag because the split menu can start a backfill from this
  * same button: the announcement has to be able to name which operation started. Once the server has a
@@ -44,7 +44,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Idle — clickable, and the live region is silent until a run actually starts. */
+/** Idle — clickable, and the live region is silent before a run actually starts. */
 export const Idle: Story = {
 	play: async ({ args, canvas }) => {
 		await expect(canvas.queryByText(/starting/iu)).not.toBeInTheDocument();

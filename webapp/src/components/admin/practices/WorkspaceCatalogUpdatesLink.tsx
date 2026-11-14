@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 
 export interface WorkspaceCatalogUpdatesLinkProps {
 	workspaceSlug: string;
-	/** How many updates wait. Absent until the inbox has loaded, so no count is guessed. */
+	/** How many updates wait. Absent while the inbox loads, so no count is guessed. */
 	count?: number;
 }
 

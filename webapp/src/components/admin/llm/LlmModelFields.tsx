@@ -77,7 +77,7 @@ export interface LlmModelFieldsValue {
 	contextWindow: string;
 	maxOutputTokens: string;
 	reasoningEffort: ReasoningEffortChoice;
-	/** Absent until the admin declares the model, as the wire carries it. */
+	/** Absent while the admin has not declared the model, as the wire carries it. */
 	operatedBy?: OperatedBy;
 	brand?: AiModelBrand;
 	dataHandlingNote: string;

@@ -104,7 +104,7 @@ function hasProgressDetail(progress: SyncJobProgress): boolean {
  * account id and this client has no endpoint that resolves one to a person — there is no account
  * lookup in the generated API at all. Rendering "Triggered by 42" would answer the accountability
  * question with a number the admin still has to go look up by hand, so the field stays unrendered
- * until the server either resolves it to a name or exposes a lookup. The Type column already says
+ * while the server neither resolves it to a name nor exposes a lookup. The Type column already says
  * *how* the job started; only *who* is missing.
  */
 function JobProgressPanel({ progress }: { progress: SyncJobProgress }) {

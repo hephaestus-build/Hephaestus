@@ -58,7 +58,7 @@ export interface ConnectionSyncOptions extends Pick<
 	"resourceNoun" | "resourceNounPlural" | "expectedClassKeys"
 > {
 	workspaceSlug: string;
-	/** Undefined until the provider's lookup has found a connection; every sync query waits on it. */
+	/** Undefined while the provider's lookup has found no connection; every sync query waits on it. */
 	connectionId: number | undefined;
 	isConnectionActive: boolean;
 	credentialsUnreadableSince?: Date | null;
