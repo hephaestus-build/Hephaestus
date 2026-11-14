@@ -2514,6 +2514,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             var original = RuntimeJobTestData.fence(jdbc, current);
             jdbc.update(
                     "UPDATE agent_run SET leased_until = now() - interval '1 second' WHERE id = ?", original.runId());
+            long subjectRuns = subjectRunCount(review.workspaceId(), original.runId());
             assertThatThrownBy(() -> transactions.executeWithoutResult(tx -> {
                         reviewRuns.lock(original.run());
                         reviewRuns.continueExpiredComposition(original);
@@ -2523,12 +2524,9 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     .hasMessage("domain transaction refused");
             assertThat(jobs.findById(jobId).orElseThrow().getRunId()).isEqualTo(original.runId());
             assertThat(runState(original.runId())).isEqualTo("LEASED");
-            assertThat(jdbc.queryForObject(
-                            "SELECT count(*) FROM agent_run WHERE workspace_id = ? AND concurrency_key = ?",
-                            Long.class,
-                            review.workspaceId(),
-                            subjectOf(original.runId())))
-                    .isEqualTo(1);
+            assertThat(subjectRunCount(review.workspaceId(), original.runId()))
+                    .as("the rolled-back continuation added no run")
+                    .isEqualTo(subjectRuns);
             int ceiling = context.getBean(ReviewComposeRunKind.class).retries();
             for (int spent = current.spentAttempts(); spent < ceiling; spent++) {
                 UUID previous = current.getRunId();
@@ -2932,6 +2930,14 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         when(policy.permitsReview(any())).thenReturn(permits);
         when(policy.binding(any())).thenReturn(Optional.of(new WorkspaceAgentBinding()));
         return policy;
+    }
+
+    private long subjectRunCount(long workspaceId, UUID runId) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT count(*) FROM agent_run WHERE workspace_id = ? AND concurrency_key = ?",
+                Long.class,
+                workspaceId,
+                subjectOf(runId)));
     }
 
     private String subjectOf(UUID run) {
