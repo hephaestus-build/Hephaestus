@@ -6,6 +6,7 @@ import io.fabric8.kubernetes.api.model.DeletionPropagation;
 import io.fabric8.kubernetes.api.model.GenericKubernetesResource;
 import io.fabric8.kubernetes.api.model.GenericKubernetesResourceBuilder;
 import io.fabric8.kubernetes.api.model.GenericKubernetesResourceList;
+import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.kubernetes.client.dsl.NonNamespaceOperation;
@@ -18,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -77,6 +79,46 @@ public final class KubernetesSandboxClaims implements SandboxClaims {
                 .filter(claim -> claim.getMetadata().getDeletionTimestamp() == null)
                 .map(claim -> claim.getMetadata().getName())
                 .toList();
+    }
+
+    @Override
+    @SuppressWarnings("PMD.PreserveStackTrace") // The cause's message can quote the API's answer.
+    public Optional<PodEnd> podEnd(String name) {
+        try {
+            return Optional.ofNullable(
+                            client.pods().inNamespace(namespace).withName(name).get())
+                    .map(KubernetesSandboxClaims::end);
+        } catch (KubernetesClientException e) {
+            throw new PodReadException(e.getCode(), e.getClass().getName());
+        }
+    }
+
+    /**
+     * The fields of {@link PodEnd} and nothing else: the Pod's spec holds the sandbox's token in its environment.
+     * From the metadata, only whether the Pod is being deleted. A sandbox is one container, so its status is the Pod's
+     * only container status.
+     */
+    static PodEnd end(Pod pod) {
+        boolean terminating = pod.getMetadata() != null && pod.getMetadata().getDeletionTimestamp() != null;
+        var status = pod.getStatus();
+        if (status == null) return new PodEnd(null, null, null, null, 0, terminating);
+        var container = status.getContainerStatuses() == null
+                ? null
+                : status.getContainerStatuses().stream().findFirst().orElse(null);
+        if (container == null) return new PodEnd(status.getPhase(), status.getReason(), null, null, 0, terminating);
+        // A Pod being deleted stops its container with the stop signal; only an earlier termination is the sandbox's.
+        var terminated = terminating || container.getState() == null
+                ? null
+                : container.getState().getTerminated();
+        if (terminated == null && container.getLastState() != null)
+            terminated = container.getLastState().getTerminated();
+        return new PodEnd(
+                status.getPhase(),
+                status.getReason(),
+                terminated == null ? null : terminated.getReason(),
+                terminated == null ? null : terminated.getExitCode(),
+                container.getRestartCount() == null ? 0 : container.getRestartCount(),
+                terminating);
     }
 
     GenericKubernetesResource resource(Claim claim) {

@@ -220,10 +220,14 @@ await test("a server with sandboxes receives its runtime settings, its sandbox n
 	const expected = new Map<string | undefined, string[]>([
 		[
 			sandboxes,
-			// A subject's sandbox: its claim, never the Sandbox or its Pod, which the controller owns.
-			["create", "delete", "get", "list", "watch"].map(
-				(verb) => `extensions.agents.x-k8s.io/sandboxclaims:${verb}`,
-			),
+			// A subject's sandbox: its claim, never the Sandbox or its Pod, which the controller owns. The server
+			// reads one Pod by name to record how its sandbox ended, and lists or watches no Pod.
+			[
+				...["create", "delete", "get", "list", "watch"].map(
+					(verb) => `extensions.agents.x-k8s.io/sandboxclaims:${verb}`,
+				),
+				"/pods:get",
+			],
 		],
 	]);
 	const roles = resources.filter((resource) => kindOf(resource) === "Role");

@@ -94,8 +94,14 @@ The server's service account has only these permissions in the sandbox namespace
 - SandboxClaims (`extensions.agents.x-k8s.io`): `get`, `list`, `watch`, `create`, and `delete`.
   The controller creates the Sandbox and Pod from the template.
   The server deletes claims that no work needs. It waits for foreground deletion before it acknowledges removal of copied evidence.
+- Pods: `get`.
+  Before the server deletes a claim, it reads the status of the claim's Pod to [record how the sandbox ended](./log-records#sandbox-ends).
+  The read moves the whole Pod into the server's memory. The Kubernetes API cannot return only the status.
+  The server keeps the phase, the reasons, the exit code and the restart count.
+  It also keeps whether the Pod is being deleted.
+  It does not keep the Pod's spec, which holds the sandbox token.
 
-The server has no authority over Pods, Jobs, logs, events, or ResourceQuotas.
+The server cannot list, watch, create, change or delete Pods. It has no authority over Jobs, logs, events, or ResourceQuotas.
 It cannot run a command inside a Pod.
 
 ## Sandbox prerequisites

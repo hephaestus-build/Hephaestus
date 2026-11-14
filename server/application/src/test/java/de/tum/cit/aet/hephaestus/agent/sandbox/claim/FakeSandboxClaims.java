@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.claim;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -12,6 +13,10 @@ final class FakeSandboxClaims implements SandboxClaims {
     final List<String> creates = new CopyOnWriteArrayList<>();
     volatile boolean failCreates;
     volatile boolean failDeletes;
+    /** Each claim's Pod status; a claim without one has no Pod. */
+    final Map<String, PodEnd> pods = new ConcurrentHashMap<>();
+
+    volatile boolean failPodReads;
 
     @Override
     public void create(Claim claim) {
@@ -29,5 +34,11 @@ final class FakeSandboxClaims implements SandboxClaims {
     @Override
     public List<String> names() {
         return List.copyOf(Set.copyOf(created.keySet()));
+    }
+
+    @Override
+    public Optional<PodEnd> podEnd(String name) {
+        if (failPodReads) throw new PodReadException(403, "io.fabric8.kubernetes.client.KubernetesClientException");
+        return Optional.ofNullable(pods.get(name));
     }
 }

@@ -120,6 +120,11 @@ rules:
   - apiGroups: ["extensions.agents.x-k8s.io"]
     resources: ["sandboxclaims"]
     verbs: ["get", "list", "watch", "create", "delete"]
+  # The server reads a sandbox's Pod by its name before it deletes the claim, to record how the sandbox ended. It
+  # maps only the Pod's status; the Pod's spec holds the sandbox token.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

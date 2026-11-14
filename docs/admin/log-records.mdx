@@ -221,14 +221,30 @@ The [preparation protocol](/contributor/agent-runs#review-preparation-recovery) 
 An outbox event names no person and no payload.
 An account email has no workspace, so its events have no `workspace.id`.
 
-## Abnormal sandbox ends
+## Sandbox ends
 
-When a sandbox ends abnormally, the server logs `sandbox.exited` with the container, its exit code and the Kubernetes reason from the Pod's status.
-For a practice review, the line also carries the last diagnostic lines of the review runtime as `sandbox.stderr.tail`.
-Each kept line names one runtime event with counts, flags and closed codes, such as `[pi-runner] tool.failed phase=review turn=1 practice=0 tool=bash reason_chars=42`.
-A turn and a practice are named by their positions in the review's practice index.
-The line never holds a tool result, a provider's error message, model output, reviewed code, a name, a path or an identifier.
-The server keeps only lines whose event, fields and values are in the runtime's diagnostic vocabulary, and counts the others in `sandbox.stderr.dropped`.
+When the server deletes a sandbox's claim and its row, it logs `agent.sandbox.ended` at `INFO`, and counts it in `agent_sandbox_ended_total`.
+Before the deletion, it reads the status of the sandbox's Pod.
+Each end has one line: when two servers delete the same sandbox, only the server that deletes its row logs it.
+The line holds no output of the sandbox: no log line, transcript, tool result or file.
+
+| Field | Value |
+| --- | --- |
+| `sandbox.name`, `subject.key`, `workspace.id`, `sandbox.kind` | The sandbox, as in its other events |
+| `run.id` | The latest run that the sandbox served: a run of its subject that started while the sandbox lived. Absent when it served no run |
+| `sandbox.reason` | `completed`, `error`, `oom_killed`, `evicted`, `running`, `deleted`, `unread` or `other`, as in the counter |
+| `sandbox.termination_reason` | The Kubernetes reason, such as `OOMKilled`, `Error`, `Completed`, `Evicted` or `DeadlineExceeded`. Another reason shows as `other`. Absent when the Pod has no reason |
+| `sandbox.exit_code` | The exit code of the container's current termination, else of its last one. Absent when the container did not stop |
+| `sandbox.restart_count` | How often the kubelet restarted the container |
+| `sandbox.oom` | `true` when the kernel killed the container for its memory |
+| `error.type` | The error when the server could not read the Pod's status. `sandbox.reason` is then `unread` |
+| `http.response.status_code` | The Kubernetes API's HTTP status for that read, such as `403` when the server's Role does not grant `get` on Pods. Absent when the API did not answer |
+
+`running` means that the container still ran when the server ended the sandbox, which is the usual end of an idle sandbox.
+A Pod that is being deleted also shows as `running`, unless its container ended before the deletion.
+The stop signal of the deletion is not the sandbox's own end.
+`deleted` means that the Pod was gone, or that the claim was gone before the server ended the sandbox.
+A container that the kernel killed and the kubelet started again shows as `oom_killed`, with its restart count.
 
 A practice review can stop with some practices still without a result, for example when a practice reaches its deadline.
 The runtime then keeps the results that it staged and exits with code 78.
