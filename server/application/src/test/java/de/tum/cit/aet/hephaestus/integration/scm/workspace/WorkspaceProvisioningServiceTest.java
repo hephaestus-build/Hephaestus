@@ -198,7 +198,8 @@ class WorkspaceProvisioningServiceTest {
                 workspaceService,
                 workspaceSlugs,
                 userRepository,
-                gitProviderRepository,
+                identityProviders,
+                sourceNamespaces,
                 workspaceMembershipRepository,
                 workspaceMembershipService,
                 connectionService,
@@ -212,8 +213,8 @@ class WorkspaceProvisioningServiceTest {
         Workspace workspace = new Workspace();
         workspace.setWorkspaceSlug("aet-org");
         workspace.setId(1L);
-        when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com"))
-                .thenReturn(Optional.of(TestEntities.gitProvider(100L, IdentityProviderType.GITHUB)));
+        when(identityProviders.findId(IdentityProviderType.GITHUB, "https://github.com"))
+                .thenReturn(Optional.of(100L));
         User owner = new User();
         owner.setId(11L);
         when(userRepository.findByLoginAndProviderId("aet-org", 100L)).thenReturn(Optional.of(owner));

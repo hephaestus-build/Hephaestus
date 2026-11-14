@@ -293,10 +293,7 @@ public class WorkspaceRepositoryMonitorService {
         // A live GitLab connection, suspended too: its project on the same path is another repository, and is kept.
         // An uninstalled one is history, and its workspace may monitor GitHub now.
         boolean gitLab = EnumSet.of(IntegrationState.ACTIVE, IntegrationState.SUSPENDED).stream()
-                .anyMatch(state -> connectionRepository
-                        .findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                                workspaceId, IntegrationKind.GITLAB, state)
-                        .isPresent());
+                .anyMatch(state -> connectionQueries.hasConnectionInState(workspaceId, IntegrationKind.GITLAB, state));
         if (gitLab) return;
         Workspace workspace = workspaceRepository
                 .findByIdForUpdate(workspaceId)
