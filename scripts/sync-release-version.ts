@@ -1,8 +1,10 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { asRecord, asString, parseJson } from "./lib/json.ts";
 import { migrationGuideSections, renderMigrationGuide } from "./lib/migration-guide.ts";
+import { CHANGELOG_HEADINGS, MIGRATION_HEADINGS, foldUnpublished } from "./lib/release-headings.ts";
 import { compareVersions, parseVersion } from "./lib/release-version.ts";
 
 const manifest = asRecord(parseJson(readFileSync("package.json", "utf8")), "package.json");
@@ -27,6 +29,21 @@ if (version.endsWith("-rc.0")) {
 	);
 }
 
+// A cut that failed after its Version PR merged burned its number. Its notes belong to the release that shipped them.
+// Outside a Git checkout there are no tags, so nothing folds.
+const tags = spawnSync("git", ["tag", "--list", "v*"], { encoding: "utf8" });
+const published = new Set(
+	tags.status === 0
+		? tags.stdout.split("\n").flatMap((tag) => (tag.startsWith("v") ? [tag.slice(1)] : []))
+		: [],
+);
+if (tags.status === 0 && existsSync("CHANGELOG.md")) {
+	writeFileSync(
+		"CHANGELOG.md",
+		foldUnpublished(readFileSync("CHANGELOG.md", "utf8"), CHANGELOG_HEADINGS, published, version),
+	);
+}
+
 const edits = [
 	{
 		file: "docs/admin/k3s.md",
@@ -44,7 +61,9 @@ for (const { file, re, line } of edits) {
 }
 
 const migrationFile = "MIGRATION.md";
-const migration = renderMigrationGuide(readFileSync(migrationFile, "utf8"));
+const rendered = renderMigrationGuide(readFileSync(migrationFile, "utf8"));
+const migration =
+	tags.status === 0 ? foldUnpublished(rendered, MIGRATION_HEADINGS, published, version) : rendered;
 const sections = migrationGuideSections(migration);
 const pendingSection = sections.find((section) => section.heading === "### Next release");
 if (!pendingSection) {

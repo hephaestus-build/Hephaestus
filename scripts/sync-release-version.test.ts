@@ -83,6 +83,7 @@ void test("real Changesets prerelease cycle starts at rc.1, increments and exits
 	assert.ok(firstGuide.includes(history));
 	assert.match(firstGuide, /### v1\.0\.0-rc\.1[\s\S]*Stop every role/u);
 	await commit();
+	await git("tag", "v1.0.0-rc.1");
 	assert.equal(
 		await hasPendingChangesets("HEAD", cwd),
 		false,

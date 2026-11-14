@@ -20,6 +20,7 @@ import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { asRecord, asString, parseJson } from "./lib/json.ts";
 import { BASELINE_RELEASE } from "./lib/previous-release.ts";
 import { output } from "./lib/process.ts";
+import { releaseHistoryProblems } from "./lib/release-headings.ts";
 import {
 	compareVersions,
 	formatVersion,
@@ -369,6 +370,35 @@ export async function renderReleaseNotes(
 	throw new Error(`release notes: no "## ${previousVersion}" section below "## ${version}"`);
 }
 
+/** Refuses a cut whose CHANGELOG.md or MIGRATION.md names an unpublished release or lacks a published one. */
+async function withReleaseHistory(
+	plan: ReleasePlan,
+	releases: readonly ReleaseRef[],
+): Promise<ReleasePlan> {
+	if (plan.kind !== "cut") {
+		return plan;
+	}
+	const show = async (file: string) =>
+		output("git", ["show", `${plan.sha}:${file}`], { env: environmentWithoutGitRepository() });
+	const published = new Set(
+		releases.flatMap((release) =>
+			release.isDraft || !release.tag.startsWith("v") ? [] : [release.tag.slice(1)],
+		),
+	);
+	const problems = releaseHistoryProblems(
+		await show("CHANGELOG.md"),
+		await show("MIGRATION.md"),
+		published,
+		plan.version,
+	);
+	return problems.length === 0
+		? plan
+		: {
+				kind: "refuse",
+				reason: `${problems.join("; ")}. The Version PR folds such a section into the release that shipped it; regenerate it.`,
+			};
+}
+
 /** Every release, drafts included — which the listing carries only for a token with push access. */
 export async function listReleases(repository: string): Promise<ReleaseRef[]> {
 	const listed = await output("gh", [
@@ -633,7 +663,9 @@ if (import.meta.main && process.argv[2] === "--aliases") {
 				pending,
 			);
 		} else {
-			plan = planRelease(sha, version, await listReleases(repository), pending);
+			const releases = await listReleases(repository);
+			plan = planRelease(sha, version, releases, pending);
+			plan = await withReleaseHistory(plan, releases);
 		}
 		if (plan.kind === "refuse") {
 			console.log(`::error::${plan.reason}`);

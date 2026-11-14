@@ -55,6 +55,9 @@ sequenceDiagram
    Its title is `chore(release): version packages`, with the prerelease tag in pre mode.
    It previews the version bump, `CHANGELOG.md` section, and `MIGRATION.md` section.
    The migration section uses `.migration/` fragments at the `### Next release` anchor.
+   A cut that fails after its Version PR merged leaves a number that no release carries.
+   The next Version PR moves that section of both files into the release that shipped its changes.
+   From 1.0.0-rc.1 on, the release planner refuses a cut while either file names an unpublished release.
    Updates use `GITHUB_TOKEN`.
    The pull request's own CI/CD run validates its updated head, with approval when GitHub requests it.
    [The Version PR trigger contract](./ci-cd.mdx#merge-policy) owns approval, reruns and manual recovery.
