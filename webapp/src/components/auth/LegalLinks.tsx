@@ -2,6 +2,7 @@ import { Link, type LinkProps } from "@tanstack/react-router";
 
 import { cn } from "cn";
 import { DotSeparator } from "@/components/common/DotSeparator";
+import { OutboundMark } from "@/components/common/outbound-link";
 
 /** The `auth` surface renders no site footer, so sign-in and onboarding carry these themselves. */
 export function LegalLinks({ className }: { className?: string }) {
@@ -30,7 +31,7 @@ export function LegalLink({ to, children }: { to: LinkProps["to"]; children: str
 			className="underline underline-offset-4 hover:text-foreground"
 		>
 			{children}
-			<span className="sr-only"> (opens in a new tab)</span>
+			<OutboundMark />
 		</Link>
 	);
 }

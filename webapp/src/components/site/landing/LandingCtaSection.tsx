@@ -1,5 +1,6 @@
 import { ArrowRight, BookOpen } from "lucide-react";
 import { LandingSignInCta } from "@/components/auth/LandingSignInCta";
+import { OutboundMark } from "@/components/common/outbound-link";
 import { buttonVariants } from "@/components/ui/button";
 import { docUrl } from "@/lib/docs-url";
 import { LandingGlow, LandingSpeechFigure, LandingSpark } from "./LandingVisuals";
@@ -48,7 +49,7 @@ export function LandingCtaSection({ onSignIn }: LandingCtaSectionProps) {
 						>
 							<BookOpen aria-hidden="true" />
 							<span>Read the user guide</span>
-							<span className="sr-only">(opens in a new tab)</span>
+							<OutboundMark />
 							<ArrowRight aria-hidden="true" />
 						</a>
 					</div>
@@ -61,7 +62,7 @@ export function LandingCtaSection({ onSignIn }: LandingCtaSectionProps) {
 							rel="noopener noreferrer"
 						>
 							Read the installation guide
-							<span className="sr-only"> (opens in a new tab)</span>
+							<OutboundMark />
 						</a>
 						.
 					</p>

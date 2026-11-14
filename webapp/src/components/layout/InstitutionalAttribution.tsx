@@ -1,3 +1,5 @@
+import { OutboundMark } from "@/components/common/outbound-link";
+
 export function InstitutionalAttribution() {
 	return (
 		<div className="inline-flex w-fit max-w-full items-center justify-center gap-2">
@@ -23,6 +25,7 @@ export function InstitutionalAttribution() {
 					<br />
 					Technologies
 				</span>
+				<OutboundMark />
 			</a>
 			<span className="h-8 w-px shrink-0 bg-border" aria-hidden="true" />
 			<a
@@ -40,6 +43,7 @@ export function InstitutionalAttribution() {
 					loading="lazy"
 					className="h-7 w-auto dark:brightness-0 dark:invert"
 				/>
+				<OutboundMark />
 			</a>
 		</div>
 	);

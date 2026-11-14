@@ -181,9 +181,7 @@ function GroupActions({
 }) {
 	return (
 		<>
-			{pending && (
-				<Spinner className="size-4 text-muted-foreground" role="status" aria-label="Saving" />
-			)}
+			<SavingStatus name={group.name} pending={pending} />
 			<Switch
 				className="hidden sm:inline-flex"
 				checked={!group.excluded}
@@ -305,9 +303,7 @@ function PracticeActions({
 	}
 	return (
 		<>
-			{pending && (
-				<Spinner className="size-4 text-muted-foreground" role="status" aria-label="Saving" />
-			)}
+			<SavingStatus name={entry.name} pending={pending} />
 			<Switch
 				className="hidden sm:inline-flex"
 				checked={practice.offered}
@@ -409,5 +405,20 @@ function PracticeDragPreview({ entry }: { entry: TreePractice }) {
 				<ItemDescription>{itemKindLabel(entry.practice.kind)}</ItemDescription>
 			</ItemContent>
 		</Item>
+	);
+}
+
+/**
+ * The row's save, said once. The live region mounts with the row and only its text changes, so a
+ * screen reader announces "Saving …" when a save starts (ARIA22). The spinner is only seen.
+ */
+function SavingStatus({ name, pending }: { name: string; pending: boolean }) {
+	return (
+		<>
+			{pending && <Spinner className="size-4 text-muted-foreground" />}
+			<span role="status" className="sr-only">
+				{pending ? `Saving ${name}…` : ""}
+			</span>
+		</>
 	);
 }

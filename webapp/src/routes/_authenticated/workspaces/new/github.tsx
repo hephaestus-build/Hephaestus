@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeftIcon, ExternalLinkIcon } from "lucide-react";
+import { ArrowLeftIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { getProvidersOptions } from "@/api/@tanstack/react-query.gen";
 import { DocLink } from "@/components/common/DocLink";
+import { OutboundMark } from "@/components/common/outbound-link";
 import { InstallActionSkeleton } from "@/components/create-workspace/CreateWorkspaceSkeletons";
 import { GitHubIcon } from "@/components/icons/brand";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -41,7 +42,7 @@ function GitHubSetupPage() {
 			>
 				<GitHubIcon className="mr-2 size-4" />
 				Install GitHub App
-				<ExternalLinkIcon className="ml-2 size-3.5" />
+				<OutboundMark />
 			</a>
 		);
 	} else {

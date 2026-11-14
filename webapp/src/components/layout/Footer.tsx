@@ -2,6 +2,7 @@ import { ClockIcon, GitBranchIcon, GitCommitIcon } from "@primer/octicons-react"
 import { Link } from "@tanstack/react-router";
 
 import { cn } from "cn";
+import { OutboundMark } from "@/components/common/outbound-link";
 import { RelativeTime } from "@/components/common/RelativeTime";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { hasText } from "@/lib/text";
@@ -33,6 +34,7 @@ export default function Footer({ className, isProduction, buildInfo }: FooterPro
 						className="font-medium underline underline-offset-4 hover:text-foreground"
 					>
 						AET Team
+						<OutboundMark />
 					</a>{" "}
 					at{" "}
 					<a
@@ -42,6 +44,7 @@ export default function Footer({ className, isProduction, buildInfo }: FooterPro
 						className="font-medium underline underline-offset-4 hover:text-foreground"
 					>
 						TUM
+						<OutboundMark />
 					</a>
 					. Source on{" "}
 					<a
@@ -51,6 +54,7 @@ export default function Footer({ className, isProduction, buildInfo }: FooterPro
 						className="font-medium underline underline-offset-4 hover:text-foreground"
 					>
 						GitHub
+						<OutboundMark />
 					</a>
 					.
 				</p>
@@ -70,6 +74,7 @@ export default function Footer({ className, isProduction, buildInfo }: FooterPro
 							className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
 						>
 							Releases
+							<OutboundMark />
 						</a>
 						<Link
 							to="/privacy"
@@ -95,13 +100,14 @@ export default function Footer({ className, isProduction, buildInfo }: FooterPro
 												href={`https://github.com/hephaestus-build/Hephaestus/tree/${buildInfo.branch}`}
 												target="_blank"
 												rel="noopener noreferrer"
-												aria-label={`View branch ${buildInfo.branch}`}
+												aria-label={`View branch ${buildInfo.branch} (opens in a new tab)`}
 												className="flex items-center gap-1 transition-colors hover:text-foreground"
 											/>
 										}
 									>
 										<GitBranchIcon size={12} />
 										<span className="max-w-20 truncate">{buildInfo.branch}</span>
+										<OutboundMark />
 									</TooltipTrigger>
 									<TooltipContent>{buildInfo.branch}</TooltipContent>
 								</Tooltip>
@@ -115,13 +121,14 @@ export default function Footer({ className, isProduction, buildInfo }: FooterPro
 												href={`https://github.com/hephaestus-build/Hephaestus/commit/${buildInfo.commit}`}
 												target="_blank"
 												rel="noopener noreferrer"
-												aria-label={`View commit ${buildInfo.commit.slice(0, 7)}`}
+												aria-label={`View commit ${buildInfo.commit.slice(0, 7)} (opens in a new tab)`}
 												className="flex items-center gap-1 transition-colors hover:text-foreground"
 											/>
 										}
 									>
 										<GitCommitIcon size={12} />
 										<span>{buildInfo.commit.slice(0, 7)}</span>
+										<OutboundMark />
 									</TooltipTrigger>
 									<TooltipContent>{buildInfo.commit}</TooltipContent>
 								</Tooltip>

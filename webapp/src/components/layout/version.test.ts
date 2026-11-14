@@ -10,7 +10,7 @@ describe("resolveHeaderBadge", () => {
 			label: "v0.73.2",
 			href: "https://github.com/hephaestus-build/Hephaestus/releases/tag/v0.73.2",
 			tooltip: "View release notes",
-			ariaLabel: "View release v0.73.2",
+			ariaLabel: "View release v0.73.2 (opens in a new tab)",
 		});
 	});
 
@@ -21,7 +21,7 @@ describe("resolveHeaderBadge", () => {
 			label: "v1.0.0-rc.1",
 			href: "https://github.com/hephaestus-build/Hephaestus/releases/tag/v1.0.0-rc.1",
 			tooltip: "View release notes",
-			ariaLabel: "View release v1.0.0-rc.1",
+			ariaLabel: "View release v1.0.0-rc.1 (opens in a new tab)",
 		});
 	});
 

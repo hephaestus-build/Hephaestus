@@ -4,6 +4,7 @@ import { History, LogOut, UserRoundCog } from "lucide-react";
 
 import { cn } from "cn";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
+import { OutboundMark } from "@/components/common/outbound-link";
 import { ModeToggle } from "@/components/layout/ModeToggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -120,6 +121,7 @@ export default function Header({
 							>
 								<TagIcon size={12} />
 								<span>{badge.label}</span>
+								<OutboundMark />
 							</TooltipTrigger>
 							<TooltipContent>{badge.tooltip}</TooltipContent>
 						</Tooltip>
@@ -140,6 +142,7 @@ export default function Header({
 							>
 								<span className={cn("size-1.5 rounded-full", ENV_DOT[badge.tone])} />
 								{badge.label}
+								{hasText(badge.href) && <OutboundMark />}
 							</TooltipTrigger>
 							<TooltipContent>{badge.tooltip}</TooltipContent>
 						</Tooltip>

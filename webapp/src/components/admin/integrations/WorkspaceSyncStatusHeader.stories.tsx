@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { ExternalLinkIcon } from "lucide-react";
 import { expect, fn, screen, userEvent } from "storybook/test";
 
 import type { ConnectionSyncStatus, SyncJob } from "@/api/types.gen";
+import { OutboundMark } from "@/components/common/outbound-link";
 import { buttonVariants } from "@/components/ui/button";
 import { expectSettledVisible } from "@/stories/overlay";
 import { minutesAfter, minutesBefore } from "@/stories/story-clock";
@@ -369,7 +369,7 @@ export const WithActions: Story = {
 				className={buttonVariants({ variant: "outline", size: "sm" })}
 			>
 				Manage installation on GitHub
-				<ExternalLinkIcon className="size-3.5" />
+				<OutboundMark />
 			</a>
 		),
 	},

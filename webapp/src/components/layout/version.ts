@@ -46,7 +46,7 @@ export function resolveHeaderBadge(
 			label: `v${version}`,
 			href: `${REPO_URL}/releases/tag/v${version}`,
 			tooltip: "View release notes",
-			ariaLabel: `View release v${version}`,
+			ariaLabel: `View release v${version} (opens in a new tab)`,
 		};
 	}
 	const tone = toneFor(environmentName);

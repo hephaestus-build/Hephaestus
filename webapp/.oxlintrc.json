@@ -202,6 +202,7 @@
 
 		// -- House rules, defined in `tools/oxlint/` --------------------------------------------------
 		// Each states in its own `meta.docs.description` what it asks.
+		"hephaestus/new-tab-link-says-so": "error",
 		"hephaestus/no-context-provider": "error",
 		"hephaestus/no-manual-query-key": "error",
 		"hephaestus/no-unsafe-definition-lookup": "error",

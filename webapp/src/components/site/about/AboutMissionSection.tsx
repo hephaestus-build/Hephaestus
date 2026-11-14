@@ -1,3 +1,4 @@
+import { OutboundMark } from "@/components/common/outbound-link";
 import { InstitutionalAttribution } from "@/components/layout/InstitutionalAttribution";
 import { PRODUCT_FEATURES } from "@/components/site/product-features";
 import { ProductFeatureList } from "@/components/site/ProductFeatureList";
@@ -21,7 +22,7 @@ export function AboutMissionSection() {
 						className="underline underline-offset-4 hover:text-highlight"
 					>
 						2022 study
-						<span className="sr-only"> (opens in a new tab)</span>
+						<OutboundMark />
 					</a>{" "}
 					found that only about a quarter of pull requests received an implicit-mentoring comment.
 					Such a comment explains a suggestion, an instruction, or a way to fix an error. Hephaestus
