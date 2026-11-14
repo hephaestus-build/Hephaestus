@@ -204,6 +204,15 @@ final class ComposerReplay {
     /** Runs the Node composer loop on a sealed basis, with each model call answered by {@code model}. */
     static Outcome node(Basis basis, Function<byte[], ModelSession.Answer> model)
             throws IOException, InterruptedException {
+        return node(basis, model, true);
+    }
+
+    /**
+     * Runs the Node composer loop on a sealed basis. With {@code retryProviderFailures} false, as the production
+     * gateway option sets it, a provider failure ends the session after its one call instead of being sent again.
+     */
+    static Outcome node(Basis basis, Function<byte[], ModelSession.Answer> model, boolean retryProviderFailures)
+            throws IOException, InterruptedException {
         var state = new Server(basis);
         var sessions = state.sessions();
         var calls = JSON.arrayNode();
@@ -221,7 +230,9 @@ final class ComposerReplay {
                 identity,
                 Instant.now().plus(state.properties.compositionTimeout()),
                 recorded)) {
-            var process = new ProcessBuilder("node", NODE_DRIVER.toString(), gateway.url())
+            var command = new ArrayList<>(List.of("node", NODE_DRIVER.toString(), gateway.url()));
+            if (!retryProviderFailures) command.add("--no-provider-retries");
+            var process = new ProcessBuilder(command)
                     .redirectError(ProcessBuilder.Redirect.INHERIT)
                     .start();
             byte[] printed = process.getInputStream().readAllBytes();

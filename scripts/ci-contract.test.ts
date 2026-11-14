@@ -6901,11 +6901,21 @@ void test("a superseded PR cancels its native gate while live failures still get
 	);
 	assert.equal(fixture.conclusion, "cancelled");
 	const observed = asRecord(fixture.needs, "recorded prerequisite results");
-	const recordedNeeds = Object.fromEntries(
-		Object.entries(observed).map(([name, value]) => [
-			name,
-			{ result: asString(asRecord(value, name).result, `${name} result`) },
-		]),
+	const recordedNeeds = {
+		...Object.fromEntries(
+			Object.entries(observed).map(([name, value]) => [
+				name,
+				{ result: asString(asRecord(value, name).result, `${name} result`) },
+			]),
+		),
+		// The feedback eval gate is newer than this recording. Its path filter selects no change of that
+		// run, so the job would have been skipped; the recording itself stays as it was captured.
+		"feedback-eval": { result: "skipped" },
+	};
+	assert.equal(
+		"feedback-eval" in observed,
+		false,
+		"the recording now holds the gate: drop this model",
 	);
 	const recordedJobs = asArray(fixture.jobs, "recorded jobs").map((entry) =>
 		asRecord(entry, "recorded job"),
@@ -7569,4 +7579,60 @@ void test("an old candidate lacks the release drill verifier and stops before an
 	assert.ok(isMap(checkout));
 	assert.match(String(checkout.get("uses")), /^actions\/checkout@/u);
 	assert.equal(steps.items[1], verifier);
+});
+
+void test("the feedback eval gate runs on its paths in every tier, a stacked layer's light tier included", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	const runs = (outputs: Record<string, string>, event = "pull_request") =>
+		jobRuns(workflow, "feedback-eval", event, {
+			"detect-changes": {
+				result: "success",
+				outputs: {
+					should_skip: "false",
+					"version-bump": "false",
+					unfiltered: "false",
+					"light-tier": "false",
+					"feedback-eval": "false",
+					...outputs,
+				},
+			},
+		});
+	assert.equal(runs({ "feedback-eval": "true", "light-tier": "true" }), true);
+	assert.equal(runs({ "feedback-eval": "true" }), true);
+	assert.equal(runs({ "feedback-eval": "true" }, "merge_group"), true);
+	assert.equal(runs({ "light-tier": "true" }), false);
+	assert.equal(runs({}), false);
+});
+
+void test("only the eval:run label or a push to a labelled pull request starts the panel, and nothing else cancels it", async () => {
+	const workflow = parseDocument(
+		await readFile(".github/workflows/feedback-eval-panel.yml", "utf8"),
+	);
+	const starts = (action: string, labels: string[], label?: string) =>
+		expandExpressions(
+			`\${{ ${asString(workflow.getIn(["jobs", "provider", "if"]), "provider if")} }}`,
+			{
+				github: {
+					event_name: "pull_request",
+					event: {
+						action,
+						...(label === undefined ? {} : { label: { name: label } }),
+						pull_request: { number: 7, labels: labels.map((name) => ({ name })) },
+					},
+				},
+				vars: {},
+			},
+		) === "true";
+	// An unrelated label on a pull request that already carries eval:run starts no panel.
+	assert.equal(starts("labeled", ["eval:run", "ci:full"], "ci:full"), false);
+	assert.equal(starts("labeled", ["eval:run"], "eval:run"), true);
+	assert.equal(starts("synchronize", ["eval:run"]), true);
+	assert.equal(starts("synchronize", ["ci:full"]), false);
+	// A run whose jobs are skipped must not enter a cancelling group, so only the panel job holds one.
+	assert.equal(workflow.has("concurrency"), false);
+	assert.equal(workflow.hasIn(["jobs", "provider", "concurrency"]), false);
+	assert.equal(
+		workflow.getIn(["jobs", "panel", "concurrency", "group"]),
+		`feedback-eval-panel-\${{ github.event.pull_request.number || github.ref }}`,
+	);
 });

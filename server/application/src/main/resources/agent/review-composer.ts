@@ -55,7 +55,13 @@ export async function composeReview(gateway: Gateway): Promise<Outcome> {
 		gateway.signal?.aborted === true;
 	let failure: unknown = null;
 	try {
-		await new Run(client, stops, gateway.retryPauseMs ?? 1000, gateway.signal).compose();
+		await new Run(
+			client,
+			stops,
+			gateway.retryPauseMs ?? 1000,
+			gateway.retryProviderFailures ?? true,
+			gateway.signal,
+		).compose();
 	} catch (error) {
 		if (stopped(error)) {
 			return { leaseLost: true };
@@ -117,6 +123,7 @@ class Run {
 	readonly #client: Client;
 	readonly #stops: Map<Destination, Stop>;
 	readonly #retryPauseMs: number;
+	readonly #retryProviderFailures: boolean;
 	readonly #signal: AbortSignal | undefined;
 	readonly #finished = new Set<Destination>();
 	#deadline = Number.POSITIVE_INFINITY;
@@ -130,11 +137,13 @@ class Run {
 		client: Client,
 		stops: Map<Destination, Stop>,
 		retryPauseMs: number,
+		retryProviderFailures: boolean,
 		signal: AbortSignal | undefined,
 	) {
 		this.#client = client;
 		this.#stops = stops;
 		this.#retryPauseMs = retryPauseMs;
+		this.#retryProviderFailures = retryProviderFailures;
 		this.#signal = signal;
 	}
 
@@ -349,7 +358,7 @@ class Run {
 			const room = model.calls < bound && !this.#expired();
 			if (failure === "PROVIDER") {
 				providerFailures += 1;
-				if (!room || !(await this.#pause(providerFailures))) {
+				if (!this.#retryProviderFailures || !room || !(await this.#pause(providerFailures))) {
 					return { ending: await this.#stopped("PROVIDER"), published };
 				}
 				reply = await model.retry();
@@ -429,7 +438,7 @@ class Run {
 			const room = model.calls < bound && !this.#expired();
 			if (failure === "PROVIDER") {
 				providerFailures += 1;
-				if (!room || !(await this.#pause(providerFailures))) {
+				if (!this.#retryProviderFailures || !room || !(await this.#pause(providerFailures))) {
 					this.#stopFor("PROVIDER");
 					break;
 				}

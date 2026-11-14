@@ -253,6 +253,121 @@ The labels file holds one label for each composed review, with the rubric codes.
 The good rate needs a label for every composed review. With fewer labels, the report lists the unlabelled cases and gives no rate.
 Without a labels file, the report gives only the raise decisions, main's acceptance and the mechanical codes.
 
+## Feedback eval gate
+
+The feedback eval gate stops a change that weakens what the prompts tell the model.
+Its deterministic checks gate each pull request that touches what they measure.
+That is a prompt, the writing guide, the practice catalog or its scripts, the practice-script corpus, the composer, or the gate itself.
+[Path filters](./ci-cd.mdx#path-filters) list the paths.
+`scripts/feedback-eval/gate.json` holds its fixed case set, its prompt clauses and its floors.
+
+### Gate checks without a model
+
+These checks send no model request. Each check must pass exactly.
+They detect edits. They do not judge what an edit means: only the [model panel](#model-panel) composes with a model.
+
+| Check | Fails when |
+| --- | --- |
+| G1 | A pinned case changed or is missing. Or `gate.json` changed since the base commit, and its `version` did not increase. |
+| G2 | The composition set or the claim corpus does not parse. |
+| G3 | A quote check does not match, or an absence check finds its text and the claim label is not `false`. |
+| G4 | A prompt changed, or a new prompt file has no pin. Or a prompt no longer contains a clause that `gate.json` names. |
+| G5 | An automated practice has no Applicability section in its criteria and no Applies when gate. Or a practice's criteria or Applies when changed. |
+| G6 | A bundled practice script gives other leads than its snapshot in `docker/agents/practice-scripts/corpus/snapshots/`. |
+| G7 | The pinned cases times the calls for each case permit more model calls than the panel's ceiling. |
+
+A pin is a SHA-256 of one of these:
+
+- A case, as the fixture file holds it.
+- A whole prompt file under `agent/` or `agent/mentor/`, or the writing guide's Writing feedback section.
+- A practice's criteria and Applies when.
+
+A failure prints the new digest.
+
+Each G4 clause carries one occasion criterion (O1–O8) or one evidence-bound criterion (E1–E15).
+The criterion ID is in `gate.json` beside the clause.
+
+A text check cannot tell a rule from its reversal, and a new paragraph can override a rule that is still present.
+Thus, G4 pins each whole prompt. Any edit to a prompt fails until the pull request pins it again.
+The clause check names a rule that went missing. The panel and the review of the pull request judge what an edit means.
+
+G5 keeps a list of known gaps: automated practices without an Applicability section or an Applies when gate.
+The check also fails when a listed practice gets one. Then remove it from the list.
+
+G6 runs `docker/agents/practice-scripts/corpus.test.ts`. Each bundled script runs over the authored corpus, without a model.
+To change what a script sends on purpose, run that test with `--test-update-snapshots` and commit the new snapshot.
+
+To pin a changed case, prompt or practice, put the new digest in `gate.json` and increase `version` in the same pull request.
+The review of that pull request is the review of the change.
+
+### Model panel
+
+The model panel composes 20 fixed public cases with the production composer, one run each.
+The panel holds every case with an expected withhold, the capture-limit case and two instruction cases.
+It scores the output against the case labels. It does not use a judge model.
+Only the panel measures how the composer behaves. The deterministic checks do not.
+
+| Measure | Floor |
+| --- | --- |
+| P1. Cases composed and accepted by main's check | 18 of 20 |
+| P2. Cases with no mechanical code (Q6, Q9) | 18 of 20 |
+| P3. Raise recall | 11 of 13 |
+| P4. Withhold decisions correct | 8 of 17 |
+
+Each floor is the one-sided binomial quantile at the rate of the rc.5 measurement, at a false-alarm level of 1.25 %.
+The four floors share a 5 % budget.
+A floor finds only a large regression. The [release eval](#release-feedback-eval) remains the quality bar.
+
+Each case is one `CompositionEvalLiveTest` invocation, with 16,384 output tokens and medium reasoning effort.
+The composer loop sends at most 12 model calls for each case, and G7 keeps the pinned cases within 240 calls.
+The run also counts the HTTP requests that each case recorded. The eval transport sends one request for each model call and never probes a second path. It stops before a case that could pass 240 calls, and after a case that passed its bound of 12.
+Such a run ends as "ceiling reached", not as a pass.
+
+The eval composer sends a failed model request once: a provider failure ends that case and is recorded as its failure.
+The job stops after 40 minutes.
+
+### When the panel runs
+
+The panel does not run for each pull request. The `CI / Feedback eval panel` workflow runs it:
+
+- Each night on `main`.
+- On a manual run.
+- On a pull request with the `eval:run` label, when the label is added and on each later push.
+
+The panel runs only with a configured model provider.
+[Feedback eval panel provider](./ci-cd.mdx#feedback-eval-panel-provider) lists the settings and what happens without them.
+
+### A skipped panel
+
+With a provider, the panel is skipped when the endpoint gives no composition for a panel case.
+An endpoint failure is never retried.
+A skip is not a pass: the panel job fails and names the reason.
+
+With a provider, a night can fall below a floor, be skipped or not finish.
+Each such night comments on one tracking issue, "The nightly feedback eval panel is not green".
+The workflow opens the issue if it is not open.
+
+The comment links the run, the kept result and the commits since the last night whose panel measured and passed.
+[Feedback eval panel provider](./ci-cd.mdx#feedback-eval-panel-provider) says how the workflow keeps that night.
+The next night that measures and passes closes the issue with a link to its run.
+
+A pull request run and a manual run report in their job summary only.
+If the report job itself fails, or the night is cancelled after its panel started, `CI / Scheduled failures` writes to the same issue.
+Both call one script, `scripts/feedback-eval-night.ts`, so the fallback gives the same commit range and result link.
+
+Each comment carries a marker of its run attempt. A replay of an attempt that a panel issue already holds, open or closed, adds nothing.
+The check reads only issues updated since the attempt started. If it fails, the report still goes out and says that the duplicate check could not complete.
+
+The cicd job keeps `feedback-eval-gate.json` as the `feedback-eval-gate` artifact for 14 days. The panel keeps it as `feedback-eval-panel`.
+The file holds each check, each measure, the model name and the SHA-256 of the endpoint. It never holds the endpoint or the key.
+
+The gate runs locally without a model.
+With `--base`, it also compares `gate.json` with the base commit, as pull request CI does:
+
+```bash
+node scripts/feedback-eval-gate.ts --base "$(git merge-base origin/main HEAD)"
+```
+
 ## Composition replay cases
 
 A replay case fixes what the composer loop admits for one sealed review and one sequence of model answers.

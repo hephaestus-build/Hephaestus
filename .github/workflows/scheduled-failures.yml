@@ -7,6 +7,7 @@ on:
       - "CI / Kubernetes nightly"
       - "Security / Rescan images"
       - "CI / Extension provider slots"
+      - "CI / Feedback eval panel"
       - "CI / Flaky test report"
       - "CI / Profile"
       - "CI / Server clean-build reference"
@@ -28,21 +29,34 @@ jobs:
     if: >-
       github.event.workflow_run.event == 'schedule' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
-      (github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'timed_out')
+      (
+        github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'timed_out' ||
+        (github.event.workflow_run.name == 'CI / Feedback eval panel' && github.event.workflow_run.conclusion == 'cancelled')
+      )
     runs-on: ubuntu-slim
     timeout-minutes: 15
     permissions:
       issues: write
       actions: read
+      contents: read
     steps:
+      # The default branch's own report script, never the failed run's code. Only the panel needs it.
+      - if: github.event.workflow_run.name == 'CI / Feedback eval panel'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/feedback-eval-night.ts
+          sparse-checkout-cone-mode: false
+
       - name: Notify maintainers of a failed scheduled run
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           retries: 2
           script: |
             const run = context.payload.workflow_run;
-            if (['CI / Kubernetes nightly', 'Security / Rescan images'].includes(run.name)) {
-              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, {
+            let jobs = [];
+            if (['CI / Kubernetes nightly', 'CI / Feedback eval panel', 'Security / Rescan images'].includes(run.name)) {
+              jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, {
                 ...context.repo, run_id: run.id, attempt_number: run.run_attempt, per_page: 100,
               });
               const reporters = ['Report a failed rescan', 'Notify vulnerability response tracking',
@@ -53,6 +67,19 @@ jobs:
                   reporters.includes(step.name) && step.conclusion === 'success')));
               // Keep the specific issue when its owner notified maintainers. Timeouts still need a reporter.
               if (handled) return;
+            }
+            // The panel keeps one tracking issue with its commit range; its report script writes it.
+            if (run.name === 'CI / Feedback eval panel') {
+              // A cancelled night whose panel never started measured nothing: an inactive night has no jobs.
+              const started = jobs.some(job => job.name === 'Model panel' && (job.steps ?? []).length > 0);
+              if (run.conclusion === 'cancelled' && !started) return;
+              const { reportNight } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/feedback-eval-night.ts`);
+              await reportNight(github, context.repo, {
+                runId: run.id, attempt: run.run_attempt, date: run.run_started_at ?? run.created_at,
+                sha: run.head_sha, serverUrl: context.serverUrl, runUrl: run.html_url,
+                result: run.conclusion, status: '', artifactUrl: '',
+              });
+              return;
             }
             const marker = `<!-- hephaestus:scheduled-failure:${run.workflow_id} -->`;
             const attempt = `<!-- run:${run.id}:${run.run_attempt} -->`;
