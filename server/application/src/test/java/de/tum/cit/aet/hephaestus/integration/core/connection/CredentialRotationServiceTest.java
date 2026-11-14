@@ -55,7 +55,7 @@ class CredentialRotationServiceTest extends BaseUnitTest {
         MockitoAnnotations.openMocks(this);
         oldConverter = new CredentialBundleConverter(OLD_KEY, false);
         rotatingConverter = new CredentialBundleConverter(NEW_KEY, 2, OLD_KEY, 1, false);
-        SecurityProperties properties = new SecurityProperties(null, NEW_KEY, 2, OLD_KEY, 1, true, 25);
+        SecurityProperties properties = new SecurityProperties(null, NEW_KEY, 2, OLD_KEY, 1, true, 25, null, false);
         meterRegistry = new SimpleMeterRegistry();
         service = new CredentialRotationService(
                 connectionRepository, rotatingConverter, properties, Clock.fixed(NOW, ZoneOffset.UTC), meterRegistry);
@@ -163,7 +163,7 @@ class CredentialRotationServiceTest extends BaseUnitTest {
         doThrow(new EncryptionException("Credential encryption failed"))
                 .when(failingConverter)
                 .encrypt(any(), any());
-        SecurityProperties properties = new SecurityProperties(null, NEW_KEY, 2, OLD_KEY, 1, true, 25);
+        SecurityProperties properties = new SecurityProperties(null, NEW_KEY, 2, OLD_KEY, 1, true, 25, null, false);
         service = new CredentialRotationService(
                 connectionRepository, failingConverter, properties, Clock.fixed(NOW, ZoneOffset.UTC), meterRegistry);
         when(connectionRepository.lockCredentialRotationBatch(2, 25)).thenReturn(List.of(60L));

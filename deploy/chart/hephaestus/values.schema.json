@@ -1062,6 +1062,7 @@
 				"browserFaultReports",
 				"sync",
 				"credentialKey",
+				"systemKey",
 				"auth",
 				"github",
 				"gitlab",
@@ -1196,13 +1197,34 @@
 						}
 					}
 				},
+				"systemKey": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["rotationEnabled"],
+					"properties": {
+						"rotationEnabled": {
+							"type": "boolean"
+						}
+					}
+				},
 				"auth": {
 					"type": "object",
 					"additionalProperties": false,
-					"required": ["assuranceEnforced", "bootstrapAdmins", "browserExtensionIds", "passkeys"],
+					"required": [
+						"assuranceEnforced",
+						"bootstrapAdmins",
+						"browserExtensionIds",
+						"signingKeyNotBefore",
+						"passkeys"
+					],
 					"properties": {
 						"assuranceEnforced": {
 							"type": "boolean"
+						},
+						"signingKeyNotBefore": {
+							"type": "string",
+							"pattern": "^(?:[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?Z)?$",
+							"description": "Empty, or a UTC ISO-8601 instant after which a starting server makes a new JWT signing key."
 						},
 						"bootstrapAdmins": {
 							"$ref": "#/definitions/stringList"

@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.time.Instant;
 import java.util.List;
@@ -31,6 +32,9 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 class AccountProvisioningIntegrationTest extends RealAuthIntegrationTest {
+
+    @Autowired
+    private SystemSecrets systemSecrets;
 
     @Autowired
     private AccountProvisioningService service;
@@ -274,7 +278,7 @@ class AccountProvisioningIntegrationTest extends RealAuthIntegrationTest {
         // git_provider (type, server_url) key collision-free across the tests in this class.
         provider.setBaseUrl("https://" + registrationId + ".example");
         provider.setClientId("test-client-id");
-        provider.setClientSecret("test-client-secret");
+        provider.replaceClientSecret("test-client-secret", systemSecrets);
         provider.setScopes("read:user");
         loginProviderRepository.save(provider);
     }

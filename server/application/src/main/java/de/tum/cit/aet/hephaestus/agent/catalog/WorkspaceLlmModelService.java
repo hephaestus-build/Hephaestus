@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.AccessForbiddenException;
 import de.tum.cit.aet.hephaestus.core.exception.DataIntegrityViolationConstraints;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -38,6 +39,7 @@ public class WorkspaceLlmModelService {
     private final WorkspaceAgentBindingRepository agentBindingRepository;
     private final InstanceLlmSettingsService instanceLlmSettingsService;
     private final ConfigAuditPort configAudit;
+    private final SystemSecrets secrets;
 
     @Transactional(readOnly = true)
     public List<WorkspaceLlmModel> list(WorkspaceContext workspaceContext) {
@@ -191,7 +193,10 @@ public class WorkspaceLlmModelService {
                 .orElseThrow(() -> new EntityNotFoundException("WorkspaceLlmModel", id));
         var connection = model.getConnection();
         var current = new LlmProbeTarget(
-                connection.getBaseUrl(), connection.getAuthMode(), connection.getApiKey(), connection.getApiProtocol());
+                connection.getBaseUrl(),
+                connection.getAuthMode(),
+                connection.apiKey(secrets),
+                connection.getApiProtocol());
         if (!upstream.equals(model.getUpstreamModelId()) || !target.equals(current))
             throw new IllegalArgumentException("The model connection changed. Test it again.");
         var before = WorkspaceLlmModelSnapshot.of(model);

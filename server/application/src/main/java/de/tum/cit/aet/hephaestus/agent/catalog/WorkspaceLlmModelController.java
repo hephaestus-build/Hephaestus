@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.core.web.PublicApiUrls;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -45,6 +46,7 @@ public class WorkspaceLlmModelController {
     private final PublicApiUrls publicApiUrls;
     private final LlmCallPoolService callPools;
     private final LlmModelCapabilityProbe capabilityProbe;
+    private final SystemSecrets secrets;
 
     @PostMapping("/connections/{connectionId}/models")
     @Operation(summary = "Create a model on your AI provider", operationId = "workspaceCreateLlmModel")
@@ -111,7 +113,10 @@ public class WorkspaceLlmModelController {
         var model = modelService.get(workspaceContext, id);
         var connection = model.getConnection();
         var target = new LlmProbeTarget(
-                connection.getBaseUrl(), connection.getAuthMode(), connection.getApiKey(), connection.getApiProtocol());
+                connection.getBaseUrl(),
+                connection.getAuthMode(),
+                connection.apiKey(secrets),
+                connection.getApiProtocol());
         var result = capabilityProbe.probe(
                 new LlmModelResolver.ConnectionRef(
                         UsageFundingSource.WORKSPACE, connection.getId(), id, workspaceContext.id()),

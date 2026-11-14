@@ -29,7 +29,7 @@ record WorkspaceLlmConnectionSnapshot(
                 credentialFreeBaseUrl(c.getBaseUrl()),
                 c.getApiProtocol(),
                 c.getAuthMode(),
-                c.getApiKey() != null && !c.getApiKey().isBlank(),
+                c.hasApiKey(),
                 c.isEnabled());
     }
 

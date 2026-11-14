@@ -141,7 +141,8 @@ COMMIT;
 The account table lock waits for session issuance in progress and blocks new issuance until the transaction commits.
 The updates then include the credentials that those issuers committed.
 The server checks each request against `issued_jwt`, so every session ends at once.
-If the signing key leaked, also rotate it.
+If the signing key leaked, also make a new signing key, as [Signing key](./secret-custody#signing-key) describes.
+If the system key leaked together with the database or a backup, rotate the system key, as [System key](./secret-custody#system-key) describes.
 Record the action in your incident record.
 
 ## Upgrade and failed-migration recovery

@@ -3028,6 +3028,8 @@ await test("every revision migrates the database once, in a Job that only reache
 			"DATABASE_URL",
 			"DATABASE_USERNAME",
 			"DATABASE_PASSWORD",
+			// A change set that migrates sealed values opens them with the system key (ADR 0104).
+			"HEPHAESTUS_SECURITY_ENCRYPTION_KEY",
 		],
 	);
 	// It starts once PostgreSQL accepts connections: on a first install, both start together.

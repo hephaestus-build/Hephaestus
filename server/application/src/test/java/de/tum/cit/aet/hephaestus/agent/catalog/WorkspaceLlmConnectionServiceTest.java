@@ -17,7 +17,9 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.AccessForbiddenException;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.TestSystemSecrets;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -37,6 +39,9 @@ import org.mockito.Mock;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
+
+    private static final SystemSecrets SECRETS =
+            TestSystemSecrets.systemSecrets("0123456789abcdef0123456789abcdef", "test");
 
     @Mock
     private WorkspaceLlmConnectionRepository connectionRepository;
@@ -79,7 +84,8 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
                 egressPolicy,
                 instanceLlmSettingsService,
                 limitDiscovery,
-                configAudit);
+                configAudit,
+                SECRETS);
         ReflectionTestUtils.setField(connectionService, "entityManager", entityManager);
         lenient().when(entityManager.getReference(Workspace.class, 1L)).thenReturn(workspace);
         workspaceContext =
@@ -212,7 +218,7 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
                     new UpdateWorkspaceLlmConnectionRequestDTO(
                             null, null, null, null, LlmConnectionPlatform.AZURE, null));
             assertThat(connection.getConnectionPlatform()).isEqualTo(LlmConnectionPlatform.AZURE);
-            assertThat(WorkspaceLlmConnectionDTO.from(connection).connectionPlatform())
+            assertThat(WorkspaceLlmConnectionDTO.from(connection, SECRETS).connectionPlatform())
                     .isEqualTo(LlmConnectionPlatform.AZURE);
 
             connectionService.update(
@@ -231,8 +237,9 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
             // told was deleted.
             WorkspaceLlmConnection connection = new WorkspaceLlmConnection();
             connection.setId(5L);
+            connection.setWorkspace(workspace);
             connection.setSlug("openai-prod");
-            connection.setApiKey("sk-abc");
+            connection.replaceApiKey("sk-abc", SECRETS);
             connection.setEnabled(true);
             when(connectionRepository.findByIdAndWorkspaceIdForUpdate(5L, 1L)).thenReturn(Optional.of(connection));
             when(connectionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -242,7 +249,7 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
                     5L,
                     new UpdateWorkspaceLlmConnectionRequestDTO(null, null, true, null, null, null));
 
-            assertThat(result.getApiKey()).isNull();
+            assertThat(result.apiKey(SECRETS)).isNull();
             verify(connectionRepository).findByIdAndWorkspaceIdForUpdate(5L, 1L);
             verify(connectionRepository, never()).findByIdAndWorkspaceId(anyLong(), anyLong());
         }

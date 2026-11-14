@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -31,6 +32,9 @@ import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 
 class PracticeRoleResolutionEndToEndIntegrationTest extends RealAuthIntegrationTest {
+
+    @Autowired
+    private SystemSecrets systemSecrets;
 
     private static final String ROLE = "run_practice_review";
     // Explicit-port base URL so origin canonicalization is genuinely exercised (a state production
@@ -130,7 +134,7 @@ class PracticeRoleResolutionEndToEndIntegrationTest extends RealAuthIntegrationT
         provider.setDisplayName(registrationId);
         provider.setBaseUrl(baseUrl);
         provider.setClientId("test-client-id");
-        provider.setClientSecret("test-client-secret");
+        provider.replaceClientSecret("test-client-secret", systemSecrets);
         provider.setScopes("read_user");
         loginProviderRepository.save(provider);
     }

@@ -146,6 +146,10 @@ spec:
             # The auth layer runs on this role only.
             - name: HEPHAESTUS_AUTH_ASSURANCE_ENFORCED
               value: {{ $config.auth.assuranceEnforced | quote }}
+            {{- with $config.auth.signingKeyNotBefore }}
+            - name: HEPHAESTUS_AUTH_SIGNING_KEY_NOT_BEFORE
+              value: {{ . | quote }}
+            {{- end }}
             - name: HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS
               value: {{ $config.auth.bootstrapAdmins | join "," | quote }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_AUTH_BOOTSTRAP_TOKEN" "optional" true) | nindent 12 }}

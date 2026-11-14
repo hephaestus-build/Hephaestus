@@ -195,7 +195,6 @@ erDiagram
         BYTEA private_key_pem "NOT NULL"
         BOOLEAN active "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
-        VARCHAR(64) encryption_key_id "NOT NULL"
     }
 
     LoginProvider {
@@ -256,6 +255,12 @@ erDiagram
         VARCHAR(512) image
         TIMESTAMPTZ started_at "NOT NULL"
         VARCHAR(128) version "NOT NULL"
+    }
+
+    SystemSecret {
+        VARCHAR(64) name PK
+        BYTEA sealed_value "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
     }
 
     IdentityProvider["IdentityProvider · Integration Identity"]

@@ -63,7 +63,7 @@ this key rather than comparing login names.
   A sign-in option — GitHub, GitLab.com, or a self-hosted GitLab — is a row in the instance
   `login_provider` table (`core.auth.provider`), **one per SCM instance** (`UNIQUE(type, base_url)`),
   env-seeded on first boot and managed at runtime by an instance admin. The client secret is sealed
-  by `EncryptedStringConverter` (AES-256-GCM). This is **authentication** only; a workspace's SCM
+  by `SystemSecrets` (AES-256-GCM, bound to its row, ADR 0104). This is **authentication** only; a workspace's SCM
   data source is a separate per-workspace `Connection` + group token/PAT. ADR 0017 records why the
   two are separate.
 - **A user view never switches authentication.** An instance administrator reads a workspace

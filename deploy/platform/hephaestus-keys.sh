@@ -81,7 +81,7 @@ secret_json=$(kubectl -n "$NAMESPACE" get secret "$SECRET" -o json --ignore-not-
 existing=$(printf '%s' "$secret_json" | jq -r '.data // {} | keys[]' | tr -d '\r')
 has() { printf '%s\n' "$existing" | grep -qx "$1"; }
 # The keys that a restore needs: docs/admin/secret-custody.mdx § Keep the required keys outside the cluster.
-RESTORE_KEYS='^(HEPHAESTUS_SECURITY_(CREDENTIAL_|PRIOR_CREDENTIAL_)?ENCRYPTION_KEY|DATABASE_ADMIN_USERNAME|BACKUP_CIPHER_PASS)$'
+RESTORE_KEYS='^(HEPHAESTUS_SECURITY_(CREDENTIAL_|PRIOR_CREDENTIAL_|PRIOR_)?ENCRYPTION_KEY|DATABASE_ADMIN_USERNAME|BACKUP_CIPHER_PASS)$'
 value_of() { printf '%s' "$secret_json" | jq -r --arg key "$1" '.data[$key] // empty | @base64d' | tr -d '\r'; }
 
 if [ -n "$EXPORT" ]; then

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.auth;
 
 import java.net.URI;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -56,6 +57,28 @@ public final class AuthPropertiesFixture {
         return build(apiBasePath, providers, stepUpMaxAge, browserExtensionIds, true);
     }
 
+    /** Defaults that ask for a signing key created at or after {@code notBefore}. */
+    public static AuthProperties withSigningKeyNotBefore(Instant notBefore) {
+        AuthProperties d = defaults();
+        return new AuthProperties(
+                d.issuer(),
+                d.apiBasePath(),
+                d.audience(),
+                d.accessTtl(),
+                d.cookieName(),
+                d.stateCookieKey(),
+                d.loginProviders(),
+                d.bootstrapAdmins(),
+                d.bootstrapToken(),
+                d.sessionMaxLifetime(),
+                d.stepUpMaxAge(),
+                d.assuranceEnforced(),
+                d.devLoginEnabled(),
+                d.cookieSecure(),
+                d.browserExtensionIds(),
+                notBefore);
+    }
+
     public static AuthProperties withoutAssurance() {
         return build("", Map.of(), Duration.ofMinutes(5), List.of(), false);
     }
@@ -97,6 +120,7 @@ public final class AuthPropertiesFixture {
                 assuranceEnforced,
                 false,
                 true,
-                browserExtensionIds);
+                browserExtensionIds,
+                null);
     }
 }

@@ -20,6 +20,11 @@ import org.springframework.validation.annotation.Validated;
  *     prior-credential-encryption-key.
  * @param credentialRotationEnabled Re-encrypts stored credentials with the active credential key in batches on the
  *     server role. Requires both the active and the prior credential key.
+ * @param credentialRotationBatchSize Credentials that one rotation batch re-encrypts.
+ * @param priorEncryptionKey Previous encryption key, still used to open values that it sealed during a key rotation.
+ *     Exactly 32 bytes. Each sealed value names its key by an identifier derived from the key, so no version is set.
+ * @param encryptionRotationEnabled Seals each stored system secret again with the active encryption key on the server
+ *     role. Requires both the active and the prior encryption key.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.security")
@@ -30,7 +35,9 @@ public record SecurityProperties(
         @Nullable String priorCredentialEncryptionKey,
         @Nullable Integer priorCredentialEncryptionKeyVersion,
         @DefaultValue("false") boolean credentialRotationEnabled,
-        @DefaultValue("100") int credentialRotationBatchSize) {
+        @DefaultValue("100") int credentialRotationBatchSize,
+        @Nullable String priorEncryptionKey,
+        @DefaultValue("false") boolean encryptionRotationEnabled) {
 
     public SecurityProperties {
         // An environment source can supply an empty key, so an operator who set
@@ -38,8 +45,21 @@ public record SecurityProperties(
         // arrives here — a String binds it as "" while the paired Integer version binds it as null,
         // so comparing the raw values would read a fresh install as a half-finished key rotation and
         // refuse to boot. Normalize first; every rule below then reads one notion of "configured".
+        encryptionKey = blankToNull(encryptionKey);
+        priorEncryptionKey = blankToNull(priorEncryptionKey);
         credentialEncryptionKey = blankToNull(credentialEncryptionKey);
         priorCredentialEncryptionKey = blankToNull(priorCredentialEncryptionKey);
+
+        if (priorEncryptionKey != null && priorEncryptionKey.equals(encryptionKey)) {
+            throw new IllegalArgumentException("The active and prior system encryption keys must differ");
+        }
+        if (priorEncryptionKey != null && encryptionKey == null) {
+            throw new IllegalArgumentException(
+                    "hephaestus.security.prior-encryption-key requires hephaestus.security.encryption-key");
+        }
+        if (encryptionRotationEnabled && priorEncryptionKey == null) {
+            throw new IllegalArgumentException("System key rotation requires both active and prior encryption keys");
+        }
 
         if (credentialEncryptionKeyVersion < 1) {
             throw new IllegalArgumentException(

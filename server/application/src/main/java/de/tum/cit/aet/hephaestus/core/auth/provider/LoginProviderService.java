@@ -9,6 +9,8 @@ import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.ServerUrlValidator;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecretOwner;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -34,7 +36,7 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnServerRole
 @Service
 @WorkspaceAgnostic("Login providers are instance-global, not workspace-scoped")
-public class LoginProviderService {
+public class LoginProviderService implements SystemSecretOwner {
 
     static final String GITHUB_SCOPES = "read:user user:email";
     // GitLab is plain OAuth2, NOT OIDC — scope must NOT contain "openid" (see
@@ -61,6 +63,7 @@ public class LoginProviderService {
     private final ObjectMapper objectMapper;
     private final OutlineOriginPolicy outlineOriginPolicy;
     private final ScmServerEndpointPolicy scmEndpoints;
+    private final SystemSecrets secrets;
 
     public LoginProviderService(
             LoginProviderRepository repository,
@@ -69,8 +72,10 @@ public class LoginProviderService {
             AuthEventLogger authEventLogger,
             ObjectMapper objectMapper,
             OutlineOriginPolicy outlineOriginPolicy,
-            ScmServerEndpointPolicy scmEndpoints) {
+            ScmServerEndpointPolicy scmEndpoints,
+            SystemSecrets secrets) {
         this.repository = repository;
+        this.secrets = secrets;
         this.registrationCache = registrationCache;
         this.authProperties = authProperties;
         this.authEventLogger = authEventLogger;
@@ -140,7 +145,7 @@ public class LoginProviderService {
         provider.setDisplayName(displayName == null ? registrationId : displayName);
         provider.setBaseUrl(resolveBaseUrl(draft.type(), draft.baseUrl()));
         provider.setClientId(requireValue(draft.clientId(), "clientId"));
-        provider.setClientSecret(requireValue(draft.clientSecret(), "clientSecret"));
+        provider.replaceClientSecret(requireValue(draft.clientSecret(), "clientSecret"), secrets);
         provider.setScopes(resolveScopes(draft.type(), draft.scopes()));
         provider.setEnabled(true);
         provider.setSeededFromEnv(false);
@@ -155,7 +160,10 @@ public class LoginProviderService {
      */
     @Transactional
     public LoginProvider update(String registrationId, Patch patch) {
-        LoginProvider provider = loadRequired(registrationId);
+        LoginProvider provider = repository
+                .findByRegistrationIdForUpdate(registrationId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "The login provider was not found: " + registrationId));
         // Field NAMES only — this list goes into the audit trail, so it must stay free of values.
         List<String> changed = new ArrayList<>();
         if (patch.displayName() != null && !patch.displayName().isBlank()) {
@@ -172,7 +180,7 @@ public class LoginProviderService {
         }
         // Write-only secret: a null/blank value leaves the sealed secret unchanged.
         if (patch.clientSecret() != null && !patch.clientSecret().isBlank()) {
-            provider.setClientSecret(patch.clientSecret());
+            provider.replaceClientSecret(patch.clientSecret(), secrets);
             changed.add("clientSecret");
         }
         if (patch.scopes() != null && !patch.scopes().isBlank()) {
@@ -336,7 +344,7 @@ public class LoginProviderService {
         provider.setDisplayName(displayName);
         provider.setBaseUrl(baseUrl);
         provider.setClientId(clientId);
-        provider.setClientSecret(clientSecret);
+        provider.replaceClientSecret(clientSecret, secrets);
         provider.setScopes(scopes);
         provider.setEnabled(true);
         provider.setSeededFromEnv(true);
@@ -461,4 +469,14 @@ public class LoginProviderService {
             @Nullable String clientSecret,
             @Nullable String scopes,
             @Nullable Boolean enabled) {}
+
+    @Override
+    @Transactional
+    public int resealWithActiveKey(SystemSecrets secrets) {
+        int resealed = 0;
+        for (var row : repository.lockAllForKeyRotation()) {
+            if (row.resealWithActiveKey(secrets)) resealed++;
+        }
+        return resealed;
+    }
 }

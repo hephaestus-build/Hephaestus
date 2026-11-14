@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEvent;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -43,6 +44,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 class AgentWorkspacePurgeIntegrationTest extends BaseIntegrationTest {
+
+    @Autowired
+    private SystemSecrets systemSecrets;
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -148,7 +152,7 @@ class AgentWorkspacePurgeIntegrationTest extends BaseIntegrationTest {
         connection.setDisplayName("Connection " + suffix);
         connection.setBaseUrl(LlmCatalogTestFixtures.BASE_URL);
         connection.setApiProtocol(LlmApiProtocol.OPENAI_COMPLETIONS);
-        connection.setApiKey("secret-" + suffix);
+        connection.replaceApiKey("secret-" + suffix, systemSecrets);
         connection.setEnabled(true);
         connection = connectionRepository.save(connection);
 

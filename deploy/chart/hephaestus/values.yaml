@@ -368,12 +368,19 @@ config:
     version: 1
     priorVersion: ""
     rotationEnabled: false
+  # The system key (HEPHAESTUS_SECURITY_ENCRYPTION_KEY) and its rotation: docs/admin/secret-custody.mdx § System key.
+  # The prior key is HEPHAESTUS_SECURITY_PRIOR_ENCRYPTION_KEY in the Secret.
+  systemKey:
+    rotationEnabled: false
   auth:
     # Step-up and passkey assurance for administration. The application default is true. Set false
     # only as a deliberate operator decision; the chart never derives it from the environment name.
     assuranceEnforced: true
     bootstrapAdmins: []
     browserExtensionIds: []
+    # An ISO-8601 instant, such as 2026-11-14T10:00:00Z. A server that starts after it makes a new JWT signing key
+    # unless one is newer: docs/admin/secret-custody.mdx § Signing key. Empty keeps the current key.
+    signingKeyNotBefore: ""
     # docs/admin/passkeys.mdx. An empty relying party ID and origin list use the host.
     passkeys:
       instanceAdminRequired: true

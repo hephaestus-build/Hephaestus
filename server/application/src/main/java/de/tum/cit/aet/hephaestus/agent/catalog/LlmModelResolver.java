@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ public class LlmModelResolver {
     private final LlmModelRepository llmModelRepository;
     private final WorkspaceLlmModelRepository workspaceLlmModelRepository;
     private final LlmModelWorkspaceGrantRepository grantRepository;
+    private final SystemSecrets secrets;
 
     @Transactional(readOnly = true)
     public ResolvedLlmModel resolve(ModelBindingSource config) {
@@ -118,11 +120,11 @@ public class LlmModelResolver {
     public @Nullable String resolveCredential(ModelBindingSource config) {
         LlmModel instance = config.getInstanceModel();
         if (instance != null) {
-            return instance.getConnection().getApiKey();
+            return instance.getConnection().apiKey(secrets);
         }
         WorkspaceLlmModel byo = config.getWorkspaceModel();
         if (byo != null) {
-            return byo.getConnection().getApiKey();
+            return byo.getConnection().apiKey(secrets);
         }
         return null;
     }
@@ -210,7 +212,7 @@ public class LlmModelResolver {
                         c.getApiProtocol().wire(),
                         c.getAuthMode(),
                         model.getUpstreamModelId(),
-                        blankToNull(c.getApiKey()),
+                        blankToNull(c.apiKey(secrets)),
                         model.getCallPoolId()),
                 c.getApiProtocol(),
                 model.getReasoningEffort(),
@@ -257,7 +259,7 @@ public class LlmModelResolver {
                             c.getApiProtocol().wire(),
                             c.getAuthMode(),
                             model.getUpstreamModelId(),
-                            blankToNull(c.getApiKey()),
+                            blankToNull(c.apiKey(secrets)),
                             model.getCallPoolId()))
                     .orElse(null);
         }
@@ -280,7 +282,7 @@ public class LlmModelResolver {
                             c.getApiProtocol().wire(),
                             c.getAuthMode(),
                             model.getUpstreamModelId(),
-                            blankToNull(c.getApiKey()),
+                            blankToNull(c.apiKey(secrets)),
                             model.getCallPoolId()))
                     .orElse(null);
         }
@@ -304,7 +306,7 @@ public class LlmModelResolver {
                     connection.getApiProtocol().wire(),
                     connection.getAuthMode(),
                     model.getUpstreamModelId(),
-                    blankToNull(connection.getApiKey()),
+                    blankToNull(connection.apiKey(secrets)),
                     model.getCallPoolId());
         }
         Long workspaceId = ref.workspaceId();
@@ -319,7 +321,7 @@ public class LlmModelResolver {
                     connection.getApiProtocol().wire(),
                     connection.getAuthMode(),
                     model.getUpstreamModelId(),
-                    blankToNull(connection.getApiKey()),
+                    blankToNull(connection.apiKey(secrets)),
                     model.getCallPoolId());
         }
         return null;
