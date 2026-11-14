@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -109,4 +109,32 @@ void test("the lifecycle's failure lines become one annotation, so the step name
 		{ input: "[builder] unable to read an optional file\n", encoding: "utf8" },
 	);
 	assert.doesNotMatch(warning.stdout, /::error/u);
+});
+
+void test("the image build takes the per-arch digest that the lifecycle reports, with no registry read", (t) => {
+	const workflow = readFileSync(".github/workflows/reusable-docker-build.yml", "utf8");
+	const start = workflow.indexOf("mapfile -t reported");
+	const assignment = String.raw`DIGEST=${"$"}{reported[0]}`;
+	const end = workflow.indexOf(assignment, start);
+	assert.ok(start !== -1 && end !== -1, "the build step reads the reported digest");
+	const snippet = `${workflow.slice(start, end)}${assignment}\necho "$DIGEST"`.replaceAll(
+		/^ {10}/gmu,
+		"",
+	);
+	const directory = mkdtempSync(path.join(tmpdir(), "buildpack-digest-"));
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	const digest = `sha256:${"a".repeat(64)}`;
+	const run = (log: string) => {
+		writeFileSync(path.join(directory, "buildpacks.log"), log);
+		return spawnSync("bash", ["-euo", "pipefail", "-c", snippet], {
+			encoding: "utf8",
+			env: { ...process.env, RUNNER_TEMP: directory },
+		});
+	};
+	const reported = run(`[exporter] *** Images (${digest}):\n[exporter]       ghcr.io/x:tag\n`);
+	assert.equal(reported.status, 0, reported.stderr);
+	assert.equal(reported.stdout.trim(), digest);
+	const missing = run("Successfully built image\n");
+	assert.notEqual(missing.status, 0);
+	assert.match(missing.stdout, /reported 0 image digests/u);
 });
