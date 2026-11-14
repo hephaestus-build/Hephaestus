@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.auth;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSessionRepository;
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSignInHandoffRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -26,7 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @ConditionalOnServerRole
 @Service
-@WorkspaceAgnostic("Session revocation is account-scoped, not workspace-scoped")
 public class SessionRevocation {
 
     private final AccountRepository accountRepository;

@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobStateConflictException;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.JdbcPersonDataStore;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataContributor;
@@ -65,10 +64,11 @@ import tools.jackson.databind.node.ObjectNode;
  * {@code ERASED} in PostgreSQL and notify {@link EvidenceErasureNotifications#CHANNEL}; every server then removes its own
  * folders of the receipt's job once its leases are released and removal succeeds ({@link #removeErasedFolders}).
  * No erasure waits for a server.
+ *
+ * <p>Exact-person receipts span workspaces. Every job mutation also pins its workspace key.
  */
 @Component
 @PersonDataStores({"person_evidence_copy", "review_attempt_input"})
-@WorkspaceAgnostic("Exact-person receipts span workspaces; every job mutation also pins its workspace key")
 public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, WorkspacePurgeContributor {
     private static final ThreadLocal<JdbcOperations> LATE_READ_CONTROLS = new ThreadLocal<>();
 

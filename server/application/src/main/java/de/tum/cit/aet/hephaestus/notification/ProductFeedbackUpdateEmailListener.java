@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.notification;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.notification.email.EmailDeliveryResult.Outcome;
@@ -22,7 +21,6 @@ import org.springframework.transaction.annotation.Propagation;
 
 @Component
 @ConditionalOnServerRole
-@WorkspaceAgnostic("Product-feedback notifications address the account that submitted the report")
 @RequiredArgsConstructor
 public class ProductFeedbackUpdateEmailListener implements EmailNotice<ProductFeedbackUpdateEmailRequested> {
     private final AccountContactQuery contacts;

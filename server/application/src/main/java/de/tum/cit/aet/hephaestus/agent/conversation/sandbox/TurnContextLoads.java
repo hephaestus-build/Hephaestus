@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.conversation.sandbox;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoadException;
@@ -47,7 +46,6 @@ import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 
 /** Prepares context loads on the server. Tools read the archives in their own sandbox. */
-@WorkspaceAgnostic("The turn credential binds the workspace and the developer of every call")
 public class TurnContextLoads implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(TurnContextLoads.class);

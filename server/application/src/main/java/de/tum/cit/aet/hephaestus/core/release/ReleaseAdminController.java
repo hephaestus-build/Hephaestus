@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.core.release;
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -16,7 +15,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @ConditionalOnServerRole
 @RestController
-@WorkspaceAgnostic("Instance release identity carries no tenant data — app_admin only")
 @RequestMapping("/admin/release")
 @Tag(name = "Instance Release", description = "Running release identity and update checks")
 @RecentSignInExempt(reason = "a credential-free read of public release metadata that changes no configuration")

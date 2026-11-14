@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
@@ -17,11 +16,11 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * PostgreSQL transaction locks close the admission/erasure race across replicas.
  * https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS
+ *
+ * <p>It admits exact native identities for the whole instance. Content writers keep their own workspace predicates.
  */
 @Component
 @RequiredArgsConstructor
-@WorkspaceAgnostic(
-        "Instance-wide exact native identity admission; content writers retain their workspace" + " predicates")
 public class NativePersonDataWriteFence implements PersonDataWriteFence {
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;

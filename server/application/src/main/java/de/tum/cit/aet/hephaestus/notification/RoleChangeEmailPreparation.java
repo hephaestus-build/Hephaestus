@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.notification;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.event.RoleChangedEvent;
@@ -21,8 +20,6 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-@WorkspaceAgnostic(
-        "Each change names its workspace, or none for the instance admin role, and that decides the recipients")
 public class RoleChangeEmailPreparation {
     private final AccountContactQuery contacts;
     private final AccountMembershipQuery memberships;

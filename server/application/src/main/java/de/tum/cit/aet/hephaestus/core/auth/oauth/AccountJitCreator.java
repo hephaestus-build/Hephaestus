@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.auth.oauth;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Identity;
@@ -12,7 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 @ConditionalOnServerRole
 @Component
-@WorkspaceAgnostic("JIT account creation is user-scoped, keyed by (provider, subject)")
 public class AccountJitCreator {
 
     private final AccountRepository accountRepository;

@@ -15,7 +15,6 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -38,7 +37,6 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @ConditionalOnAgentRuntime
 @Profile(ConversationTurnConfiguration.PROFILES)
-@WorkspaceAgnostic("Each call names a run of the sandbox's own workspace and subject")
 public class TurnSandboxRunKind implements SandboxRunKind {
 
     private final ConversationTurnStarter starter;

@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.account;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.ResearchParticipationQuery;
@@ -12,7 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @ConditionalOnServerRole
-@WorkspaceAgnostic("Feedback choices are account-wide")
 @RequiredArgsConstructor
 public class AccountPreferencesQueryAdapter implements AccountPreferencesQuery {
     private final AccountDirectory accounts;

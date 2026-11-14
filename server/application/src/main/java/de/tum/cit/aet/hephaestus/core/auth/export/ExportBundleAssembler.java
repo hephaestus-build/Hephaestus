@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.auth.export;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.AccountService;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventRepository;
@@ -30,7 +29,6 @@ import org.springframework.transaction.annotation.Transactional;
 /** Maps account-owned data to the explicit field allowlist in {@link ExportBundle}. */
 @ConditionalOnServerRole
 @Component
-@WorkspaceAgnostic("GDPR export aggregates an account's own data across workspaces; not workspace-scoped")
 public class ExportBundleAssembler {
 
     /** Auth-event export window. */

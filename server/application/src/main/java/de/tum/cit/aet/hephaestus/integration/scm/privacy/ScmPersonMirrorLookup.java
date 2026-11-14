@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.scm.privacy;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderPersonLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
@@ -13,7 +12,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Component
 @RequiredArgsConstructor
-@WorkspaceAgnostic("An exact provider/native identity selects only that provider's person mirror")
 public class ScmPersonMirrorLookup implements ProviderPersonLookup {
     private final UserRepository users;
 

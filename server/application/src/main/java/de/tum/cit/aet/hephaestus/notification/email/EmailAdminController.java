@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.notification.email;
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
@@ -35,7 +34,6 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @ConditionalOnServerRole
 @RestController
-@WorkspaceAgnostic("Instance-wide relay verification — deliberately cross-tenant, app_admin only")
 @RequestMapping("/admin/email")
 @Tag(name = "Instance Email", description = "Instance-wide email transport verification")
 @RecentSignInExempt(reason = "sends one test email; changes no access and stores no credential")

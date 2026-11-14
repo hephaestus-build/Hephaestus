@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.database;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.security.SecretBinding;
 import de.tum.cit.aet.hephaestus.core.security.SecurityProperties;
 import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
@@ -38,7 +37,6 @@ import org.springframework.modulith.NamedInterface;
  * <p>The earlier envelopes are read here only. No runtime path reads them.
  */
 @NamedInterface("database-migration")
-@WorkspaceAgnostic("Upgrade-time conversion of instance and workspace AI provider keys")
 public class SystemSecretSealingChange implements CustomTaskChange {
 
     private static final String EARLIER_TEXT_PREFIX = "ENC:";

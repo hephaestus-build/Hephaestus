@@ -14,7 +14,6 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunStopReason;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -42,7 +41,6 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Component
 @ConditionalOnServerRole
-@WorkspaceAgnostic("Each call names a run, which carries its workspace")
 public class ReviewRunKind implements AgentRunHandler {
 
     /** How many attempts past the retry limit may withhold what an admitted review still has open. */

@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.auth;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountAbsorptionContributor;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -11,7 +10,6 @@ import org.springframework.stereotype.Component;
 @Component
 @Order(40)
 @ConditionalOnServerRole
-@WorkspaceAgnostic("Identity ownership spans workspaces")
 @RequiredArgsConstructor
 public class IdentityAbsorptionContributor implements AccountAbsorptionContributor {
     private final IdentityRepository identities;

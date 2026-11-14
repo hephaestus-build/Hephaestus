@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry.ActorProfile;
@@ -17,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
  * cached actor references can become stale, so neither is identity evidence.
  */
 @Component
-@WorkspaceAgnostic("Resolves the principal's SCM user mirrors; not scoped to a single workspace")
 public class CurrentAccountUsers {
 
     private final AccountIdentityQuery accountIdentityQuery;

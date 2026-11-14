@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.usage.fx;
 
 import de.tum.cit.aet.hephaestus.agent.LlmProperties;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -29,7 +28,6 @@ import org.w3c.dom.NodeList;
  * cannot fail a scheduled tick and the last stored rate simply stays in place.
  */
 @Component
-@WorkspaceAgnostic("Public reference rates are instance-wide reference data, not tenant data")
 public class EcbFxRateClient {
 
     private static final Logger log = LoggerFactory.getLogger(EcbFxRateClient.class);

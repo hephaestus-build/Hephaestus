@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.common;
 
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.GITHUB_API_BASE_URL;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import io.netty.resolver.DefaultAddressResolverGroup;
 import java.time.Duration;
 import java.time.Instant;
@@ -43,7 +42,6 @@ import reactor.netty.http.client.HttpClient;
  */
 @Component
 @Slf4j
-@WorkspaceAgnostic("System-wide rate-limit seeding — probes GitHub's REST rate-limit endpoint per scope")
 public class GitHubRestRateLimitSeeder {
 
     /** Minimum spacing between probe attempts for a scope that has still not been observed. */

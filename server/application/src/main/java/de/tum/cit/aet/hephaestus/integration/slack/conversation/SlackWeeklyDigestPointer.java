@@ -18,7 +18,6 @@ import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestWri
 import de.tum.cit.aet.hephaestus.conversation.Conversation;
 import de.tum.cit.aet.hephaestus.conversation.ConversationService;
 import de.tum.cit.aet.hephaestus.conversation.ConversationSlackReplies;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
@@ -53,7 +52,6 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @Component
 @ConditionalOnServerRole
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true")
-@WorkspaceAgnostic("Each note carries its workspace; the Slack identity is resolved against that workspace")
 public class SlackWeeklyDigestPointer implements WeeklyDigestTransport {
 
     private static final Logger log = LoggerFactory.getLogger(SlackWeeklyDigestPointer.class);

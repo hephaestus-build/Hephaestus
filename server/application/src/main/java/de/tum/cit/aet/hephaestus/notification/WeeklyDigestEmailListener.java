@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.notification;
 import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestPointer;
 import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestTransport;
 import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestWritten;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -34,7 +33,6 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-@WorkspaceAgnostic("The note names its workspace; delivery rechecks the account's current membership")
 public class WeeklyDigestEmailListener implements WeeklyDigestTransport, EmailNotice<WeeklyDigestWritten> {
 
     /** A note older than this is no news any more; the digest stays in the app. */

@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.auth.jwt;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -13,7 +12,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 @ConditionalOnServerRole
 @Service
-@WorkspaceAgnostic("JWT principal assembly is account-scoped")
 public class JwtPrincipalFactory {
 
     // Grantable feature flags must not confer instance-admin or workspace-admin authority, or claim

@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.action.ActionAdapter;
 import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
 import de.tum.cit.aet.hephaestus.core.action.ActionEnded;
@@ -27,7 +26,6 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Component
 @ConditionalOnServerRole
-@WorkspaceAgnostic("Instance-level product feedback; it belongs to no workspace")
 class FileIssueAdapter implements ActionAdapter {
 
     private static final String KEY_PREFIX = "file_issue:";

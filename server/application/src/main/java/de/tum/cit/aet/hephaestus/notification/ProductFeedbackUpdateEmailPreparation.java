@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.notification;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionService;
 import de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackUpdatedEvent;
@@ -13,7 +12,6 @@ import org.springframework.transaction.event.TransactionalEventListener;
 
 @Component
 @ConditionalOnServerRole
-@WorkspaceAgnostic("Product-feedback updates address the account that submitted the report")
 @RequiredArgsConstructor
 public class ProductFeedbackUpdateEmailPreparation {
     private static final Duration MAX_AGE = Duration.ofDays(7);

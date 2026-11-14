@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core.auth;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
@@ -16,7 +15,6 @@ import org.springframework.web.server.ResponseStatusException;
 /** Serializes exact identity ownership before account rows are locked. */
 @Component
 @ConditionalOnServerRole
-@WorkspaceAgnostic("Exact provider identity ownership spans workspaces")
 @RequiredArgsConstructor
 class IdentityKeyLock {
     private final IdentityRepository identityRepository;

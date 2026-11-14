@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.configuration;
 
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.IdentityProviderCatalog;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
@@ -13,7 +12,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @ConditionalOnServerRole
 @RestController
-@WorkspaceAgnostic("Redacted instance configuration facts, app_admin only")
 @RequestMapping("/admin/configuration-readiness")
 @Tag(name = "Configuration Readiness", description = "Redacted production configuration facts")
 @RequireInstanceAdmin

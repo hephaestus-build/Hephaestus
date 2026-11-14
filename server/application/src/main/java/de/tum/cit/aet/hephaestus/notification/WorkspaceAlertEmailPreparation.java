@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.notification;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent;
@@ -15,7 +14,6 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-@WorkspaceAgnostic("Each incident's explicit workspace determines its current administrator recipients")
 public class WorkspaceAlertEmailPreparation {
     private final AccountMembershipQuery memberships;
     private final NotificationSubscriptionService subscriptions;

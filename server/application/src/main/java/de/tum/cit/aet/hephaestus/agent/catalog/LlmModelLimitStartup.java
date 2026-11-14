@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
-import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.util.LinkedHashSet;
@@ -21,7 +20,6 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnBackgroundWork
 @ConditionalOnServerRole
-@WorkspaceAgnostic("Startup limit discovery covers every workspace's own models, each probed in its own workspace")
 public class LlmModelLimitStartup {
 
     private static final Logger log = LoggerFactory.getLogger(LlmModelLimitStartup.class);
