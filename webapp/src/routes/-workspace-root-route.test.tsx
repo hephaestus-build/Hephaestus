@@ -29,7 +29,14 @@ import { loadRouteCode, ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/tes
 
 beforeAll(
 	async () =>
-		loadRouteCode("/w/acme", "/w/acme/activity", "/w/acme/onboarding", "/workspaces/new", "/login"),
+		loadRouteCode(
+			"/w/acme",
+			"/w/acme/activity",
+			"/w/acme/onboarding",
+			"/workspaces/new",
+			"/login",
+			"/consent",
+		),
 	ROUTE_RENDER_WAIT.timeout,
 );
 
