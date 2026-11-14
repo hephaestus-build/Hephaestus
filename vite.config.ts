@@ -335,7 +335,8 @@ export default defineConfig({
 				"vp -C webapp exec node check-code-editor-runtime.ts",
 			]),
 			"build:webapp": run("vp -C webapp build"),
-			"dev:webapp": run("vp -C webapp dev"),
+			// Vite reads its port and the server's from `server/.env`, which `dev:env` gives this worktree.
+			"dev:webapp": run("vp -C webapp dev", { dependsOn: ["dev:env"] }),
 
 			// Chrome extension
 			"gate:extension": cached("vp -C extension check --no-fmt"),
@@ -524,7 +525,8 @@ export default defineConfig({
 			"release:version": run("changeset version && node scripts/sync-release-version.ts"),
 
 			// Local development
-			dev: run("mprocs"),
+			// `dev:env` completes `server/.env` once, before the two panes read it at the same time.
+			dev: run("mprocs", { dependsOn: ["dev:env"] }),
 			// `dev-env.ts` is the one writer of `server/.env`: it creates the file and adds its generated values before
 			// Compose or Spring Boot read it.
 			"dev:env": run("node scripts/dev-env.ts"),

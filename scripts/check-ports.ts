@@ -1,6 +1,7 @@
 import { connect } from "node:net";
 import path from "node:path";
 
+import { defaultPort, MANAGEMENT_OFFSET, PORTS } from "./dev-env.ts";
 import { positivePort, readEnvFile } from "./lib/env.ts";
 
 export interface ServicePort {
@@ -55,26 +56,17 @@ async function main(): Promise<void> {
 		process.env[name] ?? fileEnv[name] ?? fallback;
 	let services: ServicePort[];
 	try {
-		services = [
-			{ name: "PostgreSQL", port: positivePort(value("POSTGRES_PORT", "5432"), "POSTGRES_PORT") },
-			{
-				name: "Application server",
-				port: positivePort(value("SERVER_PORT", "8080"), "SERVER_PORT"),
-			},
-			{
-				name: "Sandbox gateway",
-				port: positivePort(value("SANDBOX_API_PORT", "8081"), "SANDBOX_API_PORT"),
-			},
-			{
-				name: "Mailpit SMTP",
-				port: positivePort(value("MAILPIT_SMTP_PORT", "1025"), "MAILPIT_SMTP_PORT"),
-			},
-			{
-				name: "Mailpit UI",
-				port: positivePort(value("MAILPIT_UI_PORT", "8025"), "MAILPIT_UI_PORT"),
-			},
-			{ name: "Webapp (Vite)", port: positivePort(value("WEBAPP_PORT", "4200"), "WEBAPP_PORT") },
-		];
+		const server = positivePort(
+			value("SERVER_PORT", String(defaultPort("SERVER_PORT"))),
+			"SERVER_PORT",
+		);
+		services = PORTS.map(({ name, port, label }) => ({
+			name: label,
+			port: positivePort(
+				value(name, String(name === "MANAGEMENT_PORT" ? server + MANAGEMENT_OFFSET : port)),
+				name,
+			),
+		}));
 	} catch (error) {
 		console.error(error instanceof Error ? error.message : String(error));
 		process.exitCode = 2;

@@ -153,13 +153,13 @@ Never commit `application-local.yml`. It may contain secrets and machine-specifi
    vp run dev:webapp   # terminal 2 — Vite dev server
    ```
 
-3. Open the configured server and webapp ports. See the [port map](#default-port-map).
-   The defaults are `http://localhost:8080` and `http://localhost:4200`.
+3. Open the webapp on this worktree's `WEBAPP_PORT`. See the [port map](#port-map).
+   The first worktree uses `http://localhost:4200`, with the server on `http://localhost:8080`.
 
    The OpenAPI description and Swagger UI are **off** by default. When enabled, these endpoints are
    unauthenticated and expose the route list, including admin routes. For a local session, set `SPRINGDOC_API_DOCS_ENABLED=true`
    (and `SPRINGDOC_SWAGGER_UI_ENABLED=true` for the browser UI) and Swagger UI appears at
-   `http://localhost:8080/swagger-ui/index.html`. Committing a spec does not need either flag —
+   `http://localhost:<SERVER_PORT>/swagger-ui/index.html`. Committing a spec does not need either flag —
    `vp run generate:api:specs` boots under the `specs` profile, which turns them on
    itself.
 
@@ -170,7 +170,7 @@ To wipe the local database (e.g. after a bad migration or sync), run `vp run dev
 `server/.env` holds the local settings of a checkout.
 Docker Compose and Spring Boot both read it.
 One command writes it: `vp run dev:env`.
-`vp run dev`, `dev:server`, `dev:compose`, `dev:reset` and every `db:*` command run it first, so you run it yourself only to edit the file before the first start.
+`vp run dev`, `dev:server`, `dev:webapp`, `dev:compose`, `dev:reset` and every `db:*` command run it first, so you run it yourself only to edit the file before the first start.
 It is safe to run again: it never replaces a value that is set.
 
 1. If `server/.env` does not exist, the command creates it from `server/.env.example`.
@@ -192,29 +192,59 @@ Thus, a checkout whose `server/postgres-data` already has data gets no new passw
 If its password or project name is missing, the command stops and tells you to set it. If a key is missing, it warns.
 Run `vp run dev:reset` to start again with a new database. This deletes the local data.
 
-### Port overrides
+### Port map
 
-Every host-side port is configurable so multiple Hephaestus instances (or other services) can coexist on the same machine. Container-internal ports never change – only the `localhost` binding moves.
+Each worktree of a clone has its own host ports, so several worktrees run at the same time.
+`vp run dev:env` writes them to `server/.env` the first time, with the other [local settings](#local-settings).
+It takes the first port set that no other worktree of the clone uses.
+Set `n` adds `10 × n` to each default port. The first worktree gets the defaults.
 
-#### Default port map
+A worktree keeps its ports: the command never changes a port that is set.
+Container-internal ports never change. Only the `localhost` binding moves.
 
-| Service            | Default | Variable            | Config location |
-| ------------------ | ------- | ------------------- | --------------- |
-| PostgreSQL         | 5432    | `POSTGRES_PORT`     | `server/.env`   |
-| Application server | 8080    | `SERVER_PORT`       | `server/.env`   |
-| Sandbox gateway    | 8081    | `SANDBOX_API_PORT`  | `server/.env`   |
-| Mailpit SMTP       | 1025    | `MAILPIT_SMTP_PORT` | `server/.env`   |
-| Mailpit UI         | 8025    | `MAILPIT_UI_PORT`   | `server/.env`   |
-| Webapp (Vite dev)  | 4200    | `WEBAPP_PORT`       | Shell env only  |
+| Service            | Default | Variable            |
+| ------------------ | ------- | ------------------- |
+| PostgreSQL         | 5432    | `POSTGRES_PORT`     |
+| Application server | 8080    | `SERVER_PORT`       |
+| Sandbox gateway    | 8081    | `SANDBOX_API_PORT`  |
+| Management         | 9090    | `MANAGEMENT_PORT`   |
+| Mailpit SMTP       | 1025    | `MAILPIT_SMTP_PORT` |
+| Mailpit UI         | 8025    | `MAILPIT_UI_PORT`   |
+| Webapp (Vite dev)  | 4200    | `WEBAPP_PORT`       |
 
-:::tip[Pre-flight check]
-Run `vp run check:ports` before starting the stack. It checks the ports above.
-:::
+Every set keeps the management port at `SERVER_PORT + 1010`.
+Read your worktree's ports in `server/.env`.
+
+Every consumer reads the same file:
+
+- Docker Compose maps the PostgreSQL and Mailpit ports.
+- Spring Boot listens on `SERVER_PORT`, `SANDBOX_API_PORT` and `MANAGEMENT_PORT`, and allows the webapp origin `http://localhost:<WEBAPP_PORT>`.
+- `vp run dev:webapp` serves on `WEBAPP_PORT` and points the app at `http://localhost:<SERVER_PORT>`.
+- `vp run check:ports` checks the ports before you start the stack.
+
+A worktree whose `server/.env` sets no ports runs on the defaults.
+A new `server/.env`, or one that sets some ports, avoids those ports, because such a worktree can be running.
+An existing `server/.env` without ports keeps the defaults, unless another worktree's `server/.env` sets them.
+Then its ports move once, and its sandbox namespace with them ([Kubernetes](#kubernetes)).
+
+The command does not see other clones or other programs.
+If a port is in use, set the port in `server/.env` yourself.
+A port in your shell overrides the file.
+
+#### The webapp's settings
+
+The web app reads its server URL and its own URL from a runtime environment script.
+In production, the container entrypoint writes that script.
+`vp run dev:webapp` serves it itself, with the URLs of this worktree.
+Do not edit the committed stub `webapp/public/env-config.js`.
+
+The app has no Vite-level environment variables: the config sets no `envPrefix`, and nothing in `src/` reads `import.meta.env` beyond `DEV`.
+A `webapp/.env` file has no effect.
 
 ### Email
 
 The `local` profile sends every email to the Mailpit container from `server/compose.yaml`. Nothing
-leaves your machine. Its SMTP and inbox ports bind to `127.0.0.1` only. Open [http://localhost:8025](http://localhost:8025) (`MAILPIT_UI_PORT`) to read
+leaves your machine. Its SMTP and inbox ports bind to `127.0.0.1` only. Open `http://localhost:<MAILPIT_UI_PORT>` to read
 what the server sent, with the HTML part, the plain-text alternative and the headers side by side.
 
 The quickest end-to-end check is the **Send test email** button on the instance settings page
@@ -222,80 +252,6 @@ The quickest end-to-end check is the **Send test email** button on the instance 
 
 Templates live in `server/application/src/main/resources/templates/email/` — `html/` and `text/`
 hold the two parts of one message, and `messages.properties` holds the subjects.
-
-#### How it works
-
-The `.env` file in `server/` is read by **both** Docker Compose (for container port mappings and the database password) and Spring Boot (through `spring.config.import`). The webapp port is a separate shell setting, as listed above.
-
-Ports flow through the system like this:
-
-```text
-.env (POSTGRES_PORT=15432)
-  ├─► Docker Compose  →  '15432:5432' host mapping
-  └─► Spring Boot     →  jdbc:postgresql://localhost:15432/hephaestus
-```
-
-#### Changing ports
-
-**Basic example** – move PostgreSQL to a non-standard port:
-
-```bash
-# server/.env
-POSTGRES_PORT=15432
-```
-
-The application server automatically picks up the new port from the same `.env` file.
-
-**Changing the application server port:**
-
-```bash
-# server/.env
-SERVER_PORT=18080
-```
-
-If the webapp also needs to reach the server at the new port, edit the runtime-environment stub the
-webapp loads before its bundle:
-
-```js
-// webapp/public/env-config.js
-window.__ENV__ = { APPLICATION_SERVER_URL: "http://localhost:18080" };
-```
-
-:::caution[Keep it local]
-`env-config.js` is committed as an empty stub and overwritten by the Docker entrypoint in
-production. Treat a local override the way you treat `application-local.yml`: do not commit it.
-:::
-
-The webapp has no Vite-level environment variables — `vite.config.ts` does not call `loadEnv`, sets
-no `envPrefix`, and nothing in `src/` reads `import.meta.env` beyond `DEV`. A `webapp/.env` file has
-no effect on the application's configuration, and there is no `VITE_`-prefixed setting for the server
-URL.
-
-**Changing the webapp port:**
-
-The Vite dev server reads `WEBAPP_PORT` from the shell environment (`process.env`, not a `.env` file
-and not `server/.env`):
-
-```bash
-WEBAPP_PORT=5200 vp run dev:webapp
-```
-
-When changing the webapp port, the server's CORS origin must also be updated so API calls are not rejected:
-
-```bash
-# server/.env
-APPLICATION_HOST_URL=http://localhost:5200
-```
-
-#### Cascading effects reference
-
-Changing a port in one place may require updates elsewhere. This table shows the full picture:
-
-| When you change... | Also update...                                             | Why                                      |
-| ------------------ | ---------------------------------------------------------- | ---------------------------------------- |
-| `WEBAPP_PORT`      | `APPLICATION_HOST_URL` in `.env`                           | CORS origin must match                   |
-| `SERVER_PORT`      | Webapp's `APPLICATION_SERVER_URL` (if connecting directly) | API base URL changes                     |
-| `POSTGRES_PORT`    | Nothing (automatic)                                        | Both Compose and Spring read from `.env` |
 
 ### GitHub configuration
 
@@ -475,9 +431,8 @@ The dev launcher builds and pins the agent image, creates the worktree namespace
 It gives the JVM a namespace-scoped kubeconfig with short-lived credentials.
 No cluster credential reaches a sandbox.
 
-Set distinct `SERVER_PORT` and `SANDBOX_API_PORT` values in each worktree's `server/.env`.
+Each worktree has its own `SERVER_PORT` and `SANDBOX_API_PORT` ([Port map](#port-map)).
 The namespace is `heph-dev-<SERVER_PORT>-<SANDBOX_API_PORT>`.
-The management port defaults to `SERVER_PORT + 1010`. Set `MANAGEMENT_PORT` when that port is in use.
 The host loop runs one review and one conversation turn at a time.
 The Pod requests stay the same as the chart's.
 
@@ -606,13 +561,13 @@ For Slack app setup, use the scope/event checklist in
    vp install
    ```
 
-2. Start Vite (defaults to port 4200):
+2. Start Vite on this worktree's `WEBAPP_PORT`:
 
    ```bash
    vp run dev:webapp
    ```
 
-3. Visit `http://localhost:4200` (or your custom `WEBAPP_PORT`).
+3. Visit `http://localhost:<WEBAPP_PORT>`, with the port from `server/.env`.
 
 ### UI foundations
 
