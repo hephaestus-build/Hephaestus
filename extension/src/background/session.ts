@@ -45,7 +45,70 @@ export const sessionRecordSchema = z.object({
  */
 export type SessionRecord = z.infer<typeof sessionRecordSchema>;
 
+export type SessionState =
+	| { state: "signed-out"; generation: number; epoch: number; credentials?: undefined }
+	| { state: "signed-in"; generation: number; epoch: number; credentials: Credentials };
+
+function sessionState(record: SessionRecord): SessionState {
+	return record.credentials === undefined
+		? { state: "signed-out", generation: record.generation, epoch: record.epoch }
+		: { ...record, state: "signed-in", credentials: record.credentials };
+}
+
+function sessionRecord(state: SessionState): SessionRecord {
+	return state.state === "signed-in"
+		? { generation: state.generation, epoch: state.epoch, credentials: state.credentials }
+		: { generation: state.generation, epoch: state.epoch };
+}
+
 export const EMPTY_SESSION: SessionRecord = { generation: 0, epoch: 0 };
+
+type SessionEvent =
+	| { type: "invalidate-views" }
+	| { type: "adopt"; epoch: number; credentials: Credentials }
+	| { type: "rotate"; refreshToken: string; tokens: Tokens }
+	| { type: "end"; refreshToken: string }
+	| { type: "detach" };
+
+/** A stale family cannot change its successor. Undefined rejects the transition without a write. */
+export function transitionSession(
+	record: SessionState,
+	event: SessionEvent,
+): SessionState | undefined {
+	switch (event.type) {
+		case "invalidate-views": {
+			return { ...record, generation: record.generation + 1 };
+		}
+		case "adopt": {
+			return record.epoch === event.epoch
+				? {
+						state: "signed-in",
+						generation: record.generation + 1,
+						epoch: record.epoch + 1,
+						credentials: event.credentials,
+					}
+				: undefined;
+		}
+		case "rotate": {
+			return record.state === "signed-in" &&
+				record.credentials.tokens.refreshToken === event.refreshToken
+				? { ...record, credentials: { issuer: record.credentials.issuer, tokens: event.tokens } }
+				: undefined;
+		}
+		case "end": {
+			if (
+				record.state !== "signed-in" ||
+				record.credentials.tokens.refreshToken !== event.refreshToken
+			) {
+				return undefined;
+			}
+			return { state: "signed-out", generation: record.generation + 1, epoch: record.epoch + 1 };
+		}
+		case "detach": {
+			return { state: "signed-out", generation: record.generation + 1, epoch: record.epoch + 1 };
+		}
+	}
+}
 
 export interface SessionStorage {
 	read: () => Promise<SessionRecord>;
@@ -61,7 +124,7 @@ export interface SessionDependencies {
 	storage: SessionStorage;
 	/** Always called with the family's own issuer, never with whatever instance is configured now. */
 	refresh: (issuer: Issuer, refreshToken: string) => Promise<RefreshOutcome>;
-	/** Best effort: a revocation that cannot reach the issuer leaves the session to expire. */
+	/** An offline browser cannot revoke remotely; the issuer still enforces session expiry. */
 	revoke: (issuer: Issuer, refreshToken: string) => Promise<void>;
 	now: () => number;
 	onChange: (generation: number) => void;
@@ -125,42 +188,40 @@ export class SessionStore {
 		return generation;
 	}
 
-	/** Moves the view generation without touching the credential lineage, and tells every view. */
-	async bump(): Promise<number> {
-		const next = await this.#exclusive(async () => {
-			const record = await this.#deps.storage.read();
-			const updated = { ...record, generation: record.generation + 1 };
-			await this.#deps.storage.write(updated);
-			return updated.generation;
-		});
-		this.#deps.onChange(next);
-		return next;
-	}
-
-	/**
-	 * Stores the family a sign-in produced, if no lineage change happened since the sign-in began. A
-	 * sign-in that lost the race is revoked at once, at the instance that issued it, so no live
-	 * session is left behind unreferenced.
-	 */
-	async adopt(credentials: Credentials, startedAtEpoch: number): Promise<boolean> {
-		const adopted = await this.#exclusive(async () => {
-			const record = await this.#deps.storage.read();
-			if (record.epoch !== startedAtEpoch) {
+	async #apply(event: SessionEvent) {
+		return this.#exclusive(async () => {
+			const previous = await this.#deps.storage.read();
+			const next = transitionSession(sessionState(previous), event);
+			if (next === undefined) {
 				return;
 			}
-			const updated = {
-				generation: record.generation + 1,
-				epoch: record.epoch + 1,
-				credentials,
-			};
-			await this.#deps.storage.write(updated);
-			return updated.generation;
+			await this.#deps.storage.write(sessionRecord(next));
+			return { previous, next };
 		});
-		if (adopted === undefined) {
+	}
+
+	/** Moves the view generation without touching the credential lineage, and tells every view. */
+	async bump(): Promise<number> {
+		const changed = await this.#apply({ type: "invalidate-views" });
+		if (changed === undefined) {
+			throw new Error("View invalidation must be legal in every session state");
+		}
+		this.#deps.onChange(changed.next.generation);
+		return changed.next.generation;
+	}
+
+	/** A sign-in that lost its lineage is revoked at the instance that issued it. */
+	async adopt(credentials: Credentials, startedAtEpoch: number): Promise<boolean> {
+		const changed = await this.#apply({ type: "adopt", epoch: startedAtEpoch, credentials });
+		if (changed === undefined) {
 			await this.#deps.revoke(credentials.issuer, credentials.tokens.refreshToken);
 			return false;
 		}
-		this.#deps.onChange(adopted);
+		this.#deps.onChange(changed.next.generation);
+		const replaced = changed.previous.credentials;
+		if (replaced !== undefined) {
+			await this.#deps.revoke(replaced.issuer, replaced.tokens.refreshToken);
+		}
 		return true;
 	}
 
@@ -216,20 +277,15 @@ export class SessionStore {
 			await this.#end(presented);
 			return undefined;
 		}
-		const stored = await this.#exclusive(async () => {
-			const current = await this.#deps.storage.read();
-			// Still the family and the secret that was presented: revoked site access does not change
-			// the family, but a sign-out or another sign-in does.
-			if (current.credentials?.tokens.refreshToken !== presented) {
-				return;
-			}
-			const updated = {
-				...current,
-				credentials: { issuer: credentials.issuer, tokens: outcome.tokens },
-			};
-			await this.#deps.storage.write(updated);
-			return grantOf(updated, updated.credentials);
+		const changed = await this.#apply({
+			type: "rotate",
+			refreshToken: presented,
+			tokens: outcome.tokens,
 		});
+		const stored =
+			changed?.next.state === "signed-in"
+				? grantOf(changed.next, changed.next.credentials)
+				: undefined;
 		if (stored === undefined) {
 			// The family ended while the refresh was out: the rotated secret is the live one now.
 			await this.#deps.revoke(credentials.issuer, outcome.tokens.refreshToken);
@@ -242,14 +298,12 @@ export class SessionStore {
 	 * so callers can publish related local state before revoking it outside their critical section.
 	 */
 	async detach(): Promise<Credentials | undefined> {
-		const ended = await this.#exclusive(async () => {
-			const record = await this.#deps.storage.read();
-			const updated = { generation: record.generation + 1, epoch: record.epoch + 1 };
-			await this.#deps.storage.write(updated);
-			return { generation: updated.generation, credentials: record.credentials };
-		});
-		this.#deps.onChange(ended.generation);
-		return ended.credentials;
+		const changed = await this.#apply({ type: "detach" });
+		if (changed === undefined) {
+			throw new Error("Detaching must be legal in every session state");
+		}
+		this.#deps.onChange(changed.next.generation);
+		return changed.previous.credentials;
 	}
 
 	/** Ends the local family before attempting remote revocation. */
@@ -265,17 +319,9 @@ export class SessionStore {
 	 * revoking — unless the stored family has already moved on, in which case there is nothing to end.
 	 */
 	async #end(refreshToken: string): Promise<void> {
-		const ended = await this.#exclusive(async () => {
-			const record = await this.#deps.storage.read();
-			if (record.credentials?.tokens.refreshToken !== refreshToken) {
-				return;
-			}
-			const updated = { generation: record.generation + 1, epoch: record.epoch + 1 };
-			await this.#deps.storage.write(updated);
-			return updated.generation;
-		});
-		if (ended !== undefined) {
-			this.#deps.onChange(ended);
+		const changed = await this.#apply({ type: "end", refreshToken });
+		if (changed !== undefined) {
+			this.#deps.onChange(changed.next.generation);
 		}
 	}
 
