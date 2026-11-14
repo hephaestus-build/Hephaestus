@@ -17,9 +17,11 @@ RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 FROM dependencies AS gateway
 WORKDIR /opt/pi-sdk
 RUN pnpm install --frozen-lockfile --ignore-scripts
-COPY pi/tsconfig.build.json pi/gateway-capabilities.ts pi/gateway-init.ts pi/gateway-run.ts ./
-# The entrypoint of a sandbox from a SandboxTemplate: its driver, and the run kinds that it drives.
+COPY pi/tsconfig.build.json ./
+# The entrypoint of a sandbox from a SandboxTemplate: its driver, the run kinds that it drives, and the review kind's
+# programs.
 COPY --from=agent-runtime driver.ts driver-kinds.ts driver-isolation.ts sandbox-paths.ts review-measure.ts \
+    gateway-capabilities.ts gateway-init.ts gateway-run.ts \
     review-composer.ts review-composer-gateway.ts review-composer-model.ts ./
 COPY --from=agent-runtime turn.ts heph-host-protocol.ts context-folder.ts pi-agent-sandbox.ts pi-diagnostics.ts \
     pi-diagnostics.json pi-error-text.ts pi-provider.ts pi-text.ts ./

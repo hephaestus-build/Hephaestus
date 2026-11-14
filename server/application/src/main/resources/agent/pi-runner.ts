@@ -722,7 +722,7 @@ export async function runReviewJob(): Promise<void> {
 	const AGENT_DIR = requiredEnv("PI_CODING_AGENT_DIR");
 	const LLM_PROXY_URL = requiredEnv("LLM_PROXY_URL");
 	const LLM_PROXY_TOKEN = requiredEnv("LLM_PROXY_TOKEN");
-	// The claim of the run that a sandbox's driver started this runner for; empty otherwise.
+	// The claim of the run that the sandbox's driver started this runner for.
 	const LLM_PROXY_CLAIM = parseProxyClaim(process.env.LLM_PROXY_CLAIM);
 	// The runner passes its credential where it is used. No process that it starts inherits it.
 	delete process.env.LLM_PROXY_TOKEN;

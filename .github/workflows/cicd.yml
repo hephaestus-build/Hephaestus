@@ -545,12 +545,21 @@ jobs:
               - 'scripts/api-generator/**'
             agent-images:
               - 'docker/agents/**'
-              # Tool protocol v1, which the agent image compiles from its one source.
-              - 'server/application/src/main/resources/agent/tool-protocol.ts'
-              - 'server/application/src/main/resources/agent/tool-client.ts'
-              - 'server/application/src/main/resources/agent/tools-server.ts'
-              # The sandbox driver, the image's entrypoint.
+              # What docker/agents/pi/Dockerfile copies from the agent runtime: the sandbox driver, its run kinds and
+              # the review kind's programs.
               - 'server/application/src/main/resources/agent/driver*.ts'
+              - 'server/application/src/main/resources/agent/sandbox-paths.ts'
+              - 'server/application/src/main/resources/agent/review-measure.ts'
+              - 'server/application/src/main/resources/agent/gateway-*.ts'
+              - 'server/application/src/main/resources/agent/review-composer*.ts'
+              - 'server/application/src/main/resources/agent/turn.ts'
+              - 'server/application/src/main/resources/agent/heph-host-protocol.ts'
+              - 'server/application/src/main/resources/agent/context-folder.ts'
+              - 'server/application/src/main/resources/agent/pi-agent-sandbox.ts'
+              - 'server/application/src/main/resources/agent/pi-diagnostics.*'
+              - 'server/application/src/main/resources/agent/pi-error-text.ts'
+              - 'server/application/src/main/resources/agent/pi-provider.ts'
+              - 'server/application/src/main/resources/agent/pi-text.ts'
             postgres-image:
               - 'docker/postgres/**'
             # What changes an upgrade from the last release: a migration and the baseline synchronization.

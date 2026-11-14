@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test, { type TestContext } from "node:test";
 import timers from "node:timers/promises";
-import { collectTraces, upload } from "./gateway-run.ts";
+import { collectTraces, upload } from "../../../main/resources/agent/gateway-run.ts";
 
 function traceManifest(text: string) {
 	const value: unknown = JSON.parse(text);

@@ -7,8 +7,39 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
+import { gzipSync } from "node:zlib";
 
-import { downloadWorkspace, extract, extractArguments } from "./gateway-init.ts";
+import {
+	downloadWorkspace,
+	extract,
+	extractArguments,
+} from "../../../main/resources/agent/gateway-init.ts";
+
+/** The sandbox token and the run's claim, as main() sends them with every gateway call. */
+const HEADERS = {
+	Authorization: "Bearer attempt-token",
+	"x-agent-run": "run-1",
+	"x-agent-epoch": "2",
+};
+
+void test("the initializer refuses to start without the run's claim, before any gateway call", () => {
+	const child = spawnSync(
+		process.execPath,
+		[fileURLToPath(new URL("../../../main/resources/agent/gateway-init.ts", import.meta.url))],
+		{
+			env: {
+				PATH: process.env.PATH,
+				SANDBOX_RUNTIME_URL: "http://gateway.invalid/runtime",
+				LLM_PROXY_TOKEN: "attempt-token",
+				SANDBOX_WORK_DEADLINE_MS: String(Date.now() + 60_000),
+			},
+			encoding: "utf8",
+		},
+	);
+	assert.equal(child.status, 1);
+	assert.match(child.stderr, /LLM_PROXY_CLAIM is missing/u);
+});
 
 void test("retries a truncated workspace from byte zero", async () => {
 	const directory = await mkdtemp(path.join(tmpdir(), "gateway-download-test-"));
@@ -16,7 +47,11 @@ void test("retries a truncated workspace from byte zero", async () => {
 	let requests = 0;
 	const server = createServer((request, response) => {
 		// Another local process can probe a newly opened port. It carries no credential.
-		if (request.headers.authorization !== "Bearer attempt-token") {
+		if (
+			request.headers.authorization !== "Bearer attempt-token" ||
+			request.headers["x-agent-run"] !== "run-1" ||
+			request.headers["x-agent-epoch"] !== "2"
+		) {
 			response.writeHead(401).end();
 			return;
 		}
@@ -47,7 +82,7 @@ void test("retries a truncated workspace from byte zero", async () => {
 		const archive = path.join(directory, "workspace.tar");
 		await downloadWorkspace(
 			`http://127.0.0.1:${address.port}/runtime`,
-			"attempt-token",
+			HEADERS,
 			archive,
 			AbortSignal.timeout(30_000),
 		);
@@ -96,7 +131,7 @@ void test("waits out a limit of the gateway on discovery and on the download", a
 		const archive = path.join(directory, "workspace.tar");
 		await downloadWorkspace(
 			`http://127.0.0.1:${address.port}/runtime`,
-			"attempt-token",
+			HEADERS,
 			archive,
 			AbortSignal.timeout(30_000),
 		);
@@ -136,7 +171,51 @@ void test("rejects an archive above the advertised budget without retry", async 
 		await assert.rejects(
 			downloadWorkspace(
 				`http://127.0.0.1:${address.port}/runtime`,
-				"attempt-token",
+				HEADERS,
+				path.join(directory, "workspace.tar"),
+				AbortSignal.timeout(30_000),
+			),
+			/Workspace exceeded its advertised byte budget/u,
+		);
+		assert.equal(requests, 1);
+	} finally {
+		const closed = once(server, "close");
+		server.close();
+		server.closeAllConnections();
+		await closed;
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
+void test("rejects a compressed workspace whose decoded bytes exceed the budget, without retry", async () => {
+	const directory = await mkdtemp(path.join(tmpdir(), "gateway-download-test-"));
+	// The transfer fits the budget; only the decoded stream exceeds it.
+	const compressed = gzipSync(Buffer.alloc(64 * 1024));
+	let requests = 0;
+	const server = createServer((request, response) => {
+		if (request.url === "/runtime") {
+			response.end(JSON.stringify({ protocolVersion: 3, workspaceByteBudget: 1024 }));
+			return;
+		}
+		// Another local process can probe a newly opened port. Only the workspace requests count.
+		if (request.url !== "/runtime/workspace") {
+			response.writeHead(404).end();
+			return;
+		}
+		requests += 1;
+		response.writeHead(200, { "Content-Encoding": "gzip", "Content-Length": compressed.length });
+		response.end(compressed);
+	});
+	try {
+		server.listen(0, "127.0.0.1");
+		await once(server, "listening");
+		const address = server.address();
+		assert.ok(address !== null && typeof address !== "string");
+		assert.ok(compressed.length < 1024);
+		await assert.rejects(
+			downloadWorkspace(
+				`http://127.0.0.1:${address.port}/runtime`,
+				HEADERS,
 				path.join(directory, "workspace.tar"),
 				AbortSignal.timeout(30_000),
 			),
@@ -177,7 +256,7 @@ void test("rejects a workspace without an exact transfer length without retry", 
 		await assert.rejects(
 			downloadWorkspace(
 				`http://127.0.0.1:${address.port}/runtime`,
-				"attempt-token",
+				HEADERS,
 				path.join(directory, "workspace.tar"),
 				AbortSignal.timeout(30_000),
 			),

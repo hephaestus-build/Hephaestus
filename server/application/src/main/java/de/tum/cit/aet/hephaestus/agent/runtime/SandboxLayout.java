@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.runtime;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import java.time.Duration;
-import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -167,17 +166,6 @@ public final class SandboxLayout {
 
     /** The exit of a process that SIGKILL ended: 128 plus the signal's number, as every container runtime reports it. */
     public static final int EXIT_KILLED = 137;
-
-    /** The sandbox's first process: it fills {@code /workspace} from the attempt's gateway session. */
-    public static final List<String> INITIALIZER_COMMAND =
-            List.of("node", "--enable-source-maps", "/opt/pi-sdk/gateway-init.js");
-
-    /**
-     * The wrapper of a practice review's own command: it holds the gateway credential and uploads the result. A process
-     * of the sandbox must not open its inspector with SIGUSR1.
-     */
-    public static final List<String> RUNTIME_COMMAND =
-            List.of("node", "--disable-sigusr1", "--enable-source-maps", "/opt/pi-sdk/gateway-run.js");
 
     public static final Duration RESULT_UPLOAD_GRACE = Duration.ofMinutes(10);
 

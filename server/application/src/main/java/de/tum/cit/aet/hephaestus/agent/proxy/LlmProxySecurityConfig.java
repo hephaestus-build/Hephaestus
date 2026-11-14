@@ -192,7 +192,7 @@ class LlmProxySecurityConfig {
             ProxyAccounting accounting,
             ObjectMapper objectMapper)
             throws Exception {
-        // A review sandbox's result, bounded as a review Job's result is on the capability chain.
+        // A review sandbox's result, bounded on the capability chain.
         RequestMatcher reviewResult = PathPatternRequestMatcher.withDefaults()
                 .matcher(HttpMethod.POST, "/internal/agent/runs/{runId}/runtime/result");
         RequestMatcher turnPartial = PathPatternRequestMatcher.withDefaults()

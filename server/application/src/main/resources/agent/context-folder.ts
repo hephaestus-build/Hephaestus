@@ -48,7 +48,7 @@ function refusal(error: string, detail: string): SandboxRefusal {
 
 /**
  * One turn's context folder. The first tool that needs it empties what an earlier turn left and extracts this turn's
- * documents, so each turn starts as a fresh tools Pod did. Loads run one at a time, so a second load of a repository
+ * documents, so no turn reads what another turn loaded. Loads run one at a time, so a second load of a repository
  * knows whether the first one made it.
  */
 export class ContextFolder {

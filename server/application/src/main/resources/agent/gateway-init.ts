@@ -2,32 +2,37 @@ import { spawn, spawnSync } from "node:child_process";
 import { createWriteStream, existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
-import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import {
-	claimHeaders,
-	discoverCapabilities,
-	present,
-	fetchGatewayInput,
-} from "./gateway-capabilities.ts";
+import { discoverCapabilities, present, fetchGatewayInput } from "./gateway-capabilities.ts";
+import { parseProxyClaim } from "./pi-provider.ts";
 
 const DOWNLOAD_ATTEMPTS = 3;
 const DOWNLOAD_BACKOFF_MS = 500;
 
+/** Passes a transfer's chunks on and counts their bytes, and fails it once they exceed `budget`. */
+async function* withinBudget(
+	chunks: AsyncIterable<Uint8Array>,
+	budget: number,
+	transferred: { bytes: number },
+): AsyncGenerator<Uint8Array> {
+	for await (const chunk of chunks) {
+		transferred.bytes += chunk.length;
+		if (transferred.bytes > budget) {
+			throw new Error("Workspace exceeded its advertised byte budget");
+		}
+		yield chunk;
+	}
+}
+
 /** Download a complete archive before extraction, so a broken transfer leaves no partial workspace. */
 export async function downloadWorkspace(
 	endpoint: string,
-	token: string,
+	headers: Readonly<Record<string, string>>,
 	archive: string,
 	signal: AbortSignal,
 ): Promise<void> {
-	// A sandbox's run names its claim; a review Job has none.
-	const headers = {
-		Authorization: `Bearer ${token}`,
-		...claimHeaders(process.env.LLM_PROXY_CLAIM),
-	};
 	const { workspaceByteBudget: budget } = await discoverCapabilities(endpoint, headers, signal);
 	for (let attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt += 1) {
 		let retryable = true;
@@ -50,28 +55,22 @@ export async function downloadWorkspace(
 						: "Workspace requires a valid Content-Length",
 				);
 			}
-			let bytes = 0;
-			const bound = new Transform({
-				// oxlint-disable-next-line promise/prefer-await-to-callbacks -- Node's Transform API takes a callback.
-				transform(chunk: Buffer, _encoding, callback) {
-					bytes += chunk.length;
-					// oxlint-disable-next-line promise/prefer-await-to-callbacks -- The same callback, answered.
-					callback(
-						bytes > budget ? new Error("Workspace exceeded its advertised byte budget") : null,
-						chunk,
-					);
-				},
-			});
+			const transferred = { bytes: 0 };
 			try {
-				await pipeline(response.body, bound, createWriteStream(archive), { signal });
+				await pipeline(
+					response.body,
+					(chunks: AsyncIterable<Uint8Array>) => withinBudget(chunks, budget, transferred),
+					createWriteStream(archive),
+					{ signal },
+				);
 			} catch (error) {
-				if (bytes > budget) {
+				if (transferred.bytes > budget) {
 					retryable = false;
 					throw new Error("Workspace exceeded its advertised byte budget", { cause: error });
 				}
 				throw error;
 			}
-			if (bytes !== expected) {
+			if (transferred.bytes !== expected) {
 				throw new Error("Incomplete workspace download");
 			}
 			return;
@@ -167,6 +166,7 @@ function deriveChangeView(): void {
 }
 
 async function main() {
+	const claim = parseProxyClaim(process.env.LLM_PROXY_CLAIM);
 	const endpoint = process.env.SANDBOX_RUNTIME_URL;
 	const token = process.env.LLM_PROXY_TOKEN;
 	if (!present(endpoint) || !present(token)) {
@@ -180,7 +180,12 @@ async function main() {
 	const directory = await mkdtemp("/workspace/.gateway-download-");
 	try {
 		const archive = path.join(directory, "workspace.tar");
-		await downloadWorkspace(endpoint, token, archive, signal);
+		await downloadWorkspace(
+			endpoint,
+			{ Authorization: `Bearer ${token}`, ...claim },
+			archive,
+			signal,
+		);
 		await extract(archive);
 	} finally {
 		await rm(directory, { recursive: true, force: true });
