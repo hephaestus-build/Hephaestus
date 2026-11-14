@@ -37,8 +37,8 @@ export interface Measured {
 	sizes: BundleSizes;
 	/** The packages in the entry closure. */
 	entryPackages: string[];
-	/** The packages each route's split component adds past the entry, by its facade module. */
-	routePackages: Record<string, string[]>;
+	/** The packages each lazy load adds past the entry, by its key. */
+	lazyPackages: Record<string, string[]>;
 }
 
 /** Growth that one change may add to a size: a small feature or fix fits in it. */
@@ -79,7 +79,7 @@ export function measure(chunks: readonly BuiltChunk[]): Measured {
 	}
 	const entryClosure = staticClosure(entries[0]?.fileName ?? "", byName);
 	const lazy: Record<string, number> = {};
-	const routePackages: Record<string, string[]> = {};
+	const lazyPackages: Record<string, string[]> = {};
 	for (const chunk of chunks) {
 		if (!chunk.isDynamicEntry || chunk.facadeModule === null) {
 			continue;
@@ -92,11 +92,9 @@ export function measure(chunks: readonly BuiltChunk[]): Measured {
 			(name) => !entryClosure.has(name),
 		);
 		lazy[key] = gzipOf(added, byName);
-		if (key.includes("?tsr-split=")) {
-			routePackages[key] = [
-				...new Set(added.flatMap((name) => byName.get(name)?.packages ?? [])),
-			].sort();
-		}
+		lazyPackages[key] = [
+			...new Set(added.flatMap((name) => byName.get(name)?.packages ?? [])),
+		].sort();
 	}
 	const entryPackages = new Set(
 		[...entryClosure].flatMap((name) => byName.get(name)?.packages ?? []),
@@ -107,7 +105,7 @@ export function measure(chunks: readonly BuiltChunk[]): Measured {
 			lazy: Object.fromEntries(Object.entries(lazy).sort(([a], [b]) => a.localeCompare(b))),
 		},
 		entryPackages: [...entryPackages].sort(),
-		routePackages,
+		lazyPackages,
 	};
 }
 
@@ -122,20 +120,25 @@ export function entryViolations(
 }
 
 /**
- * Why a route's own chunk holds a package that only a lazy component on that route may load: it then
- * loads with the page, before the reader opens what needs it.
+ * Why a package that one lazy component owns loads anywhere else: with the entry, or in another load,
+ * such as a route's or another component's, which would fetch it before the reader opens the owner.
+ * The package's own lazy modules (its language modes, for example) are its business.
  */
-export function routeViolations(
+export function componentViolations(
 	measured: Measured,
-	componentOnlyPackages: readonly string[],
+	owners: Readonly<Record<string, string>>,
 ): string[] {
-	return Object.entries(measured.routePackages).flatMap(([route, packages]) =>
-		componentOnlyPackages
-			.filter((name) => packages.includes(name))
-			.map(
-				(name) => `${name} loads with ${route}; only the lazy component that uses it may load it.`,
-			),
-	);
+	return Object.entries(owners).flatMap(([name, owner]) => [
+		...(measured.entryPackages.includes(name)
+			? [`${name} is in the entry closure; only ${owner} may load it.`]
+			: []),
+		...Object.entries(measured.lazyPackages)
+			.filter(
+				([load, packages]) =>
+					load !== owner && !load.startsWith(`${name}/`) && packages.includes(name),
+			)
+			.map(([load]) => `${name} loads with ${load}; only ${owner} may load it.`),
+	]);
 }
 
 /** One load that a change grew past the tolerance on purpose, and the change that accepted it. */

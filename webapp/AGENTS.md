@@ -230,7 +230,7 @@ Thus, keep a search schema, its constants and a skeleton in a light module of th
 `vp run verification:webapp-build` holds two gzip sizes (`tools/bundle-budget/`): the entry's static JavaScript, and what each lazy chunk adds.
 It also builds the commit that the change merges onto.
 A change fails when it grows a size by more than 1 KiB, a new lazy chunk counting from zero.
-The build fails when the entry holds a route-only package.
+The build fails when the entry holds a route-only package, and when any load other than its owner holds a component-only package (Monaco loads only with `MonacoCodeEditor`).
 
 For intended growth, run `BUNDLE_BUDGET=update BUNDLE_ACCEPTED_REASON="<why>" vp run verification:webapp-build` and commit its changes in `tools/bundle-budget/accepted-growth/`.
 It records each grown load with the pull request that accepts it and the reason, and counts only in that change.

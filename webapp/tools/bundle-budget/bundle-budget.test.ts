@@ -5,12 +5,12 @@ import {
 	acceptGrowth,
 	type BuiltChunk,
 	type BundleSizes,
+	componentViolations,
 	entryViolations,
 	growthViolations,
 	lazyKey,
 	measure,
 	ownAcceptances,
-	routeViolations,
 	TOLERANCE_BYTES,
 } from "./bundle-budget";
 
@@ -57,7 +57,7 @@ describe("measure", () => {
 		expect(measure(build)).toStrictEqual({
 			sizes: { entry: 400, lazy: { [PROFILE]: 450 } },
 			entryPackages: ["react"],
-			routePackages: { [PROFILE]: ["recharts"] },
+			lazyPackages: { [PROFILE]: ["recharts"] },
 		});
 	});
 
@@ -75,35 +75,47 @@ describe("entryViolations", () => {
 	});
 });
 
-describe("routeViolations", () => {
-	it("breaks on a component-only package that a route's own chunk loads", () => {
-		expect(routeViolations(measure(build), ["recharts"])).toStrictEqual([
-			`recharts loads with ${PROFILE}; only the lazy component that uses it may load it.`,
-		]);
-		// The entry's packages are the entry's rule.
-		expect(routeViolations(measure(build), ["react"])).toStrictEqual([]);
+describe("componentViolations", () => {
+	const PANEL = "src/components/ChartPanel.tsx";
+	// The profile renders a chart panel that loads the chart library when it opens.
+	const lazyCharts = [
+		chunk({ fileName: "index.js", isEntry: true, imports: ["shell.js"] }),
+		chunk({ fileName: "shell.js", imports: ["index.js"], packages: ["react"] }),
+		chunk({
+			fileName: "profile.js",
+			isDynamicEntry: true,
+			facadeModule: PROFILE,
+			imports: ["shell.js"],
+		}),
+		chunk({
+			fileName: "chart-panel.js",
+			isDynamicEntry: true,
+			facadeModule: PANEL,
+			imports: ["charts.js"],
+		}),
+		chunk({ fileName: "charts.js", packages: ["recharts"] }),
+		chunk({
+			fileName: "charts-mode.js",
+			isDynamicEntry: true,
+			facadeModule: "/repo/node_modules/recharts/es6/mode.js",
+			imports: ["charts.js"],
+		}),
+	];
+
+	it("passes a package that only its owner, and its own lazy modules, load", () => {
+		expect(componentViolations(measure(lazyCharts), { recharts: PANEL })).toStrictEqual([]);
 	});
 
-	it("passes a package that only a lazy component's own chunk loads", () => {
-		// The profile renders a chart panel that loads the chart library when it opens.
-		const lazyCharts = [
-			chunk({ fileName: "index.js", isEntry: true, imports: ["shell.js"] }),
-			chunk({ fileName: "shell.js", imports: ["index.js"], packages: ["react"] }),
-			chunk({
-				fileName: "profile.js",
-				isDynamicEntry: true,
-				facadeModule: PROFILE,
-				imports: ["shell.js"],
-			}),
-			chunk({
-				fileName: "chart-panel.js",
-				isDynamicEntry: true,
-				facadeModule: "src/components/ChartPanel.tsx",
-				imports: ["charts.js"],
-			}),
-			chunk({ fileName: "charts.js", packages: ["recharts"] }),
-		];
-		expect(routeViolations(measure(lazyCharts), ["recharts"])).toStrictEqual([]);
+	it("breaks on a component-only package that another load holds", () => {
+		expect(componentViolations(measure(build), { recharts: PANEL })).toStrictEqual([
+			`recharts loads with ${PROFILE}; only ${PANEL} may load it.`,
+		]);
+	});
+
+	it("breaks on a component-only package in the entry closure", () => {
+		expect(componentViolations(measure(build), { react: PANEL })).toStrictEqual([
+			`react is in the entry closure; only ${PANEL} may load it.`,
+		]);
 	});
 });
 

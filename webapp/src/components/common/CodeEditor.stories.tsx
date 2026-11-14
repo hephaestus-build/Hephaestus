@@ -24,7 +24,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** The editor could not load. The script stays in the form, and Retry loads the editor again. */
+/** The editor could not load. The script stays in the form; the alert names the way back, and Retry tries once more. */
 export const LoadError: Story = {
 	play: async ({ args, canvas, userEvent }) => {
 		await expect(canvas.getByRole("alert")).toHaveTextContent("The editor could not load");

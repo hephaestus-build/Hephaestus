@@ -24,7 +24,8 @@ const lazyEditor = () =>
 	});
 
 export function CodeEditor({ className, ...editor }: CodeEditorProps) {
-	// React keeps a failed import in its lazy component, so Retry renders a new one.
+	// React keeps a failed import in its lazy component, so Retry renders a new one. Retry helps after a
+	// dropped connection; after a deploy the old chunk is gone, so the alert names the reload.
 	const [Editor, setEditor] = useState(lazyEditor);
 	return (
 		<div className={cn("overflow-hidden rounded-md border", className)}>
@@ -47,7 +48,8 @@ export function CodeEditorError({ reset }: ErrorComponentProps) {
 			<Alert variant="destructive" role="alert">
 				<AlertTitle>The editor could not load</AlertTitle>
 				<AlertDescription>
-					Your script is still in the form. Try loading the editor again.
+					Your script is still in the form. Save the practice, then reload the page to edit the
+					script.
 				</AlertDescription>
 			</Alert>
 			<Button type="button" variant="outline" onClick={reset}>
