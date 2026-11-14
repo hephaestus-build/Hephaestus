@@ -50,8 +50,13 @@ BEGIN
  ELSIF NEW.state = 'EXECUTING' AND OLD.state <> 'EXECUTING' THEN
   RAISE EXCEPTION 'a claim takes the next epoch' USING ERRCODE='23514';
  END IF;
- IF NEW.payload IS DISTINCT FROM OLD.payload AND NEW.payload IS NOT NULL THEN
-  RAISE EXCEPTION 'an action payload never changes' USING ERRCODE='55000';
+ IF NEW.payload IS DISTINCT FROM OLD.payload AND NEW.payload IS NOT NULL AND NOT COALESCE((
+    OLD.kind = 'EMAIL' AND OLD.payload ->> 'kind' = 'ROLE_CHANGED' AND (
+      NEW.payload = jsonb_set(OLD.payload, '{event,change}',
+        redact_role_change(OLD.payload #> '{event,change}', (OLD.payload #>> '{event,change,actorAccountId}')::bigint)) OR
+      NEW.payload = jsonb_set(OLD.payload, '{event,change}',
+        redact_role_change(OLD.payload #> '{event,change}', (OLD.payload #>> '{event,change,accountId}')::bigint)))), false) THEN
+  RAISE EXCEPTION 'an action payload changes only to erase role-notice identities' USING ERRCODE='55000';
  END IF;
  IF NEW.write_started_at IS DISTINCT FROM OLD.write_started_at AND NOT (
     (OLD.write_started_at IS NULL AND OLD.state = 'EXECUTING' AND NEW.state = 'EXECUTING' AND NEW.lease_epoch = OLD.lease_epoch) OR
