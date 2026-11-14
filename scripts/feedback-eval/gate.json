@@ -1,5 +1,5 @@
 {
-	"version": 1,
+	"version": 2,
 	"description": "The fixed case set, prompt clauses and floors of the feedback eval gate. docs/contributor/feedback-quality-evals.md § Feedback eval gate owns the rules.",
 	"claims": {
 		"t4-9": "fc8f950c328ed233704d136f45a5b9f73fe1eccd62ce5b57ee46bc03a626a228",
@@ -210,8 +210,8 @@
 	"prompts": {
 		"server/application/src/main/resources/agent/feedback-composer.md": "0b09cf335eb727650e1c55b9996caac6f0401b9cb946fa8a08b855cd52d03298",
 		"server/application/src/main/resources/agent/feedback-style.md": "ec347825f8530cb3193d7bef6d4a30944ce37df129b8f99086cab525b8371137",
-		"server/application/src/main/resources/agent/mentor/fields.md": "10b4edef336ec2e926496b9b7bf29c4276f2b0c8ed9fc2011d0a42b044508510",
-		"server/application/src/main/resources/agent/mentor/system.md": "fb8b55669cbeab3a09acad0ebefb659e6727d7a918b8320834c6aa40b7f27ff6",
+		"server/application/src/main/resources/agent/mentor/fields.md": "8621ddbdb1650f5d500d03bba65049ea61502f9828d6f7f556e282a964426efe",
+		"server/application/src/main/resources/agent/mentor/system.md": "f195d3c62d6c9b74bc9cdc85b484d2cc50417c415fb2f8c5039db722dc4a874f",
 		"server/application/src/main/resources/agent/pi-orchestrator.md": "e25c51e7d6ba4b761b2756e3930b790b10b72df80b3e99655bef67c7e6847291",
 		"server/application/src/main/resources/agent/review-composer.md": "1b4282aae00fa7fa7af5ee20b58e04fc8d8b1d7d558df708808a267da6968f70",
 		"docs/contributor/practice-feedback-language.md#writing-feedback": "b2e3e6142a4b069fd64366d70131cdd0a2d70a227ce361898d658b2da6b4edc4"

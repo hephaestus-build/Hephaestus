@@ -6901,11 +6901,21 @@ void test("a superseded PR cancels its native gate while live failures still get
 	);
 	assert.equal(fixture.conclusion, "cancelled");
 	const observed = asRecord(fixture.needs, "recorded prerequisite results");
-	const recordedNeeds = Object.fromEntries(
-		Object.entries(observed).map(([name, value]) => [
-			name,
-			{ result: asString(asRecord(value, name).result, `${name} result`) },
-		]),
+	const recordedNeeds = {
+		...Object.fromEntries(
+			Object.entries(observed).map(([name, value]) => [
+				name,
+				{ result: asString(asRecord(value, name).result, `${name} result`) },
+			]),
+		),
+		// The feedback eval gate is newer than this recording. Its path filter selects no change of that
+		// run, so the job would have been skipped; the recording itself stays as it was captured.
+		"feedback-eval": { result: "skipped" },
+	};
+	assert.equal(
+		"feedback-eval" in observed,
+		false,
+		"the recording now holds the gate: drop this model",
 	);
 	const recordedJobs = asArray(fixture.jobs, "recorded jobs").map((entry) =>
 		asRecord(entry, "recorded job"),
