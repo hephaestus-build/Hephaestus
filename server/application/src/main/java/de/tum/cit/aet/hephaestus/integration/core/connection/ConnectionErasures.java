@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
-import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,13 +14,11 @@ public final class ConnectionErasures {
 
     private ConnectionErasures() {}
 
-    public static void record(Connection erased) {
-        long erasedId = Objects.requireNonNull(erased.getId());
-        long erasedWorkspaceId = erased.getWorkspace().getId();
+    public static void record(long connectionId, long workspaceId) {
         TransactionCallbacks.afterCommit(() -> log.atInfo()
                 .addKeyValue("event.name", "connection.erased")
-                .addKeyValue("connection.id", erasedId)
-                .addKeyValue(StructuredLogKeys.WORKSPACE_ID, erasedWorkspaceId)
+                .addKeyValue("connection.id", connectionId)
+                .addKeyValue(StructuredLogKeys.WORKSPACE_ID, workspaceId)
                 .log("Connection disconnected and its local data erased"));
     }
 }

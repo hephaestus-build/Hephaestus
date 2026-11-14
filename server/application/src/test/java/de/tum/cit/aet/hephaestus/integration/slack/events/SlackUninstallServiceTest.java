@@ -60,6 +60,8 @@ class SlackUninstallServiceTest extends BaseUnitTest {
     private Connection connection;
 
     private SlackUninstallService service() {
+        // A connection that a transition returns is persisted, so it has its id.
+        lenient().when(connection.getId()).thenReturn(7L);
         return new SlackUninstallService(
                 workspaceResolver,
                 connectionService,

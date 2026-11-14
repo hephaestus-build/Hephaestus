@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.Objects;
 
 /**
  * Handles Slack app removal: mark the connection uninstalled and purge Slack raw + derived data.
@@ -74,7 +75,7 @@ public class SlackUninstallService {
                             uninstallCorrelationId(teamId, eventType, eventId),
                             "Slack " + eventType + " received"));
             // The content purge below erases what the connection mirrored, as a disconnect does.
-            ConnectionErasures.record(changed);
+            ConnectionErasures.record(Objects.requireNonNull(changed.getId()), workspaceId);
             if ("tokens_revoked".equalsIgnoreCase(eventType)) {
                 attention.report(
                         changed.getId(),
