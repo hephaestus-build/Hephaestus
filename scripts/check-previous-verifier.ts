@@ -34,10 +34,11 @@ interface Published {
 }
 
 /**
- * Tooling below this release refuses every chart with another image set, so a host on it follows
- * the manual step in docs/admin/upgrade.mdx, and it proves nothing about a later release.
+ * Tooling below this release compares a fixed chart image list and refuses every chart with another
+ * image set. A host on it follows the manual steps in docs/admin/upgrade.mdx and applies this release
+ * first, so its verifier proves nothing about a later release.
  */
-const OLDEST_VERIFIER = "v1.0.0-rc.4";
+const OLDEST_VERIFIER = "v1.0.0-rc.5";
 
 /**
  * The verifiers to run: the nearest release below this one, and the latest stable one, or the oldest

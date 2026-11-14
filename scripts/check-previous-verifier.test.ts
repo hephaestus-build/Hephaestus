@@ -54,13 +54,13 @@ async function scratch(t: { after: (callback: () => Promise<void>) => void }) {
 }
 
 await test("the verifiers of a release are the nearest one and the latest stable one", () => {
-	// Tooling from before rc.4 is the manual step's, so it never blocks a later release.
-	assert.deepEqual(verifiersOf(releases, "v1.0.0-rc.5"), ["v1.0.0-rc.4"]);
-	// Until a stable release exists, the hosts that the manual step moved stay on rc.4.
-	const later = [...releases.slice(0, 3), published("v1.0.0-rc.5"), published("v1.0.0-rc.6")];
-	assert.deepEqual(verifiersOf(later, "v1.0.0-rc.7"), ["v1.0.0-rc.6", "v1.0.0-rc.4"]);
-	assert.deepEqual(verifiersOf(later, "v1.0.0"), ["v1.0.0-rc.6", "v1.0.0-rc.4"]);
-	assert.deepEqual(verifiersOf(releases, "v1.0.0-rc.4"), ["v1.0.0-rc.3", "v0.95.1"]);
+	// Tooling up to rc.4 is the manual steps', so it never blocks a release after rc.5.
+	const later = [...releases.slice(0, 3), published("v1.0.0-rc.5"), published("v1.0.0-rc.8")];
+	assert.deepEqual(verifiersOf(later, "v1.0.0-rc.9"), ["v1.0.0-rc.8", "v1.0.0-rc.5"]);
+	// Until a stable release exists, the hosts that the manual steps moved stay on rc.5.
+	assert.deepEqual(verifiersOf(later, "v1.0.0"), ["v1.0.0-rc.8", "v1.0.0-rc.5"]);
+	assert.deepEqual(verifiersOf(later, "v1.0.0-rc.6"), ["v1.0.0-rc.5"]);
+	assert.deepEqual(verifiersOf(releases, "v1.0.0-rc.5"), ["v1.0.0-rc.4", "v0.95.1"]);
 	// A host on v1.0.0 never ran the candidate.
 	assert.deepEqual(verifiersOf(releases, "v1.1.0"), ["v1.1.0-rc.1", "v1.0.0"]);
 	assert.deepEqual(verifiersOf(releases, "v1.0.1"), ["v1.0.0"]);
@@ -78,7 +78,7 @@ await test("a pushed tag or a draft runs no code in the release job", () => {
 		...releases,
 	];
 	assert.deepEqual(verifiersOf(hostile, "v1.0.1"), ["v1.0.0"]);
-	assert.deepEqual(verifiersOf(hostile, "v1.0.0"), ["v1.0.0-rc.4"]);
+	assert.deepEqual(verifiersOf([...hostile, published("v1.0.0-rc.5")], "v1.0.0"), ["v1.0.0-rc.5"]);
 });
 
 await test("each verifier reads this release from a bare tree of its own tag", async (t) => {
