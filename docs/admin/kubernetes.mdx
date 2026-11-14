@@ -334,9 +334,10 @@ config:
 6. Set `config.github.oauthClientId` and `config.auth.bootstrapAdmins`, as [First steps § 1 and § 2](./first-steps) describe.
 7. For a public instance, name your legal pages ConfigMap in `webapp.legalOverrides`, as [Legal pages](./legal-pages#deployment-specific-overrides) describes.
    The webapp Pod waits until the ConfigMap that it names exists.
-8. Turn on backups, as [Back up the database](./backup-restore#back-up-the-database) describes.
-   Without a backup, the loss of the PostgreSQL volume loses all data.
-   Each upgrade also needs a recovery point from before the upgrade.
+8. For the bundled PostgreSQL, turn on backups, as [Back up the database](./backup-restore#back-up-the-database) describes.
+   They need the `--backups` keys of [§ 3](./kubernetes#create-the-secret) and a client TLS Secret signed by the CA of [§ 4](./kubernetes#postgresql-tls-secret).
+   Without a backup, the loss of the PostgreSQL volume loses all data, and an upgrade has no verified recovery point.
+   For an external database, use the backups of its provider.
 
 Do not set `release` or `images`: the release chart sets them.
 For `dev.yaml`, leave out `networkPolicy.kubernetesApi` and `sandbox`.
@@ -389,7 +390,7 @@ If it fails, use [A first install fails](#a-first-install-fails) before you remo
 5. Open `https://<host>`. The login page shows **Continue with GitHub**.
 6. For `small.yaml`, run the [sandbox isolation gate](./sandboxes#sandbox-isolation-gate) for each sandbox template.
    Connect no repository until the gate passes for each template.
-7. If you turned on backups, take the first one, as [Take a backup now](./backup-restore#take-a-backup-now) describes.
+7. For the bundled PostgreSQL, take the first backup, as [Take a backup now](./backup-restore#take-a-backup-now) describes.
 
 Then continue with [First steps § 3. Sign in](./first-steps#3-sign-in).
 

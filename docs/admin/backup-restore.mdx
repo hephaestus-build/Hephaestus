@@ -105,7 +105,9 @@ Keep the originals until the recovery is verified.
 
 ### Take a backup now {/*#take-a-backup-now*/}
 
-Take a full backup before each upgrade. It is the recovery point of that upgrade.
+Take a full backup before each upgrade.
+Verify it with an [isolated restore drill](#isolated-restore-drill).
+The verified backup is the recovery point of that upgrade.
 
 1. Start a full backup from the CronJob of the release:
 
@@ -120,10 +122,13 @@ Take a full backup before each upgrade. It is the recovery point of that upgrade
    kubectl --namespace hephaestus wait --for=condition=complete --timeout=2h "job/$job"
    ```
 
-3. Record the Job name, its completion time and the release version with the upgrade.
+   If the Job fails or the wait stops at its time limit, read `kubectl --namespace hephaestus logs "job/$job"`.
+   Do not start the upgrade without a completed backup.
+
+3. Record the completion time and the release version with the upgrade.
+   The CronJob keeps only its three latest Jobs, so the Job itself does not stay.
 
 If you back up the PostgreSQL volume yourself, take a snapshot with your storage tools instead.
-A recovery point is verified only after a restore of it, as [Isolated restore drill](#isolated-restore-drill) describes.
 
 ## Restore
 
