@@ -69,23 +69,6 @@ final class RepositoryOwnershipRatchet {
                     "integration.scm::spi ActivityScmFacts",
                     Set.of("activity.overview.ActivityScopeResolver")),
             new Entry(
-                    "activity",
-                    "workspace.MembershipRepository",
-                    "DDD8",
-                    "workspace::spi WorkspaceMemberships",
-                    Set.of("activity.overview.PublicActivityObjectionService")),
-            new Entry(
-                    "activity",
-                    "workspace.WorkspaceRepository",
-                    "DDD8",
-                    "workspace::spi WorkspaceQueries and WorkspaceCommands",
-                    Set.of(
-                            "activity.ActivityEventService",
-                            "activity.overview.ActivityAutomationService",
-                            "activity.overview.ActivityScopeResolver",
-                            "activity.overview.PublicActivityObjectionService",
-                            "activity.overview.PublicActivityService")),
-            new Entry(
                     "agent",
                     "integration.core.connection.IdentityProviderRepository",
                     "DDD11 (integration.core)",

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
+import com.tngtech.archunit.core.domain.JavaModifier;
 import com.tngtech.archunit.core.domain.properties.HasAnnotations;
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
@@ -14,6 +15,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -114,7 +116,7 @@ class AuditByDefaultArchTest extends HephaestusArchitectureTest {
 
     private static Optional<String> contradiction(JavaMethod method) {
         String name = method.getOwner().getSimpleName() + "." + method.getName();
-        boolean records = reachesRecorder(method, new HashSet<>(), 0);
+        boolean records = reachesRecorder(method);
         if (method.isAnnotatedWith(AuditExempt.class) && records) {
             return Optional.of(name + " is @AuditExempt but reaches ConfigAuditPort.record");
         }
@@ -125,6 +127,10 @@ class AuditByDefaultArchTest extends HephaestusArchitectureTest {
             return Optional.of(name + " is @Audited but reaches no recorder");
         }
         return Optional.empty();
+    }
+
+    static boolean reachesRecorder(JavaMethod method) {
+        return reachesRecorder(method, new HashSet<>(), 0);
     }
 
     /** Depth-bounded so a cyclic service graph terminates; audit writes sit shallow behind a handler. */
@@ -143,13 +149,26 @@ class AuditByDefaultArchTest extends HephaestusArchitectureTest {
             if (!target.getPackageName().startsWith("de.tum.cit.aet.hephaestus")) {
                 continue;
             }
-            for (JavaMethod resolved : call.getTarget().resolveMember().stream().toList()) {
+            for (JavaMethod resolved : dispatchTargets(call).toList()) {
                 if (reachesRecorder(resolved, seen, depth + 1)) {
                     return true;
                 }
             }
         }
         return false;
+    }
+
+    // A call through an SPI has no body at the interface; follow its matching implementation methods too.
+    private static Stream<JavaMethod> dispatchTargets(JavaMethodCall call) {
+        var declared = call.getTarget().resolveMember().stream();
+        if (!call.getTargetOwner().isInterface()) return declared;
+        var implementations = call.getTargetOwner().getAllSubclasses().stream()
+                .flatMap(implementation -> implementation.getAllMethods().stream())
+                .filter(method -> !method.getModifiers().contains(JavaModifier.ABSTRACT))
+                .filter(method -> method.getName().equals(call.getName()))
+                .filter(method ->
+                        method.getRawParameterTypes().equals(call.getTarget().getRawParameterTypes()));
+        return Stream.concat(declared, implementations);
     }
 
     private static final int MAX_CALL_DEPTH = 6;

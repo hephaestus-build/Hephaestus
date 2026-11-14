@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceQueryService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceCommandsAdapter;
 import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceQueriesAdapter;
@@ -34,7 +35,8 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
     final MonitoredRepositoryQuery indexed = mock(MonitoredRepositoryQuery.class);
     final ProductItemRepository items = mock(ProductItemRepository.class);
     final PracticeReviewCoverageService service = new PracticeReviewCoverageService(
-            new WorkspaceQueriesAdapter(mock(WorkspaceRepository.class), monitors, targets),
+            new WorkspaceQueriesAdapter(
+                    mock(WorkspaceRepository.class), monitors, targets, mock(WorkspaceQueryService.class)),
             new WorkspaceCommandsAdapter(mock(WorkspaceRepository.class), monitors, targets),
             items,
             indexed,

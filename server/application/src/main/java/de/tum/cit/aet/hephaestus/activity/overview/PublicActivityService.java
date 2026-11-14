@@ -6,9 +6,8 @@ import de.tum.cit.aet.hephaestus.activity.overview.dto.PublicActivityWorkDTO;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.settings.spi.PublicActivityPolicy;
 import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceQueryService;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries.PublishedWorkspace;
 import java.net.URI;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -22,20 +21,19 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 @WorkspaceAgnostic("Publication resolves an active, opted-in workspace and scopes every activity query to it")
 class PublicActivityService {
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceQueries workspaces;
     private final PublicActivityPolicy policy;
     private final ActivityPeopleService people;
-    private final WorkspaceQueryService workspaceQueries;
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 10)
     public PublicActivityDTO page(String slug, ActivityPeopleRangeParams range, Set<String> repositoryKeys) {
         var selected = publishedWorkspace(slug);
-        var publicPeople = people.publicPeople(
-                selected.getId(), range, repositoryKeys, selected.isPublicActivityContributorsWithoutAccount());
+        var publicPeople =
+                people.publicPeople(selected.id(), range, repositoryKeys, selected.contributorsWithoutAccount());
         return PublicActivityDTO.from(
-                selected.getDisplayName(),
-                workspaceQueries.scmProviderType(selected),
-                selected.isPublicActivitySearchEngines(),
+                selected.displayName(),
+                workspaces.scmProviderType(selected.id()),
+                selected.allowSearchEngines(),
                 publicPeople.people(),
                 publicPeople.unlistedContributors());
     }
@@ -46,12 +44,8 @@ class PublicActivityService {
         var workspace = publishedWorkspace(slug);
         return new Published<>(
                 people.publicPerson(
-                        workspace.getId(),
-                        login,
-                        range,
-                        repositoryKeys,
-                        workspace.isPublicActivityContributorsWithoutAccount()),
-                workspace.isPublicActivitySearchEngines());
+                        workspace.id(), login, range, repositoryKeys, workspace.contributorsWithoutAccount()),
+                workspace.allowSearchEngines());
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, timeout = 10)
@@ -64,17 +58,12 @@ class PublicActivityService {
         var workspace = publishedWorkspace(slug);
         return new Published<>(
                 people.publicPersonWork(
-                        workspace.getId(),
-                        login,
-                        range,
-                        repositoryKeys,
-                        page,
-                        workspace.isPublicActivityContributorsWithoutAccount()),
-                workspace.isPublicActivitySearchEngines());
+                        workspace.id(), login, range, repositoryKeys, page, workspace.contributorsWithoutAccount()),
+                workspace.allowSearchEngines());
     }
 
-    private Workspace publishedWorkspace(String slug) {
-        var workspace = workspaces.findPublicActivityWorkspace(slug);
+    private PublishedWorkspace publishedWorkspace(String slug) {
+        var workspace = workspaces.publicActivityWorkspace(slug);
         if (!policy.allowed() || workspace.isEmpty()) {
             var exception =
                     new ResponseStatusException(HttpStatus.NOT_FOUND, "This public activity page is not available.");

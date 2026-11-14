@@ -8,6 +8,8 @@ import org.jspecify.annotations.NonNull;
 public interface WorkspaceSummaryQuery {
     Optional<WorkspaceSummary> findById(long workspaceId);
 
+    boolean exists(long workspaceId);
+
     /** Keyed by id; an unknown id is absent. */
     Map<Long, WorkspaceSummary> findAllByIds(Collection<Long> workspaceIds);
 

@@ -25,6 +25,12 @@ class WorkspaceSummaryQueryAdapter implements WorkspaceSummaryQuery {
 
     @Override
     @Transactional(readOnly = true)
+    public boolean exists(long workspaceId) {
+        return workspaceRepository.existsById(workspaceId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Map<Long, WorkspaceSummary> findAllByIds(Collection<Long> workspaceIds) {
         if (workspaceIds.isEmpty()) return Map.of();
         return workspaceRepository.findAllById(workspaceIds).stream()

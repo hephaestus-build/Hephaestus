@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -13,7 +14,10 @@ public class WorkspaceOrganizationLookup {
     private final OrganizationRepository organizations;
 
     public Optional<Organization> find(Workspace workspace) {
-        var id = workspace.getOrganizationId();
-        return id == null ? Optional.empty() : organizations.findById(id);
+        return find(workspace.getOrganizationId());
+    }
+
+    public Optional<Organization> find(@Nullable Long organizationId) {
+        return organizationId == null ? Optional.empty() : organizations.findById(organizationId);
     }
 }

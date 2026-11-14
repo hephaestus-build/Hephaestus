@@ -7,7 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.ScmMemberRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceTeamScopeResolver;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import java.text.Collator;
 import java.util.Comparator;
 import java.util.List;
@@ -30,7 +30,7 @@ class ActivityScopeResolver {
 
     private final ScmMemberRepository memberships;
     private final WorkspaceActorSelector actorSelector;
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceQueries workspaces;
     private final WorkspaceTeamScopeResolver teamScopes;
     private final TeamRepository teams;
 
@@ -61,7 +61,7 @@ class ActivityScopeResolver {
     }
 
     private List<Team> workspaceTeams(long workspaceId) {
-        var workspace = workspaces.findById(workspaceId).orElseThrow();
+        var workspace = workspaces.organizationScope(workspaceId).orElseThrow();
         return teamScopes
                 .resolve(workspace)
                 .map(scope ->
