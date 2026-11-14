@@ -9,18 +9,18 @@ import { output, run } from "./lib/process.ts";
 import { prepareShellCheck } from "./lib/shellcheck.ts";
 
 const root = path.join(import.meta.dirname, "..");
-const files = (
-	await output("git", ["ls-files", "-z", "--", "*.sh", ".vite-hooks/*"], { cwd: root })
-)
-	.split("\0")
-	.filter(Boolean);
+const listed = await output("git", ["ls-files", "-z", "--", "*.sh", ".vite-hooks/*"], {
+	cwd: root,
+});
+const files = listed.split("\0").filter(Boolean);
 if (files.length === 0) {
 	throw new Error("no tracked shell script");
 }
 // A script without a shebang is one the chart runs with `sh`.
 const byShell = new Map<string, string[]>();
 for (const file of files) {
-	const shebang = (await readFile(path.join(root, file), "utf8")).split("\n", 1)[0] ?? "";
+	const source = await readFile(path.join(root, file), "utf8");
+	const shebang = source.split("\n", 1)[0] ?? "";
 	const shell = /^#!.*\bbash\b/u.test(shebang) ? "bash" : "sh";
 	byShell.set(shell, [...(byShell.get(shell) ?? []), file]);
 }
