@@ -5,7 +5,6 @@ import { cn } from "cn";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
-import { Spinner } from "@/components/ui/spinner";
 import { ITEM_KIND, itemKindNoun } from "@/lib/item-kinds";
 import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-terms";
 
@@ -149,6 +148,7 @@ function ChoiceButton({
 	const pending = answer.status === "saving" && answer.visible === visible;
 	return (
 		<Button
+			pending={pending}
 			type="button"
 			variant="outline"
 			size="sm"
@@ -156,7 +156,6 @@ function ChoiceButton({
 			focusableWhenDisabled
 			onClick={() => onAnswer(visible)}
 		>
-			{pending && <Spinner />}
 			{children}
 		</Button>
 	);

@@ -17,7 +17,6 @@ import {
 	ItemTitle,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import type { MorePages } from "@/runtime/tanstack-query/infinite-list";
@@ -165,8 +164,7 @@ function MoreRepositories({ more }: { more: MorePages }) {
 				/>
 			)}
 			{more.hasMore && more.loadMoreError === undefined && (
-				<Button variant="outline" size="sm" disabled={more.isLoadingMore} onClick={more.onLoadMore}>
-					{more.isLoadingMore ? <Spinner /> : null}
+				<Button pending={more.isLoadingMore} variant="outline" size="sm" onClick={more.onLoadMore}>
 					{more.isLoadingMore ? "Loading repositories…" : "Show more repositories"}
 				</Button>
 			)}
@@ -320,6 +318,7 @@ function RepositoryGeneratedPaths({
 						{!removed && (
 							<div>
 								<Button
+									pending={state === "saving"}
 									variant="outline"
 									size="sm"
 									aria-label={state === "saving" ? undefined : `Save generated paths for ${name}`}
@@ -328,7 +327,6 @@ function RepositoryGeneratedPaths({
 										save().catch(() => setState("error"));
 									}}
 								>
-									{state === "saving" ? <Spinner /> : null}
 									{state === "saving" ? "Saving…" : "Save generated paths"}
 								</Button>
 							</div>

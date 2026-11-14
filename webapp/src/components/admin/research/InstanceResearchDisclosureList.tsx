@@ -8,7 +8,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import {
 	Table,
 	TableBody,
@@ -115,8 +114,7 @@ export function InstanceResearchDisclosureList({
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-4">
-				<Button variant="outline" className="w-fit" disabled={checking} onClick={onCheck}>
-					{checking && <Spinner />}
+				<Button pending={checking} variant="outline" className="w-fit" onClick={onCheck}>
 					{checking ? "Checking…" : "Check open datasets"}
 				</Button>
 				{actionError !== undefined && (
@@ -220,11 +218,11 @@ export function InstanceResearchDisclosureList({
 										</Button>
 									)}
 									<Button
+										pending={pending}
 										variant="outline"
 										disabled={pending || checking}
 										onClick={() => openDialog("closure", dataset.datasetId)}
 									>
-										{pending && <Spinner />}
 										{pending ? "Recording…" : "Close dataset…"}
 									</Button>
 								</div>

@@ -1,7 +1,5 @@
 import { type ReactNode, useId, useState } from "react";
 
-import { useSpinDelay } from "spin-delay";
-
 import type { PasskeyStatus } from "@/api/types.gen";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { Button } from "@/components/ui/button";
@@ -9,7 +7,6 @@ import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { copyToClipboard } from "@/lib/clipboard";
 
@@ -147,7 +144,6 @@ export function PasskeySection({
 	onRecover,
 }: PasskeySectionProps) {
 	const id = useId();
-	const showSpinner = useSpinDelay(pending, { delay: 1000, minDuration: 500 });
 
 	const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
 	// The dialog keeps showing its last subject while it closes, so its button keeps that label too.
@@ -215,13 +211,13 @@ export function PasskeySection({
 							protection or create recovery codes.
 						</p>
 						<Button
+							pending={pending && pendingAction === "verify"}
 							disabled={pending || !supported}
 							focusableWhenDisabled
 							className="aria-disabled:opacity-50"
 							aria-busy={pending && pendingAction === "verify"}
 							onClick={onVerify}
 						>
-							{showSpinner && pendingAction === "verify" && <Spinner />}
 							{pending && pendingAction === "verify" ? "Verifying passkey…" : "Verify passkey"}
 						</Button>
 					</div>
@@ -284,6 +280,7 @@ export function PasskeySection({
 						sessions.
 					</p>
 					<Button
+						pending={pending && pendingAction === "register"}
 						// Once a passkey exists, confirming with it comes first.
 						variant={credentials.length > 0 ? "outline" : "default"}
 						disabled={unavailable || !supported}
@@ -296,7 +293,6 @@ export function PasskeySection({
 						}
 						onClick={() => onRegister(label.trim())}
 					>
-						{showSpinner && pendingAction === "register" && <Spinner />}
 						{pending && pendingAction === "register" ? "Registering passkey…" : "Register passkey"}
 					</Button>
 				</div>

@@ -10,7 +10,6 @@ import {
 	AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 
 export interface AdminProductFeedbackMoveReportsProps {
 	/** Saved reports that the private repository can take now. */
@@ -38,8 +37,7 @@ export function AdminProductFeedbackMoveReports({
 			<AlertDialog>
 				<AlertDialogTrigger
 					render={
-						<Button type="button" size="sm" disabled={moving}>
-							{moving && <Spinner className="size-4" />}
+						<Button pending={moving} type="button" size="sm">
 							{moving ? "Moving…" : "Move to GitHub"}
 						</Button>
 					}

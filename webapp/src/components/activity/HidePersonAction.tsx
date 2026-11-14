@@ -12,7 +12,6 @@ import {
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 
 export interface HidePersonActionProps {
 	name: string;
@@ -31,13 +30,13 @@ export function HidePersonAction({ name, pending, onConfirm }: HidePersonActionP
 	return (
 		<>
 			<Button
+				pending={pending}
 				variant="outline"
 				size="sm"
-				disabled={pending}
 				focusableWhenDisabled
 				onClick={() => setOpen(true)}
 			>
-				{pending ? <Spinner /> : <EyeOffIcon aria-hidden />}
+				<EyeOffIcon aria-hidden />
 				{pending ? "Hiding…" : "Hide from activity"}
 			</Button>
 			<AlertDialog open={open} onOpenChange={setOpen}>

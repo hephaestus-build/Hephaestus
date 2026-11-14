@@ -523,6 +523,7 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 				)}
 				{state.step < 3 && (
 					<Button
+						pending={isTransitioning}
 						onClick={handleNext}
 						disabled={
 							(state.step === 1 && !canAdvanceFromStep1) ||
@@ -530,15 +531,13 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 							isTransitioning
 						}
 					>
-						{isTransitioning && <Spinner className="mr-2" />}
 						Next
 					</Button>
 				)}
 				{state.step === 3 && (
 					// The name and slug fields join this form by `formId`; `ConfigureWorkspaceStep` says why.
 					<form id={detailsFormId} noValidate onSubmit={handleSubmit} className="contents">
-						<Button type="submit" disabled={!canSubmit || isCreating}>
-							{isCreating && <Spinner className="mr-2" />}
+						<Button pending={isCreating} type="submit" disabled={!canSubmit || isCreating}>
 							Create workspace
 						</Button>
 					</form>

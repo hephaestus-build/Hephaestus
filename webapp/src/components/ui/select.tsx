@@ -3,9 +3,11 @@
 import { Select as SelectPrimitive } from "@base-ui/react/select";
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import type * as React from "react";
+import { useSpinDelay } from "spin-delay";
 
 import { cn } from "cn";
 import type { AccessibleNameProps } from "@/components/ui/accessible-name";
+import { Spinner } from "@/components/ui/spinner";
 
 /**
  * `items` is required here, where Base UI leaves it optional.
@@ -46,14 +48,23 @@ function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
 	);
 }
 
+/**
+ * `pending` diverges from the registry: a `<Spinner />` shows before the value once the change has
+ * taken `spin-delay`'s second, as `Button`'s `pending` does and for the reason `webapp/DESIGN.md`
+ * § Loading and errors gives. The `Select` root owns `disabled`.
+ */
 function SelectTrigger({
 	className,
 	size = "default",
+	pending = false,
 	children,
 	...props
 }: SelectPrimitive.Trigger.Props & {
 	size?: "sm" | "default";
+	pending?: boolean;
 }) {
+	// `ssr: false`: with the default, a trigger that mounts pending shows its spinner at once.
+	const showSpinner = useSpinDelay(pending, { delay: 1000, minDuration: 500, ssr: false });
 	return (
 		<SelectPrimitive.Trigger
 			data-slot="select-trigger"
@@ -64,6 +75,7 @@ function SelectTrigger({
 			)}
 			{...props}
 		>
+			{showSpinner && <Spinner />}
 			{children}
 			<SelectPrimitive.Icon
 				render={<ChevronDownIcon className="pointer-events-none size-4 text-muted-foreground" />}

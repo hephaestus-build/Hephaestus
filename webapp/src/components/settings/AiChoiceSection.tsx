@@ -11,7 +11,6 @@ import {
 	QuestionnaireTitle,
 } from "@/components/ui/questionnaire";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 
 export interface AiChoiceSectionProps {
 	/** The saved answer; `undefined` pre-selects nothing. */
@@ -105,8 +104,12 @@ function AiChoiceForm({
 			</QuestionnaireItem>
 
 			<footer className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-				<Button type="submit" disabled={!changed || busy} aria-describedby={hintId}>
-					{isSaving && <Spinner />}
+				<Button
+					pending={isSaving}
+					type="submit"
+					disabled={!changed || busy}
+					aria-describedby={hintId}
+				>
 					{isSaving ? "Saving…" : "Save AI choice"}
 				</Button>
 				<p id={hintId} className="text-sm text-muted-foreground">

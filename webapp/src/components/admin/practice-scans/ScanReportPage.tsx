@@ -38,7 +38,6 @@ import {
 	AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { formatDate } from "@/lib/dates";
 import { problemDetailOf } from "@/lib/problem-detail";
@@ -188,8 +187,8 @@ function LoadedReport({
 							<AlertDialog>
 								<AlertDialogTrigger
 									render={
-										<Button type="button" variant="outline" disabled={cancel.pending}>
-											{cancel.pending ? <Spinner /> : <OctagonXIcon aria-hidden />}
+										<Button pending={cancel.pending} type="button" variant="outline">
+											<OctagonXIcon aria-hidden />
 											{cancel.pending ? "Canceling scan…" : "Cancel scan"}
 										</Button>
 									}
@@ -216,12 +215,13 @@ function LoadedReport({
 							</AlertDialog>
 						) : (
 							<Button
+								pending={exportSarif.pending}
 								type="button"
 								variant="outline"
 								disabled={exportSarif.pending || report.availability.expired}
 								onClick={exportSarif.onRun}
 							>
-								{exportSarif.pending ? <Spinner /> : <DownloadIcon aria-hidden />}
+								<DownloadIcon aria-hidden />
 								{exportSarif.pending ? "Exporting SARIF…" : "Export SARIF"}
 							</Button>
 						)}

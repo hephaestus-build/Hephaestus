@@ -8,7 +8,6 @@ import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
 export type WorkspaceHiddenPeopleState = PanelState<{
@@ -94,13 +93,13 @@ export function WorkspaceHiddenPeopleSettings({
 								</ItemContent>
 								<ItemActions>
 									<Button
+										pending={restoring === person.id}
 										variant="outline"
 										size="sm"
 										disabled={restoring !== undefined}
 										focusableWhenDisabled
 										onClick={() => onShowAgain(person.id)}
 									>
-										{restoring === person.id && <Spinner />}
 										Show again
 									</Button>
 								</ItemActions>

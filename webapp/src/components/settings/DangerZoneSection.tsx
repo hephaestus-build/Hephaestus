@@ -18,7 +18,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Spinner } from "@/components/ui/spinner";
 
 const DELETE_CONFIRM_PHRASE = "delete my account";
 
@@ -96,13 +95,11 @@ function DataExportRow({
 			</div>
 			<div className="mt-1 flex shrink-0 gap-2">
 				{state === "ready" ? (
-					<Button variant="outline" onClick={onDownload} disabled={downloading}>
-						{downloading ? <Spinner className="mr-1.5" /> : null}
+					<Button pending={downloading} variant="outline" onClick={onDownload}>
 						Download
 					</Button>
 				) : (
-					<Button variant="outline" onClick={onRequest} disabled={isPreparing}>
-						{isPreparing ? <Spinner className="mr-1.5" /> : null}
+					<Button pending={isPreparing} variant="outline" onClick={onRequest}>
 						{isFailed ? "Request export again" : "Request export"}
 					</Button>
 				)}

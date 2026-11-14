@@ -20,7 +20,6 @@ import {
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import {
 	Table,
 	TableBody,
@@ -157,11 +156,11 @@ export function WorkspaceResetToCatalogDialog({
 				<AlertDialogFooter>
 					<AlertDialogCancel disabled={pending}>Keep yours</AlertDialogCancel>
 					<AlertDialogAction
+						pending={pending}
 						variant="destructive"
 						disabled={!ready || rows.length === 0 || pending}
 						onClick={onConfirm}
 					>
-						{pending && <Spinner />}
 						{pending ? "Resetting…" : "Reset to catalog"}
 					</AlertDialogAction>
 				</AlertDialogFooter>

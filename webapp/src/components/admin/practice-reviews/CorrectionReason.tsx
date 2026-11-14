@@ -11,7 +11,6 @@ import {
 	PopoverTitle,
 	PopoverTrigger,
 } from "@/components/ui/popover";
-import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { hasText } from "@/lib/text";
 
@@ -53,8 +52,8 @@ export function CorrectionReasonPopover({
 	};
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
-			<PopoverTrigger render={<Button variant="outline" disabled={disabled} />}>
-				{disabled ? <Spinner /> : <Icon />}
+			<PopoverTrigger render={<Button pending={disabled} variant="outline" />}>
+				<Icon />
 				{copy.trigger}
 			</PopoverTrigger>
 			<PopoverContent align="end" side="top" className="w-[min(24rem,calc(100vw-2rem))] gap-4 p-4">
@@ -80,6 +79,7 @@ export function CorrectionReasonPopover({
 						Cancel
 					</Button>
 					<Button
+						pending={disabled}
 						variant={destructive ? "destructive" : "default"}
 						size="sm"
 						disabled={disabled || !hasText(reason.trim())}
@@ -87,7 +87,6 @@ export function CorrectionReasonPopover({
 							void submit();
 						}}
 					>
-						{disabled && <Spinner />}
 						{copy.trigger}
 					</Button>
 				</div>

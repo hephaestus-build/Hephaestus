@@ -3,7 +3,6 @@ import type * as React from "react";
 
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import {
 	PROBLEM_COPY,
 	type ProblemCopy,
@@ -98,8 +97,7 @@ export function QueryErrorAlert({
 			</AlertDescription>
 			{showRetry && (
 				<AlertAction>
-					<Button type="button" variant="outline" size="sm" onClick={onRetry} disabled={pending}>
-						{pending && <Spinner />}
+					<Button pending={pending} type="button" variant="outline" size="sm" onClick={onRetry}>
 						{pending ? "Retrying…" : "Retry"}
 					</Button>
 				</AlertAction>

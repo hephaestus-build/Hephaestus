@@ -40,7 +40,6 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
@@ -573,8 +572,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 
 			<DrawerFooter>
 				{cancelAction}
-				<Button type="submit" disabled={formDisabled || isSubmitDisabled}>
-					{isPending && <Spinner className="size-4" />}
+				<Button pending={isPending} type="submit" disabled={formDisabled || isSubmitDisabled}>
 					{submitLabel(mode, isPending)}
 				</Button>
 			</DrawerFooter>

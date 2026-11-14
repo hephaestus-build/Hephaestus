@@ -26,7 +26,6 @@ import {
 } from "@/components/ui/empty";
 import { Item, ItemActions, ItemContent, ItemGroup, ItemTitle } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { problemDetailOf } from "@/lib/problem-detail";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
@@ -130,20 +129,13 @@ function StoppedProjectRow({
 						<AlertDialogFooter>
 							<AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
 							<AlertDialogAction
+								pending={submitting}
 								variant="destructive"
-								disabled={submitting}
 								onClick={() => {
 									void confirm();
 								}}
 							>
-								{submitting ? (
-									<>
-										<Spinner className="size-4" aria-hidden />
-										Removing…
-									</>
-								) : (
-									"Remove synced work"
-								)}
+								{submitting ? "Removing…" : "Remove synced work"}
 							</AlertDialogAction>
 						</AlertDialogFooter>
 					</AlertDialogContent>

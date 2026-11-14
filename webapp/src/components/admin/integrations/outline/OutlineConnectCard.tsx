@@ -27,7 +27,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/co
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { asDate } from "@/lib/dates";
 import { hasText } from "@/lib/text";
 
@@ -205,11 +204,11 @@ export function OutlineConnectCard({
 							)}
 
 							<Button
+								pending={isConnecting}
 								onClick={() => onConnect({ serverUrl: serverUrl.trim(), token: token.trim() })}
 								disabled={!canConnect}
 								className="w-full"
 							>
-								{isConnecting && <Spinner />}
 								{isConnecting ? "Connecting…" : "Connect Outline"}
 							</Button>
 						</FieldGroup>

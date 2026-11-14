@@ -39,7 +39,6 @@ import { WorkspaceActivityPage } from "@/components/activity/WorkspaceActivityPa
 import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
 import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import {
 	useActivityFacets,
@@ -187,9 +186,9 @@ function WorkspaceActivity() {
 	const automationAction =
 		isAdmin && person && person.kind !== "BOT" ? (
 			<Button
+				pending={automationPending}
 				variant="outline"
 				size="sm"
-				disabled={automationPending}
 				focusableWhenDisabled
 				onClick={() =>
 					automation.mutate({
@@ -198,7 +197,6 @@ function WorkspaceActivity() {
 					})
 				}
 			>
-				{automationPending && <Spinner />}
 				{automationLabel(person.kind, automationPending)}
 			</Button>
 		) : undefined;

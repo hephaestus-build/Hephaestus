@@ -17,7 +17,6 @@ import { FilterToolbar } from "@/components/common/FilterToolbar";
 import { ReferenceFilterPill } from "@/components/common/ReferenceFilterPill";
 import { ResultCount } from "@/components/common/ResultCount";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { nonEmpty } from "@/lib/search-params";
 
 const EVENT_TYPE_OPTIONS = toFacetOptions(EVENT_TYPE_LABELS);
@@ -80,13 +79,14 @@ export function AdminAuthAuditPanel({
 				onReset={reset}
 				actions={
 					<Button
+						pending={exporting}
 						variant="outline"
 						size="sm"
 						className="h-8"
 						onClick={onExport}
 						disabled={exporting || events.length === 0}
 					>
-						{exporting ? <Spinner className="size-3.5" /> : <DownloadIcon aria-hidden />}
+						<DownloadIcon aria-hidden />
 						Export CSV
 					</Button>
 				}

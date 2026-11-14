@@ -34,7 +34,6 @@ import {
 	ItemTitle,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { asDate, formatDate } from "@/lib/dates";
 import { getProviderLabel } from "@/lib/provider/provider-labels";
 import { firstNonBlank, hasText } from "@/lib/text";
@@ -419,6 +418,7 @@ function UnlinkControl({
 			<AlertDialogTrigger
 				render={
 					<Button
+						pending={isUnlinking}
 						variant="quiet"
 						size="sm"
 						aria-busy={isUnlinking}
@@ -426,11 +426,7 @@ function UnlinkControl({
 						aria-label={isUnlinking ? `Disconnecting… ${name}` : `Disconnect ${name}`}
 						className="shrink-0 hover:text-destructive"
 					>
-						{isUnlinking ? (
-							<Spinner className="mr-1.5 size-3.5" />
-						) : (
-							<Unlink className="mr-1.5 size-3.5" aria-hidden="true" />
-						)}
+						<Unlink className="mr-1.5 size-3.5" aria-hidden="true" />
 						{isUnlinking ? "Disconnecting…" : "Disconnect"}
 					</Button>
 				}

@@ -14,7 +14,6 @@ import {
 	ItemMedia,
 	ItemTitle,
 } from "@/components/ui/item";
-import { Spinner } from "@/components/ui/spinner";
 import { type ProviderType, workReference } from "@/lib/provider/provider-terms";
 import { andList } from "@/lib/text";
 
@@ -95,18 +94,14 @@ export function WorkItemRow({ work, providerType, login, reviewNow }: WorkItemRo
 					)}
 					{reviewNow && (
 						<Button
+							pending={reviewNow.asking}
 							type="button"
 							variant="outline"
 							size="xs"
-							disabled={reviewNow.asking}
 							onClick={reviewNow.onReviewNow}
 							aria-label={`${reviewNow.asking ? "Requesting review…" : "Request review"}: ${workReference(providerType, work)}`}
 						>
-							{reviewNow.asking ? (
-								<Spinner data-icon="inline-start" />
-							) : (
-								<PlayIcon aria-hidden data-icon="inline-start" />
-							)}
+							<PlayIcon aria-hidden data-icon="inline-start" />
 							{reviewNow.asking ? "Requesting review…" : "Request review"}
 						</Button>
 					)}

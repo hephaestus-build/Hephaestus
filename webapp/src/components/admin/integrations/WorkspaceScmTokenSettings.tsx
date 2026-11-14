@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Spinner } from "@/components/ui/spinner";
 import { problemDetailOf } from "@/lib/problem-detail";
 
 import { WorkspaceIntegrationCardHeading } from "./WorkspaceIntegrationCardHeading";
@@ -141,8 +140,7 @@ export function WorkspaceScmTokenSettings({
 							</FieldError>
 						)}
 					</Field>
-					<Button type="submit" disabled={!token.trim() || isSaving}>
-						{isSaving && <Spinner />}
+					<Button pending={isSaving} type="submit" disabled={!token.trim() || isSaving}>
 						{buttonLabel}
 					</Button>
 				</form>

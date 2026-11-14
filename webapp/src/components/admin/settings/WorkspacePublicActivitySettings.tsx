@@ -15,7 +15,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { ITEM_KIND, itemKindNoun } from "@/lib/item-kinds";
 import { formatNumber } from "@/lib/numbers";
@@ -257,12 +256,10 @@ function SettingRow({
 				</ItemDescription>
 			</ItemContent>
 			<ItemActions>
-				{pending && <Spinner />}
 				<Switch
 					checked={checked}
 					onCheckedChange={(next) => onCheckedChange(next)}
-					// Read-only, not disabled: a disabled switch leaves the tab order and drops keyboard focus.
-					readOnly={pending}
+					pending={pending}
 					aria-labelledby={`${id}-title`}
 					aria-describedby={`${id}-description`}
 				/>

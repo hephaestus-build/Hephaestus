@@ -21,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { DrawerBody, DrawerFooter } from "@/components/ui/drawer";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 
@@ -343,8 +342,7 @@ export function CatalogGroupForm(props: CatalogGroupFormProps) {
 
 				<DrawerFooter>
 					{cancel}
-					<Button type="submit" disabled={formDisabled || conflict}>
-						{isPending && <Spinner className="size-4" />}
+					<Button pending={isPending} type="submit" disabled={formDisabled || conflict}>
 						{submitLabel}
 					</Button>
 				</DrawerFooter>

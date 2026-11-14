@@ -30,7 +30,6 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { Spinner } from "@/components/ui/spinner";
 import type { FieldErrors, LlmModelFormField } from "@/lib/llm-form-validation";
 import { reasoningEffortOf, reasoningEffortUpdateOf } from "@/lib/reasoning-effort";
 
@@ -176,8 +175,7 @@ function WorkspaceLlmModelFormDialogContent({
 
 				<DialogFooter>
 					<DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
-					<Button type="submit" disabled={isSubmitting}>
-						{isSubmitting && <Spinner aria-hidden />}
+					<Button pending={isSubmitting} type="submit">
 						{isSubmitting ? "Saving…" : submitLabel}
 					</Button>
 				</DialogFooter>

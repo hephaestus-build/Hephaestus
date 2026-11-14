@@ -22,7 +22,6 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { lastDayBefore, type ResearchReleaseReceipt } from "@/lib/research-release";
 import { hasText } from "@/lib/text";
 
@@ -145,12 +144,11 @@ function PasskeyCard({ passkey }: { passkey: ResearchPasskeyState }) {
 				<CardContent className="space-y-3">
 					{passkey.available ? (
 						<Button
+							pending={passkey.pending}
 							variant="outline"
 							className="w-fit"
-							disabled={passkey.pending}
 							onClick={passkey.onConfirm}
 						>
-							{passkey.pending && <Spinner />}
 							{passkey.pending ? "Confirming…" : "Confirm with passkey"}
 						</Button>
 					) : (
@@ -413,8 +411,7 @@ function ReleaseForm({
 						)}
 					</FieldContent>
 				</Field>
-				<Button type="submit" className="w-fit" disabled={release.pending}>
-					{release.pending && <Spinner />}
+				<Button pending={release.pending} type="submit" className="w-fit">
 					{release.pending ? "Exporting…" : "Export and download"}
 				</Button>
 			</FieldGroup>

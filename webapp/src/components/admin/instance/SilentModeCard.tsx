@@ -35,7 +35,6 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { hasText } from "@/lib/text";
 
@@ -126,13 +125,18 @@ export function SilentModeCard({
 			</CardContent>
 			<CardFooter>
 				{engaged ? (
-					<Button variant="outline" onClick={openRelease} disabled={isPending || releaseDisabled}>
-						{isPending ? <Spinner aria-hidden /> : <Volume2 aria-hidden />}
+					<Button
+						pending={isPending}
+						variant="outline"
+						onClick={openRelease}
+						disabled={isPending || releaseDisabled}
+					>
+						<Volume2 aria-hidden />
 						Turn off silent mode…
 					</Button>
 				) : (
-					<Button variant="destructive-outline" onClick={openEngage} disabled={isPending}>
-						{isPending ? <Spinner aria-hidden /> : <VolumeX aria-hidden />}
+					<Button pending={isPending} variant="destructive-outline" onClick={openEngage}>
+						<VolumeX aria-hidden />
 						Turn on silent mode…
 					</Button>
 				)}
@@ -171,11 +175,11 @@ export function SilentModeCard({
 							Cancel
 						</DialogClose>
 						<Button
+							pending={isPending}
 							variant="destructive"
-							disabled={isPending}
 							onClick={() => onEngage(reason.trim() === "" ? undefined : reason.trim())}
 						>
-							{isPending ? <Spinner aria-hidden /> : <VolumeX aria-hidden />}
+							<VolumeX aria-hidden />
 							Turn on silent mode
 						</Button>
 					</DialogFooter>
@@ -231,11 +235,11 @@ export function SilentModeCard({
 						<AlertDialogFooter>
 							<AlertDialogCancel>Keep silent mode on</AlertDialogCancel>
 							<AlertDialogAction
+								pending={isPending}
 								type="submit"
 								variant="destructive"
 								disabled={isPending || releaseDisabled}
 							>
-								{isPending && <Spinner aria-hidden />}
 								Turn off silent mode
 							</AlertDialogAction>
 						</AlertDialogFooter>

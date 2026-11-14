@@ -1,6 +1,5 @@
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
@@ -44,8 +43,7 @@ export function ScanListMore({
 					className="w-full"
 				/>
 			)}
-			<Button type="button" variant="outline" size="sm" disabled={loadingMore} onClick={onLoadMore}>
-				{loadingMore && <Spinner />}
+			<Button pending={loadingMore} type="button" variant="outline" size="sm" onClick={onLoadMore}>
 				{loadingMore ? "Loading…" : `Show more ${noun}`}
 			</Button>
 		</div>

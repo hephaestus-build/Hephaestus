@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import type { MorePages } from "@/runtime/tanstack-query/infinite-list";
 
 /**
@@ -25,8 +24,7 @@ export function AuditListEnd({
 					We could not load more {noun}.
 				</p>
 			)}
-			<Button variant="outline" onClick={list.onLoadMore} disabled={list.isLoadingMore}>
-				{list.isLoadingMore ? <Spinner className="mr-2 size-3.5" /> : null}
+			<Button pending={list.isLoadingMore} variant="outline" onClick={list.onLoadMore}>
 				Load more
 			</Button>
 		</div>

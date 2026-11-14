@@ -12,7 +12,6 @@ import {
 	InputGroupButton,
 	InputGroupInput,
 } from "@/components/ui/input-group";
-import { Spinner } from "@/components/ui/spinner";
 import { firstNonBlank, hasText } from "@/lib/text";
 
 import { connectionSchema } from "./schemas";
@@ -119,11 +118,11 @@ export function ConnectGitLabStep({
 			</Field>
 
 			<Button
+				pending={validating}
 				type="button"
 				onClick={handleValidate}
 				disabled={!state.personalAccessToken.trim() || validating}
 			>
-				{validating && <Spinner className="mr-2" />}
 				Validate token
 			</Button>
 

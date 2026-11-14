@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
 import { FieldDescription, FieldError, FieldLegend, FieldSet } from "@/components/ui/field";
-import { Spinner } from "@/components/ui/spinner";
 import type { ToolChoiceTestState } from "@/lib/llm-tool-choice-test";
 
 export interface LlmModelCapabilitiesProps {
@@ -32,8 +31,7 @@ export function LlmModelCapabilities({ supported, test, onProbe }: LlmModelCapab
 				can charge for. The result is saved right away.
 			</FieldDescription>
 			<div>
-				<Button type="button" variant="outline" size="sm" disabled={isPending} onClick={onProbe}>
-					{isPending && <Spinner aria-hidden />}
+				<Button pending={isPending} type="button" variant="outline" size="sm" onClick={onProbe}>
 					{isPending ? "Testing…" : "Test tool choice"}
 				</Button>
 			</div>

@@ -21,7 +21,6 @@ import {
 import { type ComponentProps, type ReactElement, useMemo, useRef, useState } from "react";
 import { useSpinDelay } from "spin-delay";
 import { TableRowsSkeleton } from "@/components/common/TableRowsSkeleton";
-import { Spinner } from "@/components/ui/spinner";
 
 import type { TeamInfo } from "@/api/types.gen";
 import { ACCOUNT_STATUS_LABELS } from "@/components/admin/users/account-labels";
@@ -162,8 +161,12 @@ function MemberRoleSelect({ member, items, onRoleChange }: MemberRoleSelectProps
 				}
 			}}
 		>
-			<SelectTrigger ref={trigger} size="sm" aria-label={`Role of ${member.name}`}>
-				{pending && <Spinner />}
+			<SelectTrigger
+				ref={trigger}
+				size="sm"
+				pending={pending}
+				aria-label={`Role of ${member.name}`}
+			>
 				<SelectValue />
 			</SelectTrigger>
 			<SelectContent aria-label={`Role of ${member.name}`}>
@@ -195,13 +198,12 @@ function RoleSourceNote({ member, providerLabel, onFollowProvider, pending }: Ro
 			<span>Set in Hephaestus</span>
 			{onFollowProvider && role !== "OWNER" && (
 				<Button
+					pending={pending}
 					variant="link"
 					size="inline"
-					disabled={pending}
 					aria-label={`Use ${providerLabel} role for ${member.name}`}
 					onClick={() => onFollowProvider(member)}
 				>
-					{pending && <Spinner />}
 					Use {providerLabel} role
 				</Button>
 			)}

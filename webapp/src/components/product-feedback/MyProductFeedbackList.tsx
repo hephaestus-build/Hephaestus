@@ -31,7 +31,6 @@ import {
 } from "@/components/ui/empty";
 import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { hasText } from "@/lib/text";
 
@@ -207,6 +206,7 @@ function MyProductFeedbackRow({
 					<CardFooter className="flex flex-wrap items-center gap-2">
 						{report.canKeepPrivate && (
 							<Button
+								pending={pending === "keep-private"}
 								type="button"
 								variant="outline"
 								size="sm"
@@ -214,7 +214,6 @@ function MyProductFeedbackRow({
 								aria-describedby={`${id}-message`}
 								onClick={() => onKeepPrivate(report)}
 							>
-								{pending === "keep-private" && <Spinner />}
 								{pending === "keep-private" ? "Keeping private…" : "Keep private"}
 							</Button>
 						)}
@@ -235,13 +234,13 @@ function MyProductFeedbackRow({
 								<AlertDialogTrigger
 									render={
 										<Button
+											pending={pending === "make-private"}
 											type="button"
 											variant="outline"
 											size="sm"
 											disabled={busy}
 											aria-describedby={`${id}-message`}
 										>
-											{pending === "make-private" && <Spinner />}
 											{pending === "make-private" ? "Making private…" : "Make private"}
 										</Button>
 									}

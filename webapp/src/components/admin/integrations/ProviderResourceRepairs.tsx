@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 
 const RESOURCE_LABELS: Record<ProviderResourceRepair["resourceType"], string> = {
 	INSTALLATION: "App installation",
@@ -290,13 +289,14 @@ function ReleaseConfirmation({
 						Cancel
 					</Button>
 					<Button
+						pending={pending}
 						onClick={() => {
 							void release();
 						}}
 						disabled={!confirmed || pending}
 						aria-busy={pending}
 					>
-						{pending && <Spinner />}Release block
+						Release block
 					</Button>
 				</DialogFooter>
 			</DialogContent>

@@ -32,7 +32,6 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { asDate } from "@/lib/dates";
 import { ITEM_KIND, itemKindLabel, itemKindNoun } from "@/lib/item-kinds";
 import { formatCostUsd } from "@/lib/money";
@@ -251,8 +250,7 @@ function EstimateSection({
 			</FieldGroup>
 
 			<div className="flex items-center gap-3">
-				<Button onClick={estimate} disabled={isEstimating || isLoading}>
-					{isEstimating ? <Spinner /> : null}
+				<Button pending={isEstimating} onClick={estimate} disabled={isEstimating || isLoading}>
 					Estimate this review
 				</Button>
 				<p className="text-sm text-muted-foreground">Nothing is reviewed until you confirm.</p>
@@ -314,11 +312,11 @@ function ConfirmationSection({
 
 			<div className="flex flex-wrap items-center gap-3">
 				<Button
+					pending={isUpdating}
 					onClick={() => onChangeStatus(batch, "RUNNING")}
 					disabled={isUpdating || nothingToDo}
 					aria-disabled={isUpdating || nothingToDo}
 				>
-					{isUpdating ? <Spinner /> : null}
 					{nothingToDo
 						? "Nothing to review"
 						: `Review ${countOf(batch.estimatedItems, batch.itemKind)}`}
@@ -386,11 +384,10 @@ function ActiveBatchSection({
 
 			<div className="flex flex-wrap items-center gap-3">
 				<Button
+					pending={isUpdating}
 					variant="outline"
 					onClick={() => onChangeStatus(batch, paused ? "RUNNING" : "PAUSED")}
-					disabled={isUpdating}
 				>
-					{isUpdating ? <Spinner /> : null}
 					{paused ? "Resume" : "Pause"}
 				</Button>
 				<Button

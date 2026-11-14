@@ -2,7 +2,6 @@ import { RefreshCwIcon } from "lucide-react";
 
 import type { SyncJob } from "@/api/types.gen";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 
 import { JOB_TYPE_LABEL, type SyncTriggerType } from "./sync-format";
 
@@ -61,16 +60,12 @@ export function WorkspaceSyncNowButton({
 	return (
 		<>
 			<Button
+				pending={disabled}
 				variant="outline"
 				size="sm"
 				onClick={canRecover ? onRecover : onClick}
-				disabled={disabled}
 			>
-				{disabled ? (
-					<Spinner className="size-4" aria-hidden />
-				) : (
-					<RefreshCwIcon className="size-4" />
-				)}
+				<RefreshCwIcon className="size-4" />
 				{text}
 			</Button>
 			{/* Announce sync start/progress to assistive tech; a plain button-label swap is not reliably

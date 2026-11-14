@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { useSpinDelay } from "spin-delay";
 
 import { getOwnPracticePageFeedbackOptions } from "@/api/@tanstack/react-query.gen";
 import type { FeedbackResponse, FeedbackResponseRequest, GroupRef } from "@/api/types.gen";
@@ -141,11 +140,7 @@ export function usePracticePageFeedback({
 		setLastWrite({ feedbackId, control });
 		responses.write(feedbackId, recordedOf(feedbackId), response);
 	};
-	// Disable the SSR default so Saving does not appear immediately when the page mounts.
-	const showSaving = useSpinDelay(
-		lastWrite !== undefined && pendingResponses.has(lastWrite.feedbackId),
-		{ delay: 1000, minDuration: 500, ssr: false },
-	);
+	const saving = lastWrite !== undefined && pendingResponses.has(lastWrite.feedbackId);
 
 	const rate = (feedbackId: string, usefulness: FeedbackUsefulness) => {
 		const next = nextRating(responseOf(feedbackId), usefulness);
@@ -181,7 +176,7 @@ export function usePracticePageFeedback({
 			resolution: responseOf(feedbackId).resolution,
 			openBand: openBand?.feedbackId === feedbackId ? openBand.band : undefined,
 			isPending: pendingResponses.has(feedbackId),
-			saving: showSaving && lastWrite?.feedbackId === feedbackId ? lastWrite.control : undefined,
+			saving: saving && lastWrite.feedbackId === feedbackId ? lastWrite.control : undefined,
 			onRate: (usefulness) => rate(feedbackId, usefulness),
 			onSendComment: (comment) => send(feedbackId, comment),
 			onSkipComment: () => setOpenBand(undefined),

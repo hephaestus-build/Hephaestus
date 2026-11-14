@@ -1,7 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { MailIcon, SendIcon } from "lucide-react";
 import { type SubmitEvent, useId, useState } from "react";
-import { useSpinDelay } from "spin-delay";
 import { definitionFor } from "@/components/common/status-def";
 
 import type { EmailTestResponse } from "@/api/types.gen";
@@ -23,7 +22,6 @@ import {
 	FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Spinner } from "@/components/ui/spinner";
 import { hasText } from "@/lib/text";
 
 import { EMAIL_TEST_OUTCOME_DEFS } from "./email-test-outcome-defs";
@@ -37,12 +35,10 @@ export interface InstanceEmailCardProps {
 export function InstanceEmailCard({ isPending, result, onSendTest }: InstanceEmailCardProps) {
 	const [to, setTo] = useState("");
 	const recipientId = useId();
-	const showSpinner = useSpinDelay(isPending, { delay: 1000, minDuration: 500 });
-	const isBusy = isPending || showSpinner;
 
 	const submit = (event: SubmitEvent<HTMLFormElement>) => {
 		event.preventDefault();
-		if (isBusy) {
+		if (isPending) {
 			return;
 		}
 		const trimmed = to.trim();
@@ -84,7 +80,7 @@ export function InstanceEmailCard({ isPending, result, onSendTest }: InstanceEma
 								onChange={(event) => setTo(event.target.value)}
 								placeholder="Your verified address"
 								autoComplete="off"
-								disabled={isBusy}
+								disabled={isPending}
 							/>
 						</Field>
 					</FieldGroup>
@@ -119,9 +115,9 @@ export function InstanceEmailCard({ isPending, result, onSendTest }: InstanceEma
 					)}
 				</CardContent>
 				<CardFooter>
-					<Button type="submit" variant="outline" disabled={isBusy}>
-						{showSpinner ? <Spinner aria-hidden /> : <SendIcon aria-hidden />}
-						{showSpinner ? "Sending…" : "Send test email"}
+					<Button pending={isPending} type="submit" variant="outline">
+						<SendIcon aria-hidden />
+						{isPending ? "Sending…" : "Send test email"}
 					</Button>
 				</CardFooter>
 			</form>

@@ -25,7 +25,6 @@ import {
 } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { asDate } from "@/lib/dates";
 import { docUrl } from "@/lib/docs-url";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
@@ -235,12 +234,13 @@ export function InstanceReleaseCard({ state }: InstanceReleaseCardProps) {
 				{canCheck && state.status === "ready" && (
 					<CardAction>
 						<Button
+							pending={checking}
 							variant="outline"
 							size="sm"
 							disabled={checking || rateLimited}
 							onClick={state.onCheck}
 						>
-							{checking ? <Spinner /> : <RefreshCwIcon aria-hidden />}
+							<RefreshCwIcon aria-hidden />
 							{checking ? "Checking…" : "Check now"}
 						</Button>
 					</CardAction>

@@ -28,7 +28,6 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
 import { hasText } from "@/lib/text";
 
 import { FEEDBACK_KIND_DEFS } from "./feedback-kind-defs";
@@ -155,14 +154,13 @@ function NeedsActionRow({
 				</p>
 			</div>
 			<Button
+				pending={pending}
 				type="button"
 				variant="outline"
 				size="sm"
-				disabled={pending}
 				aria-describedby={`${id}-summary`}
 				onClick={() => onRetryFiling(item)}
 			>
-				{pending && <Spinner />}
 				{pending ? "Retrying…" : "Retry"}
 			</Button>
 		</li>
@@ -225,13 +223,12 @@ function CleanupRow({
 				<AlertDialogTrigger
 					render={
 						<Button
+							pending={pending}
 							type="button"
 							variant="outline"
 							size="sm"
-							disabled={pending}
 							aria-describedby={`${id}-summary`}
 						>
-							{pending && <Spinner />}
 							{pending ? "Confirming…" : "Confirm done"}
 						</Button>
 					}

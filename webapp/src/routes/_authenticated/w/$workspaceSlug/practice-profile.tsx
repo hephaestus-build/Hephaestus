@@ -9,7 +9,6 @@ import {
 } from "@tanstack/react-router";
 import { CompassIcon } from "lucide-react";
 import { lazy, type ReactNode, Suspense, useState, useTransition } from "react";
-import { useSpinDelay } from "spin-delay";
 
 import { getOwnResultOptions } from "@/api/@tanstack/react-query.gen";
 import type { GroupRef, ResultDetail, ResultList } from "@/api/types.gen";
@@ -59,7 +58,6 @@ import {
 } from "@/components/profile/ReviewResultRow";
 import type { TourChapterId } from "@/components/tour/tour-chapters";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { REVIEW_PAGE_SIZE, usePracticeGroupDetail } from "@/hooks/use-practice-group-detail";
 import { usePracticePageFeedback } from "@/hooks/use-practice-page-feedback";
@@ -113,6 +111,7 @@ function TourOffer({
 }) {
 	return (
 		<Button
+			pending={pending}
 			variant="quiet"
 			size="sm"
 			className="w-fit self-center"
@@ -121,7 +120,7 @@ function TourOffer({
 			onFocus={preloadTour}
 			aria-busy={pending}
 		>
-			{pending ? <Spinner /> : <CompassIcon aria-hidden />}
+			<CompassIcon aria-hidden />
 			{children}
 		</Button>
 	);
@@ -132,7 +131,6 @@ function PracticeProfile() {
 	const readOnly = useAuth().userView !== undefined;
 	const [tour, setTour] = useState<{ startChapter?: TourChapterId } | null>(null);
 	const [tourLoading, startTourTransition] = useTransition();
-	const tourPending = useSpinDelay(tourLoading, { delay: 1000, minDuration: 500 });
 	const workProvider = useWorkProvider();
 	// From the reader's own membership: an admin read here would ask an admin for a passkey step-up.
 	const { isAdmin } = useWorkspaceAccess();
@@ -337,7 +335,7 @@ function PracticeProfile() {
 					pageProps.firstRun && {
 						...pageProps.firstRun,
 						tourOffer: readOnly ? undefined : (
-							<TourOffer onSelect={() => startTour("how-it-works")} pending={tourPending}>
+							<TourOffer onSelect={() => startTour("how-it-works")} pending={tourLoading}>
 								See how feedback comes about
 							</TourOffer>
 						),
@@ -347,21 +345,22 @@ function PracticeProfile() {
 					// Offered once the page has loaded: until then the tour has no real data to speak from.
 					readOnly || page.status !== "ready" ? undefined : (
 						<Button
+							pending={tourLoading}
 							variant="quiet"
 							size="sm"
 							onClick={() => startTour()}
 							onPointerEnter={preloadTour}
 							onFocus={preloadTour}
-							aria-busy={tourPending}
+							aria-busy={tourLoading}
 						>
-							{tourPending ? <Spinner /> : <CompassIcon aria-hidden />}
+							<CompassIcon aria-hidden />
 							Take the tour
 						</Button>
 					)
 				}
 				firstCardOffer={
 					readOnly ? undefined : (
-						<TourOffer onSelect={() => startTour("your-profile")} pending={tourPending}>
+						<TourOffer onSelect={() => startTour("your-profile")} pending={tourLoading}>
 							See how to read a feedback card
 						</TourOffer>
 					)

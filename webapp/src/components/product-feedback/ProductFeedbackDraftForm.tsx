@@ -4,7 +4,6 @@ import type { EditProductFeedbackDraft } from "@/api/types.gen";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 
 /** The server's `EditProductFeedbackDraftDTO` limits. */
@@ -77,8 +76,7 @@ export function ProductFeedbackDraftForm({
 				<Button type="button" variant="outline" size="sm" disabled={saving} onClick={onCancel}>
 					Cancel
 				</Button>
-				<Button type="submit" size="sm" disabled={!ready || saving}>
-					{saving && <Spinner />}
+				<Button pending={saving} type="submit" size="sm" disabled={!ready || saving}>
 					{saving ? "Saving…" : "Save issue"}
 				</Button>
 			</div>
