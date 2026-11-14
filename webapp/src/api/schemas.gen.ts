@@ -8101,7 +8101,7 @@ export const PracticeItemTypeOptionSchema = {
 		feedbackOnWork: {
 			type: "boolean",
 			description:
-				"Whether feedback can appear on the reviewed work itself. Otherwise feedback about this kind of item goes only to the author's practice page and conversation.",
+				"Whether feedback can appear on the reviewed work itself, for a practice about the author of the work. Otherwise its feedback goes only to the developer's practice page and conversation.",
 		},
 		kind: {
 			type: "string",
