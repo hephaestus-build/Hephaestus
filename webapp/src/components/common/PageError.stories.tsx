@@ -100,6 +100,19 @@ export const FailedForGood: Story = {
 	},
 };
 
+/** The page's code belongs to a newer build than this tab runs, so only a reload loads it. */
+export const Outdated: Story = {
+	args: { cause: "outdated", onReload: fn() },
+	play: async ({ args, canvas, userEvent }) => {
+		await expect(
+			canvas.getByRole("heading", { level: 1, name: "Hephaestus was updated" }),
+		).toBeVisible();
+		await expect(canvas.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+		await userEvent.click(canvas.getByRole("button", { name: "Reload" }));
+		await expect(args.onReload).toHaveBeenCalledOnce();
+	},
+};
+
 export const NotFound: Story = {
 	args: { cause: "not-found" },
 	play: async ({ canvas }) => {

@@ -3,12 +3,13 @@ import {
 	createRootRoute,
 	createRoute,
 	createRouter,
+	lazyRouteComponent,
 	RouterProvider,
 } from "@tanstack/react-router";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
-import { expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 
 import { ROUTER_SEARCH } from "@/lib/router-search";
 import { RouteError } from "./RouteError";
@@ -126,4 +127,40 @@ it("names no reference for a failure without one, or with a value that is not a 
 
 	await screen.findByRole("alert");
 	expect(screen.queryByRole("button", { name: "Copy reference" })).toBeNull();
+});
+
+afterEach(() => {
+	sessionStorage.clear();
+	vi.restoreAllMocks();
+});
+
+it("offers a reload, not a blank page, when a route's code is gone after a deploy and the reload already ran", async () => {
+	const missing = new TypeError(
+		"Failed to fetch dynamically imported module: https://hephaestus.example/assets/members-1a2b3c.js",
+	);
+	// TanStack Router reloads once per tab for each missing module; this tab already did.
+	sessionStorage.setItem(`tanstack_router_reload:${missing.message}`, "1");
+	const reload = vi.fn();
+	vi.spyOn(window, "location", "get").mockReturnValue({ ...window.location, reload });
+	const rootRoute = createRootRoute();
+	const route = createRoute({
+		getParentRoute: () => rootRoute,
+		path: "/",
+		component: lazyRouteComponent(async () => Promise.reject(missing)),
+	});
+	const router = createRouter({
+		...ROUTER_SEARCH,
+		routeTree: rootRoute.addChildren([route]),
+		history: createMemoryHistory({ initialEntries: ["/"] }),
+		defaultErrorComponent: RouteError,
+	});
+	render(<RouterProvider router={router} />, { onCaughtError: vi.fn() });
+
+	const alert = await screen.findByRole("alert");
+	expect(alert.textContent).toContain("Hephaestus was updated");
+	expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+	expect(document.body.textContent).not.toContain("members-1a2b3c");
+
+	await userEvent.click(screen.getByRole("button", { name: "Reload" }));
+	expect(reload).toHaveBeenCalledOnce();
 });

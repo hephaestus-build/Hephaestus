@@ -3,6 +3,8 @@ import { type ErrorComponentProps, useRouter } from "@tanstack/react-router";
 import { PageError, type PageErrorProps } from "@/components/common/PageError";
 import { problemIsRetryable, problemStatusOf, requestIdOf } from "@/lib/problem-detail";
 
+import { isStaleBuildError } from "./stale-build";
+
 /**
  * What a route shows when its `beforeLoad`, loader or component throws. It names the cause when the
  * error carries a status, and offers Retry only for a failure that running the route again can fix.
@@ -12,7 +14,16 @@ export function RouteError({ error }: Pick<ErrorComponentProps, "error">) {
 	const router = useRouter();
 	const status = problemStatusOf(error);
 	let state: PageErrorProps;
-	if (status === 404) {
+	if (isStaleBuildError(error)) {
+		// The once-per-tab reload (`preload-error.ts`, TanStack Router's lazy route) has already run, or the
+		// page may hold input: the reader decides when to reload.
+		state = {
+			cause: "outdated",
+			onReload: () => {
+				window.location.reload();
+			},
+		};
+	} else if (status === 404) {
 		state = { cause: "not-found" };
 	} else if (status === 403) {
 		state = { cause: "no-access" };
