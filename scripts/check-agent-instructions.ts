@@ -16,7 +16,7 @@
  *   oversized   — an `AGENTS.md` chain longer than Codex loads, which cuts the tail off unannounced.
  *   stale       — a contributor document names a repository path or npm package that does not resolve.
  *   unknown     — an agent file, contributor document or README names a root `vp run` task that does not exist.
- *   unlisted    — an `AGENTS.md` the instruction table of the agent workflow guide does not name.
+ *   unlistedGuides — an `AGENTS.md` the instruction table of the agent workflow guide does not name.
  *
  * `unread` runs before all of them and reports this gate's own blind spot: an agent file the
  * classifier never opened, which every check below would otherwise read as a file that says nothing.
@@ -974,7 +974,7 @@ function unknownTasks(repo: Repo, tasks: readonly string[]): readonly string[] {
 }
 
 /** A guide the instruction table does not name is one a contributor does not know to read or update. */
-function unlisted(repo: Repo): readonly string[] {
+function unlistedGuides(repo: Repo): readonly string[] {
 	const table = repo.present.get(INSTRUCTION_TABLE);
 	if (table?.kind !== "text") {
 		return [`${INSTRUCTION_TABLE} is missing, so no page says which AGENTS.md covers which tree.`];
@@ -1010,7 +1010,7 @@ export const analyse = (
 		...oversized(repo),
 		...staleContributorClaims(repo),
 		...unknownTasks(repo, snapshot.tasks),
-		...unlisted(repo),
+		...unlistedGuides(repo),
 	];
 };
 
