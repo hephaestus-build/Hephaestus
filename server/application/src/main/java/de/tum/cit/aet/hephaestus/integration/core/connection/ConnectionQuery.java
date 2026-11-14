@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,5 +46,29 @@ public class ConnectionQuery implements ConnectionQueries {
     @WorkspaceAgnostic("Enumerates subscribed workspaces; each subscriber check binds its workspace")
     public List<Long> findWorkspaceIdsByKindAndState(IntegrationKind kind, IntegrationState state) {
         return connections.findWorkspaceIdsByKindAndState(kind, state);
+    }
+
+    @Override
+    public Optional<ConnectionSnapshot> findActive(long workspaceId, IntegrationKind kind) {
+        return connections.findViewsInState(workspaceId, kind, IntegrationState.ACTIVE, Limit.of(1)).stream()
+                .findFirst();
+    }
+
+    @Override
+    public Optional<ConnectionConfig> findActiveOrSuspendedConfig(long workspaceId, IntegrationKind kind) {
+        return findActive(workspaceId, kind)
+                .or(() ->
+                        connections
+                                .findViewsInState(workspaceId, kind, IntegrationState.SUSPENDED, Limit.of(1))
+                                .stream()
+                                .findFirst())
+                .map(ConnectionSnapshot::config);
+    }
+
+    @Override
+    public boolean hasConnectionInState(long workspaceId, IntegrationKind kind, IntegrationState state) {
+        return !connections
+                .findViewsInState(workspaceId, kind, state, Limit.of(1))
+                .isEmpty();
     }
 }

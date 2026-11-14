@@ -5,9 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -28,7 +27,7 @@ class AuthenticatedGitProviderUserServiceTest extends BaseUnitTest {
     private UserRepository users;
 
     @Mock
-    private IdentityProviderRepository providers;
+    private IdentityProviderLookup providers;
 
     @Mock
     private AccountIdentityQuery identities;
@@ -49,8 +48,7 @@ class AuthenticatedGitProviderUserServiceTest extends BaseUnitTest {
 
     @Test
     void shouldResolveExactCurrentMirrorProfile() {
-        var provider = new IdentityProvider(IdentityProviderType.GITLAB, "https://gitlab.example");
-        provider.setId(7L);
+        var provider = new IdentityProviderLookup.Provider(7L, IdentityProviderType.GITLAB, "https://gitlab.example");
         when(identities.activeLinksForAccount(42L))
                 .thenReturn(List.of(new AccountIdentityQuery.IdentityView(10L, 7L, "90001", "")));
         when(providers.findById(7L)).thenReturn(Optional.of(provider));
@@ -62,8 +60,7 @@ class AuthenticatedGitProviderUserServiceTest extends BaseUnitTest {
 
     @Test
     void shouldRefuseMissingMirrorWithoutInventingProfileFacts() {
-        var provider = new IdentityProvider(IdentityProviderType.GITLAB, "https://gitlab.example");
-        provider.setId(7L);
+        var provider = new IdentityProviderLookup.Provider(7L, IdentityProviderType.GITLAB, "https://gitlab.example");
         when(identities.activeLinksForAccount(42L))
                 .thenReturn(List.of(new AccountIdentityQuery.IdentityView(10L, 7L, "90001", "")));
         when(providers.findById(7L)).thenReturn(Optional.of(provider));

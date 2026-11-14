@@ -49,6 +49,13 @@ public class SourceProviderNamespaces {
                 providers.findByTypeAndServerUrl(type, serverUrl).orElseThrow().getId());
     }
 
+    /** Creates a mirror's provider reference data in the caller's transaction. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public long createIdentityProvider(IdentityProviderType type, String serverUrl) {
+        return Objects.requireNonNull(
+                providers.save(new IdentityProvider(type, serverUrl)).getId());
+    }
+
     public static @Nullable String configuredUrl(ConnectionConfig config) {
         return switch (config) {
             case ConnectionConfig.GitHubAppConfig c -> c.serverUrl();

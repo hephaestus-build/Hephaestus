@@ -4,12 +4,13 @@ import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionMaintenanceQueries;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationRepositoryEnumerator;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InstallationSuspensionTracker;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -54,7 +55,7 @@ public class WorkspaceRepositoryMonitorService {
     private final WorkspaceRepository workspaceRepository;
     private final RepositoryToMonitorRepository repositoryToMonitorRepository;
     private final RepositoryRepository repositoryRepository;
-    private final IdentityProviderRepository gitProviderRepository;
+    private final IdentityProviderLookup identityProviders;
 
     private final WorkspaceScopeFilter workspaceScopeFilter;
 
@@ -70,7 +71,9 @@ public class WorkspaceRepositoryMonitorService {
     private final ApplicationEventPublisher eventPublisher;
 
     private final ConnectionService connectionService;
-    private final ConnectionRepository connectionRepository;
+    private final ConnectionQueries connectionQueries;
+    private final ConnectionCommands connectionCommands;
+    private final ConnectionMaintenanceQueries maintenanceQueries;
     private final TransactionTemplate transactionTemplate;
     private final TransactionTemplate readTransactionTemplate;
     private final ManualRepositoryMonitorService manualAdds;
@@ -79,10 +82,12 @@ public class WorkspaceRepositoryMonitorService {
             WorkspaceRepository workspaceRepository,
             RepositoryToMonitorRepository repositoryToMonitorRepository,
             RepositoryRepository repositoryRepository,
-            IdentityProviderRepository gitProviderRepository,
+            IdentityProviderLookup identityProviders,
             WorkspaceScopeFilter workspaceScopeFilter,
             ConnectionService connectionService,
-            ConnectionRepository connectionRepository,
+            ConnectionQueries connectionQueries,
+            ConnectionCommands connectionCommands,
+            ConnectionMaintenanceQueries maintenanceQueries,
             List<InstallationSuspensionTracker> suspensionTrackerList,
             List<InstallationRepositoryEnumerator> installationEnumeratorList,
             List<WorkspaceDataSyncTrigger> dataSyncTriggerList,
@@ -93,10 +98,12 @@ public class WorkspaceRepositoryMonitorService {
         this.workspaceRepository = workspaceRepository;
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
         this.repositoryRepository = repositoryRepository;
-        this.gitProviderRepository = gitProviderRepository;
+        this.identityProviders = identityProviders;
         this.workspaceScopeFilter = workspaceScopeFilter;
         this.connectionService = connectionService;
-        this.connectionRepository = connectionRepository;
+        this.connectionQueries = connectionQueries;
+        this.connectionCommands = connectionCommands;
+        this.maintenanceQueries = maintenanceQueries;
         this.eventPublisher = eventPublisher;
         this.transactionTemplate = transactionTemplate;
         this.readTransactionTemplate = new TransactionTemplate(
@@ -179,10 +186,8 @@ public class WorkspaceRepositoryMonitorService {
             boolean gitLab = connectionService
                     .findActiveProviderKind(workspace.getId())
                     .map(kind -> kind == IntegrationKind.GITLAB)
-                    .orElseGet(() -> connectionRepository
-                            .findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                                    workspace.getId(), IntegrationKind.GITLAB, IntegrationState.SUSPENDED)
-                            .isPresent());
+                    .orElseGet(() -> connectionQueries.hasConnectionInState(
+                            workspace.getId(), IntegrationKind.GITLAB, IntegrationState.SUSPENDED));
             if (gitLab) {
                 // Takes the GitLab lock, so a discovery that runs at the same time finishes first.
                 if (connectionService
@@ -266,8 +271,7 @@ public class WorkspaceRepositoryMonitorService {
                     workspaceId);
             return Optional.empty();
         }
-        connectionRepository.findActiveInstallationForUpdateAndIncrementVersion(
-                workspaceId, Long.toString(installationId));
+        connectionCommands.fenceActiveInstallation(workspaceId, installationId);
         var monitorOpt = repositoryToMonitorRepository.findOneByWorkspaceIdAndNativeId(workspaceId, expectedNativeId);
         if (monitorOpt.isEmpty()) {
             log.debug("Skipped repository removal: reason=notMonitored, workspaceId={}", workspaceId);
@@ -317,16 +321,20 @@ public class WorkspaceRepositoryMonitorService {
 
         Workspace workspace = workspaceOpt.get();
 
-        connectionRepository.findActiveInstallationForUpdateAndIncrementVersion(
-                workspace.getId(), Long.toString(installationId));
+        connectionCommands.fenceActiveInstallation(workspace.getId(), installationId);
 
-        IdentityProvider provider = gitProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
+        Long providerId = identityProviders
+                .findId(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
                 .orElseThrow(() -> new IllegalStateException(
                         "GitHub is not set up on this instance. Ask your" + " instance operator to set it up."));
 
         if (ensureRepositoryFromSnapshot(
-                workspace, provider, snapshot.id(), snapshot.nameWithOwner(), snapshot.name(), snapshot.isPrivate())) {
+                workspace,
+                providerId,
+                snapshot.id(),
+                snapshot.nameWithOwner(),
+                snapshot.name(),
+                snapshot.isPrivate())) {
             ensureRepositoryMonitorInternal(workspace, snapshot.id(), snapshot.nameWithOwner(), true);
         }
     }
@@ -357,7 +365,7 @@ public class WorkspaceRepositoryMonitorService {
             return false;
         }
         var captured = readTransactionTemplate.execute(
-                status -> connectionRepository.findActiveInstallationSnapshot(Long.toString(installationId)));
+                status -> maintenanceQueries.findActiveInstallationSnapshot(installationId));
         if (captured == null || captured.isEmpty()) return false;
         var authority = captured.orElseThrow();
         var snapshots = enumerator.enumerate(installationId);
@@ -376,15 +384,12 @@ public class WorkspaceRepositoryMonitorService {
                 discardedEnumeration(installationId, authority, "workspaceChanged");
                 return false;
             }
-            if (connectionRepository
-                    .findAndLockLifecycleConnection(authority.connectionId(), authority.workspaceId())
-                    .isEmpty()) {
+            var heldConnection = connectionCommands.holdConnection(authority.workspaceId(), authority.connectionId());
+            if (heldConnection.isEmpty()) {
                 discardedEnumeration(installationId, authority, "connectionMissing");
                 return false;
             }
-            var connection = connectionRepository
-                    .findByIdAndWorkspaceId(authority.connectionId(), authority.workspaceId())
-                    .orElseThrow();
+            var connection = heldConnection.orElseThrow();
             if (connection.getState() != IntegrationState.ACTIVE
                     || connection.getLifecycleGeneration() != authority.lifecycleGeneration()
                     || !Objects.equals(connection.getVersion(), authority.version())
@@ -400,7 +405,7 @@ public class WorkspaceRepositoryMonitorService {
     }
 
     private void discardedEnumeration(
-            long installationId, ConnectionRepository.InstallationSnapshot authority, String reason) {
+            long installationId, ConnectionMaintenanceQueries.InstallationSnapshot authority, String reason) {
         log.info(
                 "Skipped repository enumeration result: reason={}, installationId={}, workspaceId={}, connectionId={}",
                 reason,
@@ -439,8 +444,8 @@ public class WorkspaceRepositoryMonitorService {
                         .map(name -> name.toLowerCase(Locale.ENGLISH))
                         .collect(Collectors.toSet());
 
-        IdentityProvider provider = gitProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
+        Long providerId = identityProviders
+                .findId(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
                 .orElseThrow(() -> new IllegalStateException(
                         "GitHub is not set up on this instance. Ask your" + " instance operator to set it up."));
 
@@ -458,7 +463,7 @@ public class WorkspaceRepositoryMonitorService {
         allowedSnapshots.forEach(snapshot -> {
             if (ensureRepositoryFromSnapshot(
                     workspace,
-                    provider,
+                    providerId,
                     snapshot.id(),
                     snapshot.nameWithOwner(),
                     snapshot.name(),
@@ -601,18 +606,13 @@ public class WorkspaceRepositoryMonitorService {
 
     /** Whether the mirrored repository with this id now has the snapshot's path. */
     private boolean ensureRepositoryFromSnapshot(
-            Workspace workspace,
-            IdentityProvider provider,
-            long nativeId,
-            String nameWithOwner,
-            String name,
-            boolean isPrivate) {
+            Workspace workspace, long providerId, long nativeId, String nameWithOwner, String name, boolean isPrivate) {
         if (StringUtils.isBlank(nameWithOwner)) {
             return false;
         }
         boolean recorded = repositoryRepository.upsertFromSnapshot(
                 nativeId,
-                Objects.requireNonNull(provider.getId()),
+                providerId,
                 nameWithOwner,
                 name,
                 isPrivate,

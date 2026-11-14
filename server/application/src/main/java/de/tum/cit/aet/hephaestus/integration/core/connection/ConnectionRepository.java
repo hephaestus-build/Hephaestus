@@ -116,9 +116,8 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     @WorkspaceAgnostic(
             "Installation reconciliation captures its current workspace and revalidates that exact connection before writes")
     @NativeQuery(ACTIVE_INSTALLATION_SNAPSHOT_SQL)
-    Optional<InstallationSnapshot> findActiveInstallationSnapshot(@Param("instanceKey") String instanceKey);
-
-    record InstallationSnapshot(Long connectionId, Long workspaceId, long lifecycleGeneration, Long version) {}
+    Optional<ConnectionMaintenanceQueries.InstallationSnapshot> findActiveInstallationSnapshot(
+            @Param("instanceKey") String instanceKey);
 
     @Query("""
         SELECT new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository$WorkspaceMetadataRow(
@@ -190,6 +189,16 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
             FROM Connection c WHERE c.workspace.id = :workspaceId
             """)
     List<ConnectionQueries.ConnectionView> findViewsByWorkspaceId(@Param("workspaceId") long workspaceId);
+
+    @Query("""
+            SELECT new de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries$ConnectionSnapshot(
+                c.id, c.version, c.config)
+            FROM Connection c
+            WHERE c.workspace.id = :workspaceId AND c.kind = :kind AND c.state = :state
+            ORDER BY c.createdAt DESC
+            """)
+    List<ConnectionQueries.ConnectionSnapshot> findViewsInState(
+            long workspaceId, IntegrationKind kind, IntegrationState state, Limit limit);
 
     @Query("SELECT c FROM Connection c WHERE c.workspace.id = :workspaceId")
     List<Connection> findByWorkspaceId(@Param("workspaceId") long workspaceId);

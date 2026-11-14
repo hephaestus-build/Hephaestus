@@ -4,12 +4,11 @@ import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAudit;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionAuditRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
@@ -40,18 +39,16 @@ public class GitLabStoppedProjectService {
     private static final Logger log = LoggerFactory.getLogger(GitLabStoppedProjectService.class);
 
     private final ConnectionService connectionService;
-    private final ConnectionRepository connectionRepository;
-    private final ConnectionAuditRepository auditRepository;
+    private final ConnectionCommands connectionCommands;
+    private final ConnectionQueries connectionQueries;
     private final ScmItemQueryRepository items;
     private final WorkspaceRepositoryMonitorService repositoryMonitorService;
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
     public List<GitLabStoppedProjectDTO> getStoppedProjects(long workspaceId) {
-        return connectionRepository
-                .findActive(workspaceId, IntegrationKind.GITLAB)
-                .or(() -> connectionRepository.findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                        workspaceId, IntegrationKind.GITLAB, IntegrationState.SUSPENDED))
+        return connectionQueries
+                .findActiveOrSuspendedConfig(workspaceId, IntegrationKind.GITLAB)
                 .map(connection -> stoppedProjects(workspaceId, connection).stream()
                         .map(project -> new GitLabStoppedProjectDTO(
                                 String.valueOf(project.itemId()), project.nameWithOwner(), project.receipt()))
@@ -71,7 +68,7 @@ public class GitLabStoppedProjectService {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "Resume the GitLab connection before you remove project work.");
         }
-        StoppedProject project = stoppedProjects(workspaceId, connection).stream()
+        StoppedProject project = stoppedProjects(workspaceId, connection.getConfig()).stream()
                 .filter(candidate -> candidate.itemId() == repositoryItemId)
                 .findFirst()
                 .orElseThrow(() -> new ResponseStatusException(
@@ -86,17 +83,12 @@ public class GitLabStoppedProjectService {
         // The workspace no longer monitors the source, so this unindexes its repository item.
         eventPublisher.publishEvent(new RepositoryMonitoringChangedEvent(workspaceId, List.of(project.repositoryId())));
         repositoryMonitorService.deleteRepositoryIfOrphaned(project.repositoryId());
-        ConnectionAudit audit = new ConnectionAudit(
+        connectionCommands.recordAdministrativeChange(
                 connection,
                 "STOPPED_PROJECT_WORK_REMOVED",
-                connection.getState(),
-                connection.getState(),
-                "ADMIN",
-                null,
+                actorAccountId,
                 stopReceipt.toString(),
                 project.nameWithOwner());
-        audit.setActorAccountId(actorAccountId);
-        auditRepository.save(audit);
         log.info(
                 "Removed kept work of stopped GitLab project: repositoryId={}, workspaceId={}",
                 project.repositoryId(),
@@ -104,8 +96,8 @@ public class GitLabStoppedProjectService {
     }
 
     /** Kept roots of this connection's GitLab origin whose project the connection excludes under a receipt. */
-    private List<StoppedProject> stoppedProjects(long workspaceId, Connection connection) {
-        if (!(connection.getConfig() instanceof ConnectionConfig.GitLabConfig config)) return List.of();
+    private List<StoppedProject> stoppedProjects(long workspaceId, ConnectionConfig supplied) {
+        if (!(supplied instanceof ConnectionConfig.GitLabConfig config)) return List.of();
         Optional<String> origin = PersonSourceNamespace.from(
                         IntegrationKind.GITLAB.name(), SourceProviderNamespaces.configuredUrl(config))
                 .flatMap(namespace -> ScmOrigin.of(namespace.serverUrl()));

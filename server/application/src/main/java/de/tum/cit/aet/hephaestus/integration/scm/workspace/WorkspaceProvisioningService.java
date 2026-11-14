@@ -8,9 +8,9 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryIdentityLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SelectedRepositoryVerifier;
@@ -59,7 +59,8 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
     private final WorkspaceService workspaceService;
     private final WorkspaceSlugService workspaceSlugs;
     private final UserRepository userRepository;
-    private final IdentityProviderRepository gitProviderRepository;
+    private final IdentityProviderLookup identityProviders;
+    private final SourceProviderNamespaces sourceNamespaces;
     private final MembershipRepository workspaceMembershipRepository;
     private final MembershipService workspaceMembershipService;
     private final ConnectionService connectionService;
@@ -77,7 +78,8 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
             WorkspaceService workspaceService,
             WorkspaceSlugService workspaceSlugs,
             UserRepository userRepository,
-            IdentityProviderRepository gitProviderRepository,
+            IdentityProviderLookup identityProviders,
+            SourceProviderNamespaces sourceNamespaces,
             MembershipRepository workspaceMembershipRepository,
             MembershipService workspaceMembershipService,
             ConnectionService connectionService,
@@ -95,7 +97,8 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
         this.workspaceService = workspaceService;
         this.workspaceSlugs = workspaceSlugs;
         this.userRepository = userRepository;
-        this.gitProviderRepository = gitProviderRepository;
+        this.identityProviders = identityProviders;
+        this.sourceNamespaces = sourceNamespaces;
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.workspaceMembershipService = workspaceMembershipService;
         this.connectionService = connectionService;
@@ -313,13 +316,11 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
     }
 
     private Long syncGitLabUserForPAT(String patToken, String serverUrl, String groupPath) {
-        IdentityProvider provider = gitProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITLAB, serverUrl)
-                .orElse(null);
+        Long providerId =
+                identityProviders.findId(IdentityProviderType.GITLAB, serverUrl).orElse(null);
 
-        if (provider != null) {
-            Optional<User> existing =
-                    userRepository.findByLoginAndProviderId(groupPath, Objects.requireNonNull(provider.getId()));
+        if (providerId != null) {
+            Optional<User> existing = userRepository.findByLoginAndProviderId(groupPath, providerId);
             if (existing.isPresent()) {
                 return existing.get().getId();
             }
@@ -399,13 +400,12 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
         String safeAvatar = avatarUrl != null ? (avatarUrl.startsWith("/") ? serverUrl + avatarUrl : avatarUrl) : "";
         String safeWebUrl = webUrl != null ? webUrl : "";
 
-        IdentityProvider provider = gitProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITLAB, serverUrl)
+        Long providerId = identityProviders
+                .findId(IdentityProviderType.GITLAB, serverUrl)
                 .orElseGet(() -> {
                     log.info("Creating IdentityProvider for self-hosted GitLab:" + " serverUrl={}", serverUrl);
-                    return gitProviderRepository.save(new IdentityProvider(IdentityProviderType.GITLAB, serverUrl));
+                    return sourceNamespaces.createIdentityProvider(IdentityProviderType.GITLAB, serverUrl);
                 });
-        Long providerId = Objects.requireNonNull(provider.getId());
 
         userRepository.acquireLoginLock(login, providerId);
         userRepository.freeLoginConflicts(login, nativeId, providerId);
@@ -469,10 +469,9 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
     }
 
     private Long syncGitHubUserForPAT(String patToken, String accountLogin) {
-        IdentityProvider provider = gitProviderRepository
-                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
+        Long providerId = identityProviders
+                .findId(IdentityProviderType.GITHUB, "https://github.com")
                 .orElseThrow(() -> new IllegalStateException("IdentityProvider for GitHub not found"));
-        Long providerId = Objects.requireNonNull(provider.getId());
 
         Optional<User> existing = userRepository.findByLoginAndProviderId(accountLogin, providerId);
         if (existing.isPresent()) {

@@ -6,15 +6,14 @@ import de.tum.cit.aet.hephaestus.core.exception.DataIntegrityViolationConstraint
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
-import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryIdentityLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -23,14 +22,11 @@ import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -42,15 +38,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class ManualRepositoryMonitorService {
     private static final String GITHUB_SERVER_URL = "https://github.com";
 
-    @PersistenceContext
-    private @Nullable EntityManager entityManager;
-
     private final WorkspaceRepository workspaceRepository;
     private final RepositoryToMonitorRepository repositoryToMonitorRepository;
     private final RepositoryRepository repositoryRepository;
-    private final IdentityProviderRepository gitProviderRepository;
+    private final IdentityProviderLookup identityProviders;
     private final ConnectionService connectionService;
-    private final ConnectionRepository connectionRepository;
+    private final ConnectionCommands connectionCommands;
+    private final ConnectionQueries connectionQueries;
     private final TransactionTemplate transactionTemplate;
     private final Map<IntegrationKind, RepositoryIdentityLookup> repositoryIdentityLookups;
     private final GitLabRepositorySelectionService selection;
@@ -60,9 +54,10 @@ public class ManualRepositoryMonitorService {
             WorkspaceRepository workspaceRepository,
             RepositoryToMonitorRepository repositoryToMonitorRepository,
             RepositoryRepository repositoryRepository,
-            IdentityProviderRepository gitProviderRepository,
+            IdentityProviderLookup identityProviders,
             ConnectionService connectionService,
-            ConnectionRepository connectionRepository,
+            ConnectionCommands connectionCommands,
+            ConnectionQueries connectionQueries,
             TransactionTemplate transactionTemplate,
             List<RepositoryIdentityLookup> repositoryIdentityLookupList,
             GitLabRepositorySelectionService selection,
@@ -70,9 +65,10 @@ public class ManualRepositoryMonitorService {
         this.workspaceRepository = workspaceRepository;
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
         this.repositoryRepository = repositoryRepository;
-        this.gitProviderRepository = gitProviderRepository;
+        this.identityProviders = identityProviders;
         this.connectionService = connectionService;
-        this.connectionRepository = connectionRepository;
+        this.connectionCommands = connectionCommands;
+        this.connectionQueries = connectionQueries;
         this.transactionTemplate = transactionTemplate;
         this.selection = selection;
         this.eventPublisher = eventPublisher;
@@ -94,10 +90,10 @@ public class ManualRepositoryMonitorService {
         }
 
         Long workspaceId = workspace.getId();
-        var connection = connectionRepository
+        var connection = connectionQueries
                 .findActive(workspaceId, IntegrationKind.GITHUB)
                 .orElseThrow(() -> new RepositoryProviderNotConnectedException(slug));
-        if (!(connection.getConfig() instanceof ConnectionConfig.GitHubPatConfig initialConfig)) {
+        if (!(connection.config() instanceof ConnectionConfig.GitHubPatConfig initialConfig)) {
             throw new RepositoryManagementNotAllowedException(slug);
         }
         // GitHub is asked only on github.com; a token for another server is never sent there to vouch for it.
@@ -110,12 +106,12 @@ public class ManualRepositoryMonitorService {
         if (repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(workspaceId, nameWithOwner)) {
             throw new RepositoryAlreadyMonitoredException(nameWithOwner);
         }
-        Long answeredVersion = connection.getVersion();
+        Long answeredVersion = connection.version();
         RepositoryIdentityLookup.RepositoryIdentity reported =
                 confirmWithOwnCredential(IntegrationKind.GITHUB, workspace, nameWithOwner);
         RepositoryToMonitor monitor = transactionTemplate.execute(status -> {
             // Disconnect and credential changes take this same lock; decide from the configuration they committed.
-            var current = lockAnsweringConnection(workspaceId, IntegrationKind.GITHUB, connection.getId(), slug);
+            var current = lockAnsweringConnection(workspaceId, IntegrationKind.GITHUB, connection.id(), slug);
             if (!(current.getConfig() instanceof ConnectionConfig.GitHubPatConfig config)) {
                 throw new RepositoryManagementNotAllowedException(slug);
             }
@@ -126,11 +122,11 @@ public class ManualRepositoryMonitorService {
             if (repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(workspaceId, nameWithOwner)) {
                 throw new RepositoryAlreadyMonitoredException(nameWithOwner);
             }
-            IdentityProvider provider = sourceProvider(IntegrationKind.GITHUB, config)
+            Long providerId = sourceProviderId(IntegrationKind.GITHUB, config)
                     .orElseThrow(() -> new RepositoryProviderNotConnectedException(slug));
             // The mirror at this path is another repository unless GitHub named this one to the token.
             Repository repository = repositoryRepository
-                    .findByNameWithOwnerAndProviderId(nameWithOwner, Objects.requireNonNull(provider.getId()))
+                    .findByNameWithOwnerAndProviderId(nameWithOwner, providerId)
                     .filter(mirrored -> Objects.equals(mirrored.getNativeId(), reported.nativeId()))
                     .orElseThrow(() -> new EntityNotFoundException("Repository", nameWithOwner));
             if (repositoryToMonitorRepository
@@ -158,10 +154,10 @@ public class ManualRepositoryMonitorService {
     // connection that answered changed meanwhile. A renamed project must not acquire a second monitor.
     private RepositoryToMonitor addGitLabRepositoryToMonitor(Workspace workspace, String nameWithOwner) {
         Long workspaceId = workspace.getId();
-        var connection = connectionRepository
+        var connection = connectionQueries
                 .findActive(workspaceId, IntegrationKind.GITLAB)
                 .orElseThrow(() -> new RepositoryProviderNotConnectedException(workspace.getWorkspaceSlug()));
-        if (!(connection.getConfig() instanceof ConnectionConfig.GitLabConfig initialConfig)) {
+        if (!(connection.config() instanceof ConnectionConfig.GitLabConfig initialConfig)) {
             throw new RepositoryProviderNotConnectedException(workspace.getWorkspaceSlug());
         }
         boolean selected = workspaceRepository
@@ -171,7 +167,7 @@ public class ManualRepositoryMonitorService {
         if (repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(workspaceId, nameWithOwner)) {
             throw new RepositoryAlreadyMonitoredException(nameWithOwner);
         }
-        Long answeredVersion = connection.getVersion();
+        Long answeredVersion = connection.version();
         // Resolve an explicit Add against GitLab before taking the write lock. The id always comes from GitLab: a path
         // alone cannot tell which excluded project it is or whether it was reused, and a mirror another workspace
         // recorded at this path names a project without granting it to this one.
@@ -179,7 +175,7 @@ public class ManualRepositoryMonitorService {
                 .nativeId();
         RepositoryToMonitor monitor = transactionTemplate.execute(status -> {
             var current = lockAnsweringConnection(
-                    workspaceId, IntegrationKind.GITLAB, connection.getId(), workspace.getWorkspaceSlug());
+                    workspaceId, IntegrationKind.GITLAB, connection.id(), workspace.getWorkspaceSlug());
             if (!(current.getConfig() instanceof ConnectionConfig.GitLabConfig currentConfig)
                     || !Objects.equals(currentConfig.serverUrl(), initialConfig.serverUrl())) {
                 throw new RepositoryProviderNotConnectedException(workspace.getWorkspaceSlug());
@@ -248,22 +244,14 @@ public class ManualRepositoryMonitorService {
      * from this persistence context; refused unless it is still the connection that answered the provider lookup.
      */
     private Connection lockAnsweringConnection(
-            long workspaceId, IntegrationKind kind, @Nullable Long answeringConnectionId, String slug) {
-        if (connectionRepository.lockActiveConfig(workspaceId, kind).isEmpty()) {
-            throw new RepositoryProviderNotConnectedException(slug);
-        }
-        Connection current = connectionRepository
-                .findActive(workspaceId, kind)
-                .filter(active -> Objects.equals(active.getId(), answeringConnectionId))
+            long workspaceId, IntegrationKind kind, long answeringConnectionId, String slug) {
+        return connectionCommands
+                .holdAnsweringConnection(workspaceId, kind, answeringConnectionId)
                 .orElseThrow(() -> new RepositoryProviderNotConnectedException(slug));
-        Objects.requireNonNull(entityManager).refresh(current);
-        if (current.getState() != IntegrationState.ACTIVE) throw new RepositoryProviderNotConnectedException(slug);
-        return current;
     }
 
-    private Optional<IdentityProvider> sourceProvider(IntegrationKind kind, ConnectionConfig config) {
+    private Optional<Long> sourceProviderId(IntegrationKind kind, ConnectionConfig config) {
         return PersonSourceNamespace.from(kind.name(), SourceProviderNamespaces.configuredUrl(config))
-                .flatMap(namespace -> gitProviderRepository.findByTypeAndServerUrl(
-                        IdentityProviderType.from(kind), namespace.serverUrl()));
+                .flatMap(namespace -> identityProviders.findId(IdentityProviderType.from(kind), namespace.serverUrl()));
     }
 }

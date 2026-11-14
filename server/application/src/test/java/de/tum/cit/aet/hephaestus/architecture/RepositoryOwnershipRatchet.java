@@ -115,35 +115,6 @@ final class RepositoryOwnershipRatchet {
                     Set.of("integration.core.oauth.state.OAuthStateNonceStore")),
             new Entry(
                     "integration.scm",
-                    "integration.core.connection.ConnectionAuditRepository",
-                    "DDD11 (integration.core)",
-                    "integration.core::spi ConnectionService audit commands",
-                    Set.of(
-                            "integration.scm.workspace.GitLabRepositorySelectionService",
-                            "integration.scm.workspace.GitLabStoppedProjectService")),
-            new Entry(
-                    "integration.scm",
-                    "integration.core.connection.ConnectionRepository",
-                    "DDD11 (integration.core)",
-                    "integration.core::spi ConnectionQueries and ConnectionService commands",
-                    Set.of(
-                            "integration.scm.workspace.GitLabRepositorySelectionService",
-                            "integration.scm.workspace.GitLabStoppedProjectService",
-                            "integration.scm.workspace.ManualRepositoryMonitorService",
-                            "integration.scm.workspace.WorkspaceRepositoryMonitorService",
-                            "integration.scm.workspace.adapter.WorkspaceOrganizationMembershipAdapter")),
-            new Entry(
-                    "integration.scm",
-                    "integration.core.connection.IdentityProviderRepository",
-                    "DDD11 (integration.core)",
-                    "integration.core::spi IdentityProviderLookup; SourceProviderNamespaces registration",
-                    Set.of(
-                            "integration.scm.identity.AuthenticatedGitProviderUserService",
-                            "integration.scm.workspace.ManualRepositoryMonitorService",
-                            "integration.scm.workspace.WorkspaceProvisioningService",
-                            "integration.scm.workspace.WorkspaceRepositoryMonitorService")),
-            new Entry(
-                    "integration.scm",
                     "integration.core.item.ItemRepository",
                     "DDD12 (integration.core)",
                     "integration.core::spi ItemQueries and existing ItemIndexService commands",
