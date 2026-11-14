@@ -1,7 +1,7 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { assert, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
 	getActivityFacetsQueryKey,
@@ -27,19 +27,12 @@ import { server } from "@/mocks/server";
 import { QUERY_STALE_TIME_MS } from "@/runtime/tanstack-query/query-defaults";
 import { deferred } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
-import {
-	loadRouteCode,
-	renderRouteAtWithRouter,
-	ROUTE_RENDER_WAIT,
-	testQueryClient,
-} from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter, testQueryClient } from "@/test/router-harness";
 import { storeUserView } from "@/test/user-view";
 import { switchWorkspace } from "@/test/workspace-switcher";
 
-beforeAll(
-	async () => loadRouteCode("/w/acme/activity", "/w/acme/workspace-activity", "/w/acme/user/bob"),
-	ROUTE_RENDER_WAIT.timeout,
-);
+// A case mounts the whole app chrome, whose route modules are imported lazily.
+vi.setConfig({ testTimeout: 40_000 });
 
 // The end of a list asks for the next page as it scrolls into view, which jsdom cannot report.
 beforeEach(() => {

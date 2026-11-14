@@ -9,7 +9,7 @@ describe("a failed query's error", () => {
 
 		const error: unknown = await screen
 			.findByRole("button", { name: "Save" }, { timeout: 100 })
-			.catch((error: unknown) => error);
+			.catch((failure: unknown) => failure);
 
 		assert(error instanceof Error);
 		expect(error.message).toContain('Unable to find role="button" and name "Save"');

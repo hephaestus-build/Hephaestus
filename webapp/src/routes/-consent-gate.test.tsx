@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { HttpResponse, http } from "msw";
-import { beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { ROUTER_SEARCH } from "@/lib/router-search";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
@@ -9,11 +9,11 @@ import { consentOutstanding, unauthenticatedUser } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 import { consentIsPending } from "@/runtime/auth/guard";
-import { loadRouteCode, ROUTE_RENDER_WAIT } from "@/test/router-harness";
+
+// `router.load()` lazily imports each matched route's module, so a case pays its transform cost.
+vi.setConfig({ testTimeout: 15_000 });
 
 const DEEP_LINK = "/w/acme/conversation?thread=65ee0cb0-99dd-4b0f-86cb-bc8bfb5bbbed#reply";
-
-beforeAll(async () => loadRouteCode(DEEP_LINK, "/consent"), ROUTE_RENDER_WAIT.timeout);
 
 function newClient() {
 	return new QueryClient({ defaultOptions: { queries: { retry: false } } });

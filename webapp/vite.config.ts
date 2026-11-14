@@ -51,6 +51,9 @@ const viteConfig = defineConfig({
 		outputFile: {
 			junit: "./test-results/junit-webapp.xml",
 		},
+		// jsdom lays nothing out, so every chart measures 0 by 0 and Recharts warns on each render. A
+		// measured size would only make each chart draw its SVG in every test.
+		onConsoleLog: (log: string) => !log.includes("of chart should be greater than 0"),
 		// `test:webapp` measures it (docs/contributor/testing.mdx § Web app coverage). A source file that
 		// no test loads counts as uncovered.
 		coverage: {
@@ -82,9 +85,6 @@ const viteConfig = defineConfig({
 					environment: "jsdom",
 					exclude: [...configDefaults.exclude, "e2e/**/*.spec.ts", "tools/oxlint/rules/**"],
 					setupFiles: ["./src/test/setup-msw.ts"],
-					// jsdom lays nothing out, so every chart measures 0 by 0 and Recharts warns on each
-					// render. A measured size would only make each chart draw its SVG in every test.
-					onConsoleLog: (log) => !log.includes("of chart should be greater than 0"),
 				},
 			},
 			{

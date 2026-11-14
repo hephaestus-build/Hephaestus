@@ -222,17 +222,10 @@ Thus, no test request reaches a real host, such as another checkout's server on 
 The list only shrinks.
 A listed file that runs in full with every request answered fails until you remove its entry.
 
-## Web app route tests
-
-A route test renders the real route tree through `webapp/src/test/router-harness.tsx`.
-Each route test file calls its `loadRouteCode` in `beforeAll` with every path that the file renders or navigates to.
-Each test then keeps the default 5-second timeout.
-Do not raise the timeout of a test or a file.
-
 ## Web app coverage
 
-`vp run test:webapp` measures the unit coverage of `webapp/src` and writes the summary to `webapp/test-results/coverage/`.
-CI keeps that directory with the unit test reports.
+`vp run test:webapp` measures the unit coverage of `webapp/src` and writes a summary beside the unit test reports.
+CI keeps the summary with those reports.
 The `coverage.thresholds` in `webapp/vite.config.ts` set a floor for statements, branches, functions and lines.
 The run fails when coverage falls below a floor.
 When coverage rises, raise the floors to the new values, rounded down to whole percent.

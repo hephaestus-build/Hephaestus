@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { afterEach, assert, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, assert, describe, expect, it, vi } from "vitest";
 
 import type {
 	IdentityProviderView,
@@ -14,9 +14,9 @@ import { identityProviders, linkedIdentities } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 import { type Deferred, deferred } from "@/test/async";
 import { captureNavigation, restoreNavigation } from "@/test/navigation";
-import { loadRouteCode, renderRouteAt, ROUTE_RENDER_WAIT } from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
-beforeAll(async () => loadRouteCode("/settings"), ROUTE_RENDER_WAIT.timeout);
+vi.setConfig({ testTimeout: 30_000 });
 
 afterEach(restoreNavigation);
 

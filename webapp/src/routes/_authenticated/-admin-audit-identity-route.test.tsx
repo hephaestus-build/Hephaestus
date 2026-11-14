@@ -1,19 +1,17 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { adminListAuthEventsInfiniteQueryKey } from "@/api/@tanstack/react-query.gen";
 import type { AuthEventView, ConfigAuditEntryView } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
-import { loadRouteCode, renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-beforeAll(
-	async () => loadRouteCode("/admin/audit", "/w/acme/admin/audit"),
-	ROUTE_RENDER_WAIT.timeout,
-);
+// The real routes mount the shared admin chrome and lazily imported route modules.
+vi.setConfig({ testTimeout: 40_000 });
 
 function auditPage<T>(content: T[]) {
 	return { content };

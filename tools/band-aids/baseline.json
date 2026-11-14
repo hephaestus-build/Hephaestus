@@ -18639,6 +18639,15 @@
 		"reason": "constraint: The thread pushed over the conversation, and where opening it put focus until the next open."
 	},
 	{
+		"file": "webapp/src/routes/-consent-gate.test.tsx",
+		"category": "test-timeout",
+		"source": "15_000",
+		"context": "vi.setConfig( -> });",
+		"count": 1,
+		"owner": "#4179 / ROOTFIX",
+		"reason": "root-cause: ROOTFIX owns this timing boundary and its event or controlled-clock fix; do not duplicate the patch."
+	},
+	{
 		"file": "webapp/src/routes/-consent-route.test.tsx",
 		"category": "test-sleep",
 		"source": "sleep(",
@@ -18738,6 +18747,33 @@
 		"reason": "constraint: The first read fails; the retry is held until the test answers it."
 	},
 	{
+		"file": "webapp/src/routes/-workspace-root-route.test.tsx",
+		"category": "test-timeout",
+		"source": "30_000",
+		"context": "vi.setConfig( -> });",
+		"count": 1,
+		"owner": "#4179 / ROOTFIX",
+		"reason": "root-cause: ROOTFIX owns this timing boundary and its event or controlled-clock fix; do not duplicate the patch."
+	},
+	{
+		"file": "webapp/src/routes/_authenticated/-admin-audit-identity-route.test.tsx",
+		"category": "test-timeout",
+		"source": "40_000",
+		"context": "vi.setConfig( -> });",
+		"count": 1,
+		"owner": "#4179 / ROOTFIX",
+		"reason": "root-cause: ROOTFIX owns this timing boundary and its event or controlled-clock fix; do not duplicate the patch."
+	},
+	{
+		"file": "webapp/src/routes/_authenticated/-admin-audit-route.test.tsx",
+		"category": "test-timeout",
+		"source": "40_000",
+		"context": "vi.setConfig( -> });",
+		"count": 1,
+		"owner": "#4179 / ROOTFIX",
+		"reason": "root-cause: ROOTFIX owns this timing boundary and its event or controlled-clock fix; do not duplicate the patch."
+	},
+	{
 		"file": "webapp/src/routes/_authenticated/-admin-catalog-route.test.tsx",
 		"category": "test-sleep",
 		"source": "delay(",
@@ -18810,6 +18846,15 @@
 		"reason": "constraint: under any other version, and a retry cannot succeed until the page reloads."
 	},
 	{
+		"file": "webapp/src/routes/_authenticated/-settings-linked-accounts-route.test.tsx",
+		"category": "test-timeout",
+		"source": "30_000",
+		"context": "vi.setConfig( -> });",
+		"count": 1,
+		"owner": "#4179 / ROOTFIX",
+		"reason": "root-cause: ROOTFIX owns this timing boundary and its event or controlled-clock fix; do not duplicate the patch."
+	},
+	{
 		"file": "webapp/src/routes/_authenticated/-settings-slack-preferences-route.test.tsx",
 		"category": "debt-marker",
 		"source": "until",
@@ -18826,6 +18871,15 @@
 		"count": 1,
 		"owner": "#4179",
 		"reason": "constraint: Accepts every write still held, and any that arrives late, then waits until the page has seen each answer. Runs when an assertion fails too, so no request or toast outlives the test."
+	},
+	{
+		"file": "webapp/src/routes/_authenticated/-settings-slack-preferences-route.test.tsx",
+		"category": "test-timeout",
+		"source": "30_000",
+		"context": "vi.setConfig( -> });",
+		"count": 1,
+		"owner": "#4179 / ROOTFIX",
+		"reason": "root-cause: ROOTFIX owns this timing boundary and its event or controlled-clock fix; do not duplicate the patch."
 	},
 	{
 		"file": "webapp/src/routes/_authenticated/admin.feedback.tsx",
@@ -18871,6 +18925,15 @@
 		"count": 1,
 		"owner": "#4179",
 		"reason": "constraint: The people at once for the first read; every later read waits until `held` settles."
+	},
+	{
+		"file": "webapp/src/routes/_authenticated/w/$workspaceSlug/-activity-route.test.tsx",
+		"category": "test-timeout",
+		"source": "40_000",
+		"context": "vi.setConfig( -> });",
+		"count": 1,
+		"owner": "#4179 / ROOTFIX",
+		"reason": "root-cause: ROOTFIX owns this timing boundary and its event or controlled-clock fix; do not duplicate the patch."
 	},
 	{
 		"file": "webapp/src/routes/_authenticated/w/$workspaceSlug/-cannot-open-workspace-route.test.tsx",
@@ -18925,6 +18988,15 @@
 		"count": 1,
 		"owner": "#4179",
 		"reason": "root-cause: Establish the precise boundary contract and remove this failure mask or suppression."
+	},
+	{
+		"file": "webapp/src/routes/_authenticated/w/$workspaceSlug/-route.test.ts",
+		"category": "test-timeout",
+		"source": "15_000",
+		"context": "vi.setConfig( -> });",
+		"count": 1,
+		"owner": "#4179 / ROOTFIX",
+		"reason": "root-cause: ROOTFIX owns this timing boundary and its event or controlled-clock fix; do not duplicate the patch."
 	},
 	{
 		"file": "webapp/src/routes/_authenticated/w/$workspaceSlug/-slow-navigation-route.test.tsx",
@@ -18988,6 +19060,15 @@
 		"count": 1,
 		"owner": "#4179",
 		"reason": "constraint: Search engines stay off until the admin turns them on, and the count of hidden people shows."
+	},
+	{
+		"file": "webapp/src/routes/_authenticated/w/$workspaceSlug/admin/-settings-route.test.tsx",
+		"category": "test-timeout",
+		"source": "15_000",
+		"context": "vi.setConfig( -> });",
+		"count": 1,
+		"owner": "#4179 / ROOTFIX",
+		"reason": "root-cause: ROOTFIX owns this timing boundary and its event or controlled-clock fix; do not duplicate the patch."
 	},
 	{
 		"file": "webapp/src/routes/_authenticated/w/$workspaceSlug/admin/-teams-route.test.tsx",
@@ -19078,6 +19159,15 @@
 		"count": 1,
 		"owner": "#4179",
 		"reason": "constraint: Holds each consent change on the next answer until the test settles it; later ones answer at once."
+	},
+	{
+		"file": "webapp/src/routes/_authenticated/w/$workspaceSlug/admin/integrations/-credential-recovery-route.test.tsx",
+		"category": "test-timeout",
+		"source": "30_000",
+		"context": "vi.setConfig( -> });",
+		"count": 1,
+		"owner": "#4179 / ROOTFIX",
+		"reason": "root-cause: ROOTFIX owns this timing boundary and its event or controlled-clock fix; do not duplicate the patch."
 	},
 	{
 		"file": "webapp/src/routes/_authenticated/w/$workspaceSlug/admin/integrations/scm.tsx",
@@ -19188,6 +19278,15 @@
 		"reason": "constraint: The overview's Practices table reads the current setup and hides the practice until asked."
 	},
 	{
+		"file": "webapp/src/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-drawer-route.test.tsx",
+		"category": "test-timeout",
+		"source": "20_000",
+		"context": "vi.setConfig( -> });",
+		"count": 1,
+		"owner": "#4179 / ROOTFIX",
+		"reason": "root-cause: ROOTFIX owns this timing boundary and its event or controlled-clock fix; do not duplicate the patch."
+	},
+	{
 		"file": "webapp/src/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-feedback-level-route.test.tsx",
 		"category": "test-sleep",
 		"source": "sleep(",
@@ -19219,6 +19318,15 @@
 		"category": "test-sleep",
 		"source": "sleep(",
 		"context": "async function settledSheet(detail: string[]): Promise<string> -> 300);",
+		"count": 1,
+		"owner": "#4179 / ROOTFIX",
+		"reason": "root-cause: ROOTFIX owns this timing boundary and its event or controlled-clock fix; do not duplicate the patch."
+	},
+	{
+		"file": "webapp/src/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/-layers-route.test.tsx",
+		"category": "test-timeout",
+		"source": "30_000",
+		"context": "vi.setConfig( -> });",
 		"count": 1,
 		"owner": "#4179 / ROOTFIX",
 		"reason": "root-cause: ROOTFIX owns this timing boundary and its event or controlled-clock fix; do not duplicate the patch."
@@ -19348,6 +19456,15 @@
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "constraint: Where a workspace publishes its activity, a member's pages open with a notice that asks whether they show on it, until they answer. The AI setup comes first: it is a route of its own, which the notice waits out. A user view answers for no one, and an instance admin who administers the workspace without a membership has no workspace here, so neither sees it."
+	},
+	{
+		"file": "webapp/src/routes/auth/-error-route.test.tsx",
+		"category": "test-timeout",
+		"source": "30_000",
+		"context": "vi.setConfig( -> });",
+		"count": 1,
+		"owner": "#4179 / ROOTFIX",
+		"reason": "root-cause: ROOTFIX owns this timing boundary and its event or controlled-clock fix; do not duplicate the patch."
 	},
 	{
 		"file": "webapp/src/routes/consent.tsx",

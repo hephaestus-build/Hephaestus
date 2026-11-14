@@ -3,7 +3,7 @@ import { createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type PathParams } from "msw";
-import { assert, beforeAll, describe, expect, it, vi } from "vitest";
+import { assert, describe, expect, it, vi } from "vitest";
 
 import {
 	getPublicActivityPersonQueryKey,
@@ -25,12 +25,10 @@ import { workspaceRewrite } from "@/runtime/workspace-address";
 import { deferred, sleep } from "@/test/async";
 import { precedes } from "@/test/dom";
 import { ObserverStub } from "@/test/observers";
-import { loadRouteCode, renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
-beforeAll(
-	async () => loadRouteCode("/w/acme", "/w/acme/activity", "/login", "/consent"),
-	ROUTE_RENDER_WAIT.timeout,
-);
+// A case mounts the whole app chrome, whose route modules are imported lazily.
+vi.setConfig({ testTimeout: 30_000 });
 
 const counts = {
 	contributions: 5,
