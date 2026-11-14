@@ -31,11 +31,11 @@ import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.boot.health.contributor.Status;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.AnnotationBeanNameGenerator;
+import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.env.StandardEnvironment;
-import org.springframework.context.annotation.AnnotationBeanNameGenerator;
-import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.springframework.core.type.filter.AssignableTypeFilter;
@@ -148,7 +148,8 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
         var scanner = new ClassPathScanningCandidateComponentProvider(false);
         TypeFilter indicator = new AssignableTypeFilter(HealthIndicator.class);
         TypeFilter component = new AnnotationTypeFilter(Component.class);
-        scanner.addIncludeFilter((reader, factory) -> indicator.match(reader, factory) && component.match(reader, factory));
+        scanner.addIncludeFilter(
+                (reader, factory) -> indicator.match(reader, factory) && component.match(reader, factory));
         var names = new AnnotationBeanNameGenerator();
         var registry = new SimpleBeanDefinitionRegistry();
         Map<String, String> contributors = new TreeMap<>();
