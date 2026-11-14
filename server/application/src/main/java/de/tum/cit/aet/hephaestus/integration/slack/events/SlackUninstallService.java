@@ -9,10 +9,9 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationAttentio
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
-import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
-import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspacePurgeAdapter;
-import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
+import de.tum.cit.aet.hephaestus.integration.slack.connect.SlackConnectionStrategy;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,23 +32,17 @@ public class SlackUninstallService {
 
     private final SlackWorkspaceResolver workspaceResolver;
     private final ConnectionService connectionService;
-    private final SlackWorkspacePurgeAdapter purgeAdapter;
-    private final ConversationFeedbackErasure conversationFeedbackErasure;
-    private final SlackMessageService messageService;
+    private final SlackConnectionStrategy connectionStrategy;
     private final IntegrationAttentionService attention;
 
     public SlackUninstallService(
             SlackWorkspaceResolver workspaceResolver,
             ConnectionService connectionService,
-            SlackWorkspacePurgeAdapter purgeAdapter,
-            ConversationFeedbackErasure conversationFeedbackErasure,
-            SlackMessageService messageService,
+            SlackConnectionStrategy connectionStrategy,
             IntegrationAttentionService attention) {
         this.workspaceResolver = workspaceResolver;
         this.connectionService = connectionService;
-        this.purgeAdapter = purgeAdapter;
-        this.conversationFeedbackErasure = conversationFeedbackErasure;
-        this.messageService = messageService;
+        this.connectionStrategy = connectionStrategy;
         this.attention = attention;
     }
 
@@ -74,7 +67,7 @@ public class SlackUninstallService {
                             teamId,
                             uninstallCorrelationId(teamId, eventType, eventId),
                             "Slack " + eventType + " received"));
-            // The content purge below erases what the connection mirrored, as a disconnect does.
+            // The erase below removes what the connection mirrored, as a disconnect does.
             ConnectionErasures.record(Objects.requireNonNull(changed.getId()), workspaceId);
             if ("tokens_revoked".equalsIgnoreCase(eventType)) {
                 attention.report(
@@ -84,16 +77,8 @@ public class SlackUninstallService {
                         false);
             }
         });
-        int erasedConversationRows = conversationFeedbackErasure.eraseAllConversationForWorkspace(workspaceId);
-        purgeAdapter.deleteWorkspaceData(workspaceId);
-        // A later reconnect may install a different Slack app; the cached bot user id must not survive teardown.
-        messageService.evictBot(workspaceId);
-        log.info(
-                "Slack {} for team {} → workspace {} torn down (connection UNINSTALLED, content purged, Hephaestus Slack messages redacted, {} conversation-derived practice rows erased)",
-                eventType,
-                teamId,
-                workspaceId,
-                erasedConversationRows);
+        // An uninstall erases exactly what an admin disconnect erases.
+        connectionStrategy.eraseLocalData(new IntegrationRef(IntegrationKind.SLACK, workspaceId, teamId));
     }
 
     private static String uninstallCorrelationId(String teamId, String eventType, String eventId) {

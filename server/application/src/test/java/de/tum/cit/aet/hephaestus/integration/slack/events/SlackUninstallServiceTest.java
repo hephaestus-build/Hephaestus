@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.integration.slack.events;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -15,10 +14,9 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationAttentionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
-import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
-import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspacePurgeAdapter;
-import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
+import de.tum.cit.aet.hephaestus.integration.slack.connect.SlackConnectionStrategy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -28,12 +26,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InOrder;
 import org.mockito.Mock;
 
 /**
  * Uninstall-routing unit tests: an {@code app_uninstalled}/{@code tokens_revoked} event flips the Slack
- * Connection to UNINSTALLED and then purges the workspace's Slack content; an unknown team is a safe no-op.
+ * Connection to UNINSTALLED and then runs the disconnect's erase; an unknown team is a safe no-op.
  */
 @Tag("unit")
 class SlackUninstallServiceTest extends BaseUnitTest {
@@ -48,13 +45,7 @@ class SlackUninstallServiceTest extends BaseUnitTest {
     private ConnectionService connectionService;
 
     @Mock
-    private SlackWorkspacePurgeAdapter purgeAdapter;
-
-    @Mock
-    private ConversationFeedbackErasure conversationFeedbackErasure;
-
-    @Mock
-    private SlackMessageService messageService;
+    private SlackConnectionStrategy connectionStrategy;
 
     @Mock
     private Connection connection;
@@ -63,12 +54,7 @@ class SlackUninstallServiceTest extends BaseUnitTest {
         // A connection that a transition returns is persisted, so it has its id.
         lenient().when(connection.getId()).thenReturn(7L);
         return new SlackUninstallService(
-                workspaceResolver,
-                connectionService,
-                purgeAdapter,
-                conversationFeedbackErasure,
-                messageService,
-                mock(IntegrationAttentionService.class));
+                workspaceResolver, connectionService, connectionStrategy, mock(IntegrationAttentionService.class));
     }
 
     private static Stream<Arguments> eventTypeMapping() {
@@ -96,16 +82,14 @@ class SlackUninstallServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void appUninstalled_purgesWorkspaceDataInOrder() {
+    void shouldEraseWhatADisconnectErasesWhenTheAppIsUninstalled() {
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
         when(connectionService.findActive(WORKSPACE, IntegrationKind.SLACK)).thenReturn(Optional.of(connection));
         lenient().when(connectionService.transition(eq(connection), any())).thenReturn(connection);
 
         service().onUninstall(TEAM, "app_uninstalled", "Ev1");
 
-        InOrder order = inOrder(conversationFeedbackErasure, purgeAdapter);
-        order.verify(conversationFeedbackErasure).eraseAllConversationForWorkspace(WORKSPACE);
-        order.verify(purgeAdapter).deleteWorkspaceData(WORKSPACE);
+        verify(connectionStrategy).eraseLocalData(new IntegrationRef(IntegrationKind.SLACK, WORKSPACE, TEAM));
     }
 
     @Test
@@ -115,6 +99,6 @@ class SlackUninstallServiceTest extends BaseUnitTest {
         service().onUninstall(TEAM, "app_uninstalled", "Ev1");
 
         verify(connectionService, never()).transition(any(), any());
-        verifyNoInteractions(purgeAdapter, conversationFeedbackErasure);
+        verifyNoInteractions(connectionStrategy);
     }
 }

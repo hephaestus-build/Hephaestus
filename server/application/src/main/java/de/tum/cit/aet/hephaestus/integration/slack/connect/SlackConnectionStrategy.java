@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OAuthExchangeRepair;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ProviderResourceAdapter;
 import de.tum.cit.aet.hephaestus.integration.slack.connect.SlackOAuthClient.OAuthV2Access;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceContentEraser;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -63,6 +64,7 @@ public class SlackConnectionStrategy implements ConnectionStrategy {
     private final SlackOAuthClient oauthClient;
     private final OAuthExchangeRepair exchangeRepairs;
     private final SlackWorkspaceContentEraser workspaceContentEraser;
+    private final SlackMessageService messageService;
     private final String clientId;
     private final String scopes;
     private final String redirectUri;
@@ -72,12 +74,14 @@ public class SlackConnectionStrategy implements ConnectionStrategy {
             SlackOAuthClient oauthClient,
             OAuthExchangeRepair exchangeRepairs,
             SlackWorkspaceContentEraser workspaceContentEraser,
+            SlackMessageService messageService,
             @Value("${hephaestus.integration.slack.client-id:}") String clientId,
             PublicApiUrls publicApiUrls) {
         this.oauthStateService = oauthStateService;
         this.oauthClient = oauthClient;
         this.exchangeRepairs = exchangeRepairs;
         this.workspaceContentEraser = workspaceContentEraser;
+        this.messageService = messageService;
         this.clientId = clientId;
         this.scopes = String.join(",", DEFAULT_SCOPES);
         this.redirectUri = publicApiUrls.uri("/oauth/callback/slack").toASCIIString();
@@ -144,6 +148,8 @@ public class SlackConnectionStrategy implements ConnectionStrategy {
                 return new ConnectFinalization.Failed("Slack returned conflicting bot identities.");
             }
             exchangeRepairs.observed(attempt, response.team().id(), identity.userId(), fingerprint);
+            // This installation may be a different Slack app: the bot identity cached for the workspace is the old one.
+            messageService.evictBot(ref.workspaceId());
             ConnectionConfig.SlackConfig config = new ConnectionConfig.SlackConfig(
                     response.team().id(),
                     identity.userId(),
@@ -176,7 +182,7 @@ public class SlackConnectionStrategy implements ConnectionStrategy {
     public void eraseLocalData(IntegrationRef ref) {
         workspaceContentEraser.eraseWorkspace(ref.workspaceId());
         log.info(
-                "slack.audit: disconnect erase — cleared ingested Slack content + consent for workspace={}",
+                "slack.audit: erase — cleared ingested Slack content, derived practice rows and consent for workspace={}",
                 ref.workspaceId());
     }
 
