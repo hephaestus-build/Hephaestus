@@ -70,7 +70,7 @@ Option 3.
 - Good: the lifecycle levels of ADR 0078 get one shared contract and one walk test.
 - Bad: about 8 to 10 days of refactoring before 1.0, mostly mechanical.
 - Bad: a cross-module read needs a named-interface query instead of a direct repository call.
-- Bad: two allowlists exist until they are empty. They must be empty before 1.0.
+- Bad: the after-commit allowlist exists until it is empty. It must be empty before 1.0.
 
 ## Confirmation
 
@@ -80,11 +80,11 @@ Option 3.
 | 2 | Database tests: the `review` and `workspace` triggers refuse the illegal update. |
 | 3 | `ReviewClosureIntegrationTest`: each end path (complete, cancel, refused selection, replaced) asserts its rows and the `practice_review.ended` increment. |
 | 4 | ArchUnit: `new Workspace()` appears only in `Workspace`. |
-| 5 | ArchUnit `RepositoryOwnershipArchTest#shouldAllowOnlyTheExactOwnedRepositoryAccesses` over `ApplicationModules`: a class that uses a Spring Data repository is in that repository's module, except for the SCM-kernel pairs. `ModulithVerificationTest` refuses access to a non-exposed package. |
+| 5 | ArchUnit `RepositoryOwnershipArchTest#shouldReachNoRepositoryOfAnotherModule` over `ApplicationModules`: a class that uses a Spring Data repository is in that repository's module, except for the SCM-kernel pairs. `ModulithVerificationTest` refuses access to a non-exposed package. |
 | 6 | `ModuleDeclarationTest#shouldDeclareEveryModuleAndItsAllowedDependencies`: every module declares `allowedDependencies` other than `ApplicationModule.OPEN_TOKEN`, and only listed modules are `Type.OPEN`. `ModulithVerificationTest` refuses an unlisted dependency. |
 | 7 | `AfterCommitRepairArchTest`: every after-commit `@TransactionalEventListener` is listed with its repair. |
 | 8 | `ContextMapCoverageTest#shouldDescribeEveryModuleInTheContextMapTable`: every module of `ApplicationModules` is in the table of `system-design.mdx`. `ContextMapCoverageTest#shouldGenerateTheContextMapFromVerifiedModules` verifies the module graph and writes `build/spring-modulith-docs`. |
-| Ratchet | The allowlists of rules 1 and 5 name an owner per entry. The test fails when the target version has no pre-release suffix and a list is not empty. The target is `hephaestus.releaseVersion`, or the root `package.json` version by default. |
+| Ratchet | The list of rule 7 names each after-commit listener that still lacks its repair. The test fails when the target version has no pre-release suffix and the list is not empty. The target is `hephaestus.releaseVersion`, or the root `package.json` version by default. |
 | 9 | Not enforced. Review refuses a new dependency (ADR 0072). |
 
 ## Revisit trigger

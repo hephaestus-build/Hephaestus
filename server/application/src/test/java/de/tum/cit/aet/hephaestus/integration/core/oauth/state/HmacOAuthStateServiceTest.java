@@ -13,7 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
 import de.tum.cit.aet.hephaestus.observability.LogCapture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -304,10 +304,7 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
         private final Map<String, Boolean> consumed = new ConcurrentHashMap<>();
 
         InMemoryNonceStore() {
-            super(
-                    mock(OAuthStateNonceRepository.class),
-                    mock(ConnectionRepository.class),
-                    mock(WorkspaceRepository.class));
+            super(mock(OAuthStateNonceRepository.class), mock(ConnectionRepository.class), mock(WorkspaceLocks.class));
         }
 
         @Override

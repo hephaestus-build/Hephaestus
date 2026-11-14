@@ -24,9 +24,14 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceQueryService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceQueriesAdapter;
+import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceRootsAdapter;
+import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryRepository;
 import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Optional;
@@ -67,8 +72,15 @@ class WorkspaceOrganizationMembershipAdapterTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
+        var roots = new WorkspaceRootsAdapter(workspaceRepository, membershipService);
         adapter = new WorkspaceOrganizationMembershipAdapter(
-                workspaceRepository,
+                roots,
+                roots,
+                new WorkspaceQueriesAdapter(
+                        workspaceRepository,
+                        mock(RepositoryToMonitorRepository.class),
+                        mock(ReviewScopeRepositoryRepository.class),
+                        mock(WorkspaceQueryService.class)),
                 membershipService,
                 roster,
                 organizationRepository,

@@ -20,17 +20,17 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubAuthenticatedUserDTO;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
-import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceProperties;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceSlugService;
+import de.tum.cit.aet.hephaestus.workspace.spi.RepositoryMonitorCommands;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProvisioning;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRoots;
 import java.time.Duration;
 import java.util.EnumMap;
 import java.util.List;
@@ -54,14 +54,15 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
     private static final Logger log = LoggerFactory.getLogger(WorkspaceProvisioningService.class);
 
     private final WorkspaceProperties workspaceProperties;
-    private final WorkspaceRepository workspaceRepository;
-    private final RepositoryToMonitorRepository repositoryToMonitorRepository;
+    private final WorkspaceRoots workspaces;
+    private final WorkspaceLookup workspaceLookup;
+    private final RepositoryMonitorCommands monitorCommands;
     private final WorkspaceService workspaceService;
     private final WorkspaceSlugService workspaceSlugs;
     private final UserRepository userRepository;
     private final IdentityProviderLookup identityProviders;
     private final SourceProviderNamespaces sourceNamespaces;
-    private final MembershipRepository workspaceMembershipRepository;
+    private final WorkspaceMemberships memberships;
     private final MembershipService workspaceMembershipService;
     private final ConnectionService connectionService;
     private final WebClient webClient;
@@ -73,14 +74,15 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
 
     public WorkspaceProvisioningService(
             WorkspaceProperties workspaceProperties,
-            WorkspaceRepository workspaceRepository,
-            RepositoryToMonitorRepository repositoryToMonitorRepository,
+            WorkspaceRoots workspaces,
+            WorkspaceLookup workspaceLookup,
+            RepositoryMonitorCommands monitorCommands,
             WorkspaceService workspaceService,
             WorkspaceSlugService workspaceSlugs,
             UserRepository userRepository,
             IdentityProviderLookup identityProviders,
             SourceProviderNamespaces sourceNamespaces,
-            MembershipRepository workspaceMembershipRepository,
+            WorkspaceMemberships memberships,
             MembershipService workspaceMembershipService,
             ConnectionService connectionService,
             List<WorkspaceProviderAvailability> providerAvailabilityList,
@@ -92,14 +94,15 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
         this.identityLookups = identityLookups;
         this.endpoints = endpoints;
         this.workspaceProperties = workspaceProperties;
-        this.workspaceRepository = workspaceRepository;
-        this.repositoryToMonitorRepository = repositoryToMonitorRepository;
+        this.workspaces = workspaces;
+        this.workspaceLookup = workspaceLookup;
+        this.monitorCommands = monitorCommands;
         this.workspaceService = workspaceService;
         this.workspaceSlugs = workspaceSlugs;
         this.userRepository = userRepository;
         this.identityProviders = identityProviders;
         this.sourceNamespaces = sourceNamespaces;
-        this.workspaceMembershipRepository = workspaceMembershipRepository;
+        this.memberships = memberships;
         this.workspaceMembershipService = workspaceMembershipService;
         this.connectionService = connectionService;
         Map<IntegrationKind, WorkspaceProviderAvailability> map = new EnumMap<>(IntegrationKind.class);
@@ -123,7 +126,7 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
             return;
         }
 
-        if (workspaceRepository.count() > 0) {
+        if (workspaceLookup.anyExists()) {
             log.debug("Skipped PAT workspace creation: reason=workspacesAlreadyExist");
             ensureDefaultAdminMembershipIfPresent();
             return;
@@ -152,48 +155,41 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
         Workspace workspace =
                 workspaceService.createWorkspace(slug, displayName, accountLogin, AccountType.ORG, ownerUserId);
 
-        workspace.setRepositorySelection(RepositorySelection.SELECTED);
-        Workspace savedWorkspace = workspaceRepository.save(workspace);
+        workspaces.selectRepositories(workspace.getId(), RepositorySelection.SELECTED);
 
         // Every PAT connection uses instance_key "pat"; the bearer credential is stored encrypted
         // via the
         // per-row AAD.
         connectionService.provisionPatConnection(
-                savedWorkspace,
+                workspace,
                 IntegrationKind.GITHUB,
                 "pat",
                 new ConnectionConfig.GitHubPatConfig(accountLogin, null, Set.of()),
                 token,
-                "bootstrap-pat-workspace-" + savedWorkspace.getId());
+                "bootstrap-pat-workspace-" + workspace.getId());
 
-        log.info("Created default PAT workspace: workspaceId={}", savedWorkspace.getId());
+        log.info("Created default PAT workspace: workspaceId={}", workspace.getId());
 
         config.repositoriesToMonitor().stream()
                 .map(repo -> repo == null ? null : repo.trim())
                 .filter(nameWithOwner -> !isBlank(nameWithOwner))
                 .forEach(nameWithOwner -> {
-                    RepositoryToMonitor monitor = new RepositoryToMonitor();
                     var identity = identityLookups.stream()
                             .filter(lookup -> lookup.kind() == IntegrationKind.GITHUB)
                             .findFirst()
-                            .flatMap(lookup -> lookup.resolve(savedWorkspace.getId(), nameWithOwner))
+                            .flatMap(lookup -> lookup.resolve(workspace.getId(), nameWithOwner))
                             .filter(reported ->
                                     reported.nativeId() > 0 && nameWithOwner.equalsIgnoreCase(reported.fullPath()))
                             .orElseThrow(
                                     () -> new IllegalStateException(
                                             "We could not verify the GitHub repository ID. Check the repository name and token access."));
-                    monitor.setNameWithOwner(identity.fullPath());
-                    monitor.setNativeId(identity.nativeId());
-                    monitor.setWorkspace(savedWorkspace);
-                    repositoryToMonitorRepository.save(monitor);
-                    savedWorkspace.getRepositoriesToMonitor().add(monitor);
+                    monitorCommands.add(workspace.getId(), identity.fullPath(), identity.nativeId());
                     log.info("Queued repository for monitoring: repoName={}", nameWithOwner);
                 });
 
-        workspaceRepository.save(savedWorkspace);
-        log.info("Completed PAT workspace provisioning: workspaceId={}", savedWorkspace.getId());
+        log.info("Completed PAT workspace provisioning: workspaceId={}", workspace.getId());
 
-        ensureAdminMembership(savedWorkspace);
+        ensureAdminMembership(workspace);
     }
 
     @Override
@@ -224,7 +220,7 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
         //   (b) it has an ACTIVE non-GitLab Connection (e.g. GitHub) → refuse cross-vendor
         //       attach; falling through to createWorkspace would crash on the slug unique
         // constraint.
-        List<Workspace> existing = workspaceRepository.findAllByAccountLoginIgnoreCase(groupPath);
+        List<Workspace> existing = workspaceLookup.findByAccountLogin(groupPath);
         if (!existing.isEmpty()) {
             Optional<Workspace> existingGitLab = existing.stream()
                     .filter(workspace -> connectionService
@@ -262,22 +258,21 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
         Workspace workspace =
                 workspaceService.createWorkspace(slug, displayName, groupPath, AccountType.ORG, ownerUserId);
 
-        workspace.setRepositorySelection(RepositorySelection.ALL);
-        Workspace savedWorkspace = workspaceRepository.save(workspace);
+        workspaces.selectRepositories(workspace.getId(), RepositorySelection.ALL);
 
         // The workspace owns the connection; the instance URL distinguishes its provider origin.
         String instanceKey = serverUrl;
         connectionService.provisionPatConnection(
-                savedWorkspace,
+                workspace,
                 IntegrationKind.GITLAB,
                 instanceKey,
                 new ConnectionConfig.GitLabConfig(serverUrl, groupId, /* gitlabWebhookId */ null, Set.of(), null),
                 token,
-                "bootstrap-gitlab-pat-workspace-" + savedWorkspace.getId());
+                "bootstrap-gitlab-pat-workspace-" + workspace.getId());
 
-        log.info("Created default GitLab PAT workspace: workspaceId={}", savedWorkspace.getId());
+        log.info("Created default GitLab PAT workspace: workspaceId={}", workspace.getId());
 
-        ensureAdminMembership(savedWorkspace);
+        ensureAdminMembership(workspace);
     }
 
     /**
@@ -432,12 +427,12 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
         String defaultSlug = workspaceProperties.defaultProperties().login();
         Workspace target = null;
         if (!isBlank(defaultSlug)) {
-            target = workspaceRepository
-                    .findByWorkspaceSlug(Objects.requireNonNull(defaultSlug).trim())
+            target = workspaceLookup
+                    .findBySlug(Objects.requireNonNull(defaultSlug).trim())
                     .orElse(null);
         }
         if (target == null) {
-            target = workspaceRepository.findAll().stream().findFirst().orElse(null);
+            target = workspaceLookup.findAny().orElse(null);
         }
         if (target != null) {
             ensureAdminMembership(target);
@@ -446,10 +441,8 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
 
     private void ensureAdminMembership(Workspace workspace) {
         userRepository.findByLogin("admin").ifPresent(adminUser -> {
-            boolean alreadyMember = workspaceMembershipRepository
-                    .findByWorkspace_IdAndId_AccountId(
-                            workspace.getId(), workspaceMembershipService.accountIdForUser(adminUser.getId()))
-                    .isPresent();
+            boolean alreadyMember = memberships.hasMembership(
+                    workspace.getId(), workspaceMembershipService.accountIdForUser(adminUser.getId()));
             if (alreadyMember) {
                 log.debug("Skipped adding default admin, already member: workspaceId={}", workspace.getId());
                 return;

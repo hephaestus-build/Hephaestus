@@ -10,8 +10,11 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProviderAccounts;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRoots;
 import io.micrometer.common.util.StringUtils;
 import java.util.Objects;
 import java.util.UUID;
@@ -30,17 +33,28 @@ public class GitLabRepositorySelectionService {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabRepositorySelectionService.class);
 
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceRoots workspaces;
+
+    private final WorkspaceLocks workspaceLocks;
+
+    private final WorkspaceLookup workspaceLookup;
+    private final WorkspaceProviderAccounts providerAccounts;
     private final ConnectionQueries connectionQueries;
     private final ConnectionCommands connectionCommands;
     private final TransactionTemplate transactionTemplate;
 
     public GitLabRepositorySelectionService(
-            WorkspaceRepository workspaceRepository,
+            WorkspaceRoots workspaces,
+            WorkspaceLocks workspaceLocks,
+            WorkspaceLookup workspaceLookup,
+            WorkspaceProviderAccounts providerAccounts,
             ConnectionQueries connectionQueries,
             ConnectionCommands connectionCommands,
             TransactionTemplate transactionTemplate) {
-        this.workspaceRepository = workspaceRepository;
+        this.workspaces = workspaces;
+        this.workspaceLocks = workspaceLocks;
+        this.workspaceLookup = workspaceLookup;
+        this.providerAccounts = providerAccounts;
         this.connectionQueries = connectionQueries;
         this.connectionCommands = connectionCommands;
         this.transactionTemplate = transactionTemplate;
@@ -66,8 +80,8 @@ public class GitLabRepositorySelectionService {
         String slug = requireSlug(workspaceContext);
         Long workspaceId = requireWorkspace(slug).getId();
         RepositorySelection selection = transactionTemplate.execute(status -> {
-            Workspace workspace = workspaceRepository
-                    .findByIdForUpdate(workspaceId)
+            var unused = workspaceLocks
+                    .lock(workspaceId)
                     .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
             Connection current = connectionCommands
                     .holdActiveConnection(workspaceId, IntegrationKind.GITLAB)
@@ -75,8 +89,7 @@ public class GitLabRepositorySelectionService {
                     .orElseThrow(() -> gitLabNotActive(slug));
             RepositorySelection stored = storedSelection(workspaceId);
             if (stored == requested) return stored;
-            workspace.setRepositorySelection(requested);
-            workspaceRepository.saveAndFlush(workspace);
+            workspaces.selectRepositories(workspaceId, requested);
             recordChange(current, stored, requested, actorAccountId);
             log.info(
                     "Changed GitLab project selection: workspaceId={}, from={}, to={}", workspaceId, stored, requested);
@@ -87,9 +100,9 @@ public class GitLabRepositorySelectionService {
 
     /** A workspace without a stored choice follows every project, as discovery and admission already treat it. */
     RepositorySelection storedSelection(long workspaceId) {
-        return workspaceRepository
-                        .findMonitorPolicy(workspaceId)
-                        .filter(policy -> policy.getRepositorySelection() == RepositorySelection.SELECTED)
+        return providerAccounts
+                        .providerAccount(workspaceId)
+                        .filter(policy -> policy.repositorySelection() == RepositorySelection.SELECTED)
                         .isPresent()
                 ? RepositorySelection.SELECTED
                 : RepositorySelection.ALL;
@@ -111,9 +124,7 @@ public class GitLabRepositorySelectionService {
         if (StringUtils.isBlank(slug)) {
             throw new IllegalArgumentException("Workspace slug must not be blank.");
         }
-        return workspaceRepository
-                .findByWorkspaceSlug(slug)
-                .orElseThrow(() -> new EntityNotFoundException("Workspace", slug));
+        return workspaceLookup.findBySlug(slug).orElseThrow(() -> new EntityNotFoundException("Workspace", slug));
     }
 
     private static String requireSlug(WorkspaceContext workspaceContext) {

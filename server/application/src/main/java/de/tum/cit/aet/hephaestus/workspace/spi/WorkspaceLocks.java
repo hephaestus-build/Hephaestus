@@ -14,6 +14,9 @@ public interface WorkspaceLocks {
     /** The workspace that holds or last held the GitHub App installation, locked. */
     Optional<Workspace> lockByInstallation(long installationId);
 
+    /** The active workspace that holds or last held the GitHub App installation, locked. */
+    Optional<Workspace> lockActiveByInstallation(long installationId);
+
     /** The one workspace that binds the organization, locked. */
     Optional<Workspace> lockByOrganization(long organizationId);
 }

@@ -10,13 +10,14 @@ import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.Hibernate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
 @RequiredArgsConstructor
-class WorkspaceRepositoryMonitorsAdapter
+public class WorkspaceRepositoryMonitorsAdapter
         implements WorkspaceRepositoryMonitors, RepositoryMonitorSources, RepositoryMonitorCommands {
     private final RepositoryToMonitorRepository monitors;
     private final WorkspaceRepository workspaces;
@@ -42,6 +43,31 @@ class WorkspaceRepositoryMonitorsAdapter
     }
 
     @Override
+    public boolean monitorsPathElsewhere(long workspaceId, String nameWithOwner, long exceptMonitorId) {
+        return monitors.existsByWorkspaceIdAndNameWithOwnerAndIdNot(workspaceId, nameWithOwner, exceptMonitorId);
+    }
+
+    @Override
+    public Optional<RepositoryToMonitor> monitorOf(long workspaceId, long nativeId) {
+        return monitors.findOneByWorkspaceIdAndNativeId(workspaceId, nativeId);
+    }
+
+    @Override
+    public Optional<RepositoryToMonitor> monitorAt(long workspaceId, String nameWithOwner) {
+        return monitors.findByWorkspaceIdAndNameWithOwner(workspaceId, nameWithOwner);
+    }
+
+    @Override
+    public long countForRepository(long repositoryId) {
+        return monitors.countForRepository(repositoryId);
+    }
+
+    @Override
+    public List<Long> workspaceSourceRepositoryIds(long workspaceId) {
+        return monitors.findSourceRepositoryIds(workspaceId);
+    }
+
+    @Override
     public Optional<RepositoryToMonitor> find(long monitorId) {
         return monitors.findById(monitorId);
     }
@@ -57,10 +83,15 @@ class WorkspaceRepositoryMonitorsAdapter
         var monitor = new RepositoryToMonitor();
         monitor.setNameWithOwner(nameWithOwner);
         monitor.setNativeId(nativeId);
-        monitor.setWorkspace(workspaces
+        var workspace = workspaces
                 .findById(workspaceId)
-                .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId)));
-        return monitors.saveAndFlush(monitor);
+                .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
+        monitor.setWorkspace(workspace);
+        var saved = monitors.saveAndFlush(monitor);
+        // A monitor set that this transaction already loaded would miss the new row until it is read again.
+        if (Hibernate.isInitialized(workspace.getRepositoriesToMonitor()))
+            workspace.getRepositoriesToMonitor().add(saved);
+        return saved;
     }
 
     @Override
@@ -71,6 +102,23 @@ class WorkspaceRepositoryMonitorsAdapter
                 .findFirst()
                 .orElseThrow();
         monitor.setNameWithOwner(nameWithOwner);
-        monitors.save(monitor);
+        monitors.saveAndFlush(monitor);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void remove(long workspaceId, long monitorId) {
+        var workspace = workspaces.findById(workspaceId).orElseThrow();
+        // The monitor set's orphan removal deletes the row.
+        workspace.getRepositoriesToMonitor().removeIf(monitor -> monitor.getId() == monitorId);
+        workspaces.saveAndFlush(workspace);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void clear(long workspaceId) {
+        var workspace = workspaces.findById(workspaceId).orElseThrow();
+        workspace.getRepositoriesToMonitor().clear();
+        workspaces.saveAndFlush(workspace);
     }
 }

@@ -7,7 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepositor
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.Set;
@@ -35,13 +35,13 @@ public class OAuthStateNonceStore {
     private final OAuthStateNonceRepository repository;
 
     private final ConnectionRepository connections;
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceLocks workspaceLocks;
 
     public OAuthStateNonceStore(
-            OAuthStateNonceRepository repository, ConnectionRepository connections, WorkspaceRepository workspaces) {
+            OAuthStateNonceRepository repository, ConnectionRepository connections, WorkspaceLocks workspaceLocks) {
         this.repository = repository;
         this.connections = connections;
-        this.workspaces = workspaces;
+        this.workspaceLocks = workspaceLocks;
     }
 
     /**
@@ -76,7 +76,7 @@ public class OAuthStateNonceStore {
             throw new IllegalStateException("OAuth state nonce collision");
         }
         // Serialize initiation before choosing or creating the workspace's null-instance attempt.
-        Workspace workspace = workspaces.findByIdForUpdate(workspaceId).orElseThrow();
+        Workspace workspace = workspaceLocks.lock(workspaceId).orElseThrow();
         var candidates = connections.findByWorkspaceId(workspaceId).stream()
                 .filter(connection -> connection.getKind() == kind)
                 .sorted(Comparator.comparing(Connection::getCreatedAt).reversed())

@@ -28,6 +28,9 @@ public interface WorkspaceRoots {
 
     void linkOrganization(long workspaceId, long organizationId);
 
+    /** Unbinds the organization and writes it at once, so a following count of its workspaces sees it. */
+    void unlinkOrganization(long workspaceId);
+
     /** Creates a workspace under a slug that the caller validated and allocated. */
     Workspace create(
             String slug,
