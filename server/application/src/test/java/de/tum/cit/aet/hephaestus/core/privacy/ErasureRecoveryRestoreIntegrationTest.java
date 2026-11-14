@@ -233,7 +233,7 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
 
     private int memberships() {
         Integer count = jdbc.queryForObject(
-                "SELECT count(*) FROM workspace_membership WHERE workspace_id = ?", Integer.class, workspace.getId());
+                "SELECT count(*) FROM membership WHERE workspace_id = ?", Integer.class, workspace.getId());
         return count == null ? 0 : count;
     }
 
@@ -250,7 +250,10 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
      * deletes the repairs that the workspace's links name and the backup did not hold.
      */
     private record Backup(
-            JdbcTemplate jdbc, long workspaceId, Map<String, List<Map<String, @Nullable Object>>> rows, Set<String> generated) {
+            JdbcTemplate jdbc,
+            long workspaceId,
+            Map<String, List<Map<String, @Nullable Object>>> rows,
+            Set<String> generated) {
 
         static Backup of(JdbcTemplate jdbc, long workspaceId) {
             var generated = jdbc.queryForList("""
@@ -319,7 +322,8 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         }
 
         /** A generated column is computed again from the restored row, as a restore does. */
-        private static void insert(JdbcTemplate restore, String table, Map<String, @Nullable Object> row, Set<String> generated) {
+        private static void insert(
+                JdbcTemplate restore, String table, Map<String, @Nullable Object> row, Set<String> generated) {
             var stored = row.entrySet().stream()
                     .filter(column -> !generated.contains(table + "." + column.getKey()))
                     .toList();

@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
-import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredWorkspacePurges;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.workspace.audit.WorkspaceAuditSnapshots;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
@@ -22,7 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class WorkspaceLifecycleService implements RestoredWorkspacePurges {
+public class WorkspaceLifecycleService {
 
     private static final Logger log = LoggerFactory.getLogger(WorkspaceLifecycleService.class);
 
@@ -150,7 +149,6 @@ public class WorkspaceLifecycleService implements RestoredWorkspacePurges {
      *
      * @return whether it purged: false when the restore has no such workspace or it is purged already
      */
-    @Override
     @Transactional
     public boolean purgeAgain(long workspaceId) {
         var workspace = workspaceRepository.findByIdForUpdate(workspaceId).orElse(null);
