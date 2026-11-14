@@ -5,7 +5,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.AccountReferenceService;
-import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogChangeKind;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogEntryState;
@@ -56,7 +55,6 @@ class CatalogOriginPresentationTest extends BaseUnitTest {
                         mock(PracticeVersionService.class),
                         mock(WorkspaceReviewDefaultsProvider.class),
                         mock(PracticeVersionRepository.class),
-                        mock(AccountDirectory.class),
                         mock(AccountReferenceService.class))
                 .present(10L, group);
 
@@ -93,7 +91,6 @@ class CatalogOriginPresentationTest extends BaseUnitTest {
                         versions,
                         defaults,
                         mock(PracticeVersionRepository.class),
-                        mock(AccountDirectory.class),
                         mock(AccountReferenceService.class))
                 .present(10L, practice);
         assertThat(dto.id()).isEqualTo("9007199254740993");

@@ -105,7 +105,9 @@ public class PracticeVersionService {
             @Nullable Long createdByAccountId) {}
 
     public PracticeVersionDTO view(
-            PracticeVersion version, @Nullable PracticeVersion previous, @Nullable AccountRefDTO createdBy) {
+            PracticeVersion version,
+            PracticeVersionRepository.@Nullable PreviousDefinition previous,
+            @Nullable AccountRefDTO createdBy) {
         PracticeDefinition definition;
         try {
             definition = definitionOf(version);
@@ -116,7 +118,7 @@ public class PracticeVersionService {
                 ? List.of()
                 : Arrays.stream(PracticeDefinitionField.values())
                         .filter(field -> !Objects.equals(
-                                previous.getDefinition().get(key(field)),
+                                previous.definition().get(key(field)),
                                 version.getDefinition().get(key(field))))
                         .toList();
         return new PracticeVersionDTO(
@@ -128,7 +130,7 @@ public class PracticeVersionService {
                 version.getCreatedAt(),
                 createdBy,
                 changed,
-                previous != null && !previous.getReviewDigest().equals(version.getReviewDigest()));
+                previous != null && !previous.reviewDigest().equals(version.getReviewDigest()));
     }
 
     public static String key(PracticeDefinitionField field) {

@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.practices;
 
 import de.tum.cit.aet.hephaestus.core.auth.AccountReferenceService;
 import de.tum.cit.aet.hephaestus.core.auth.dto.AccountRefDTO;
-import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogEntryState;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogPracticeDocument;
@@ -22,7 +21,9 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -38,52 +39,82 @@ public class CatalogOriginPresenter {
     private final PracticeVersionService versions;
     private final WorkspaceReviewDefaultsProvider defaults;
     private final PracticeVersionRepository versionRepository;
-    private final AccountDirectory accounts;
     private final AccountReferenceService accountReferences;
 
     public PracticeVersionDTO viewCurrent(Practice practice) {
-        var version = practice.getCurrentVersion();
-        var previous = versionRepository
-                .findFirstByPracticeIdAndNumberLessThanOrderByNumberDesc(practice.getId(), version.getNumber())
-                .orElse(null);
-        return versions.view(version, previous, createdBy(version));
+        return Objects.requireNonNull(
+                currentViews(Objects.requireNonNull(practice.getWorkspace().getId()), List.of(practice))
+                        .get(practice.getId()));
     }
 
     public List<PracticeVersionDTO> history(Practice practice) {
+        long workspaceId = Objects.requireNonNull(practice.getWorkspace().getId());
+        var rows = versionRepository.findByWorkspaceIdAndPracticeIdOrderByNumberAsc(workspaceId, practice.getId());
+        var creators = creators(workspaceId, rows);
         List<PracticeVersionDTO> history = new ArrayList<>();
         PracticeVersion previous = null;
-        for (PracticeVersion version : versionRepository.findByWorkspaceIdAndPracticeIdOrderByNumberAsc(
-                Objects.requireNonNull(practice.getWorkspace().getId()), practice.getId())) {
-            history.add(versions.view(version, previous, createdBy(version)));
+        for (PracticeVersion version : rows) {
+            var comparison = previous == null
+                    ? null
+                    : new PracticeVersionRepository.PreviousDefinition(
+                            Objects.requireNonNull(version.getId()),
+                            previous.getDefinition(),
+                            previous.getReviewDigest());
+            history.add(versions.view(version, comparison, createdBy(version, creators)));
             previous = version;
         }
         return history.reversed();
     }
 
-    private @Nullable AccountRefDTO createdBy(PracticeVersion version) {
-        Long creator = version.getCreatedByAccountId();
-        return creator == null
-                ? null
-                : accounts.find(creator)
-                        .map(account -> accountReferences.reference(version.getWorkspaceId(), creator))
-                        .orElse(null);
+    private Map<Long, AccountRefDTO> creators(long workspaceId, List<PracticeVersion> rows) {
+        return accountReferences.references(
+                workspaceId,
+                rows.stream()
+                        .map(PracticeVersion::getCreatedByAccountId)
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .toList());
+    }
+
+    private static @Nullable AccountRefDTO createdBy(PracticeVersion version, Map<Long, AccountRefDTO> creators) {
+        var id = version.getCreatedByAccountId();
+        return id == null ? null : creators.get(id);
+    }
+
+    private Map<Long, PracticeVersionDTO> currentViews(long workspaceId, List<Practice> practices) {
+        if (practices.isEmpty()) return Map.of();
+        var current = practices.stream().map(Practice::getCurrentVersion).toList();
+        var previous = versionRepository
+                .previousDefinitions(
+                        workspaceId,
+                        current.stream()
+                                .map(version -> Objects.requireNonNull(version.getId()))
+                                .toList())
+                .stream()
+                .collect(Collectors.toMap(PracticeVersionRepository.PreviousDefinition::currentVersionId, row -> row));
+        var creators = creators(workspaceId, current);
+        return practices.stream()
+                .collect(Collectors.toMap(practice -> Objects.requireNonNull(practice.getId()), practice -> {
+                    var version = practice.getCurrentVersion();
+                    return versions.view(version, previous.get(version.getId()), createdBy(version, creators));
+                }));
     }
 
     public PracticeDTO present(Long workspaceId, Practice practice) {
-        return present(
-                practice,
-                practice.getCatalogSlug() == null ? null : catalog.effectiveCatalog(),
-                defaults.rawDefaultFeedbackMode(workspaceId));
+        return presentPractices(workspaceId, List.of(practice)).getFirst();
     }
 
     private PracticeDTO present(
-            Practice practice, @Nullable EffectiveCatalog effectiveCatalog, @Nullable FeedbackMode mode) {
+            Practice practice,
+            @Nullable EffectiveCatalog effectiveCatalog,
+            @Nullable FeedbackMode mode,
+            PracticeVersionDTO current) {
         var effective = FeedbackModeResolver.resolvePractice(practice, mode);
         return new PracticeDTO(
                 practice.getId().toString(),
                 practice.getSlug(),
                 practice.getKind().value(),
-                viewCurrent(practice),
+                current,
                 practice.getGroup() == null ? null : practice.getGroup().getSlug(),
                 practice.getPosition(),
                 new FeedbackModeAssignmentDTO(practice.getFeedbackMode(), effective.mode(), effective.source()),
@@ -136,8 +167,10 @@ public class CatalogOriginPresenter {
                 ? catalog.effectiveCatalog()
                 : null;
         var mode = defaults.rawDefaultFeedbackMode(workspaceId);
+        var current = currentViews(workspaceId, practices);
         return practices.stream()
-                .map(practice -> present(practice, effectiveCatalog, mode))
+                .map(practice -> present(
+                        practice, effectiveCatalog, mode, Objects.requireNonNull(current.get(practice.getId()))))
                 .toList();
     }
 
