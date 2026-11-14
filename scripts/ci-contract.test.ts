@@ -3476,19 +3476,45 @@ void describe("CI contract", () => {
 			if (file.endsWith(".test.ts")) {
 				continue;
 			}
-			const source = await readFile(file, "utf8");
-			// `stdio: inherit`/`ignore` streams to the parent and buffers nothing; only a capture,
-			// which is what `encoding` marks, can overflow.
-			const captures =
-				source.match(/exec(?:File)?Sync\(|execFileAsync\(|spawnSync\(/gu)?.length ?? 0;
-			if (captures === 0 || !source.includes("encoding")) {
-				continue;
-			}
-			if (!source.includes("maxBuffer")) {
+			if (capturesWithoutBound(await readFile(file, "utf8"))) {
 				offenders.push(file);
 			}
 		}
 		assert.deepEqual(offenders, [], "these capture a subprocess without bounding its buffer");
+	});
+
+	void test("a capture is a subprocess whose output stays in memory, not a file that names an encoding", () => {
+		const streamed = [
+			'spawnSync("vp", ["run", "check"], { stdio: "inherit" });',
+			'readdirSync(directory, { recursive: true, encoding: "utf8" });',
+		].join("\n");
+		assert.equal(capturesWithoutBound(streamed), false);
+		assert.equal(
+			capturesWithoutBound(
+				'spawnSync("git", ["log"], { stdio: ["ignore", "inherit", "inherit"] });',
+			),
+			false,
+		);
+		// spawnSync buffers its output under the same 1 MiB default with or without an encoding.
+		assert.equal(capturesWithoutBound('spawnSync("git", ["log"], { encoding: "utf8" });'), true);
+		assert.equal(
+			capturesWithoutBound('spawnSync("git", ["log"], { stdio: ["ignore", "pipe", "inherit"] });'),
+			true,
+		);
+		assert.equal(
+			capturesWithoutBound('const out = execFileSync("gh", ["api", path], options);'),
+			true,
+		);
+		assert.equal(
+			capturesWithoutBound('await execFileAsync("cosign", args, { stdio: "inherit" });'),
+			true,
+		);
+		assert.equal(
+			capturesWithoutBound(
+				'spawnSync("git", ["log"], { encoding: "utf8", maxBuffer: MAX_BUFFER });',
+			),
+			false,
+		);
 	});
 
 	void test("scans both released platforms before the release, not just linux/amd64", async () => {
@@ -7577,3 +7603,66 @@ void test("an old candidate lacks the release drill verifier and stops before an
 	assert.match(String(checkout.get("uses")), /^actions\/checkout@/u);
 	assert.equal(steps.items[1], verifier);
 });
+
+/** The text between a call's opening parenthesis at `start` and its matching close, skipping string literals. */
+function callArguments(source: string, start: number): string {
+	let depth = 1;
+	let quote = "";
+	let index = start;
+	while (index < source.length) {
+		const character = source[index];
+		// An escape inside a string literal also skips the character after it.
+		let advance = 1;
+		if (quote !== "") {
+			if (character === "\\") {
+				advance = 2;
+			} else if (character === quote) {
+				quote = "";
+			}
+		} else if (character === '"' || character === "'" || character === "`") {
+			quote = character;
+		} else if (character === "(") {
+			depth += 1;
+		} else if (character === ")") {
+			depth -= 1;
+			if (depth === 0) {
+				return source.slice(start, index);
+			}
+		}
+		index += advance;
+	}
+	return source.slice(start);
+}
+
+/**
+ * Whether a source captures a subprocess's output in memory without the shared `maxBuffer` bound. A call captures
+ * unless its options stream stdout and stderr to the parent or discard them; `execFileAsync` always captures.
+ */
+function capturesWithoutBound(source: string): boolean {
+	if (source.includes("maxBuffer")) {
+		return false;
+	}
+	for (const call of source.matchAll(
+		/\b(?<name>execFileAsync|execFileSync|execSync|spawnSync)\(/gu,
+	)) {
+		if (call.groups?.name === "execFileAsync") {
+			return true;
+		}
+		const options = callArguments(source, call.index + call[0].length);
+		if (/stdio:\s*["'](?:inherit|ignore)["']/u.test(options)) {
+			continue;
+		}
+		const streams = /stdio:\s*\[(?<entries>[^\]]*)\]/u
+			.exec(options)
+			?.groups?.entries?.split(",")
+			.map((entry) => entry.trim());
+		if (
+			streams !== undefined &&
+			streams.slice(1, 3).every((entry) => /^["'](?:inherit|ignore)["']$/u.test(entry))
+		) {
+			continue;
+		}
+		return true;
+	}
+	return false;
+}
