@@ -70,8 +70,6 @@ spec:
           image: {{ include "hephaestus.image" (dict "root" $ "name" "agent-pi") | quote }}
           imagePullPolicy: IfNotPresent
           env:
-            - name: HEPHAESTUS_SANDBOX_KIND
-              value: {{ $kind }}
             # The image's home is read-only. A process that writes below HOME writes to /tmp.
             - name: HOME
               value: /tmp/home
