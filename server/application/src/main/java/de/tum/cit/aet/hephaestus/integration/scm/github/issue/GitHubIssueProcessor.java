@@ -169,17 +169,13 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
         boolean isNew = existingOpt.isEmpty();
 
         // An older payload would restore older work and record it as new (sync-lifecycle.md).
-        boolean freshEqualRead = !isNew
-                && context.isSync()
-                && ProviderStateVersion.acceptsEqualRead(
+        if (!isNew
+                && ProviderStateVersion.refuses(
                         dto.updatedAt(),
                         existingOpt.get().getUpdatedAt(),
+                        context.isSync(),
                         context.observedAt(),
-                        existingOpt.get().getLastSyncAt());
-        if (!isNew
-                && !freshEqualRead
-                && ProviderStateVersion.cannotReplace(
-                        dto.updatedAt(), existingOpt.get().getUpdatedAt())) {
+                        existingOpt.get().getLastSyncAt())) {
             log.debug(
                     "Skipped stale issue update: issueId={}, existingUpdatedAt={}, dtoUpdatedAt={}",
                     existingOpt.get().getId(),

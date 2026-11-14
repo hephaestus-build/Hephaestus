@@ -108,6 +108,15 @@ public class PullRequestReviewThread extends BaseGitServiceEntity {
     @Column(name = "resolved_at")
     private Instant resolvedAt;
 
+    /**
+     * The date of the last resolve or unresolve event that changed this thread on GitHub. A later-arriving event with
+     * an older date changes nothing. Null until such an event arrives, and on GitLab, where a whole read of the merge
+     * request's discussions orders the resolution ({@code PullRequest.discussionsObservedAt}).
+     */
+    @Nullable
+    @Column(name = "resolution_changed_at")
+    private Instant resolutionChangedAt;
+
     @OneToMany(mappedBy = "thread", cascade = CascadeType.REMOVE, orphanRemoval = true)
     @ToString.Exclude
     private Set<PullRequestReviewComment> comments = new HashSet<>();

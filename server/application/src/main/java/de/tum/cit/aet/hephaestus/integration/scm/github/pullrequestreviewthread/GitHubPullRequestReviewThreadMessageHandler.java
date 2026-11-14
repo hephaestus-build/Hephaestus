@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewthread
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.integration.core.ProviderStateVersion;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.DeliveryInbox;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
@@ -118,12 +119,18 @@ public class GitHubPullRequestReviewThreadMessageHandler
                 // Ensure the sender (who resolved the thread) exists
                 User resolvedBy =
                         userProcessor.ensureExists(event.sender(), Objects.requireNonNull(context.providerId()));
-                // GitHub's thread events document no date of their own. The pull request's updated_at, which the
-                // payload carries, dates the resolution: a redelivery repeats it and a later act moves it.
+                // The payload's top-level updated_at dates the act and orders it against the thread's other resolve and
+                // unresolve events; a redelivery repeats it. The pull request's updated_at does not move on a
+                // resolution, so it only stands in for the resolution time when the payload carries no date.
                 Instant resolvedAt = event.updatedAt() != null
                         ? event.updatedAt()
                         : prDto.updatedAt() != null ? prDto.updatedAt() : Instant.now();
-                threadProcessor.resolve(threadId, resolvedBy, resolvedAt, context);
+                threadProcessor.resolve(
+                        threadId,
+                        resolvedBy,
+                        resolvedAt,
+                        ProviderStateVersion.atStoredPrecision(event.updatedAt()),
+                        context);
             }
             case GitHubEventAction.PullRequestReviewThread.UNRESOLVED -> {
                 // Thread ID is derived from the first comment. If no comments exist, we cannot
@@ -138,7 +145,7 @@ public class GitHubPullRequestReviewThreadMessageHandler
                                     : "unknown");
                     return;
                 }
-                threadProcessor.unresolve(threadId, context);
+                threadProcessor.unresolve(threadId, ProviderStateVersion.atStoredPrecision(event.updatedAt()), context);
             }
             default ->
                 log.debug(

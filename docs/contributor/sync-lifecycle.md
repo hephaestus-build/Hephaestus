@@ -182,14 +182,15 @@ Two rules make it harmless.
 
 **The stored work only moves forward.**
 Each consumer compares the payload with the stored row.
-Pull and merge requests, issues and comments are read with a row lock.
+Pull and merge requests, issues, comments, milestones and GitHub review threads are read with a row lock.
 For these, the compare and the write are one step, also when a sync writes the same row.
 
 - A payload with an older `updated_at` than the stored row changes nothing.
-  This rule applies to pull and merge requests, issues, comments, reviews, review comments, notes, diff notes and Outline documents.
+  This rule applies to pull and merge requests, issues, milestones, comments, reviews, review comments, notes, diff notes and Outline documents.
 - An undated snapshot cannot replace a dated row.
 - Equal webhook versions keep the stored core fields, labels and assignees.
-  An authoritative issue sync or GitLab merge request sync can refresh an equal version.
+  An authoritative issue, milestone or GitLab merge request sync can refresh an equal version.
+  A milestone sync needs this, because issue counts change without a new `updated_at`.
   Its request-start time must be later than `lastSyncAt`.
   A GitLab merge request read must also start after its stored readiness read.
   The SQL upsert rejects strictly older versions when two inserts race before either row exists.
@@ -198,7 +199,14 @@ For these, the compare and the write are one step, also when a sync writes the s
   Outline reconciliation can refresh metadata at the same version, if the mirror has not changed since its read.
   It keeps evicted bodies absent until a live read needs them.
 - An Outline delete or archive without a version reads current provider state before it changes the mirror.
+- A GitHub thread resolve or unresolve applies only if its event date is not older than the stored one.
+  The thread stores that date also when the event finds the state it sets.
+  Events of the same second keep their arrival order.
+  GitLab orders a resolution by the start of the discussion read that saw it.
 - A Slack edit applies only if its `edited.ts` is later than the stored edit.
+- A Slack consent choice applies only if its `action_ts` is not older than the stored choice.
+  A change in the app is dated by the server.
+  An older opt-out does not erase data.
 - A Slack change without `edited.ts` is a new reply or an unfurl. It changes nothing.
 - A GitHub dismissal is final.
   A second dismissal publishes nothing.

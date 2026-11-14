@@ -167,7 +167,7 @@ class SlackIngestOutsideTransactionsIntegrationTest extends BaseIntegrationTest 
     @Test
     void shouldStoreNothingWhenTheAuthorOptsOutWhileSlackAnswers() {
         when(slack.humanDisplayName(workspaceId, team, "U2")).thenAnswer(invocation -> {
-            participantConsent.optOutOfIngestion(workspaceId, "U2");
+            participantConsent.decide(workspaceId, "U2", true, Instant.now());
             return Optional.of("Grace");
         });
         String payload = """

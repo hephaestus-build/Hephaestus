@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.milestone;
 
+import de.tum.cit.aet.hephaestus.integration.core.ProviderStateVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
@@ -92,6 +93,8 @@ public class GitHubMilestoneProcessor {
 
         // Always look up by number within the repository to avoid duplicates.
         // The milestone number is unique within a repository and is the canonical identifier.
+        // The row lock makes the compare with the stored updated_at and the write after it one step.
+        milestoneRepository.lockByRepositoryIdAndNumber(repository.getId(), dto.number());
         Optional<Milestone> existingOpt =
                 milestoneRepository.findByNumberAndRepositoryId(dto.number(), repository.getId());
         boolean isNew = existingOpt.isEmpty();
@@ -111,6 +114,26 @@ public class GitHubMilestoneProcessor {
             milestone.setNativeId(generateDeterministicId(repository.getId(), dto.number()));
         }
         // else: existing milestone, keep its current nativeId (whether real or generated)
+
+        Instant incomingUpdatedAt = ProviderStateVersion.atStoredPrecision(dto.updatedAt());
+        // A late delivery would restore an older title, state or due date (sync-lifecycle.md).
+        // A sync read that began after the last write may settle an equal version, because issue counts change
+        // without moving updated_at. Identity is not versioned: a refused webhook still records the real id above,
+        // which a later delete looks up.
+        if (!isNew
+                && ProviderStateVersion.refuses(
+                        incomingUpdatedAt,
+                        milestone.getUpdatedAt(),
+                        context.isSync(),
+                        context.observedAt(),
+                        milestone.getLastSyncAt())) {
+            log.debug(
+                    "Skipped stale milestone update: milestoneId={}, existingUpdatedAt={}, dtoUpdatedAt={}",
+                    milestone.getId(),
+                    milestone.getUpdatedAt(),
+                    incomingUpdatedAt);
+            return milestone;
+        }
 
         // Set provider for new milestones
         if (isNew) {
@@ -148,8 +171,8 @@ public class GitHubMilestoneProcessor {
         if (dto.createdAt() != null) {
             milestone.setCreatedAt(dto.createdAt());
         }
-        if (dto.updatedAt() != null) {
-            milestone.setUpdatedAt(dto.updatedAt());
+        if (incomingUpdatedAt != null) {
+            milestone.setUpdatedAt(incomingUpdatedAt);
         }
         if (dto.closedAt() != null) {
             milestone.setClosedAt(dto.closedAt());

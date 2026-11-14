@@ -53,8 +53,9 @@ public class SlackParticipantConsent {
     private boolean ingestionOptedOut;
 
     /**
-     * When the current decision was made. Every write goes through the repository's native {@code ON CONFLICT}
-     * upserts, which restamp this on each re-decision; the creation timestamp only covers a JPA-persisted row.
+     * When the current decision was made: the Slack action's {@code action_ts}, or the server time of a change in the
+     * app. {@code SlackParticipantConsentRepository#decide} keeps the latest decision; the creation timestamp only
+     * covers a JPA-persisted row.
      */
     @CreationTimestamp
     @Column(name = "decided_at", nullable = false)

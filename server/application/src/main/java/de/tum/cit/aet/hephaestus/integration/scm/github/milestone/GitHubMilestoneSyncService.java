@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHMileston
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHMilestoneConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.milestone.dto.GitHubMilestoneDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -111,6 +112,8 @@ public class GitHubMilestoneSyncService {
         String name = parsedName.get().name();
 
         List<FetchedMilestone> fetched = new ArrayList<>();
+        // The processor lets a read begun after a milestone's last write settle an equal version.
+        Instant readStartedAt = Instant.now();
         boolean complete;
         int pagesProcessed;
         try {
@@ -248,8 +251,8 @@ public class GitHubMilestoneSyncService {
                     pagesProcessed);
         }
         // A database failure propagates, so the caller's transient-failure retry gets a fresh transaction.
-        int totalSynced = Objects.requireNonNull(
-                transactionTemplate.execute(status -> writeMilestones(scopeId, repositoryId, fetched, complete)));
+        int totalSynced = Objects.requireNonNull(transactionTemplate.execute(
+                status -> writeMilestones(scopeId, repositoryId, fetched, complete, readStartedAt)));
 
         log.info(
                 "Completed milestone sync: repoName={}, milestoneCount={}, complete={}, scopeId={}",
@@ -264,12 +267,14 @@ public class GitHubMilestoneSyncService {
             GitHubMilestoneDTO milestone, @Nullable GitHubUserDTO creator) {}
 
     /** Stores the milestones that GitHub listed, and removes the stale ones if the listing is complete. */
-    private int writeMilestones(Long scopeId, Long repositoryId, List<FetchedMilestone> fetched, boolean complete) {
+    private int writeMilestones(
+            Long scopeId, Long repositoryId, List<FetchedMilestone> fetched, boolean complete, Instant readStartedAt) {
         Repository repository = repositoryRepository.findById(repositoryId).orElse(null);
         if (repository == null) {
             return 0;
         }
-        ProcessingContext context = ProcessingContext.forSync(scopeId, repository);
+        ProcessingContext context =
+                ProcessingContext.forSync(scopeId, repository).withObservedAt(readStartedAt);
         Set<Integer> syncedNumbers = new HashSet<>();
         int synced = 0;
         for (FetchedMilestone entry : fetched) {

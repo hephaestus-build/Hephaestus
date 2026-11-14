@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.milestone;
 
+import de.tum.cit.aet.hephaestus.integration.core.ProviderStateVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
@@ -94,6 +95,8 @@ public class GitLabMilestoneProcessor extends BaseGitLabProcessor {
             return null;
         }
 
+        // The row lock makes the compare with the stored updated_at and the write after it one step.
+        milestoneRepository.lockByRepositoryIdAndNumber(repository.getId(), dto.iid());
         Optional<Milestone> existingOpt =
                 milestoneRepository.findByNumberAndRepositoryId(dto.iid(), repository.getId());
         boolean isNew = existingOpt.isEmpty();
@@ -111,6 +114,25 @@ public class GitLabMilestoneProcessor extends BaseGitLabProcessor {
         } else if (!dto.groupMilestone() && milestone.getNativeId() < 0) {
             // Existing milestone was stored with deterministic ID but now has real ID
             milestone.setNativeId(dto.nativeId());
+        }
+
+        // A late hook would restore an older title, state or due date (sync-lifecycle.md).
+        Instant incomingUpdatedAt = ProviderStateVersion.atStoredPrecision(parseGitLabTimestamp(dto.updatedAt()));
+        // A sync read that began after the last write may settle an equal version, because issue counts change
+        // without moving updated_at. Identity is not versioned: a refused hook still records the real id above.
+        if (!isNew
+                && ProviderStateVersion.refuses(
+                        incomingUpdatedAt,
+                        milestone.getUpdatedAt(),
+                        context.isSync(),
+                        context.observedAt(),
+                        milestone.getLastSyncAt())) {
+            log.debug(
+                    "Skipped stale milestone update: milestoneId={}, existingUpdatedAt={}, dtoUpdatedAt={}",
+                    milestone.getId(),
+                    milestone.getUpdatedAt(),
+                    incomingUpdatedAt);
+            return milestone;
         }
 
         milestone.setNumber(dto.iid());
@@ -164,8 +186,8 @@ public class GitLabMilestoneProcessor extends BaseGitLabProcessor {
         if (dto.createdAt() != null) {
             milestone.setCreatedAt(parseGitLabTimestamp(dto.createdAt()));
         }
-        if (dto.updatedAt() != null) {
-            milestone.setUpdatedAt(parseGitLabTimestamp(dto.updatedAt()));
+        if (incomingUpdatedAt != null) {
+            milestone.setUpdatedAt(incomingUpdatedAt);
         }
 
         milestone.setRepository(repository);

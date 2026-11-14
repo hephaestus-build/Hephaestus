@@ -48,6 +48,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -227,6 +228,24 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
                 .isTrue();
     }
 
+    @Test
+    @DisplayName("an opt-out that Slack delivers after a later opt-in keeps the opt-in and erases nothing")
+    void shouldKeepTheLaterOptInAndEraseNothingWhenAnEarlierOptOutArrivesLate() {
+        insertMessage("me.after-opt-in", meMemberId, OPTING_OUT_SLACK_USER);
+
+        handler.handleBlockActions(
+                action(SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_IN, OPTING_OUT_SLACK_USER, "1793000010.000100"));
+        handler.handleBlockActions(action(
+                SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_OUT, OPTING_OUT_SLACK_USER, "1793000000.000100"));
+
+        assertThat(participantConsentRepository.existsByWorkspaceIdAndSlackUserIdAndIngestionOptedOutTrue(
+                        workspaceId, OPTING_OUT_SLACK_USER))
+                .isFalse();
+        assertThat(messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(
+                        workspaceId, CHANNEL, "me.after-opt-in"))
+                .isTrue();
+    }
+
     private UUID seedOwnMentorDm() {
         var main = mentorConversations.findOrCreateMain(workspaceId, meMemberId);
         return mentorConversations
@@ -235,6 +254,10 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     private ObjectNode optOut(String slackUserId) {
+        return action(SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_OUT, slackUserId, null);
+    }
+
+    private ObjectNode action(String actionId, String slackUserId, @Nullable String actionTs) {
         ObjectNode payload = mapper.createObjectNode();
         payload.put("type", "block_actions");
         payload.putObject("team").put("id", TEAM);
@@ -242,8 +265,10 @@ class SlackAppHomeOptOutErasureIntegrationTest extends BaseIntegrationTest {
         payload.putObject("channel").put("id", CHANNEL);
         ArrayNode actions = payload.putArray("actions");
         ObjectNode action = actions.addObject();
-        action.put("action_id", SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_OUT);
-        action.put("value", "false");
+        action.put("action_id", actionId);
+        if (actionTs != null) {
+            action.put("action_ts", actionTs);
+        }
         return payload;
     }
 

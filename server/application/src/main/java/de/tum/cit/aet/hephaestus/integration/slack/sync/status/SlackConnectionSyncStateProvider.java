@@ -20,7 +20,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -99,7 +98,7 @@ public class SlackConnectionSyncStateProvider implements ConnectionSyncStateProv
     private SyncResourceState toResourceState(SlackMonitoredChannel channel, Map<String, Long> itemCountByChannelId) {
         Long itemCount = itemCountByChannelId.getOrDefault(channel.getSlackChannelId(), 0L);
         String name = channel.getChannelName() != null ? channel.getChannelName() : channel.getSlackChannelId();
-        Instant lastSyncedAt = toInstant(channel.getLastHistorySyncedTs());
+        Instant lastSyncedAt = SlackTs.toInstant(channel.getLastHistorySyncedTs());
         return new SyncResourceState(
                 channel.getId(),
                 channel.getSlackChannelId(),
@@ -115,13 +114,5 @@ public class SlackConnectionSyncStateProvider implements ConnectionSyncStateProv
                 channel.getLastSyncError(),
                 null,
                 null);
-    }
-
-    private static @Nullable Instant toInstant(@Nullable String slackTs) {
-        Long micros = SlackTs.toEpochMicros(slackTs);
-        if (micros == null) {
-            return null;
-        }
-        return Instant.ofEpochSecond(micros / 1_000_000L, (micros % 1_000_000L) * 1_000L);
     }
 }
