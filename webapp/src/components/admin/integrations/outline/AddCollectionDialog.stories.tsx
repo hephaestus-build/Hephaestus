@@ -4,6 +4,7 @@ import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 import type { OutlineCollectionCandidate } from "@/api/types.gen";
 import { expectSettledVisible } from "@/stories/overlay";
 
+import { deferred } from "@/test/async";
 import { AddCollectionDialog } from "./AddCollectionDialog";
 
 const meta = {
@@ -199,8 +200,12 @@ export const AllAlreadyMirrored: Story = {
 export const RegisteringSequentially: Story = {
 	args: {
 		candidates: read(candidates),
-		// oxlint-disable-next-line promise/avoid-new -- each registration takes a visible moment in the story
-		onRegister: fn(async () => new Promise<void>((resolve) => setTimeout(resolve, 400))),
+		// Each registration takes a visible moment in the story.
+		onRegister: fn(async () => {
+			const registered = deferred();
+			setTimeout(registered.resolve, 400);
+			await registered.promise;
+		}),
 	},
 	play: async () => {
 		const dialog = await screen.findByRole("dialog");

@@ -272,8 +272,10 @@ describe("Practices across the workspace", () => {
 			focusManager.setFocused(false);
 			focusManager.setFocused(true);
 		});
-		// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that a refocus does not read the overview again
-		await new Promise<void>((resolve) => setTimeout(resolve, 100));
+		const elapsed = deferred();
+		// oxlint-disable-next-line no-restricted-globals -- proves that a refocus does not read the overview again
+		setTimeout(elapsed.resolve, 100);
+		await elapsed.promise;
 
 		expect(overviewReads()).toHaveLength(1);
 		focusManager.setFocused(undefined);

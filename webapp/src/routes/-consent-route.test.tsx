@@ -9,6 +9,7 @@ import { WORDING_VERSION } from "@/components/auth/consent-wording";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { consentOutstanding } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter, loadRouteCode } from "@/test/router-harness";
 
 beforeAll(
@@ -115,8 +116,10 @@ describe("a notice answered elsewhere", () => {
 			() => expect(router.state.location.pathname).toBe("/settings"),
 			ROUTE_RENDER_WAIT,
 		);
-		// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that the page stays; no event marks a redirect that does not come
-		await new Promise<void>((resolve) => setTimeout(resolve, 200));
+		const elapsed = deferred();
+		// oxlint-disable-next-line no-restricted-globals -- proves that the page stays; no event marks a redirect that does not come
+		setTimeout(elapsed.resolve, 200);
+		await elapsed.promise;
 		expect(router.state.location.pathname).toBe("/settings");
 	});
 
@@ -135,8 +138,10 @@ describe("a notice answered elsewhere", () => {
 			() => expect(router.state.location.pathname).toBe("/settings"),
 			ROUTE_RENDER_WAIT,
 		);
-		// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that the page stays; no event marks a redirect that does not come
-		await new Promise<void>((resolve) => setTimeout(resolve, 200));
+		const elapsed2 = deferred();
+		// oxlint-disable-next-line no-restricted-globals -- proves that the page stays; no event marks a redirect that does not come
+		setTimeout(elapsed2.resolve, 200);
+		await elapsed2.promise;
 		expect(router.state.location.pathname).toBe("/settings");
 	});
 });

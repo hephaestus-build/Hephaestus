@@ -8,6 +8,7 @@ import { EMPTY_REVIEW_FEED, type ReviewFeedState } from "@/components/profile/re
 import { server } from "@/mocks/server";
 import { practiceStandingOf } from "@/stories/practice-profile-story-mock-data";
 
+import { deferred } from "@/test/async";
 import { usePracticeGroupDetail } from "./use-practice-group-detail";
 
 const workspaceSlug = "acme";
@@ -115,8 +116,10 @@ describe("usePracticeGroupDetail", () => {
 
 		expect(result.current.practice?.slug).toBe("write-tests");
 		expect(result.current.feed).toStrictEqual(EMPTY_REVIEW_FEED);
-		// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that no read starts on the next turn
-		await new Promise<void>((resolve) => setTimeout(resolve, 0));
+		const elapsed = deferred();
+		// oxlint-disable-next-line no-restricted-globals -- proves that no read starts on the next turn
+		setTimeout(elapsed.resolve, 0);
+		await elapsed.promise;
 		expect(reviews).not.toHaveBeenCalled();
 	});
 });

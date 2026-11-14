@@ -203,8 +203,10 @@ describe("installBrowserFaults", () => {
 		await hide();
 		await hide();
 		// A second request would reach the server within this time.
-		// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that no second request is sent within this window
-		await new Promise<void>((resolve) => setTimeout(resolve, 50));
+		const elapsed = deferred();
+		// oxlint-disable-next-line no-restricted-globals -- proves that no second request is sent within this window
+		setTimeout(elapsed.resolve, 50);
+		await elapsed.promise;
 		expect(sent).toHaveLength(1);
 
 		answer.resolve();
