@@ -4,7 +4,8 @@
  * (`onBrokenLinks`, `onBrokenAnchors`), but not an address that another program writes. Thus, a
  * renamed page or heading fails the docs build here instead of breaking a link in the app.
  *
- * `docs/package.json` runs it after `docusaurus build`, on the output in `docs/build`.
+ * `docs/package.json` runs it after `docusaurus build`, on the output in `docs/build`. Run on its own, it reads
+ * whatever build is there, so it refuses when there is none instead of reporting every target as missing.
  */
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -40,6 +41,14 @@ export function readBuiltPage(buildDirectory: string, page: string): string | un
 	return existsSync(file) ? readFileSync(file, "utf8") : undefined;
 }
 
+/** Why the check cannot run, or `undefined` when `buildDirectory` holds a built site. */
+export function missingBuild(buildDirectory: string): string | undefined {
+	return existsSync(path.join(buildDirectory, "index.html"))
+		? undefined
+		: `There is no built docs site in ${path.relative(repositoryRoot, buildDirectory)}. ` +
+				"Run `vp run docs:build`: it builds the site, then runs this check.";
+}
+
 /** One line for each target that the build does not have. */
 export function missingTargets(
 	targets: Readonly<Record<string, DocTarget>>,
@@ -59,6 +68,11 @@ export function missingTargets(
 
 if (import.meta.main) {
 	const buildDirectory = path.join(repositoryRoot, "docs", "build");
+	const unbuilt = missingBuild(buildDirectory);
+	if (unbuilt !== undefined) {
+		console.error(unbuilt);
+		process.exit(1);
+	}
 	const problems = missingTargets(DOC_TARGETS, (page) => readBuiltPage(buildDirectory, page));
 	if (problems.length > 0) {
 		console.error(
