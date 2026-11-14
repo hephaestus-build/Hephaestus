@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import {
 	createColumnHelper,
 	FlexRender,
@@ -47,6 +48,8 @@ import { type Fx, FxDisclosure, FxSpendLine, spendConversion } from "./fx";
 import { LlmUsageByDayTable, LlmUsageByJobTypeTable } from "./LlmUsageBreakdownTables";
 import { MoneyCell } from "./MoneyCell";
 import { PurseHeading, PurseLeaf } from "./PurseHeading";
+import { UnavailableCostAlert } from "./UnavailableCostAlert";
+import { usageAlerts } from "./usage-alerts";
 import {
 	type AdminInstanceUsageView,
 	INSTANCE_USAGE_SEARCH_MAX_LENGTH,
@@ -454,40 +457,6 @@ function RowActions({
 	);
 }
 
-type CapScope = "shared" | "provider";
-
-interface CapPace {
-	scope: CapScope;
-	spend: number;
-	cap?: number;
-	percent: number;
-}
-
-function pacesWorthWarningAbout(
-	report: WorkspaceLlmUsageReport | undefined,
-	isCurrentMonth: boolean,
-): CapPace[] {
-	if (report == null) {
-		return [];
-	}
-	const streams = (
-		[
-			["shared", "SHARED"],
-			["provider", "OWN_PROVIDER"],
-		] as const
-	).map(([scope, purse]) => {
-		const { spendUsd, capUsd, paused } = purseCap(report, purse);
-		return { scope, spend: spendUsd, cap: capUsd, paused };
-	});
-	return streams.flatMap(({ paused, ...stream }) => {
-		const percent = budgetUsedPercent(stream.spend, stream.cap);
-		if (percent == null || capState(percent, paused, isCurrentMonth) !== "NEAR") {
-			return [];
-		}
-		return [{ ...stream, percent }];
-	});
-}
-
 interface WorkspaceUsageDetailsProps {
 	workspace: AdminWorkspaceLlmUsage;
 	report?: WorkspaceLlmUsageReport;
@@ -514,7 +483,7 @@ function WorkspaceUsageDetails({
 }: WorkspaceUsageDetailsProps) {
 	const loaded = isLoading ? undefined : report;
 	const purses = pursesOf(workspace);
-	const paces = pacesWorthWarningAbout(report, isCurrentMonth);
+	const alerts = report == null ? [] : usageAlerts(report, isCurrentMonth);
 	return (
 		<Section
 			id={detailPanelId(workspace.workspaceSlug)}
@@ -525,20 +494,30 @@ function WorkspaceUsageDetails({
 		>
 			{error == null ? (
 				<div className="space-y-8">
-					{paces.length > 0 && (
+					{alerts.length > 0 && (
 						<div className="space-y-4">
-							{paces.map((pace) => (
-								<BudgetPaceAlert
-									key={pace.scope}
-									scope={pace.scope}
-									subjectName={workspace.displayName}
-									percent={pace.percent}
-									spendUsd={pace.spend}
-									capUsd={pace.cap}
-									projection={projectBudget(pace.spend, pace.cap, month, now)}
-									fx={fx}
-								/>
-							))}
+							{alerts.map((alert) =>
+								alert.kind === "NEAR_CAP" ? (
+									<BudgetPaceAlert
+										key={alert.purse}
+										purse={alert.purse}
+										subjectName={workspace.displayName}
+										percent={alert.percent}
+										spendUsd={alert.spendUsd}
+										capUsd={alert.capUsd}
+										projection={projectBudget(alert.spendUsd, alert.capUsd, month, now)}
+										fx={fx}
+									/>
+								) : (
+									<UnavailableCostAlert key="unavailable-cost" uses={alert.uses}>
+										Set rates for shared models in{" "}
+										<Link to="/admin/models" className="underline underline-offset-4">
+											AI models
+										</Link>
+										. {workspace.displayName}’s admins set rates for its own models.
+									</UnavailableCostAlert>
+								),
+							)}
 						</div>
 					)}
 					<Section level={3} title="By use">

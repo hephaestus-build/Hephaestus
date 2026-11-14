@@ -4,13 +4,7 @@ import {
 	type LlmModelCapabilitiesProps,
 } from "@/components/admin/instance-llm/LlmModelCapabilities";
 
-import type {
-	CreateLlmModelRequest,
-	LlmModel,
-	UpdateLlmModelPriceRequest,
-	UpdateLlmModelRequest,
-	UpdateLlmModelSharingRequest,
-} from "@/api/types.gen";
+import type { LlmModel, UpdateLlmModelSharingRequest } from "@/api/types.gen";
 import { FacetMultiSelect } from "@/components/common/FacetMultiSelect";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,10 +27,9 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import type { AdminLlmModelSaveBody } from "@/lib/admin-llm-model-save";
 import type { FieldErrors, LlmModelFormField } from "@/lib/llm-form-validation";
-import { reasoningEffortOf, reasoningEffortUpdateOf } from "@/lib/reasoning-effort";
 
+import { modelCreateBodyOf, modelPriceBodyOf, modelUpdateBodyOf } from "./llm-model-request";
 import {
-	modelDetailsBodyOf,
 	LlmModelFields,
 	type LlmModelFieldsValue,
 	modelFieldsValueOf,
@@ -122,38 +115,8 @@ function AdminLlmModelFormDialogContent({
 			return;
 		}
 
-		const { price } = fields;
-		const metadataShared = {
-			displayName: fields.displayName.trim(),
-			contextWindow: fields.contextWindow.trim() ? Number(fields.contextWindow) : undefined,
-			maxOutputTokens: fields.maxOutputTokens.trim() ? Number(fields.maxOutputTokens) : undefined,
-			...modelDetailsBodyOf(fields),
-			enabled: fields.enabled,
-		};
-		const metadata: CreateLlmModelRequest | UpdateLlmModelRequest = isEdit
-			? {
-					...metadataShared,
-					clearBrand: fields.brand === undefined,
-					// A blank limit field hands the limit back to the provider's metadata.
-					clearContextWindow: !fields.contextWindow.trim(),
-					clearMaxOutputTokens: !fields.maxOutputTokens.trim(),
-					clearDataHandling: fields.operatedBy === undefined,
-					...reasoningEffortUpdateOf(fields.reasoningEffort),
-				}
-			: {
-					...metadataShared,
-					reasoningEffort: reasoningEffortOf(fields.reasoningEffort),
-					upstreamModelId: fields.upstreamModelId.trim(),
-				};
-
-		const priceBody: UpdateLlmModelPriceRequest = {
-			pricingMode: price.pricingMode,
-			per1mInputUsd: price.pricingMode === "PRICED" ? price.per1mInputUsd : undefined,
-			per1mOutputUsd: price.pricingMode === "PRICED" ? price.per1mOutputUsd : undefined,
-			per1mCacheReadUsd: price.pricingMode === "PRICED" ? price.per1mCacheReadUsd : undefined,
-			per1mCacheWriteUsd: price.pricingMode === "PRICED" ? price.per1mCacheWriteUsd : undefined,
-			note: price.pricingMode === "NO_CHARGE" ? price.note?.trim() : undefined,
-		};
+		const metadata = isEdit ? modelUpdateBodyOf(fields) : modelCreateBodyOf(fields);
+		const priceBody = modelPriceBodyOf(fields.price);
 
 		if (isEdit) {
 			onSave({ metadata, price: priceBody });

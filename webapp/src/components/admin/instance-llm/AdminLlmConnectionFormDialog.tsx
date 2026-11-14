@@ -24,6 +24,7 @@ import type { FieldErrors, LlmConnectionFormField } from "@/lib/llm-form-validat
 import type { LlmApiProtocol, LlmAuthMode } from "@/lib/llm-provider-type";
 import { hasText } from "@/lib/text";
 
+import { connectionCreateBodyOf, connectionUpdateBodyOf } from "./llm-connection-request";
 import {
 	connectionFieldsValueOf,
 	LlmConnectionFields,
@@ -181,33 +182,10 @@ function AdminLlmConnectionFormDialogContent({
 		}
 
 		if (editing) {
-			const body: UpdateLlmConnectionRequest = {
-				displayName: fields.displayName.trim(),
-			};
-			if (fields.connectionPlatform) {
-				body.connectionPlatform = fields.connectionPlatform;
-			} else if (editing.connectionPlatform) {
-				body.clearConnectionPlatform = true;
-			}
-			if (fields.apiKey.trim()) {
-				body.apiKey = fields.apiKey.trim();
-			}
-			if (fields.clearApiKey) {
-				body.clearApiKey = true;
-			}
-			onUpdate(editing.id, body);
+			onUpdate(editing.id, connectionUpdateBodyOf(fields, editing));
 			return;
 		}
-
-		onCreate({
-			displayName: fields.displayName.trim(),
-			baseUrl: fields.baseUrl.trim(),
-			apiProtocol,
-			authMode: fields.authMode,
-			connectionPlatform: fields.connectionPlatform,
-			apiKey: fields.apiKey.trim() || undefined,
-			enabled: false,
-		});
+		onCreate(connectionCreateBodyOf(fields));
 	};
 
 	let failure = probeError;

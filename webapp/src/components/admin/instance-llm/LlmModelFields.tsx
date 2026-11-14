@@ -131,14 +131,6 @@ export function validateModelFields(
 	});
 }
 
-export function modelDetailsBodyOf(value: LlmModelFieldsValue) {
-	return {
-		operatedBy: value.operatedBy,
-		brand: value.brand,
-		dataHandlingNote: value.dataHandlingNote.trim() || undefined,
-	};
-}
-
 const canBeActive = (price: PriceModeValue) => price.pricingMode !== "UNPRICED";
 
 const BRAND_OPTIONS = ["NONE", ...AI_MODEL_BRANDS] as const;

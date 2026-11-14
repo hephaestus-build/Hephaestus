@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { CircleAlert, CircleDollarSign } from "lucide-react";
+import { CircleDollarSign } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { LlmUnmeasuredUsage, WorkspaceLlmUsageReport } from "@/api/types.gen";
@@ -9,7 +9,6 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { Section } from "@/components/layout/Section";
 import { CAP_STATE_DEFS, type CapState } from "@/components/practice-vocabulary/cap-state-defs";
 import { PURSE_DEFS, type Purse } from "@/components/practice-vocabulary/purse-defs";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
 	Empty,
@@ -20,7 +19,6 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 import { formatCapUsd, formatCostUsd } from "@/lib/money";
-import { formatNumber } from "@/lib/numbers";
 
 import { BudgetPaceAlert } from "./BudgetPaceAlert";
 import { CapIsNotMonthScoped } from "./CapIsNotMonthScoped";
@@ -34,6 +32,8 @@ import {
 	spendOfCapConversion,
 } from "./fx";
 import { LlmUsageByDayTable, LlmUsageByJobTypeTable } from "./LlmUsageBreakdownTables";
+import { UnavailableCostAlert } from "./UnavailableCostAlert";
+import { usageAlerts } from "./usage-alerts";
 import {
 	budgetUsedPercent,
 	formatMonthLabel,
@@ -70,7 +70,6 @@ export function WorkspaceUsageReport({
 	const providerCap = provider.capUsd;
 	const sharedPercent = budgetUsedPercent(sharedSpend, sharedBudget);
 	const providerPercent = budgetUsedPercent(providerSpend, providerCap);
-	const { unpricedEventCount } = report;
 	const providerPaused = isCurrentMonth && provider.paused;
 	const sharedPaused = isCurrentMonth && shared.paused;
 	const providerState = capState(providerPercent, providerPaused, isCurrentMonth);
@@ -113,45 +112,23 @@ export function WorkspaceUsageReport({
 				workspaceSlug={workspaceSlug}
 			/>
 		),
-		providerState === "NEAR" && providerPercent != null && (
-			<BudgetPaceAlert
-				key="near-own"
-				scope="provider"
-				percent={providerPercent}
-				spendUsd={providerSpend}
-				capUsd={providerCap}
-				projection={projectBudget(providerSpend, providerCap, month, now)}
-				fx={fx}
-			/>
-		),
-		sharedState === "NEAR" && sharedPercent != null && (
-			<BudgetPaceAlert
-				key="near-shared"
-				scope="shared"
-				percent={sharedPercent}
-				spendUsd={sharedSpend}
-				capUsd={sharedBudget}
-				projection={projectBudget(sharedSpend, sharedBudget, month, now)}
-				fx={fx}
-			/>
-		),
-		unpricedEventCount > 0 && (
-			<Alert key="unpriced" variant="warning" role="note">
-				<CircleAlert aria-hidden />
-				<AlertTitle>
-					{unpricedEventCount === 1
-						? "1 use has unavailable cost"
-						: `${formatNumber(unpricedEventCount)} uses have unavailable cost`}
-				</AlertTitle>
-				<AlertDescription>
-					<p>
-						Usage with unavailable cost is not counted in these totals. A rate may be missing or a
-						measurement unverified. Real spend may be higher. Adding rates repairs only verified
-						usage. Set rates for your own models in <AiModelsLink workspaceSlug={workspaceSlug} />.
-						For shared models, ask an instance admin.
-					</p>
-				</AlertDescription>
-			</Alert>
+		...usageAlerts(report, isCurrentMonth).map((alert) =>
+			alert.kind === "NEAR_CAP" ? (
+				<BudgetPaceAlert
+					key={alert.purse}
+					purse={alert.purse}
+					percent={alert.percent}
+					spendUsd={alert.spendUsd}
+					capUsd={alert.capUsd}
+					projection={projectBudget(alert.spendUsd, alert.capUsd, month, now)}
+					fx={fx}
+				/>
+			) : (
+				<UnavailableCostAlert key="unavailable-cost" uses={alert.uses}>
+					Set rates for your own models in <AiModelsLink workspaceSlug={workspaceSlug} />. For
+					shared models, ask an instance admin.
+				</UnavailableCostAlert>
+			),
 		),
 	].filter((alert) => alert !== false);
 

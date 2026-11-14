@@ -18,7 +18,7 @@ const meta = {
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
 	args: {
-		scope: "provider",
+		purse: "OWN_PROVIDER",
 		percent: 84,
 		spendUsd: 42,
 		capUsd: 50,
@@ -47,7 +47,7 @@ export const NamedSubject: Story = {
 };
 
 export const SharedModelBudget: Story = {
-	args: { scope: "shared", subjectName: "Acme" },
+	args: { purse: "SHARED", subjectName: "Acme" },
 	play: async ({ canvas }) => {
 		await expect(await canvas.findByText(/shared-model budget/u)).toBeVisible();
 	},
