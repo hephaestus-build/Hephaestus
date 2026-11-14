@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemLabel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
@@ -124,6 +125,37 @@ class DocumentItemSourceIntegrationTest extends BaseIntegrationTest {
                         .orElseThrow()
                         .getContentHash())
                 .isEqualTo("changed-after-pin");
+    }
+
+    @Test
+    void shouldStopAsRemovedWorkWhenOutlineDeletedTheDocument() {
+        var fixture = readableDocument("https://wiki.example.com");
+        var document = documents
+                .findById(Objects.requireNonNull(fixture.item().sourceId()))
+                .orElseThrow();
+        // A tombstone also drops the body and the people it names (ck_outline_document_tombstone).
+        document.setDeletedAt(Instant.now());
+        document.setBodyMarkdown(null);
+        document.setContentHash(null);
+        document.setCreatedBySubject(null);
+        document.setUpdatedBySubject(null);
+        document.setCollaboratorSubjects(null);
+        documents.saveAndFlush(document);
+
+        assertThatThrownBy(() -> resolver.pin(fixture.item(), null))
+                .isInstanceOfSatisfying(
+                        ItemCaptureException.class,
+                        refused -> assertThat(refused.code()).isEqualTo(ItemCaptureCode.ITEM_REMOVED));
+    }
+
+    @Test
+    void shouldStopAsNotVisibleWhenTheDocumentOriginIsNotApproved() {
+        var fixture = readableDocument("https://unapproved.example.com");
+
+        assertThatThrownBy(() -> resolver.pin(fixture.item(), null))
+                .isInstanceOfSatisfying(
+                        ItemCaptureException.class,
+                        refused -> assertThat(refused.code()).isEqualTo(ItemCaptureCode.ITEM_NOT_VISIBLE));
     }
 
     @Test
