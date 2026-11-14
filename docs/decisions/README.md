@@ -176,6 +176,11 @@ Rejected options are never deleted. A superseded ADR keeps them, and the new ADR
 | [0100](0100-the-server-serves-the-web-app.md) | The server serves the web app | Accepted |
 | [0101](0101-a-connection-cannot-adopt-an-upstream-resource-whose-removal-is-unresolved.md) | A connection cannot adopt an upstream resource whose removal is unresolved | Accepted |
 | [0103](0103-the-public-api-grows-only-by-addition-and-every-client-tolerates-what-it-does-not-know.md) | The public API grows only by addition, and every client tolerates what it does not know | Proposed |
+| [0104](0104-the-mobile-apps-are-native-clients-of-the-server-api.md) | The mobile apps are native SwiftUI and Jetpack Compose clients of the server API | Proposed |
+| [0105](0105-one-store-app-signs-in-to-any-instance-by-its-address.md) | One store app for each platform signs in to any instance by its address, through a claimed HTTPS redirect and a checked issuer | Proposed |
+| [0106](0106-the-mobile-apps-release-with-the-stores-own-tools.md) | The mobile apps build and code-sign in GitHub Actions with the stores' own tools, and release on a version line of their own | Proposed |
+| [0107](0107-a-push-is-one-web-push-message-from-the-instance.md) | A push is one encrypted Web Push message from the instance, sent at most once from the outbox, and it says only that something is ready | Proposed |
+| [0108](0108-the-store-apps-receive-push-through-one-stateless-relay.md) | The store apps receive push through one stateless Web Push relay of the publishing organization | Proposed |
 
 | [0102](0102-sync-status-hints-use-postgresql-notifications.md) | Sync-status hints use PostgreSQL notifications | Accepted |
 
