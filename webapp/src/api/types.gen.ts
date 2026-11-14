@@ -4074,6 +4074,10 @@ export type PracticeItemTypeOption = {
 	applicabilityClauses: Array<"CHANGED_PATH" | "DIFF_CONTAINS" | "HAS_ITEMS" | "MERGED">;
 	applicabilitySources: Array<ReadSourceOption>;
 	events: Array<ItemEventOption>;
+	/**
+	 * Whether feedback can appear on the reviewed work itself. Otherwise feedback about this kind of item goes only to the author's practice page and conversation.
+	 */
+	feedbackOnWork: boolean;
 	kind: string;
 	label: string;
 	readSources: Array<ReadSourceOption>;

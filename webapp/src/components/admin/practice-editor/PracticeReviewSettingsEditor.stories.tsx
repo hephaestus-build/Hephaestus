@@ -54,6 +54,8 @@ export const PullRequest: Story = {
 		await expect(strip.getByRole("checkbox", { name: /^Merged/u })).not.toBeChecked();
 		await expect(canvas.getByRole("checkbox", { name: "Ready for review" })).toBeChecked();
 		await expect(canvas.getByRole("group", { name: "Reads" })).toBeVisible();
+		// Feedback can appear on a pull request, so the editor names no other place.
+		await expect(canvas.queryByText(/posts no feedback/u)).toBeNull();
 	},
 };
 
@@ -85,6 +87,8 @@ export const Document: Story = {
 		const strip = within(canvas.getByRole("group", { name: "Review on" }));
 		await expect(strip.getByRole("checkbox", { name: /^Published/u })).toBeChecked();
 		await expect(strip.getByRole("checkbox", { name: /^Archived/u })).not.toBeChecked();
+		// Outline gets no feedback, so the editor says where it goes instead.
+		await expect(canvas.getByText(/Hephaestus posts no feedback on a document\./u)).toBeVisible();
 	},
 };
 
@@ -100,6 +104,9 @@ export const ConversationHasOneEvent: Story = {
 		const strip = within(canvas.getByRole("group", { name: "Review on" }));
 		await expect(strip.getAllByRole("checkbox")).toHaveLength(1);
 		await expect(canvas.queryByText("Along the way")).toBeNull();
+		await expect(
+			canvas.getByText(/Hephaestus posts no feedback on a conversation\./u),
+		).toBeVisible();
 	},
 };
 

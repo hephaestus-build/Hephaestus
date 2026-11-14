@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices;
 
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CopyCapability;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemDescriptor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventCoverage;
 import de.tum.cit.aet.hephaestus.practices.dto.ItemEventOptionDTO;
@@ -78,6 +79,8 @@ public class PracticeDefinitionOptionsService {
                 readSources.stream()
                         .filter(source ->
                                 capabilities.appliesWhenEvidenceCollections().contains(source.source()))
-                        .toList());
+                        .toList(),
+                item.copyCapabilities().contains(CopyCapability.SUMMARY)
+                        || item.copyCapabilities().contains(CopyCapability.LINE_NOTE));
     }
 }

@@ -78,6 +78,7 @@ export const mockPullRequestItemType = {
 	applicabilityClauses: ["CHANGED_PATH", "DIFF_CONTAINS", "HAS_ITEMS", "MERGED"],
 	applicabilitySources,
 	scanSupported: true,
+	feedbackOnWork: true,
 	scanItemKinds: ["scm.file"],
 } satisfies PracticeItemTypeOption;
 
@@ -91,6 +92,7 @@ export const mockPullRequestReviewItemType = {
 	applicabilityClauses: ["HAS_ITEMS"],
 	applicabilitySources,
 	scanSupported: false,
+	feedbackOnWork: true,
 	scanItemKinds: [],
 } satisfies PracticeItemTypeOption;
 
@@ -120,6 +122,7 @@ export const mockIssueItemType = {
 	applicabilityClauses: [],
 	applicabilitySources: [],
 	scanSupported: false,
+	feedbackOnWork: true,
 	scanItemKinds: [],
 } satisfies PracticeItemTypeOption;
 
@@ -133,6 +136,7 @@ export const mockThreadItemType = {
 	applicabilityClauses: [],
 	applicabilitySources: [],
 	scanSupported: false,
+	feedbackOnWork: false,
 	scanItemKinds: [],
 } satisfies PracticeItemTypeOption;
 
@@ -150,6 +154,7 @@ export const mockDocumentItemType = {
 	applicabilityClauses: [],
 	applicabilitySources: [],
 	scanSupported: false,
+	feedbackOnWork: false,
 	scanItemKinds: [],
 } satisfies PracticeItemTypeOption;
 
@@ -163,6 +168,7 @@ export const mockFileItemType = {
 	applicabilityClauses: [],
 	applicabilitySources: [],
 	scanSupported: false,
+	feedbackOnWork: false,
 	scanItemKinds: [],
 } satisfies PracticeItemTypeOption;
 

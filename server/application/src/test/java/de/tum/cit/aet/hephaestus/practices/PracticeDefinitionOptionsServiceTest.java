@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -9,6 +10,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCatalog;
 import de.tum.cit.aet.hephaestus.evidence.SourceContract;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadItemDescriptor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemDescriptor;
@@ -17,7 +19,9 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventDefinition;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewCapabilities;
+import de.tum.cit.aet.hephaestus.integration.docs.item.DocumentItemDescriptor;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.PullRequestItemDescriptor;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeItemTypeOptionDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import java.util.List;
@@ -89,5 +93,19 @@ class PracticeDefinitionOptionsServiceTest extends BaseUnitTest {
             assertThat(type.scanItemKinds()).contains("scm.file");
             assertThat(type.readSources()).isEmpty();
         });
+    }
+
+    @Test
+    void shouldSayThatOnlyWorkOnTheCodeHostCarriesFeedbackOnTheWork() {
+        var items = mock(PracticeItemOptions.class);
+        when(items.all())
+                .thenReturn(List.of(
+                        new PullRequestItemDescriptor(), new ThreadItemDescriptor(), new DocumentItemDescriptor()));
+        var registry = new ClasspathSourceCatalogRegistry(JsonMapper.builder().build(), Clock.systemUTC());
+        var result = new PracticeDefinitionOptionsService(items, registry, mock(ItemEventCoverage.class)).options(null);
+        assertThat(result.itemTypes())
+                .extracting(PracticeItemTypeOptionDTO::kind, PracticeItemTypeOptionDTO::feedbackOnWork)
+                .containsExactly(
+                        tuple("scm.pull_request", true), tuple("chat.thread", false), tuple("docs.document", false));
     }
 }

@@ -1,8 +1,8 @@
-import { HandIcon } from "lucide-react";
+import { HandIcon, InboxIcon } from "lucide-react";
 
 import type { PracticeItemTypeOption, PracticeReadSource, ReviewOn } from "@/api/types.gen";
 import { FieldError } from "@/components/ui/field";
-import { itemKindIcon } from "@/lib/item-kinds";
+import { itemKindIcon, itemKindNoun } from "@/lib/item-kinds";
 import { hasText } from "@/lib/text";
 
 import { PracticeReadsEditor } from "./PracticeReadsEditor";
@@ -87,6 +87,16 @@ export function PracticeReviewSettingsEditor({
 					<span>
 						Anyone can also request this review on the work itself. A requested review ignores
 						Review on and When, and still checks Applies when.
+					</span>
+				</p>
+			)}
+
+			{automated && !itemType.feedbackOnWork && (
+				<p className="flex items-start gap-2 text-sm text-muted-foreground">
+					<InboxIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
+					<span>
+						Hephaestus posts no feedback on a {itemKindNoun(itemType.kind, 1)}. Its author gets the
+						feedback on their Practice profile and in their conversation with Hephaestus.
 					</span>
 				</p>
 			)}
