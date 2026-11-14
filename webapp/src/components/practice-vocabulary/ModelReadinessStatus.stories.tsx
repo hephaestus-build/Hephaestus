@@ -1,7 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect } from "storybook/test";
 
-import { MODEL_READINESS_DEFS, type ModelNotReady } from "./model-readiness-defs";
+import { statusValues } from "@/components/common/status-def";
+
+import { MODEL_READINESS_DEFS } from "./model-readiness-defs";
 import { ModelReadinessStatus } from "./ModelReadinessStatus";
 
 /**
@@ -18,13 +20,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const NOT_READY = [
-	"PRICE_MISSING",
-	"CONNECTION_OFF",
-	"OFF",
-	"LIMITS_MISSING",
-	"NO_WORKSPACE_ACCESS",
-] as const satisfies readonly ModelNotReady[];
+const NOT_READY = statusValues(MODEL_READINESS_DEFS);
 
 export const Ready: Story = {
 	play: async ({ canvas }) => {

@@ -100,8 +100,9 @@ The alerts say "N runs have no price".
 They name no purse, because the count covers both purses.
 
 Two other surfaces answer a *different* question and correctly use different words.
-The instance model table's readiness column says "Price missing".
-It ranks one blocker against others: "Connection off", "Model off", and "No workspace access".
+Both model tables say "Price missing" in their status column.
+The server decides one readiness per model, and the status ranks one blocker against others, such as "Connection off", "Off" and "No workspace access".
+`model-readiness-defs.ts` holds the labels.
 It does not name a pricing mode.
 If you are adding a third phrasing for the same question `priceLabel` already answers, route it through `priceLabel` instead.
 
