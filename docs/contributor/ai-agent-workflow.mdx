@@ -182,13 +182,14 @@ opencode and Codex both ignore the field, so there they are ordinary skills the 
 | `AGENTS.md`        | The repository — layout, quality gates, generated artifacts, migrations, changesets     |
 | `webapp/AGENTS.md` | The SPA — component conventions, data fetching, role gating, vocabulary                 |
 | `server/AGENTS.md` | The Spring Boot server — build traps, the four test tiers, API and security conventions |
+| `extension/AGENTS.md` | The Chrome extension — where things live, the credential boundary, provider slots |
 
 The tools read them differently.
 The file itself does not show these differences:
 
 - **opencode** reads `AGENTS.md` natively.
   It reads the nested files through the `instructions` globs in `opencode.json`.
-  These load unconditionally, so an opencode session carries all three.
+  These load unconditionally, so an opencode session carries all of them.
 - **Codex** reads `AGENTS.md` from the repository root down to its launch directory.
   It stops there.
   Start it in `webapp/` to get the SPA guide.
@@ -215,17 +216,22 @@ The file itself does not show these differences:
 - Two agent files have the same body.
 - Any of these files is a committed symlink.
 - The root `AGENTS.md` and a nested one together are larger than 32 KiB.
+- An `AGENTS.md` is not in the table above.
+- An agent file or contributor doc names a `vp run` task that `vite.config.ts` or the filtered package does not define.
 
 Each failure explains itself.
 The gate compares bodies exactly.
 Thus, it detects a copy when someone makes it, not after the copies differ.
+
+`.github/CODEOWNERS` names the owner of these files, the skills and the local development configuration.
 
 ### Adding a tree, or a skill
 
 1. Write `<dir>/AGENTS.md`.
 2. Add `<dir>/CLAUDE.md` with `@AGENTS.md`.
 3. Unless `*/AGENTS.md` already matches, add its own `opencode.json` `instructions` entry.
-4. Run the gate.
+4. Add a row to the table above.
+5. Run the gate.
 
 A skill is a directory under `.claude/skills/`.
 It needs a file in `.opencode/commands/` only if you mark it `disable-model-invocation`.

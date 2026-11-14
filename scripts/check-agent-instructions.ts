@@ -15,6 +15,8 @@
  *   duplicated  — two agent files with one body.
  *   oversized   — an `AGENTS.md` chain longer than Codex loads, which cuts the tail off unannounced.
  *   stale       — a contributor document names a repository path or npm package that does not resolve.
+ *   unknown     — an agent file or contributor document names a `vp run` task that does not exist.
+ *   unlisted    — an `AGENTS.md` the instruction table of the agent workflow guide does not name.
  *
  * `unread` runs before all of them and reports this gate's own blind spot: an agent file the
  * classifier never opened, which every check below would otherwise read as a file that says nothing.
@@ -34,11 +36,14 @@ import { mdxjs } from "micromark-extension-mdxjs";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { asRecord, asStringArray, parseJson } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
+import { loadTasks } from "./lib/task-graph.ts";
 
 /** Resolved from this file, so the gate answers the same whatever the working directory is. */
 const REPO_ROOT = nodePath.resolve(import.meta.dirname, "..");
 
 const OPENCODE_CONFIG = "opencode.json";
+/** The contributor page whose table names every `AGENTS.md`, so a reader finds each guide and what it covers. */
+const INSTRUCTION_TABLE = "docs/contributor/ai-agent-workflow.mdx";
 const SKILLS_ROOT = ".claude/skills";
 const COMMANDS_ROOT = ".opencode/commands";
 
@@ -119,6 +124,8 @@ export type TrackedFile =
 
 export interface Snapshot {
 	readonly files: readonly TrackedFile[];
+	/** The task names of the root `vite.config.ts`, which `vp run <task>` resolves. */
+	readonly tasks: readonly string[];
 }
 
 interface Repo {
@@ -909,6 +916,100 @@ function oversized(repo: Repo): readonly string[] {
  * `codexSkills` is the repo's intent rather than the algorithm's, so it is supplied rather than
  * assumed: the CLI passes `CODEX_SKILLS`, and a caller reasoning about a snapshot alone passes none.
  */
+/** The scripts of each workspace package, which `vp run --filter <package> <script>` resolves. */
+function packageScripts(repo: Repo): ReadonlyMap<string, ReadonlySet<string>> {
+	const scripts = new Map<string, ReadonlySet<string>>();
+	for (const file of repo.present.values()) {
+		if (file.kind !== "text" || basename(file.path) !== "package.json") {
+			continue;
+		}
+		const json = asRecord(parseJson(file.content), file.path);
+		if (typeof json.name === "string") {
+			scripts.set(
+				json.name,
+				new Set(Object.keys(asRecord(json.scripts ?? {}, `${file.path} scripts`))),
+			);
+		}
+	}
+	return scripts;
+}
+
+const TASK_NAME = /^[a-z][a-z0-9-]*(?::[a-z0-9-]+)*$/u;
+
+/**
+ * The tasks that each `vp run` in `text` names. A command ends at a backtick, a quote, a shell operator or the end
+ * of the line. A placeholder such as `<task>` is not a name. `--filter <package>` names a package script.
+ */
+export function namedTasks(
+	text: string,
+): readonly { readonly task: string; readonly filter?: string }[] {
+	const named: { task: string; filter?: string }[] = [];
+	for (const match of text.matchAll(/\bvp run\b(?<rest>[^`"'|&;\n]*)/gu)) {
+		const tokens = (match.groups?.rest ?? "")
+			.trim()
+			.split(/\s+/u)
+			.filter((token) => token !== "");
+		let filter: string | undefined;
+		for (let index = 0; index < tokens.length; index += 1) {
+			const token = tokens[index] ?? "";
+			if (token === "--filter") {
+				filter = tokens[index + 1];
+				index += 1;
+				continue;
+			}
+			if (token.startsWith("-")) {
+				continue;
+			}
+			const task = token.replace(/[.,:;)]+$/u, "");
+			if (TASK_NAME.test(task)) {
+				named.push(filter === undefined ? { task } : { task, filter });
+			}
+			break;
+		}
+	}
+	return named;
+}
+
+function unknownTasks(repo: Repo, tasks: readonly string[]): readonly string[] {
+	const known = new Set(tasks);
+	const scripts = packageScripts(repo);
+	const failures = new Set<string>();
+	for (const file of repo.present.values()) {
+		if (file.kind !== "text" || !(isAgentMarkdown(file.path) || isContributorDoc(file.path))) {
+			continue;
+		}
+		for (const { task, filter } of namedTasks(file.content)) {
+			if (filter === undefined ? known.has(task) : (scripts.get(filter)?.has(task) ?? false)) {
+				continue;
+			}
+			failures.add(
+				filter === undefined
+					? `${file.path} names \`vp run ${task}\`, but vite.config.ts defines no such task.\n` +
+							"  Use the task's current name, or remove the stale command."
+					: `${file.path} names \`vp run --filter ${filter} ${task}\`, but package ${filter} has no script ${task}.\n` +
+							"  Use the script's current name, or remove the stale command.",
+			);
+		}
+	}
+	return [...failures];
+}
+
+/** A guide the instruction table does not name is one a contributor does not know to read or update. */
+function unlisted(repo: Repo): readonly string[] {
+	const table = repo.present.get(INSTRUCTION_TABLE);
+	if (table?.kind !== "text") {
+		return [`${INSTRUCTION_TABLE} is missing, so no page says which AGENTS.md covers which tree.`];
+	}
+	const named = new Set(codeSpans(table.content, "mdx"));
+	return repo.guides
+		.filter((guide) => !named.has(guide))
+		.map(
+			(guide) =>
+				`${guide} is not in the instruction table of ${INSTRUCTION_TABLE}.\n` +
+				"  Add a row that names it and what it covers.",
+		);
+}
+
 export const analyse = (
 	snapshot: Snapshot,
 	codexSkills: readonly string[] = [],
@@ -925,6 +1026,8 @@ export const analyse = (
 		...duplicated(repo),
 		...oversized(repo),
 		...staleContributorClaims(repo),
+		...unknownTasks(repo, snapshot.tasks),
+		...unlisted(repo),
 	];
 };
 
@@ -957,7 +1060,7 @@ export async function scan(root: string = REPO_ROOT): Promise<Snapshot> {
 			files.push({ path, kind: "opaque" });
 		}
 	}
-	return { files };
+	return { files, tasks: Object.keys(await loadTasks()) };
 }
 
 if (process.argv[1] === import.meta.filename) {
@@ -990,6 +1093,6 @@ if (process.argv[1] === import.meta.filename) {
 	console.log(
 		`check-agent-instructions: ${repo.guides.length} AGENTS.md reach Claude Code and opencode; ` +
 			`${skills.length} skills, ${mirrored} of them mirrored for Codex, ` +
-			`${repo.commands.length} opencode commands; contributor-doc references checked.`,
+			`${repo.commands.length} opencode commands; contributor-doc references and vp run tasks checked.`,
 	);
 }

@@ -6,3 +6,24 @@
 # Auth and identity: ADR 0017.
 server/application/src/main/java/de/tum/cit/aet/hephaestus/core/auth/   @FelixTJDietrich @hephaestus-build/maintainer
 docs/decisions/0017-replace-keycloak-with-spring-native-auth.md          @FelixTJDietrich
+
+# Agent instructions and skills. docs/contributor/ai-agent-workflow.mdx owns them; `vp run gate:instructions` checks them.
+AGENTS.md                @hephaestus-build/maintainer
+CLAUDE.md                @hephaestus-build/maintainer
+/.claude/                @hephaestus-build/maintainer
+/.agents/                @hephaestus-build/maintainer
+/.opencode/              @hephaestus-build/maintainer
+/opencode.json           @hephaestus-build/maintainer
+/skills-lock.json        @hephaestus-build/maintainer
+
+# Local development configuration. docs/contributor/local-development.mdx owns it.
+/mprocs.yaml             @hephaestus-build/maintainer
+/.vite-hooks/            @hephaestus-build/maintainer
+/server/.env.example     @hephaestus-build/maintainer
+/server/compose.yaml     @hephaestus-build/maintainer
+/scripts/dev-*.ts        @hephaestus-build/maintainer
+/project.code-workspace  @hephaestus-build/maintainer
+/.vscode/                @hephaestus-build/maintainer
+/.idea/                  @hephaestus-build/maintainer
+/.editorconfig           @hephaestus-build/maintainer
+/.java-version           @hephaestus-build/maintainer

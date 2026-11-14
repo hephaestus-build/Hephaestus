@@ -8,6 +8,7 @@ import {
 	CODEX_INSTRUCTION_BYTES,
 	CODEX_SKILLS,
 	codeSpans,
+	namedTasks,
 	parse,
 	references,
 	type Snapshot,
@@ -31,6 +32,12 @@ function only(failures: readonly string[]): string {
 const symlinkTo = (target: string): { readonly target: string } => ({ target });
 const markdownSpans = (markdown: string): readonly string[] => codeSpans(markdown, "markdown");
 
+/** The instruction table once a case adds `server/AGENTS.md`. */
+const tableWithServer = {
+	"docs/contributor/ai-agent-workflow.mdx":
+		"| File | Covers |\n| --- | --- |\n| `AGENTS.md` | The repository |\n| `webapp/AGENTS.md` | The SPA |\n| `server/AGENTS.md` | The server |\n",
+};
+
 type Override = string | { readonly target: string } | { readonly kind: "opaque" } | null;
 
 /** A checkout with the wiring intact. `null` removes a file; every other value sets its kind. */
@@ -45,6 +52,8 @@ function snapshot(overrides: Record<string, Override> = {}): Snapshot {
 			"---\nname: land-pr\ndisable-model-invocation: true\n---\n\n# Land PR\n",
 		".opencode/commands/land-pr.md":
 			"---\ndescription: Land a PR\n---\n\n@.claude/skills/land-pr/SKILL.md\n",
+		"docs/contributor/ai-agent-workflow.mdx":
+			"| File | Covers |\n| --- | --- |\n| `AGENTS.md` | The repository |\n| `webapp/AGENTS.md` | The SPA |\n",
 	};
 	const files: TrackedFile[] = [];
 	for (const [file, content] of Object.entries({ ...base, ...overrides })) {
@@ -59,7 +68,7 @@ function snapshot(overrides: Record<string, Override> = {}): Snapshot {
 			files.push({ path: file, kind: "opaque" });
 		}
 	}
-	return { files };
+	return { files, tasks: ["check", "dev:env"] };
 }
 
 await test("the wired checkout passes", () => {
@@ -91,6 +100,7 @@ await test("sibling guides count against the budget separately", () => {
 				"webapp/AGENTS.md": "b".repeat(20_000),
 				"server/AGENTS.md": "c".repeat(20_000),
 				"server/CLAUDE.md": "@AGENTS.md\n",
+				...tableWithServer,
 			}),
 		),
 		[],
@@ -670,7 +680,11 @@ await test("a Codex file of a listed skill with no Claude Code counterpart is re
 
 await test("two pointers are allowed to look alike", () => {
 	const failures = analyse(
-		snapshot({ "server/AGENTS.md": "# Server\n", "server/CLAUDE.md": "@AGENTS.md\n" }),
+		snapshot({
+			"server/AGENTS.md": "# Server\n",
+			"server/CLAUDE.md": "@AGENTS.md\n",
+			...tableWithServer,
+		}),
 	);
 	assert.deepEqual(failures, []);
 });
@@ -682,6 +696,7 @@ await test("failures arrive in the order analyse lists its checks", () => {
 			// unread
 			"server/AGENTS.md": { kind: "opaque" },
 			"server/CLAUDE.md": "@AGENTS.md\n",
+			...tableWithServer,
 			// unreachable
 			"webapp/CLAUDE.md": null,
 			// dangling
@@ -699,4 +714,53 @@ await test("failures arrive in the order analyse lists its checks", () => {
 			".claude/skills/land-pr/SKILL.md sets",
 		],
 	);
+});
+
+await test("a vp run command reads the task it names, and a placeholder or flag is not a task", () => {
+	assert.deepEqual(
+		namedTasks(
+			"Run `vp run check`, then `vp run --no-cache check:affected --base main`.\n" +
+				"```bash\nvp run --filter webapp test:e2e accessibility.spec.ts\nvp run pr:wait <n>\n```\n" +
+				"`vp run` lists every task. `vp run <task>` runs one. `vp run --last-details` explains it.",
+		),
+		[
+			{ task: "check" },
+			{ task: "check:affected" },
+			{ task: "test:e2e", filter: "webapp" },
+			{ task: "pr:wait" },
+		],
+	);
+});
+
+await test("an instruction or contributor doc that names a task nobody defines fails", () => {
+	const failures = analyse(
+		snapshot({
+			"AGENTS.md": "# Hephaestus\n\nRun `vp run check` and `vp run chek`.\n",
+			"docs/contributor/setup.md": "Start with `vp run dev:env` and `vp run dev:setup`.\n",
+		}),
+	);
+	assert.equal(failures.length, 2, failures.join("\n"));
+	assert.match(failures[0] ?? "", /AGENTS\.md names `vp run chek`/u);
+	assert.match(failures[1] ?? "", /setup\.md names `vp run dev:setup`/u);
+});
+
+await test("a filtered task resolves against that package's scripts", () => {
+	const failures = analyse(
+		snapshot({
+			"webapp/package.json": JSON.stringify({
+				name: "webapp",
+				scripts: { "test:e2e": "playwright test" },
+			}),
+			"docs/contributor/setup.md":
+				"Run `vp run --filter webapp test:e2e`, not `vp run --filter webapp e2e`.\n",
+		}),
+	);
+	assert.match(only(failures), /package webapp has no script e2e/u);
+});
+
+await test("a guide the instruction table does not name fails", () => {
+	const failures = analyse(
+		snapshot({ "extension/AGENTS.md": "# Extension\n", "extension/CLAUDE.md": "@AGENTS.md\n" }),
+	);
+	assert.match(only(failures), /extension\/AGENTS\.md is not in the instruction table/u);
 });

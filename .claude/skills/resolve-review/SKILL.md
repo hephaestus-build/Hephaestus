@@ -117,7 +117,7 @@ Fixed in 3f2a1c4: `parseCursor` now rejects an empty cursor, and `CursorTest.emp
 ```
 
 ```text
-Declined: `retries` is only read by the webhook role, which this PR does not touch.
+Declined: `retries` is only read by the migrate run mode, which this PR does not touch.
 ```
 
 Post the reply to the thread:
