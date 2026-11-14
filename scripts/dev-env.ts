@@ -1,11 +1,10 @@
-import { execFile } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { constants } from "node:fs";
 import { access, chmod, copyFile, readdir, readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
 
 import { isSet, readEnvFile } from "./lib/env.ts";
+import { output } from "./lib/process.ts";
 
 const server = path.join(import.meta.dirname, "../server");
 
@@ -170,10 +169,10 @@ export function portsOf(values: Record<string, string | undefined>): Set<number>
 		const configured = values[name];
 		return isSet(configured) ? Number(configured) : fallback;
 	};
-	const server = value("SERVER_PORT", defaultPort("SERVER_PORT"));
+	const serverPort = value("SERVER_PORT", defaultPort("SERVER_PORT"));
 	return new Set(
 		PORTS.map(({ name, port }) =>
-			value(name, name === "MANAGEMENT_PORT" ? server + MANAGEMENT_OFFSET : port),
+			value(name, name === "MANAGEMENT_PORT" ? serverPort + MANAGEMENT_OFFSET : port),
 		),
 	);
 }
@@ -182,11 +181,7 @@ export function portsOf(values: Record<string, string | undefined>): Set<number>
 async function otherWorktreeSettings(checkout: string): Promise<Record<string, string>[]> {
 	let listing: string;
 	try {
-		({ stdout: listing } = await promisify(execFile)(
-			"git",
-			["worktree", "list", "--porcelain", "-z"],
-			{ cwd: checkout },
-		));
+		listing = await output("git", ["worktree", "list", "--porcelain", "-z"], { cwd: checkout });
 	} catch {
 		// A checkout outside Git, such as a source archive, has no other worktrees.
 		return [];
