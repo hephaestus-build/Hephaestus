@@ -1239,8 +1239,10 @@ public class JobEvidenceFiles implements SandboxResultListener {
         Path workspaceDirectory = Objects.requireNonNull(jobDirectory.getParent());
         return EvidenceFolderLease.removeAsOwner(
                 layout.root(),
-                Long.parseLong(Objects.requireNonNull(workspaceDirectory.getFileName()).toString()),
-                UUID.fromString(Objects.requireNonNull(jobDirectory.getFileName()).toString()),
+                Long.parseLong(
+                        Objects.requireNonNull(workspaceDirectory.getFileName()).toString()),
+                UUID.fromString(
+                        Objects.requireNonNull(jobDirectory.getFileName()).toString()),
                 () -> deleteAttempt(root));
     }
 

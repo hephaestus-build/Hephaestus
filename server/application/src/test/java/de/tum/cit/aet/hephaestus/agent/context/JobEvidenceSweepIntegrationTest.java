@@ -58,7 +58,8 @@ class JobEvidenceSweepIntegrationTest extends BaseIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        workspace = workspaces.save(TestEntities.activeWorkspace("evsweep-" + UUID.randomUUID().toString().substring(0, 8)));
+        workspace = workspaces.save(TestEntities.activeWorkspace(
+                "evsweep-" + UUID.randomUUID().toString().substring(0, 8)));
     }
 
     @Test
@@ -97,7 +98,8 @@ class JobEvidenceSweepIntegrationTest extends BaseIntegrationTest {
         assertThat(measured).doesNotExist();
         assertThat(composition.resolve("context/source.txt")).exists();
         // The composition still reads the inventory of the attempt it composes.
-        assertThat(Objects.requireNonNull(jobs.findById(composing.getId()).orElseThrow().getCapture())
+        assertThat(Objects.requireNonNull(
+                                jobs.findById(composing.getId()).orElseThrow().getCapture())
                         .path("manifest")
                         .has("citableTexts"))
                 .isTrue();
