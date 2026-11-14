@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewFreshness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -83,6 +84,11 @@ public class ReviewJobAssignments {
                 .filter(row -> row.practiceSlug().equals(practiceSlug))
                 .findFirst()
                 .ifPresent(assignment -> freshness.syncSources(job.getWorkspaceId(), assignment.id()));
+    }
+
+    /** {@link ReviewFreshness#syncResults} for the results that a feedback package rests on. */
+    public void syncBasis(long workspaceId, Collection<UUID> resultIds) {
+        freshness.syncResults(workspaceId, resultIds);
     }
 
     public boolean publicReviewed(ReviewJob job) {

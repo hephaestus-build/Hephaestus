@@ -80,11 +80,17 @@ import tools.jackson.databind.node.ObjectNode;
 @RequiredArgsConstructor
 public class ReviewServiceImpl implements ReviewService {
     /**
-     * Membership reasons of a practice that was never measured and is still owed: it waits for the item's checks, or a
-     * newer occasion replaced its review. The next edge selects it again, whatever that edge's occasions select.
+     * Membership reasons of a practice that was never measured and is still owed: it waits for the item's checks, a
+     * newer occasion replaced its review, or it was not ready. Not ready covers sources that could not be verified at
+     * practice start or seal, too little evidence and a spent workspace budget; none of them says that the practice
+     * does not apply. The next edge selects it again, whatever that edge's occasions select.
      */
     private static final List<String> CARRIED_REASONS = List.of(
-            "CHECKS_PENDING", "NO_CHECKS_REPORTED", "CHECKS_AWAITING_APPROVAL", ReviewStopReason.REPLACED.name());
+            "CHECKS_PENDING",
+            "NO_CHECKS_REPORTED",
+            "CHECKS_AWAITING_APPROVAL",
+            ReviewStopReason.REPLACED.name(),
+            ReviewStopReason.READINESS_REFUSED.name());
 
     /** Where a review that a comment requested answers that comment when no feedback does. */
     static final String COMMENT_ANSWER = "commentAnswer";
@@ -785,7 +791,6 @@ public class ReviewServiceImpl implements ReviewService {
     private static ReviewStopReason owed(@Nullable String reason) {
         if (ReviewStopReason.REPLACED.name().equals(reason)) return ReviewStopReason.REPLACED;
         return CARRIED_REASONS.contains(reason)
-                        || ReviewStopReason.READINESS_REFUSED.name().equals(reason)
                 ? ReviewStopReason.READINESS_REFUSED
                 : ReviewStopReason.EXECUTION_INCOMPLETE;
     }

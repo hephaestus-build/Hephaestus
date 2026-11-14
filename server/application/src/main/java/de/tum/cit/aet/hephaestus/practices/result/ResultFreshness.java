@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.databind.JsonNode;
 
 /** The captured content dependencies of a result, compared with the work that can be read now. */
@@ -156,6 +157,7 @@ public class ResultFreshness {
      * call the provider, so it runs with no transaction. A scan reads its frozen scope and needs nothing.
      */
     public void sync(long workspaceId, Collection<Result> rows) {
+        requireNoTransaction();
         var owned = rows.stream()
                 .filter(result -> result.getWorkspaceId() == workspaceId)
                 .toList();
@@ -189,9 +191,16 @@ public class ResultFreshness {
 
     /** {@link #sync(long, Collection)} for the sources that one capture fingerprinted, before {@link #check}. */
     public void sync(long workspaceId, long itemId, @Nullable UUID occasion, @Nullable JsonNode facts) {
+        requireNoTransaction();
         var kinds = fingerprints(facts).keySet();
         if (kinds.isEmpty()) return;
         items.find(workspaceId, itemId).ifPresent(item -> items.sync(item, kinds, occasion));
+    }
+
+    /** A sync may call the provider, which a transaction must not wait on; a suspended one still holds its locks. */
+    private static void requireNoTransaction() {
+        if (TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("A source sync runs only outside a database transaction");
     }
 
     private record CaptureKey(UUID reviewId, long practiceId, long itemId) {}

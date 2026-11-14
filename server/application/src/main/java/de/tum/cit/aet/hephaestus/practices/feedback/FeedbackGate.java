@@ -54,7 +54,6 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -84,7 +83,6 @@ public class FeedbackGate {
      * at send does not answer from a mirror that another server filled or that this one evicted. It may call the
      * provider, so it runs with no transaction.
      */
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void syncSources(long workspaceId, UUID feedbackId) {
         var support = results.findByWorkspaceIdAndIdIn(
                 workspaceId,

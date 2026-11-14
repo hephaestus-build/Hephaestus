@@ -291,7 +291,7 @@ A missing fingerprint or an unavailable current source makes the result unverifi
 A missing mirror makes only the sources that read it unreadable. The diff fingerprint comes from the stored commit pair.
 
 The mirror does not have the commits when the bounded cache evicted it, or when another server captured the result.
-Practice start and the feedback send therefore sync the mirror with no transaction before their locked read.
+Practice start, the publish of a feedback package and the feedback send therefore sync the mirror with no transaction before their locked read.
 A capture whose fetch failed records no linked-work fingerprint, so a later read with the commits cannot find a change.
 
 A missing capture record makes the result unverifiable with `RECORD_MISSING` ([Currentness](./practice-review-glossary.mdx#currentness)).

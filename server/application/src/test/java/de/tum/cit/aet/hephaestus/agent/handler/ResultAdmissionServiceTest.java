@@ -180,6 +180,28 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldSyncTheBasisSourcesWithNoTransactionBeforeAPackageIsPublished() {
+        var basis = UUID.randomUUID();
+
+        assertThatThrownBy(() ->
+                        service.publishPackage(identity(), new FeedbackPackage(List.of(basis), List.of(), false, null)))
+                .isInstanceOf(AdmissionConflictException.class);
+
+        var order = inOrder(assignments, manager);
+        order.verify(assignments).syncBasis(1L, List.of(basis));
+        order.verify(manager).getTransaction(any());
+    }
+
+    @Test
+    void shouldNotSyncWhenAPackageIsOnlyChecked() {
+        assertThatThrownBy(() -> service.checkPackage(
+                        identity(), new FeedbackPackage(List.of(UUID.randomUUID()), List.of(), false, null)))
+                .isInstanceOf(AdmissionConflictException.class);
+
+        verify(assignments, never()).syncBasis(anyLong(), any());
+    }
+
+    @Test
     void shouldAcceptALiveDatabaseLeaseWhenTheServerClockIsAhead() {
         var databaseNow = Instant.now().minusSeconds(7200);
         when(jobs.databaseClock()).thenReturn(databaseNow);

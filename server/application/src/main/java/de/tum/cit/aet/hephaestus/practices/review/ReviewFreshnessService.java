@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.result.ResultFreshness;
+import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
@@ -12,13 +13,13 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import java.time.Clock;
+import java.util.Collection;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -35,6 +36,7 @@ public class ReviewFreshnessService implements ReviewFreshness {
     private final Clock clock;
     private final JsonMapper json;
     private final ResultFreshness freshness;
+    private final ResultRepository results;
 
     @Override
     @Transactional(readOnly = true)
@@ -97,7 +99,6 @@ public class ReviewFreshnessService implements ReviewFreshness {
     }
 
     @Override
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void syncSources(long workspaceId, ReviewAssignmentId id) {
         var review = reviews.findByIdAndWorkspaceId(id.reviewId(), workspaceId).orElse(null);
         if (review == null || review.getKind() == ReviewKind.SCAN) return;
@@ -106,6 +107,12 @@ public class ReviewFreshnessService implements ReviewFreshness {
                 .findFirst()
                 .ifPresent(assignment ->
                         freshness.sync(workspaceId, id.itemId(), occasion(review), assignment.getCaptureDecision()));
+    }
+
+    @Override
+    public void syncResults(long workspaceId, Collection<UUID> resultIds) {
+        if (resultIds.isEmpty()) return;
+        freshness.sync(workspaceId, results.findByWorkspaceIdAndIdIn(workspaceId, resultIds));
     }
 
     private static @Nullable UUID occasion(Review review) {
