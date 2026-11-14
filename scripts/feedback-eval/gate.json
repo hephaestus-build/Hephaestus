@@ -41,15 +41,5 @@
 		"mechanicallyClean": 18,
 		"raiseRecall": 11,
 		"withholdCorrect": 8
-	},
-	"occasionGaps": [
-		"avoids-insecure-defaults-and-over-broad-permissions",
-		"avoids-unsafe-panics-and-chosen-crashes",
-		"excludes-generated-and-build-artifacts",
-		"handles-errors-instead-of-swallowing-them",
-		"keeps-functions-small-and-single-purpose",
-		"leaves-the-code-clean-with-intent-revealing-comments",
-		"logs-through-the-platform-logger",
-		"validates-inputs-and-edge-cases-at-the-boundary"
-	]
+	}
 }

@@ -100,28 +100,20 @@ void test("invalid fixtures fail G2 and leave the checks that need them unchecke
 	assert.match(problems(checks, "G3")[0] ?? "", /Not checked/u);
 });
 
-void test("a practice without an Applicability section or an Applies when gate fails G5 unless listed", () => {
+void test("a practice without an Applicability section fails G5, whatever its gate or scan section says", () => {
 	const silent = {
 		slug: "new-practice",
 		automated: true,
-		criteria: "## The standard\nJudge it.\n\n## Judge\n- DOES_NOT_APPLY: never.",
-		appliesWhen: null,
+		criteria: "## The standard\nJudge it.\n\n## In a scan\nA file with no view does not apply.",
 	};
 	assert.deepEqual(problems(deterministic(inputs({ catalog: [...catalog, silent] })), "G5"), [
-		"new-practice has no Applicability section and no Applies when gate",
+		"new-practice has no Applicability section",
 	]);
-	const [gap] = gate.occasionGaps;
-	assert.ok(gap !== undefined);
-	const fixed = catalog.map((practice) =>
-		practice.slug === gap
-			? {
-					...practice,
-					criteria: `${practice.criteria}\n\n## Applicability\nIt applies to every change.`,
-				}
-			: practice,
-	);
-	const found = problems(deterministic(inputs({ catalog: fixed })), "G5");
-	assert.ok(found.includes(`${gap} now states its occasion: remove it from occasionGaps`));
+	const stated = {
+		...silent,
+		criteria: `${silent.criteria}\n\n## Applicability\nIt applies to every change.`,
+	};
+	assert.deepEqual(problems(deterministic(inputs({ catalog: [...catalog, stated] })), "G5"), []);
 });
 
 void test("a practice script that gives other leads fails G6", () => {
