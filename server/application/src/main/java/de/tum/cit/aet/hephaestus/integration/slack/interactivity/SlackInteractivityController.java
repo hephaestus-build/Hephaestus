@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -40,12 +41,17 @@ public class SlackInteractivityController {
     private static final Logger log = LoggerFactory.getLogger(SlackInteractivityController.class);
 
     private final SlackSignatureVerifier verifier;
+    private final SlackRequestReplayGuard replayGuard;
     private final SlackInteractivityHandler handler;
     private final ObjectMapper objectMapper;
 
     public SlackInteractivityController(
-            SlackSignatureVerifier verifier, SlackInteractivityHandler handler, ObjectMapper objectMapper) {
+            SlackSignatureVerifier verifier,
+            SlackRequestReplayGuard replayGuard,
+            SlackInteractivityHandler handler,
+            ObjectMapper objectMapper) {
         this.verifier = verifier;
+        this.replayGuard = replayGuard;
         this.handler = handler;
         this.objectMapper = objectMapper;
     }
@@ -73,6 +79,11 @@ public class SlackInteractivityController {
                     verification.status(),
                     verification.driftSeconds());
             return ResponseEntity.status(401).build();
+        }
+        // A verified signature is non-null. A copy gets the answer of the first request and changes nothing.
+        if (!replayGuard.claim(Objects.requireNonNull(signature))) {
+            log.info("Slack interactivity request handled before: status=duplicate");
+            return ResponseEntity.ok().build();
         }
 
         String payloadJson = extractPayload(new String(rawBody, StandardCharsets.UTF_8));

@@ -83,6 +83,7 @@ The jobs that delete review job data run only when `AGENT_ENABLED` is `true`.
 | Issued access tokens | Until they expire. Access tokens last 24 hours. | `hephaestus.auth.access-ttl` | A server job at 03:30 every day |
 | Client sessions | At most 7 days. A revoked session goes 1 day after revocation. | `hephaestus.auth.session-max-lifetime` | A server job every hour |
 | OAuth state values | 7 days | `hephaestus.integration.oauth-state.nonce-retention` | A server job at 04:00 every day |
+| Signatures of handled Slack button presses | 15 minutes | Fixed | A server job every 10 minutes |
 | Activity facts waiting for recording | Deleted when recorded. Person erasure deletes matching queued facts. Delivery ends a fact without a write if its workspace, repository or actor is missing. It also ends a fact if monitoring stops or the provider connection is inactive. | None | Activity delivery and the existing retry job |
 | Outbox actions, such as notification email | A waiting email expires if it is not sent in time. Security, alert and weekly digest mail expires after 24 hours. Product feedback mail expires after 7 days. The payload goes when the action ends. The ended action goes 30 days later. | None | The outbox executor on every server replica |
 | Self-service account exports | The download goes 48 hours after it is ready. | None | A server job every hour |
