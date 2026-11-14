@@ -24,6 +24,8 @@ export interface PracticeReviewSettingsEditorProps {
 	reviewedBy: ReviewedByKind;
 	/** Whether this practice's feedback can appear on the work: its kind allows it and the practice is about the author. */
 	feedbackOnWork: boolean;
+	/** Whether the practice is about a developer. A practice about the work itself has nobody to give feedback to. */
+	aboutADeveloper: boolean;
 	error?: string;
 	/** The control the error points at, so the field it names is the one that opens. */
 	errorFocusId?: string;
@@ -36,6 +38,7 @@ export function PracticeReviewSettingsEditor({
 	onChange,
 	reviewedBy,
 	feedbackOnWork,
+	aboutADeveloper,
 	error,
 	errorFocusId,
 	disabled = false,
@@ -98,8 +101,9 @@ export function PracticeReviewSettingsEditor({
 				<p className="flex items-start gap-2 text-sm text-muted-foreground">
 					<InboxIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
 					<span>
-						This practice’s feedback never appears on the work itself. The developer it is about
-						gets it on their Practice profile and from Hephaestus when they ask.
+						This practice’s feedback never appears on the work itself.
+						{aboutADeveloper &&
+							" The developer it is about gets it on their Practice profile and from Hephaestus when they ask."}
 					</span>
 				</p>
 			)}

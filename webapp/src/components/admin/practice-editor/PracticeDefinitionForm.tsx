@@ -454,6 +454,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 									onChange={(settings) => update({ settings })}
 									reviewedBy={draft.reviewedBy.by}
 									feedbackOnWork={itemType.feedbackOnWork && draft.about === "AUTHOR"}
+									aboutADeveloper={draft.about !== null}
 									error={shown?.settings?.message}
 									errorFocusId={shown?.settings?.focusId}
 									disabled={formDisabled}

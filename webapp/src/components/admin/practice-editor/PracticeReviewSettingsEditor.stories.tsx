@@ -22,6 +22,7 @@ const meta = {
 		value: { reviewOn, reads: reads.sources },
 		reviewedBy: "HEPHAESTUS",
 		feedbackOnWork: true,
+		aboutADeveloper: true,
 		onChange: fn(),
 	},
 	argTypes: {
@@ -57,6 +58,15 @@ export const PullRequest: Story = {
 		await expect(canvas.getByRole("group", { name: "Reads" })).toBeVisible();
 		// Feedback can appear on a pull request, so the editor names no other place.
 		await expect(canvas.queryByText(/never appears on the work itself/u)).toBeNull();
+	},
+};
+
+/** A practice about the work itself names no developer, so the note says only where feedback cannot go. */
+export const AboutTheWork: Story = {
+	args: { feedbackOnWork: false, aboutADeveloper: false },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/never appears on the work itself/u)).toBeVisible();
+		await expect(canvas.queryByText(/The developer it is about/u)).toBeNull();
 	},
 };
 
