@@ -3,7 +3,12 @@ package de.tum.cit.aet.hephaestus.agent.composer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -19,6 +24,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxRunKind;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionClaim;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobClaimService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
@@ -29,29 +35,31 @@ import de.tum.cit.aet.hephaestus.agent.metrics.ReviewStageTelemetry;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
-import de.tum.cit.aet.hephaestus.agent.run.StaleRunException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxKind;
 import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
+import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.ErrorResponseException;
+import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.json.JsonMapper;
 
-/**
- * A composition run composes or withholds as its claim decided, holds its inputs across its requests, and never
- * composes on a decision that its replica lost.
- */
+/** A composition reads its persisted claim decision on every replica and holds only a local input cache. */
 @Tag("unit")
 class ReviewComposeSandboxKindTest {
     private final ReviewJobClaimService claims = mock(ReviewJobClaimService.class);
@@ -64,19 +72,28 @@ class ReviewComposeSandboxKindTest {
     private final ReviewJobTerminal terminal = mock(ReviewJobTerminal.class);
     private final ReviewRunKind reviewRuns = mock(ReviewRunKind.class);
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
-    private final ReviewComposeSandboxKind kind = new ReviewComposeSandboxKind(
-            claims,
-            jobs,
-            admission,
-            custody,
-            continuation,
-            sessions,
-            terminal,
-            reviewRuns,
-            runs,
-            new TransactionTemplate(mock(PlatformTransactionManager.class)),
-            meters,
-            Tracer.NOOP);
+    private final JsonMapper mapper = JsonMapper.builder().build();
+    private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+    private final ClusterLock locks = mock(ClusterLock.class);
+    private final ReviewCompositionClaim gateway =
+            new ReviewCompositionClaim(jobs, new TransactionTemplate(transactionManager), mapper, locks);
+    private final ReviewComposeSandboxKind kind = replica(custody);
+
+    private ReviewComposeSandboxKind replica(ReviewAttemptCustody localCustody) {
+        return new ReviewComposeSandboxKind(
+                claims,
+                jobs,
+                admission,
+                localCustody,
+                continuation,
+                sessions,
+                terminal,
+                reviewRuns,
+                runs,
+                gateway,
+                meters,
+                Tracer.NOOP);
+    }
 
     private final AgentRunFence fence = new AgentRunFence(UUID.randomUUID(), 7L, 2);
     private final SandboxRun run = new SandboxRun(
@@ -90,6 +107,24 @@ class ReviewComposeSandboxKindTest {
             null);
     private final AtomicInteger closed = new AtomicInteger();
 
+    @BeforeEach
+    void storeGatewayDescriptors() {
+        composing.job().setId(composing.identity().jobId());
+        composing.job().setWorkspaceId(fence.workspaceId());
+        composing.job().setRunId(fence.runId());
+        when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+        when(locks.call(anyString(), any(), any()))
+                .thenAnswer(call ->
+                        Optional.of(call.<Supplier<Object>>getArgument(2).get()));
+        when(jobs.saveCompositionClaim(any(), anyLong(), any(), anyInt(), anyInt(), anyString()))
+                .thenAnswer(call -> {
+                    var capture = mapper.createObjectNode();
+                    capture.set("compositionClaim", mapper.readTree(call.<String>getArgument(5)));
+                    composing.job().setCapture(capture);
+                    return 1;
+                });
+    }
+
     @Test
     void shouldRouteModelCallsWithTheRunsLeaseEpoch() {
         claim(null);
@@ -101,15 +136,72 @@ class ReviewComposeSandboxKindTest {
     }
 
     @Test
-    void shouldWithholdOnceAndMakeNoModelCallWhenTheClaimOnlyWithholds() {
+    void shouldWithholdAndMakeNoModelCallWhenTheClaimOnlyWithholds() {
         claim(CompositionStop.BUDGET);
         when(continuation.stageWithoutInputs(composing.job())).thenReturn(restored());
 
         kind.context(run);
         kind.prepare(run);
 
-        verify(sessions, times(1)).withholdOpen(composing.job(), composing.identity(), CompositionStop.BUDGET);
+        var other = replica(new ReviewAttemptCustody(runs));
+        other.prepare(run);
+
+        verify(sessions).withholdOpen(composing.job(), composing.identity(), CompositionStop.BUDGET);
         verify(continuation, never()).restore(any());
+        assertThat(kind.attempt(run)).isEmpty();
+    }
+
+    @Test
+    void shouldRetryBusyCompositionWithoutWithholdingOrChangingTheRun() {
+        claim(CompositionStop.BUDGET);
+        when(continuation.stageWithoutInputs(composing.job())).thenReturn(restored());
+        doReturn(Optional.empty()).when(locks).call(anyString(), any(), any());
+
+        assertThatThrownBy(() -> kind.prepare(run)).isInstanceOfSatisfying(ErrorResponseException.class, failure -> {
+            assertThat(failure.getStatusCode().value()).isEqualTo(503);
+            assertThat(failure.getHeaders().getFirst("Retry-After")).isEqualTo("1");
+        });
+
+        verify(sessions, never()).withholdOpen(any(), any(), any());
+        verify(reviewRuns, never()).requeue(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldNotTakeTheWithholdingLockAgainOnceTheClaimIsWithheld() {
+        claim(CompositionStop.BUDGET);
+        when(continuation.stageWithoutInputs(composing.job())).thenReturn(restored());
+        var other = replica(new ReviewAttemptCustody(runs));
+        kind.prepare(run);
+        clearInvocations(locks, sessions);
+
+        other.prepare(run);
+
+        verify(locks, never()).call(anyString(), any(), any());
+        verify(sessions, never()).withholdOpen(any(), any(), any());
+    }
+
+    @Test
+    void shouldNotTakeTheWithholdingLockAgainWhenTheInputsLossWasAlreadyWithheld() {
+        claim(null);
+        when(continuation.restore(composing.job()))
+                .thenThrow(new ReviewCompositionContinuation.InputsUnavailableException("gone", false));
+        when(continuation.stageWithoutInputs(composing.job())).thenReturn(restored());
+        var other = replica(new ReviewAttemptCustody(runs));
+        kind.prepare(run);
+        verify(sessions).withholdOpen(composing.job(), composing.identity(), CompositionStop.INPUTS_GONE);
+        clearInvocations(locks, sessions);
+
+        other.prepare(run);
+
+        verify(locks, never()).call(anyString(), any(), any());
+        verify(sessions, never()).withholdOpen(any(), any(), any());
+    }
+
+    @Test
+    void shouldRouteNoModelCallWhenTheRunHasNoRecordedDecision() {
+        when(jobs.findByRunIdAndWorkspaceId(eq(fence.runId()), eq(fence.workspaceId())))
+                .thenReturn(Optional.of(composing.job()));
+
         assertThat(kind.attempt(run)).isEmpty();
     }
 
@@ -138,12 +230,28 @@ class ReviewComposeSandboxKindTest {
     }
 
     @Test
-    void shouldQueueTheRunAgainForFreeWhenThisReplicaLostItsClaimsDecision() {
+    void shouldRestoreTheClaimDecisionOnAnotherReplicaWithoutRequeueingItsRun() {
+        claim(CompositionStop.BUDGET);
+        when(continuation.stageWithoutInputs(composing.job())).thenReturn(restored());
+        var other = replica(new ReviewAttemptCustody(runs));
+
+        other.prepare(run);
+
+        assertThat(other.attempt(run)).isEmpty();
+        verify(sessions).withholdOpen(composing.job(), composing.identity(), CompositionStop.BUDGET);
+        verify(reviewRuns, never()).requeue(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldRefuseAnUnrecordedLegacyDecisionWithoutInventingALeaseLossOrRequeueing() {
         when(admission.composing(fence)).thenReturn(composing);
 
-        assertThatThrownBy(() -> kind.prepare(run)).isInstanceOf(StaleRunException.class);
+        assertThatThrownBy(() -> kind.prepare(run))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        failure -> assertThat(failure.getStatusCode().value()).isEqualTo(503));
 
-        verify(reviewRuns).requeue(composing.identity().jobId(), fence, AgentRuns.Charge.FREE, Duration.ZERO, null);
+        verify(reviewRuns, never()).requeue(any(), any(), any(), any(), any());
         verify(continuation, never()).restore(any());
         verify(sessions, never()).withholdOpen(any(), any(), any());
     }
@@ -226,10 +334,11 @@ class ReviewComposeSandboxKindTest {
     private void claim(@Nullable CompositionStop withholdOnly) {
         var started = mock(ReviewJobClaimService.ClaimResult.class);
         when(started.withholdOnly()).thenReturn(withholdOnly);
+        when(started.job()).thenReturn(composing.job());
         when(claims.claimLeased(fence)).thenReturn(Optional.of(started));
         when(admission.composing(fence)).thenReturn(composing);
-        when(jobs.findIdByRun(eq(fence.runId()), eq(fence.workspaceId())))
-                .thenReturn(Optional.of(composing.identity().jobId()));
+        when(jobs.findByRunIdAndWorkspaceId(eq(fence.runId()), eq(fence.workspaceId())))
+                .thenReturn(Optional.of(composing.job()));
         assertThat(kind.claimed(run)).isTrue();
     }
 

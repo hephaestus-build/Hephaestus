@@ -896,7 +896,8 @@ are unchanged. Steady includes one backup; upgrade includes migration/stanza Job
 
 {{/*
 The same inbox and review caps that the server reads size its pool. Review preparation can hold its
-capture lease and a transaction together. Long loads retain at most two such pairs (TurnContextLoads),
+capture lease and a transaction together, and a composition that withholds can also hold its
+session lock, so a capture holds up to three connections. Long loads retain at most two such pairs (TurnContextLoads),
 and LlmCallPermits has two maintenance threads. Model streaming itself holds no pooled connection.
 The reserve is eight connections for four syncs with two holders each and four for HTTP/control work.
 Hikari queues excess callers, then throws SQLException at connection-timeout (45000 ms in application.yml).
@@ -913,7 +914,7 @@ The full overlap budget also reserves optional monitoring and backup sessions wh
 {{- $permits = 2 -}}
 {{- end -}}
 {{- $inbox := int .Values.server.inboxClaimers -}}
-{{- $captureConnections := mul 2 $captures -}}
+{{- $captureConnections := mul 3 $captures -}}
 {{- $loadConnections := mul 2 $loads -}}
 {{- $sync := mul 4 2 -}}
 {{- $http := 4 -}}
@@ -933,6 +934,8 @@ The full overlap budget also reserves optional monitoring and backup sessions wh
 {{- $pooled := mul $servers $pool -}}
 {{- /* Run wakeups, conversation ledger, evidence erasure, model pools and sync hints each own one LISTEN connection. */ -}}
 {{- $listeners := mul 5 $servers -}}
+{{- /* One unpooled boot connection for every possible server process, counted beside its full pool and listeners. The budget does not depend on a boot ending before readiness. */ -}}
+{{- $startup := $servers -}}
 {{- $migration := int .Values.migration.databasePool.maximumPoolSize -}}
 {{- /* database-monitor.sql bounds the monitor role to two sessions across old and new exporters. */ -}}
 {{- $exporter := 2 -}}
@@ -941,9 +944,9 @@ The full overlap budget also reserves optional monitoring and backup sessions wh
 {{- $maintenance := 3 -}}
 {{- $reserved := 3 -}}
 {{- $margin := 4 -}}
-{{- $ordinary := add $pooled $listeners $migration $exporter $backup $maintenance -}}
+{{- $ordinary := add $pooled $listeners $startup $migration $exporter $backup $maintenance -}}
 {{- dict "servers" $servers "serverPool" $pool "serverPools" $pooled "listeners" $listeners
-  "migration" $migration "exporter" $exporter "backup" $backup "maintenance" $maintenance
+  "startup" $startup "migration" $migration "exporter" $exporter "backup" $backup "maintenance" $maintenance
   "superuserReserved" $reserved "operatorMargin" $margin "ordinary" $ordinary
   "required" (add $ordinary $reserved $margin)
   "maximum" (max 120 (mul 20 (divf (add $ordinary $reserved $margin) 20 | ceil | int))) | toJson -}}
@@ -954,9 +957,9 @@ The full overlap budget also reserves optional monitoring and backup sessions wh
 {{- if hasKey .Values.postgresql.parameters "max_connections" -}}
 {{- $capacity := include "hephaestus.databaseConnectionCapacity" . | fromJson -}}
 {{- if gt (int $capacity.required) (int .Values.postgresql.parameters.max_connections) -}}
-{{- fail (printf "PostgreSQL max_connections needs at least %d: %d servers x pool %d=%d, LISTEN=%d, migration=%d, exporter=%d, backup=%d, probes/setup=%d, superuser reserved=%d, operator margin=%d"
+{{- fail (printf "PostgreSQL max_connections needs at least %d: %d servers x pool %d=%d, LISTEN=%d, startup=%d, migration=%d, exporter=%d, backup=%d, probes/setup=%d, superuser reserved=%d, operator margin=%d"
   (int $capacity.required) (int $capacity.servers) (int $capacity.serverPool) (int $capacity.serverPools)
-  (int $capacity.listeners) (int $capacity.migration) (int $capacity.exporter) (int $capacity.backup)
+  (int $capacity.listeners) (int $capacity.startup) (int $capacity.migration) (int $capacity.exporter) (int $capacity.backup)
   (int $capacity.maintenance) (int $capacity.superuserReserved) (int $capacity.operatorMargin)) -}}
 {{- end -}}
 {{- end -}}

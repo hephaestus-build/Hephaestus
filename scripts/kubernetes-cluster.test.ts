@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -22,6 +22,7 @@ import {
 	devClusterArguments,
 	devSignIn,
 	devSummary,
+	drillLayer,
 	forwardedPort,
 	heldChecks,
 	trustSteps,
@@ -148,6 +149,156 @@ function render(values: object) {
 		rmSync(directory, { recursive: true, force: true });
 	}
 }
+
+/** `helm template` of the dev profile with the prepared values, then each of `layers`. */
+function renderLayers(values: object, layers: readonly string[]) {
+	const directory = mkdtempSync(path.join(tmpdir(), "hephaestus-cluster-"));
+	try {
+		const file = path.join(directory, "values.yaml");
+		writeFileSync(file, JSON.stringify(values));
+		const result = spawnSync(
+			"helm",
+			[
+				"template",
+				RELEASE,
+				chart,
+				"--namespace",
+				NAMESPACE,
+				"--values",
+				path.join(chart, "profiles", "dev.yaml"),
+				"--values",
+				file,
+				...layers,
+			],
+			{ encoding: "utf8", timeout: 30_000 },
+		);
+		return {
+			status: result.status,
+			stderr: result.stderr,
+			documents: parseAllDocuments(result.stdout)
+				.map((document) => document.toJS() as unknown)
+				.filter(isRecord),
+		};
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
+}
+
+function serverEnv(documents: readonly Record<string, unknown>[], name: string): string {
+	const server = documents.find(
+		(resource) =>
+			resource.kind === "Deployment" &&
+			isRecord(resource.metadata) &&
+			resource.metadata.name === `${RELEASE}-server`,
+	);
+	const text = JSON.stringify(server);
+	const match = new RegExp(`"name":"${name}","value":"(?<value>[^"]*)"`, "u").exec(text);
+	assert.ok(match?.groups?.value !== undefined, name);
+	return match.groups.value;
+}
+
+function postgresSetting(documents: readonly Record<string, unknown>[], name: string): number {
+	const text = JSON.stringify(
+		documents.find(
+			(resource) =>
+				resource.kind === "StatefulSet" &&
+				isRecord(resource.metadata) &&
+				resource.metadata.name === `${RELEASE}-postgresql`,
+		),
+	);
+	const values = [...text.matchAll(new RegExp(`"${name}=(\\d+)"`, "gu"))].map((match) =>
+		Number(match[1]),
+	);
+	assert.ok(values.length > 0, name);
+	return values.at(-1) ?? Number.NaN;
+}
+
+await test("a backup drill install keeps the installed release's capacity and the pinned max_connections", async () => {
+	const prepared = operatorValues({
+		images,
+		commit: "c".repeat(40),
+		api: { address: "172.18.0.3", port: 6443 },
+	});
+	// What CI adds on the command line of its install: the gVisor runtime class and its pod overhead.
+	const gvisor = {
+		sandbox: {
+			templates: { runtimeClassName: "gvisor", podOverhead: { memoryMi: 48, cpuMillis: 10 } },
+		},
+	};
+	const directory = mkdtempSync(path.join(tmpdir(), "hephaestus-drill-"));
+	try {
+		const gvisorFile = path.join(directory, "gvisor.yaml");
+		writeFileSync(gvisorFile, JSON.stringify(gvisor));
+		const installed = renderLayers(prepared, ["--values", gvisorFile]);
+		const plain = renderLayers(prepared, []);
+		assert.equal(installed.status, 0, installed.stderr);
+		assert.equal(plain.status, 0, plain.stderr);
+		const capacity = (documents: readonly Record<string, unknown>[]) => ({
+			reviews: serverEnv(documents, "SANDBOX_MAX_CONCURRENT"),
+			pool: serverEnv(documents, "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE"),
+			maxConnections: postgresSetting(documents, "max_connections"),
+		});
+		// The two installs differ, so a drill install that forgets the first one can pin a limit that the second exceeds.
+		const source = capacity(installed.documents);
+		assert.notDeepEqual(capacity(plain.documents), source);
+		assert.ok(source.maxConnections < capacity(plain.documents).maxConnections);
+
+		const pinned = (restore: object) => ({
+			postgresql: {
+				parameters: { max_connections: source.maxConnections },
+				backup: { restore },
+			},
+		});
+		const pinnedFile = path.join(directory, "pinned.yaml");
+		writeFileSync(pinnedFile, JSON.stringify(pinned({ enabled: false, time: "" })));
+		const forgotten = renderLayers(prepared, ["--values", pinnedFile]);
+		assert.notEqual(forgotten.status, 0);
+		assert.match(forgotten.stderr, /PostgreSQL max_connections needs at least/u);
+
+		// The release's own values, as `helm get values` reports them.
+		const merge = (base: unknown, change: unknown): unknown =>
+			isRecord(base) && isRecord(change)
+				? Object.fromEntries(
+						[...new Set([...Object.keys(base), ...Object.keys(change)])].map((key) => [
+							key,
+							key in change ? merge(base[key], change[key]) : base[key],
+						]),
+					)
+				: change;
+		const releaseValues = asRecord(merge(prepared, gvisor), "release values");
+		const paused = ["--set", "migration.enabled=false,server.replicas=0"];
+		for (const [name, restore, layers] of [
+			["backup", { enabled: false, time: "" }, []],
+			["backup", { enabled: false, time: "" }, paused],
+			["restore", { enabled: true, time: "2026-01-01 00:00:00.000000+00" }, paused],
+		] as const) {
+			const work = path.join(directory, `work-${name}-${layers.length}`);
+			mkdirSync(work);
+			const kept = renderLayers(prepared, [
+				...(await drillLayer(work, releaseValues, name, pinned(restore))),
+				...layers,
+			]);
+			assert.equal(kept.status, 0, kept.stderr);
+			assert.deepEqual(capacity(kept.documents), source);
+			assert.match(JSON.stringify(kept.documents), /"runtimeClassName":"gvisor"/u);
+			assert.equal(
+				kept.documents.some(
+					(resource) =>
+						resource.kind === "Job" &&
+						isRecord(resource.metadata) &&
+						isRecord(resource.metadata.labels) &&
+						resource.metadata.labels["app.kubernetes.io/component"] === "migration",
+				),
+				layers.length === 0,
+			);
+			if (process.platform !== "win32") {
+				assert.equal(statSync(path.join(work, "source.yaml")).mode.toString(8).slice(-3), "600");
+			}
+		}
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
+});
 
 await test("the prepared values run the sandboxes on the dev profile's server, with the bundled or an external PostgreSQL", () => {
 	const api = { address: "172.18.0.3", port: 6443 };
