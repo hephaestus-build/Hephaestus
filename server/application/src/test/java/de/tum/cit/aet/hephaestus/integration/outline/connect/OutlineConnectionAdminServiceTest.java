@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
@@ -13,7 +14,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
-import de.tum.cit.aet.hephaestus.integration.core.connection.BearerTokenReplacement;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -168,19 +168,19 @@ class OutlineConnectionAdminServiceTest extends BaseUnitTest {
         assertThatThrownBy(() -> service.replaceToken(WS, "ol_typo", 1L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Outline does not accept this key. Check that you copied all of it.");
-        verify(connectionService, never()).rotateBearerToken(anyLong(), any(), any());
+        verify(connectionService, never()).rotateBearerToken(anyLong(), any(), any(), any());
     }
 
     @Test
-    void shouldStoreNothingWhenAnotherTeamWasConnectedWhileTheKeyWasChecked() {
+    void shouldStoreNothingWhenTheConnectionChangedWhileTheKeyWasChecked() {
         OutlineConnectionAdminService service = service();
         lenient().when(connection.getInstanceKey()).thenReturn("team-1");
         when(apiClient.validateToken(SERVER_URL, "ol_new"))
                 .thenReturn(new OutlineApiClient.OutlineIdentity("team-1", "Acme", "user-1"));
-        Connection reconnected = mock(Connection.class);
-        when(reconnected.getId()).thenReturn(CONNECTION_ID + 1);
-        when(connectionService.rotateBearerToken(WS, IntegrationKind.OUTLINE, new BearerToken("ol_new", null)))
-                .thenReturn(Optional.of(new BearerTokenReplacement(reconnected, true)));
+        // The fence no longer matches: another admin reconnected or replaced the key in between.
+        when(connectionService.rotateBearerToken(
+                        eq(WS), eq(IntegrationKind.OUTLINE), eq(new BearerToken("ol_new", null)), any()))
+                .thenReturn(Optional.empty());
         doAnswer(invocation -> {
                     Consumer<TransactionStatus> work = invocation.getArgument(0);
                     work.accept(mock(TransactionStatus.class));

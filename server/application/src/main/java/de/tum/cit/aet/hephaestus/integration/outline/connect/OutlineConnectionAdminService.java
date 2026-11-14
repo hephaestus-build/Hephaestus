@@ -1,11 +1,11 @@
 package de.tum.cit.aet.hephaestus.integration.outline.connect;
 
-import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.CredentialFence;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineApiClient.OutlineIdentity;
@@ -81,19 +81,19 @@ public class OutlineConnectionAdminService {
             throw new IllegalArgumentException(
                     "This key belongs to another Outline team. Use a key of the connected team.");
         }
-        long validatedId = Objects.requireNonNull(connection.getId());
-        String teamId = identity.teamId();
+        // The key was checked against the connection read before the call to Outline. The fence stores it only on that
+        // connection and credential: another admin's reconnect or replacement in between stores nothing.
+        var fence = new CredentialFence(
+                Objects.requireNonNull(connection.getId()),
+                connection.getCredentialsGeneration(),
+                connection.getLifecycleGeneration());
         transactionTemplate.executeWithoutResult(status -> {
             Connection replaced = connectionService
-                    .rotateBearerToken(workspaceId, IntegrationKind.OUTLINE, new BearerToken(token, null))
-                    .orElseThrow(() -> new EntityNotFoundException("Outline connection", Long.toString(workspaceId)))
+                    .rotateBearerToken(workspaceId, IntegrationKind.OUTLINE, new BearerToken(token, null), fence)
+                    .orElseThrow(
+                            () -> new IllegalArgumentException(
+                                    "The Outline connection changed while Hephaestus checked the key. Reload the page and try again."))
                     .connection();
-            // The key was checked against the connection read before the call to Outline. Another admin may have
-            // reconnected another team since; the throw rolls the write back.
-            if (!Objects.equals(replaced.getId(), validatedId) || !teamId.equals(replaced.getInstanceKey())) {
-                throw new IllegalArgumentException(
-                        "The Outline connection changed while Hephaestus checked the key. Reload the page and try again.");
-            }
             connectionCommands.recordAdministrativeChange(
                     replaced,
                     "REPLACE_CREDENTIALS",
