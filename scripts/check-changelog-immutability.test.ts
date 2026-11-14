@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { type ChangelogSnapshot, violations } from "./check-changelog-immutability.ts";
+import {
+	type ChangelogSnapshot,
+	recoveryProblems,
+	violations,
+} from "./check-changelog-immutability.ts";
 
 const directory = "server/application/src/main/resources/db/changelog/";
 const master = "server/application/src/main/resources/db/master.xml";
@@ -11,6 +16,7 @@ const include = (file: string): string =>
 const automatic =
 	'<includeAll path="./changelog/next" relativeToChangelogFile="true" errorIfMissingOrEmpty="false" endsWithFilter=".xml" maxDepth="1"/>';
 const xml = (content: string): string => `<databaseChangeLog>${content}</databaseChangeLog>`;
+const readEmpty = (): string => xml("");
 const current = (): ChangelogSnapshot => ({
 	...original(),
 	master: xml(include("old.xml") + automatic),
@@ -23,6 +29,7 @@ function original(): ChangelogSnapshot {
 			[`${directory}old.xml`, "old-blob"],
 		]),
 		master: xml(include("old.xml")),
+		read: readEmpty,
 	};
 }
 
@@ -138,6 +145,7 @@ const rc1 = (): ChangelogSnapshot => ({
 			include("1793168406889_changelog.xml") +
 			automatic,
 	),
+	read: readEmpty,
 });
 const legacy = (): ChangelogSnapshot => changed(rc1(), laterNext, "later");
 const baselined = (): ChangelogSnapshot => ({
@@ -148,6 +156,7 @@ const baselined = (): ChangelogSnapshot => ({
 		[laterNext, "later"],
 	]),
 	master: xml(include("1.0.0/baseline.xml") + automatic),
+	read: readEmpty,
 });
 const check = (before: ChangelogSnapshot, after: ChangelogSnapshot) =>
 	violations(before, after, rc1);
@@ -216,5 +225,58 @@ void test("an unreadable release tag fails the replacement", () => {
 		violations(legacy(), baselined(), () => {
 			throw new Error("no tag");
 		}),
+	);
+});
+
+const changeSet = (body: string): string =>
+	xml(`<changeSet id="1794580948952-1" author="hephaestus">${body}</changeSet>`);
+const stop = "<rollback><stop>Restore the backup taken before the upgrade.</stop></rollback>";
+
+void test("a new change set with raw SQL or a custom change states its rollback", () => {
+	const file = `${directory}next/20261115000000-new.xml`;
+	const added = (content: string) =>
+		violations(current(), { ...changed(current(), file, "new"), read: () => content });
+	for (const raw of [
+		"<sql>CREATE INDEX i ON t (c);</sql>",
+		'<sql splitStatements="false"><![CDATA[UPDATE t SET c = 1;]]></sql>',
+		'<sqlFile path="x.sql"/>',
+		'<customChange class="x.Backfill"/>',
+	]) {
+		assert.match(added(changeSet(raw)).join("\n"), /without a rollback/u, raw);
+		assert.match(added(changeSet(`${raw}<rollback/>`)).join("\n"), /without a rollback/u, raw);
+		assert.match(
+			added(changeSet(`${raw}<rollback><stop/></rollback>`)).join("\n"),
+			/without a rollback/u,
+			raw,
+		);
+		assert.deepEqual(added(changeSet(`${raw}${stop}`)), [], raw);
+		assert.deepEqual(
+			added(
+				changeSet(`${raw}<rollback><stop message="Restore the pre-upgrade backup."/></rollback>`),
+			),
+			[],
+			raw,
+		);
+	}
+	assert.deepEqual(added(changeSet('<createIndex tableName="t" indexName="i"/>')), []);
+	assert.deepEqual(
+		added(changeSet("<sql>CREATE INDEX i ON t (c);</sql><rollback>DROP INDEX i;</rollback>")),
+		[],
+	);
+	assert.deepEqual(
+		added(
+			changeSet(
+				'<sql>CREATE INDEX i ON t (c);</sql><rollback changeSetId="1794580948952-0" changeSetAuthor="hephaestus"/>',
+			),
+		),
+		[],
+	);
+});
+
+void test("the guard refuses the role-notice change sets that reached main without a rollback", () => {
+	const file = `${directory}next/20261114013648-harvest-role-change-notifications.xml`;
+	assert.deepEqual(
+		recoveryProblems(file, readFileSync(file, "utf8")).map((problem) => problem.split(":")[0]),
+		["-1", "-2", "-3"].map((id) => `${file} change set 1794580948952${id}`),
 	);
 });

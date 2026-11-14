@@ -4,9 +4,16 @@ import { SyntaxValidator } from "fast-xml-validator";
 
 import nodePath from "node:path";
 
+import {
+	type ChangelogElement,
+	attribute,
+	changelogParser,
+	elements,
+	text,
+} from "./lib/changelog-xml.ts";
 import { CHANGELOG_DIRECTORY, NEXT_CHANGELOG_DIRECTORY, migrationTime } from "./lib/changelog.ts";
 import { isSet } from "./lib/env.ts";
-import { asArray, asRecord, asString } from "./lib/json.ts";
+import { asArray, asRecord, asString, isRecord } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 const directory = `${CHANGELOG_DIRECTORY}/`;
@@ -18,12 +25,44 @@ const baselineRelease = "v1.0.0-rc.1";
 export interface ChangelogSnapshot {
 	blobs: ReadonlyMap<string, string>;
 	master: string;
+	/** The content of a changelog file in this snapshot. */
+	read: (path: string) => string;
 }
 
 const parser = new XMLParser({
 	ignoreAttributes: false,
 	isArray: (name) => name === "include" || name === "includeAll",
 });
+
+/** A rollback that does something: reverse changes, statements, or another change set's changes. */
+const reverses = (rollback: ChangelogElement): boolean =>
+	attribute(rollback, "changeSetId") !== "" ||
+	text(rollback).trim() !== "" ||
+	Object.keys(rollback).some((key) => !key.startsWith("@_") && key !== "#text");
+
+/**
+ * Liquibase derives no reverse for raw SQL or a custom change, so each new one states its rollback: reverse
+ * statements, or a `<stop>` whose message names the backup to restore. docs/contributor/database-migration.mdx
+ * § Rollback of raw SQL owns the rule.
+ */
+export function recoveryProblems(file: string, xml: string): string[] {
+	SyntaxValidator.validate(xml);
+	const document: unknown = changelogParser.parse(xml);
+	const root = isRecord(document) ? elements(document, "databaseChangeLog")[0] : undefined;
+	return elements(root ?? {}, "changeSet").flatMap((set) => {
+		const raw = ["sql", "sqlFile", "customChange"].filter((name) => elements(set, name).length > 0);
+		const rollbacks = elements(set, "rollback");
+		const silentStop = rollbacks
+			.flatMap((rollback) => elements(rollback, "stop"))
+			.some((stop) => text(stop).trim() === "" && attribute(stop, "message").trim() === "");
+		if (raw.length === 0 || (rollbacks.some(reverses) && !silentStop)) {
+			return [];
+		}
+		return [
+			`${file} change set ${attribute(set, "id")}: ${raw.join(" and ")} without a rollback. Write the reverse statements, or <rollback><stop>…</stop></rollback> whose message names the backup to restore.`,
+		];
+	});
+}
 
 const canonical = (value: unknown) =>
 	JSON.stringify(
@@ -181,6 +220,7 @@ export function violations(
 			if (previous !== undefined && file <= previous) {
 				throw new Error(`New migration sorts before existing history: ${file} <= ${previous}`);
 			}
+			errors.push(...recoveryProblems(file, after.read(file)));
 		} catch (error) {
 			errors.push(error instanceof Error ? error.message : String(error));
 		}
@@ -204,7 +244,8 @@ function snapshot(revision: string): ChangelogSnapshot {
 			blobs.set(path, blob);
 		}
 	}
-	return { blobs, master: blobs.has(master) ? git("show", `${commit}:${master}`) : "" };
+	const read = (path: string) => git("show", `${commit}:${path}`);
+	return { blobs, master: blobs.has(master) ? read(master) : "", read };
 }
 
 if (import.meta.main) {
@@ -219,6 +260,8 @@ if (import.meta.main) {
 	if (errors.length > 0) {
 		process.exitCode = 1;
 	} else {
-		console.log("Released migrations are unchanged.");
+		console.log(
+			"Released migrations are unchanged, and each new raw SQL change set states its rollback.",
+		);
 	}
 }

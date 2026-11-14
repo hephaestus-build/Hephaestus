@@ -134,6 +134,18 @@ Include these safeguards:
 - A `<rollback><stop>` that names the backup to restore.
 
 A data correction needs maintainer approval in the pull request.
+Review checks the comment and the precondition.
+The [changelog immutability guard](#ci-validation) checks the rollback, as [Rollback of raw SQL](#rollback-of-raw-sql) describes.
+A change set that has reached `main` keeps a missing safeguard ([immutability policy](#changelog-immutability-policy), rule 1).
+Its release note and migration note then name the changed rows and the backup to restore.
+
+## Rollback of raw SQL
+
+Liquibase cannot derive the reverse of raw SQL or a custom change.
+Thus, each new change set with `<sql>`, `<sqlFile>` or `<customChange>` has a `<rollback>`.
+Write the reverse statements.
+If a reversal is not safe, write a `<stop>` whose message names the backup to restore.
+The changelog immutability guard refuses a new change set without one, and an empty `<stop/>`.
 
 ## Changelog immutability policy
 
@@ -277,6 +289,7 @@ The 1.0 cutover dropped every earlier pending contraction, so the table is empty
    New migration files must have a valid UTC timestamp and sort after that branch’s existing migrations.
    The `<include>` of the baseline and the final `includeAll` cannot change.
    New explicit includes also fail the check.
+   A new change set with raw SQL or a custom change needs a rollback ([Rollback of raw SQL](#rollback-of-raw-sql)).
    A prohibited change fails the check.
 3. **Changelog compatibility** — Security workflow, same job, step *Changelog compatibility guard*.
    `scripts/check-changelog-compatibility.ts` applies [Expand and contract](#expand-and-contract).

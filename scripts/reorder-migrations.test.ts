@@ -161,6 +161,8 @@ const snapshot = (git: (...args: string[]) => string, revision: string) => ({
 			}),
 	),
 	master: "",
+	// The order rules read names only; these fixtures hold no change sets for the recovery rule.
+	read: () => "<databaseChangeLog/>",
 });
 
 void test("the command moves the branch's file after main and the merge-queue guard accepts it", async (t) => {
