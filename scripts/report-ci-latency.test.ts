@@ -516,6 +516,42 @@ void test("cancellation attribution requires exact trees and causal timestamps",
 	]) {
 		assert.equal(classifyCancellation(run, jobs, [run], [removal]).cause, "unknown");
 	}
+	const ahead = {
+		...run,
+		head_sha: "b".repeat(40),
+		head_branch: `gh-readonly-queue/main/pr-2-${"d".repeat(40)}`,
+	};
+	const root = { ...run, head_sha: "d".repeat(40), head_branch: undefined };
+	const removedAhead = (head: string, reason: string) => ({
+		...manual,
+		head,
+		reason,
+		pullRequest: 2,
+	});
+	assert.deepEqual(
+		classifyCancellation(run, jobs, [run, ahead], [removedAhead(ahead.head_sha, "manual")]),
+		{ cause: "manual", removal: removedAhead(ahead.head_sha, "manual") },
+		"a hand removal ahead is manual churn, not a predecessor failure",
+	);
+	assert.equal(
+		classifyCancellation(run, jobs, [run, ahead], [removedAhead(ahead.head_sha, "failed_checks")])
+			.cause,
+		"predecessor_drop",
+	);
+	assert.equal(
+		classifyCancellation(
+			run,
+			jobs,
+			[run, ahead, root],
+			[removedAhead(ahead.head_sha, "stack_invalidated"), removedAhead(root.head_sha, "manual")],
+		).cause,
+		"manual",
+		"a cascade is attributed to its root removal",
+	);
+	assert.deepEqual(
+		classifyCancellation(run, jobs, [run], [{ ...manual, reason: "stack_invalidated" }]),
+		{ cause: "predecessor_drop", removal: { ...manual, reason: "stack_invalidated" } },
+	);
 	assert.equal(
 		classifyCancellation(run, [{ name: "Build / Generated API", conclusion: "timed_out" }], [], [])
 			.cause,
