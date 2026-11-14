@@ -49,6 +49,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.context.annotation.Profile;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
@@ -190,6 +191,17 @@ public class ReviewSandboxRuns implements SandboxRunKind {
     }
 
     /**
+     * The session of the attempt that this replica prepared, which takes its result. A result never prepares: a new
+     * capture could differ from the inputs that the sandbox measured, so a result without its prepared attempt ends.
+     */
+    SandboxGatewaySessions.Session preparedSession(SandboxRun run) {
+        ReviewJob job = job(run).orElseThrow(() -> new StaleRunException(run.fence()));
+        Measurement measurement = measurements.synchronous().getIfPresent(identity(run, job));
+        if (measurement == null) throw new StaleRunException(run.fence());
+        return measurement.session();
+    }
+
+    /**
      * The attempt's result arrived: the steps after a review Job's sandbox run on it now, outside any transaction, and
      * they end the attempt, hand it on to its composition, or requeue it. Its inputs and its session go after them.
      */
@@ -202,6 +214,12 @@ public class ReviewSandboxRuns implements SandboxRunKind {
             if (measurement == null) throw new StaleRunException(run.fence());
             try {
                 results.measured(job.getId(), job, run.fence(), measurement.endedBefore(), result);
+            } catch (PessimisticLockingFailureException contention) {
+                // The session closes below, so the attempt ends without this result and its run requeues it.
+                log.warn(
+                        "A review's result was lost to lock contention, so its attempt runs again: jobId={}",
+                        job.getId());
+                throw contention;
             } finally {
                 finish(attempt);
             }

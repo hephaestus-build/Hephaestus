@@ -80,7 +80,7 @@ public class ReviewSandboxController {
             HttpServletRequest request,
             HttpServletResponse response) {
         current(run);
-        var session = reviews.session(run);
+        var session = reviews.preparedSession(run);
         try {
             var upload = session.upload(request.getInputStream(), contentDigest);
             if (!upload.admitted()) {

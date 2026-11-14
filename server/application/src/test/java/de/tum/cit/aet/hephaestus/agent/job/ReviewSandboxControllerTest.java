@@ -61,7 +61,7 @@ class ReviewSandboxControllerTest extends BaseUnitTest {
 
     private void admittedUpload() throws Exception {
         when(runs.isCurrent(any(), anyInt())).thenReturn(true);
-        when(reviews.session(run)).thenReturn(session);
+        when(reviews.preparedSession(run)).thenReturn(session);
         when(session.upload(any(), any())).thenReturn(new SandboxGatewaySessions.Session.UploadResult(true, ETAG));
         when(session.result()).thenReturn(Map.of());
     }

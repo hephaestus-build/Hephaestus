@@ -123,6 +123,7 @@ This is the [transactional outbox](https://microservices.io/patterns/data/transa
   Spring translates it to a `PessimisticLockingFailureException`.
   These callers retry it: the provider event inbox, a review attempt, and the outbox before its write fence.
   The routes that a sandbox calls answer `503` through `AgentGatewayErrors`, and the sandbox calls again.
+  A review's final result is the exception: its attempt has already closed its session, so the attempt runs again.
   A person-data erasure step retries it once, and then the erasure stops with `STORE_ERASURE_FAILED`.
   Other HTTP routes answer `409` through `GlobalControllerAdvice`.
   Liquibase (`MigrationDataSourceConfiguration`) and the `LISTEN` listeners connect without the bound.
