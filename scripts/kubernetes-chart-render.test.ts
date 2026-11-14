@@ -4007,8 +4007,9 @@ await test("the database budget holds the runtime pools, rollout, listeners and 
 	const loads = javaCapacityConstant("agent/mentor/sandbox/TurnContextLoads.java", "LOADS_AT_ONCE");
 	const permits = javaCapacityConstant("agent/proxy/LlmCallPermits.java", "MAINTENANCE_THREADS");
 	const monitorSql = readFileSync(path.join(chart, "files/database-monitor.sql"), "utf8");
-	const monitor = /CONNECTION LIMIT (?<count>\d+)/u.exec(monitorSql)?.groups?.count;
-	assert.ok(monitor !== undefined, "the exporter must have a cluster-wide connection bound");
+	const monitorLimit = /CONNECTION LIMIT (?<count>\d+)/u.exec(monitorSql)?.groups?.count;
+	assert.ok(monitorLimit !== undefined, "the exporter must have a cluster-wide connection bound");
+	const monitor = Number(monitorLimit);
 	const defaults = [prepared, operator, reviews, { sandbox: { enabled: true } }];
 	for (const { layers, expectedPool, expectedRequired, expectedMaximum } of [
 		{ layers: base, expectedPool: 42, expectedRequired: 110, expectedMaximum: 120 },
@@ -4061,7 +4062,7 @@ await test("the database budget holds the runtime pools, rollout, listeners and 
 		const ordinary =
 			peakServers * (pool + 5) +
 			Number(envValue(migration, "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE")) +
-			Number(monitor) +
+			monitor +
 			backupSessions +
 			probeAndSetupSessions;
 		const postgres = workload(resources, "postgresql");
