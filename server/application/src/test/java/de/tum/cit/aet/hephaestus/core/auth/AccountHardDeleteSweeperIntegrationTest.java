@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeature;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository;
@@ -18,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.observability.ShippedLogEncoder;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import java.time.Clock;
@@ -28,8 +32,10 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import tools.jackson.databind.ObjectMapper;
 
 class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
 
@@ -125,6 +131,38 @@ class AccountHardDeleteSweeperIntegrationTest extends BaseIntegrationTest {
         assertThat(accountRepository.findById(id).orElseThrow().getPrimaryEmail())
                 .isNull();
         assertThat(childRowCounts(id)).containsExactly(0, 0, 0, 0);
+    }
+
+    @Test
+    void shouldRecordTheDeletionOutsideTheDatabaseWhenItsOwnerDeletesIt() {
+        Long id = persistedId(
+                newAccount("Katherine Johnson", "katherine@example.com").getId());
+        Logger logger = (Logger) LoggerFactory.getLogger(AccountDeletionRecord.class);
+        ListAppender<ILoggingEvent> records = new ListAppender<>();
+        records.start();
+        logger.addAppender(records);
+        try {
+            accountService.softDelete(id);
+
+            // The operator keeps and queries the record as shipped, so assert its JSON, not the Logback event.
+            await().atMost(Duration.ofSeconds(30))
+                    .untilAsserted(() -> assertThat(records.list.stream()
+                                    .map(record -> new ObjectMapper()
+                                            .readTree(ShippedLogEncoder.encode(record))
+                                            .get("context"))
+                                    .filter(context -> context.at("/event/name")
+                                            .asString("")
+                                            .equals("account.deleted"))
+                                    .filter(context -> context.at("/account/id").asLong() == id)
+                                    .toList())
+                            .singleElement()
+                            .satisfies(context -> assertThat(
+                                            context.at("/account/id").isNumber())
+                                    .isTrue()));
+        } finally {
+            logger.detachAppender(records);
+            records.stop();
+        }
     }
 
     @Test

@@ -223,6 +223,7 @@ A missing or invalid manifest, a manifest of version 1, an unknown provider inst
    List each disconnected connection with its workspace ID and connection ID, and each purged workspace with its ID.
    Include each `connection.erased` event that a provider caused, such as a Slack app uninstall.
    List each erased person, including an account deleted by its owner, under `people`.
+   The log event `account.deleted` with `account.id` names each account that its owner deleted, and that account ID alone identifies the person.
    Include each person's account ID, when known, and all known exact native identities.
    Use numeric user IDs for GitHub and GitLab.
    Use a user ID and team ID for Slack.
