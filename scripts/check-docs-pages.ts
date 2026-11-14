@@ -296,7 +296,8 @@ const STOPS_ROLES =
 	/\bstop (?:the |every |all |each )?(?:(?:old|runtime|application|running) )*(?:servers?|roles?|replicas)\b|\bdo not start (?:the )?target servers\b/iu;
 
 /** A rollback or recovery also stops servers, but it does not make the upgrade a stopped one. */
-const RECOVERY = /^(?:[-*\d.\s]*)(?:to roll back|to recover|recovery|rollback)\b/iu;
+const RECOVERY =
+	/^(?:[-*\d.\s]*)(?:to roll back|to recover|recovery|rollback)\b|\b(?:do|need) not stop\b/iu;
 
 const stopsRoles = (source: string): boolean =>
 	source

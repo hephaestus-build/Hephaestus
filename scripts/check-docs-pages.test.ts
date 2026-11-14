@@ -274,6 +274,7 @@ await describe("migration note stops and links", async () => {
 			["Stop all application replicas, then migrate.", true],
 			["To roll back, stop every role and restore the backup.", false],
 			["Keep PostgreSQL running and stop nothing.", false],
+			["Do not stop the servers.", false],
 		] as const) {
 			const problems = migrationNoteProblems(
 				[{ file: "n.md", source: `#### 🔴 Drain the queues\n\n${source}\n` }],

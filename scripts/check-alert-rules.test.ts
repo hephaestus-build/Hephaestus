@@ -161,6 +161,12 @@ void test("an alert needs a table row that gives the reason for its threshold", 
 		]),
 		[],
 	);
+	assert.deepEqual(
+		unexplainedAlerts(rules, [
+			"| `HephaestusAnswered` | up | Unlike `HephaestusUntested`, it fires |",
+		]),
+		[`HephaestusUntested: no table row in ${ALERT_REASON_PAGES.join(", ")} gives its threshold`],
+	);
 });
 
 void test("every shipped alert has a table row that gives its threshold", async () => {
