@@ -554,7 +554,7 @@ It logs a count and no personal values.
 
 Earlier releases could set a commit's author or contributor without an answer from the provider.
 Person export and erasure follow those values, so they can reach a commit that the person did not write, or miss one that they did.
-The commit link correction job reads these values from GitHub and GitLab again when an administrator enables it.
+The commit link correction job reads these values from GitHub and GitLab again by default.
 GitLab answers only for the author email of the representative commit.
 An email that appears only as a committer or co-author has no answer, so its value stays.
 

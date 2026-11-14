@@ -181,9 +181,6 @@ public class GitLabUserService {
             log.warn("Skipped user: reason=notReportedByGitLab, userId={}", nativeId);
             return null;
         }
-        if (userRepository.tryAcquireLoginLock(login, providerId)) {
-            userRepository.freeLoginConflicts(login, nativeId, providerId);
-        }
         return upsertLookup(reported.get(), providerId);
     }
 
@@ -215,6 +212,9 @@ public class GitLabUserService {
         }
 
         String username = lookup.username();
+        if (userRepository.tryAcquireLoginLock(username, providerId)) {
+            userRepository.freeLoginConflicts(username, nativeId, providerId);
+        }
         String resolvedName = lookup.name() != null ? lookup.name() : username;
         String resolvedAvatarUrl = resolveAvatarUrl(lookup.avatarUrl());
         String resolvedHtmlUrl =

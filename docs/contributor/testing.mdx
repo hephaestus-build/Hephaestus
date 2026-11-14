@@ -334,9 +334,46 @@ Use one of these composite annotations on the test class (or method) rather than
 | --------------------------------------------------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@LiveLlmTest`    | `HEPHAESTUS_LIVE_LLM_API_KEY`        | Tests that drive a real OpenAI-compatible endpoint. Set `HEPHAESTUS_LIVE_LLM_BASE_URL`, `HEPHAESTUS_LIVE_LLM_API_KEY`, and `HEPHAESTUS_LIVE_LLM_MODEL` explicitly. Read through `LiveLlmCredentials.fromEnv()`. |
 | `@LiveGitHubTest` | `GH_APP_INSTALLATION_ID`             | Tests that hit github.com through the installed GitHub App. `BaseGitHubLiveIntegrationTest` runs an extra runtime check on private-key material.                                                                |
-| `@LiveGitLabTest` | `HEPHAESTUS_LIVE_GITLAB_TOKEN`       | Reserved for GitLab-side replay/live-sync tests.                                                                                                                                                                |
+| `@LiveGitLabTest` | `HEPHAESTUS_LIVE_GITLAB_TOKEN_FILE`       | GitLab CE commit identity re-resolution.                                                                                                                                                                |
 
 The annotations use `Execution(SAME_THREAD)`. Gradle also runs one test JVM at a time.
+
+### GitLab commit identity proof
+
+`GitLabCommitIdentityLiveTest` uses a disposable GitLab CE instance and the normal test database.
+It creates one user and a private group tree per case.
+It schedules that tree for deletion and permanently deletes the user, even if group cleanup fails.
+
+The setup credential needs the GitLab `api` scope and instance-admin access to create test users and group tokens.
+The Hephaestus connection uses a disposable, non-admin group token.
+The setup token is never stored in the connection.
+Keep it in a private file and set `HEPHAESTUS_LIVE_GITLAB_TOKEN_FILE` to that path.
+Set `HEPHAESTUS_LIVE_GITLAB_URL` to the fixture's HTTPS origin.
+
+Set `hephaestus.integration.gitlab.default-server-url` to the same origin for the test JVM.
+For a private instance, admit only its host or address with `hephaestus.scm.egress.private-hosts`.
+Use its current CA in the JVM truststore, with normal hostname and certificate verification.
+The fixture hostname must resolve to its service address, rather than loopback.
+
+```bash
+HEPHAESTUS_LIVE_GITLAB_URL=https://gitlab-fixture.example.test \
+HEPHAESTUS_LIVE_GITLAB_TOKEN_FILE=/private/fixture-token \
+./server/gradlew -p server :application:liveTest --tests '*GitLabCommitIdentityLiveTest' \
+  -PtestJvmArgs='-Dhephaestus.integration.gitlab.default-server-url=https://gitlab-fixture.example.test -Dhephaestus.scm.egress.private-hosts=gitlab-fixture.example.test -Djavax.net.ssl.trustStore=/private/fixture-trust.p12 -Djavax.net.ssl.trustStorePassword=changeit'
+```
+
+The example truststore holds public certificates only.
+The test calls the configured repair job and respects its one-minute ShedLock minimum between cases.
+It does not enable background scheduling in the test profile.
+
+The cases rename a user, change an email and remove the old address, and transfer a project between subgroups.
+The transfer case fetches the project by its stable ID, persists its reported path, then reconciles the monitor, as the scheduler does.
+Each case checks the queue result, changed commit link, correction receipt and matching Activity actor.
+The fixture waits for an ID read to confirm the new namespace.
+
+A successful transfer response describes the project before its asynchronous transfer.
+GitLab retains scheduled group deletions for its configured retention period ([Groups API](https://docs.gitlab.com/api/groups/#schedule-a-group-for-deletion)).
+The provider mutations use GitLab's [Users API](https://docs.gitlab.com/api/users/), [Commits API](https://docs.gitlab.com/api/commits/) and [project transfer API](https://docs.gitlab.com/api/projects/#transfer-a-project-to-a-new-namespace).
 
 ### Authoring a new live test
 

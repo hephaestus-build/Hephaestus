@@ -132,6 +132,34 @@ class GitLabUserTypeIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldResolveAReusedLoginFromProviderEvidenceWithoutChangingEitherNativeIdentity() {
+        store(new GitLabUserLookup(gid(STUDENT), "original", "First", null, null, null, false));
+        long first = userRepository
+                .findByNativeIdAndProviderId(STUDENT, providerId)
+                .orElseThrow()
+                .getId();
+        store(new GitLabUserLookup(gid(SERVICE_ACCOUNT), "other", "Second", null, null, null, false));
+        long second = userRepository
+                .findByNativeIdAndProviderId(SERVICE_ACCOUNT, providerId)
+                .orElseThrow()
+                .getId();
+
+        // The provider has reassigned the login before the old account's rename reaches this mirror.
+        store(new GitLabUserLookup(gid(SERVICE_ACCOUNT), "original", "Second", null, null, null, false));
+        store(new GitLabUserLookup(gid(STUDENT), "renamed", "First", null, null, null, false));
+
+        var original =
+                userRepository.findByNativeIdAndProviderId(STUDENT, providerId).orElseThrow();
+        var replacement = userRepository
+                .findByNativeIdAndProviderId(SERVICE_ACCOUNT, providerId)
+                .orElseThrow();
+        assertThat(original.getId()).isEqualTo(first);
+        assertThat(original.getLogin()).isEqualTo("renamed");
+        assertThat(replacement.getId()).isEqualTo(second);
+        assertThat(replacement.getLogin()).isEqualTo("original");
+    }
+
+    @Test
     void shouldRecordAFirstSeenAccountWhoseTypeIsUnknownAsAUser() {
         storeHookUser(new GitLabWebhookUser(STUDENT, "ab12cde", "Muster, Max (Erika)", null, null));
 

@@ -444,14 +444,16 @@ Normal job-folder retention stays unchanged:
 
 A commit's author, committer, or contributor link can disagree with its provider, whatever the age of the commit.
 The commit link correction job asks GitHub or GitLab for each email on each repository.
-It is off by default. It asks about 50 emails every 5 minutes, and it stops when the rate limit is near.
+It runs by default. It asks about 50 emails every 5 minutes, and it stops when the rate limit is near.
 
 GitLab uses one request for each author email. GitHub batches the emails in one request.
 GitLab leaves emails that appear only as committer or co-author unchanged.
 
-1. Set `config.commitIdentityResolutionEnabled` to `true` in your Helm values.
-2. Read `commit_identity_pending` to see the queue. It shrinks as the provider answers.
-3. Read `commit_identity_resolutions_total` by `outcome`:
+To stop the job, set `config.commitIdentityResolutionEnabled` to `false` in your Helm values.
+Set it to `true` to resume. A default installation needs no switch.
+
+1. Read `commit_identity_pending` to see the queue. It shrinks as the provider answers.
+2. Read `commit_identity_resolutions_total` by `outcome`:
    - `resolved`: the provider named an account, and the links now follow it.
    - `no_account`: the provider says that no account owns the email, so the links are cleared.
    - `erased`: the provider named an erased account, so the links were cleared.

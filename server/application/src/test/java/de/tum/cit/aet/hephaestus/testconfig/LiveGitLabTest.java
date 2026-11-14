@@ -10,12 +10,12 @@ import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
 /**
- * Live test that hits a real GitLab instance. Gated by {@code HEPHAESTUS_LIVE_GITLAB_TOKEN}.
- * Reserved for future GitLab-side replay/live-sync tests — not yet used by any test in tree.
+ * Live test that hits a real GitLab instance. Gated by {@code HEPHAESTUS_LIVE_GITLAB_TOKEN_FILE}.
+ * The file holds the fixture setup credential; each connection uses a disposable non-admin token.
  */
 @Target({ElementType.TYPE, ElementType.METHOD})
 @Retention(RetentionPolicy.RUNTIME)
 @Tag("live")
-@EnabledIfEnvironmentVariable(named = "HEPHAESTUS_LIVE_GITLAB_TOKEN", matches = ".+")
+@EnabledIfEnvironmentVariable(named = "HEPHAESTUS_LIVE_GITLAB_TOKEN_FILE", matches = ".+")
 @Execution(ExecutionMode.SAME_THREAD)
 public @interface LiveGitLabTest {}

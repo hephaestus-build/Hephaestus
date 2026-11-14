@@ -29,7 +29,11 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @ConditionalOnServerRole
-@ConditionalOnProperty(prefix = "hephaestus.commit-identity-resolution", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(
+        prefix = "hephaestus.commit-identity-resolution",
+        name = "enabled",
+        havingValue = "true",
+        matchIfMissing = true)
 @Profile("!specs & !cds-training")
 @WorkspaceAgnostic("The queue spans shared commit rows; each statement names its own reason")
 public class CommitIdentityResolutionJob {

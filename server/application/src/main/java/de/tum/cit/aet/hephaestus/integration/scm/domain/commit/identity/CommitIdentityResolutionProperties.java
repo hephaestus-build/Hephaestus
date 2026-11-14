@@ -15,5 +15,5 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.commit-identity-resolution")
 public record CommitIdentityResolutionProperties(
-        @DefaultValue("false") boolean enabled,
+        @DefaultValue("true") boolean enabled,
         @DefaultValue("50") @Min(1) @Max(500) int batchSize) {}
