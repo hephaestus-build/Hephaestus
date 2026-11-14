@@ -281,7 +281,7 @@ accessible name a screen reader needs anyway.
 `vitest/no-restricted-matchers` names the replacement for the common ones. Otherwise assert on the plain value.
 Stories do have the matchers, so an assertion copied from a story into a route test breaks.
 
-Test helpers: `deferred()`, `pending()`, `sleep()`, `nextFrame()` (`@/test/async`), `ObserverStub` (`@/test/observers`), and `precedes()` (`@/test/dom`).
+Test helpers: `deferred()`, `pending()`, `nextFrame()` (`@/test/async`), `ObserverStub` (`@/test/observers`), and `precedes()` (`@/test/dom`).
 
 ## Type checking
 

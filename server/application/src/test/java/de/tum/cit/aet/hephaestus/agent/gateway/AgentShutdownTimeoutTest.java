@@ -85,7 +85,7 @@ class AgentShutdownTimeoutTest extends BaseUnitTest {
                     stop();
                     Thread.ofVirtual().start(() -> {
                         try {
-                            Thread.sleep(DRAIN_MS);
+                            Thread.sleep(DRAIN_MS); // NOPMD - the drain takes this long, by design
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();
                         }

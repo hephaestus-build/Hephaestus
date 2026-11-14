@@ -8,8 +8,8 @@ import { zWebVitalsReport } from "@/api/zod.gen";
 import { server } from "@/mocks/server";
 import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
 import { USER_VIEW_STORAGE_KEY } from "@/runtime/user-view/session";
-import { sleep } from "@/test/async";
 
+import { deferred } from "@/test/async";
 import { journeyPageOf, landmarkOf, reportVisitVitals } from "./web-vitals";
 
 type Report = (metric: unknown) => void;
@@ -103,7 +103,10 @@ async function land(...routeIds: string[]) {
 async function hide() {
 	Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
 	document.dispatchEvent(new Event("visibilitychange"));
-	await sleep(0);
+	const elapsed = deferred();
+	// oxlint-disable-next-line no-restricted-globals -- web-vitals reports on the task after visibilitychange, and nothing signals that task
+	setTimeout(elapsed.resolve, 0);
+	await elapsed.promise;
 }
 
 afterEach(() => {

@@ -913,6 +913,7 @@ for (const resend of ["succeeds", "fails"] as const) {
 			(response) => {
 				requests += 1;
 				if (requests === 1) {
+					// oxlint-disable-next-line no-restricted-globals -- the provider answers the first request late, which is the behaviour under test
 					setTimeout(() => {
 						response.writeHead(400, { "content-type": "application/json" });
 						response.end(

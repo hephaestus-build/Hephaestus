@@ -637,7 +637,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                 if (!waiting.isEmpty()) {
                     return String.valueOf(waiting.getFirst());
                 }
-                Thread.sleep(20);
+                Thread.sleep(20); // NOPMD - poll interval of a bounded wait
             }
             throw new AssertionError("no backend waited on a lock within 30 seconds");
         }

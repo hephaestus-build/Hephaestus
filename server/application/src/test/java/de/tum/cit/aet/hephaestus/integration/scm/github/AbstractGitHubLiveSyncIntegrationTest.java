@@ -314,7 +314,7 @@ public abstract class AbstractGitHubLiveSyncIntegrationTest extends BaseGitHubLi
             } catch (Exception ex) {
                 logger.debug("Condition '{}' not yet satisfied: {}", description, ex.getMessage());
             }
-            Thread.sleep(1000);
+            Thread.sleep(1000); // NOPMD - polling interval against the live GitHub API, which sends no event
         }
         throw new IllegalStateException("Timed out waiting for " + description);
     }

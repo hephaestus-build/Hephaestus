@@ -7,8 +7,8 @@ import { describe, expect, it, vi } from "vitest";
 import { EMPTY_REVIEW_FEED, type ReviewFeedState } from "@/components/profile/reviews";
 import { server } from "@/mocks/server";
 import { practiceStandingOf } from "@/stories/practice-profile-story-mock-data";
-import { sleep } from "@/test/async";
 
+import { deferred } from "@/test/async";
 import { usePracticeGroupDetail } from "./use-practice-group-detail";
 
 const workspaceSlug = "acme";
@@ -116,7 +116,10 @@ describe("usePracticeGroupDetail", () => {
 
 		expect(result.current.practice?.slug).toBe("write-tests");
 		expect(result.current.feed).toStrictEqual(EMPTY_REVIEW_FEED);
-		await sleep(0);
+		const elapsed = deferred();
+		// oxlint-disable-next-line no-restricted-globals -- proves that no read starts on the next turn
+		setTimeout(elapsed.resolve, 0);
+		await elapsed.promise;
 		expect(reviews).not.toHaveBeenCalled();
 	});
 });

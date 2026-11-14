@@ -8,6 +8,7 @@ import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test, { type TestContext } from "node:test";
+// oxlint-disable-next-line no-restricted-imports -- mocks the module's setTimeout, so the test needs the module object
 import timers from "node:timers/promises";
 import { collectTraces, upload } from "./gateway-run.ts";
 

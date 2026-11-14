@@ -963,7 +963,7 @@ class AgentRunsIntegrationTest extends BaseIntegrationTest {
 
     private static void sleep(Duration wait) {
         try {
-            Thread.sleep(wait);
+            Thread.sleep(wait); // NOPMD - the run's timestamps must differ, which needs real elapsed time
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
         }

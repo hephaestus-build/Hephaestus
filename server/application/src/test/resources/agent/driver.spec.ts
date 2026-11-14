@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { syncBuiltinESMExports } from "node:module";
 import test from "node:test";
+// oxlint-disable-next-line no-restricted-imports -- a fake gateway answers slowly on purpose, and the other tests run on fake timers
 import { setImmediate, setTimeout as sleep } from "node:timers/promises";
 
 import type { Isolation } from "../../../main/resources/agent/driver-isolation.ts";
@@ -214,6 +215,7 @@ void test("a server roll cannot spend the remaining lease on one failed renewal"
 	// AbortSignal uses a platform timer, which must share the fake clock with the driver.
 	t.mock.method(AbortSignal, "timeout", (milliseconds: number) => {
 		const controller = new AbortController();
+		// oxlint-disable-next-line no-restricted-globals -- fake timers are on (t.mock.timers); this moves AbortSignal.timeout onto the test clock
 		setTimeout(() => controller.abort(new DOMException("timed out", "TimeoutError")), milliseconds);
 		return controller.signal;
 	});
@@ -354,6 +356,7 @@ void test("an assignment that does not name a run, its claim and its lease is no
 void test("no kind starts before the sandbox's policy holds", async () => {
 	const events: string[] = [];
 	const { promise: isolation, resolve } = Promise.withResolvers<Isolation>();
+	// oxlint-disable-next-line no-restricted-globals -- isolation must arrive after the driver is ready to start, which is the order under test
 	setTimeout(() => {
 		events.push("isolated");
 		resolve({ isolated: true });

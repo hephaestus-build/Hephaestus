@@ -184,7 +184,7 @@ class CredentialReaderIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 return row;
             }
             try {
-                Thread.sleep(50);
+                Thread.sleep(50); // NOPMD - poll interval of a bounded wait
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return row;

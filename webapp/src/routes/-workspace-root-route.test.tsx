@@ -22,7 +22,7 @@ import { consentOutstanding, unauthenticatedUser } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 import { workspaceRewrite } from "@/runtime/workspace-address";
-import { deferred, sleep } from "@/test/async";
+import { deferred } from "@/test/async";
 import { precedes } from "@/test/dom";
 import { ObserverStub } from "@/test/observers";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
@@ -896,7 +896,12 @@ describe("a member", () => {
 		renderRouteAtWithRouter("/w/acme");
 
 		// The gate waits for the state, so the page does not render without the notice and then move.
-		await act(async () => sleep(300));
+		await act(async () => {
+			const elapsed = deferred();
+			// oxlint-disable-next-line no-restricted-globals -- proves that the page does not render before the state arrives
+			setTimeout(elapsed.resolve, 300);
+			await elapsed.promise;
+		});
 		expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
 		held.resolve();
 

@@ -9,7 +9,7 @@ import { WORDING_VERSION } from "@/components/auth/consent-wording";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { consentOutstanding } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
-import { sleep } from "@/test/async";
+import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
 const notice = {
@@ -111,7 +111,10 @@ describe("a notice answered elsewhere", () => {
 			() => expect(router.state.location.pathname).toBe("/settings"),
 			ROUTE_RENDER_WAIT,
 		);
-		await sleep(200);
+		const elapsed = deferred();
+		// oxlint-disable-next-line no-restricted-globals -- proves that the route stays at /settings
+		setTimeout(elapsed.resolve, 200);
+		await elapsed.promise;
 		expect(router.state.location.pathname).toBe("/settings");
 	});
 
@@ -130,7 +133,10 @@ describe("a notice answered elsewhere", () => {
 			() => expect(router.state.location.pathname).toBe("/settings"),
 			ROUTE_RENDER_WAIT,
 		);
-		await sleep(200);
+		const elapsed2 = deferred();
+		// oxlint-disable-next-line no-restricted-globals -- proves that the route stays at /settings
+		setTimeout(elapsed2.resolve, 200);
+		await elapsed2.promise;
 		expect(router.state.location.pathname).toBe("/settings");
 	});
 });

@@ -8,7 +8,7 @@ import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { mockFeatureFlags } from "@/runtime/feature-flags/testing";
-import { sleep } from "@/test/async";
+import { deferred } from "@/test/async";
 import { ConversationFake } from "@/test/conversation-server";
 import { loadRouteCode, renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
@@ -31,7 +31,10 @@ vi.mock("./-ConversationView", () => ({
  */
 async function toastSaying(text: string): Promise<HTMLElement> {
 	await screen.findByText(text, undefined, ROUTE_RENDER_WAIT);
-	await sleep(500);
+	const elapsed = deferred();
+	// oxlint-disable-next-line no-restricted-globals -- the toast must outlive the frames in which a dismissed toast would leave
+	setTimeout(elapsed.resolve, 500);
+	await elapsed.promise;
 	const toast = screen.getByText(text).closest<HTMLElement>("[data-sonner-toast]");
 	assert(toast !== null, `"${text}" is not in a toast.`);
 	expect(toast.dataset.removed).not.toBe("true");

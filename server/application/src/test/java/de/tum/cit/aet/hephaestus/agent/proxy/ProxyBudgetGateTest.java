@@ -249,7 +249,7 @@ class ProxyBudgetGateTest extends BaseUnitTest {
         @Test
         void shouldReadTheLedgerWithoutPinningTheVirtualThreadThatAsks() throws Exception {
             when(budgetService.headroom(WORKSPACE_ID)).thenAnswer(read -> {
-                Thread.sleep(50);
+                Thread.sleep(50); // NOPMD - slow ledger read on purpose
                 return instanceCapOfOneDollar("0.10");
             });
             assertThat(PinnedParks.during(() -> gate.isBlocked(routing(UsageFundingSource.INSTANCE))))

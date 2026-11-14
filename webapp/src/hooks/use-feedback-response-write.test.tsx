@@ -17,7 +17,7 @@ import {
 import type { FeedbackResponse } from "@/api/types.gen";
 import { useFeedbackResponseWrite } from "@/hooks/use-feedback-response-write";
 import { server } from "@/mocks/server";
-import { deferred, sleep } from "@/test/async";
+import { deferred } from "@/test/async";
 
 const workspaceSlug = "acme";
 const feedbackId = "00000000-0000-0000-0000-000000000103";
@@ -149,7 +149,10 @@ describe("useFeedbackResponseWrite", () => {
 			});
 		});
 
-		await sleep(0);
+		const elapsed = deferred();
+		// oxlint-disable-next-line no-restricted-globals -- proves that nothing is written on the next turn
+		setTimeout(elapsed.resolve, 0);
+		await elapsed.promise;
 		expect(written).toStrictEqual([]);
 	});
 
