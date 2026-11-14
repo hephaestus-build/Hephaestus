@@ -132,7 +132,7 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
         assertThat(binder().bind("hephaestus.integration.consumer.replay-window", Duration.class)
                         .get())
                 .as("a redelivery inside the window must find its stored event, not be stored again")
-                .isGreaterThan(GitHubWebhookRedelivery.WINDOW);
+                .isGreaterThan(GitHubWebhookRedelivery.RECOVERY_WINDOW);
     }
 
     /**

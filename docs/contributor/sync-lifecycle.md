@@ -272,7 +272,7 @@ it. A redelivery of a delivery that the inbox stored adds no event. The redelive
 delivery is the first stored copy, so its arrival dates it. Such a late copy can restate an old list over a sync
 page read in between, until the next sync reads the list again.
 
-`GitHubWebhookRedelivery` asks GitHub to redeliver failed deliveries for up to two hours after the original.
+`GitHubWebhookRedelivery` asks GitHub to redeliver failed deliveries, after an outage up to 71 hours after the original.
 Thus, after a database stall, a late copy is a normal event, not a rare one.
 
 GitLab's webhooks state each reviewer's review from 18.6

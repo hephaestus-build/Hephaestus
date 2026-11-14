@@ -75,7 +75,8 @@ class GitHubWebhookRedeliveryTest extends BaseUnitTest {
                         redelivery(21, "original-gone", 30, 503)),
                 "<" + github.url("/app/hook/deliveries?per_page=100&cursor=v1_page2") + ">; rel=\"next\"");
         respond(
-                deliveries(delivery(22, "last-page", 55, 502), delivery(23, "original-gone", 125, 503)),
+                // An original beyond the recovery window ends the read: GitHub no longer redelivers it.
+                deliveries(delivery(22, "last-page", 55, 502), delivery(23, "original-gone", 72 * 60, 503)),
                 "<" + github.url("/app/hook/deliveries?per_page=100&cursor=v1_page3") + ">; rel=\"next\"");
         for (int i = 0; i < 3; i++)
             github.enqueue(new MockResponse.Builder().code(202).build());
@@ -99,6 +100,102 @@ class GitHubWebhookRedeliveryTest extends BaseUnitTest {
         assertThat(github.getRequestCount()).isEqualTo(5);
         assertThat(outcome("requested")).isEqualTo(3);
         assertThat(meters.get("github.webhook.unrecovered").gauge().value()).isEqualTo(1);
+    }
+
+    @Test
+    void shouldRedeliverAnEventThatFailedAWeekendAgoWhenItIsTheServersFirstRun() throws Exception {
+        configured();
+        respond(
+                deliveries(delivery(41, "friday-evening", 62 * 60, 503), delivery(42, "beyond-github", 72 * 60, 503)),
+                "<" + github.url("/app/hook/deliveries?per_page=100&cursor=v1_older") + ">; rel=\"next\"");
+        github.enqueue(new MockResponse.Builder().code(202).build());
+
+        redelivery.redeliverFailed();
+
+        github.takeRequest();
+        assertThat(github.takeRequest().getTarget()).isEqualTo("/app/hook/deliveries/41/attempts");
+        assertThat(github.getRequestCount())
+                .as("no older page and no request for the delivery that GitHub no longer keeps")
+                .isEqualTo(2);
+    }
+
+    @Test
+    void shouldReadBackOnlyTheWindowWhenThePreviousRunReadEverything() throws Exception {
+        configured();
+        SettableClock clock = new SettableClock(NOW);
+        GitHubWebhookRedelivery job = jobAt(clock);
+        respond(deliveries(delivery(43, "fine", 1, 202)), null);
+        job.redeliverFailed();
+
+        clock.set(NOW.plus(GitHubWebhookRedelivery.INTERVAL));
+        respond(
+                deliveries(delivery(44, "fresh", 0, 202), delivery(45, "older-than-the-window", 190, 503)),
+                "<" + github.url("/app/hook/deliveries?per_page=100&cursor=v1_older") + ">; rel=\"next\"");
+        job.redeliverFailed();
+
+        assertThat(github.getRequestCount())
+                .as("one listing for each run, no older page and no redelivery")
+                .isEqualTo(2);
+    }
+
+    @Test
+    void shouldKeepAnEventThatACatchUpFoundInViewWhenItsRedeliveryFailedAgain() throws Exception {
+        configured();
+        SettableClock clock = new SettableClock(NOW);
+        GitHubWebhookRedelivery job = jobAt(clock);
+        respond(deliveries(delivery(46, "friday-evening", 62 * 60, 503)), null);
+        github.enqueue(new MockResponse.Builder().code(202).build());
+        job.redeliverFailed();
+
+        clock.set(NOW.plus(GitHubWebhookRedelivery.INTERVAL));
+        respond(
+                deliveries(redelivery(47, "friday-evening", 0, 503), delivery(46, "friday-evening", 62 * 60, 503)),
+                null);
+        github.enqueue(new MockResponse.Builder().code(202).build());
+        job.redeliverFailed();
+
+        github.takeRequest();
+        github.takeRequest();
+        github.takeRequest();
+        assertThat(github.takeRequest().getTarget())
+                .as("the next run still sees its original, so its next attempt is due")
+                .isEqualTo("/app/hook/deliveries/47/attempts");
+    }
+
+    @Test
+    void shouldReadTheWholeGapWhenRunsDidNotStartForADay() throws Exception {
+        configured();
+        SettableClock clock = new SettableClock(NOW);
+        GitHubWebhookRedelivery job = jobAt(clock);
+        respond(deliveries(delivery(48, "fine", 1, 202)), null);
+        job.redeliverFailed();
+
+        // The database refused the lock for 30 hours, so no run started.
+        clock.set(NOW.plus(Duration.ofHours(30)));
+        // Failed an hour after the last run; minutes count back from the first run, so this one is ahead of it.
+        respond(deliveries(delivery(49, "during-the-outage", -60, 503)), null);
+        github.enqueue(new MockResponse.Builder().code(202).build());
+        job.redeliverFailed();
+
+        github.takeRequest();
+        github.takeRequest();
+        assertThat(github.takeRequest().getTarget()).isEqualTo("/app/hook/deliveries/49/attempts");
+    }
+
+    @Test
+    void shouldNotCountEventsThatUsedTheirAttemptsLongAgoWhenItIsTheServersFirstRun() {
+        configured();
+        List<String> attempts = new ArrayList<>();
+        // Newest first, as GitHub lists them: the last attempt failed 50 hours ago.
+        for (int i = 0; i < GitHubWebhookRedelivery.MAX_ATTEMPTS - 1; i++)
+            attempts.add(redelivery(90 + i, "spent-on-monday", 50 * 60 + 10 * i, 503));
+        attempts.add(delivery(89, "spent-on-monday", 52 * 60, 503));
+        respond(deliveries(attempts.toArray(String[]::new)), null);
+
+        redelivery.redeliverFailed();
+
+        assertThat(meters.get("github.webhook.unrecovered").gauge().value()).isZero();
+        assertThat(github.getRequestCount()).isOne();
     }
 
     @Test
@@ -208,7 +305,7 @@ class GitHubWebhookRedeliveryTest extends BaseUnitTest {
     @Test
     void shouldStopRequestingAtTheRunBudgetAndRedeliverTheOldestEventsFirst() throws Exception {
         configured();
-        // Each reading of the time moves it on by a minute, so the budget ends after the first redelivery.
+        // Each reading of the time moves it on by a minute, so the budget ends after the second redelivery.
         GitHubWebhookRedelivery budgeted = new GitHubWebhookRedelivery(
                 tokens,
                 new MinutePerReading(NOW),
@@ -223,15 +320,17 @@ class GitHubWebhookRedeliveryTest extends BaseUnitTest {
                         delivery(63, "older", 30, 503)),
                 null);
         github.enqueue(new MockResponse.Builder().code(202).build());
+        github.enqueue(new MockResponse.Builder().code(202).build());
 
         budgeted.redeliverFailed();
 
         github.takeRequest();
         assertThat(github.takeRequest().getTarget()).isEqualTo("/app/hook/deliveries/62/attempts");
+        assertThat(github.takeRequest().getTarget()).isEqualTo("/app/hook/deliveries/63/attempts");
         assertThat(github.getRequestCount())
-                .as("the other two wait for the next run")
-                .isEqualTo(2);
-        assertThat(outcome("requested")).isEqualTo(1);
+                .as("the newest event waits for the next run")
+                .isEqualTo(3);
+        assertThat(outcome("requested")).isEqualTo(2);
     }
 
     @Test
@@ -473,6 +572,16 @@ class GitHubWebhookRedeliveryTest extends BaseUnitTest {
         public Clock withZone(ZoneId zone) {
             return this;
         }
+    }
+
+    private GitHubWebhookRedelivery jobAt(Clock clock) {
+        return new GitHubWebhookRedelivery(
+                tokens,
+                clock,
+                meters,
+                RestClient.builder(),
+                github.url("/").toString().replaceAll("/$", ""),
+                waits::add);
     }
 
     private void configured() {
