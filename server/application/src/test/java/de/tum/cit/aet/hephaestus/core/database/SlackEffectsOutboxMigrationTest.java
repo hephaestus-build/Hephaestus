@@ -77,6 +77,11 @@ class SlackEffectsOutboxMigrationTest {
                 '{"entryId":"00000000-0000-7000-8000-0000000000aa"}',997813,0,3,now(),now(),now()),
                   ('00000000-0000-7000-8000-000000000002',NULL,'EMAIL','lane:email','email:seeded','ADMITTED',
                 '{"kind":"TEST_MESSAGE"}',997813,0,3,now(),now(),now());
+            -- A live role-change notice to another recipient that names an account as its actor, as main's migration allows.
+            INSERT INTO agent_action(id,workspace_id,kind,lane_key,idempotency_key,state,payload,subject_account_id,
+                attempts,max_attempts,next_attempt_at,created_at,updated_at)
+            VALUES('00000000-0000-7000-8000-000000000a01',NULL,'EMAIL','lane:role','email:role','ADMITTED',
+                '{"kind":"ROLE_CHANGED","event":{"change":{"actorAccountId":997813,"accountId":997814}}}',NULL,0,3,now(),now(),now());
             INSERT INTO agent_action(id,workspace_id,kind,lane_key,idempotency_key,state,payload,subject_account_id,
                 attempts,max_attempts,next_attempt_at,created_at,updated_at,ended_at,stop_reason,readback_ref)
             VALUES('00000000-0000-7000-8000-000000000003',997811,'SLACK_POST','lane:done','slack_reply:done','DONE',NULL,
@@ -207,6 +212,24 @@ class SlackEffectsOutboxMigrationTest {
             assertThat(PracticeMigrationFixture.column(
                             database, "SELECT tgenabled::text FROM pg_trigger WHERE tgname='agent_action_lifecycle'"))
                     .containsExactly("O");
+
+            // Main's role-notice redaction still works after this change set replaced the guard function, and only it.
+            PracticeMigrationFixture.execute(
+                    database,
+                    "UPDATE agent_action SET payload = jsonb_set(payload, '{event,change}',"
+                            + " redact_role_change(payload #> '{event,change}', 997813))"
+                            + " WHERE id='00000000-0000-7000-8000-000000000a01'");
+            assertThat(PracticeMigrationFixture.column(
+                            database,
+                            "SELECT (payload #>> '{event,change,actorAccountId}' IS NULL)::text || '/' ||"
+                                    + " (payload #>> '{event,change,accountId}')"
+                                    + " FROM agent_action WHERE id='00000000-0000-7000-8000-000000000a01'"))
+                    .containsExactly("true/997814");
+            assertThatThrownBy(() -> PracticeMigrationFixture.execute(
+                            database,
+                            "UPDATE agent_action SET payload = jsonb_set(payload, '{event,change,role}', '\"OWNER\"'::jsonb)"
+                                    + " WHERE id='00000000-0000-7000-8000-000000000a01'"))
+                    .hasMessageContaining("payload changes only to erase role-notice identities");
 
             assertThatThrownBy(() -> PracticeMigrationFixture.rollbackOnly(liquibase, "prod", CHANGELOG))
                     .hasStackTraceContaining("pre-upgrade database backup");

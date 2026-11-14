@@ -239,7 +239,8 @@ class NativeActionRecipientIntegrationTest extends AbstractWorkspaceIntegrationT
     }
 
     private String payloadText(UUID id) {
-        return jdbc.queryForObject("SELECT payload::text FROM agent_action WHERE id=?", String.class, id);
+        return Objects.requireNonNull(
+                jdbc.queryForObject("SELECT payload::text FROM agent_action WHERE id=?", String.class, id));
     }
 
     @Test
