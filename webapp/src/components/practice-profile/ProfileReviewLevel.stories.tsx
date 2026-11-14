@@ -300,6 +300,20 @@ export const Loading: Story = {
 	},
 };
 
+/** A server fault is worth repeating, so the level offers Retry and calls it once per press. */
+export const LoadFailed: Story = {
+	args: { state: { status: "error", error: { status: 503 }, onRetry: fn() } },
+	play: async ({ args }) => {
+		await settledReviewPanel();
+		await expect(screen.getByText("We could not load this review")).toBeVisible();
+		await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+		if (args.state.status !== "error") {
+			throw new Error("This story renders the error state.");
+		}
+		await expect(args.state.onRetry).toHaveBeenCalledTimes(1);
+	},
+};
+
 /** A review that is not the reader's, or is gone, answers 404, which offers no retry. */
 export const NotFound: Story = {
 	args: { state: { status: "error", error: { status: 404 }, onRetry: fn() } },

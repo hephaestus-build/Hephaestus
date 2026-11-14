@@ -79,7 +79,7 @@ export const NotCheckedYet: Story = {
 	},
 };
 
-export const Checking: Story = {
+export const Loading: Story = {
 	args: { state: { status: "loading" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { name: "Checking…" })).toBeDisabled();
@@ -91,7 +91,7 @@ export const NoOpenDatasets: Story = {
 };
 
 /** A refused check shows no earlier list. */
-export const CheckRefused: Story = {
+export const LoadFailed: Story = {
 	args: {
 		state: {
 			status: "error",
