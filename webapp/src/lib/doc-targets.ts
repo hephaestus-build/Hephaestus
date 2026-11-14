@@ -42,6 +42,10 @@ export const DOC_TARGETS = {
 
 	// Errors whose fix the docs give.
 	practiceScriptTraceLine: { path: "admin/practice-review-operations", anchor: "the-trace-line" },
+	unconfirmedUsageCost: {
+		path: "admin/ai-providers",
+		anchor: "missing-prices-and-unverified-measurements",
+	},
 } as const satisfies Record<string, DocTarget>;
 
 export type DocKey = keyof typeof DOC_TARGETS;
