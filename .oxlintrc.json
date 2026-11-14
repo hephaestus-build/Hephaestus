@@ -491,6 +491,19 @@
 			"rules": { "no-script-url": "off" }
 		},
 		{
+			// A fixed sleep makes a test slow when the event is early and flaky when it is late.
+			"files": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts"],
+			"rules": {
+				"no-restricted-globals": [
+					"error",
+					{
+						"name": "setTimeout",
+						"message": "A test waits for an event, not for elapsed time: fake timers, vi.waitFor, expect.poll or a promise the code resolves. Suppress with the reason only when the elapsed time is the behaviour under test, or when fake timers are on."
+					}
+				]
+			}
+		},
+		{
 			// Java source sets split resources across `src/test/resources` and `src/main/resources`, so a
 			// spec reaches its subject across that boundary and no alias spans it.
 			"files": ["server/application/src/test/resources/agent/**"],

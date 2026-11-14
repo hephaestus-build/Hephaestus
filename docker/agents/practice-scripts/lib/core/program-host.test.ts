@@ -1068,6 +1068,7 @@ void describe("a program that does not stop when the host stops it", { concurren
 				'{ meta: {}, async run() { await new Promise((end) => setTimeout(end, 1500)); throw new Error("stopped"); } }',
 			),
 		});
+		// oxlint-disable-next-line no-restricted-globals -- the cancel must arrive while the program runs, which is the behaviour under test
 		setTimeout(() => {
 			cancel.abort(new UnratedError("unavailable", "the tools side stopped"));
 		}, 700);

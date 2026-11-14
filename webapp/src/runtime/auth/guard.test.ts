@@ -187,6 +187,7 @@ describe("resolveCurrentUser", () => {
 		// AbortSignal.timeout runs on a platform timer that fake timers do not move.
 		vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) => {
 			const controller = new AbortController();
+			// oxlint-disable-next-line no-restricted-globals -- fake timers are on; this moves AbortSignal.timeout onto the test clock
 			setTimeout(() => {
 				controller.abort(new DOMException("The read timed out.", "TimeoutError"));
 			}, ms);

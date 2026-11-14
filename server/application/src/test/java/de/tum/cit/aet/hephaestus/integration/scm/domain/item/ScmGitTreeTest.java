@@ -81,7 +81,7 @@ class ScmGitTreeTest extends BaseUnitTest {
         var key = new RepositoryKey(1, 2);
         var manager = mock(GitRepositoryManager.class);
         when(manager.read(eq(key), any())).thenAnswer(read -> {
-            Thread.sleep(50);
+            Thread.sleep(50); // NOPMD - the repository read is slow on purpose, which the test observes
             return List.of();
         });
         var tree = new ScmGitTree(manager);

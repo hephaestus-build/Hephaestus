@@ -116,7 +116,7 @@ class BoundedLockWaitIntegrationTest extends BaseIntegrationTest {
                 awaitCopyFenceWaiters(1);
                 var erasure = executor.submit(() -> boundAfter(copyFence::holdForErasure));
                 awaitCopyFenceWaiters(2);
-                Thread.sleep(bound + 500);
+                Thread.sleep(bound + 500); // NOPMD - the waiter must stay blocked past its bound, which is the behaviour under test
                 assertThat(capture).isNotDone();
                 assertThat(erasure).isNotDone();
 
@@ -146,7 +146,7 @@ class BoundedLockWaitIntegrationTest extends BaseIntegrationTest {
                         Long.class))
                 < waiters) {
             if (System.nanoTime() > deadline) throw new AssertionError("The copy fence has no waiting transaction");
-            Thread.sleep(20);
+            Thread.sleep(20); // NOPMD - polling interval of a bounded wait for a condition with no event to await
         }
     }
 

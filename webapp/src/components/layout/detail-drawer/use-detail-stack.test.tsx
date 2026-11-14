@@ -2,7 +2,6 @@ import { act, waitFor } from "@testing-library/react";
 import { useEffect } from "react";
 import { describe, expect, it } from "vitest";
 
-import { sleep } from "@/test/async";
 import { renderWithRouter } from "@/test/router-harness";
 
 import { focusSwitchHistory, isFocusSwitchStep } from "@/components/practice-focus/practice-focus";
@@ -96,7 +95,8 @@ describe("useDetailStack", () => {
 		// The request ends and closes its level: the group the reader is still in stays open.
 		await act(async () => {
 			stale.close(1);
-			await sleep(50);
+			// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that the late close leaves the open level alone
+			await new Promise<void>((resolve) => setTimeout(resolve, 50));
 		});
 		expect(stack()).toStrictEqual(["group:a"]);
 	});
@@ -149,7 +149,8 @@ describe("useDetailStack", () => {
 
 			await act(async () => {
 				controls().close(0);
-				await sleep(50);
+				// oxlint-disable-next-line no-restricted-globals, promise/avoid-new -- proves that the close does not change the stack
+				await new Promise<void>((resolve) => setTimeout(resolve, 50));
 			});
 			expect(stack()).toStrictEqual(before.stack);
 			expect(index()).toBe(before.index);

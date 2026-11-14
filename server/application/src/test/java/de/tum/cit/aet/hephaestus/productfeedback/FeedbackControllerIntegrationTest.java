@@ -191,7 +191,7 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     void shouldRefuseASecondReportWhenTheAccountSentOneThisMinute() throws InterruptedException {
         Member member = member("feedback-rate");
         // The limit counts calendar minutes, so both sends must fall into the same one.
-        while (LocalTime.now(ZoneOffset.UTC).getSecond() >= 58) Thread.sleep(250);
+        while (LocalTime.now(ZoneOffset.UTC).getSecond() >= 58) Thread.sleep(250); // NOPMD - both sends must fall into one calendar minute, which a real clock decides
         send(member, "First").expectStatus().isOk().expectBody(Void.class);
         send(member, "Second")
                 .expectStatus()
