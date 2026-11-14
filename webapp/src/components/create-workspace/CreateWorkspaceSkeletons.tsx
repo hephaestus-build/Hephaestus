@@ -11,7 +11,8 @@ import { Skeleton } from "@/components/ui/skeleton";
  * on its way, so it has no minimum time to hold. `ssr: false`, or a stand-in that mounts with the
  * read in flight shows at once.
  *
- * The shapes are aria-hidden, and a screen reader hears what loads instead.
+ * The shapes are aria-hidden, and a screen reader hears what loads instead. No `aria-busy`: the
+ * stand-in leaves when the content arrives, and a busy ancestor can hold back the label.
  */
 function WhileLoading({ label, children }: { label: string; children: ReactNode }) {
 	const shown = useSpinDelay(true, { delay: 1000, minDuration: 0, ssr: false });
@@ -19,7 +20,7 @@ function WhileLoading({ label, children }: { label: string; children: ReactNode 
 		return null;
 	}
 	return (
-		<div aria-busy="true">
+		<div>
 			<span className="sr-only">{label}</span>
 			<div aria-hidden>{children}</div>
 		</div>
@@ -67,15 +68,14 @@ export function InstallActionSkeleton() {
 }
 
 /**
- * The GitLab wizard while it loads, in the shape of its first step: the heading and description, the
+ * The GitLab wizard's body while it loads, in the shape of its first step: the heading and description, the
  * progress indicator, then the instance and token fields above the validate button. Checking which
  * accounts are linked decides what follows, so no step's own words stand in for it.
  */
 export function GitLabWizardSkeleton() {
 	return (
 		<WhileLoading label="Loading the GitLab setup…">
-			<div className="mx-auto w-full max-w-2xl">
-				<Skeleton className="mb-6 h-5 w-14" />
+			<div>
 				<div className="mb-6 space-y-1.5">
 					<Skeleton className="h-8 w-64 max-w-full" />
 					<Skeleton className="h-5 w-full max-w-md" />

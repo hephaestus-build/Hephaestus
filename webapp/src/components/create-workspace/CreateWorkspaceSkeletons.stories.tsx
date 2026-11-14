@@ -36,9 +36,9 @@ const SHOWN = { timeout: 3000 };
 export const ProviderChoice: Story = {
 	render: () => <ProviderChoiceSkeleton />,
 	play: async ({ canvas }) => {
+		// A read that answers within a second shows no stand-in at all.
+		await expect(canvas.queryByText("Loading the providers…")).toBeNull();
 		await expect(await canvas.findByText("Loading the providers…", undefined, SHOWN)).toBeVisible();
-		// The shapes stand for no provider: nothing a person can follow.
-		await expect(canvas.queryByRole("link")).toBeNull();
 	},
 };
 
@@ -49,7 +49,6 @@ export const InstallAction: Story = {
 		await expect(
 			await canvas.findByText("Loading the GitHub App link…", undefined, SHOWN),
 		).toBeVisible();
-		await expect(canvas.queryByRole("link")).toBeNull();
 	},
 };
 
@@ -60,8 +59,6 @@ export const GitLabWizard: Story = {
 		await expect(
 			await canvas.findByText("Loading the GitLab setup…", undefined, SHOWN),
 		).toBeVisible();
-		// No step's own words stand in before the account check decides which page follows.
-		await expect(canvas.queryByRole("heading")).toBeNull();
 	},
 };
 

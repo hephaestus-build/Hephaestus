@@ -9,6 +9,7 @@ import { InstallActionSkeleton } from "@/components/create-workspace/CreateWorks
 import { GitHubIcon } from "@/components/icons/brand";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { pageHead } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
 
@@ -84,14 +85,21 @@ function GitHubSetupPage() {
 							organization
 						</li>
 						<li>Select which repositories you want to monitor</li>
-						{adoptionNeeded ? (
+						{isLoading && (
+							// The last step depends on the creation policy, so it says nothing until that is known.
+							<li aria-hidden>
+								<Skeleton className="inline-block h-4 w-3/4 align-middle" />
+							</li>
+						)}
+						{!isLoading && adoptionNeeded && (
 							<li>
 								Back in Hephaestus, adopt the installation under{" "}
 								<strong className="text-foreground">
 									Instance administration → GitHub installations
 								</strong>
 							</li>
-						) : (
+						)}
+						{!isLoading && !adoptionNeeded && (
 							<li>A workspace is created automatically and appears in your sidebar</li>
 						)}
 					</ol>

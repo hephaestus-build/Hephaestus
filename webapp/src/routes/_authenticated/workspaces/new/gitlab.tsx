@@ -200,7 +200,12 @@ function GitLabWizardPage() {
 	});
 
 	if (providersLoading || identityProvidersLoading) {
-		return <GitLabWizardSkeleton />;
+		return (
+			<div className="mx-auto w-full max-w-2xl">
+				<BackToProviders />
+				<GitLabWizardSkeleton />
+			</div>
+		);
 	}
 	if (providersError || identityProvidersError) {
 		return (
