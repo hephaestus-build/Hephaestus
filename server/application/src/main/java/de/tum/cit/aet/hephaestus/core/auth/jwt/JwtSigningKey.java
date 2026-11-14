@@ -72,6 +72,11 @@ public class JwtSigningKey {
         return true;
     }
 
+    /** Why the private key does not open with the configured keys; names key identifiers, never a key. */
+    public String sealingMismatch(SystemSecrets secrets) {
+        return secrets.describeMismatch(sealedPrivateKey);
+    }
+
     private SecretBinding secretBinding() {
         return SecretBinding.of("jwt_signing_key.private_key_pem", kid);
     }

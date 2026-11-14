@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SystemSecretOwner;
+import de.tum.cit.aet.hephaestus.core.security.EncryptionException;
 import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import java.security.KeyFactory;
 import java.security.interfaces.ECPrivateKey;
@@ -110,6 +111,24 @@ public class JwtSigningKeyService implements JWKSource<SecurityContext>, SystemS
         repository.save(row);
         cache.set(null);
         log.info("auth.jwt: created signing key kid={}, rotation={}", row.getKid(), notBefore != null);
+    }
+
+    /**
+     * Opens every active signing key. A server whose system key differs from the key that sealed them would start, report
+     * ready and refuse every session; this stops it at start with the identifiers of the keys involved instead.
+     */
+    @Transactional(readOnly = true)
+    public void verifyActiveKeysOpen() {
+        for (JwtSigningKey row : repository.findActive()) {
+            try {
+                row.privateKey(secrets);
+            } catch (EncryptionException mismatch) {
+                throw new IllegalStateException("hephaestus.security.encryption-key does not open the stored JWT signing"
+                        + " key " + row.getKid() + ": " + row.sealingMismatch(secrets)
+                        + ". Restore the system key that sealed it, as docs/admin/secret-custody.mdx describes.",
+                        mismatch);
+            }
+        }
     }
 
     /** The configured instant, or null when it is unset or still in the future. */

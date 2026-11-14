@@ -27,6 +27,22 @@ public class StoredSystemSecrets implements SystemSecretOwner {
         return repository.findById(name).map(secret -> secret.value(secrets));
     }
 
+    /** Opens every stored value, so a wrong system key stops the server at start with the identifiers involved. */
+    @Transactional(readOnly = true)
+    public void verifyAllOpen() {
+        if (!secrets.isEnabled()) return;
+        for (StoredSystemSecret secret : repository.findAll()) {
+            try {
+                secret.value(secrets);
+            } catch (EncryptionException mismatch) {
+                throw new IllegalStateException("hephaestus.security.encryption-key does not open the stored system"
+                        + " secret " + secret.getName() + ": " + secret.sealingMismatch(secrets)
+                        + ". Restore the system key that sealed it, as docs/admin/secret-custody.mdx describes.",
+                        mismatch);
+            }
+        }
+    }
+
     /**
      * Creates a random value of {@code bytes} bytes under {@code name} unless one exists. Its own transaction commits the
      * value, so a caller in a read-only transaction can read it right after.

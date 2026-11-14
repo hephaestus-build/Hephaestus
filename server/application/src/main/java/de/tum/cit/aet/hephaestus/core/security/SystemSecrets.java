@@ -93,6 +93,33 @@ public final class SystemSecrets {
         return !keys.isEmpty();
     }
 
+    /**
+     * Why {@code sealed} does not open with the configured keys, for a message to the operator: the identifier of the
+     * key that sealed it and the identifiers that this server holds. Identifiers derive from the keys by HMAC, so the
+     * text never reveals a key.
+     */
+    public String describeMismatch(byte[] sealed) {
+        int stored;
+        try {
+            stored = keyId(sealed);
+        } catch (EncryptionException notSealed) {
+            return "the value is not a sealed system secret";
+        }
+        if (keys.containsKey(stored)) {
+            return "the value names the configured key " + keyIdText(stored)
+                    + " but does not open with it: it is damaged, or it belongs to another row";
+        }
+        String held = keys.isEmpty()
+                ? "no system key"
+                : "the active key " + keyIdText(activeId)
+                        + keys.keySet().stream()
+                                .filter(id -> id != activeId)
+                                .findFirst()
+                                .map(id -> " and the prior key " + keyIdText(id))
+                                .orElse(" and no prior key");
+        return "the value was sealed by the system key with id " + keyIdText(stored) + ", and this server holds " + held;
+    }
+
     /** The identifier of the active key, as hex, for logs. Never the key. */
     public String activeKeyId() {
         return keyIdText(activeId);
