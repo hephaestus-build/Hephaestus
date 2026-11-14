@@ -235,24 +235,34 @@ await describe("the host ports of a worktree", async () => {
 	};
 	const shifted = (sets: number) =>
 		Object.fromEntries(Object.entries(defaults).map(([name, port]) => [name, port + 10 * sets]));
+	const asFile = (ports: Record<string, number>) =>
+		Object.fromEntries(Object.entries(ports).map(([name, port]) => [name, String(port)]));
 
 	await test("the first worktree gets the defaults, written so that other worktrees see them", async () => {
 		await checkout(async ({ envFile }) => {
-			assert.deepEqual(await ensurePorts({ envFile, others: [], environment: {} }), defaults);
-			const values = await readEnvFile(envFile);
-			assert.equal(values.SERVER_PORT, "8080");
-			assert.equal(values.WEBAPP_PORT, "4200");
+			assert.deepEqual(
+				await ensurePorts({ envFile, others: [], created: true, environment: {} }),
+				defaults,
+			);
+			assert.equal((await readEnvFile(envFile)).WEBAPP_PORT, "4200");
 		});
 	});
 
-	await test("worktrees started one after another get port sets that share no port", async () => {
+	await test("worktrees created one after another get sets that share no port, and keep them", async () => {
 		const files: Record<string, string>[] = [];
 		for (let index = 0; index < 3; index += 1) {
 			await checkout(async ({ envFile }) => {
+				const environment = {};
 				assert.deepEqual(
-					await ensurePorts({ envFile, others: files, environment: {} }),
+					await ensurePorts({ envFile, others: files, created: true, environment }),
 					shifted(index),
 				);
+				const first = await readFile(envFile, "utf8");
+				assert.deepEqual(
+					await ensurePorts({ envFile, others: [], created: false, environment }),
+					{},
+				);
+				assert.equal(await readFile(envFile, "utf8"), first);
 				files.push(await readEnvFile(envFile));
 			});
 		}
@@ -260,11 +270,34 @@ await describe("the host ports of a worktree", async () => {
 		assert.equal(new Set(all).size, all.length);
 	});
 
-	await test("a worktree that never wrote ports counts as the defaults", async () => {
+	await test("a new worktree avoids an older one that never wrote ports, which runs on the defaults", async () => {
 		await checkout(async ({ envFile }) => {
 			const older = { COMPOSE_PROJECT_NAME: "older" };
 			assert.deepEqual(
-				await ensurePorts({ envFile, others: [older], environment: {} }),
+				await ensurePorts({ envFile, others: [older], created: true, environment: {} }),
+				shifted(1),
+			);
+		});
+	});
+
+	await test("an older worktree keeps the defaults unless another worktree wrote them", async () => {
+		await checkout(async ({ envFile }) => {
+			await writeFile(envFile, "COMPOSE_PROJECT_NAME=mine\n");
+			const older = { COMPOSE_PROJECT_NAME: "older" };
+			assert.deepEqual(
+				await ensurePorts({ envFile, others: [older], created: false, environment: {} }),
+				defaults,
+			);
+		});
+		await checkout(async ({ envFile }) => {
+			await writeFile(envFile, "COMPOSE_PROJECT_NAME=mine\n");
+			assert.deepEqual(
+				await ensurePorts({
+					envFile,
+					others: [asFile(defaults)],
+					created: false,
+					environment: {},
+				}),
 				shifted(1),
 			);
 		});
@@ -272,44 +305,53 @@ await describe("the host ports of a worktree", async () => {
 
 	await test("a free set below a taken one is reused", async () => {
 		await checkout(async ({ envFile }) => {
-			const second = Object.fromEntries(
-				Object.entries(shifted(1)).map(([name, port]) => [name, String(port)]),
+			assert.deepEqual(
+				await ensurePorts({
+					envFile,
+					others: [asFile(shifted(1))],
+					created: true,
+					environment: {},
+				}),
+				defaults,
 			);
-			assert.deepEqual(await ensurePorts({ envFile, others: [second], environment: {} }), defaults);
 		});
 	});
 
-	await test("no port of one set equals the management port of another", () => {
-		const sets = Array.from({ length: 100 }, (_, set) =>
-			portsOf(
-				Object.fromEntries(
-					Object.entries(shifted(set)).map(([name, port]) => [name, String(port)]),
-				),
-			),
-		);
-		const all = sets.flatMap((ports) => [...ports]);
+	await test("no port of one set equals a port of another, the management port included", () => {
+		const all = Array.from({ length: 100 }, (_, set) => [...portsOf(asFile(shifted(set)))]).flat();
 		assert.equal(new Set(all).size, all.length);
 	});
 
-	await test("a set server port stays, gets its management port, and a second run changes nothing", async () => {
+	await test("a file that the old guide set up by hand gets the ports it lacks, clear of other worktrees", async () => {
 		await checkout(async ({ envFile }) => {
-			await writeFile(envFile, "SERVER_PORT=18080\nPOSTGRES_PORT=15432\n");
-			assert.deepEqual(await ensurePorts({ envFile, others: [], environment: {} }), {
-				MANAGEMENT_PORT: 19090,
-			});
-			const first = await readFile(envFile, "utf8");
-			assert.equal(first, "SERVER_PORT=18080\nPOSTGRES_PORT=15432\nMANAGEMENT_PORT=19090\n");
-			assert.deepEqual(await ensurePorts({ envFile, others: [], environment: {} }), {});
-			assert.equal(await readFile(envFile, "utf8"), first);
+			await writeFile(envFile, "SERVER_PORT=8090\nSANDBOX_API_PORT=8091\n");
+			assert.deepEqual(
+				await ensurePorts({
+					envFile,
+					others: [asFile(defaults)],
+					created: false,
+					environment: {},
+				}),
+				{
+					POSTGRES_PORT: 5442,
+					MAILPIT_SMTP_PORT: 1035,
+					MAILPIT_UI_PORT: 8035,
+					WEBAPP_PORT: 4210,
+					MANAGEMENT_PORT: 9100,
+				},
+			);
+			const values = await readEnvFile(envFile);
+			assert.equal(values.SERVER_PORT, "8090");
+			assert.equal(values.SANDBOX_API_PORT, "8091");
 		});
 	});
 
-	await test("ports that the developer set are kept, and the set around them avoids other worktrees", async () => {
+	await test("the management port follows a server port the developer set", async () => {
 		await checkout(async ({ envFile }) => {
-			await writeFile(envFile, "POSTGRES_PORT=15432\n");
-			const { POSTGRES_PORT: _kept, ...rest } = shifted(1);
-			assert.deepEqual(await ensurePorts({ envFile, others: [{}], environment: {} }), rest);
-			assert.equal((await readEnvFile(envFile)).POSTGRES_PORT, "15432");
+			await writeFile(envFile, "SERVER_PORT=18080\n");
+			const written = await ensurePorts({ envFile, others: [], created: false, environment: {} });
+			assert.equal(written.MANAGEMENT_PORT, 19090);
+			assert.equal(written.SERVER_PORT, undefined);
 		});
 	});
 
@@ -318,19 +360,25 @@ await describe("the host ports of a worktree", async () => {
 			await writeFile(envFile, "POSTGRES_PORT=55432\n");
 			const { POSTGRES_PORT: _kept, ...rest } = shifted(1);
 			assert.deepEqual(
-				await ensurePorts({ envFile, others: [{ POSTGRES_PORT: "55432" }], environment: {} }),
+				await ensurePorts({
+					envFile,
+					others: [{ POSTGRES_PORT: "55432" }],
+					created: true,
+					environment: {},
+				}),
 				rest,
 			);
 		});
 	});
 
-	await test("a server port in the shell wins and nothing is written", async () => {
+	await test("ports in the shell win and nothing is written", async () => {
 		await checkout(async ({ envFile }) => {
 			assert.deepEqual(
 				await ensurePorts({
 					envFile,
 					others: [],
-					environment: { SERVER_PORT: "18080", MANAGEMENT_PORT: "19090" },
+					created: true,
+					environment: asFile(defaults),
 				}),
 				{},
 			);

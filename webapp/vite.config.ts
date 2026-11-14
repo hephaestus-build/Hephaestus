@@ -13,7 +13,8 @@ import { appSourcePlugins } from "./vite.shared.ts";
 const lint = loadLintConfig(new URL(".oxlintrc.json", import.meta.url));
 
 // The worktree's ports live in `server/.env` (docs/contributor/local-development.mdx § Port map). A variable in the
-// shell wins. Only these two names are read, and none reaches the bundle.
+// shell wins. `loadEnv` takes name prefixes, and nothing it returns reaches the bundle: only the port and the
+// runtime environment below read it.
 const ports = loadEnv("development", path.resolve(import.meta.dirname, "../server"), [
 	"WEBAPP_PORT",
 	"SERVER_PORT",
