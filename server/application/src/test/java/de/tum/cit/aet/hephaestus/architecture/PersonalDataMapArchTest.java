@@ -76,6 +76,8 @@ class PersonalDataMapArchTest extends BaseIntegrationTest {
             "issue_label",
             "issue_type",
             "jwt_signing_key",
+            // Sealed instance secrets, such as the key of the namespace reservations: key material with no person.
+            "system_secret",
             "label",
             "llm_call_permit",
             "llm_call_pool",
