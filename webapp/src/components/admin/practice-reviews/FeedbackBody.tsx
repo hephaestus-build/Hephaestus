@@ -1,5 +1,10 @@
+import { lazy, Suspense } from "react";
+
 import type { ReviewFeedback } from "@/api/types.gen";
-import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
+import {
+	UNTRUSTED_MARKDOWN_PROSE,
+	UntrustedMarkdownLoading,
+} from "@/components/common/UntrustedMarkdown";
 import { ADMIN_WITHHELD_TEXT } from "@/components/practice-vocabulary/feedback-destination-defs";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
@@ -11,7 +16,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { hasText } from "@/lib/text";
 
-import { feedbackDisplayMarkdown } from "./feedback-display";
+const FeedbackMarkdown = lazy(async () => {
+	const markdown = await import("./FeedbackMarkdown");
+	return { default: markdown.FeedbackMarkdown };
+});
 
 export type FeedbackBodyFeedback = Pick<ReviewFeedback, "destination" | "textHidden"> & {
 	body: string | null;
@@ -66,7 +74,9 @@ export function FeedbackBody({ feedback, className }: FeedbackBodyProps) {
 				</CardHeader>
 				<CardContent className="pb-4">
 					<TabsContent value="rendered" className={UNTRUSTED_MARKDOWN_PROSE}>
-						<UntrustedMarkdown>{feedbackDisplayMarkdown(body)}</UntrustedMarkdown>
+						<Suspense fallback={<UntrustedMarkdownLoading />}>
+							<FeedbackMarkdown body={body} />
+						</Suspense>
 					</TabsContent>
 					<TabsContent value="source">
 						<CodeBlock size="sm">

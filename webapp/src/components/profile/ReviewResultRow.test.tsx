@@ -1,5 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { EvidenceCitation, ResultDetail } from "@/api/types.gen";
 import { detailResult, listedResult } from "@/stories/practice-detail-story-mock-data";
@@ -46,6 +46,12 @@ const core = (quote: string): EvidenceCitation => ({
 });
 
 const NO_EVIDENCE = { citations: [], openQuestions: [], search: null, inapplicability: null };
+
+// Loaded up front, as on a page that showed Markdown before: a test waits only for React to resolve
+// the lazy renderer, not for its first import.
+beforeAll(async () => {
+	await import("@/components/common/UntrustedMarkdownRenderer");
+});
 
 describe("ReviewResultRow", () => {
 	it("keeps a diff pair that could not fold as two blocks, each with its own key", () => {
@@ -110,7 +116,7 @@ describe("ReviewResultRow", () => {
 		screen.getByText("Not met · 2 problems");
 	});
 
-	it("lists what could not be settled as open questions, never as a check", () => {
+	it("lists what could not be settled as open questions, never as a check", async () => {
 		renderOpen({
 			result: {
 				...result,
@@ -129,7 +135,7 @@ describe("ReviewResultRow", () => {
 		});
 
 		screen.getByText("Open questions");
-		screen.getByText("Was the move requested?");
+		await screen.findByText("Was the move requested?");
 		screen.getByText("The linked issue.");
 		expect(screen.queryByText("What was checked")).toBeNull();
 	});
