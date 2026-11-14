@@ -44,7 +44,8 @@ jobs:
   upgrade:
     name: Migrate a seeded database
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Two seeded upgrades when the latest published release differs from the supported starting release.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -81,6 +82,16 @@ jobs:
           PREVIOUS_APP: ${{ steps.images.outputs.previous-app }}
           PREVIOUS_VERSION: ${{ steps.images.outputs.previous-version }}
           PREVIOUS_AGENT_IMAGE: ${{ steps.images.outputs.previous-agent }}
+          CANDIDATE_APP: ${{ steps.images.outputs.candidate-app }}
+          POSTGRES_IMAGE: ${{ steps.images.outputs.postgres }}
+        run: node scripts/release-upgrade-test.ts "$PREVIOUS_APP" "$CANDIDATE_APP" "$POSTGRES_IMAGE"
+
+      - name: Test seeded upgrade from the latest release
+        if: steps.images.outputs.latest-app != ''
+        env:
+          PREVIOUS_APP: ${{ steps.images.outputs.latest-app }}
+          PREVIOUS_VERSION: ${{ steps.images.outputs.latest-version }}
+          PREVIOUS_AGENT_IMAGE: ${{ steps.images.outputs.latest-agent }}
           CANDIDATE_APP: ${{ steps.images.outputs.candidate-app }}
           POSTGRES_IMAGE: ${{ steps.images.outputs.postgres }}
         run: node scripts/release-upgrade-test.ts "$PREVIOUS_APP" "$CANDIDATE_APP" "$POSTGRES_IMAGE"

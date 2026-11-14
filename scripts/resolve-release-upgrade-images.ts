@@ -5,7 +5,7 @@ import process from "node:process";
 import { currentReleaseIdentity, releaseIdentityFor } from "./lib/release-identities.ts";
 
 import { isSet, requiredEnv } from "./lib/env.ts";
-import { upgradeFromOf } from "./lib/previous-release.ts";
+import { latestReleaseOf, upgradeFromOf } from "./lib/previous-release.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import { parseVersion } from "./lib/release-version.ts";
 
@@ -109,6 +109,14 @@ if (
 	postgres = `${postgresRepository}:${candidate}`;
 }
 
+// The supported path starts at the previous stable release, or at the baseline's release. Installations that follow
+// the candidates run the latest published release, so its rows are seeded too when it is a different release.
+const latest = latestReleaseOf("HEAD")?.slice(1);
+const latestApplication =
+	latest !== undefined && latest !== previousApplication.version
+		? previousApplicationReference(latest)
+		: undefined;
+
 const output = requiredEnv(process.env, "GITHUB_OUTPUT");
 appendFileSync(
 	output,
@@ -116,6 +124,13 @@ appendFileSync(
 		`previous-app=${immutable(previousApplication.reference, previousApplication.repository)}`,
 		`previous-version=${previousApplication.version}`,
 		`previous-agent=${immutable(`${previousApplication.agentRepository}:${previousApplication.version}`, previousApplication.agentRepository)}`,
+		...(latestApplication === undefined
+			? ["latest-app=", "latest-version=", "latest-agent="]
+			: [
+					`latest-app=${immutable(latestApplication.reference, latestApplication.repository)}`,
+					`latest-version=${latestApplication.version}`,
+					`latest-agent=${immutable(`${latestApplication.agentRepository}:${latestApplication.version}`, latestApplication.agentRepository)}`,
+				]),
 		`candidate-app=${immutable(candidateApplication, applicationRepository)}`,
 		`postgres=${immutable(postgres, postgresRepository)}`,
 		"",

@@ -25,6 +25,15 @@ await test("release and weekly runs use the supported seeded upgrade", () => {
 	);
 	assert.ok(isMap(resolver));
 	assert.ok(isMap(driver));
+	// The latest published release is the second starting point, so a database that follows the candidates is seeded too.
+	const latest = steps.items.find(
+		(step) =>
+			isMap(step) &&
+			String(step.get("run")).includes("scripts/release-upgrade-test.ts") &&
+			String(step.getIn(["env", "PREVIOUS_VERSION"])).includes("outputs.latest-version"),
+	);
+	assert.ok(isMap(latest));
+	assert.equal(latest.get("if"), "steps.images.outputs.latest-app != ''");
 	const release = parseDocument(readFileSync(".github/workflows/release.yml", "utf8"));
 	assert.equal(
 		release.getIn(["jobs", "upgrade-test", "uses"]),
@@ -96,6 +105,11 @@ mock.module("node:child_process", { exports: {
 					/^previous-agent=.*\/agent-pi@sha256:[a-f0-9]{64}$/mu,
 				);
 				assert.match(readFileSync(output, "utf8"), /^candidate-app=.*@sha256:[a-f0-9]{64}$/mu);
+				// The latest published release of this checkout is resolved as the second starting point, or stays empty.
+				assert.match(
+					readFileSync(output, "utf8"),
+					/^latest-version=(?:|\d+\.\d+\.\d+(?:-rc\.\d+)?)$/mu,
+				);
 			} finally {
 				rmSync(directory, { recursive: true, force: true });
 			}
