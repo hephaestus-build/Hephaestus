@@ -155,7 +155,7 @@ export const PrivateFiledCopy: Story = {
 			await canvas.findByText("Avoid repeated points in the review summary"),
 		);
 		await expect(
-			canvas.getByText("The summary repeats the same point on a long pull request."),
+			await canvas.findByText("The summary repeats the same point on a long pull request."),
 		).toBeVisible();
 	},
 };

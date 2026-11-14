@@ -1,8 +1,26 @@
 import { ChevronDown } from "lucide-react";
+import { lazy, Suspense } from "react";
+import { useSpinDelay } from "spin-delay";
 
-import { UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Skeleton } from "@/components/ui/skeleton";
+
+const UntrustedMarkdown = lazy(async () => {
+	const markdown = await import("@/components/common/UntrustedMarkdown");
+	return { default: markdown.UntrustedMarkdown };
+});
+
+function FiledIssueLoading() {
+	const visible = useSpinDelay(true, { delay: 1000, minDuration: 0 });
+	return visible ? (
+		<div aria-busy="true" className="flex flex-col gap-2">
+			<Skeleton className="h-4 w-3/4" />
+			<Skeleton className="h-4 w-full" />
+			<Skeleton className="h-4 w-1/2" />
+		</div>
+	) : null;
+}
 
 export interface FiledIssueProps {
 	title: string;
@@ -25,7 +43,9 @@ export function FiledIssue({ title, text }: FiledIssueProps) {
 				<div className="mt-2 flex flex-col gap-2 rounded-lg border p-3">
 					<p className="font-medium break-words">{title}</p>
 					<div className="min-w-0 text-sm break-words">
-						<UntrustedMarkdown>{text}</UntrustedMarkdown>
+						<Suspense fallback={<FiledIssueLoading />}>
+							<UntrustedMarkdown>{text}</UntrustedMarkdown>
+						</Suspense>
 					</div>
 				</div>
 			</CollapsibleContent>
