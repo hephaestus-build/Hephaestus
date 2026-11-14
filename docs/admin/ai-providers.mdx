@@ -317,7 +317,7 @@ For vLLM or SGLang, set the server's default chat template arguments so that `en
 Or a Hephaestus answer fails after 2 minutes with no text, but the provider's log shows a complete answer.
 
 The server's LLM proxy fails a conversation model call whose stream sends no byte for 2 minutes.
-It also fails a call whose provider sends no response headers for 5 minutes ([Runtime roles](./runtime-roles.mdx#lease-retry-and-deadline)).
+It also fails a call whose provider sends no response headers for 5 minutes ([Server runtime § Turn limits](./runtime-roles.mdx#turn-limits)).
 A gateway that buffers the whole answer sends nothing until the answer is complete.
 Configure every proxy between Hephaestus and the model to stream:
 

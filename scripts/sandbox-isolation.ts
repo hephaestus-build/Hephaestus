@@ -2,7 +2,7 @@
  * The sandbox isolation gate: proves on a live cluster that a sandbox from a SandboxTemplate reaches the
  * gateway port and nothing else, holds no Kubernetes token, runs as a non-root user and, on the default
  * runtime, in a user namespace of its own. The CI cluster legs run it against the chart's templates
- * (docs/admin/kubernetes.mdx § Sandbox isolation).
+ * (docs/admin/sandboxes.md § Sandbox isolation gate).
  *
  * It clones the template, with its Pod spec, labels and policies, and changes only the command, so
  * that the container waits instead of running a loop. It claims two sandboxes from the clone, so each

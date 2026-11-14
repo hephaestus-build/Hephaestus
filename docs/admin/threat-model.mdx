@@ -83,7 +83,7 @@ accDescr: The diagram separates independently controlled systems, the operator e
 ```
 
 Arrows show permitted logical flows, not network-level reachability.
-The [chart topology](./overview#architecture-and-network) shows the Pods and their connections.
+The [chart topology](./helm-chart#what-the-chart-runs) shows the Pods and their connections.
 [Network egress](./network-egress) lists every outbound destination.
 
 Only the server role creates sandbox Jobs and Pods in the release's restricted sandbox namespace, and only with `sandbox.enabled`.
@@ -100,7 +100,7 @@ The native k3s CI and release smokes require every server to pass this probe.
 Sandbox inputs arrive and results leave through the server's sandbox gateway, which also hosts the LLM proxy.
 No server disk paths mount into a sandbox.
 Runtime-role separation reduces reachable surface but is not authorization.
-See [Runtime Roles](./runtime-roles).
+See [Server runtime](./runtime-roles).
 
 ## Attacker assumptions
 

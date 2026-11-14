@@ -359,7 +359,7 @@ await test("the values that the repository shows an operator fit the schema", ()
 		.flatMap((name) =>
 			[
 				...readFileSync(new URL(name, admin), "utf8").matchAll(
-					/^```yaml title="values\.yaml"\n(?<block>.*?)^```$/gmsu,
+					/^(?<indent> *)```yaml title="(?:values|site)\.yaml"\n(?<block>.*?)^\k<indent>```$/gmsu,
 				),
 			].map((match) => ({ name, values: asRecord(parse(match.groups?.block ?? ""), name) })),
 		);

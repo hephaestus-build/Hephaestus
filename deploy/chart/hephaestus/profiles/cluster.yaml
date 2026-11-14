@@ -4,14 +4,14 @@
 # default runtime with hostUsers: false.
 #
 # Sandboxes are on. The operator states sandbox.namespace and networkPolicy.kubernetesApi, and
-# the chart refuses to render without them (docs/admin/managed-cluster.mdx § Values).
+# the chart refuses to render without them (docs/admin/managed-cluster.mdx).
 priorityClasses:
   # The admin bundle (deploy/platform/hephaestus-cluster-admin.yaml) creates these three.
   create: false
   roles: hephaestus-roles
   conversations: hephaestus-conversations
   reviews: hephaestus-reviews
-# The staging bench of 2026-11-10 measured a server peak of 2325 MiB: 91 % of the default 2560Mi.
+# A staging bench measured a server peak of 2325 MiB: 91 % of the default 2560Mi.
 # The JVM sizes its heap from the limit, so the request equals it.
 server:
   resources:

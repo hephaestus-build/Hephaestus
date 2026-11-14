@@ -34,7 +34,7 @@ Thus, context refresh succeeds without a reachable Postgres.
 
 The chart's runtime `SPRING_PROFILES_ACTIVE` overrides the default that the buildpack sets.
 Paketo writes `env.launch/<KEY>.default`, which yields to the runtime environment.
-The [build-only profile boundary](https://docs.hephaestus.build/admin/runtime-roles#build-only-profiles) keeps runtime bootstrap out of training.
+The [build-only profile boundary](https://docs.hephaestus.build/contributor/local-development#build-only-profiles) keeps runtime bootstrap out of training.
 It rejects a production/build-profile combination.
 Authentication types remain available for class loading without configured deployment secrets.
 

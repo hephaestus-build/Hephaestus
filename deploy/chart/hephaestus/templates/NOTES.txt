@@ -1,6 +1,6 @@
 Hephaestus {{ .Values.release.version }} ({{ .Values.release.commit }}) is installed as "{{ .Release.Name }}" in "{{ .Release.Namespace }}".
 
-The migration Job of this revision applies the database migrations, and every role waits for them.
+The migration Job of this revision applies the database migrations, and the server waits for them.
 Follow it with:
 
   kubectl --namespace {{ .Release.Namespace }} logs --follow job/{{ include "hephaestus.name" (dict "root" . "component" "migration") }}-{{ .Release.Revision }}
@@ -8,10 +8,9 @@ Follow it with:
 Then open https://{{ .Values.host }}.
 
 {{ if .Values.sandbox.enabled -}}
-Each server runs the sandbox isolation probe before it starts a sandbox. A server whose probe failed logs
-each check that the cluster failed, and its health shows it under kubernetesSandbox:
+Run the sandbox isolation gate against each sandbox template before you connect a repository:
 
-  kubectl --namespace {{ .Release.Namespace }} logs deployment/{{ include "hephaestus.name" (dict "root" . "component" "server") }}
+  https://docs.hephaestus.build/admin/sandboxes#sandbox-isolation-gate
 {{ else -}}
 The sandboxes are off (sandbox.enabled=false), so practice reviews and conversation turns do not run.
 {{ end -}}

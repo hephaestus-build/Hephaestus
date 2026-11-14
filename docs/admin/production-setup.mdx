@@ -9,7 +9,7 @@ This page owns the deployment settings of the optional integrations: GitLab, Sla
 [First steps](./first-steps) owns the GitHub OAuth app and the first admin.
 
 [Integrations](./integrations) owns the workspace connections that a workspace admin makes in the UI.
-[Runtime roles](./runtime-roles#webapp-container) owns the container contract of the webapp image.
+[Pod security](./helm-chart#pod-security) gives the container contract of the webapp image.
 [Clocks](./helm-chart#clocks) owns the clock requirement.
 The [Configuration reference](./configuration-reference) maps application variables to chart values and Secret keys.
 
@@ -361,9 +361,9 @@ Sync-status hints use PostgreSQL notifications. Each replica delivers the hint t
 Clients refetch through REST and keep polling if a notification is missed.
 
 Each conversation runs its turns in one conversation sandbox.
-[Runtime Roles](./runtime-roles.mdx#conversation-sandboxes) gives its lifecycle, and [Helm chart reference § Conversation capacity](./helm-chart#conversation-capacity) gives its values.
+[Conversation runtime § Conversation sandbox](/contributor/unified-pi-runtime#conversation-sandbox) gives its lifecycle, and [Sandbox capacity budget](./helm-chart#sandbox-capacity-budget) gives its values.
 The application server needs no memory for Conversation runtimes.
-[Runtime Roles](./runtime-roles.mdx#conversation-turns) explains dispatch and capacity.
+[Server runtime](./runtime-roles.mdx#conversation-turns) explains dispatch and capacity.
 
 ### Instance-wide LLM settings
 
@@ -393,7 +393,7 @@ A server with `AGENT_ENABLED` admits the turn again, with the budget check, and 
 Without `AGENT_ENABLED`, a server creates no sandbox backend.
 A turn waits in the queue until a server has free capacity.
 
-[Runtime roles](./runtime-roles.mdx#conversation-turns) owns dispatch, leases, drain, and the conversation loop.
+[Server runtime](./runtime-roles.mdx#conversation-turns) gives turn capacity, leases and the drain.
 The proxy resolves each model's upstream base URL, auth header, and key from its bound connection.
 No process-level configuration needs to fix those values.
 All server pods use the same provider catalog.

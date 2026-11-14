@@ -73,7 +73,7 @@ A host name entry trusts the DNS of that name, so list only a name whose DNS you
 A listed host name can also use a private TLD such as `.internal`.
 
 Each GitLab API call and sign-in request checks the address when it connects.
-Thus, a name that later resolves elsewhere gets no access.
+A name that later resolves to another address gets no access.
 Loopback, link-local, and known cloud metadata addresses stay refused, and so do the addresses of the Pod itself.
 A range that covers the address of the Pod stops the server at startup.
 
@@ -116,7 +116,7 @@ spec:
 
 Replace `<gitlab-namespace>`, `<label>: <value>`, and `<port>` with the namespace, a pod label, and the container port of the GitLab web service.
 
-If your GitLab uses a certificate from a private CA, also follow [A Git provider with a private CA](#trust-a-git-providers-private-ca).
+If your GitLab uses a certificate from a private CA, also follow [Trust a Git provider's private CA](#trust-a-git-providers-private-ca).
 
 ## Admit a model endpoint on a private network
 
@@ -142,7 +142,7 @@ The chart cannot compare the two lists, because a host name is not an address ra
 
 A `cidr` must be in `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, or `fc00::/7`.
 `ports` must name at least one port.
-Thus, no item can open the link-local range of the cloud metadata service.
+No item can open the link-local range of the cloud metadata service.
 Use `modelEndpoints` only for addresses outside the cluster.
 
 Do not list a range in `config.llmPrivateHosts` that covers the Pod or Service range of the cluster.

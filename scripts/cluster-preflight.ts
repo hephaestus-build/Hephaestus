@@ -18,9 +18,8 @@
  * Each finding is one line that the operator can forward to the cluster's admins. A `missing:` line
  * fails the preflight. An `unverified:` line names a fact that the operator's access cannot read.
  *
- * Isolation (user namespaces, NetworkPolicy enforcement) is not checked here: the server's isolation
- * probe checks it on the real nodes, and the server is not ready until the probe passes. `--installed`
- * reads that result after the install.
+ * Isolation (user namespaces, NetworkPolicy enforcement) is not checked here: the sandbox isolation gate
+ * (scripts/sandbox-isolation.ts) checks it on the real nodes. `--installed` waits for the rollout.
  *
  *   node scripts/cluster-preflight.ts --namespace <app> --values <operator values.yaml> \
  *     [--values <more.yaml> ...] [--release hephaestus] [--context <kubectl context>] [--installed]

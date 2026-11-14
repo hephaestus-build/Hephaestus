@@ -211,7 +211,7 @@ count by (runtime_role, version) (application_build_info{job="hephaestus"})
 ## Conversation turn metrics
 
 Each claim of a conversation turn by a server is one attempt.
-A turn has a second attempt only after a lease expiry ([Runtime Roles](./runtime-roles.mdx#conversation-turns)).
+A turn has a second attempt only after a lease expiry ([Server runtime](./runtime-roles.mdx#conversation-turns)).
 
 | Prometheus name                            | Type      | Labels    | Meaning                                                                 |
 | ------------------------------------------ | --------- | --------- | ----------------------------------------------------------------------- |
@@ -303,7 +303,7 @@ Its `failure_cause` is `its lease expired on its last attempt`.
 An increase in `mentor_turn_claim_failure_total` shows a server that claims turns but cannot start them.
 The server fails each turn that it cannot start, and claims the next one.
 A claim that fails answers the loop's pull with `503`. The loop then pulls again, maybe from another server.
-[Runtime roles](./runtime-roles.mdx#conversation-sandboxes) tells what the sandbox driver does when it stops, and what happens to its turns.
+[Conversation runtime § Leases and retries](/contributor/unified-pi-runtime#leases-and-retries) tells what happens to the turns of a sandbox that stops.
 
 ## Call pool metrics
 
