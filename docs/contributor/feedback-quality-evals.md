@@ -266,6 +266,18 @@ The gate does not pin prompt wording.
 A wording pin fails on an improvement and on a removed rule alike, so it cannot tell them apart.
 Protect a prompt rule with labelled cases that fail when the rule goes, not with a pin of its words.
 
+### What the gate is made of
+
+The gate is labelled cases, scorers and one OpenAI-compatible endpoint. It has no evaluation framework of its own.
+This section is the contract that another evaluator can rely on to run the same cases.
+
+- Cases: `scripts/feedback-eval/compositions.json`, with its schema `compositions.schema.json`. The prompt-safety subset and the panel are lists of case IDs in `gate.json`.
+- Endpoint: `CompositionEvalLiveTest` composes each case with the production composer. It reads the endpoint from `HEPHAESTUS_LIVE_LLM_BASE_URL`, `HEPHAESTUS_LIVE_LLM_MODEL` and `HEPHAESTUS_LIVE_LLM_API_KEY`, and CI fills them from the [CI model connection](./ci-cd.mdx#ci-model-connection).
+- Run file: the live test writes one checked output for each case, in the schema's `run` definition.
+- Scorers: `scripts/feedback-eval/gate.ts` scores a run file against the panel floors and the safety subset. `scripts/feedback-eval/compositions.ts` writes the composition report.
+
+An evaluator that writes a run file in that schema can use the same scorers, offline or against live traffic.
+
 ### Gate checks without a model
 
 These checks send no model request. Each check must pass exactly.
@@ -336,21 +348,20 @@ The `CI / Feedback eval panel` workflow runs the whole panel:
 Any other push to a pull request that changes what the composer reads composes the prompt-safety subset.
 The workflow's path filter lists those paths. A pull request outside them runs neither, even with the label.
 
-The panel runs only with a configured model provider.
-[Feedback eval panel provider](./ci-cd.mdx#feedback-eval-panel-provider) lists the settings and what happens without them.
+The panel runs only with the [CI model connection](./ci-cd.mdx#ci-model-connection), which also says what happens without it.
 
 ### A skipped panel
 
-With a provider, the panel is skipped when the endpoint gives no composition for a panel case.
+With the connection, the panel is skipped when the endpoint gives no composition for a panel case.
 An endpoint failure is never retried.
 A skip is not a pass: the panel job fails and names the reason.
 
-With a provider, a night can fall below a floor, be skipped or not finish.
+With the connection, a night can fall below a floor, be skipped or not finish.
 Each such night comments on one tracking issue, "The nightly feedback eval panel is not green".
 The workflow opens the issue if it is not open.
 
 The comment links the run, the kept result and the commits since the last night whose panel measured and passed.
-[Feedback eval panel provider](./ci-cd.mdx#feedback-eval-panel-provider) says how the workflow keeps that night.
+[Feedback eval panel state](./ci-cd.mdx#feedback-eval-panel-state) says how the workflow keeps that night.
 The next night that measures and passes closes the issue with a link to its run.
 
 A pull request run and a manual run report in their job summary only.

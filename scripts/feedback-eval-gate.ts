@@ -89,7 +89,7 @@ function compose(caseIds: string[]): { run: RunFile; model: Model } | Panel {
 	if (missing.length > 0) {
 		return {
 			status: "skipped",
-			reason: `No model provider in this run: ${missing.join(", ")} not set. docs/contributor/ci-cd.mdx § Feedback eval panel provider says how CI sets them.`,
+			reason: `No model endpoint in this run: ${missing.join(", ")} not set. docs/contributor/ci-cd.mdx § CI model connection says how CI sets them.`,
 		};
 	}
 	if (!deterministicPassed) {

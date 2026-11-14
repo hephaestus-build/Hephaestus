@@ -31,13 +31,14 @@ on:
 permissions: {}
 
 jobs:
-  # The panel runs only with a configured provider: docs/contributor/ci-cd.mdx § Feedback eval
-  # panel provider. A cron cannot be conditional, so a night without the variables starts no job.
+  # The panel runs only with the CI model connection: docs/contributor/ci-cd.mdx § CI model
+  # connection. The base URL is a secret, and neither a cron nor a job `if:` can read a secret, so
+  # this job checks the settings in a step. A night without the model variable starts no job.
   provider:
-    name: Model provider
+    name: Model connection
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'schedule' && vars.FEEDBACK_EVAL_BASE_URL != '' && vars.FEEDBACK_EVAL_MODEL != '') ||
+      (github.event_name == 'schedule' && vars.CI_LLM_MODEL != '') ||
       (github.event_name == 'pull_request' && (
         github.event.action != 'labeled' || github.event.label.name == 'eval:run'
       ))
@@ -47,29 +48,30 @@ jobs:
     outputs:
       configured: ${{ steps.check.outputs.configured }}
     steps:
-      # A secret cannot appear in an `if:`, so this step reads only whether the key is set.
-      - name: Check the provider settings
+      # Each expression is only whether a setting is set; no value reaches the step.
+      - name: Check the model connection
         id: check
         env:
-          BASE_URL_SET: ${{ vars.FEEDBACK_EVAL_BASE_URL != '' }}
-          MODEL_SET: ${{ vars.FEEDBACK_EVAL_MODEL != '' }}
-          KEY_SET: ${{ secrets.FEEDBACK_EVAL_API_KEY != '' }}
+          BASE_URL_SET: ${{ secrets.CI_LLM_BASE_URL != '' }}
+          KEY_SET: ${{ secrets.CI_LLM_API_KEY != '' }}
+          MODEL_SET: ${{ vars.CI_LLM_MODEL != '' }}
         run: |
-          if [ "$BASE_URL_SET" = true ] && [ "$MODEL_SET" = true ] && [ "$KEY_SET" = true ]; then
+          if [ "$BASE_URL_SET" = true ] && [ "$KEY_SET" = true ] && [ "$MODEL_SET" = true ]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           echo "configured=false" >> "$GITHUB_OUTPUT"
           missing=()
-          [ "$BASE_URL_SET" = true ] || missing+=("FEEDBACK_EVAL_BASE_URL")
-          [ "$MODEL_SET" = true ] || missing+=("FEEDBACK_EVAL_MODEL")
-          [ "$KEY_SET" = true ] || missing+=("FEEDBACK_EVAL_API_KEY")
+          [ "$BASE_URL_SET" = true ] || missing+=("CI_LLM_BASE_URL")
+          [ "$KEY_SET" = true ] || missing+=("CI_LLM_API_KEY")
+          [ "$MODEL_SET" = true ] || missing+=("CI_LLM_MODEL")
+          echo "::notice title=Feedback eval panel::The CI model connection is not configured, so nothing was composed. Missing: ${missing[*]}."
           {
             echo "## Feedback eval panel"
             echo
-            echo "The model provider is not configured, so the panel did not run. Missing: ${missing[*]}."
+            echo "The CI model connection is not configured, so nothing was composed. Missing: ${missing[*]}."
             echo "The deterministic feedback eval gate still covers every pull request."
-            echo "docs/contributor/ci-cd.mdx § Feedback eval panel provider lists the settings."
+            echo "docs/contributor/ci-cd.mdx § CI model connection lists the settings."
           } >> "$GITHUB_STEP_SUMMARY"
 
   panel:
@@ -103,9 +105,9 @@ jobs:
       - name: Compose the panel or the safety subset
         id: gate
         env:
-          HEPHAESTUS_LIVE_LLM_BASE_URL: ${{ vars.FEEDBACK_EVAL_BASE_URL }}
-          HEPHAESTUS_LIVE_LLM_MODEL: ${{ vars.FEEDBACK_EVAL_MODEL }}
-          HEPHAESTUS_LIVE_LLM_API_KEY: ${{ secrets.FEEDBACK_EVAL_API_KEY }}
+          HEPHAESTUS_LIVE_LLM_BASE_URL: ${{ secrets.CI_LLM_BASE_URL }}
+          HEPHAESTUS_LIVE_LLM_MODEL: ${{ vars.CI_LLM_MODEL }}
+          HEPHAESTUS_LIVE_LLM_API_KEY: ${{ secrets.CI_LLM_API_KEY }}
           SCOPE: ${{ (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'eval:run')) && '--model' || '--safety' }}
         run: node scripts/feedback-eval-gate.ts "$SCOPE" --output "$RUNNER_TEMP/feedback-eval-panel"
 

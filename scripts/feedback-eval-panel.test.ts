@@ -373,9 +373,16 @@ void test("only a scheduled night on main whose whole panel job succeeded saves 
 	);
 });
 
-void test("the provider check names each missing setting, the key by name only", async () => {
+void test("the connection check names each missing setting, and no secret value reaches a step's text", async () => {
 	const workflow = await readFile(".github/workflows/feedback-eval-panel.yml", "utf8");
-	assert.match(workflow, /\[ "\$KEY_SET" = true \] \|\| missing\+=\("FEEDBACK_EVAL_API_KEY"\)/u);
-	assert.match(workflow, /KEY_SET: \$\{\{ secrets\.FEEDBACK_EVAL_API_KEY != '' \}\}/u);
+	for (const name of ["CI_LLM_BASE_URL", "CI_LLM_API_KEY", "CI_LLM_MODEL"]) {
+		assert.match(workflow, new RegExp(`missing\\+=\\("${name}"\\)`, "u"), name);
+	}
+	// A secret reaches a step only as whether it is set, or as the live test's environment.
+	for (const match of workflow.matchAll(/\$\{\{(?<expression>[^}]*secrets\.[^}]*)\}\}/gu)) {
+		const expression = match.groups?.expression ?? "";
+		assert.match(expression, /^ secrets\.CI_LLM_\w+(?: != '')? $/u, expression);
+	}
 	assert.doesNotMatch(workflow, /echo[^\n]*secrets\./u);
+	assert.doesNotMatch(workflow, /FEEDBACK_EVAL_/u);
 });

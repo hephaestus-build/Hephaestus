@@ -1,5 +1,5 @@
 /**
- * The tracking issue of the nightly feedback eval panel: docs/contributor/ci-cd.mdx § Feedback eval panel provider.
+ * The tracking issue of the nightly feedback eval panel: docs/contributor/ci-cd.mdx § Feedback eval panel state.
  * The panel's own report job and the `CI / Scheduled failures` fallback both import this one implementation, from an
  * `actions/github-script` step. It loads no package: those jobs install nothing.
  */
