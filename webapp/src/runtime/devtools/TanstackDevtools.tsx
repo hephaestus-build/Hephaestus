@@ -1,6 +1,10 @@
 import type { AnyRouter } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
 
+interface TanstackDevtoolsProps {
+	router?: AnyRouter;
+}
+
 /**
  * Release builds of the TanStack devtools render nothing, so a release image has no use for them.
  * `import.meta.env.DEV` is a build-time constant: a production build drops the dynamic imports with
@@ -22,10 +26,6 @@ const Devtools = import.meta.env.DEV
 			};
 		})
 	: null;
-
-interface TanstackDevtoolsProps {
-	router?: AnyRouter;
-}
 
 export function TanstackDevtools({ router }: TanstackDevtoolsProps) {
 	return Devtools === null ? null : (
