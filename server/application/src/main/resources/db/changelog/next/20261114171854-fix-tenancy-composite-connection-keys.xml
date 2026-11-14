@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794660336480-1" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT count(*) FROM pg_constraint WHERE conname = 'sfk_connection_activity_connection_workspace'</sqlCheck>
+        </preConditions>
+        <comment>A connection's activity and its Outline collections and documents must name the connection's own workspace. NOT VALID adds each key without a table scan, so writes to these tables and to connection wait only for a moment. The single-column keys stay: dropping one would lock connection against reads. The lock timeout fails the step fast behind a long transaction, so that it can run again. Liquibase can commit this change set before it records it, so a rerun finds the keys and marks it ran.</comment>
+        <sql>SET LOCAL lock_timeout = '5s'; ALTER TABLE connection_activity ADD CONSTRAINT sfk_connection_activity_connection_workspace FOREIGN KEY (connection_id, workspace_id) REFERENCES connection (id, workspace_id) ON DELETE CASCADE NOT VALID; ALTER TABLE outline_collection ADD CONSTRAINT sfk_outline_collection_connection_workspace FOREIGN KEY (connection_id, workspace_id) REFERENCES connection (id, workspace_id) NOT VALID; ALTER TABLE outline_document ADD CONSTRAINT sfk_outline_document_connection_workspace FOREIGN KEY (connection_id, workspace_id) REFERENCES connection (id, workspace_id) NOT VALID</sql>
+        <rollback>
+            <sql>ALTER TABLE connection_activity DROP CONSTRAINT IF EXISTS sfk_connection_activity_connection_workspace; ALTER TABLE outline_collection DROP CONSTRAINT IF EXISTS sfk_outline_collection_connection_workspace; ALTER TABLE outline_document DROP CONSTRAINT IF EXISTS sfk_outline_document_connection_workspace</sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1794660336480-2" author="hephaestus">
+        <comment>Validation reads every row without blocking writes, and validating a valid key again does nothing. It fails on a row whose workspace differs from its connection's workspace, and the upgrade stops until that row is corrected or deleted.</comment>
+        <sql>ALTER TABLE connection_activity VALIDATE CONSTRAINT sfk_connection_activity_connection_workspace; ALTER TABLE outline_collection VALIDATE CONSTRAINT sfk_outline_collection_connection_workspace; ALTER TABLE outline_document VALIDATE CONSTRAINT sfk_outline_document_connection_workspace</sql>
+        <rollback>
+            <sql>ALTER TABLE connection_activity DROP CONSTRAINT sfk_connection_activity_connection_workspace, ADD CONSTRAINT sfk_connection_activity_connection_workspace FOREIGN KEY (connection_id, workspace_id) REFERENCES connection (id, workspace_id) ON DELETE CASCADE NOT VALID; ALTER TABLE outline_collection DROP CONSTRAINT sfk_outline_collection_connection_workspace, ADD CONSTRAINT sfk_outline_collection_connection_workspace FOREIGN KEY (connection_id, workspace_id) REFERENCES connection (id, workspace_id) NOT VALID; ALTER TABLE outline_document DROP CONSTRAINT sfk_outline_document_connection_workspace, ADD CONSTRAINT sfk_outline_document_connection_workspace FOREIGN KEY (connection_id, workspace_id) REFERENCES connection (id, workspace_id) NOT VALID</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -749,9 +749,11 @@ erDiagram
     Account ||--o{ OauthStateNonce : has
     Connection ||--o{ OauthStateNonce : has
     IdentityProvider ||--o{ Organization : references
-    Connection ||--o{ OutlineCollection : has
+    Connection ||--o{ OutlineCollection : connection_id
+    Connection ||--o{ OutlineCollection : connection_id
     Workspace ||--o{ OutlineCollection : has
-    Connection ||--o{ OutlineDocument : has
+    Connection ||--o{ OutlineDocument : connection_id
+    Connection ||--o{ OutlineDocument : connection_id
     Workspace ||--o{ OutlineDocument : has
     Workspace ||--o{ ProviderEvent : has
     ProviderEvent ||--o{ ProviderEventStep : has
@@ -785,8 +787,9 @@ erDiagram
     %% Many-to-Many relationships
     GitCommit }o--o{ CommitPullRequest : has
     Issue }o--o{ CommitPullRequest : references
-    Connection }o--o{ ConnectionActivity : has
+    Connection }o--o{ ConnectionActivity : connection_id
     Workspace }o--o{ ConnectionActivity : has
+    Connection }o--o{ ConnectionActivity : connection_id
     User }o--o{ IssueAssignee : assigned_to
     Issue }o--o{ IssueAssignee : assigned_to
     Issue }o--o{ IssueBlocking : blocked_issue_id
