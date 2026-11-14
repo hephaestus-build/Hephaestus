@@ -54,6 +54,7 @@ function model(id: number, connection: WorkspaceLlmConnection, displayName: stri
 		displayName,
 		upstreamModelId: `upstream-${id}`,
 		enabled: true,
+		readiness: "PRICE_MISSING",
 		pricingMode: "UNPRICED",
 		currency: "USD",
 		limits: { contextWindow: 128_000, maxOutputTokens: 16_384, bounded: true },

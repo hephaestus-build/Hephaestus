@@ -23,6 +23,7 @@ const mockModel: WorkspaceLlmModel = {
 	connectionId: 1,
 	connectionDisplayName: "My OpenAI account",
 	enabled: true,
+	readiness: "READY",
 	reasoningEffort: "MEDIUM",
 	contextWindow: 128_000,
 	maxOutputTokens: 16_000,

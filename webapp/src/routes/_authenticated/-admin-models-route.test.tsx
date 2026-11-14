@@ -52,6 +52,8 @@ function model(id: number, connectionId: number, displayName: string) {
 		upstreamModelId: `upstream-${id}`,
 		dataHandlingTier: "UNDECLARED" as const,
 		enabled: true,
+		// No price is set on these fixtures, as the server would report it.
+		readiness: "PRICE_MISSING" as const,
 		visibility: "PUBLIC" as const,
 		grantedWorkspaceIds: [],
 		limits: { contextWindow: 128_000, maxOutputTokens: 16_384, bounded: true },

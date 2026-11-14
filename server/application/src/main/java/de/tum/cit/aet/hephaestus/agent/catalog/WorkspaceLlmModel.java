@@ -1,34 +1,23 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.spi.AiModelBrand;
-import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import jakarta.persistence.Column;
-import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.ForeignKey;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
-import java.time.Instant;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import org.hibernate.annotations.ColumnDefault;
-import org.hibernate.annotations.Generated;
-import org.hibernate.generator.EventType;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -54,14 +43,9 @@ import org.jspecify.annotations.Nullable;
 @Getter
 @Setter
 @NoArgsConstructor
-@ToString
-@EqualsAndHashCode(onlyExplicitlyIncluded = true)
-public class WorkspaceLlmModel {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @EqualsAndHashCode.Include
-    private Long id;
+@ToString(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
+public class WorkspaceLlmModel extends LlmCatalogModel {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "workspace_id", nullable = false, foreignKey = @ForeignKey(name = "fk_ws_llm_model_workspace"))
@@ -72,52 +56,6 @@ public class WorkspaceLlmModel {
     @JoinColumn(name = "connection_id", nullable = false, foreignKey = @ForeignKey(name = "fk_ws_llm_model_connection"))
     @ToString.Exclude
     private WorkspaceLlmConnection connection;
-
-    @Column(name = "slug", nullable = false, length = 64)
-    private String slug;
-
-    @Column(name = "display_name", nullable = false, length = 128)
-    private String displayName;
-
-    @Column(name = "upstream_model_id", nullable = false, length = 256)
-    private String upstreamModelId;
-
-    @Nullable
-    @Column(name = "context_window")
-    private Integer contextWindow;
-
-    @Nullable
-    @Column(name = "max_output_tokens")
-    private Integer maxOutputTokens;
-
-    /** The context window the provider's model metadata reported; {@link #getContextWindow()} wins over it. */
-    @Nullable
-    @Column(name = "discovered_context_window")
-    private Integer discoveredContextWindow;
-
-    /** The maximum output the provider's model metadata reported; {@link #getMaxOutputTokens()} wins over it. */
-    @Nullable
-    @Column(name = "discovered_max_output_tokens")
-    private Integer discoveredMaxOutputTokens;
-
-    /** Null until a probe establishes the model's forced tool-choice support. */
-    @Nullable
-    @Column(name = "forced_tool_choice")
-    private Boolean forcedToolChoice;
-
-    /** The reasoning effort requested of the model; null sends none, and the provider's default applies. */
-    @Nullable
-    @Enumerated(EnumType.STRING)
-    @Column(name = "reasoning_effort", length = ReasoningEffort.MAX_LENGTH)
-    private ReasoningEffort reasoningEffort;
-
-    @Nullable
-    @Enumerated(EnumType.STRING)
-    @Column(name = "brand", length = 16)
-    private AiModelBrand brand;
-
-    @Embedded
-    private DataHandlingFacts dataHandling = new DataHandlingFacts();
 
     @ColumnDefault("'UNPRICED'")
     @Enumerated(EnumType.STRING)
@@ -147,52 +85,4 @@ public class WorkspaceLlmModel {
     @Nullable
     @Column(name = "price_note", length = 500)
     private String priceNote;
-
-    /**
-     * The {@link LlmCallPool} whose capacity the model's calls share. The database gives a model its own when none is
-     * set, also when the model leaves a shared one. Only the instance admin moves it. Backed by {@code sfk_ws_llm_model_call_pool}.
-     */
-    @Generated(event = EventType.INSERT)
-    @Column(name = "call_pool_id", nullable = false, insertable = false, updatable = false)
-    private Long callPoolId;
-
-    @ColumnDefault("false")
-    @Column(name = "enabled", nullable = false)
-    private boolean enabled = false;
-
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
-
-    @Nullable
-    @Column(name = "updated_at")
-    private Instant updatedAt;
-
-    /** Null-safe accessor: Hibernate sets the embeddable to {@code null} when every column is null. */
-    public DataHandlingFacts getDataHandling() {
-        if (dataHandling == null) {
-            dataHandling = new DataHandlingFacts();
-        }
-        return dataHandling;
-    }
-
-    public DataHandlingTier getDataHandlingTier() {
-        return getDataHandling().tier();
-    }
-
-    /** The limits the model runs with: an admin's, else the provider's, else derived ({@link ModelLimits}). */
-    public ModelLimits limits() {
-        return ModelLimits.of(
-                upstreamModelId, contextWindow, maxOutputTokens, discoveredContextWindow, discoveredMaxOutputTokens);
-    }
-
-    @PrePersist
-    public void prePersist() {
-        this.createdAt = Instant.now();
-        this.updatedAt = this.createdAt;
-    }
-
-    @PreUpdate
-    public void preUpdate() {
-        this.updatedAt = Instant.now();
-    }
 }

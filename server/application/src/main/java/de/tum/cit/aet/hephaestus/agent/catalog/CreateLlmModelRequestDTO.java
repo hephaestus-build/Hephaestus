@@ -43,4 +43,5 @@ public record CreateLlmModelRequestDTO(
         Boolean enabled,
 
         @Nullable @Schema(description = "Model brand declared by an admin; display only")
-        AiModelBrand brand) {}
+        AiModelBrand brand)
+        implements LlmModelSettings {}

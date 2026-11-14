@@ -220,6 +220,9 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
 
         assertThat(created).isNotNull();
         assertThat(created.slug()).isEqualTo("model-1");
+        assertThat(created.readiness())
+                .as("an enabled, priced workspace model whose output limit is unknown")
+                .isEqualTo(LlmModelReadiness.LIMITS_MISSING);
 
         assertThat(listedModel(workspace, created.id()))
                 .map(WorkspaceLlmModelDTO::slug)

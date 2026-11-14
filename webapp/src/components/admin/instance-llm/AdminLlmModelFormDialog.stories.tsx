@@ -27,6 +27,7 @@ const mockModel: LlmModel = {
 	connectionId: 1,
 	connectionDisplayName: "OpenAI production",
 	enabled: true,
+	readiness: "READY",
 	reasoningEffort: "MEDIUM",
 	visibility: "GRANTED",
 	grantedWorkspaceIds: [1],

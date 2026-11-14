@@ -2744,6 +2744,16 @@ export type LlmModel = {
 	 */
 	operatedBy?: "OWN_ORGANISATION" | "PROVIDER";
 	/**
+	 * Whether the model can run now, or the first reason it cannot
+	 */
+	readiness:
+		| "READY"
+		| "PRICE_MISSING"
+		| "CONNECTION_OFF"
+		| "OFF"
+		| "LIMITS_MISSING"
+		| "NO_WORKSPACE_ACCESS";
+	/**
 	 * Reasoning effort requested of the model; null sends none, the provider's default applies
 	 */
 	reasoningEffort?: "NONE" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH" | "XHIGH" | "MAX";
@@ -8156,6 +8166,16 @@ export type WorkspaceLlmModel = {
 	 * Pricing mode
 	 */
 	pricingMode: "PRICED" | "NO_CHARGE" | "UNPRICED";
+	/**
+	 * Whether the model can run now, or the first reason it cannot
+	 */
+	readiness:
+		| "READY"
+		| "PRICE_MISSING"
+		| "CONNECTION_OFF"
+		| "OFF"
+		| "LIMITS_MISSING"
+		| "NO_WORKSPACE_ACCESS";
 	/**
 	 * Reasoning effort requested of the model; null sends none, the provider's default applies
 	 */

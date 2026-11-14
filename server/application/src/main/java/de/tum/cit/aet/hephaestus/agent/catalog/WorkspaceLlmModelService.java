@@ -79,13 +79,7 @@ public class WorkspaceLlmModelService {
         model.setWorkspace(connection.getWorkspace());
         model.setConnection(connection);
         model.setSlug(slug);
-        model.setDisplayName(request.displayName());
-        model.setUpstreamModelId(request.upstreamModelId());
-        model.setContextWindow(request.contextWindow());
-        model.setMaxOutputTokens(request.maxOutputTokens());
-        model.setReasoningEffort(request.reasoningEffort());
-        model.setBrand(request.brand());
-        model.setDataHandling(DataHandlingFacts.of(request.operatedBy(), request.dataHandlingNote()));
+        model.applySettings(request);
         if (request.enabled() != null) {
             model.setEnabled(request.enabled());
         }
@@ -135,25 +129,7 @@ public class WorkspaceLlmModelService {
                 .orElseThrow(() -> new EntityNotFoundException("WorkspaceLlmModel", id));
         WorkspaceLlmModelSnapshot before = WorkspaceLlmModelSnapshot.of(model);
 
-        if (request.displayName() != null) {
-            model.setDisplayName(request.displayName());
-        }
-        if (Boolean.TRUE.equals(request.clearContextWindow())) model.setContextWindow(null);
-        else if (request.contextWindow() != null) model.setContextWindow(request.contextWindow());
-        if (Boolean.TRUE.equals(request.clearMaxOutputTokens())) model.setMaxOutputTokens(null);
-        else if (request.maxOutputTokens() != null) model.setMaxOutputTokens(request.maxOutputTokens());
-        if (Boolean.TRUE.equals(request.clearReasoningEffort())) {
-            model.setReasoningEffort(null);
-        } else if (request.reasoningEffort() != null) {
-            model.setReasoningEffort(request.reasoningEffort());
-        }
-        if (Boolean.TRUE.equals(request.clearBrand())) model.setBrand(null);
-        else if (request.brand() != null) model.setBrand(request.brand());
-        model.setDataHandling(model.getDataHandling()
-                .updated(request.clearDataHandling(), request.operatedBy(), request.dataHandlingNote()));
-        if (request.enabled() != null) {
-            model.setEnabled(request.enabled());
-        }
+        model.changeSettings(request.settingsChange());
         if (request.pricingMode() != null) {
             validateAndApplyPrice(
                     model,
@@ -265,10 +241,7 @@ public class WorkspaceLlmModelService {
     }
 
     private static void requireActivatable(WorkspaceLlmModel model) {
-        if (!model.getConnection().isEnabled() || model.getPricingMode() == PricingMode.UNPRICED) {
-            throw new IllegalArgumentException(
-                    "Activate the connection and set a price before you activate the model.");
-        }
+        LlmModelReadiness.requireActivatable(model.getConnection().isEnabled(), model.getPricingMode());
     }
 
     private static @Nullable String blankToNull(@Nullable String value) {

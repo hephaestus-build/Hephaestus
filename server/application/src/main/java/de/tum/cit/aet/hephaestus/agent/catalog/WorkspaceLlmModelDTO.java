@@ -62,6 +62,10 @@ public record WorkspaceLlmModelDTO(
         DataHandlingTier dataHandlingTier,
 
         @NonNull @Schema(description = "Active toggle") Boolean enabled,
+
+        @NonNull @Schema(description = "Whether the model can run now, or the first reason it cannot")
+        LlmModelReadiness readiness,
+
         @NonNull @Schema(description = "Pricing mode") PricingMode pricingMode,
 
         @Nullable @Schema(description = "Input rate per 1M tokens (USD)")
@@ -106,6 +110,7 @@ public record WorkspaceLlmModelDTO(
                 model.getDataHandling().getNote(),
                 model.getDataHandlingTier(),
                 model.isEnabled(),
+                LlmModelReadiness.of(model, model.getConnection().isEnabled(), model.getPricingMode(), true),
                 model.getPricingMode(),
                 model.getPer1mInputUsd(),
                 model.getPer1mOutputUsd(),
