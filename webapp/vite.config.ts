@@ -51,6 +51,32 @@ const viteConfig = defineConfig({
 		outputFile: {
 			junit: "./test-results/junit-webapp.xml",
 		},
+		// jsdom lays nothing out, so every chart measures 0 by 0 and Recharts warns on each render. A
+		// measured size would only make each chart draw its SVG in every test.
+		onConsoleLog: (log: string) => !log.includes("of chart should be greater than 0"),
+		// `test:webapp` measures it (docs/contributor/testing.mdx § Web app coverage). A source file that
+		// no test loads counts as uncovered.
+		coverage: {
+			include: ["src/**/*.{ts,tsx}"],
+			exclude: [
+				"src/api/**",
+				"src/routeTree.gen.ts",
+				"src/**/*.d.ts",
+				"src/**/*.test.{ts,tsx}",
+				"src/**/*.stories.tsx",
+				"src/**/*fixtures.ts",
+				"src/**/__mocks__/**",
+				"src/mocks/**",
+				"src/routes/**/-*-server.ts",
+				"src/runtime/feature-flags/testing.ts",
+				"src/components/layout/sidebar/sidebar-story-frame.tsx",
+				"src/stories/**",
+				"src/test/**",
+			],
+			reporter: ["text-summary", "json-summary"],
+			reportsDirectory: "./test-results/coverage",
+			thresholds: { statements: 0, branches: 0, functions: 0, lines: 0 },
+		},
 		projects: [
 			{
 				extends: true,
