@@ -1,13 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeftIcon, type LucideIcon, OctagonXIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { ArrowLeftIcon } from "lucide-react";
 
 import { getProvidersOptions } from "@/api/@tanstack/react-query.gen";
-import { ProviderChoiceSkeleton } from "@/components/create-workspace/CreateWorkspaceSkeletons";
-import { type BrandIcon, GitHubIcon, GitLabIcon } from "@/components/icons/brand";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+	type WorkspaceProvider,
+	WorkspaceProviderChoice,
+} from "@/components/create-workspace/WorkspaceProviderChoice";
 import { workspaceCreationOf } from "@/hooks/use-workspace-creation";
 import { pageHead } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
@@ -17,18 +16,6 @@ export const Route = createFileRoute("/_authenticated/workspaces/new/")({
 	head: pageHead("Create workspace"),
 	component: ProviderSelectionPage,
 });
-
-interface Provider {
-	id: string;
-	name: string;
-	description: string;
-	/**
-	 * Lucide and the in-house brand glyphs are separate component types, and this slot takes either.
-	 * All it asks of a glyph is that it render from `className`, which both do.
-	 */
-	icon: LucideIcon | BrandIcon;
-	to: string;
-}
 
 function ProviderSelectionPage() {
 	const { isAppAdmin } = useAuth();
@@ -41,75 +28,14 @@ function ProviderSelectionPage() {
 		staleTime: 5 * 60 * 1000,
 	});
 
-	// A non-admin under ADMIN_ONLY would get a 403 on submit, so say so before the wizard.
-	const blockedForNonAdmin =
-		workspaceCreationOf(workspaceProviders?.creationPolicy, isAppAdmin) === "instance-admin-only";
-
-	const providers: Provider[] = [];
+	const providers: WorkspaceProvider[] = [];
 	// The GitHub card leads to a page whose only action is the installation link, so a provider
 	// without a usable URL is a dead end rather than a choice.
 	if (hasText(workspaceProviders?.github?.appInstallationUrl)) {
-		providers.push({
-			id: "github",
-			name: "GitHub",
-			description:
-				"Install the Hephaestus GitHub App on your organization. Workspaces are created automatically.",
-			icon: GitHubIcon,
-			to: "/workspaces/new/github",
-		});
+		providers.push("github");
 	}
 	if (workspaceProviders?.gitlab) {
-		providers.push({
-			id: "gitlab",
-			name: "GitLab",
-			description: "Connect with an access token and select a group to monitor.",
-			icon: GitLabIcon,
-			to: "/workspaces/new/gitlab",
-		});
-	}
-
-	let providerChoice: ReactNode;
-	if (isLoading) {
-		providerChoice = <ProviderChoiceSkeleton />;
-	} else if (blockedForNonAdmin) {
-		providerChoice = (
-			<Alert className="mb-4">
-				<OctagonXIcon aria-hidden="true" />
-				<AlertTitle>Workspace creation is admin-only</AlertTitle>
-				<AlertDescription>
-					An instance admin must create workspaces on this instance. Ask an instance admin to set
-					one up for you.
-				</AlertDescription>
-			</Alert>
-		);
-	} else if (providers.length === 0 && !isError) {
-		providerChoice = (
-			<p className="py-12 text-center text-muted-foreground">
-				No providers are available. Contact an instance admin.
-			</p>
-		);
-	} else {
-		providerChoice = (
-			<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-				{providers.map((provider) => (
-					<Link
-						key={provider.id}
-						to={provider.to}
-						aria-label={`Set up workspace with ${provider.name}`}
-					>
-						<Card variant="interactive" className="h-full cursor-pointer">
-							<CardHeader>
-								<div className="mb-1 flex items-center gap-3">
-									<provider.icon className="size-6" />
-									<CardTitle className="text-lg">{provider.name}</CardTitle>
-								</div>
-								<CardDescription>{provider.description}</CardDescription>
-							</CardHeader>
-						</Card>
-					</Link>
-				))}
-			</div>
-		);
+		providers.push("gitlab");
 	}
 
 	return (
@@ -125,14 +51,16 @@ function ProviderSelectionPage() {
 				<h1 className="text-2xl font-semibold tracking-tight">Create workspace</h1>
 				<p className="text-muted-foreground">Choose your Git provider to get started.</p>
 			</div>
-			{isError && (
-				<Alert variant="destructive" className="mb-4">
-					<OctagonXIcon aria-hidden="true" />
-					<AlertTitle>We could not load the provider options</AlertTitle>
-					<AlertDescription>Reload the page to try again.</AlertDescription>
-				</Alert>
-			)}
-			{providerChoice}
+			<WorkspaceProviderChoice
+				providers={providers}
+				loading={isLoading}
+				failed={isError}
+				// A non-admin under ADMIN_ONLY would get a 403 on submit, so say so before the wizard.
+				adminOnly={
+					workspaceCreationOf(workspaceProviders?.creationPolicy, isAppAdmin) ===
+					"instance-admin-only"
+				}
+			/>
 		</div>
 	);
 }
