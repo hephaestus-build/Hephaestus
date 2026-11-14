@@ -8,7 +8,7 @@ import {
 	changelogParser as parser,
 	elements,
 	text,
-} from "./lib/changelog.ts";
+} from "./lib/changelog-xml.ts";
 import { isRecord } from "./lib/json.ts";
 import { STOP_EVERY_ROLE_HEADING, stopEveryRoleEntries } from "./lib/migration-guide.ts";
 import { BASELINE_RELEASE, latestReleaseOf } from "./lib/previous-release.ts";

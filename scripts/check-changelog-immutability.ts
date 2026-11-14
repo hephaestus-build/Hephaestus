@@ -5,15 +5,13 @@ import { SyntaxValidator } from "fast-xml-validator";
 import nodePath from "node:path";
 
 import {
-	CHANGELOG_DIRECTORY,
 	type ChangelogElement,
-	NEXT_CHANGELOG_DIRECTORY,
 	attribute,
 	changelogParser,
 	elements,
-	migrationTime,
 	text,
-} from "./lib/changelog.ts";
+} from "./lib/changelog-xml.ts";
+import { CHANGELOG_DIRECTORY, NEXT_CHANGELOG_DIRECTORY, migrationTime } from "./lib/changelog.ts";
 import { isSet } from "./lib/env.ts";
 import { asArray, asRecord, asString, isRecord } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
