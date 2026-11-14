@@ -28,9 +28,9 @@ describe("usageAlerts", () => {
 			report({ instanceTotalCostUsd: 21, ownProviderTotalCostUsd: 9 }),
 			true,
 		);
-		expect(alerts.map((alert) => alert.kind === "NEAR_CAP" && alert.purse)).toStrictEqual([
-			"OWN_PROVIDER",
-			"SHARED",
+		expect(alerts).toStrictEqual([
+			expect.objectContaining({ kind: "NEAR_CAP", purse: "OWN_PROVIDER" }),
+			expect.objectContaining({ kind: "NEAR_CAP", purse: "SHARED" }),
 		]);
 	});
 
@@ -57,7 +57,9 @@ describe("usageAlerts", () => {
 	});
 
 	it("counts the uses with unavailable cost, last, in any month", () => {
-		expect(usageAlerts(report({ instanceTotalCostUsd: 21, unpricedEventCount: 7 }), true)).toEqual([
+		expect(
+			usageAlerts(report({ instanceTotalCostUsd: 21, unpricedEventCount: 7 }), true),
+		).toStrictEqual([
 			expect.objectContaining({ kind: "NEAR_CAP" }),
 			{ kind: "UNAVAILABLE_COST", uses: 7 },
 		]);

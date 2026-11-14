@@ -24,7 +24,7 @@ function modelMetadataOf(fields: LlmModelFieldsValue) {
 		brand: fields.brand,
 		dataHandlingNote: fields.dataHandlingNote.trim() || undefined,
 		enabled: fields.enabled,
-	} satisfies CreateLlmModelRequest & UpdateLlmModelRequest;
+	} satisfies Omit<CreateLlmModelRequest, "upstreamModelId"> & UpdateLlmModelRequest;
 }
 
 export function modelCreateBodyOf(fields: LlmModelFieldsValue): CreateLlmModelRequest {
