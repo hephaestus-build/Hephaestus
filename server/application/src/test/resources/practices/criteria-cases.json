@@ -472,6 +472,30 @@
 		"workType": "pull_request"
 	},
 	{
+		"id": "credential-through-a-platform-logger",
+		"expected": {
+			"logs-through-the-platform-logger": "DOES_NOT_APPLY",
+			"avoids-insecure-defaults-and-over-broad-permissions": "NOT_MET"
+		},
+		"files": {
+			"repo/SignIn.swift": "import Foundation\n\nfunc didSignIn(token: String) {\n    NSLog(\"Signed in with token %@\", token)\n}\n"
+		},
+		"reason": "The only added diagnostic logs an issued token. The security practice owns that exposure. The logger practice records Does not apply and never Met, even though the call goes through a platform logger.",
+		"workType": "pull_request"
+	},
+	{
+		"id": "placeholder-api-key-in-sample-config",
+		"expected": {
+			"avoids-insecure-defaults-and-over-broad-permissions": "DOES_NOT_APPLY"
+		},
+		"files": {
+			"repo/Sources/SampleConfig.swift": "enum SampleConfig {\n    static let apiKey = \"REPLACE_WITH_YOUR_API_KEY\"\n}\n",
+			"repo/README.md": "# Sample\nReplace `REPLACE_WITH_YOUR_API_KEY` in `SampleConfig.swift` with the key from your own account before you run the sample.\n"
+		},
+		"reason": "The literal is a nonfunctional placeholder that the captured README tells each user to replace; no code accepts it and no setting changes. The practice records Does not apply and never Met or a statement that the change is secure.",
+		"workType": "pull_request"
+	},
+	{
 		"id": "external-context",
 		"expected": {
 			"issue-points-to-relevant-context": "MET"
