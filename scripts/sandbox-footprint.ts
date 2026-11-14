@@ -1,9 +1,9 @@
 /**
  * The sandbox footprint benchmark: what a practice review sandbox uses, measured, not assumed.
  *
- * It runs one review container from the agent image with the Pod's file systems (disk
- * volumes for the attempt folders, /tmp and ~/.local, memory for /run, a read-only root) and its
- * limits, against a stand-in gateway in this process. The gateway serves a workspace that
+ * It runs one review container from the agent image with the review SandboxTemplate's file systems
+ * (disk volumes for /workspace and /tmp, a read-only root) and its limits from the chart's values,
+ * against a stand-in gateway in this process. The gateway serves a workspace that
  * `ReviewFootprintStagingLiveTest` staged with the real adapter, the bundled practices and a real
  * repository change. Only the model is a stand-in: it answers each turn with reads, searches and
  * Git commands on the reviewed repository, then a result, after a set latency.
@@ -13,8 +13,10 @@
  * uses the same counters on Docker and Kubernetes. Placement and node overhead require a cluster run.
  *
  *   node scripts/sandbox-footprint.ts --stage <dir> [--image <ref>] [--reviews <n>] [--memory 3g]
- *     [--tool-calls <n>] [--latency-ms 1500] [--node-options "--max-old-space-size=256"]
+ *     [--cpus 1] [--tool-calls <n>] [--latency-ms 1500] [--node-options "--max-old-space-size=256"]
  *     [--work <dir>] [--out <file>]
+ *
+ * `--memory` and `--cpus` override the review template's limits for a trial.
  *
  * The work directory receives the container logs, `samples.jsonl` and, without `--out`,
  * `footprint.json`. The run exits 1 unless its verdict shows that every review was measured.
@@ -43,6 +45,7 @@ import {
 	parseSample,
 	positiveInteger,
 	REPORT_MAP_LIMIT,
+	reviewLimits,
 	SAMPLE_MS,
 	verdict,
 	type Sample,
@@ -54,8 +57,8 @@ const { values: options } = parseArgs({
 		stage: { type: "string" },
 		image: { type: "string", default: "hephaestus-footprint/agent-pi:bench" },
 		reviews: { type: "string", default: "1" },
-		memory: { type: "string", default: "3g" },
-		cpus: { type: "string", default: "1" },
+		memory: { type: "string" },
+		cpus: { type: "string" },
 		"tool-calls": { type: "string" },
 		/** Whole-checkout searches that the stand-in model runs, comma-separated, before its reads. */
 		searches: { type: "string", default: "" },
@@ -77,20 +80,17 @@ const latencyMs = positiveInteger(options["latency-ms"], "--latency-ms");
 const workSeconds = positiveInteger(options["work-seconds"], "--work-seconds");
 const budgetSeconds = positiveInteger(options["budget-seconds"], "--budget-seconds");
 const runId = `fp-${randomUUID().slice(0, 8)}`;
-
-/** The memory volumes of a review Pod (KubernetesPods.MEMORY_VOLUMES) and its disk volumes (attemptVolumes). */
-const MEMORY_VOLUMES = {
-	"/run": "16777216",
+const templateLimits = reviewLimits(
+	await readFile(path.join(import.meta.dirname, "../deploy/chart/hephaestus/values.yaml"), "utf8"),
+);
+const limits = {
+	memory: options.memory ?? templateLimits.memory,
+	cpus: options.cpus ?? templateLimits.cpus,
 };
-const DISK_VOLUMES = [
-	"/workspace",
-	"/workspace/work",
-	"/workspace/out",
-	"/workspace/.pi",
-	"/workspace/.sessions",
-	"/tmp",
-	"/home/agent/.local",
-];
+
+/** The emptyDir volumes and the environment of the review SandboxTemplate (sandbox-templates.yaml). */
+const DISK_VOLUMES = ["/workspace", "/tmp"];
+const TEMPLATE_ENVIRONMENT = { HOME: "/tmp/home", XDG_CONFIG_HOME: "/tmp/home/.config" };
 const GIT_SECURITY = [
 	["core.hooksPath", "/nonexistent"],
 	["core.fsmonitor", "false"],
@@ -411,43 +411,47 @@ async function serveRuntime(
 	}
 }
 
+/** The stand-in's answer on a result admission route of the gateway. */
+function admissionAnswer(route: string, bytes: Buffer): unknown {
+	const digest = createHash("sha256").update(bytes).digest("hex");
+	if (route === "admit-results") {
+		// Admission is the server's; the stand-in admits nothing and withholds nothing.
+		return { contractVersion: 4, admissionDigest: digest, admitted: [], withheld: [] };
+	}
+	const request = asRecord(parseJson(bytes.toString("utf8")), `${route} request`);
+	if (route === "start-practice") {
+		// The staged sources are the whole review, so every practice stays current.
+		return { practiceSlug: asString(request.practiceSlug, "practice slug"), current: true };
+	}
+	const { results, nonResults } = request;
+	if (
+		!Array.isArray(results) ||
+		!Array.isArray(nonResults) ||
+		results.length + nonResults.length !== 1
+	) {
+		throw new Error("Stage one completed practice");
+	}
+	const practiceSlug = asString(
+		asRecord(results[0] ?? nonResults[0], "staged practice").practiceSlug,
+		"practice slug",
+	);
+	return { practiceSlug, digest };
+}
+
 async function serve(request: IncomingMessage, response: ServerResponse) {
 	const url = new URL(request.url ?? "/", "http://gateway");
 	const runtime = /^\/internal\/llm\/runtime\/(?<session>[^/]+)(?<route>\/.*)?$/u.exec(
 		url.pathname,
 	)?.groups;
+	const admission = /\/(?<route>start-practice|stage-result|admit-results)$/u.exec(url.pathname)
+		?.groups?.route;
 	try {
 		if (runtime !== undefined && sessions.has(runtime.session ?? "")) {
 			await serveRuntime(request, response, runtime.session, runtime.route ?? "");
-		} else if (request.method === "POST" && url.pathname.endsWith("/stage-result")) {
-			const bytes = await body(request);
-			const parsed: unknown = JSON.parse(bytes.toString("utf8"));
-			const staged = asRecord(parsed, "staging request");
-			const { results, nonResults } = staged;
-			if (
-				!Array.isArray(results) ||
-				!Array.isArray(nonResults) ||
-				results.length + nonResults.length !== 1
-			) {
-				throw new Error("Stage one completed practice");
-			}
-			const practiceSlug = asString(
-				asRecord(results[0] ?? nonResults[0], "staged practice").practiceSlug,
-				"practice slug",
-			);
+		} else if (request.method === "POST" && admission !== undefined) {
+			const answer = admissionAnswer(admission, await body(request));
 			response.writeHead(200, { "content-type": "application/json" });
-			response.end(
-				JSON.stringify({ practiceSlug, digest: createHash("sha256").update(bytes).digest("hex") }),
-			);
-		} else if (request.method === "POST" && url.pathname.endsWith("/admit-results")) {
-			// Admission is the server's; the stand-in admits nothing and withholds nothing.
-			const digest = createHash("sha256")
-				.update(await body(request))
-				.digest("hex");
-			response.writeHead(200, { "content-type": "application/json" });
-			response.end(
-				JSON.stringify({ contractVersion: 4, admissionDigest: digest, admitted: [], withheld: [] }),
-			);
+			response.end(JSON.stringify(answer));
 		} else if (request.method === "POST" && url.pathname.endsWith("/chat/completions")) {
 			await completions(request, response);
 		} else {
@@ -545,15 +549,7 @@ function find(id) {
   if (found) paths.set(id, found);
   return found;
 }
-function du(dir) {
-  let bytes = 0; const stack = [dir];
-  while (stack.length) { const d = stack.pop(); let list; try { list = fs.readdirSync(d, { withFileTypes: true }); } catch { continue; }
-    for (const e of list) { const p = d + "/" + e.name; if (e.isDirectory()) stack.push(p); else { try { bytes += fs.lstatSync(p).blocks * 512; } catch {} } } }
-  return bytes;
-}
-let tick = 0;
 setInterval(() => {
-  tick++;
   const t = Date.now();
   const ids = (read("/bench/ids") ?? "").split("\n").filter(Boolean);
   for (const line of ids) {
@@ -570,14 +566,9 @@ setInterval(() => {
       const cmd = (read("/proc/" + pid + "/cmdline") ?? "").split("\0").filter(Boolean).filter((a) => !a.startsWith("--") && a !== "/usr/bin/prlimit").map((a) => a.split("/").pop()).slice(0, 2).join(" ");
       return { pid: Number(pid), cmd, rss: kb("VmRSS"), hwm: kb("VmHWM"), anon: kb("RssAnon"), file: kb("RssFile"), shmem: kb("RssShmem") };
     });
-    let tmpfs;
-    if (tick % 8 === 0 && procs.length) {
-      const root = "/proc/" + procs[0].pid + "/root";
-      tmpfs = {"/run": du(root + "/run")};
-    }
     process.stdout.write(JSON.stringify({ t, label, current: Number(current), peak: Number(read(cg + "/memory.peak") ?? 0),
       anon: stat.anon, file: stat.file, shmem: stat.shmem, kernel: stat.kernel, sock: stat.sock, activeFile: stat.active_file, inactiveFile: stat.inactive_file,
-      cpuUsec: cpu.usage_usec, throttledUsec: cpu.throttled_usec, pids: Number(read(cg + "/pids.current") ?? 0), procs, tmpfs }) + "\n");
+      cpuUsec: cpu.usage_usec, throttledUsec: cpu.throttled_usec, pids: Number(read(cg + "/pids.current") ?? 0), procs }) + "\n");
   }
 }, ${SAMPLE_MS});
 `;
@@ -677,7 +668,7 @@ function environment(sessionId: string): string[] {
 	for (const [key, value] of Object.entries(specEnvironment)) {
 		env[key] = String(value);
 	}
-	Object.assign(env, gitEnvironment());
+	Object.assign(env, gitEnvironment(), TEMPLATE_ENVIRONMENT);
 	const gateway = gatewayUrl();
 	env.LLM_PROXY_URL = `${gateway}/internal/llm`;
 	env.LLM_PROXY_TOKEN = "footprint-token";
@@ -693,7 +684,7 @@ function environment(sessionId: string): string[] {
 	return Object.entries(env).flatMap(([key, value]) => ["--env", `${key}=${value}`]);
 }
 
-function podFlags(name: string, volumes: string[], workspaceReadOnly: boolean): string[] {
+function podFlags(name: string, volumes: string[]): string[] {
 	const flags = [
 		"--name",
 		name,
@@ -707,11 +698,11 @@ function podFlags(name: string, volumes: string[], workspaceReadOnly: boolean): 
 		"--group-add",
 		"1000",
 		"--memory",
-		options.memory,
+		limits.memory,
 		"--memory-swap",
-		options.memory,
+		limits.memory,
 		"--cpus",
-		options.cpus,
+		limits.cpus,
 		"--pids-limit",
 		"256",
 		"-w",
@@ -722,15 +713,8 @@ function podFlags(name: string, volumes: string[], workspaceReadOnly: boolean): 
 	} else {
 		flags.push("--network", fixtureNetwork);
 	}
-	for (const [target, size] of Object.entries(MEMORY_VOLUMES)) {
-		flags.push("--mount", `type=tmpfs,dst=${target},tmpfs-size=${size},tmpfs-mode=1777`);
-	}
 	for (const [index, target] of DISK_VOLUMES.entries()) {
-		const readOnly = workspaceReadOnly && target === "/workspace" ? ",readonly" : "";
-		flags.push(
-			"--mount",
-			`type=volume,src=${volumes[index] ?? ""},dst=${target},volume-nocopy${readOnly}`,
-		);
+		flags.push("--mount", `type=volume,src=${volumes[index] ?? ""},dst=${target},volume-nocopy`);
 	}
 	return flags;
 }
@@ -770,7 +754,7 @@ async function review(index: number): Promise<ReviewRun> {
 		await run("docker", ["volume", "create", volume], { stdout: "ignore" });
 		volumesCreated.add(volume);
 	}
-	// As a Pod's fsGroup leaves an emptyDir: root's, writable by group 1000, new files in that group.
+	// As the kubelet leaves an emptyDir when the Pod sets no fsGroup: root's and writable by every user.
 	await run("docker", [
 		"run",
 		"--rm",
@@ -781,11 +765,11 @@ async function review(index: number): Promise<ReviewRun> {
 		"sh",
 		image,
 		"-c",
-		volumes.map((_, i) => `chown 0:1000 /v${i} && chmod 2775 /v${i}`).join(" && "),
+		volumes.map((_, i) => `chown 0:0 /v${i} && chmod 0777 /v${i}`).join(" && "),
 	]);
 	const startMs = Date.now();
 	const runtime = await container(`review-${index}/runtime`, `${runId}-${index}-runtime`, [
-		...podFlags(`${runId}-${index}-runtime`, volumes, true),
+		...podFlags(`${runId}-${index}-runtime`, volumes),
 		...environment(sessionId),
 		"--entrypoint",
 		RLIMITS[0] ?? "",
@@ -807,14 +791,14 @@ async function review(index: number): Promise<ReviewRun> {
 		"--user",
 		"0",
 		"-v",
-		`${volumes[DISK_VOLUMES.indexOf("/workspace/out")] ?? ""}:/out:ro`,
+		`${volumes[DISK_VOLUMES.indexOf("/workspace")] ?? ""}:/workspace:ro`,
 		"-v",
 		`${path.resolve(work)}:/copy`,
 		"--entrypoint",
 		"sh",
 		image,
 		"-c",
-		`mkdir -p /copy/out-${String(index)} && cp -R /out/. /copy/out-${String(index)}/ && chmod -R a+rX /copy/out-${String(index)}`,
+		`mkdir -p /copy/out-${String(index)} && cp -R /workspace/out/. /copy/out-${String(index)}/ && chmod -R a+rX /copy/out-${String(index)}`,
 	]).catch(() => undefined);
 	const disk: Record<string, number> = {};
 	const du = await output("docker", [
@@ -887,12 +871,6 @@ function summarize(label: string) {
 			});
 		}
 	}
-	const tmpfs = new Map<string, number>();
-	for (const s of mine) {
-		for (const [dir, bytes] of Object.entries(s.tmpfs ?? {})) {
-			tmpfs.set(dir, Math.max(tmpfs.get(dir) ?? 0, bytes));
-		}
-	}
 	return {
 		samples: mine.length,
 		seconds: Math.round((last.t - first.t) / 100) / 10,
@@ -915,13 +893,6 @@ function summarize(label: string) {
 				cmd,
 				{ anonMiB: MiB(v.anon), largestRssMiB: MiB(v.rss), atOnce: v.count },
 			]),
-		),
-		tmpfsPeak: Object.fromEntries(
-			largest(
-				[...tmpfs].filter(([, b]) => b > 0),
-				([, bytes]) => bytes,
-				REPORT_MAP_LIMIT,
-			).map(([dir, bytes]) => [dir, MiB(bytes)]),
 		),
 	};
 }
@@ -998,11 +969,11 @@ try {
 			platform: process.platform,
 		},
 		image,
-		volumes: { memory: MEMORY_VOLUMES, disk: DISK_VOLUMES },
+		volumes: { disk: DISK_VOLUMES },
 		stage,
 		practices,
 		workspaceArchiveMiB: MiB(archiveBytes),
-		limits: { memory: options.memory, cpus: options.cpus, nodeOptions: options["node-options"] },
+		limits: { ...limits, nodeOptions: options["node-options"] },
 		model: { toolCallsPerSession: toolCalls, latencyMs, ...modelStats },
 		reviews: runs.map((r) => ({
 			...r,

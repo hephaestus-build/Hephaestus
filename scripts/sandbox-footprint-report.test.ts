@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -10,6 +12,7 @@ import {
 	positiveInteger,
 	parseQueueObservation,
 	queueReport,
+	reviewLimits,
 	RUNTIME_SAMPLE_FLOOR,
 	verdict,
 	type ReviewOutcome,
@@ -37,7 +40,6 @@ const sample = {
 	throttledUsec: 0,
 	pids: 2,
 	procs: [{ pid: 7, cmd: "node gateway-run.ts", rss: 5, hwm: 6, anon: 4, file: 1, shmem: 0 }],
-	tmpfs: { "/tmp": 4096 },
 };
 
 const clean = (index: number): ReviewOutcome => ({
@@ -57,10 +59,24 @@ const run = (reviews: ReviewOutcome[], overrides: Partial<Parameters<typeof verd
 		...overrides,
 	});
 
-await test("isSample accepts a full sample and one without tmpfs", () => {
+await test("isSample accepts a full sample", () => {
 	assert.equal(isSample(sample), true);
-	const { tmpfs: _tmpfs, ...withoutTmpfs } = sample;
-	assert.equal(isSample(withoutTmpfs), true);
+});
+
+const template = (memory: string, cpu: string) =>
+	`sandbox:\n  templates:\n    review:\n      resources:\n        limits: { cpu: ${cpu}, memory: ${memory} }\n`;
+
+await test("the benchmark takes the review template's limits from the chart's values", async () => {
+	const values = await readFile(
+		path.join(import.meta.dirname, "../deploy/chart/hephaestus/values.yaml"),
+		"utf8",
+	);
+	// The chart owns the numbers; this proves only that its values stay readable.
+	assert.match(reviewLimits(values).memory, /^\d+[kmg]$/u);
+	assert.deepEqual(reviewLimits(template("1536Mi", "500m")), { memory: "1536m", cpus: "0.5" });
+	assert.throws(() => reviewLimits(template("2G", "1")), /Ki, Mi or Gi/u);
+	assert.throws(() => reviewLimits(template("2Gi", "1.5")), /cores or millicores/u);
+	assert.throws(() => reviewLimits("sandbox: {}\n"), /values\.sandbox\.templates/u);
 });
 
 await test("isSample rejects a missing numeric field, a bad process and a non-object", () => {

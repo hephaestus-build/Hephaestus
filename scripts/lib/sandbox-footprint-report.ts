@@ -2,7 +2,9 @@
  * The pure parts of the sandbox footprint benchmark (`scripts/sandbox-footprint.ts`): what a sampler
  * line must hold, how the report bounds its maps, and when a run counts as a measurement.
  */
-import { isRecord, parseJson } from "./json.ts";
+import { parse } from "yaml";
+
+import { asString, at, isRecord, parseJson } from "./json.ts";
 import { percentile } from "./statistics.ts";
 
 /** How often the sampler reads each sandbox's cgroup. */
@@ -18,7 +20,7 @@ export const NOT_STARTED = -1;
 export const REPORT_MAP_LIMIT = 10;
 
 export const BUDGETS =
-	"not enforced: controlled fixture memory and live service capacity require separate qualification";
+	"each review runs under the review template's limits; live service capacity requires separate qualification";
 
 export interface Sample {
 	t: number;
@@ -41,7 +43,6 @@ export interface Sample {
 		file: number;
 		shmem: number;
 	}[];
-	tmpfs?: Record<string, number>;
 }
 
 const SAMPLE_NUMBERS = [
@@ -69,9 +70,7 @@ export function isSample(value: unknown): value is Sample {
 				isRecord(proc) &&
 				typeof proc.cmd === "string" &&
 				PROCESS_NUMBERS.every((key) => nonnegative(proc[key])),
-		) &&
-		(value.tmpfs === undefined ||
-			(isRecord(value.tmpfs) && Object.values(value.tmpfs).every(nonnegative)))
+		)
 	);
 }
 
@@ -262,6 +261,35 @@ export function verdict(run: {
 		);
 	}
 	return { passed: reasons.length === 0, reasons };
+}
+
+/** Docker reads its memory suffixes as 1024-based units, as Kubernetes reads these. */
+const MEMORY_SUFFIXES: Readonly<Record<string, string>> = { Ki: "k", Mi: "m", Gi: "g" };
+
+/**
+ * The review template's container limits (`sandbox.templates.review.resources.limits` in the chart's values), as
+ * Docker's `--memory` and `--cpus` take them. A review that outgrows the product's limit then fails the run.
+ */
+export function reviewLimits(valuesYaml: string): { memory: string; cpus: string } {
+	const limits = at(
+		parse(valuesYaml),
+		["sandbox", "templates", "review", "resources", "limits"],
+		"values",
+	);
+	const memory = /^(?<amount>\d+)(?<suffix>Ki|Mi|Gi)$/u.exec(
+		asString(at(limits, ["memory"], "limits"), "limits.memory"),
+	)?.groups;
+	const cpu = /^(?<amount>\d+)(?<milli>m?)$/u.exec(String(at(limits, ["cpu"], "limits")))?.groups;
+	const suffix = MEMORY_SUFFIXES[memory?.suffix ?? ""];
+	if (memory?.amount === undefined || suffix === undefined || cpu?.amount === undefined) {
+		throw new Error(
+			"The review template's limits must give memory in Ki, Mi or Gi and CPU in cores or millicores",
+		);
+	}
+	return {
+		memory: `${memory.amount}${suffix}`,
+		cpus: cpu.milli === "m" ? String(Number(cpu.amount) / 1000) : cpu.amount,
+	};
 }
 
 /** A whole number above zero, or an error that names the option. */
