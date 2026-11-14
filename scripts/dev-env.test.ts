@@ -22,11 +22,6 @@ async function checkout(
 	}
 }
 
-async function passwordIn(envFile: string): Promise<string | undefined> {
-	const values = await readEnvFile(envFile);
-	return values.POSTGRES_PASSWORD;
-}
-
 const keyNames = [
 	"HEPHAESTUS_SECURITY_ENCRYPTION_KEY",
 	"HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY",
