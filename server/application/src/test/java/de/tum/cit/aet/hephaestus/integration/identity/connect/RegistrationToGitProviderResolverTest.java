@@ -11,7 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.spi.ScmIdentityLookup;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -21,17 +21,16 @@ import org.junit.jupiter.api.Test;
 class RegistrationToGitProviderResolverTest {
 
     private IdentityProviderLookup providers;
-    private UserRepository userRepository;
+    private ScmIdentityLookup users;
     private RegistrationToGitProviderResolver resolver;
     private SourceProviderNamespaces namespaces;
 
     @BeforeEach
     void setup() {
         providers = mock(IdentityProviderLookup.class);
-        userRepository = mock(UserRepository.class);
+        users = mock(ScmIdentityLookup.class);
         namespaces = mock(SourceProviderNamespaces.class);
-        resolver = new RegistrationToGitProviderResolver(
-                providers, userRepository, mock(ConnectionQueries.class), namespaces);
+        resolver = new RegistrationToGitProviderResolver(providers, users, mock(ConnectionQueries.class), namespaces);
     }
 
     @Test
