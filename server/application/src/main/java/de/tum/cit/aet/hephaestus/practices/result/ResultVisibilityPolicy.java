@@ -142,12 +142,12 @@ public class ResultVisibilityPolicy {
     public static Freshness freshness(
             Result result, @Nullable PracticeVersion pinned, PracticeVersion current, Freshness source) {
         if (result.isMigratedHistory()) return Freshness.recordMissing();
-        if (result.getEndedAt() != null) return Freshness.stale(source.lastVerifiedAt());
+        if (result.getEndedAt() != null) return Freshness.stale(source.capturedAt());
         if (!verifiable(result, pinned)) return Freshness.recordMissing();
         Objects.requireNonNull(pinned);
         return pinned.getReviewDigest().equals(current.getReviewDigest())
                 ? source
-                : Freshness.stale(source.lastVerifiedAt());
+                : Freshness.stale(source.capturedAt());
     }
 
     private static boolean verifiable(Result result, @Nullable PracticeVersion pinned) {

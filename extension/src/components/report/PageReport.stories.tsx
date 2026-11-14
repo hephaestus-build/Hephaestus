@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 
 import {
+	HISTORICAL_ROW,
 	LONG_PAGE,
 	MET_ROW,
 	NO_FEEDBACK,
@@ -11,6 +12,7 @@ import {
 	READY,
 	READY_ADMIN,
 	READY_ON_GITHUB,
+	UNREADABLE_ROW,
 	WEB_APP,
 	WORK_FEEDBACK,
 } from "~/components/report/fixtures";
@@ -319,6 +321,46 @@ export const ProblemsUnderAResult: Story = {
 		);
 		await expect(within(results).queryByRole("button", { name: /problem/iu })).toBeNull();
 		await expect(within(results).queryByRole("link")).toBeNull();
+	},
+};
+
+/**
+ * Each row says only what is known about it: a current row says nothing, an unverifiable one says why. A row
+ * from a server that sends no reason says only what every reason shares.
+ */
+export const ObservationsThatCannotBeChecked: Story = {
+	args: {
+		expanded: true,
+		results: {
+			status: "ready",
+			data: {
+				...OWN_PAGE,
+				rows: [
+					MET_ROW,
+					UNREADABLE_ROW,
+					HISTORICAL_ROW,
+					{
+						...NOT_MET_ROW,
+						currentness: "UNVERIFIABLE",
+						unverifiableReason: null,
+						capturedAt: null,
+					},
+				],
+				total: 4,
+			},
+		},
+	},
+	play: async ({ canvas }) => {
+		const results = canvas.getByRole("region", { name: "Your observations" });
+		const [current, unreadable, missing, older] = resultRows(results);
+		await expect(current).not.toHaveTextContent(/cannot|could not/u);
+		await expect(unreadable).toHaveTextContent(
+			/We could not read the current work to check this observation\. It is based on the work as of \d{1,2} \w+ \d{4}, \d{1,2}:\d{2} [ap]m\./u,
+		);
+		await expect(missing).toHaveTextContent("We cannot verify what this observation was based on.");
+		await expect(older).toHaveTextContent(
+			"We cannot check this observation against the current work.",
+		);
 	},
 };
 

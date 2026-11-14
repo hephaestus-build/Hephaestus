@@ -1,17 +1,16 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import { formatShortDay } from "@/lib/dates";
 import { daysBefore } from "@/stories/story-clock";
 
 import { ClaimCurrentnessBadge } from "./ClaimCurrentness";
 
-const LAST_VERIFIED = daysBefore(3);
+const CAPTURED_AT = daysBefore(3);
 
 const meta = {
 	component: ClaimCurrentnessBadge,
 	args: {
-		freshness: { currentness: "STALE", unverifiableReason: null, lastVerifiedAt: LAST_VERIFIED },
+		freshness: { currentness: "STALE", unverifiableReason: null, capturedAt: CAPTURED_AT },
 	},
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],
@@ -32,7 +31,7 @@ export const RecordMissing: Story = {
 		freshness: {
 			currentness: "UNVERIFIABLE",
 			unverifiableReason: "RECORD_MISSING",
-			lastVerifiedAt: null,
+			capturedAt: null,
 		},
 	},
 	play: async ({ canvas }) => {
@@ -40,30 +39,28 @@ export const RecordMissing: Story = {
 	},
 };
 
-/** The record is there, but the current work could not be read: the badge says since when. */
+/** The record is there, but the current work could not be read on this server now. */
 export const WorkUnreadable: Story = {
 	args: {
 		freshness: {
 			currentness: "UNVERIFIABLE",
 			unverifiableReason: "WORK_UNREADABLE",
-			lastVerifiedAt: LAST_VERIFIED,
+			capturedAt: CAPTURED_AT,
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(
-			canvas.getByText(`Unverified since ${formatShortDay(LAST_VERIFIED)}`),
-		).toBeVisible();
+		await expect(canvas.getByText("Cannot verify now")).toBeVisible();
 	},
 };
 
 /** A current observation needs no badge: only an observation that no longer holds says so. */
 export const Current: Story = {
 	args: {
-		freshness: { currentness: "CURRENT", unverifiableReason: null, lastVerifiedAt: LAST_VERIFIED },
+		freshness: { currentness: "CURRENT", unverifiableReason: null, capturedAt: CAPTURED_AT },
 	},
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.queryByText(/^(?:Historical|Unverified) observation$|^Unverified since/u),
+			canvas.queryByText(/^(?:Historical|Unverified) observation$|^Cannot verify now$/u),
 		).toBeNull();
 	},
 };

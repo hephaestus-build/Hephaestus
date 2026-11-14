@@ -100,6 +100,8 @@ export type ResultRow = Pick<
 	| "summary"
 	| "severity"
 	| "currentness"
+	| "unverifiableReason"
+	| "capturedAt"
 	| "recordedAt"
 	| "problems"
 > & {

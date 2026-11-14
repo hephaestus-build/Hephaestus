@@ -37,7 +37,7 @@ function outcomeLine(row: ResultRow) {
 function Result({ row }: { row: ResultRow }) {
 	const { def, label, tone, severity } = outcomeLine(row);
 	const Icon = def.icon;
-	const currentnessNote = claimCurrentnessNote(row.currentness);
+	const currentnessNote = claimCurrentnessNote(row);
 	return (
 		<li className={cn(INDENT, "flex min-w-0 items-start gap-2 py-1.5 text-sm")}>
 			<Icon aria-hidden className={cn("mt-0.5 size-4 shrink-0", tone)} />

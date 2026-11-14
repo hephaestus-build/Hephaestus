@@ -139,7 +139,7 @@ export function byActionability(
 export interface ResultExceptionsProps {
 	result: Pick<
 		ReviewResult,
-		"currentness" | "unverifiableReason" | "lastVerifiedAt" | "markedIncorrectAt"
+		"currentness" | "unverifiableReason" | "capturedAt" | "markedIncorrectAt"
 	>;
 }
 

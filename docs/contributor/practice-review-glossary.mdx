@@ -182,13 +182,19 @@ It reads the repository mirror as it is and never calls a provider.
 An unverifiable observation has one of these reasons (`unverifiableReason`):
 
 - `RECORD_MISSING`: the record of what the review read is missing, or it comes from an earlier version of the review. No later read can verify the observation. The product shows it as an unverified observation.
-- `WORK_UNREADABLE`: the record exists, but this server cannot read the current work now. For example, the repository mirror does not have the reviewed commits, or a source is not readable. A later read can verify the observation, for example after a capture syncs the mirror. The product shows it as unverified since the time it was last verified.
+- `WORK_UNREADABLE`: the record exists, but this server cannot read the current work now. For example, the provider no longer has the reviewed commits, or a source is not readable. A later read can verify the observation. The product shows it as an observation that it cannot verify now.
 
-**Last verified** (`lastVerifiedAt`) is the time when the observation's sources were last verified against the work: the time its capture read them.
+**Captured at** (`capturedAt`) is the time when the observation's capture read the work.
+The observation describes the work as of that time.
+A later check that found the work unchanged is not recorded.
 An observation without its record has no such time.
 
 These reasons establish nothing about the work.
-Delivery withholds the feedback of an unverifiable observation as `UNCORROBORATED`.
+Before practice start and before a send, the server syncs the repository mirror with no transaction.
+Thus, a server whose mirror was empty or evicted reads current data.
+If that sync fails, practice start withholds the practice as `READINESS_REFUSED`, and the next readiness edge of the item measures it again.
+A send that cannot sync is retried by the outbox.
+Only a source that stays unreadable after a sync withholds the feedback as `UNCORROBORATED`.
 
 ## Legacy history reasons
 

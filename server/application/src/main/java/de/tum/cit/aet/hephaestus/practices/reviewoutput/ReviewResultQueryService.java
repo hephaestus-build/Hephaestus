@@ -108,7 +108,7 @@ public class ReviewResultQueryService {
                                     r.getRecordedAt(),
                                     freshness.currentness(),
                                     freshness.unverifiableReason(),
-                                    freshness.lastVerifiedAt(),
+                                    freshness.capturedAt(),
                                     activeMarks.get(ResultMarkKind.INCORRECT),
                                     activeMarks.get(ResultMarkKind.ACCEPTED),
                                     summaries.getOrDefault(r.getId(), List.of()),
@@ -145,7 +145,7 @@ public class ReviewResultQueryService {
                 r.getRecordedAt(),
                 freshness.currentness(),
                 freshness.unverifiableReason(),
-                freshness.lastVerifiedAt(),
+                freshness.capturedAt(),
                 presentation.markedAt(r, ResultMarkKind.INCORRECT),
                 presentation.markedAt(r, ResultMarkKind.ACCEPTED),
                 r.getPracticeVersionId() == null
@@ -201,7 +201,7 @@ public class ReviewResultQueryService {
                 row.evidenceHidden(),
                 row.currentness(),
                 row.unverifiableReason(),
-                row.lastVerifiedAt(),
+                row.capturedAt(),
                 row.markedIncorrectAt(),
                 row.acceptedAt(),
                 row.disagreedAt(),
@@ -226,7 +226,7 @@ public class ReviewResultQueryService {
                 r.getRecordedAt(),
                 freshness.currentness(),
                 freshness.unverifiableReason(),
-                freshness.lastVerifiedAt());
+                freshness.capturedAt());
     }
 
     private ReviewProblemDTO problemRow(long ws, Problem p) {
@@ -258,7 +258,7 @@ public class ReviewResultQueryService {
                 !permitted,
                 freshness.currentness(),
                 freshness.unverifiableReason(),
-                freshness.lastVerifiedAt(),
+                freshness.capturedAt(),
                 presentation.markedAt(r, ResultMarkKind.INCORRECT),
                 presentation.markedAt(r, ResultMarkKind.ACCEPTED),
                 presentation.disagreements(r).stream()

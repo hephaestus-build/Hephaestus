@@ -9,7 +9,7 @@ import {
 } from "@/components/practice-vocabulary/delivery-state-defs";
 import { FEEDBACK_DECISION_DEFS } from "@/components/practice-vocabulary/feedback-decision-defs";
 import { FEEDBACK_DESTINATION_DEFS } from "@/components/practice-vocabulary/feedback-destination-defs";
-import { formatDate, formatShortDay, formatTime } from "@/lib/dates";
+import { formatDate, formatTime } from "@/lib/dates";
 import { withPageBehind } from "@/stories/decorators";
 import { InLevelStack } from "@/stories/level-stack";
 import { expectSettledVisible, settledDrawerPanel } from "@/stories/overlay";
@@ -333,32 +333,32 @@ export const UnverifiableRecordMissing: Story = {
 			...resultDetail("bbbbbbbb-2222-2222-2222-222222222222"),
 			currentness: "UNVERIFIABLE",
 			unverifiableReason: "RECORD_MISSING",
-			lastVerifiedAt: null,
+			capturedAt: null,
 		}),
 	},
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
 		panel.getByText("Unverified observation");
 		panel.getByText(/^The record of what this observation was based on is missing/u);
-		await expect(panel.queryByText(/^Unverified since/u)).toBeNull();
+		await expect(panel.queryByText("Cannot verify now")).toBeNull();
 	},
 };
 
-/** Its record is there, but the current work could not be read: the panel says since when. */
+/** Its record is there, but the current work could not be read: the panel says which work it is based on. */
 export const UnverifiableWorkUnreadable: Story = {
 	args: {
 		result: ready({
 			...resultDetail("bbbbbbbb-2222-2222-2222-222222222222"),
 			currentness: "UNVERIFIABLE",
 			unverifiableReason: "WORK_UNREADABLE",
-			lastVerifiedAt: daysBefore(3),
+			capturedAt: daysBefore(3),
 		}),
 	},
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		panel.getByText(`Unverified since ${formatShortDay(daysBefore(3))}`);
+		panel.getByText("Cannot verify now");
 		panel.getByText(
-			`We could not read the current work to check this observation. It was last verified against the work on ${formatDate(daysBefore(3))}, ${formatTime(daysBefore(3))}. It is not shown as current until we can check it again.`,
+			`We could not read the current work to check this observation. It is based on the work as of ${formatDate(daysBefore(3))}, ${formatTime(daysBefore(3))}. It is not shown as current until we can check it again.`,
 		);
 		await expect(panel.queryByText(/is missing, or it comes from an earlier version/u)).toBeNull();
 	},

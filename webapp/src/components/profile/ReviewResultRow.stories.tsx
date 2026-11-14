@@ -184,7 +184,7 @@ export const UnverifiableRecordMissing: Story = {
 			...strength,
 			currentness: "UNVERIFIABLE",
 			unverifiableReason: "RECORD_MISSING",
-			lastVerifiedAt: null,
+			capturedAt: null,
 		},
 	},
 	play: async ({ canvas }) => {
@@ -194,14 +194,14 @@ export const UnverifiableRecordMissing: Story = {
 	},
 };
 
-/** Its record is there, but the current work could not be read: the note says when it last held. */
+/** Its record is there, but the current work could not be read: the note says which work it is based on. */
 export const UnverifiableWorkUnreadable: Story = {
 	args: {
 		result: {
 			...strength,
 			currentness: "UNVERIFIABLE",
 			unverifiableReason: "WORK_UNREADABLE",
-			lastVerifiedAt: daysBefore(3),
+			capturedAt: daysBefore(3),
 		},
 	},
 	play: async ({ canvas }) => {
@@ -210,7 +210,7 @@ export const UnverifiableWorkUnreadable: Story = {
 			"We could not read the current work to check this observation.",
 		);
 		await expect(note).toHaveTextContent(
-			`It was last verified against the work on ${formatDate(daysBefore(3))}, ${formatTime(daysBefore(3))}.`,
+			`It is based on the work as of ${formatDate(daysBefore(3))}, ${formatTime(daysBefore(3))}.`,
 		);
 		await expect(note).not.toHaveTextContent(/missing|earlier version/u);
 	},

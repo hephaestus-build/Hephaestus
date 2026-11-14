@@ -169,7 +169,7 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo("UNVERIFIABLE")
                 .jsonPath("$.unverifiableReason")
                 .isEqualTo("RECORD_MISSING")
-                .jsonPath("$.lastVerifiedAt")
+                .jsonPath("$.capturedAt")
                 .isEmpty()
                 .jsonPath("$.evidenceHidden")
                 .isEqualTo(false)

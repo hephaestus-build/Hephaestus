@@ -3360,10 +3360,10 @@ export const zResultExample = z.object({
 
 export const zResultList = z.object({
 	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	capturedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
 	id: z.uuid(),
 	item: zItemRef,
-	lastVerifiedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	origin: z.enum(["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]),
 	outcome: z.enum(["MET", "NOT_MET", "DOES_NOT_APPLY", "COULD_NOT_DETERMINE"]),
@@ -3565,11 +3565,11 @@ export const zReviewDeveloper = z.object({
 });
 
 export const zReviewBoundResult = z.object({
+	capturedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
 	developer: zReviewDeveloper.nullable(),
 	id: z.uuid(),
 	item: zItemRef,
-	lastVerifiedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	outcome: z.enum(["MET", "NOT_MET", "DOES_NOT_APPLY", "COULD_NOT_DETERMINE"]),
 	practiceName: z.string(),
 	practiceSlug: z.string(),
@@ -3896,6 +3896,7 @@ export const zReviewOn = z.object({
 
 export const zReviewProblem = z.object({
 	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	capturedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
 	developer: zReviewDeveloper.nullable(),
 	disagreedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
@@ -3908,7 +3909,6 @@ export const zReviewProblem = z.object({
 	group: zGroupRef.nullable(),
 	id: z.uuid(),
 	item: zItemRef,
-	lastVerifiedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	path: z.string().nullable(),
 	practiceName: z.string(),
@@ -4120,12 +4120,12 @@ export const zReviewRequestOutcome = z.object({
 
 export const zReviewResult = z.object({
 	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	capturedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
 	developer: zReviewDeveloper.nullable(),
 	feedback: zReviewFeedbackCounts,
 	id: z.uuid(),
 	item: zItemRef,
-	lastVerifiedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	origin: z.enum(["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]),
 	outcome: z.enum(["MET", "NOT_MET", "DOES_NOT_APPLY", "COULD_NOT_DETERMINE"]),
@@ -6656,6 +6656,7 @@ export const zProblem = z.object({
 
 export const zResultDetail = z.object({
 	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	capturedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	coverage: zHostCoverage.nullable(),
 	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
 	endReason: z.enum(["REPLACED", "OUTRANKED", "WORK_CHANGED", "REPAIRED", "REMOVED"]).nullable(),
@@ -6667,7 +6668,6 @@ export const zResultDetail = z.object({
 	id: z.uuid(),
 	item: zItemRef,
 	itemVersion: z.string().nullable(),
-	lastVerifiedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	origin: z.enum(["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]),
 	outcome: z.enum(["MET", "NOT_MET", "DOES_NOT_APPLY", "COULD_NOT_DETERMINE"]),
@@ -6692,6 +6692,7 @@ export const zResultDetail = z.object({
 
 export const zReviewProblemDetail = z.object({
 	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	capturedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
 	developer: zReviewDeveloper.nullable(),
 	disagreedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
@@ -6704,7 +6705,6 @@ export const zReviewProblemDetail = z.object({
 	group: zGroupRef.nullable(),
 	id: z.uuid(),
 	item: zItemRef,
-	lastVerifiedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	path: z.string().nullable(),
 	practiceName: z.string(),
@@ -6728,6 +6728,7 @@ export const zReviewProblemDetail = z.object({
 
 export const zReviewResultDetail = z.object({
 	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	capturedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	coverage: zHostCoverage.nullable(),
 	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
 	developer: zReviewDeveloper.nullable(),
@@ -6746,7 +6747,6 @@ export const zReviewResultDetail = z.object({
 	id: z.uuid(),
 	item: zItemRef,
 	itemVersion: z.string().nullable(),
-	lastVerifiedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	markedIncorrectAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	marks: z.array(zResultMark),
 	origin: z.enum(["EVENT", "REQUEST", "SCHEDULE", "BACKFILL"]),

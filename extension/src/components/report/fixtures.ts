@@ -89,6 +89,8 @@ export const NOT_MET_ROW: ResultRow = {
 	outcome: "NOT_MET",
 	severity: "MAJOR",
 	currentness: "CURRENT",
+	unverifiableReason: null,
+	capturedAt: minutesBefore(45),
 	recordedAt: minutesBefore(42),
 	problems: [
 		{
@@ -112,6 +114,8 @@ export const MET_ROW: ResultRow = {
 	outcome: "MET",
 	severity: null,
 	currentness: "CURRENT",
+	unverifiableReason: null,
+	capturedAt: minutesBefore(45),
 	recordedAt: minutesBefore(42),
 	problems: [],
 };
@@ -125,6 +129,8 @@ export const COULD_NOT_DETERMINE_ROW: ResultRow = {
 	outcome: "COULD_NOT_DETERMINE",
 	severity: null,
 	currentness: "CURRENT",
+	unverifiableReason: null,
+	capturedAt: minutesBefore(45),
 	recordedAt: minutesBefore(42),
 	problems: [],
 };
@@ -145,7 +151,20 @@ export const HISTORICAL_ROW: ResultRow = {
 	severity: "MINOR",
 	summary: "Two commits are titled only “fix”.",
 	currentness: "UNVERIFIABLE",
+	unverifiableReason: "RECORD_MISSING",
+	capturedAt: null,
 	problems: [],
+};
+
+/** Its record is there, but this server could not read the current work to check it. */
+export const UNREADABLE_ROW: ResultRow = {
+	...MET_ROW,
+	id: "1a2b3c4d-0000-4000-8000-000000000006",
+	practiceName: "Link the issue the change closes",
+	practiceSlug: "issue-traceability-and-lifecycle",
+	summary: "The description and a commit name the issue that the change closes.",
+	currentness: "UNVERIFIABLE",
+	unverifiableReason: "WORK_UNREADABLE",
 };
 
 export const OWN_PAGE: ResultPage = {

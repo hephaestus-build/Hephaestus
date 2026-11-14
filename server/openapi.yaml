@@ -21660,6 +21660,14 @@ components:
           - string
           - "null"
           format: date-time
+        capturedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+          description: "When the observation's capture read the work: the work as\
+            \ of that time. A later check that found the work unchanged is not recorded.\
+            \ Null when the capture record is missing."
         coverage:
           anyOf:
           - oneOf:
@@ -21712,14 +21720,6 @@ components:
           type:
           - string
           - "null"
-        lastVerifiedAt:
-          type:
-          - string
-          - "null"
-          format: date-time
-          description: "When the observation's sources were last verified against\
-            \ the work: when its capture read them. Null when the record of that capture\
-            \ is missing."
         markedIncorrectAt:
           type:
           - string
@@ -21789,6 +21789,7 @@ components:
           - null
       required:
       - acceptedAt
+      - capturedAt
       - coverage
       - currentness
       - endReason
@@ -21800,7 +21801,6 @@ components:
       - id
       - item
       - itemVersion
-      - lastVerifiedAt
       - markedIncorrectAt
       - origin
       - outcome
@@ -21856,6 +21856,14 @@ components:
           - string
           - "null"
           format: date-time
+        capturedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+          description: "When the observation's capture read the work: the work as\
+            \ of that time. A later check that found the work unchanged is not recorded.\
+            \ Null when the capture record is missing."
         currentness:
           type: string
           enum:
@@ -21867,14 +21875,6 @@ components:
           format: uuid
         item:
           $ref: "#/components/schemas/ItemRef"
-        lastVerifiedAt:
-          type:
-          - string
-          - "null"
-          format: date-time
-          description: "When the observation's sources were last verified against\
-            \ the work: when its capture read them. Null when the record of that capture\
-            \ is missing."
         markedIncorrectAt:
           type:
           - string
@@ -21934,10 +21934,10 @@ components:
           - null
       required:
       - acceptedAt
+      - capturedAt
       - currentness
       - id
       - item
-      - lastVerifiedAt
       - markedIncorrectAt
       - origin
       - outcome
@@ -22361,6 +22361,14 @@ components:
     ReviewBoundResult:
       type: object
       properties:
+        capturedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+          description: "When the observation's capture read the work: the work as\
+            \ of that time. A later check that found the work unchanged is not recorded.\
+            \ Null when the capture record is missing."
         currentness:
           type: string
           enum:
@@ -22376,14 +22384,6 @@ components:
           format: uuid
         item:
           $ref: "#/components/schemas/ItemRef"
-        lastVerifiedAt:
-          type:
-          - string
-          - "null"
-          format: date-time
-          description: "When the observation's sources were last verified against\
-            \ the work: when its capture read them. Null when the record of that capture\
-            \ is missing."
         outcome:
           type: string
           enum:
@@ -22426,11 +22426,11 @@ components:
           - WORK_UNREADABLE
           - null
       required:
+      - capturedAt
       - currentness
       - developer
       - id
       - item
-      - lastVerifiedAt
       - outcome
       - practiceName
       - practiceSlug
@@ -23357,6 +23357,14 @@ components:
           - string
           - "null"
           format: date-time
+        capturedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+          description: "When the observation's capture read the work: the work as\
+            \ of that time. A later check that found the work unchanged is not recorded.\
+            \ Null when the capture record is missing."
         currentness:
           type: string
           enum:
@@ -23388,14 +23396,6 @@ components:
           format: uuid
         item:
           $ref: "#/components/schemas/ItemRef"
-        lastVerifiedAt:
-          type:
-          - string
-          - "null"
-          format: date-time
-          description: "When the observation's sources were last verified against\
-            \ the work: when its capture read them. Null when the record of that capture\
-            \ is missing."
         markedIncorrectAt:
           type:
           - string
@@ -23456,6 +23456,7 @@ components:
           - null
       required:
       - acceptedAt
+      - capturedAt
       - currentness
       - developer
       - disagreedAt
@@ -23464,7 +23465,6 @@ components:
       - group
       - id
       - item
-      - lastVerifiedAt
       - markedIncorrectAt
       - path
       - practiceName
@@ -23486,6 +23486,14 @@ components:
           - string
           - "null"
           format: date-time
+        capturedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+          description: "When the observation's capture read the work: the work as\
+            \ of that time. A later check that found the work unchanged is not recorded.\
+            \ Null when the capture record is missing."
         currentness:
           type: string
           enum:
@@ -23517,14 +23525,6 @@ components:
           format: uuid
         item:
           $ref: "#/components/schemas/ItemRef"
-        lastVerifiedAt:
-          type:
-          - string
-          - "null"
-          format: date-time
-          description: "When the observation's sources were last verified against\
-            \ the work: when its capture read them. Null when the record of that capture\
-            \ is missing."
         markedIncorrectAt:
           type:
           - string
@@ -23589,6 +23589,7 @@ components:
           - null
       required:
       - acceptedAt
+      - capturedAt
       - currentness
       - developer
       - disagreedAt
@@ -23597,7 +23598,6 @@ components:
       - group
       - id
       - item
-      - lastVerifiedAt
       - markedIncorrectAt
       - path
       - practiceName
@@ -23835,6 +23835,14 @@ components:
           - string
           - "null"
           format: date-time
+        capturedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+          description: "When the observation's capture read the work: the work as\
+            \ of that time. A later check that found the work unchanged is not recorded.\
+            \ Null when the capture record is missing."
         currentness:
           type: string
           enum:
@@ -23852,14 +23860,6 @@ components:
           format: uuid
         item:
           $ref: "#/components/schemas/ItemRef"
-        lastVerifiedAt:
-          type:
-          - string
-          - "null"
-          format: date-time
-          description: "When the observation's sources were last verified against\
-            \ the work: when its capture read them. Null when the record of that capture\
-            \ is missing."
         markedIncorrectAt:
           type:
           - string
@@ -23922,12 +23922,12 @@ components:
           - null
       required:
       - acceptedAt
+      - capturedAt
       - currentness
       - developer
       - feedback
       - id
       - item
-      - lastVerifiedAt
       - markedIncorrectAt
       - origin
       - outcome
@@ -23968,6 +23968,14 @@ components:
           - string
           - "null"
           format: date-time
+        capturedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+          description: "When the observation's capture read the work: the work as\
+            \ of that time. A later check that found the work unchanged is not recorded.\
+            \ Null when the capture record is missing."
         coverage:
           anyOf:
           - oneOf:
@@ -24033,14 +24041,6 @@ components:
           type:
           - string
           - "null"
-        lastVerifiedAt:
-          type:
-          - string
-          - "null"
-          format: date-time
-          description: "When the observation's sources were last verified against\
-            \ the work: when its capture read them. Null when the record of that capture\
-            \ is missing."
         markedIncorrectAt:
           type:
           - string
@@ -24114,6 +24114,7 @@ components:
           - null
       required:
       - acceptedAt
+      - capturedAt
       - coverage
       - currentness
       - developer
@@ -24129,7 +24130,6 @@ components:
       - id
       - item
       - itemVersion
-      - lastVerifiedAt
       - markedIncorrectAt
       - marks
       - origin

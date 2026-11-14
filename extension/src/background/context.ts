@@ -2,6 +2,7 @@ import type {
 	DeliveredWorkFeedback,
 	OwnItemTrace,
 	OffsetPageDtoResultList,
+	ResultList,
 	ReviewContext as ReviewContextDTO,
 	Workspace,
 	WorkspaceListItem,
@@ -10,6 +11,7 @@ import { consentRequired, stale, WorkerError } from "~/background/errors";
 import type { InstanceConfig } from "~/background/storage";
 import {
 	type ResultPage,
+	type ResultRow,
 	type ReadyContext,
 	type ReviewContext,
 	THE_PAGE,
@@ -337,6 +339,16 @@ function requireOnlyThisItem(
 }
 
 /**
+ * Why a result cannot be checked against the work and when its capture read it. A server older than this
+ * release sends neither, so the row says no reason rather than a wrong one.
+ */
+function unverifiable(
+	row: Partial<Pick<ResultList, "unverifiableReason" | "capturedAt">>,
+): Pick<ResultRow, "unverifiableReason" | "capturedAt"> {
+	return { unverifiableReason: row.unverifiableReason ?? null, capturedAt: row.capturedAt ?? null };
+}
+
+/**
  * The reader's own results on the work, most severe first, projected field by field. Everyone,
  * admins included, reads only their own here; every developer's are the web app's.
  */
@@ -355,6 +367,7 @@ export async function resultPage(
 	await stillShowing();
 	return {
 		rows: content.map((row) => ({
+			...unverifiable(row),
 			id: row.id,
 			practiceName: row.practiceName,
 			practiceSlug: row.practiceSlug,

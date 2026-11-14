@@ -534,7 +534,7 @@ interface ResultSpec {
 	practiceSlug: string;
 	currentness?: ReviewResult["currentness"];
 	unverifiableReason?: ReviewResult["unverifiableReason"];
-	lastVerifiedAt?: string;
+	capturedAt?: string;
 	recordedAt: string;
 	item?: ItemRef;
 	aboutTheWork?: true;
@@ -1817,7 +1817,7 @@ function toResult(review: ReviewSpec, spec: ResultSpec): ReviewResult {
 		recordedAt: new Date(spec.recordedAt),
 		currentness: spec.currentness ?? "CURRENT",
 		unverifiableReason: spec.unverifiableReason ?? null,
-		lastVerifiedAt: spec.lastVerifiedAt === undefined ? null : new Date(spec.lastVerifiedAt),
+		capturedAt: spec.capturedAt === undefined ? null : new Date(spec.capturedAt),
 		markedIncorrectAt: activeMarkAt(spec, "INCORRECT"),
 		acceptedAt: activeMarkAt(spec, "ACCEPTED"),
 		problemCount: problems.length,
@@ -1844,7 +1844,7 @@ export function boundResultOf(result: ReviewBoundResult): ReviewBoundResult {
 		recordedAt: result.recordedAt,
 		currentness: result.currentness,
 		unverifiableReason: result.unverifiableReason,
-		lastVerifiedAt: result.lastVerifiedAt,
+		capturedAt: result.capturedAt,
 	};
 }
 
@@ -1888,7 +1888,7 @@ function toProblemRows(review: ReviewSpec, spec: ResultSpec): ReviewProblem[] {
 			evidenceHidden: hidden,
 			currentness: result.currentness,
 			unverifiableReason: result.unverifiableReason,
-			lastVerifiedAt: result.lastVerifiedAt,
+			capturedAt: result.capturedAt,
 			markedIncorrectAt: result.markedIncorrectAt,
 			acceptedAt: result.acceptedAt,
 			disagreedAt: disagreedAt(result.id),

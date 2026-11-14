@@ -49,10 +49,10 @@ public record ReviewResultDetailDTO(
 
         @Schema(
                 requiredMode = Schema.RequiredMode.REQUIRED,
-                description = "When the observation's sources were last verified against the work: when its capture"
-                        + " read them. Null when the record of that capture is missing.")
+                description = "When the observation's capture read the work: the work as of that time. A later check"
+                        + " that found the work unchanged is not recorded. Null when the capture record is missing.")
         @Nullable
-        Instant lastVerifiedAt,
+        Instant capturedAt,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
         Instant markedIncorrectAt,

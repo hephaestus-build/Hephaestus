@@ -10,27 +10,27 @@ import org.jspecify.annotations.Nullable;
  * Whether a result still describes the work, and what is known about it.
  *
  * @param unverifiableReason why the currentness is {@link Currentness#UNVERIFIABLE}; null for any other currentness
- * @param lastVerifiedAt when the result's sources were last verified against the work: the time its capture read them.
- *     Null when the record of that capture is missing.
+ * @param capturedAt when the result's capture read the work: the result describes the work as of that time. A later
+ *     check that found the work unchanged is not recorded. Null when the record of that capture is missing.
  */
 public record Freshness(
         Currentness currentness,
         @Nullable UnverifiableReason unverifiableReason,
-        @Nullable Instant lastVerifiedAt) {
+        @Nullable Instant capturedAt) {
     public Freshness {
         Objects.requireNonNull(currentness, "currentness");
         if ((currentness == Currentness.UNVERIFIABLE) != (unverifiableReason != null))
             throw new IllegalArgumentException("Only an unverifiable result has an unverifiable reason");
-        if (unverifiableReason == UnverifiableReason.RECORD_MISSING && lastVerifiedAt != null)
+        if (unverifiableReason == UnverifiableReason.RECORD_MISSING && capturedAt != null)
             throw new IllegalArgumentException("A result without its record has no verification time");
     }
 
-    public static Freshness current(@Nullable Instant lastVerifiedAt) {
-        return new Freshness(Currentness.CURRENT, null, lastVerifiedAt);
+    public static Freshness current(@Nullable Instant capturedAt) {
+        return new Freshness(Currentness.CURRENT, null, capturedAt);
     }
 
-    public static Freshness stale(@Nullable Instant lastVerifiedAt) {
-        return new Freshness(Currentness.STALE, null, lastVerifiedAt);
+    public static Freshness stale(@Nullable Instant capturedAt) {
+        return new Freshness(Currentness.STALE, null, capturedAt);
     }
 
     public static Freshness recordMissing() {

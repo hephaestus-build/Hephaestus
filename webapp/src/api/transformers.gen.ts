@@ -1792,10 +1792,10 @@ const resultListSchemaResponseTransformer = (data: any) => {
 	if (data.acceptedAt) {
 		data.acceptedAt = new Date(data.acceptedAt);
 	}
-	data.item = itemRefSchemaResponseTransformer(data.item);
-	if (data.lastVerifiedAt) {
-		data.lastVerifiedAt = new Date(data.lastVerifiedAt);
+	if (data.capturedAt) {
+		data.capturedAt = new Date(data.capturedAt);
 	}
+	data.item = itemRefSchemaResponseTransformer(data.item);
 	if (data.markedIncorrectAt) {
 		data.markedIncorrectAt = new Date(data.markedIncorrectAt);
 	}
@@ -2091,14 +2091,14 @@ const resultDetailSchemaResponseTransformer = (data: any) => {
 	if (data.acceptedAt) {
 		data.acceptedAt = new Date(data.acceptedAt);
 	}
+	if (data.capturedAt) {
+		data.capturedAt = new Date(data.capturedAt);
+	}
 	if (data.endedAt) {
 		data.endedAt = new Date(data.endedAt);
 	}
 	data.feedback = data.feedback.map((item: any) => ownFeedbackRefSchemaResponseTransformer(item));
 	data.item = itemRefSchemaResponseTransformer(data.item);
-	if (data.lastVerifiedAt) {
-		data.lastVerifiedAt = new Date(data.lastVerifiedAt);
-	}
 	if (data.markedIncorrectAt) {
 		data.markedIncorrectAt = new Date(data.markedIncorrectAt);
 	}
@@ -2274,10 +2274,10 @@ const feedbackAnswerSchemaResponseTransformer = (data: any) => {
 };
 
 const reviewBoundResultSchemaResponseTransformer = (data: any) => {
-	data.item = itemRefSchemaResponseTransformer(data.item);
-	if (data.lastVerifiedAt) {
-		data.lastVerifiedAt = new Date(data.lastVerifiedAt);
+	if (data.capturedAt) {
+		data.capturedAt = new Date(data.capturedAt);
 	}
+	data.item = itemRefSchemaResponseTransformer(data.item);
 	data.recordedAt = new Date(data.recordedAt);
 	return data;
 };
@@ -2431,13 +2431,13 @@ const reviewProblemSchemaResponseTransformer = (data: any) => {
 	if (data.acceptedAt) {
 		data.acceptedAt = new Date(data.acceptedAt);
 	}
+	if (data.capturedAt) {
+		data.capturedAt = new Date(data.capturedAt);
+	}
 	if (data.disagreedAt) {
 		data.disagreedAt = new Date(data.disagreedAt);
 	}
 	data.item = itemRefSchemaResponseTransformer(data.item);
-	if (data.lastVerifiedAt) {
-		data.lastVerifiedAt = new Date(data.lastVerifiedAt);
-	}
 	if (data.markedIncorrectAt) {
 		data.markedIncorrectAt = new Date(data.markedIncorrectAt);
 	}
@@ -2461,13 +2461,13 @@ const reviewProblemDetailSchemaResponseTransformer = (data: any) => {
 	if (data.acceptedAt) {
 		data.acceptedAt = new Date(data.acceptedAt);
 	}
+	if (data.capturedAt) {
+		data.capturedAt = new Date(data.capturedAt);
+	}
 	if (data.disagreedAt) {
 		data.disagreedAt = new Date(data.disagreedAt);
 	}
 	data.item = itemRefSchemaResponseTransformer(data.item);
-	if (data.lastVerifiedAt) {
-		data.lastVerifiedAt = new Date(data.lastVerifiedAt);
-	}
 	if (data.markedIncorrectAt) {
 		data.markedIncorrectAt = new Date(data.markedIncorrectAt);
 	}
@@ -2509,10 +2509,10 @@ const reviewResultSchemaResponseTransformer = (data: any) => {
 	if (data.acceptedAt) {
 		data.acceptedAt = new Date(data.acceptedAt);
 	}
-	data.item = itemRefSchemaResponseTransformer(data.item);
-	if (data.lastVerifiedAt) {
-		data.lastVerifiedAt = new Date(data.lastVerifiedAt);
+	if (data.capturedAt) {
+		data.capturedAt = new Date(data.capturedAt);
 	}
+	data.item = itemRefSchemaResponseTransformer(data.item);
 	if (data.markedIncorrectAt) {
 		data.markedIncorrectAt = new Date(data.markedIncorrectAt);
 	}
@@ -2549,6 +2549,9 @@ const reviewResultDetailSchemaResponseTransformer = (data: any) => {
 	if (data.acceptedAt) {
 		data.acceptedAt = new Date(data.acceptedAt);
 	}
+	if (data.capturedAt) {
+		data.capturedAt = new Date(data.capturedAt);
+	}
 	data.disagreements = data.disagreements.map((item: any) =>
 		feedbackDisagreementSchemaResponseTransformer(item),
 	);
@@ -2559,9 +2562,6 @@ const reviewResultDetailSchemaResponseTransformer = (data: any) => {
 		reviewBoundFeedbackSchemaResponseTransformer(item),
 	);
 	data.item = itemRefSchemaResponseTransformer(data.item);
-	if (data.lastVerifiedAt) {
-		data.lastVerifiedAt = new Date(data.lastVerifiedAt);
-	}
 	if (data.markedIncorrectAt) {
 		data.markedIncorrectAt = new Date(data.markedIncorrectAt);
 	}
@@ -2802,17 +2802,17 @@ const scanReportItemSchemaResponseTransformer = (data: any) => {
 			}
 			if (value) {
 				if (value.lastResult) {
-					if (value.lastResult.item) {
-						if (value.lastResult.item.removedAt) {
-							value.lastResult.item.removedAt = new Date(value.lastResult.item.removedAt);
-						}
+					if (value.lastResult.capturedAt) {
+						value.lastResult.capturedAt = new Date(value.lastResult.capturedAt);
 					}
 				}
 			}
 			if (value) {
 				if (value.lastResult) {
-					if (value.lastResult.lastVerifiedAt) {
-						value.lastResult.lastVerifiedAt = new Date(value.lastResult.lastVerifiedAt);
+					if (value.lastResult.item) {
+						if (value.lastResult.item.removedAt) {
+							value.lastResult.item.removedAt = new Date(value.lastResult.item.removedAt);
+						}
 					}
 				}
 			}
@@ -2848,17 +2848,17 @@ const scanReportItemSchemaResponseTransformer = (data: any) => {
 			}
 			if (value) {
 				if (value.lastResult) {
-					if (value.lastResult.item) {
-						if (value.lastResult.item.removedAt) {
-							value.lastResult.item.removedAt = new Date(value.lastResult.item.removedAt);
-						}
+					if (value.lastResult.capturedAt) {
+						value.lastResult.capturedAt = new Date(value.lastResult.capturedAt);
 					}
 				}
 			}
 			if (value) {
 				if (value.lastResult) {
-					if (value.lastResult.lastVerifiedAt) {
-						value.lastResult.lastVerifiedAt = new Date(value.lastResult.lastVerifiedAt);
+					if (value.lastResult.item) {
+						if (value.lastResult.item.removedAt) {
+							value.lastResult.item.removedAt = new Date(value.lastResult.item.removedAt);
+						}
 					}
 				}
 			}

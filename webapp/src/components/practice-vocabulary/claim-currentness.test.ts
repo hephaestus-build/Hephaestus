@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { claimCurrentnessNote, currentnessCopy } from "./claim-currentness";
 
 // A local wall-clock time, so the copy reads the same in every time zone.
-const LAST_VERIFIED = new Date(2026, 10, 3, 14, 5);
+const CAPTURED_AT = new Date(2026, 10, 3, 14, 5);
 
 describe("currentnessCopy", () => {
 	it("says nothing about a current observation", () => {
@@ -11,7 +11,7 @@ describe("currentnessCopy", () => {
 			currentnessCopy({
 				currentness: "CURRENT",
 				unverifiableReason: null,
-				lastVerifiedAt: LAST_VERIFIED,
+				capturedAt: CAPTURED_AT,
 			}),
 		).toBeUndefined();
 	});
@@ -20,7 +20,7 @@ describe("currentnessCopy", () => {
 		const copy = currentnessCopy({
 			currentness: "UNVERIFIABLE",
 			unverifiableReason: "RECORD_MISSING",
-			lastVerifiedAt: null,
+			capturedAt: null,
 		});
 
 		expect(copy?.badge).toBe("Unverified observation");
@@ -30,16 +30,16 @@ describe("currentnessCopy", () => {
 		);
 	});
 
-	it("says that the work could not be read, and when it was last verified, when the work is unreadable", () => {
+	it("says that the work could not be read, and the time of the work it is based on, when the work is unreadable", () => {
 		const copy = currentnessCopy({
 			currentness: "UNVERIFIABLE",
 			unverifiableReason: "WORK_UNREADABLE",
-			lastVerifiedAt: LAST_VERIFIED,
+			capturedAt: CAPTURED_AT,
 		});
 
-		expect(copy?.badge).toBe("Unverified since 3 Nov");
+		expect(copy?.badge).toBe("Cannot verify now");
 		expect(copy?.note).toBe(
-			"We could not read the current work to check this observation. It was last verified against the work on 3 November 2026, 2:05 pm.",
+			"We could not read the current work to check this observation. It is based on the work as of 3 November 2026, 2:05 pm.",
 		);
 		expect(copy?.description).toContain("It is not shown as current until we can check it again.");
 		expect(copy?.description).not.toContain("missing");
@@ -50,7 +50,7 @@ describe("currentnessCopy", () => {
 			claimCurrentnessNote({
 				currentness: "UNVERIFIABLE",
 				unverifiableReason: "WORK_UNREADABLE",
-				lastVerifiedAt: null,
+				capturedAt: null,
 			}),
 		).toBe("We could not read the current work to check this observation.");
 	});
@@ -60,7 +60,7 @@ describe("currentnessCopy", () => {
 			claimCurrentnessNote({
 				currentness: "UNVERIFIABLE",
 				unverifiableReason: null,
-				lastVerifiedAt: null,
+				capturedAt: null,
 			}),
 		).toBe("We cannot check this observation against the current work.");
 	});

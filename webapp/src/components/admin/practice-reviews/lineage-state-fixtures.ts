@@ -769,7 +769,7 @@ const resultCases: LineageStateCase[] = [
 			results: threeResults({
 				currentness: "UNVERIFIABLE",
 				unverifiableReason: "WORK_UNREADABLE",
-				lastVerifiedAt: at("13:39:00"),
+				capturedAt: at("13:39:00"),
 			}),
 		}),
 	),

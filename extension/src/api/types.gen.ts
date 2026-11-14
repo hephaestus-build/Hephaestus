@@ -5146,6 +5146,10 @@ export type ResultCoverage = {
 
 export type ResultDetail = {
 	acceptedAt: string | null;
+	/**
+	 * When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.
+	 */
+	capturedAt: string | null;
 	coverage: HostCoverage | null;
 	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
 	endReason: "REPLACED" | "OUTRANKED" | "WORK_CHANGED" | "REPAIRED" | "REMOVED" | null;
@@ -5157,10 +5161,6 @@ export type ResultDetail = {
 	id: string;
 	item: ItemRef;
 	itemVersion: string | null;
-	/**
-	 * When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.
-	 */
-	lastVerifiedAt: string | null;
 	markedIncorrectAt: string | null;
 	origin: "EVENT" | "REQUEST" | "SCHEDULE" | "BACKFILL";
 	outcome: "MET" | "NOT_MET" | "DOES_NOT_APPLY" | "COULD_NOT_DETERMINE";
@@ -5193,13 +5193,13 @@ export type ResultExample = {
 
 export type ResultList = {
 	acceptedAt: string | null;
+	/**
+	 * When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.
+	 */
+	capturedAt: string | null;
 	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
 	id: string;
 	item: ItemRef;
-	/**
-	 * When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.
-	 */
-	lastVerifiedAt: string | null;
 	markedIncorrectAt: string | null;
 	origin: "EVENT" | "REQUEST" | "SCHEDULE" | "BACKFILL";
 	outcome: "MET" | "NOT_MET" | "DOES_NOT_APPLY" | "COULD_NOT_DETERMINE";
@@ -5352,14 +5352,14 @@ export type ReviewBoundFeedback = {
 };
 
 export type ReviewBoundResult = {
+	/**
+	 * When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.
+	 */
+	capturedAt: string | null;
 	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
 	developer: ReviewDeveloper | null;
 	id: string;
 	item: ItemRef;
-	/**
-	 * When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.
-	 */
-	lastVerifiedAt: string | null;
 	outcome: "MET" | "NOT_MET" | "DOES_NOT_APPLY" | "COULD_NOT_DETERMINE";
 	practiceName: string;
 	practiceSlug: string;
@@ -5730,6 +5730,10 @@ export type ReviewPracticeCounts = {
 
 export type ReviewProblem = {
 	acceptedAt: string | null;
+	/**
+	 * When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.
+	 */
+	capturedAt: string | null;
 	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
 	developer: ReviewDeveloper | null;
 	disagreedAt: string | null;
@@ -5738,10 +5742,6 @@ export type ReviewProblem = {
 	group: GroupRef | null;
 	id: string;
 	item: ItemRef;
-	/**
-	 * When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.
-	 */
-	lastVerifiedAt: string | null;
 	markedIncorrectAt: string | null;
 	path: string | null;
 	practiceName: string;
@@ -5762,6 +5762,10 @@ export type ReviewProblem = {
 
 export type ReviewProblemDetail = {
 	acceptedAt: string | null;
+	/**
+	 * When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.
+	 */
+	capturedAt: string | null;
 	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
 	developer: ReviewDeveloper | null;
 	disagreedAt: string | null;
@@ -5770,10 +5774,6 @@ export type ReviewProblemDetail = {
 	group: GroupRef | null;
 	id: string;
 	item: ItemRef;
-	/**
-	 * When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.
-	 */
-	lastVerifiedAt: string | null;
 	markedIncorrectAt: string | null;
 	path: string | null;
 	practiceName: string;
@@ -5888,15 +5888,15 @@ export type ReviewRequestOutcome = {
 
 export type ReviewResult = {
 	acceptedAt: string | null;
+	/**
+	 * When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.
+	 */
+	capturedAt: string | null;
 	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
 	developer: ReviewDeveloper | null;
 	feedback: ReviewFeedbackCounts;
 	id: string;
 	item: ItemRef;
-	/**
-	 * When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.
-	 */
-	lastVerifiedAt: string | null;
 	markedIncorrectAt: string | null;
 	origin: "EVENT" | "REQUEST" | "SCHEDULE" | "BACKFILL";
 	outcome: "MET" | "NOT_MET" | "DOES_NOT_APPLY" | "COULD_NOT_DETERMINE";
@@ -5923,6 +5923,10 @@ export type ReviewResultCounts = {
 
 export type ReviewResultDetail = {
 	acceptedAt: string | null;
+	/**
+	 * When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.
+	 */
+	capturedAt: string | null;
 	coverage: HostCoverage | null;
 	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
 	developer: ReviewDeveloper | null;
@@ -5938,10 +5942,6 @@ export type ReviewResultDetail = {
 	id: string;
 	item: ItemRef;
 	itemVersion: string | null;
-	/**
-	 * When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.
-	 */
-	lastVerifiedAt: string | null;
 	markedIncorrectAt: string | null;
 	marks: Array<ResultMark>;
 	origin: "EVENT" | "REQUEST" | "SCHEDULE" | "BACKFILL";

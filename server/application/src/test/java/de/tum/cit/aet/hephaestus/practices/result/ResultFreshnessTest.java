@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessDecision;
+import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
@@ -74,6 +76,24 @@ class ResultFreshnessTest {
 
         assertThat(freshness.freshness(1, List.of(result), Map.of(7L, item)))
                 .containsEntry(result.getId(), Freshness.stale(CAPTURED_AT));
+    }
+
+    @Test
+    void shouldReadTheCaptureTimeFromTheReadinessDecisionThatACaptureRecords() {
+        var result = result();
+        ObjectNode facts = new JsonMapper()
+                .valueToTree(new AutomatedReviewReadinessDecision(
+                        "issue-traceability-and-lifecycle",
+                        CAPTURED_AT,
+                        false,
+                        List.of(AutomatedReviewReadinessReason.NO_AUTOMATED_REVIEW),
+                        List.of()));
+        facts.putObject("sourceFingerprints").put(LINKED.value(), FINGERPRINT);
+        captured(result, facts);
+        when(items.fingerprints(eq(item), eq(Set.of(LINKED)), any())).thenReturn(Map.of());
+
+        assertThat(freshness.freshness(1, List.of(result), Map.of(7L, item)).get(result.getId()))
+                .isEqualTo(new Freshness(Currentness.UNVERIFIABLE, UnverifiableReason.WORK_UNREADABLE, CAPTURED_AT));
     }
 
     private Result result() {

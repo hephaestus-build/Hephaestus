@@ -288,8 +288,11 @@ Git source fingerprints follow [ADR 0069](https://github.com/hephaestus-build/He
 A freshness read never fetches from a provider: an SCM record source reads the synced mirror as it is.
 Commits are content-addressed, so the answer is exact when the mirror has the reviewed commits.
 A missing fingerprint or an unavailable current source makes the result unverifiable with the reason `WORK_UNREADABLE`, never current.
+A missing mirror makes only the sources that read it unreadable. The diff fingerprint comes from the stored commit pair.
+
 The mirror does not have the commits when the bounded cache evicted it, or when another server captured the result.
-The next capture that syncs the mirror makes the result verifiable again.
+Practice start and the feedback send therefore sync the mirror with no transaction before their locked read.
+A capture whose fetch failed records no linked-work fingerprint, so a later read with the commits cannot find a change.
 
 A missing capture record makes the result unverifiable with `RECORD_MISSING` ([Currentness](./practice-review-glossary.mdx#currentness)).
 Neither reason establishes a change to the work.

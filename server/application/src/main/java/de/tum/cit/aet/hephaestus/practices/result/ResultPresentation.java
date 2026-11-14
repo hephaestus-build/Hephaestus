@@ -129,7 +129,7 @@ public class ResultPresentation {
                 r.getRecordedAt(),
                 freshness.currentness(),
                 freshness.unverifiableReason(),
-                freshness.lastVerifiedAt(),
+                freshness.capturedAt(),
                 markTime(activeMarks, ResultMarkKind.INCORRECT),
                 markTime(activeMarks, ResultMarkKind.ACCEPTED),
                 permitted
@@ -163,7 +163,7 @@ public class ResultPresentation {
                 r.getRecordedAt(),
                 freshness.currentness(),
                 freshness.unverifiableReason(),
-                freshness.lastVerifiedAt(),
+                freshness.capturedAt(),
                 markedAt(r, ResultMarkKind.INCORRECT),
                 markedAt(r, ResultMarkKind.ACCEPTED),
                 r.getPracticeVersionId() == null

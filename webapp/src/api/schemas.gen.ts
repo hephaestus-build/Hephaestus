@@ -10695,6 +10695,12 @@ export const ResultDetailSchema = {
 			type: ["string", "null"],
 			format: "date-time",
 		},
+		capturedAt: {
+			type: ["string", "null"],
+			format: "date-time",
+			description:
+				"When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.",
+		},
 		coverage: {
 			anyOf: [
 				{
@@ -10760,12 +10766,6 @@ export const ResultDetailSchema = {
 		itemVersion: {
 			type: ["string", "null"],
 		},
-		lastVerifiedAt: {
-			type: ["string", "null"],
-			format: "date-time",
-			description:
-				"When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.",
-		},
 		markedIncorrectAt: {
 			type: ["string", "null"],
 			format: "date-time",
@@ -10822,6 +10822,7 @@ export const ResultDetailSchema = {
 	},
 	required: [
 		"acceptedAt",
+		"capturedAt",
 		"coverage",
 		"currentness",
 		"endReason",
@@ -10833,7 +10834,6 @@ export const ResultDetailSchema = {
 		"id",
 		"item",
 		"itemVersion",
-		"lastVerifiedAt",
 		"markedIncorrectAt",
 		"origin",
 		"outcome",
@@ -10909,6 +10909,12 @@ export const ResultListSchema = {
 			type: ["string", "null"],
 			format: "date-time",
 		},
+		capturedAt: {
+			type: ["string", "null"],
+			format: "date-time",
+			description:
+				"When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.",
+		},
 		currentness: {
 			type: "string",
 			enum: ["CURRENT", "STALE", "UNVERIFIABLE"],
@@ -10919,12 +10925,6 @@ export const ResultListSchema = {
 		},
 		item: {
 			$ref: "#/components/schemas/ItemRef",
-		},
-		lastVerifiedAt: {
-			type: ["string", "null"],
-			format: "date-time",
-			description:
-				"When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.",
 		},
 		markedIncorrectAt: {
 			type: ["string", "null"],
@@ -10974,10 +10974,10 @@ export const ResultListSchema = {
 	},
 	required: [
 		"acceptedAt",
+		"capturedAt",
 		"currentness",
 		"id",
 		"item",
-		"lastVerifiedAt",
 		"markedIncorrectAt",
 		"origin",
 		"outcome",
@@ -11464,6 +11464,12 @@ export const ReviewBoundFeedbackSchema = {
 export const ReviewBoundResultSchema = {
 	type: "object",
 	properties: {
+		capturedAt: {
+			type: ["string", "null"],
+			format: "date-time",
+			description:
+				"When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.",
+		},
 		currentness: {
 			type: "string",
 			enum: ["CURRENT", "STALE", "UNVERIFIABLE"],
@@ -11484,12 +11490,6 @@ export const ReviewBoundResultSchema = {
 		},
 		item: {
 			$ref: "#/components/schemas/ItemRef",
-		},
-		lastVerifiedAt: {
-			type: ["string", "null"],
-			format: "date-time",
-			description:
-				"When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.",
 		},
 		outcome: {
 			type: "string",
@@ -11524,11 +11524,11 @@ export const ReviewBoundResultSchema = {
 		},
 	},
 	required: [
+		"capturedAt",
 		"currentness",
 		"developer",
 		"id",
 		"item",
-		"lastVerifiedAt",
 		"outcome",
 		"practiceName",
 		"practiceSlug",
@@ -12641,6 +12641,12 @@ export const ReviewProblemSchema = {
 			type: ["string", "null"],
 			format: "date-time",
 		},
+		capturedAt: {
+			type: ["string", "null"],
+			format: "date-time",
+			description:
+				"When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.",
+		},
 		currentness: {
 			type: "string",
 			enum: ["CURRENT", "STALE", "UNVERIFIABLE"],
@@ -12682,12 +12688,6 @@ export const ReviewProblemSchema = {
 		},
 		item: {
 			$ref: "#/components/schemas/ItemRef",
-		},
-		lastVerifiedAt: {
-			type: ["string", "null"],
-			format: "date-time",
-			description:
-				"When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.",
 		},
 		markedIncorrectAt: {
 			type: ["string", "null"],
@@ -12741,6 +12741,7 @@ export const ReviewProblemSchema = {
 	},
 	required: [
 		"acceptedAt",
+		"capturedAt",
 		"currentness",
 		"developer",
 		"disagreedAt",
@@ -12749,7 +12750,6 @@ export const ReviewProblemSchema = {
 		"group",
 		"id",
 		"item",
-		"lastVerifiedAt",
 		"markedIncorrectAt",
 		"path",
 		"practiceName",
@@ -12772,6 +12772,12 @@ export const ReviewProblemDetailSchema = {
 		acceptedAt: {
 			type: ["string", "null"],
 			format: "date-time",
+		},
+		capturedAt: {
+			type: ["string", "null"],
+			format: "date-time",
+			description:
+				"When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.",
 		},
 		currentness: {
 			type: "string",
@@ -12814,12 +12820,6 @@ export const ReviewProblemDetailSchema = {
 		},
 		item: {
 			$ref: "#/components/schemas/ItemRef",
-		},
-		lastVerifiedAt: {
-			type: ["string", "null"],
-			format: "date-time",
-			description:
-				"When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.",
 		},
 		markedIncorrectAt: {
 			type: ["string", "null"],
@@ -12879,6 +12879,7 @@ export const ReviewProblemDetailSchema = {
 	},
 	required: [
 		"acceptedAt",
+		"capturedAt",
 		"currentness",
 		"developer",
 		"disagreedAt",
@@ -12887,7 +12888,6 @@ export const ReviewProblemDetailSchema = {
 		"group",
 		"id",
 		"item",
-		"lastVerifiedAt",
 		"markedIncorrectAt",
 		"path",
 		"practiceName",
@@ -13141,6 +13141,12 @@ export const ReviewResultSchema = {
 			type: ["string", "null"],
 			format: "date-time",
 		},
+		capturedAt: {
+			type: ["string", "null"],
+			format: "date-time",
+			description:
+				"When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.",
+		},
 		currentness: {
 			type: "string",
 			enum: ["CURRENT", "STALE", "UNVERIFIABLE"],
@@ -13164,12 +13170,6 @@ export const ReviewResultSchema = {
 		},
 		item: {
 			$ref: "#/components/schemas/ItemRef",
-		},
-		lastVerifiedAt: {
-			type: ["string", "null"],
-			format: "date-time",
-			description:
-				"When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.",
 		},
 		markedIncorrectAt: {
 			type: ["string", "null"],
@@ -13223,12 +13223,12 @@ export const ReviewResultSchema = {
 	},
 	required: [
 		"acceptedAt",
+		"capturedAt",
 		"currentness",
 		"developer",
 		"feedback",
 		"id",
 		"item",
-		"lastVerifiedAt",
 		"markedIncorrectAt",
 		"origin",
 		"outcome",
@@ -13273,6 +13273,12 @@ export const ReviewResultDetailSchema = {
 		acceptedAt: {
 			type: ["string", "null"],
 			format: "date-time",
+		},
+		capturedAt: {
+			type: ["string", "null"],
+			format: "date-time",
+			description:
+				"When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.",
 		},
 		coverage: {
 			anyOf: [
@@ -13362,12 +13368,6 @@ export const ReviewResultDetailSchema = {
 		itemVersion: {
 			type: ["string", "null"],
 		},
-		lastVerifiedAt: {
-			type: ["string", "null"],
-			format: "date-time",
-			description:
-				"When the observation's sources were last verified against the work: when its capture read them. Null when the record of that capture is missing.",
-		},
 		markedIncorrectAt: {
 			type: ["string", "null"],
 			format: "date-time",
@@ -13430,6 +13430,7 @@ export const ReviewResultDetailSchema = {
 	},
 	required: [
 		"acceptedAt",
+		"capturedAt",
 		"coverage",
 		"currentness",
 		"developer",
@@ -13445,7 +13446,6 @@ export const ReviewResultDetailSchema = {
 		"id",
 		"item",
 		"itemVersion",
-		"lastVerifiedAt",
 		"markedIncorrectAt",
 		"marks",
 		"origin",

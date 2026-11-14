@@ -410,7 +410,7 @@ export const NOT_REVIEWED_ENTRY: ScanReportItem = {
 		problems: [],
 		currentness: "STALE",
 		unverifiableReason: null,
-		lastVerifiedAt: null,
+		capturedAt: null,
 		markedIncorrectAt: null,
 		acceptedAt: null,
 		recordedAt: daysBefore(14),
