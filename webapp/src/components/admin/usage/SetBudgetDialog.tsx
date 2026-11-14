@@ -44,7 +44,6 @@ export function SetBudgetDialog({
 			}
 			fieldLabel="Monthly budget (USD)"
 			submitLabel="Save budget"
-			// Otherwise this falls through to the shared dialog's "Remove cap", naming one number twice.
 			removeLabel="Remove budget"
 			currentValueUsd={workspace?.instanceMonthlyBudgetUsd ?? null}
 			fx={fx}

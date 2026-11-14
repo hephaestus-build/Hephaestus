@@ -35,6 +35,8 @@ export interface AuthContextType {
 	/** The read-only view this administrator opened, if one is active. */
 	userView: UserViewSession | undefined;
 	login: (idpHint?: string, returnTo?: string) => void;
+	/** Mints an admin session for the `dev` provider, which the server offers outside production only. */
+	devLogin: (username: string, returnTo?: string) => Promise<void>;
 	linkAccount: (providerAlias: string, returnTo?: string) => void;
 	logout: () => Promise<void>;
 	hasRole: (role: string) => boolean;
@@ -56,6 +58,10 @@ export function useAuth() {
 
 function login(idpHint?: string, returnTo?: string) {
 	authClient.login(idpHint, returnTo);
+}
+
+async function devLogin(username: string, returnTo?: string) {
+	return authClient.devLogin(username, true, returnTo);
 }
 
 function linkAccount(providerAlias: string, returnTo?: string) {
@@ -151,6 +157,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 		userProfile,
 		userView: viewed,
 		login,
+		devLogin,
 		linkAccount,
 		logout,
 		hasRole,

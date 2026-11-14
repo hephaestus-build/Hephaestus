@@ -12,6 +12,7 @@ const meta = {
 		open: true,
 		onClose: fn(),
 		onSignIn: fn(),
+		onDevSignIn: fn(async () => undefined),
 		options: {
 			status: "ready",
 			providers: [

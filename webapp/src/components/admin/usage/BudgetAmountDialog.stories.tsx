@@ -25,6 +25,8 @@ const meta = {
 		title: "Set monthly cap",
 		description: "At the cap, that work pauses until the month resets. Enter $0 to pause now.",
 		fieldLabel: "Monthly cap (USD)",
+		submitLabel: "Save cap",
+		removeLabel: "Remove cap",
 		currentValueUsd: 25,
 		isPending: false,
 		serverError: null,

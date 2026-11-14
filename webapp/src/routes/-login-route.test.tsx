@@ -14,6 +14,7 @@ import {
 	recordAccountDeleted,
 } from "@/runtime/auth/account-deleted-notice";
 import { authClient } from "@/runtime/auth/auth-client";
+import { captureNavigation, restoreNavigation } from "@/test/navigation";
 import { ObserverStub } from "@/test/observers";
 import { ROUTE_RENDER_WAIT, loadRouteCode, renderRouteAtWithRouter } from "@/test/router-harness";
 
@@ -128,6 +129,58 @@ describe("contextual sign-in", () => {
 		expect(screen.getByRole("alert").textContent).toContain(
 			"Try again. If it keeps failing, contact your instance operator.",
 		);
+	});
+
+	it("signs in as the dev admin and returns to the requested page", async () => {
+		server.use(
+			http.get("*/identity-providers", () =>
+				HttpResponse.json([{ registrationId: "dev", displayName: "Dev", providerType: "DEV" }]),
+			),
+		);
+		let sent: unknown;
+		server.use(
+			http.get("*/auth/csrf", () =>
+				HttpResponse.json({ token: "token", headerName: "X-XSRF-TOKEN" }),
+			),
+			http.post("*/auth/dev-login", async ({ request }) => {
+				sent = await request.json();
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+		renderRouteAtWithRouter("/login?returnTo=%2Fabout");
+		const button = await screen.findByRole(
+			"button",
+			{ name: "Continue as dev admin" },
+			ROUTE_RENDER_WAIT,
+		);
+		const assigned = captureNavigation();
+		try {
+			await userEvent.click(button);
+			await waitFor(() => expect(assigned).toStrictEqual(["/about"]));
+			expect(sent).toStrictEqual({ username: "dev-admin", admin: true });
+		} finally {
+			restoreNavigation();
+		}
+	});
+
+	it("shows why dev sign-in failed and lets the reader retry", async () => {
+		server.use(
+			http.get("*/identity-providers", () =>
+				HttpResponse.json([{ registrationId: "dev", displayName: "Dev", providerType: "DEV" }]),
+			),
+			http.get("*/auth/csrf", () =>
+				HttpResponse.json({ token: "token", headerName: "X-XSRF-TOKEN" }),
+			),
+			http.post("*/auth/dev-login", () => new HttpResponse(null, { status: 403 })),
+		);
+		renderRouteAtWithRouter("/login");
+		await userEvent.click(
+			await screen.findByRole("button", { name: "Continue as dev admin" }, ROUTE_RENDER_WAIT),
+		);
+		await screen.findByText("Dev sign-in failed (403)");
+		expect(
+			screen.getByRole<HTMLButtonElement>("button", { name: "Continue as dev admin" }).disabled,
+		).toBe(false);
 	});
 
 	it("retries provider discovery in place", async () => {

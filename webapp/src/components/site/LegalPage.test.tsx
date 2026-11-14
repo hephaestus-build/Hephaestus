@@ -1,14 +1,9 @@
-import { render, waitFor } from "@testing-library/react";
-import { assert, describe, expect, it, vi } from "vitest";
+import { render } from "@testing-library/react";
+import { assert, describe, expect, it } from "vitest";
 
-import {
-	isSafeLegalHref,
-	isSafeLegalImageSrc,
-	LEGAL_PAGE_TITLES,
-	type resolveLegalContent,
-} from "@/lib/legal";
+import { isSafeLegalHref, isSafeLegalImageSrc, LEGAL_PAGE_TITLES } from "@/lib/legal";
 
-import { LegalPage } from "./LegalPage";
+import { LegalPage, type LegalContentState } from "./LegalPage";
 
 declare global {
 	interface Window {
@@ -50,33 +45,19 @@ const HOSTILE_MARKDOWN = `# Hostile
 ![ok](https://tum.de/logo.png "spoof-img-title")
 `;
 
-function makeResolver(markdown: string): typeof resolveLegalContent {
-	return async () => ({
-		markdown,
-		source: "override",
-	});
-}
-
-const disclaimerResolver: typeof resolveLegalContent = async () => ({
-	markdown: "# fallback",
-	source: "disclaimer",
+const ready = (markdown: string): LegalContentState => ({
+	status: "ready",
+	content: { markdown, source: "override" },
 });
 
 describe("LegalPage — XSS guardrail", () => {
-	it("strips raw HTML, javascript: hrefs, and data: images from operator markdown", async () => {
+	it("strips raw HTML, javascript: hrefs, and data: images from operator markdown", () => {
 		const { container } = render(
-			<LegalPage
-				page="imprint"
-				title={LEGAL_PAGE_TITLES.imprint}
-				resolver={makeResolver(HOSTILE_MARKDOWN)}
-			/>,
+			<LegalPage title={LEGAL_PAGE_TITLES.imprint} state={ready(HOSTILE_MARKDOWN)} />,
 		);
 
-		const article = await waitFor(() => {
-			const el = container.querySelector("article");
-			assert(el, "article not rendered yet");
-			return el;
-		});
+		const article = container.querySelector("article");
+		assert(article, "article not rendered");
 
 		expect(article.querySelector("script")).toBeNull();
 		expect(article.querySelector("iframe")).toBeNull();
@@ -112,19 +93,15 @@ describe("LegalPage — XSS guardrail", () => {
 		expect(window.__xss_onerror__).toBeUndefined();
 	});
 
-	it("external links get noopener/noreferrer + target=_blank", async () => {
+	it("external links get noopener/noreferrer + target=_blank", () => {
 		const { container } = render(
 			<LegalPage
-				page="imprint"
 				title={LEGAL_PAGE_TITLES.imprint}
-				resolver={makeResolver("[ext](https://tum.de) · [int](/privacy)")}
+				state={ready("[ext](https://tum.de) · [int](/privacy)")}
 			/>,
 		);
-		const article = await waitFor(() => {
-			const el = container.querySelector("article");
-			assert(el, "article not rendered");
-			return el;
-		});
+		const article = container.querySelector("article");
+		assert(article, "article not rendered");
 		const [ext, int] = [...article.querySelectorAll("a")];
 		assert(ext);
 		assert(int);
@@ -134,26 +111,13 @@ describe("LegalPage — XSS guardrail", () => {
 		expect(int.getAttribute("rel")).toBeNull();
 	});
 
-	it.each(["imprint", "privacy"] as const)(
-		"renders the %s disclaimer and warns exactly once across page mounts",
-		async (page) => {
-			using warn = vi.spyOn(console, "warn").mockReturnValue(undefined);
-			const expected = `[legal] Disclaimer fallback served for page=${page}. Mount /legal-overrides/. See docs/admin/legal-pages.`;
-			const first = render(
-				<LegalPage page={page} title={LEGAL_PAGE_TITLES[page]} resolver={disclaimerResolver} />,
-			);
-			// The load-error alert says the opposite about the deployment; assert the disclaimer copy.
-			const alert = await first.findByRole("alert");
-			expect(alert.textContent).toMatch(/has not published its own legal pages/iu);
-			expect(warn).toHaveBeenCalledExactlyOnceWith(expected);
-			first.unmount();
-
-			const remounted = render(
-				<LegalPage page={page} title={LEGAL_PAGE_TITLES[page]} resolver={disclaimerResolver} />,
-			);
-			const remountedAlert = await remounted.findByRole("alert");
-			expect(remountedAlert.textContent).toMatch(/has not published its own legal pages/iu);
-			expect(warn).toHaveBeenCalledExactlyOnceWith(expected);
-		},
-	);
+	it("says that the page is a placeholder when the deployment published none", () => {
+		const { getByRole } = render(
+			<LegalPage
+				title={LEGAL_PAGE_TITLES.privacy}
+				state={{ status: "ready", content: { markdown: "# fallback", source: "disclaimer" } }}
+			/>,
+		);
+		expect(getByRole("alert").textContent).toMatch(/has not published its own legal pages/iu);
+	});
 });

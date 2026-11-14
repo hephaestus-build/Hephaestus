@@ -562,7 +562,7 @@ function AppSidebarContainer() {
 
 function PublicLoginOverlay() {
 	const { login: open } = Route.useSearch();
-	const { isAuthenticated, login } = useAuth();
+	const { isAuthenticated, login, devLogin } = useAuth();
 	const location = useLocation();
 	const router = useRouter();
 	const providers = useSignInProviders(Boolean(open) && !isAuthenticated);
@@ -579,7 +579,7 @@ function PublicLoginOverlay() {
 			open={Boolean(open) && !isAuthenticated}
 			options={providers}
 			onSignIn={(registrationId) => login(registrationId, returnTo)}
-			devReturnTo={returnTo}
+			onDevSignIn={async (username) => devLogin(username, returnTo)}
 			onClose={() => {
 				if (location.maskedLocation) {
 					router.history.back();

@@ -29,7 +29,7 @@ export const Route = createFileRoute("/login")({
 function LoginRoute() {
 	const providers = useSignInProviders();
 	const { error, returnTo } = Route.useSearch();
-	const { login, isAuthenticated } = useAuth();
+	const { login, devLogin, isAuthenticated } = useAuth();
 	const navigate = useNavigate();
 
 	useEffect(() => {
@@ -51,7 +51,7 @@ function LoginRoute() {
 			error={error}
 			notice={accountDeleted ? "account-deleted" : undefined}
 			onSignIn={(registrationId) => login(registrationId, returnTo)}
-			devReturnTo={returnTo}
+			onDevSignIn={async (username) => devLogin(username, returnTo)}
 		/>
 	);
 }
