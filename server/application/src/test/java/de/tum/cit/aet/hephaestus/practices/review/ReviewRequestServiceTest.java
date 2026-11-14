@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemDescriptor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RoleHolder;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequestStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
@@ -46,19 +47,11 @@ class ReviewRequestServiceTest extends BaseUnitTest {
     final WorkspaceAccessService access = mock(WorkspaceAccessService.class);
     final ProductItemQuery items = mock(ProductItemQuery.class);
     final ReviewService reviews = mock(ReviewService.class);
-    final ReviewRequestPolicy policy = mock(ReviewRequestPolicy.class);
     final MembershipRepository memberships = mock(MembershipRepository.class);
     final WorkspaceAdminAssurance assurance = mock(WorkspaceAdminAssurance.class);
     final ItemDescriptorRegistry descriptors = mock(ItemDescriptorRegistry.class);
     final ReviewRequestService service = new ReviewRequestService(
-            items,
-            identities,
-            access,
-            reviews,
-            policy,
-            WorkspacePortFixtures.memberships(memberships),
-            assurance,
-            descriptors);
+            items, identities, access, reviews, WorkspacePortFixtures.memberships(memberships), assurance, descriptors);
 
     @Test
     void authorAndAssigneeCanRequestTheirOwnItem() {
@@ -109,6 +102,19 @@ class ReviewRequestServiceTest extends BaseUnitTest {
         assertThat(service.mayRequest(1, snapshot(2, AboutRole.AUTHOR, true), 7))
                 .isFalse();
         verifyNoInteractions(access, identities);
+    }
+
+    @Test
+    void shouldAnswerWithTheReasonWhenTheRequestPolicyRefuses() {
+        when(identities.resolveActiveAccountId(1L, "native-user", null)).thenReturn(Optional.of(7L));
+        requesting(snapshot(1, AboutRole.AUTHOR, true));
+        when(reviews.request(any())).thenThrow(new ReviewRequestRefused(ReviewRequestReason.CONCURRENT_DUPLICATE));
+
+        var outcome = service.request(1, 3, 7);
+
+        assertThat(outcome.status()).isEqualTo(ReviewRequestStatus.REFUSED);
+        assertThat(outcome.reason()).isEqualTo(ReviewRequestReason.CONCURRENT_DUPLICATE);
+        assertThat(outcome.reviewId()).isNull();
     }
 
     @Test
@@ -180,7 +186,6 @@ class ReviewRequestServiceTest extends BaseUnitTest {
         when(descriptor.roles()).thenReturn(Set.of(AboutRole.AUTHOR));
         when(descriptors.descriptorFor(snapshot.item().kind())).thenReturn(Optional.of(descriptor));
         when(items.pin(snapshot.item(), null)).thenReturn(snapshot);
-        when(policy.refusal(1, 3, 7)).thenReturn(Optional.empty());
     }
 
     ItemSnapshot snapshot(long ws, AboutRole role, boolean human) {

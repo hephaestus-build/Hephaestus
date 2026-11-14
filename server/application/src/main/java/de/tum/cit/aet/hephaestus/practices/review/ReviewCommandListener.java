@@ -38,7 +38,7 @@ public class ReviewCommandListener {
     private final ReviewRepository reviews;
     private final ReviewItemRepository memberships;
 
-    // Not joined: a refused request rolls back its own transaction, and the refusal is the handled outcome.
+    // Not joined: a review request runs only outside a transaction.
     @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)
     public void on(BotCommandReceivedEvent command) {
         String text = command.noteBody().strip().toLowerCase(Locale.ROOT);

@@ -25,7 +25,6 @@ import java.util.function.BooleanSupplier;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @ConditionalOnServerRole
@@ -35,7 +34,6 @@ public class ReviewRequestService {
     private final AccountIdentityQuery identities;
     private final WorkspaceAccessService access;
     private final ReviewService reviews;
-    private final ReviewRequestPolicy policy;
     private final WorkspaceMemberships memberships;
     private final WorkspaceAdminAssurance adminAssurance;
     private final ItemDescriptorRegistry descriptors;
@@ -60,7 +58,7 @@ public class ReviewRequestService {
                 || admin.getAsBoolean();
     }
 
-    @Transactional
+    /** Runs with no transaction: the pins and source reads fetch from the provider. */
     public ReviewRequestOutcomeDTO request(long workspaceId, long itemId, long accountId) {
         return request(workspaceId, itemId, accountId, this::assuredAdmin, null, null);
     }
@@ -77,7 +75,6 @@ public class ReviewRequestService {
      * workspace through the account that identity is linked to; admin standing comes from that membership, since no
      * session can lend elevation. The comment id keys the request, so a redelivered comment returns its review.
      */
-    @Transactional
     public ReviewRequestOutcomeDTO requestByComment(
             long workspaceId,
             long itemId,
@@ -108,8 +105,7 @@ public class ReviewRequestService {
             ReviewRequest.@Nullable CommentAnswer answer) {
         var item = items.require(workspaceId, itemId);
         // An item review is about a role holder. A kind without roles, such as a repository, has nobody to review, and
-        // its pin would fetch the repository inside this transaction. The refusal precedes the access check: 422, not
-        // 403.
+        // its pin would fetch the repository for nothing. The refusal precedes the access check: 422, not 403.
         if (descriptors.descriptorFor(item.kind()).map(d -> d.roles().isEmpty()).orElse(true))
             throw new ReviewRequestRejected(
                     ReviewRequestRejected.Reason.ITEM_INELIGIBLE, "No practice can review this item.");
@@ -117,21 +113,22 @@ public class ReviewRequestService {
         if (!mayRequest(workspaceId, pinned, accountId, admin))
             throw new AccessForbiddenException(
                     "Only the author or an assignee, or a workspace admin, can request this review.");
-        var refusal = policy.refusal(workspaceId, itemId, accountId);
-        if (refusal.isPresent())
-            return new ReviewRequestOutcomeDTO(ReviewRequestStatus.REFUSED, null, refusal.orElseThrow());
-        var id = reviews.request(ReviewRequest.builder()
-                .workspaceId(workspaceId)
-                .itemId(itemId)
-                .kind(ReviewKind.ITEM)
-                .version(pinned.version())
-                .origin(ReviewOrigin.REQUEST)
-                .requestedById(accountId)
-                .requestKey(requestKey)
-                .requestDigest(requestKey == null ? null : CanonicalDigest.sha256Hex(itemId + ":" + accountId))
-                .practiceIds(List.of())
-                .commentAnswer(answer)
-                .build());
-        return new ReviewRequestOutcomeDTO(ReviewRequestStatus.SUBMITTED, id, null);
+        try {
+            var id = reviews.request(ReviewRequest.builder()
+                    .workspaceId(workspaceId)
+                    .itemId(itemId)
+                    .kind(ReviewKind.ITEM)
+                    .version(pinned.version())
+                    .origin(ReviewOrigin.REQUEST)
+                    .requestedById(accountId)
+                    .requestKey(requestKey)
+                    .requestDigest(requestKey == null ? null : CanonicalDigest.sha256Hex(itemId + ":" + accountId))
+                    .practiceIds(List.of())
+                    .commentAnswer(answer)
+                    .build());
+            return new ReviewRequestOutcomeDTO(ReviewRequestStatus.SUBMITTED, id, null);
+        } catch (ReviewRequestRefused refused) {
+            return new ReviewRequestOutcomeDTO(ReviewRequestStatus.REFUSED, null, refused.reason());
+        }
     }
 }

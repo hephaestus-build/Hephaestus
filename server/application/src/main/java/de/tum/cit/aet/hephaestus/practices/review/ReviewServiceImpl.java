@@ -114,23 +114,23 @@ public class ReviewServiceImpl implements ReviewService {
     private final ItemEventService itemEvents;
     private final ReviewClosure closure;
     private final ReviewRequestTransactions transactions;
+    private final ReviewRequestPolicy policy;
 
     /**
-     * Admits the request without a lock. Then it pins the item and reads the sources that the plan queues with no
-     * transaction, since a repository pin or a source read fetches the repository. It records the review under the
-     * workspace lock, which admits and plans the request again. A replay returns its review without a pin. A caller
-     * that already holds a transaction gains nothing from the early read, so the locked step reads its sources.
+     * Admits the request without a lock. Then it pins the item, judges the item's results and reads the sources that
+     * the plan queues with no transaction, since each can fetch from the provider. It records the review under the
+     * workspace lock, which admits and plans the request again. A replay returns its review without a pin.
      */
     @Override
     public UUID request(ReviewRequest request) {
+        if (TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("A review request runs only outside a database transaction");
         validate(request);
         return switch (transactions.read(() -> admit(request, workspace(request)))) {
             case Admission.Replay replay -> replay.reviewId();
             case Admission.Admitted admitted -> {
                 var pinned = pin(request, admitted.item());
-                var early = TransactionSynchronizationManager.isActualTransactionActive()
-                        ? null
-                        : earlyRead(request, admitted.item(), pinned);
+                var early = earlyRead(request, admitted.item(), pinned);
                 yield transactions.write(() -> {
                     var workspace =
                             workspaces.findByIdForUpdate(request.workspaceId()).orElseThrow();
@@ -139,7 +139,11 @@ public class ReviewServiceImpl implements ReviewService {
                         case Admission.Admitted locked -> {
                             requirePinnedVersion(request, pinned);
                             yield recordReview(
-                                    request, workspace, pinned, plan(request, workspace, locked.item(), pinned), early);
+                                    request,
+                                    workspace,
+                                    pinned,
+                                    plan(request, workspace, locked.item(), pinned, early.currentness()),
+                                    early);
                         }
                     };
                 });
@@ -186,6 +190,11 @@ public class ReviewServiceImpl implements ReviewService {
             if (prior.isPresent())
                 return new Admission.Replay(prior.orElseThrow().getId());
         }
+        if (request.origin() == ReviewOrigin.REQUEST && request.kind() == ReviewKind.ITEM)
+            policy.refusal(workspace, request.itemId(), Objects.requireNonNull(request.requestedById()))
+                    .ifPresent(reason -> {
+                        throw new ReviewRequestRefused(reason);
+                    });
         if (!workspace.active())
             throw new ReviewRequestRejected(
                     ReviewRequestRejected.Reason.WORKSPACE_INACTIVE, "The workspace is inactive.");
@@ -219,7 +228,8 @@ public class ReviewServiceImpl implements ReviewService {
                     ? items.pinOccasion(ref, requestedVersion, occasion)
                     : items.pin(ref, requestedVersion);
         } catch (ItemCaptureException unavailable) {
-            // Settled here, not in the listener: any other exception leaving the request rolls its transaction back.
+            // Settled here, not in the listener: the listener fails on any other exception, and its event is sent
+            // again.
             if (unavailable.code() != ItemCaptureCode.OCCASION_EVIDENCE_UNAVAILABLE) throw unavailable;
             throw new ReviewRequestRejected(
                     ReviewRequestRejected.Reason.ITEM_INELIGIBLE,
@@ -229,23 +239,42 @@ public class ReviewServiceImpl implements ReviewService {
         }
     }
 
-    /** The sources that a first plan queues for an item review, and their fingerprints, read with no transaction. */
-    private record EarlyRead(Set<SourceKind> kinds, Map<SourceKind, String> fingerprints) {}
+    /**
+     * What an item review reads with no transaction before its locked step: the currentness of the item's open results
+     * that an event review compares, the sources that a first plan queues, and their fingerprints.
+     */
+    private record EarlyRead(
+            Map<UUID, Currentness> currentness, Set<SourceKind> kinds, Map<SourceKind, String> fingerprints) {
+        static final EarlyRead NONE = new EarlyRead(Map.of(), Set.of(), Map.of());
+    }
 
-    private @Nullable EarlyRead earlyRead(ReviewRequest request, ItemRef ref, ItemSnapshot pinned) {
-        if (request.kind() != ReviewKind.ITEM) return null;
+    private EarlyRead earlyRead(ReviewRequest request, ItemRef ref, ItemSnapshot pinned) {
+        if (request.kind() != ReviewKind.ITEM) return EarlyRead.NONE;
+        var currentness = currentness(request, pinned);
         var kinds = transactions.read(() -> queuedKinds(
-                pinned, plan(request, workspace(request), ref, pinned).planned()));
-        return new EarlyRead(kinds, items.fingerprints(pinned.item(), kinds, occasion(request)));
+                pinned,
+                plan(request, workspace(request), ref, pinned, currentness).planned()));
+        return new EarlyRead(currentness, kinds, items.fingerprints(pinned.item(), kinds, occasion(request)));
     }
 
     /**
-     * The fingerprints of the sources that the locked plan queues: the early read's, or read now in the caller's
-     * transaction. A practice that came to read another source after the early read refuses the request.
+     * The currentness of the item's open results, for an event review whose occasions a continuing result can skip. A
+     * result that the locked step finds but this read did not judge is not current, so its practice is measured.
      */
-    private Map<SourceKind, String> fingerprints(
-            ItemSnapshot pinned, ReviewRequest request, Set<SourceKind> kinds, @Nullable EarlyRead early) {
-        if (early == null) return items.fingerprints(pinned.item(), kinds, occasion(request));
+    private Map<UUID, Currentness> currentness(ReviewRequest request, ItemSnapshot pinned) {
+        if (request.origin() != ReviewOrigin.EVENT
+                || request.occasions().stream()
+                        .anyMatch(name -> itemOptions.occasion(pinned.item().kind(), name) == OccasionKind.MILESTONE))
+            return Map.of();
+        var claims = results.findByWorkspaceIdAndItemIdAndEndedAtIsNull(request.workspaceId(), request.itemId());
+        return freshness.states(request.workspaceId(), claims);
+    }
+
+    /**
+     * The fingerprints of the sources that the locked plan queues, from the early read. A practice that came to read
+     * another source after the early read refuses the request.
+     */
+    private static Map<SourceKind, String> fingerprints(Set<SourceKind> kinds, EarlyRead early) {
         if (!early.kinds().containsAll(kinds))
             throw new ReviewRequestRejected(
                     ReviewRequestRejected.Reason.REQUEST_CONFLICT,
@@ -260,7 +289,12 @@ public class ReviewServiceImpl implements ReviewService {
     private record Plan(
             @Nullable Instant occurredAt, List<SelectedPractice> planned, ReviewMethod method, ObjectNode checks) {}
 
-    private Plan plan(ReviewRequest request, ReviewWorkspace workspace, ItemRef ref, ItemSnapshot pinned) {
+    private Plan plan(
+            ReviewRequest request,
+            ReviewWorkspace workspace,
+            ItemRef ref,
+            ItemSnapshot pinned,
+            Map<UUID, Currentness> currentness) {
         var occasion = occasion(request);
         Instant occurredAt = null;
         var occasions = new HashSet<>(request.occasions());
@@ -304,7 +338,7 @@ public class ReviewServiceImpl implements ReviewService {
                             skip.eventReason());
                 case GateDecision.Run run -> run.matchedPractices();
             };
-            if (event) selected = pending(pinned, occasions, selected);
+            if (event) selected = pending(pinned, occasions, selected, currentness);
         }
         if (selected.isEmpty()
                 || (!request.practiceIds().isEmpty()
@@ -373,19 +407,14 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     private UUID recordReview(
-            ReviewRequest request,
-            ReviewWorkspace workspace,
-            ItemSnapshot pinned,
-            Plan plan,
-            @Nullable EarlyRead early) {
+            ReviewRequest request, ReviewWorkspace workspace, ItemSnapshot pinned, Plan plan, EarlyRead early) {
         var now = clock.instant();
         var ordered = plan.occurredAt() != null ? plan.occurredAt() : now;
         var planned = plan.planned();
-        // Before the save: a refusal commits what came before it.
         JsonNode queuedSources = null;
         if (request.kind() == ReviewKind.ITEM) {
             var kinds = queuedKinds(pinned, planned);
-            queuedSources = queuedSources(kinds, fingerprints(pinned, request, kinds, early));
+            queuedSources = queuedSources(kinds, fingerprints(kinds, early));
         }
         var review = reviews.save(Review.builder()
                 .id(UUID.randomUUID())
@@ -465,7 +494,11 @@ public class ReviewServiceImpl implements ReviewService {
      * occasions are never lost. A continuing occasion
      * leaves out every practice whose result is current; a milestone measures them again.
      */
-    private List<Practice> pending(ItemSnapshot pinned, Set<ItemEventName> occasions, List<Practice> selected) {
+    private List<Practice> pending(
+            ItemSnapshot pinned,
+            Set<ItemEventName> occasions,
+            List<Practice> selected,
+            Map<UUID, Currentness> currentness) {
         long workspaceId = pinned.item().workspaceId();
         long itemId = pinned.item().itemId();
         var selectedIds = selected.stream().map(Practice::getId).collect(Collectors.toSet());
@@ -486,10 +519,8 @@ public class ReviewServiceImpl implements ReviewService {
         if (occasions.stream()
                 .anyMatch(name -> itemOptions.occasion(pinned.item().kind(), name) == OccasionKind.MILESTONE))
             return selected;
-        var claims = results.findByWorkspaceIdAndItemIdAndEndedAtIsNull(workspaceId, itemId);
-        var states = freshness.states(workspaceId, claims);
-        var current = claims.stream()
-                .filter(result -> states.get(result.getId()) == Currentness.CURRENT)
+        var current = results.findByWorkspaceIdAndItemIdAndEndedAtIsNull(workspaceId, itemId).stream()
+                .filter(result -> currentness.get(result.getId()) == Currentness.CURRENT)
                 .map(Result::getPracticeVersionId)
                 .collect(Collectors.toSet());
         var pending = selected.stream()

@@ -670,7 +670,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 null,
                 ReviewOrigin.REQUEST,
                 null,
-                scenarioAccountId,
+                scenario.account().getId(),
                 null,
                 null,
                 null,
