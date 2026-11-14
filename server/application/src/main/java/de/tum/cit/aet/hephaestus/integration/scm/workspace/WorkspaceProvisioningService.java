@@ -10,9 +10,10 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
+import de.tum.cit.aet.hephaestus.integration.core.spi.BootstrapRepositoryLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryIdentityLookup;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryIdentityLookup.RepositoryIdentity;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SelectedRepositoryVerifier;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceProviderAvailability;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -38,12 +39,15 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
@@ -66,8 +70,9 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
     private final ConnectionService connectionService;
     private final WebClient webClient;
     private final List<SelectedRepositoryVerifier> repositoryVerifiers;
-    private final List<RepositoryIdentityLookup> identityLookups;
+    private final List<BootstrapRepositoryLookup> identityLookups;
     private final ScmServerEndpointPolicy endpoints;
+    private final TransactionTemplate writes;
 
     private final Map<IntegrationKind, WorkspaceProviderAvailability> providerAvailability;
 
@@ -87,7 +92,9 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
             ScmServerEndpointPolicy endpoints,
             WebClient.Builder webClients,
             List<SelectedRepositoryVerifier> repositoryVerifiers,
-            List<RepositoryIdentityLookup> identityLookups) {
+            List<BootstrapRepositoryLookup> identityLookups,
+            PlatformTransactionManager transactions) {
+        this.writes = new TransactionTemplate(transactions);
         this.repositoryVerifiers = repositoryVerifiers;
         this.identityLookups = identityLookups;
         this.endpoints = endpoints;
@@ -116,8 +123,8 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
     }
 
     @Override
-    @Transactional
     public void bootstrapDefaultPatWorkspace() {
+        requireNoTransaction();
         if (!workspaceProperties.initDefault()) {
             log.debug("Skipped default PAT workspace bootstrap: reason=bootstrapDisabled");
             return;
@@ -125,7 +132,7 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
 
         if (workspaceRepository.count() > 0) {
             log.debug("Skipped PAT workspace creation: reason=workspacesAlreadyExist");
-            ensureDefaultAdminMembershipIfPresent();
+            writes.executeWithoutResult(status -> ensureDefaultAdminMembershipIfPresent());
             return;
         }
 
@@ -144,61 +151,69 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
         }
         String token = Objects.requireNonNull(config.token());
 
-        Long ownerUserId = syncGitHubUserForPAT(token, accountLogin);
-
-        String slug = workspaceSlugs.allocate(accountLogin, "github-pat-" + accountLogin);
-        String displayName = accountLogin;
-
-        Workspace workspace =
-                workspaceService.createWorkspace(slug, displayName, accountLogin, AccountType.ORG, ownerUserId);
-
-        workspace.setRepositorySelection(RepositorySelection.SELECTED);
-        Workspace savedWorkspace = workspaceRepository.save(workspace);
-
-        // Every PAT connection uses instance_key "pat"; the bearer credential is stored encrypted
-        // via the
-        // per-row AAD.
-        connectionService.provisionPatConnection(
-                savedWorkspace,
-                IntegrationKind.GITHUB,
-                "pat",
-                new ConnectionConfig.GitHubPatConfig(accountLogin, null, Set.of()),
-                token,
-                "bootstrap-pat-workspace-" + savedWorkspace.getId());
-
-        log.info("Created default PAT workspace: workspaceId={}", savedWorkspace.getId());
-
-        config.repositoriesToMonitor().stream()
+        Supplier<Long> owner = prepareGitHubUserForPAT(token, accountLogin);
+        List<RepositoryIdentity> repositories = config.repositoriesToMonitor().stream()
                 .map(repo -> repo == null ? null : repo.trim())
-                .filter(nameWithOwner -> !isBlank(nameWithOwner))
-                .forEach(nameWithOwner -> {
-                    RepositoryToMonitor monitor = new RepositoryToMonitor();
-                    var identity = identityLookups.stream()
-                            .filter(lookup -> lookup.kind() == IntegrationKind.GITHUB)
-                            .findFirst()
-                            .flatMap(lookup -> lookup.resolve(savedWorkspace.getId(), nameWithOwner))
-                            .filter(reported ->
-                                    reported.nativeId() > 0 && nameWithOwner.equalsIgnoreCase(reported.fullPath()))
-                            .orElseThrow(
-                                    () -> new IllegalStateException(
-                                            "We could not verify the GitHub repository ID. Check the repository name and token access."));
-                    monitor.setNameWithOwner(identity.fullPath());
-                    monitor.setNativeId(identity.nativeId());
-                    monitor.setWorkspace(savedWorkspace);
-                    repositoryToMonitorRepository.save(monitor);
-                    savedWorkspace.getRepositoriesToMonitor().add(monitor);
-                    log.info("Queued repository for monitoring: repoName={}", nameWithOwner);
-                });
+                .filter(name -> !isBlank(name))
+                .map(
+                        name -> identityLookups.stream()
+                                .filter(lookup -> lookup.kind() == IntegrationKind.GITHUB)
+                                .findFirst()
+                                .flatMap(lookup -> lookup.resolve(token, name))
+                                .filter(identity ->
+                                        identity.nativeId() > 0 && name.equalsIgnoreCase(identity.fullPath()))
+                                .orElseThrow(
+                                        () -> new IllegalStateException(
+                                                "We could not verify the GitHub repository ID. Check the repository name and token access.")))
+                .toList();
+        writes.executeWithoutResult(status -> {
+            if (workspaceRepository.count() > 0) {
+                ensureDefaultAdminMembershipIfPresent();
+                return;
+            }
+            Long ownerUserId = owner.get();
 
-        workspaceRepository.save(savedWorkspace);
-        log.info("Completed PAT workspace provisioning: workspaceId={}", savedWorkspace.getId());
+            String slug = workspaceSlugs.allocate(accountLogin, "github-pat-" + accountLogin);
+            String displayName = accountLogin;
 
-        ensureAdminMembership(savedWorkspace);
+            Workspace workspace =
+                    workspaceService.createWorkspace(slug, displayName, accountLogin, AccountType.ORG, ownerUserId);
+
+            workspace.setRepositorySelection(RepositorySelection.SELECTED);
+            Workspace savedWorkspace = workspaceRepository.save(workspace);
+
+            // Every PAT connection uses instance_key "pat"; the bearer credential is stored encrypted
+            // via the
+            // per-row AAD.
+            connectionService.provisionPatConnection(
+                    savedWorkspace,
+                    IntegrationKind.GITHUB,
+                    "pat",
+                    new ConnectionConfig.GitHubPatConfig(accountLogin, null, Set.of()),
+                    token,
+                    "bootstrap-pat-workspace-" + savedWorkspace.getId());
+
+            log.info("Created default PAT workspace: workspaceId={}", savedWorkspace.getId());
+
+            for (var identity : repositories) {
+                RepositoryToMonitor monitor = new RepositoryToMonitor();
+                monitor.setNameWithOwner(identity.fullPath());
+                monitor.setNativeId(identity.nativeId());
+                monitor.setWorkspace(savedWorkspace);
+                repositoryToMonitorRepository.save(monitor);
+                savedWorkspace.getRepositoriesToMonitor().add(monitor);
+            }
+
+            workspaceRepository.save(savedWorkspace);
+            log.info("Completed PAT workspace provisioning: workspaceId={}", savedWorkspace.getId());
+
+            ensureAdminMembership(savedWorkspace);
+        });
     }
 
     @Override
-    @Transactional
     public void bootstrapDefaultGitLabPatWorkspace() {
+        requireNoTransaction();
         if (!workspaceProperties.initGitlabDefault()) {
             log.debug("Skipped default GitLab PAT workspace bootstrap: reason=bootstrapDisabled");
             return;
@@ -254,46 +269,35 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
                 .orElseThrow(
                         () -> new IllegalStateException("GitLab group verification is not available on this server"))
                 .resolveAccountId(token, serverUrl, groupPath);
-        Long ownerUserId = syncGitLabUserForPAT(token, serverUrl, groupPath);
+        Supplier<Long> owner = prepareGitLabUserForPAT(token, serverUrl, groupPath);
+        writes.executeWithoutResult(status -> {
+            if (!workspaceRepository.findAllByAccountLoginIgnoreCase(groupPath).isEmpty()) return;
+            Long ownerUserId = owner.get();
 
-        String slug = workspaceSlugs.allocate(groupPath, "gitlab-pat-" + serverUrl + "-" + groupPath);
-        String displayName = groupPath.contains("/") ? groupPath.substring(groupPath.lastIndexOf('/') + 1) : groupPath;
+            String slug = workspaceSlugs.allocate(groupPath, "gitlab-pat-" + serverUrl + "-" + groupPath);
+            String displayName =
+                    groupPath.contains("/") ? groupPath.substring(groupPath.lastIndexOf('/') + 1) : groupPath;
 
-        Workspace workspace =
-                workspaceService.createWorkspace(slug, displayName, groupPath, AccountType.ORG, ownerUserId);
+            Workspace workspace =
+                    workspaceService.createWorkspace(slug, displayName, groupPath, AccountType.ORG, ownerUserId);
 
-        workspace.setRepositorySelection(RepositorySelection.ALL);
-        Workspace savedWorkspace = workspaceRepository.save(workspace);
+            workspace.setRepositorySelection(RepositorySelection.ALL);
+            Workspace savedWorkspace = workspaceRepository.save(workspace);
 
-        // The workspace owns the connection; the instance URL distinguishes its provider origin.
-        String instanceKey = serverUrl;
-        connectionService.provisionPatConnection(
-                savedWorkspace,
-                IntegrationKind.GITLAB,
-                instanceKey,
-                new ConnectionConfig.GitLabConfig(serverUrl, groupId, /* gitlabWebhookId */ null, Set.of(), null),
-                token,
-                "bootstrap-gitlab-pat-workspace-" + savedWorkspace.getId());
+            // The workspace owns the connection; the instance URL distinguishes its provider origin.
+            String instanceKey = serverUrl;
+            connectionService.provisionPatConnection(
+                    savedWorkspace,
+                    IntegrationKind.GITLAB,
+                    instanceKey,
+                    new ConnectionConfig.GitLabConfig(serverUrl, groupId, /* gitlabWebhookId */ null, Set.of(), null),
+                    token,
+                    "bootstrap-gitlab-pat-workspace-" + savedWorkspace.getId());
 
-        log.info("Created default GitLab PAT workspace: workspaceId={}", savedWorkspace.getId());
+            log.info("Created default GitLab PAT workspace: workspaceId={}", savedWorkspace.getId());
 
-        ensureAdminMembership(savedWorkspace);
-    }
-
-    /**
-     * Resolves or creates a git provider {@link User} for a GitLab PAT workspace owner — the entry
-     * point for user-initiated GitLab workspace creation via the REST API. Validates the PAT
-     * against the GitLab API and upserts the user record so workspace ownership can be assigned
-     * immediately.
-     *
-     * @param serverUrl the GitLab server URL (may be null to use the default)
-     * @return the database ID of the resolved or created User
-     * @throws IllegalStateException if the token cannot be validated against GitLab
-     */
-    @Transactional
-    public Long resolveOrCreateGitLabUser(String patToken, String serverUrl, String accountLogin) {
-        String resolvedServerUrl = resolveGitLabServerUrl(serverUrl);
-        return syncGitLabUserForPAT(patToken, resolvedServerUrl, accountLogin);
+            ensureAdminMembership(savedWorkspace);
+        });
     }
 
     private String resolveGitLabServerUrl(@Nullable String configServerUrl) {
@@ -315,14 +319,14 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
                         + " The default server URL is not available."));
     }
 
-    private Long syncGitLabUserForPAT(String patToken, String serverUrl, String groupPath) {
+    private Supplier<Long> prepareGitLabUserForPAT(String patToken, String serverUrl, String groupPath) {
         Long providerId =
                 identityProviders.findId(IdentityProviderType.GITLAB, serverUrl).orElse(null);
 
         if (providerId != null) {
             Optional<User> existing = userRepository.findByLoginAndProviderId(groupPath, providerId);
             if (existing.isPresent()) {
-                return existing.get().getId();
+                return existingOwner(groupPath, providerId, existing.get().getId());
             }
         }
 
@@ -347,13 +351,14 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
         }
 
         if (userInfo != null && userInfo.id() != null) {
-            Boolean bot = userInfo.bot();
-            return upsertGitLabUser(
-                    userInfo.id(),
-                    userInfo.username() != null ? userInfo.username() : groupPath,
-                    userInfo.name(),
-                    userInfo.avatarUrl(),
-                    userInfo.webUrl(),
+            var user = userInfo;
+            Boolean bot = user.bot();
+            return () -> upsertGitLabUser(
+                    user.id(),
+                    user.username() != null ? user.username() : groupPath,
+                    user.name(),
+                    user.avatarUrl(),
+                    user.webUrl(),
                     serverUrl,
                     // GitLab says whether the token's owner is a bot, as it is for an access
                     // token's user.
@@ -374,7 +379,7 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
                     "Failed to validate GitLab token against group '" + groupPath + "' at " + serverUrl);
         }
 
-        return upsertGitLabUser(
+        return () -> upsertGitLabUser(
                 groupInfo.id(),
                 groupPath,
                 groupInfo.name() != null ? groupInfo.name() : groupPath,
@@ -468,14 +473,14 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
         return value == null || value.isBlank();
     }
 
-    private Long syncGitHubUserForPAT(String patToken, String accountLogin) {
+    private Supplier<Long> prepareGitHubUserForPAT(String patToken, String accountLogin) {
         Long providerId = identityProviders
                 .findId(IdentityProviderType.GITHUB, "https://github.com")
                 .orElseThrow(() -> new IllegalStateException("IdentityProvider for GitHub not found"));
 
         Optional<User> existing = userRepository.findByLoginAndProviderId(accountLogin, providerId);
         if (existing.isPresent()) {
-            return existing.get().getId();
+            return existingOwner(accountLogin, providerId, existing.get().getId());
         }
 
         GitHubAuthenticatedUserDTO userInfo = webClient
@@ -490,23 +495,39 @@ public class WorkspaceProvisioningService implements WorkspaceProvisioning {
             throw new IllegalStateException("Failed to fetch GitHub user info for login '" + accountLogin + "'");
         }
 
+        long userId = Objects.requireNonNull(userInfo.id());
         String login = userInfo.login() != null ? userInfo.login() : accountLogin;
         String name = userInfo.name() != null ? userInfo.name() : accountLogin;
         String avatar = userInfo.avatarUrl() != null ? userInfo.avatarUrl() : "";
         String htmlUrl = userInfo.htmlUrl() != null ? userInfo.htmlUrl() : "";
 
-        // Three-step upsert (lock, free conflicts, insert) avoids uk_user_login_lower
-        // violations under concurrency.
-        userRepository.acquireLoginLock(login, providerId);
-        userRepository.freeLoginConflicts(login, userInfo.id(), providerId);
-        userRepository.upsertUser(
-                userInfo.id(), providerId, login, name, avatar, htmlUrl, User.Type.USER.name(), null, null, null);
-        log.info("Upserted user for PAT workspace bootstrap: nativeId={}", userInfo.id());
-        // Retrieve the JPA-managed entity to get the auto-generated PK (provider-scoped)
-        return userRepository
+        return () -> {
+            // Three-step upsert (lock, free conflicts, insert) avoids uk_user_login_lower
+            // violations under concurrency.
+            userRepository.acquireLoginLock(login, providerId);
+            userRepository.freeLoginConflicts(login, userId, providerId);
+            userRepository.upsertUser(
+                    userId, providerId, login, name, avatar, htmlUrl, User.Type.USER.name(), null, null, null);
+            log.info("Upserted user for PAT workspace bootstrap: nativeId={}", userInfo.id());
+            // Retrieve the JPA-managed entity to get the auto-generated PK (provider-scoped)
+            return userRepository
+                    .findByLoginAndProviderId(login, providerId)
+                    .map(User::getId)
+                    .orElseThrow(() -> new IllegalStateException("User not found after upsert: login=" + login));
+        };
+    }
+
+    private Supplier<Long> existingOwner(String login, long providerId, long userId) {
+        return () -> userRepository
                 .findByLoginAndProviderId(login, providerId)
+                .filter(user -> Objects.equals(user.getId(), userId))
                 .map(User::getId)
-                .orElseThrow(() -> new IllegalStateException("User not found after upsert: login=" + login));
+                .orElseThrow(() -> new IllegalStateException("The bootstrap owner changed during preparation"));
+    }
+
+    private static void requireNoTransaction() {
+        if (TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("Workspace bootstrap cannot hold a transaction across provider reads");
     }
 
     private record GitLabTokenUserResponse(

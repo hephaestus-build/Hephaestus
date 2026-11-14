@@ -6,6 +6,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -106,5 +107,19 @@ public class ConnectionCommands {
                 detail);
         audit.setActorAccountId(actorAccountId);
         auditRepository.save(audit);
+    }
+
+    /** Records a provider outcome that no administrator caused, in the transaction that decided it. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordSystemEvent(Connection connection, String eventType, String detail) {
+        auditRepository.save(new ConnectionAudit(
+                connection,
+                eventType,
+                connection.getState(),
+                connection.getState(),
+                "SYSTEM",
+                null,
+                UUID.randomUUID().toString(),
+                detail));
     }
 }

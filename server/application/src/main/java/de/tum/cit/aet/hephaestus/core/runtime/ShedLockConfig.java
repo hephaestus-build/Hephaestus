@@ -1,9 +1,11 @@
 package de.tum.cit.aet.hephaestus.core.runtime;
 
+import java.util.UUID;
 import javax.sql.DataSource;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.provider.jdbctemplate.JdbcTemplateLockProvider;
 import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
+import net.javacrumbs.shedlock.support.Utils;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -33,9 +35,13 @@ public class ShedLockConfig {
 
     @Bean
     public LockProvider lockProvider(DataSource dataSource) {
-        return new JdbcTemplateLockProvider(JdbcTemplateLockProvider.Configuration.builder()
-                .withJdbcTemplate(new JdbcTemplate(dataSource))
-                .usingDbTime()
-                .build());
+        var jdbc = new JdbcTemplate(dataSource);
+        // Unlock matches locked_by. An expired acquisition must not release its successor on the same server.
+        return configuration -> new JdbcTemplateLockProvider(JdbcTemplateLockProvider.Configuration.builder()
+                        .withJdbcTemplate(jdbc)
+                        .usingDbTime()
+                        .withLockedByValue(Utils.getHostname() + "/" + UUID.randomUUID())
+                        .build())
+                .lock(configuration);
     }
 }

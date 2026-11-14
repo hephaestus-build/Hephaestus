@@ -45,4 +45,25 @@ class SchedulerLockFixtureIntegrationTest extends BaseIntegrationTest {
             jdbc.update("DELETE FROM shedlock WHERE name = ?", name);
         }
     }
+
+    @Test
+    void shouldKeepTheSuccessorsLeaseWhenAnExpiredAcquisitionUnlocksOnTheSameServer() {
+        String name = "expired-owner-" + UUID.randomUUID();
+        var configuration = new LockConfiguration(Instant.now(), name, Duration.ofMinutes(1), Duration.ZERO);
+        var first = locks.lock(configuration).orElseThrow();
+        jdbc.update(
+                "UPDATE shedlock SET lock_until = timezone('utc', CURRENT_TIMESTAMP) - INTERVAL '1 second' WHERE name = ?",
+                name);
+        var next = locks.lock(configuration).orElseThrow();
+        try {
+            String owner = jdbc.queryForObject("SELECT locked_by FROM shedlock WHERE name = ?", String.class, name);
+            first.unlock();
+            assertThat(locks.lock(configuration)).isEmpty();
+            assertThat(jdbc.queryForObject("SELECT locked_by FROM shedlock WHERE name = ?", String.class, name))
+                    .isEqualTo(owner);
+        } finally {
+            next.unlock();
+            jdbc.update("DELETE FROM shedlock WHERE name = ?", name);
+        }
+    }
 }

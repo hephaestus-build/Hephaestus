@@ -1,38 +1,53 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitLabConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitLabTokenMetadata;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.CredentialFence;
 import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionCredentialsReplacedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenRotationClient;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenRotationClient.Credentials;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenRotationClient.RotatedToken;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenRotationClient.TokenInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Objects;
-import lombok.RequiredArgsConstructor;
+import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.core.LockConfiguration;
+import net.javacrumbs.shedlock.core.LockProvider;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionalEventListener;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
-/** Inspection and irreversible rotation share the connection lifecycle lock with replacement. */
+/** Token HTTP calls run without a database transaction; a logical lease serializes scheduler and initialization checks. */
 @Service
+@ConditionalOnServerRole
 @ConditionalOnProperty(name = "hephaestus.integration.gitlab.enabled", havingValue = "true")
-@RequiredArgsConstructor
 @Slf4j
 public class GitLabTokenLifecycleService {
+    // Two 15 s HTTP calls, pool acquisition and short writes fit below this lease. A late answer is fenced out.
+    static final Duration CHECK_LEASE = Duration.ofMinutes(5);
     private final ConnectionService connections;
     private final ConnectionCommands commands;
     private final GitLabTokenRotationClient rotationClient;
@@ -40,87 +55,217 @@ public class GitLabTokenLifecycleService {
     private final GitLabCredentialHealth health;
     private final WebhookProperties properties;
     private final Clock clock;
+    private final LockProvider leases;
+    private final TransactionTemplate reads;
+    private final TransactionTemplate writes;
 
     @PersistenceContext
     private @Nullable EntityManager entityManager;
 
-    @Transactional
+    public GitLabTokenLifecycleService(
+            ConnectionService connections,
+            ConnectionCommands commands,
+            GitLabTokenRotationClient rotationClient,
+            GitLabTokenService tokenService,
+            GitLabCredentialHealth health,
+            WebhookProperties properties,
+            Clock clock,
+            LockProvider leases,
+            PlatformTransactionManager transactions) {
+        this.connections = connections;
+        this.commands = commands;
+        this.rotationClient = rotationClient;
+        this.tokenService = tokenService;
+        this.health = health;
+        this.properties = properties;
+        this.clock = clock;
+        this.leases = leases;
+        this.reads = new TransactionTemplate(transactions);
+        this.reads.setReadOnly(true);
+        this.reads.setTimeout(30);
+        this.writes = new TransactionTemplate(transactions);
+        this.writes.setTimeout(30);
+    }
+
     public void check(long workspaceId) {
-        var client = rotationClient;
+        if (TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("GitLab token inspection requires no active database transaction");
+        Instant started = clock.instant();
+        var lease =
+                leases.lock(new LockConfiguration(started, "gitlab-token-" + workspaceId, CHECK_LEASE, Duration.ZERO));
+        if (lease.isEmpty()) return;
+        try {
+            var snapshot = reads.execute(status -> snapshot(workspaceId, started.plus(CHECK_LEASE)));
+            if (snapshot != null) inspect(snapshot);
+        } finally {
+            lease.get().unlock();
+        }
+    }
+
+    private @Nullable Check snapshot(long workspaceId, Instant validUntil) {
         var candidate = connections.findActive(workspaceId, IntegrationKind.GITLAB);
-        if (candidate.isEmpty()) return;
+        if (candidate.isEmpty() || !(candidate.get().getConfig() instanceof GitLabConfig config)) return null;
         var connection = candidate.get();
-        commands.holdLifecycleLock(workspaceId, connection.getId());
-        Objects.requireNonNull(entityManager).refresh(connection);
-        if (connection.getState() != IntegrationState.ACTIVE
-                || !(connection.getConfig() instanceof GitLabConfig config)) return;
-        var bearer = connections.findActiveBearerToken(workspaceId, IntegrationKind.GITLAB);
-        if (bearer.isEmpty()) return;
-        String token = bearer.get().token();
+        var token = connections.findBearerToken(workspaceId, connection.getId());
+        if (token.isEmpty()) return null;
+        return new Check(
+                new Credentials(
+                        workspaceId,
+                        tokenService.serverUrlOf(config.serverUrl()),
+                        token.get().token()),
+                new CredentialFence(
+                        connection.getId(),
+                        connection.getCredentialsGeneration(),
+                        connection.getLifecycleGeneration(),
+                        validUntil),
+                config);
+    }
+
+    private void inspect(Check check) {
+        long workspaceId = check.credentials().workspaceId();
         LocalDate today = LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC);
         int threshold = properties.tokenRotation().thresholdDays();
-        boolean expiringObserved = config.tokenMetadata() != null
-                && config.tokenMetadata().expiresAt() != null
-                && !config.tokenMetadata().expiresAt().isAfter(today.plusDays(Math.max(0, threshold)));
-        boolean rotationAttempted = false;
+        boolean expiring = check.config().tokenMetadata() != null
+                && isExpiring(check.config().tokenMetadata().expiresAt(), today, threshold);
+        boolean attempted = false;
+        TokenInfo inspected = null;
+        RotatedToken completed = null;
         try {
-            var info = client.getTokenInfo(workspaceId);
-            connection.setConfig(config.withTokenMetadata(new GitLabTokenMetadata(info.expiresAt(), clock.instant())));
-            health.observe(workspaceId, token, false);
-            boolean expiring =
-                    info.expiresAt() != null && !info.expiresAt().isAfter(today.plusDays(Math.max(0, threshold)));
-            expiringObserved = expiring;
-            if (!expiring) {
-                health.expiring(workspaceId, false);
-                return;
+            var info = rotationClient.getTokenInfo(check.credentials());
+            inspected = info;
+            expiring = isExpiring(info.expiresAt(), today, threshold);
+            RotatedToken rotated = null;
+            if (expiring && threshold > 0) {
+                // No retry: a lost response may have revoked the old token. Re-rotation revokes its whole family.
+                if (!Boolean.TRUE.equals(
+                        reads.execute(status -> current(check, false).isPresent()))) return;
+                attempted = true;
+                rotated = rotationClient.rotateToken(
+                        check.credentials(),
+                        today.plusDays(properties.tokenRotation().validityDays()));
             }
-            if (threshold <= 0) {
-                health.expiring(workspaceId, true);
-                return;
-            }
-            // No retries: a lost response may already have revoked the old token. Keep the row locked
-            // across this bounded control-plane call so another rotation or replacement cannot race it.
-            rotationAttempted = true;
-            var rotated = client.rotateToken(
-                    workspaceId, today.plusDays(properties.tokenRotation().validityDays()));
-            boolean stored = connections
+            completed = rotated;
+            var result = rotated;
+            boolean expiry = expiring;
+            writes.executeWithoutResult(status -> finish(check, info, result, expiry));
+        } catch (RuntimeException failure) {
+            boolean rotationAttempted = attempted;
+            boolean expiry = expiring;
+            var info = inspected;
+            var result = completed;
+            Signal signal = failure instanceof WebClientResponseException response
+                            && response.getStatusCode().value() == 401
+                    ? Signal.REFUSED
+                    : rotationAttempted || expiry ? Signal.EXPIRING : Signal.NONE;
+            writes.executeWithoutResult(status -> recordFailure(check, info, result, rotationAttempted, signal));
+            // Provider responses and exception messages can contain a token.
+            log.warn(
+                    "GitLab token inspection or rotation failed: workspaceId={}, rotationAttempted={}",
+                    workspaceId,
+                    attempted);
+        }
+    }
+
+    private void finish(Check check, TokenInfo info, @Nullable RotatedToken rotated, boolean expiring) {
+        long workspaceId = check.credentials().workspaceId();
+        Optional<Connection> admitted;
+        if (rotated != null) {
+            // The fence rejects a result after the lease. The credential owner coordinates provider identities before
+            // taking its lifecycle lock.
+            admitted = connections
                     .rotateBearerToken(
                             workspaceId,
                             IntegrationKind.GITLAB,
                             new BearerToken(
                                     rotated.token(),
-                                    rotated.expiresAt().atStartOfDay().toInstant(ZoneOffset.UTC)))
-                    .isPresent();
-            if (!stored) {
-                throw new IllegalStateException("No active GitLab connection to store the rotated token on");
+                                    rotated.expiresAt().atStartOfDay().toInstant(ZoneOffset.UTC)),
+                            check.fence())
+                    .map(replacement -> replacement.connection());
+        } else admitted = current(check, true);
+        if (admitted.isEmpty()) {
+            if (rotated != null) {
+                recordFailure(check, info, rotated, true, Signal.EXPIRING);
+                log.warn("Discarded a stale GitLab rotation result: workspaceId={}", workspaceId);
             }
-            var currentConfig = (GitLabConfig) connection.getConfig();
-            connection.setConfig(
-                    currentConfig.withTokenMetadata(new GitLabTokenMetadata(rotated.expiresAt(), clock.instant())));
-            health.expiring(workspaceId, false);
-            log.info("Rotated GitLab token: workspaceId={}, expiresAt={}", workspaceId, rotated.expiresAt());
-        } catch (WebClientResponseException e) {
-            if (e.getStatusCode().value() == 401) {
-                health.observe(workspaceId, token, true);
-            } else if (rotationAttempted || expiringObserved) {
-                health.expiring(workspaceId, true);
-            }
-            log.warn(
-                    "GitLab token inspection or rotation failed: workspaceId={}, status={}",
-                    workspaceId,
-                    e.getStatusCode().value());
-        } catch (RuntimeException e) {
-            if (rotationAttempted || expiringObserved) health.expiring(workspaceId, true);
-            // Provider responses and exception messages can contain the rotated token.
-            log.warn("GitLab token inspection or rotation failed: workspaceId={}", workspaceId);
+            return;
         }
+        var connection = admitted.get();
+        var config = (GitLabConfig) connection.getConfig();
+        connection.setConfig(config.withTokenMetadata(
+                new GitLabTokenMetadata(rotated == null ? info.expiresAt() : rotated.expiresAt(), clock.instant())));
+        if (rotated == null) health.observe(workspaceId, check.credentials().token(), false);
+        health.expiring(workspaceId, rotated == null && expiring);
+    }
+
+    private void recordFailure(
+            Check check, @Nullable TokenInfo info, @Nullable RotatedToken completed, boolean attempted, Signal signal) {
+        held(check).ifPresent(connection -> {
+            long workspaceId = check.credentials().workspaceId();
+            // An after-commit listener can fail after the returned credential is already durable.
+            if (completed != null
+                    && connections
+                            .findBearerToken(workspaceId, connection.getId())
+                            .map(token -> token.token().equals(completed.token()))
+                            .orElse(false)) return;
+            if (attempted)
+                commands.recordSystemEvent(
+                        connection,
+                        "GITLAB_TOKEN_ROTATION_UNCERTAIN",
+                        "Rotation was attempted but its result could not be stored. Verify the token before rotating it again.");
+            // Audit a discarded result on its original row, but never mark a replacement credential as broken.
+            if (connection.getState() != IntegrationState.ACTIVE
+                    || connection.getCredentialsGeneration() != check.fence().credentialsGeneration()) return;
+            if (info != null
+                    && connection.getLifecycleGeneration() == check.fence().lifecycleGeneration()
+                    && connection.getConfig() instanceof GitLabConfig config)
+                connection.setConfig(
+                        config.withTokenMetadata(new GitLabTokenMetadata(info.expiresAt(), clock.instant())));
+            switch (signal) {
+                case REFUSED -> health.observe(workspaceId, check.credentials().token(), true);
+                case EXPIRING -> health.expiring(workspaceId, true);
+                case NONE -> {}
+            }
+        });
+    }
+
+    private Optional<Connection> held(Check check) {
+        long workspaceId = check.credentials().workspaceId();
+        commands.holdLifecycleLock(workspaceId, check.fence().connectionId());
+        return readConnection(check);
+    }
+
+    private Optional<Connection> readConnection(Check check) {
+        return connections
+                .findInWorkspace(
+                        check.credentials().workspaceId(), check.fence().connectionId())
+                .map(connection -> {
+                    Objects.requireNonNull(entityManager).refresh(connection);
+                    return connection;
+                });
+    }
+
+    private Optional<Connection> current(Check check, boolean lock) {
+        return (lock ? held(check) : readConnection(check))
+                .filter(connection -> connection.getState() == IntegrationState.ACTIVE
+                        && check.fence().matches(connection, clock.instant()));
+    }
+
+    private static boolean isExpiring(@Nullable LocalDate expiry, LocalDate today, int threshold) {
+        return expiry != null && !expiry.isAfter(today.plusDays(Math.max(0, threshold)));
+    }
+
+    private record Check(Credentials credentials, CredentialFence fence, GitLabConfig config) {}
+
+    /** The credential health a failed check reports for the token it inspected. */
+    private enum Signal {
+        REFUSED,
+        EXPIRING,
+        NONE
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @TransactionalEventListener
     public void onReplaced(ConnectionCredentialsReplacedEvent event) {
-        if (event.kind() == IntegrationKind.GITLAB) {
-            tokenService.invalidateCache(event.workspaceId());
-        }
+        if (event.kind() == IntegrationKind.GITLAB) tokenService.invalidateCache(event.workspaceId());
     }
 }

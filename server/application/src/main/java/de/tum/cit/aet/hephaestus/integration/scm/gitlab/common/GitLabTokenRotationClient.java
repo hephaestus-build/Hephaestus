@@ -13,6 +13,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.reactive.function.client.WebClient;
 
 /**
@@ -35,37 +36,37 @@ public class GitLabTokenRotationClient {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabTokenRotationClient.class);
 
-    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
+    public static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
     private static final String SELF_TOKEN_ENDPOINT = "/api/v4/personal_access_tokens/self";
     private static final String SELF_TOKEN_ROTATE_ENDPOINT = "/api/v4/personal_access_tokens/self/rotate";
 
-    private final GitLabTokenService tokenService;
     private final WebClient webClient;
 
-    public GitLabTokenRotationClient(GitLabTokenService tokenService, GitLabWebClients webClientBuilder) {
-        this.tokenService = tokenService;
+    public GitLabTokenRotationClient(GitLabWebClients webClientBuilder) {
         this.webClient = webClientBuilder.builder().build();
     }
 
-    private record ScopeCredentials(String serverUrl, String token) {
+    /** Frozen together from the connection that authorized this check. Never resolve a newer token between calls. */
+    public record Credentials(long workspaceId, String serverUrl, String token) {
         @Override
         public String toString() {
-            return "ScopeCredentials[serverUrl=" + serverUrl + "]";
+            return "Credentials[workspaceId=" + workspaceId + "]";
         }
     }
 
-    private ScopeCredentials resolveCredentials(Long scopeId) {
-        return new ScopeCredentials(tokenService.resolveServerUrl(scopeId), tokenService.getAccessToken(scopeId));
+    private static void requireNoTransaction() {
+        if (TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("GitLab token HTTP calls require no active database transaction");
     }
 
     /**
      * Retrieves information about the PAT used for the given scope.
      *
-     * @param scopeId the workspace/scope ID
+     * @param creds the frozen connection credential
      * @return token info including expiry date
      */
-    public TokenInfo getTokenInfo(Long scopeId) {
-        ScopeCredentials creds = resolveCredentials(scopeId);
+    public TokenInfo getTokenInfo(Credentials creds) {
+        requireNoTransaction();
 
         Map<String, Object> response = webClient
                 .get()
@@ -82,12 +83,13 @@ public class GitLabTokenRotationClient {
         Number idValue = (Number) Objects.requireNonNull(response).get("id");
         if (idValue == null) {
             throw new IllegalStateException(
-                    "GitLab token introspection response missing 'id' field: scopeId=" + scopeId);
+                    "GitLab token introspection response missing 'id' field: scopeId=" + creds.workspaceId());
         }
         long id = idValue.longValue();
         String name = (String) Objects.requireNonNull(response).get("name");
         if (!response.containsKey("expires_at")) {
-            throw new IllegalStateException("GitLab token introspection did not report expiry: scopeId=" + scopeId);
+            throw new IllegalStateException(
+                    "GitLab token introspection did not report expiry: scopeId=" + creds.workspaceId());
         }
         String expiresAtStr = (String) Objects.requireNonNull(response).get("expires_at");
         LocalDate expiresAt = expiresAtStr != null ? LocalDate.parse(expiresAtStr) : null;
@@ -101,12 +103,12 @@ public class GitLabTokenRotationClient {
      * <p><b>WARNING:</b> The old token is <em>immediately</em> revoked. The caller
      * must persist the returned token value before making any further API calls.
      *
-     * @param scopeId   the workspace/scope ID
+     * @param creds     the frozen connection credential
      * @param expiresAt new expiry date for the rotated token
      * @return the new token value and expiry date
      */
-    public RotatedToken rotateToken(Long scopeId, LocalDate expiresAt) {
-        ScopeCredentials creds = resolveCredentials(scopeId);
+    public RotatedToken rotateToken(Credentials creds, LocalDate expiresAt) {
+        requireNoTransaction();
 
         Map<String, Object> response = webClient
                 .post()
@@ -125,12 +127,12 @@ public class GitLabTokenRotationClient {
         if (newToken == null || newToken.isBlank()) {
             throw new IllegalStateException(
                     "GitLab rotation response missing 'token' field. Old token is revoked. Manual intervention required: scopeId="
-                            + scopeId);
+                            + creds.workspaceId());
         }
         String newExpiresAtStr = (String) Objects.requireNonNull(response).get("expires_at");
         LocalDate newExpiresAt = newExpiresAtStr != null ? LocalDate.parse(newExpiresAtStr) : expiresAt;
 
-        log.info("Rotated GitLab PAT: scopeId={}, newExpiresAt={}", scopeId, newExpiresAt);
+        log.info("Rotated GitLab PAT: scopeId={}, newExpiresAt={}", creds.workspaceId(), newExpiresAt);
         return new RotatedToken(newToken, newExpiresAt);
     }
 

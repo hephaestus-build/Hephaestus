@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.workspace;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -60,12 +61,13 @@ class WorkspaceSettingsServiceTest extends BaseUnitTest {
         connection.setCredentials(new BearerToken("ghp-old", null), new CredentialBundleConverter(KEY, false));
         when(workspaceRepository.findById(7L)).thenReturn(Optional.of(workspace));
         when(connectionService.findActiveProviderKind(7L)).thenReturn(Optional.of(IntegrationKind.GITHUB));
-        when(connectionService.rotateBearerToken(eq(7L), eq(IntegrationKind.GITHUB), any(BearerToken.class)))
+        when(connectionService.rotateBearerToken(eq(7L), eq(IntegrationKind.GITHUB), any(BearerToken.class), isNull()))
                 .thenReturn(Optional.of(new BearerTokenReplacement(connection, true)));
 
         service.updateToken(7L, "ghp-new");
 
-        verify(connectionService).rotateBearerToken(eq(7L), eq(IntegrationKind.GITHUB), any(BearerToken.class));
+        verify(connectionService)
+                .rotateBearerToken(eq(7L), eq(IntegrationKind.GITHUB), any(BearerToken.class), isNull());
         // The audit says what the write reported, not what an earlier look at the row suggested.
         ArgumentCaptor<ConfigAuditEntry> audited = ArgumentCaptor.forClass(ConfigAuditEntry.class);
         verify(configAudit).record(audited.capture());

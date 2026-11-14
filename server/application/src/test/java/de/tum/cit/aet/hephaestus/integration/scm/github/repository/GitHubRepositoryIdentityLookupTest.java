@@ -90,6 +90,18 @@ class GitHubRepositoryIdentityLookupTest extends BaseUnitTest {
         verify(clients, never()).forScope(anyLong());
     }
 
+    @Test
+    void shouldVerifyABootstrapRepositoryWithItsFrozenTokenBeforeAWorkspaceExists() {
+        var lookup = lookup(null, """
+                {"data":{"repository":{"databaseId":9101,"nameWithOwner":"shared-org/private-repository"}}}
+                """);
+        assertThat(lookup.resolve(TOKEN, "shared-org/private-repository"))
+                .contains(new RepositoryIdentity(9101L, "shared-org/private-repository"));
+        assertThat(requests).hasValue(1);
+        verify(connections, never()).findActive(anyLong(), any());
+        verify(credentials, never()).credentialsOf(any());
+    }
+
     @ParameterizedTest
     @ValueSource(
             strings = {

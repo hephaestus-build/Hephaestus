@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SelectedRepositoryVerifier;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
@@ -53,6 +54,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.env.MockEnvironment;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -124,7 +129,8 @@ class WorkspaceProvisioningServiceTest {
                         new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())),
                 WebClient.builder(),
                 List.of(),
-                List.of());
+                List.of(),
+                new Transactions());
     }
 
     @Test
@@ -273,7 +279,8 @@ class WorkspaceProvisioningServiceTest {
                         new MockEnvironment(), WebClient.builder(), new ScmEgressProperties(List.of())),
                 WebClient.builder(),
                 List.of(),
-                List.of());
+                List.of(),
+                new Transactions());
         when(workspaceRepository.findAllByAccountLoginIgnoreCase("hephaestustest"))
                 .thenReturn(List.of(gitlabWorkspace, githubDuplicate));
         when(connectionService.findActive(10L, IntegrationKind.GITLAB)).thenReturn(Optional.of(mock(Connection.class)));
@@ -295,7 +302,9 @@ class WorkspaceProvisioningServiceTest {
             MockEnvironment environment = new MockEnvironment().withProperty("hephaestus.e2e.scm-origin", origin);
             environment.setActiveProfiles("e2e");
             WorkspaceProvisioningService service = serviceWith(
-                    new ScmServerEndpointPolicy(environment, WebClient.builder(), new ScmEgressProperties(List.of())));
+                    new ScmServerEndpointPolicy(environment, WebClient.builder(), new ScmEgressProperties(List.of())),
+                    origin,
+                    "course");
             gitlab.enqueue(new MockResponse.Builder()
                     .addHeader("Content-Type", "application/json")
                     .body("{\"id\":90001,\"username\":\"ab12cde\",\"name\":\"Student\""
@@ -308,8 +317,9 @@ class WorkspaceProvisioningServiceTest {
             owner.setId(7L);
             when(userRepository.findByLoginAndProviderId("ab12cde", 5L)).thenReturn(Optional.of(owner));
 
-            assertThat(service.resolveOrCreateGitLabUser("pat", origin, "course"))
-                    .isEqualTo(7L);
+            service.bootstrapDefaultGitLabPatWorkspace();
+            verify(workspaceService)
+                    .createWorkspace(anyString(), anyString(), eq("course"), eq(AccountType.ORG), eq(7L));
 
             verify(userRepository)
                     .upsertUser(
@@ -332,6 +342,8 @@ class WorkspaceProvisioningServiceTest {
         ScmServerEndpointPolicy endpoints = mock(ScmServerEndpointPolicy.class);
         WebClient client = WebClient.builder()
                 .exchangeFunction(request -> {
+                    assertThat(TransactionSynchronizationManager.isActualTransactionActive())
+                            .isFalse();
                     if (request.url().getPath().endsWith("/user")) {
                         return Mono.just(
                                 ClientResponse.create(HttpStatus.UNAUTHORIZED).build());
@@ -353,8 +365,9 @@ class WorkspaceProvisioningServiceTest {
                 .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(owner));
 
-        assertThat(serviceWith(endpoints).resolveOrCreateGitLabUser("token", origin, "test-group"))
-                .isEqualTo(7L);
+        serviceWith(endpoints, origin, "test-group").bootstrapDefaultGitLabPatWorkspace();
+        verify(workspaceService)
+                .createWorkspace(anyString(), anyString(), eq("test-group"), eq(AccountType.ORG), eq(7L));
 
         verify(userRepository)
                 .upsertUser(
@@ -370,9 +383,31 @@ class WorkspaceProvisioningServiceTest {
                         any());
     }
 
-    private WorkspaceProvisioningService serviceWith(ScmServerEndpointPolicy endpoints) {
+    private WorkspaceProvisioningService serviceWith(ScmServerEndpointPolicy endpoints, String origin, String group) {
+        var verifier = mock(SelectedRepositoryVerifier.class);
+        when(verifier.kind()).thenReturn(IntegrationKind.GITLAB);
+        when(verifier.resolveAccountId("token", origin, group)).thenAnswer(invocation -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive())
+                    .isFalse();
+            return 42L;
+        });
+        when(workspaceService.createWorkspace(anyString(), anyString(), eq(group), eq(AccountType.ORG), eq(7L)))
+                .thenAnswer(invocation -> {
+                    assertThat(TransactionSynchronizationManager.isActualTransactionActive())
+                            .isTrue();
+                    Workspace workspace = new Workspace();
+                    workspace.setId(91L);
+                    return workspace;
+                });
+        when(workspaceRepository.save(any(Workspace.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        var settings = new WorkspaceProperties(
+                false,
+                null,
+                true,
+                new WorkspaceProperties.GitLabDefaultProperties(group, "token", origin),
+                WorkspaceProperties.CreationPolicy.SELF_SERVICE);
         return new WorkspaceProvisioningService(
-                workspaceProperties,
+                settings,
                 workspaceRepository,
                 repositoryToMonitorRepository,
                 workspaceService,
@@ -386,7 +421,26 @@ class WorkspaceProvisioningServiceTest {
                 List.of(),
                 endpoints,
                 WebClient.builder(),
+                List.of(verifier),
                 List.of(),
-                List.of());
+                new Transactions());
+    }
+
+    private static class Transactions extends AbstractPlatformTransactionManager {
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        protected Object doGetTransaction() {
+            return new Object();
+        }
+
+        @Override
+        protected void doBegin(Object transaction, TransactionDefinition definition) {}
+
+        @Override
+        protected void doCommit(DefaultTransactionStatus status) {}
+
+        @Override
+        protected void doRollback(DefaultTransactionStatus status) {}
     }
 }

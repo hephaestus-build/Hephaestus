@@ -20,7 +20,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -35,9 +34,6 @@ import reactor.core.publisher.Mono;
 @Tag("unit")
 class GitLabTokenRotationClientTest extends BaseUnitTest {
 
-    @Mock
-    private GitLabTokenService tokenService;
-
     private WebClient mockWebClient;
     private GitLabTokenRotationClient rotationClient;
 
@@ -45,19 +41,16 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
     private static final String SERVER_URL = "https://gitlab.com";
     private static final String TOKEN = "glpat-test-token";
 
+    private static final GitLabTokenRotationClient.Credentials CREDENTIALS =
+            new GitLabTokenRotationClient.Credentials(SCOPE_ID, SERVER_URL, TOKEN);
+
     @BeforeEach
     void setUp() {
         mockWebClient = mock(WebClient.class);
         WebClient.Builder builder = mock(WebClient.Builder.class);
         when(builder.build()).thenReturn(mockWebClient);
 
-        rotationClient = new GitLabTokenRotationClient(tokenService, () -> builder);
-    }
-
-    /** Sets up token service mocks for REST API tests. */
-    private void stubTokenService() {
-        when(tokenService.resolveServerUrl(SCOPE_ID)).thenReturn(SERVER_URL);
-        when(tokenService.getAccessToken(SCOPE_ID)).thenReturn(TOKEN);
+        rotationClient = new GitLabTokenRotationClient(() -> builder);
     }
 
     @Nested
@@ -66,7 +59,6 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
         @Test
         @SuppressWarnings("unchecked")
         void shouldReturnTokenInfoWithExpiry() {
-            stubTokenService();
             RequestHeadersUriSpec<?> uriSpec = mock(RequestHeadersUriSpec.class);
             RequestHeadersSpec<?> headersSpec = mock(RequestHeadersSpec.class);
             ResponseSpec responseSpec = mock(ResponseSpec.class);
@@ -78,7 +70,7 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
             when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
                     .thenReturn(Mono.just(Map.of("id", 123, "name", "my-token", "expires_at", "2026-06-01")));
 
-            TokenInfo result = rotationClient.getTokenInfo(SCOPE_ID);
+            TokenInfo result = rotationClient.getTokenInfo(CREDENTIALS);
 
             assertThat(result.id()).isEqualTo(123L);
             assertThat(result.name()).isEqualTo("my-token");
@@ -88,7 +80,6 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
         @Test
         @SuppressWarnings("unchecked")
         void shouldHandleNullExpiry() {
-            stubTokenService();
             RequestHeadersUriSpec<?> uriSpec = mock(RequestHeadersUriSpec.class);
             RequestHeadersSpec<?> headersSpec = mock(RequestHeadersSpec.class);
             ResponseSpec responseSpec = mock(ResponseSpec.class);
@@ -106,7 +97,7 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
 
             when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class))).thenReturn(Mono.just(responseMap));
 
-            TokenInfo result = rotationClient.getTokenInfo(SCOPE_ID);
+            TokenInfo result = rotationClient.getTokenInfo(CREDENTIALS);
 
             assertThat(result.expiresAt()).isNull();
         }
@@ -114,7 +105,6 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
         @Test
         @SuppressWarnings("unchecked")
         void shouldThrowOn401() {
-            stubTokenService();
             RequestHeadersUriSpec<?> uriSpec = mock(RequestHeadersUriSpec.class);
             RequestHeadersSpec<?> headersSpec = mock(RequestHeadersSpec.class);
 
@@ -125,7 +115,7 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
                     .thenThrow(WebClientResponseException.create(
                             401, "Unauthorized", HttpHeaders.EMPTY, new byte[0], StandardCharsets.UTF_8));
 
-            assertThatThrownBy(() -> rotationClient.getTokenInfo(SCOPE_ID))
+            assertThatThrownBy(() -> rotationClient.getTokenInfo(CREDENTIALS))
                     .isInstanceOf(WebClientResponseException.class);
         }
     }
@@ -136,7 +126,6 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
         @Test
         @SuppressWarnings("unchecked")
         void shouldRotateToken() {
-            stubTokenService();
             RequestBodyUriSpec bodyUriSpec = mock(RequestBodyUriSpec.class);
             RequestBodySpec bodySpec = mock(RequestBodySpec.class);
             ResponseSpec responseSpec = mock(ResponseSpec.class);
@@ -149,7 +138,7 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
             when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
                     .thenReturn(Mono.just(Map.of("token", "glpat-new-rotated-token", "expires_at", "2026-09-01")));
 
-            RotatedToken result = rotationClient.rotateToken(SCOPE_ID, LocalDate.of(2026, 9, 1));
+            RotatedToken result = rotationClient.rotateToken(CREDENTIALS, LocalDate.of(2026, 9, 1));
 
             assertThat(result.token()).isEqualTo("glpat-new-rotated-token");
             assertThat(result.expiresAt()).isEqualTo(LocalDate.of(2026, 9, 1));
@@ -158,7 +147,6 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
         @Test
         @SuppressWarnings("unchecked")
         void shouldThrowWhenResponseMissingToken() {
-            stubTokenService();
             RequestBodyUriSpec bodyUriSpec = mock(RequestBodyUriSpec.class);
             RequestBodySpec bodySpec = mock(RequestBodySpec.class);
             ResponseSpec responseSpec = mock(ResponseSpec.class);
@@ -175,7 +163,7 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
 
             when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class))).thenReturn(Mono.just(responseMap));
 
-            assertThatThrownBy(() -> rotationClient.rotateToken(SCOPE_ID, LocalDate.of(2026, 9, 1)))
+            assertThatThrownBy(() -> rotationClient.rotateToken(CREDENTIALS, LocalDate.of(2026, 9, 1)))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("missing 'token' field");
         }
@@ -184,7 +172,6 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
         @DisplayName("should throw on 403 (insufficient scope)")
         @SuppressWarnings("unchecked")
         void shouldThrowOn403() {
-            stubTokenService();
             RequestBodyUriSpec bodyUriSpec = mock(RequestBodyUriSpec.class);
             RequestBodySpec bodySpec = mock(RequestBodySpec.class);
 
@@ -196,7 +183,7 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
                     .thenThrow(WebClientResponseException.create(
                             403, "Forbidden", HttpHeaders.EMPTY, new byte[0], StandardCharsets.UTF_8));
 
-            assertThatThrownBy(() -> rotationClient.rotateToken(SCOPE_ID, LocalDate.of(2026, 9, 1)))
+            assertThatThrownBy(() -> rotationClient.rotateToken(CREDENTIALS, LocalDate.of(2026, 9, 1)))
                     .isInstanceOf(WebClientResponseException.class);
         }
     }
