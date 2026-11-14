@@ -142,7 +142,7 @@
 		"de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingServletIntegrationTest": 3.1,
 		"de.tum.cit.aet.hephaestus.core.release.ReleaseAdminControllerIntegrationTest": 0.8,
 		"de.tum.cit.aet.hephaestus.core.release.ReleaseHistoryIntegrationTest": 0.3,
-		"de.tum.cit.aet.hephaestus.core.runtime.ConversationRedirectIntegrationTest": 2.2,
+		"de.tum.cit.aet.hephaestus.core.runtime.WebappServingIntegrationTest": 2.2,
 		"de.tum.cit.aet.hephaestus.core.runtime.RuntimeRoleContextIntegrationTest": 38.4,
 		"de.tum.cit.aet.hephaestus.core.runtime.ScheduledWorkAcrossReplicasIntegrationTest": 13.8,
 		"de.tum.cit.aet.hephaestus.core.runtime.SchedulerLockFixtureIntegrationTest": 0.2,

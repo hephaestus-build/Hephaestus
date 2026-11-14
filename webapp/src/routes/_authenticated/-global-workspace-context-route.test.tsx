@@ -78,7 +78,7 @@ function renderNavigation(initialEntry = "/w/beta/conversation") {
 	});
 	const workspace = createRoute({
 		getParentRoute: () => root,
-		path: "w/$workspaceSlug/mentor",
+		path: "w/$workspaceSlug/conversation",
 		component: () => null,
 	});
 	const workspaceHome = createRoute({

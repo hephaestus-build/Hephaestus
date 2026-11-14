@@ -22,7 +22,7 @@ import org.testcontainers.utility.MountableFile;
 
 /** Exercises the shipped serving configuration, before any SPA code can run. */
 @Tag("integration")
-class ConversationRedirectIntegrationTest {
+class WebappServingIntegrationTest {
     private static final Path WEBAPP = Path.of(System.getProperty("basedir", "."), "../../webapp");
     private static final HttpClient CLIENT = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER)
@@ -58,40 +58,6 @@ class ConversationRedirectIntegrationTest {
     @AfterAll
     static void stopServingBoundary() {
         if (nginx != null) nginx.close();
-    }
-
-    @ParameterizedTest
-    @CsvSource({
-        "/mentor,/conversation",
-        "/mentor/,/conversation",
-        "/w/acme/mentor,/w/acme/conversation",
-        "/w/acme/mentor/,/w/acme/conversation",
-        "/w/Old_Team/mentor,/w/Old_Team/conversation"
-    })
-    void shouldPermanentlyRedirectLegacyDocumentRequestsWithoutChangingTheQuery(String oldPath, String newPath)
-            throws Exception {
-        for (String query : new String[] {"", "?thread=thread-id&entry=entry-id&extra=a%2Fb%20c"}) {
-            var response = request(oldPath + query);
-            assertThat(response.statusCode()).isEqualTo(308);
-            assertThat(response.headers().firstValue("location")).contains(newPath + query);
-        }
-    }
-
-    @ParameterizedTest
-    @CsvSource({"/api/mentor", "/webhooks/mentor", "/w/acme/mentor/other", "/mentorship"})
-    void shouldNotRedirectOtherRoutes(String path) throws Exception {
-        var response = request(path);
-        assertThat(response.statusCode() / 100).isNotEqualTo(3);
-        assertThat(response.headers().firstValue("location")).isEmpty();
-    }
-
-    @ParameterizedTest
-    @CsvSource({"/w/a%0d%0aX-Injected:%201/mentor", "/w/x%3Fy/mentor"})
-    void shouldNotRedirectWhenADecodedSlugContainsHeaderOrQueryDelimiters(String path) throws Exception {
-        var response = request(path);
-        assertThat(response.statusCode() / 100).isNotEqualTo(3);
-        assertThat(response.headers().firstValue("location")).isEmpty();
-        assertThat(response.headers().firstValue("x-injected")).isEmpty();
     }
 
     @ParameterizedTest

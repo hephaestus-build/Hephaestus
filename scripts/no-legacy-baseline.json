@@ -46,29 +46,5 @@
 		"digest": "0c6b0d226979ff9fc689be3e1825bc50e1e35fb44d1e30190e995da45a8e20dd",
 		"count": 1,
 		"owner": "LEGACY after #4179"
-	},
-	{
-		"rule": "path-alias",
-		"file": "webapp/docker/nginx.conf",
-		"text": "return 308 /conversation$is_args$args;",
-		"digest": "17807177be030be5636dc22883c407646fe3592f99451fd053bd646d79adc49d",
-		"count": 1,
-		"owner": "LEGACY routes"
-	},
-	{
-		"rule": "path-alias",
-		"file": "webapp/docker/nginx.conf",
-		"text": "return 308 /w/$conversation_workspace/conversation$is_args$args;",
-		"digest": "17807177be030be5636dc22883c407646fe3592f99451fd053bd646d79adc49d",
-		"count": 1,
-		"owner": "LEGACY routes"
-	},
-	{
-		"rule": "route-alias",
-		"file": "webapp/src/routes/_authenticated/w/$workspaceSlug/mentor.tsx",
-		"text": "throw redirect({",
-		"digest": "b534769a78ed3f3d38ad85c7944ea35357b1460ea10e186081e4812624ae0974",
-		"count": 1,
-		"owner": "LEGACY routes"
 	}
 ]

@@ -8,6 +8,6 @@ Ask Hephaestus now uses its own name everywhere: in the API, in metrics, in sett
 
 Slack answers and their feedback buttons keep working.
 
-Links to `/w/{slug}/mentor` still open the conversation.
+Links to `/w/{slug}/mentor` no longer redirect. Hephaestus has linked to `/w/{slug}/conversation` since 0.95.
 
 **Operators:** Install this change in the stopped window before the 1.0.0 cut. Stop every runtime role before the migration, then start only the upgraded roles. The migration renames the conversation and model-assignment tables, so an old server cannot run beside a new one. The metrics `mentor.turn.*` (Prometheus `mentor_turn_*`) and `mentor.live.streams` are now `conversation.turn.*` and `conversation.live.streams`, the `surface` label value `mentor` is `conversation`, the email delivery `kind` tag `mentor_digest` is `weekly_digest`, the rate-limit `bucket` tag `mentor-turns` is `conversation-turns`, and the log events `mentor.turn.ended`, `heph.turn.tool_call` and `heph.turn.model_call` are `conversation.turn.ended`, `conversation.turn.tool_call` and `conversation.turn.model_call`. The shipped alert rules and dashboards already use the new names, so update your own queries. Outside the chart, rename `HEPHAESTUS_MENTOR_TURN_*` and `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_*` to `HEPHAESTUS_CONVERSATION_TURN_*` and `HEPHAESTUS_RATE_LIMIT_CONVERSATION_TURNS_*`, and `hephaestus.mentor.*` settings to `hephaestus.conversation.*`. `HEPHAESTUS_MENTOR_CONVERSATION_RETENTION` stays retired: use `HEPHAESTUS_FEEDBACK_RETENTION`. The chart values do not change.

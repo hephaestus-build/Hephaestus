@@ -46,7 +46,6 @@ import { Route as AuthenticatedAdminCatalogIndexRouteImport } from './routes/_au
 import { Route as AuthenticatedWWorkspaceSlugActivityRouteImport } from './routes/_authenticated/w/$workspaceSlug/activity'
 import { Route as AuthenticatedWWorkspaceSlugAdminRouteRouteImport } from './routes/_authenticated/w/$workspaceSlug/admin/route'
 import { Route as AuthenticatedWWorkspaceSlugConversationRouteImport } from './routes/_authenticated/w/$workspaceSlug/conversation'
-import { Route as AuthenticatedWWorkspaceSlugMentorRouteImport } from './routes/_authenticated/w/$workspaceSlug/mentor'
 import { Route as AuthenticatedWWorkspaceSlugOnboardingRouteImport } from './routes/_authenticated/w/$workspaceSlug/onboarding'
 import { Route as AuthenticatedWWorkspaceSlugPracticeProfileRouteImport } from './routes/_authenticated/w/$workspaceSlug/practice-profile'
 import { Route as AuthenticatedWWorkspaceSlugPracticesAcrossTheWorkspaceRouteImport } from './routes/_authenticated/w/$workspaceSlug/practices-across-the-workspace'
@@ -286,12 +285,6 @@ const AuthenticatedWWorkspaceSlugConversationRoute =
   AuthenticatedWWorkspaceSlugConversationRouteImport.update({
     id: '/conversation',
     path: '/conversation',
-    getParentRoute: () => AuthenticatedWWorkspaceSlugRouteRoute,
-  } as any)
-const AuthenticatedWWorkspaceSlugMentorRoute =
-  AuthenticatedWWorkspaceSlugMentorRouteImport.update({
-    id: '/mentor',
-    path: '/mentor',
     getParentRoute: () => AuthenticatedWWorkspaceSlugRouteRoute,
   } as any)
 const AuthenticatedWWorkspaceSlugOnboardingRoute =
@@ -559,7 +552,6 @@ export interface FileRoutesByFullPath {
   '/w/$workspaceSlug/admin': typeof AuthenticatedWWorkspaceSlugAdminRouteRouteWithChildren
   '/w/$workspaceSlug/activity': typeof AuthenticatedWWorkspaceSlugActivityRoute
   '/w/$workspaceSlug/conversation': typeof AuthenticatedWWorkspaceSlugConversationRoute
-  '/w/$workspaceSlug/mentor': typeof AuthenticatedWWorkspaceSlugMentorRoute
   '/w/$workspaceSlug/onboarding': typeof AuthenticatedWWorkspaceSlugOnboardingRoute
   '/w/$workspaceSlug/practice-profile': typeof AuthenticatedWWorkspaceSlugPracticeProfileRoute
   '/w/$workspaceSlug/practices-across-the-workspace': typeof AuthenticatedWWorkspaceSlugPracticesAcrossTheWorkspaceRoute
@@ -632,7 +624,6 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/w/$workspaceSlug/activity': typeof AuthenticatedWWorkspaceSlugActivityRoute
   '/w/$workspaceSlug/conversation': typeof AuthenticatedWWorkspaceSlugConversationRoute
-  '/w/$workspaceSlug/mentor': typeof AuthenticatedWWorkspaceSlugMentorRoute
   '/w/$workspaceSlug/onboarding': typeof AuthenticatedWWorkspaceSlugOnboardingRoute
   '/w/$workspaceSlug/practice-profile': typeof AuthenticatedWWorkspaceSlugPracticeProfileRoute
   '/w/$workspaceSlug/practices-across-the-workspace': typeof AuthenticatedWWorkspaceSlugPracticesAcrossTheWorkspaceRoute
@@ -707,7 +698,6 @@ export interface FileRoutesById {
   '/_authenticated/w/$workspaceSlug/admin': typeof AuthenticatedWWorkspaceSlugAdminRouteRouteWithChildren
   '/_authenticated/w/$workspaceSlug/activity': typeof AuthenticatedWWorkspaceSlugActivityRoute
   '/_authenticated/w/$workspaceSlug/conversation': typeof AuthenticatedWWorkspaceSlugConversationRoute
-  '/_authenticated/w/$workspaceSlug/mentor': typeof AuthenticatedWWorkspaceSlugMentorRoute
   '/_authenticated/w/$workspaceSlug/onboarding': typeof AuthenticatedWWorkspaceSlugOnboardingRoute
   '/_authenticated/w/$workspaceSlug/practice-profile': typeof AuthenticatedWWorkspaceSlugPracticeProfileRoute
   '/_authenticated/w/$workspaceSlug/practices-across-the-workspace': typeof AuthenticatedWWorkspaceSlugPracticesAcrossTheWorkspaceRoute
@@ -786,7 +776,6 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug/admin'
     | '/w/$workspaceSlug/activity'
     | '/w/$workspaceSlug/conversation'
-    | '/w/$workspaceSlug/mentor'
     | '/w/$workspaceSlug/onboarding'
     | '/w/$workspaceSlug/practice-profile'
     | '/w/$workspaceSlug/practices-across-the-workspace'
@@ -859,7 +848,6 @@ export interface FileRouteTypes {
     | '/admin'
     | '/w/$workspaceSlug/activity'
     | '/w/$workspaceSlug/conversation'
-    | '/w/$workspaceSlug/mentor'
     | '/w/$workspaceSlug/onboarding'
     | '/w/$workspaceSlug/practice-profile'
     | '/w/$workspaceSlug/practices-across-the-workspace'
@@ -933,7 +921,6 @@ export interface FileRouteTypes {
     | '/_authenticated/w/$workspaceSlug/admin'
     | '/_authenticated/w/$workspaceSlug/activity'
     | '/_authenticated/w/$workspaceSlug/conversation'
-    | '/_authenticated/w/$workspaceSlug/mentor'
     | '/_authenticated/w/$workspaceSlug/onboarding'
     | '/_authenticated/w/$workspaceSlug/practice-profile'
     | '/_authenticated/w/$workspaceSlug/practices-across-the-workspace'
@@ -1251,13 +1238,6 @@ declare module '@tanstack/react-router' {
       path: '/conversation'
       fullPath: '/w/$workspaceSlug/conversation'
       preLoaderRoute: typeof AuthenticatedWWorkspaceSlugConversationRouteImport
-      parentRoute: typeof AuthenticatedWWorkspaceSlugRouteRoute
-    }
-    '/_authenticated/w/$workspaceSlug/mentor': {
-      id: '/_authenticated/w/$workspaceSlug/mentor'
-      path: '/mentor'
-      fullPath: '/w/$workspaceSlug/mentor'
-      preLoaderRoute: typeof AuthenticatedWWorkspaceSlugMentorRouteImport
       parentRoute: typeof AuthenticatedWWorkspaceSlugRouteRoute
     }
     '/_authenticated/w/$workspaceSlug/onboarding': {
@@ -1727,7 +1707,6 @@ interface AuthenticatedWWorkspaceSlugRouteRouteChildren {
   AuthenticatedWWorkspaceSlugAdminRouteRoute: typeof AuthenticatedWWorkspaceSlugAdminRouteRouteWithChildren
   AuthenticatedWWorkspaceSlugActivityRoute: typeof AuthenticatedWWorkspaceSlugActivityRoute
   AuthenticatedWWorkspaceSlugConversationRoute: typeof AuthenticatedWWorkspaceSlugConversationRoute
-  AuthenticatedWWorkspaceSlugMentorRoute: typeof AuthenticatedWWorkspaceSlugMentorRoute
   AuthenticatedWWorkspaceSlugOnboardingRoute: typeof AuthenticatedWWorkspaceSlugOnboardingRoute
   AuthenticatedWWorkspaceSlugPracticeProfileRoute: typeof AuthenticatedWWorkspaceSlugPracticeProfileRoute
   AuthenticatedWWorkspaceSlugPracticesAcrossTheWorkspaceRoute: typeof AuthenticatedWWorkspaceSlugPracticesAcrossTheWorkspaceRoute
@@ -1744,8 +1723,6 @@ const AuthenticatedWWorkspaceSlugRouteRouteChildren: AuthenticatedWWorkspaceSlug
       AuthenticatedWWorkspaceSlugActivityRoute,
     AuthenticatedWWorkspaceSlugConversationRoute:
       AuthenticatedWWorkspaceSlugConversationRoute,
-    AuthenticatedWWorkspaceSlugMentorRoute:
-      AuthenticatedWWorkspaceSlugMentorRoute,
     AuthenticatedWWorkspaceSlugOnboardingRoute:
       AuthenticatedWWorkspaceSlugOnboardingRoute,
     AuthenticatedWWorkspaceSlugPracticeProfileRoute:
