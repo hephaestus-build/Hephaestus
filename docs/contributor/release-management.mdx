@@ -480,8 +480,9 @@ The `tag-images` job does these steps in this order:
 
 The `publish-release` job then runs `scripts/check-previous-verifier.ts` against the signed draft.
 It runs the verifiers of the nearest published release and the latest stable release, from a tree with no installed packages.
-Only an immutable published release from 1.0.0-rc.4 on counts, so a pushed tag runs no code in this job.
-Older tooling follows the [manual step](../admin/upgrade#hosts-with-reconciler-tooling-from-before-100-rc4).
+Only an immutable published release from 1.0.0-rc.5 on counts, so a pushed tag runs no code in this job.
+Older tooling follows the manual steps in [Upgrade](../admin/upgrade#hosts-with-reconciler-tooling-from-before-100-rc4).
+Those steps end with 1.0.0-rc.5.
 A host adopts new tooling only after it applies a release, so an older verifier decides.
 The job stops before publication if one refuses.
 
@@ -494,20 +495,21 @@ It skips the download, the signature checks and the chart pull.
 
 Thus, these changes fail the Version PR, not the release:
 
-- An added, removed, or renamed chart image.
 - A change to the lock schema, including the names of the chart fields.
 - A change to the evidence manifest.
 
 These changes still show only at publication: the asset names, the signing identity, the chart digest and the packaged chart's metadata.
 
 A digest or tag change in the same image set does not trip this check.
-For tooling up to 1.0.0-rc.4, an added, removed, or renamed chart image does.
+An added, removed, or renamed chart image does not trip it either.
+The verifiers from 1.0.0-rc.5 on read the images from the signed lock.
+Only tooling up to 1.0.0-rc.4 refuses such a change, and the manual steps move a host off that tooling.
 A change to the lock schema, the evidence manifest, the asset names, or the signing identity does, for any older verifier.
 
 To release a planned break, add entries to `security/accepted-verifier-breaks.json` in a reviewed pull request, before the Version PR:
 
 ```json
-[{ "release": "v1.0.0-rc.5", "verifier": "v1.0.0-rc.4", "reason": "Adds the x image. Hosts follow <upgrade guide section>." }]
+[{ "release": "v1.1.0", "verifier": "v1.0.0", "reason": "Changes the lock schema. Hosts follow <upgrade guide section>." }]
 ```
 
 An entry covers one release and one verifier, and the job prints the failure as a warning.

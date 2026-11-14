@@ -382,7 +382,7 @@ Do this procedure once, on a host with [pull-based deployment](./pull-based-depl
 The `tooling` link names the release whose tooling runs.
 
 1.0.0-rc.8 removes the `nats` image with the sync broker.
-The verifier of 1.0.0-rc.4 compares a fixed list of chart images, so it refuses a release that removes one.
+The verifier of 1.0.0-rc.4 compares a fixed list of chart images, so it refuses 1.0.0-rc.8 and every later release.
 The verifiers from 1.0.0-rc.5 on read the images from the signed release lock and accept it.
 
 1. Promote the channel to `v1.0.0-rc.5`, and complete its migration instructions.
