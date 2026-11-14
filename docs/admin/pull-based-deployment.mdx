@@ -68,6 +68,14 @@ Automatic promotions check the latest channel while holding the promotion lock. 
 an already-promoted commit, or an older completed build leaves the channel unchanged, including
 when switching from a release to a commit. An unreadable channel or failed history comparison stops
 promotion rather than clearing a freeze.
+
+Such a run publishes and deploys nothing and succeeds.
+Its summary says **Staging is held** for a frozen channel, with the release that Staging stays on.
+For a channel that already has the build, the summary says **Staging already carries this build**.
+A held run opens no failure issue.
+
+A manual promotion to a release or commit behind the one the channel asks for stops before it publishes anything, unless it sets **allow-rollback**.
+The host would refuse that channel, so the run reports the reason at once and does not wait for a version that never comes.
 Establish the initial channel with a manual promotion before enabling continuous staging.
 
 A host applies a frozen channel like any other: `freeze` matters only to automatic promotion.

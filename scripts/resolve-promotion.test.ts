@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { parseChannel } from "./reconcile-deployment.ts";
 import { promotionHeadline, resolvePromotion, type PromotionSources } from "./resolve-promotion.ts";
 
 const commit = "a".repeat(40);
@@ -172,5 +173,66 @@ await test("the deploy-state headline names a freeze, a rollback and a database 
 			refreshDatabaseImage: true,
 		}),
 		`chore(deploy): channels/staging.json -> ${commit} (rollback allowed, database image refresh requested)`,
+	);
+});
+
+await test("a target behind what the channel asks for is refused before anything is published, unless rollback is allowed", async () => {
+	const older = "1".repeat(40);
+	const asked = "2".repeat(40);
+	let resolved = 0;
+	const history: PromotionSources = {
+		// Every target here is on main, and every other comparison finds the target behind.
+		compare: async (base, head) => {
+			if (base === head) {
+				return "identical";
+			}
+			return head === "main" ? "ahead" : "behind";
+		},
+		isDraft: async () => false,
+		images: async () => {
+			resolved += 1;
+			return {};
+		},
+	};
+	const freeze = {
+		environment: "Staging",
+		commit: older,
+		allowRollback: false,
+		freeze: true,
+		refreshDatabaseImage: false,
+		current: parseChannel({
+			commit: asked,
+			images: { HEPHAESTUS_IMAGE_WEBAPP: `ghcr.io/example/webapp@sha256:${"c".repeat(64)}` },
+			freeze: true,
+		}),
+	};
+	await assert.rejects(
+		resolvePromotion(freeze, history),
+		new RegExp(
+			`${older} is behind ${asked}, which the Staging channel asks for; set allow-rollback`,
+			"u",
+		),
+	);
+	assert.equal(resolved, 0, "no image is resolved for a refused request");
+	const rollback = await resolvePromotion({ ...freeze, allowRollback: true }, history);
+	assert.equal(rollback.version, older);
+	const first = await resolvePromotion({ ...freeze, current: undefined }, history);
+	assert.equal(first.version, older);
+	// Freezing what the channel already asks for is not a rollback.
+	const same = await resolvePromotion({ ...freeze, commit: asked }, history);
+	assert.equal(same.version, asked);
+	await assert.rejects(
+		resolvePromotion(
+			{
+				environment: "Production",
+				release: "v1.2.2",
+				allowRollback: false,
+				freeze: false,
+				refreshDatabaseImage: false,
+				current: parseChannel({ release: "v1.2.3" }),
+			},
+			history,
+		),
+		/v1\.2\.2 is behind v1\.2\.3, which the Production channel asks for/u,
 	);
 });

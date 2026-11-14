@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import { isMap, isSeq, parseDocument } from "yaml";
 
-import { automaticPromotion, supersedingBuild } from "./automatic-promotion.ts";
+import { automaticPromotion, supersedingBuild, unchangedSummary } from "./automatic-promotion.ts";
 import { parseChannel } from "./reconcile-deployment.ts";
 
 const current = "a".repeat(40);
@@ -18,22 +18,38 @@ const channel = parseChannel({
 	images: { HEPHAESTUS_IMAGE_WEBAPP: `ghcr.io/example/webapp@sha256:${"c".repeat(64)}` },
 });
 
-await test("automatic promotion preserves a hold without consulting commit history", async () => {
-	assert.equal(
+await test("a frozen channel holds an automatic request without consulting commit history", async () => {
+	assert.deepEqual(
 		await automaticPromotion({ ...channel, freeze: true }, next, () => {
 			throw new Error("a frozen channel must not query history");
 		}),
-		false,
+		{ outcome: "held", release: current },
 	);
+});
+
+await test("a held or current request says what the channel stays on, and that nothing was deployed", () => {
+	const held = unchangedSummary({ outcome: "held", release: current }, "Staging", next);
+	assert.equal(held.title, "Staging is held");
+	assert.match(
+		held.text,
+		new RegExp(`frozen on ${current}, so ${next.slice(0, 10)} was not promoted`, "u"),
+	);
+	assert.match(
+		held.text,
+		/Nothing was published or deployed\. A promotion without freeze lifts the hold\./u,
+	);
+	const unchanged = unchangedSummary({ outcome: "current", release: current }, "Staging", next);
+	assert.equal(unchanged.title, "Staging already carries this build");
+	assert.doesNotMatch(unchanged.text, /frozen|held/u);
 });
 
 await test("automatic promotion advances but never replays or rewinds a completed build", async () => {
 	for (const [status, expected] of [
-		["ahead", true],
-		["identical", false],
-		["behind", false],
+		["ahead", { outcome: "promote" }],
+		["identical", { outcome: "current", release: current }],
+		["behind", { outcome: "current", release: current }],
 	] as const) {
-		assert.equal(
+		assert.deepEqual(
 			await automaticPromotion(channel, next, async (base, head) => {
 				assert.equal(base, current);
 				assert.equal(head, next);
@@ -66,11 +82,11 @@ await test("unknown history and API failures cannot authorize promotion", async 
 await test("switching from a release to main cannot replay or rewind the release's source", async () => {
 	const release = parseChannel({ release: "v1.2.3" });
 	for (const [status, expected] of [
-		["ahead", true],
-		["identical", false],
-		["behind", false],
+		["ahead", { outcome: "promote" }],
+		["identical", { outcome: "current", release: "v1.2.3" }],
+		["behind", { outcome: "current", release: "v1.2.3" }],
 	] as const) {
-		assert.equal(
+		assert.deepEqual(
 			await automaticPromotion(release, next, async (base, head) => {
 				assert.equal(base, "v1.2.3");
 				assert.equal(head, next);
@@ -212,10 +228,10 @@ await test(
 			{ mode: 0o755 },
 		);
 		for (const [runs, comparison, expected, reads] of [
-			["list", "ahead", `apply=true\ncommit=${later}\n`, 3],
-			["fail", "ahead", `apply=true\ncommit=${next}\n`, 2],
-			["identical", "identical", "apply=false\n", 1],
-			["behind", "behind", "apply=false\n", 1],
+			["list", "ahead", `apply=true\noutcome=promote\ncommit=${later}\n`, 3],
+			["fail", "ahead", `apply=true\noutcome=promote\ncommit=${next}\n`, 2],
+			["identical", "identical", "apply=false\noutcome=current\n", 1],
+			["behind", "behind", "apply=false\noutcome=current\n", 1],
 		] as const) {
 			const outputFile = path.join(directory, `output-${runs}`);
 			const traceFile = path.join(directory, `trace-${runs}`);
@@ -276,6 +292,7 @@ await test("the CLI fails closed for invalid channels but honors a valid hold wi
 		path.join(directory, "deploy-state/channels/staging.json"),
 		JSON.stringify({ release: "v1.2.3", freeze: true }),
 	);
+	const summaryFile = path.join(directory, "summary");
 	const held = spawnSync(
 		process.execPath,
 		[fileURLToPath(new URL("automatic-promotion.ts", import.meta.url))],
@@ -289,11 +306,21 @@ await test("the CLI fails closed for invalid channels but honors a valid hold wi
 				COMMIT: next,
 				GITHUB_REPOSITORY: "example/repo",
 				GITHUB_OUTPUT: outputFile,
+				GITHUB_STEP_SUMMARY: summaryFile,
 			},
 		},
 	);
+	// A hold is a state, not a failure: the run ends green, says so, and publishes nothing.
 	assert.equal(held.status, 0, held.stderr);
-	assert.equal(readFileSync(outputFile, "utf8"), "apply=false\n");
+	assert.equal(readFileSync(outputFile, "utf8"), "apply=false\noutcome=held\n");
+	assert.match(
+		held.stdout,
+		/^::notice title=Staging is held::The Staging channel is frozen on v1\.2\.3/mu,
+	);
+	assert.match(
+		readFileSync(summaryFile, "utf8"),
+		/^### Staging is held\n\nThe Staging channel is frozen on v1\.2\.3/u,
+	);
 });
 
 await test("every step after the policy deploys the commit the policy chose", () => {
@@ -309,5 +336,32 @@ await test("every step after the policy deploys the commit the policy chose", ()
 		(deploying.match(/steps\.policy\.outputs\.commit \|\| inputs\.commit/gu) ?? []).length,
 		reads.length,
 		"a later step reads the requested commit instead of the promoted one",
+	);
+});
+
+await test("a held request publishes, signs, deploys and reports nothing, and files no failure", () => {
+	const workflow = parseDocument(readFileSync(".github/workflows/promote.yml", "utf8"));
+	const steps = workflow.getIn(["jobs", "promote", "steps"]);
+	assert.ok(isSeq(steps));
+	const policy = steps.items.findIndex((item) => isMap(item) && item.get("id") === "policy");
+	assert.ok(policy !== -1);
+	// The two closing reporters run only after a record or a published channel, which a hold never makes.
+	const closing = new Map([
+		["Finish the deployment record", "steps.deployment.outputs.id != ''"],
+		["Report promotion verification scope", "steps.publish-channel.outcome == 'success'"],
+	]);
+	for (const item of steps.items.slice(policy + 1)) {
+		assert.ok(isMap(item));
+		const name = String(item.get("name") ?? item.get("uses"));
+		const guard = closing.get(name) ?? "steps.policy.outputs.apply != 'false'";
+		const condition = item.get("if");
+		assert.ok(
+			typeof condition === "string" && condition.includes(guard),
+			`${name} runs on a held request`,
+		);
+	}
+	assert.match(
+		String(workflow.getIn(["jobs", "report-failure", "if"])),
+		/^\$\{\{ failure\(\) && inputs\.automatic \}\}$/u,
 	);
 });
