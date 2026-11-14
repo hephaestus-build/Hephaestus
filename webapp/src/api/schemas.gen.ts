@@ -5553,6 +5553,18 @@ export const LlmModelSchema = {
 			description: "Who operates the systems the work is sent to; null until declared",
 			enum: ["OWN_ORGANISATION", "PROVIDER"],
 		},
+		readiness: {
+			type: "string",
+			description: "Whether the model can run now, or the first reason it cannot",
+			enum: [
+				"READY",
+				"PRICE_MISSING",
+				"CONNECTION_OFF",
+				"OFF",
+				"LIMITS_MISSING",
+				"NO_WORKSPACE_ACCESS",
+			],
+		},
 		reasoningEffort: {
 			type: "string",
 			description:
@@ -5588,6 +5600,7 @@ export const LlmModelSchema = {
 		"grantedWorkspaceIds",
 		"id",
 		"limits",
+		"readiness",
 		"slug",
 		"upstreamModelId",
 		"visibility",
@@ -17532,6 +17545,18 @@ export const WorkspaceLlmModelSchema = {
 			description: "Pricing mode",
 			enum: ["PRICED", "NO_CHARGE", "UNPRICED"],
 		},
+		readiness: {
+			type: "string",
+			description: "Whether the model can run now, or the first reason it cannot",
+			enum: [
+				"READY",
+				"PRICE_MISSING",
+				"CONNECTION_OFF",
+				"OFF",
+				"LIMITS_MISSING",
+				"NO_WORKSPACE_ACCESS",
+			],
+		},
 		reasoningEffort: {
 			type: "string",
 			description:
@@ -17563,6 +17588,7 @@ export const WorkspaceLlmModelSchema = {
 		"id",
 		"limits",
 		"pricingMode",
+		"readiness",
 		"slug",
 		"upstreamModelId",
 	],

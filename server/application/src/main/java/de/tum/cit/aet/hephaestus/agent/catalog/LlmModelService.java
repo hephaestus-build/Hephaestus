@@ -104,19 +104,7 @@ public class LlmModelService {
         LlmModel model = new LlmModel();
         model.setConnection(connection);
         model.setSlug(slug);
-        model.setDisplayName(request.displayName());
-        model.setUpstreamModelId(request.upstreamModelId());
-        model.setContextWindow(request.contextWindow());
-        model.setMaxOutputTokens(request.maxOutputTokens());
-        model.setReasoningEffort(request.reasoningEffort());
-        model.setBrand(request.brand());
-        model.setDataHandling(DataHandlingFacts.of(request.operatedBy(), request.dataHandlingNote()));
-        if (request.enabled() != null) {
-            if (request.enabled()) {
-                requireActivatable(model);
-            }
-            model.setEnabled(request.enabled());
-        }
+        model.applySettings(request);
 
         LlmModel saved;
         try {
@@ -141,12 +129,11 @@ public class LlmModelService {
     }
 
     private void requireActivatable(LlmModel model) {
-        LlmModelPrice price =
-                priceRepository.findByModelIdAndEffectiveToIsNull(model.getId()).orElse(null);
-        if (!model.getConnection().isEnabled() || price == null || price.getPricingMode() == PricingMode.UNPRICED) {
-            throw new IllegalArgumentException(
-                    "Activate the connection and set a price before you activate the model.");
-        }
+        LlmModelReadiness.requireActivatable(
+                model.getConnection().isEnabled(),
+                PricingMode.of(priceRepository
+                        .findByModelIdAndEffectiveToIsNull(model.getId())
+                        .orElse(null)));
     }
 
     @Transactional
@@ -154,25 +141,7 @@ public class LlmModelService {
         LlmModel model =
                 modelRepository.findByIdForUpdate(id).orElseThrow(() -> new EntityNotFoundException("LlmModel", id));
 
-        if (request.displayName() != null) {
-            model.setDisplayName(request.displayName());
-        }
-        if (Boolean.TRUE.equals(request.clearContextWindow())) model.setContextWindow(null);
-        else if (request.contextWindow() != null) model.setContextWindow(request.contextWindow());
-        if (Boolean.TRUE.equals(request.clearMaxOutputTokens())) model.setMaxOutputTokens(null);
-        else if (request.maxOutputTokens() != null) model.setMaxOutputTokens(request.maxOutputTokens());
-        if (Boolean.TRUE.equals(request.clearReasoningEffort())) {
-            model.setReasoningEffort(null);
-        } else if (request.reasoningEffort() != null) {
-            model.setReasoningEffort(request.reasoningEffort());
-        }
-        if (Boolean.TRUE.equals(request.clearBrand())) model.setBrand(null);
-        else if (request.brand() != null) model.setBrand(request.brand());
-        model.setDataHandling(model.getDataHandling()
-                .updated(request.clearDataHandling(), request.operatedBy(), request.dataHandlingNote()));
-        if (request.enabled() != null) {
-            model.setEnabled(request.enabled());
-        }
+        model.changeSettings(request.settingsChange());
         if (model.isEnabled()) {
             requireActivatable(model);
         }
