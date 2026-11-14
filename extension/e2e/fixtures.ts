@@ -370,20 +370,32 @@ export async function watchServer(
 	return seen;
 }
 
-/** Stops the extension's service worker the way Chrome does when it goes idle. */
+/**
+ * Stops the extension's service worker the way Chrome does when it goes idle, and returns once Chrome no longer
+ * lists it. The CDP session is left to end with its page: detaching it after the worker's target closed can wait
+ * forever, and Playwright does not report the worker's end.
+ */
 export async function stopWorker(context: BrowserContext, page: Page): Promise<void> {
 	const session = await context.newCDPSession(page);
-	const { targetInfos } = await session.send("Target.getTargets");
-	const worker = targetInfos.find(
-		(target) =>
-			target.type === "service_worker" &&
-			target.url.startsWith(`chrome-extension://${EXTENSION_ID}/`),
-	);
+	const workerTarget = async () => {
+		const { targetInfos } = await session.send("Target.getTargets");
+		return targetInfos.find(
+			(target) =>
+				target.type === "service_worker" &&
+				target.url.startsWith(`chrome-extension://${EXTENSION_ID}/`),
+		);
+	};
+	const worker = await workerTarget();
 	if (worker === undefined) {
 		throw new Error("The extension's service worker is not running");
 	}
 	await session.send("Target.closeTarget", { targetId: worker.targetId });
-	await session.detach();
+	await expect
+		.poll(async () => {
+			const running = await workerTarget();
+			return running?.targetId;
+		})
+		.not.toBe(worker.targetId);
 }
 
 export async function serverAvailable(): Promise<boolean> {
