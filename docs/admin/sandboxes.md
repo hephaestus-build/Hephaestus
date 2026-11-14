@@ -185,7 +185,13 @@ Run it after each install and upgrade of a release with `sandbox.enabled`, and a
 A gate proves enforcement only on the nodes where it runs and at that time.
 On a new instance, run it before you connect a workspace, because no work starts before that.
 
-The gate makes a copy of a template that only waits, and starts two sandboxes from the copy.
+First, the gate asks the API server to create a Pod in the sandbox namespace in a dry run.
+The Pod meets the Baseline Pod Security Standard but not the Restricted standard.
+A dry run runs admission and stores nothing.
+The gate passes this check only when Pod Security admission refuses the Pod at the Restricted level.
+Thus, it proves enforcement, not only the namespace label.
+
+Then the gate makes a copy of a template that only waits, and starts two sandboxes from the copy.
 From inside one of them, it checks:
 
 - The Pod settings of [Sandbox templates](#sandbox-templates), and a user namespace of its own or the gVisor kernel.
@@ -205,7 +211,8 @@ From inside one of them, it checks:
 - `kubectl` with a context for the cluster.
 - These rights:
   - In the sandbox namespace: `get`, `create` and `delete` on SandboxTemplates, SandboxWarmPools and SandboxClaims.
-  - In the sandbox namespace: `list` and `watch` on SandboxClaims, `get` on Pods, and `create` on `pods/exec`.
+  - In the sandbox namespace: `list` and `watch` on SandboxClaims, `get` and `create` on Pods, and `create` on `pods/exec`.
+  - `get` on the sandbox namespace itself.
   - In `default`: `get` on the Service `kubernetes`, and `list` on EndpointSlices.
   - `get` on the cluster DNS Service.
 
@@ -255,6 +262,8 @@ Do not connect a workspace until the gate passes.
 | `reaches <target>`, `the cluster DNS resolver answers`, or `a public DNS resolver answers` | The network plugin does not enforce the NetworkPolicies of the sandbox namespace. | Use a network plugin that enforces egress policy, also to Service addresses. |
 | `still reached the Kubernetes API 10 seconds after its start` | The network plugin applies a Pod's policies late. | Use a network plugin that applies policies before or soon after the container starts. |
 | `cannot reach the gateway` | The server is not ready, the `--gateway` address is wrong, or the plugin blocks the allowed path. | Check that the server is ready and that the address is the `<release>-sandbox-gateway` Service on port 8081. |
+| `<sandbox namespace>: admits a Pod that the Restricted Pod Security Standard refuses` | Pod Security admission does not enforce the Restricted level in the sandbox namespace. The line names the namespace's `pod-security.kubernetes.io/enforce` label. | Run `kubectl label namespace <sandbox namespace> pod-security.kubernetes.io/enforce=restricted --overwrite`. |
+| `<sandbox namespace>: refused a Pod that the Restricted Pod Security Standard refuses, but not by Pod Security admission` | Another admission control, such as a quota or a policy engine, refused the Pod before Pod Security admission. Pod Security admission does not enforce the Restricted level. | Label the namespace as in the row above. The line ends with the answer of the API server. |
 | `no user namespace of its own` | The node runtime has no user namespace support. | Use nodes with user namespace support, or a gVisor RuntimeClass in `sandbox.templates.runtimeClassName`. |
 | `a Kubernetes token is mounted`, `runs as`, `effective capabilities`, or a Pod setting | The template differs from the chart's template. | Upgrade the release again with the verified chart, so that the chart writes its templates. |
 | `kubectl wait` times out on a `sandboxclaim` | The controller did not start the sandbox: it is not running, the quota is full, or the node cannot pull the agent image. | Check the controller's log and `kubectl -n <sandbox namespace> get pods,resourcequota`. |

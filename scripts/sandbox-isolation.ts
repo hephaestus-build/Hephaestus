@@ -1,7 +1,8 @@
 /**
  * The sandbox isolation gate: proves on a live cluster that a sandbox from a SandboxTemplate reaches the
  * gateway port and nothing else, holds no Kubernetes token, runs as a non-root user and, on the default
- * runtime, in a user namespace of its own. The CI cluster legs run it against the chart's templates
+ * runtime, in a user namespace of its own; and that the sandbox namespace refuses a Pod that the Restricted
+ * Pod Security Standard refuses. The CI cluster legs run it against the chart's templates
  * (docs/admin/sandboxes.md § Sandbox isolation gate).
  *
  * It clones the template, with its Pod spec, labels and policies, and changes only the command, so
@@ -19,7 +20,7 @@
  */
 import { parseArgs } from "node:util";
 
-import { asRecord, asString, parseJson } from "./lib/json.ts";
+import { asArray, asRecord, asString, isRecord, parseJson } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
 
 /** A TCP address that a sandbox must reach, or must not. */
@@ -349,6 +350,43 @@ export function insideFailures(inside: Inside, targets: Target[], gvisor: boolea
 	return failures;
 }
 
+/** The label by which Pod Security admission enforces a level in a namespace. */
+export const ENFORCE_LABEL = "pod-security.kubernetes.io/enforce";
+
+/**
+ * A Pod that the Baseline Pod Security Standard admits and the Restricted one refuses: it neither runs
+ * as non-root, nor drops capabilities, nor sets a seccomp profile. The gate creates it only in a server
+ * dry run, which runs admission and stores nothing.
+ */
+export function unrestrictedPod(namespace: string, name: string, image: string) {
+	return {
+		apiVersion: "v1",
+		kind: "Pod",
+		metadata: { name, namespace, labels: { "hephaestus.build/isolation-gate": "true" } },
+		spec: { automountServiceAccountToken: false, containers: [{ name: "baseline", image }] },
+	};
+}
+
+/**
+ * The failures of the Pod Security proof. `refusal` is the API server's answer to the dry run of
+ * {@link unrestrictedPod}, or null when it admitted the Pod. Only a refusal by Pod Security admission
+ * at the Restricted level counts: another admission plugin that refuses the Pod proves nothing about it.
+ */
+export function podSecurityFailures(refusal: string | null, enforce: string | undefined): string[] {
+	if (refusal !== null && refusal.includes('violates PodSecurity "restricted:')) {
+		return [];
+	}
+	const label = enforce === undefined ? `no ${ENFORCE_LABEL} label` : `${ENFORCE_LABEL}=${enforce}`;
+	if (refusal === null) {
+		return [`admits a Pod that the Restricted Pod Security Standard refuses (${label})`];
+	}
+	// kubectl writes admission warnings first and its error last.
+	const answer = refusal.trim().split("\n").at(-1) ?? "";
+	return [
+		`refused a Pod that the Restricted Pod Security Standard refuses, but not by Pod Security admission (${label}): ${answer}`,
+	];
+}
+
 /**
  * The addresses behind the `kubernetes` Service, from its EndpointSlices: where the API server
  * listens, such as port 6443 on a node. None is a failure, because a gate that tries none proves nothing.
@@ -429,6 +467,10 @@ export async function isolationGate(options: GateOptions): Promise<Inside> {
 	const peer = `isolation-b-${pin}`;
 	const names = [probe, peer];
 	const source = await json(["-n", namespace, "get", "sandboxtemplate", template]);
+	const failures: string[] = [];
+	for (const failure of await podSecurity(kubectl, json, namespace, source, pin)) {
+		failures.push(`${namespace}: ${failure}`);
+	}
 	const claim = (name: string) =>
 		JSON.stringify({
 			apiVersion: "extensions.agents.x-k8s.io/v1beta1",
@@ -436,7 +478,6 @@ export async function isolationGate(options: GateOptions): Promise<Inside> {
 			metadata: { name, namespace, labels: { "hephaestus.build/isolation-gate": "true" } },
 			spec: { warmPoolRef: { name: pool } },
 		});
-	const failures: string[] = [];
 	try {
 		await kubectl(["apply", "-f", "-"], JSON.stringify(gateTemplate(source, pool)));
 		await kubectl(
@@ -542,6 +583,46 @@ export async function isolationGate(options: GateOptions): Promise<Inside> {
 			"--wait=false",
 		]);
 	}
+}
+
+/**
+ * Whether the sandbox namespace enforces the Restricted Pod Security Standard: the API server must refuse
+ * the dry run of {@link unrestrictedPod}, with the template's image.
+ */
+async function podSecurity(
+	kubectl: (args: string[], input?: string) => Promise<string>,
+	json: (args: string[]) => Promise<unknown>,
+	namespace: string,
+	template: unknown,
+	pin: string,
+): Promise<string[]> {
+	const pod = asRecord(
+		asRecord(
+			asRecord(asRecord(template, "SandboxTemplate").spec, "spec").podTemplate,
+			"podTemplate",
+		).spec,
+		"pod spec",
+	);
+	const [container] = asArray(pod.containers, "containers");
+	const image = asString(asRecord(container, "container").image, "image");
+	const labels = asRecord(
+		asRecord(
+			asRecord(await json(["get", "namespace", namespace]), "namespace").metadata,
+			"metadata",
+		).labels ?? {},
+		"labels",
+	);
+	const enforce = labels[ENFORCE_LABEL];
+	let refusal: string | null = null;
+	try {
+		await kubectl(
+			["create", "--dry-run=server", "-o", "name", "-f", "-"],
+			JSON.stringify(unrestrictedPod(namespace, `isolation-restricted-${pin}`, image)),
+		);
+	} catch (error) {
+		refusal = isRecord(error) && typeof error.stderr === "string" ? error.stderr : String(error);
+	}
+	return podSecurityFailures(refusal, typeof enforce === "string" ? enforce : undefined);
 }
 
 /** A `<name>=<host>:<port>` argument as a target. */

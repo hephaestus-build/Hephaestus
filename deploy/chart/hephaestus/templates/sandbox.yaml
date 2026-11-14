@@ -2,7 +2,9 @@
 The server creates SandboxClaims in the sandbox namespace.
 The operator creates that namespace with the Restricted Pod Security level, for this release alone:
 the servers remove what they do not use there. The chart writes its quota, its policies and the
-server's API authority in it. The platform isolation gate proves the boundary before a release runs (docs/admin/kubernetes.mdx § Sandbox prerequisites).
+server's API authority in it. The sandbox isolation gate proves the boundary, and that Pod Security
+admission enforces the Restricted level there, before a release runs (docs/admin/sandboxes.md § Sandbox
+isolation gate).
 The server's own Deployment, Service account and policy are in server.yaml and networkpolicy.yaml.
 */}}
 {{- if .Values.sandbox.enabled }}
