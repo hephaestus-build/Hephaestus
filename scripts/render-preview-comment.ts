@@ -1,27 +1,26 @@
 import { execFileSync } from "node:child_process";
-import { readdir, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { isSet } from "./lib/env.ts";
-import { asRecord, asString, isRecord, readJsonFile } from "./lib/json.ts";
-import { compareLinks, renderPreviewComments, type PreviewLink } from "./lib/preview-comment.ts";
+import { asRecord, asString, readJsonFile } from "./lib/json.ts";
+import { renderPreviewComments, type PreviewLink } from "./lib/preview-comment.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 function argument(index: number): string {
 	const value = process.argv[index];
 	if (!isSet(value)) {
 		throw new Error(
-			"Usage: render-preview-comment <docs|storybook> <artifact-directory> <preview-url> <base-sha> <output>",
+			"Usage: render-preview-comment <storybook-static-directory> <preview-url> <base-sha> <output>",
 		);
 	}
 	return value;
 }
 
-const kind = argument(2);
-const artifactDirectory = argument(3);
-const previewUrl = argument(4);
-const baseSha = argument(5);
-const output = argument(6);
+const artifactDirectory = argument(2);
+const previewUrl = argument(3);
+const baseSha = argument(4);
+const output = argument(5);
 
 const changedFiles = new Set(
 	execFileSync("git", ["diff", "--name-only", "--diff-filter=ACMRT", "-z", `${baseSha}...HEAD`], {
@@ -33,46 +32,6 @@ const changedFiles = new Set(
 );
 
 const baseUrl = new URL(previewUrl);
-
-async function renderDocs(): Promise<string[]> {
-	const links = new Map<string, PreviewLink>();
-	for (const file of await readdir(artifactDirectory, { recursive: true })) {
-		if (!file.endsWith(".json")) {
-			continue;
-		}
-		const metadata = await readJsonFile(path.resolve(artifactDirectory, file));
-		if (!isRecord(metadata)) {
-			continue;
-		}
-		const { source: sourcePath, permalink, title } = metadata;
-		if (
-			typeof sourcePath !== "string" ||
-			typeof permalink !== "string" ||
-			typeof title !== "string"
-		) {
-			continue;
-		}
-		const source = `docs/${sourcePath.replace(/^@site\//u, "")}`;
-		if (changedFiles.has(source)) {
-			const url = new URL(permalink, baseUrl);
-			const existing = links.get(url.href);
-			const link = { group: path.posix.dirname(source), title, url: url.href };
-			if (
-				url.origin === baseUrl.origin &&
-				(existing === undefined || compareLinks(link, existing) < 0)
-			) {
-				links.set(url.href, link);
-			}
-		}
-	}
-	return comment(
-		"📚 Documentation preview",
-		"Open full documentation preview",
-		[...links.values()],
-		"Changed pages",
-		"No published pages found in changed files.",
-	);
-}
 
 async function renderStorybook(): Promise<string[]> {
 	const index = asRecord(
@@ -131,8 +90,5 @@ function comment(
 	return renderPreviewComments(introduction, links, emptyMessage, footer);
 }
 
-if (kind !== "docs" && kind !== "storybook") {
-	throw new Error(`Unknown preview kind: ${kind}`);
-}
-const rendered = kind === "docs" ? await renderDocs() : await renderStorybook();
+const rendered = await renderStorybook();
 await writeFile(output, `${JSON.stringify(rendered)}\n`);

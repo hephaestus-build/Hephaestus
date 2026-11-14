@@ -648,7 +648,7 @@ The required checks are job names, so a display name does not change them.
 | `delivery-metrics.yml`                | Weekly, manual                                                                | Reports lead time, deployment frequency, and change fail, recovery and rework proxies. See [Delivery Metrics](./delivery-metrics.mdx)                                                                                                 |
 | `ci-server-clean-reference.yml`       | Weekly, manual                                                                | Records cold server phases and compares generated JARs                                                                                                                                                                           |
 | `scorecard-ratchet.yml`               | Push to main, branch-protection change, weekly, manual                        | Fails when a Scorecard check drops below the committed baseline. A push fails only for the checks its own commit decides                                                                                                         |
-| `cd-docs.yml`, `cd-docs-teardown.yml` | `docs/**` on push and pull requests. A published release. PR closed | Publishes the docs site, the latest release at `/` and `main` at `/next/` ([Versions](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/README.md#versions)), and its pull-request previews |
+| `cd-docs.yml` | `docs/**` on push to `main`. A published release | Publishes the docs site, the latest release at `/` and `main` at `/next/` ([Versions](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/README.md#versions)) |
 | `version-pr.yml`                      | Successful CI/CD push run on main                                             | Maintains the accumulating Version PR from the newest validated main commit, and tracks failures on one issue. Its own pull-request CI/CD run, release evidence preflight included, validates it                                |
 | `release.yml`                         | Successful CI/CD push on `main`                                               | Requires empty architecture ratchets for the planned stable version before publication, then promotes the moving series and latest image tags                                                                                                                                                       |
 | `release-upgrade.yml`                 | Called by `release.yml`, by a merge group that changes a migration, weekly    | Boots the previous stable release with seeded data, then the candidate against the same database. See [Seeded release upgrade](./database-migration#ci-validation) |
@@ -1661,13 +1661,12 @@ vp run typecheck:agents      # Agent + practice script TypeScript
 
 ## Static preview comments
 
-Storybook and documentation previews list every published story or page from changed source files.
-They use the built Storybook index and Docusaurus metadata, not guessed routes. The lists are
+The Storybook preview lists every published story from changed source files.
+It uses the built Storybook index, not guessed routes. The list is
 not a dependency-impact report: changing a component without changing its story file does not add
 that component's stories. Unpublished or deleted entries cannot link to a preview page.
 
-Stories are grouped by their full Storybook component title (including its sidebar path), and pages
-by their source directory. Each group shows its count and all its links, with no collapsed sections
+Stories are grouped by their full Storybook component title, including its sidebar path. Each group shows its count and all its links, with no collapsed sections
 or item cap. Headings and wrapping link paragraphs keep the paths readable without repeating them
 for every variant or introducing a wide table.
 
@@ -1681,60 +1680,12 @@ fails explicitly rather than dropping content.
 update the preview's existing bot comments in place. It validates the entire artifact before
 writing, paginates existing comments, skips unchanged bodies, and deletes surplus parts only after
 publishing every current part. GitHub does not offer atomic multi-comment updates. A failed run
-fails the publication step and a retry converges without duplicate comments. Teardown replaces the
-main comment and deletes continuation parts for both previews. A delayed publisher that observes a
-closed pull request also retires its comments instead of restoring live links.
+fails the publication step and a retry converges without duplicate comments.
 
-### Documentation preview deployment
-
-Docs build errors still fail the build job. The optional preview has its own result.
-Only the Surge command can fail without failing the job. A failed upload writes an `error` status under
-**Preview / Docs**, with a link to the workflow log, and adds a warning and a step summary.
-API, artifact, build, and status-report failures still fail their steps.
-
-Forks still build. Their publication job is skipped because it has no hosting credential or status-write permission.
-
-`cd-docs.yml` compares documentation trees before it selects publication.
-For a `synchronize` event, it compares the previous head with the new head.
-Thus a code-only push does not redeploy documentation that an earlier commit changed.
-For an opened or reopened pull request, it compares the merge base with the head.
-The workflow's path filter alone cannot establish this: GitHub filters pull requests on their whole three-dot diff.
-
-Build jobs cancel superseded builds. Upload and teardown share the `docs-preview-<PR number>` concurrency group,
-keep active mutations running, and retain queued mutations with `queue: max`.
-After acquiring this lock, upload re-reads the pull request and requires an open state and the exact tested head.
-Teardown requires a fresh closed state. A delayed close event cannot remove a reopened pull request's previews.
-
-`scripts/docs-preview.ts` owns status transitions. Before Surge starts, the upload records a `pending` claim on the exact head.
-Only this attempt can turn that claim into `success` or `error`, from its actual upload outcome.
-
-An existing **Preview / Docs** status, including `pending` or `error`, prevents another upload on that head.
-A rerun preserves and reports that status. It never turns an earlier pending claim into success.
-A later head that changes docs can claim its own upload.
-
-```mermaid
-stateDiagram-v2
-    accTitle: Documentation preview claim states
-    accDescr: A new head claims one upload. That attempt records success or error. A repeated run preserves the recorded status.
-    [*] --> unclaimed
-    unclaimed --> pending: Claim this head
-    pending --> success: This upload succeeds
-    pending --> error: This upload fails or cannot run
-    success --> [*]
-    error --> [*]
-```
-
-The diagram shows writes by the attempt that creates a claim.
-Runs that find an existing status send no transition, including an existing provider `failure` status.
-
-| Signal | Meaning | Action |
-| --- | --- | --- |
-| **Preview / Docs** is `error` | The preview was not published. | Read its linked workflow log. The required docs build has its own result. |
-| **Preview / Docs** stays `pending` | An attempt claimed this head but did not report an outcome. | Read the claim's linked run. A rerun preserves the claim and does not upload again. |
-
-GitHub documents [job concurrency and its queue](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency),
-[commit statuses](https://docs.github.com/en/rest/commits/statuses), and
-[path-filter comparisons](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#git-diff-comparisons).
+The links point to the Storybook that Chromatic keeps for the build, so they stay valid after the pull request closes.
+The previews no longer use Surge. Its free account refused uploads at our push rate, and the tool printed account details in public logs.
+Documentation has no pull-request preview until an organization-owned host exists.
+The required docs build still runs in the tooling leg, and `vp run docs:dev` serves the docs locally.
 
 ## Chromatic visual coverage
 

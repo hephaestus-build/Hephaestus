@@ -1,4 +1,3 @@
-import { isSet } from "./lib/env.ts";
 import { asStringArray, readJsonFile } from "./lib/json.ts";
 import { PREVIEW_COMMENT_LIMIT } from "./lib/preview-comment.ts";
 
@@ -18,15 +17,16 @@ interface GitHubApi {
 			updateComment: ApiMethod<unknown>;
 			deleteComment: ApiMethod<unknown>;
 		};
-		pulls: { get: ApiMethod<{ state: string }> };
 	};
 }
 
-/** One owner for publication, shrinking lists and teardown of both static previews. */
+/**
+ * One owner for publication and shrinking lists of the Storybook preview. Chromatic keeps each
+ * build's Storybook, so a closed pull request keeps working links and needs no teardown.
+ */
 export async function publishPreviewComments({
 	github,
 	context,
-	kind,
 	path,
 }: {
 	github: GitHubApi;
@@ -34,13 +34,10 @@ export async function publishPreviewComments({
 		repo: { owner: string; repo: string };
 		issue: { number: number };
 	};
-	kind: "docs" | "storybook";
-	/** Omit on teardown: replace the main comment and remove every continuation. */
-	path?: string;
+	path: string;
 }): Promise<void> {
-	const title = kind === "docs" ? "📚 Documentation preview" : "🧩 Storybook preview";
-	const removed = [`## ${title}\n\n~~Preview has been removed~~ (PR closed)\n`];
-	let bodies = isSet(path) ? asStringArray(await readJsonFile(path), "Preview comments") : removed;
+	const kind = "storybook";
+	const bodies = asStringArray(await readJsonFile(path), "Preview comments");
 	if (
 		bodies.length === 0 ||
 		bodies.some((body) => !body.trim() || body.length > PREVIEW_COMMENT_LIMIT)
@@ -48,12 +45,6 @@ export async function publishPreviewComments({
 		throw new Error("Preview comments must be nonempty and fit GitHub's comment limit.");
 	}
 	const { repo, issue } = context;
-	if (isSet(path)) {
-		const pull = await github.rest.pulls.get({ ...repo, pull_number: issue.number });
-		if (pull.data.state === "closed") {
-			bodies = removed;
-		}
-	}
 	const comments = await github.paginate(github.rest.issues.listComments, {
 		...repo,
 		issue_number: issue.number,

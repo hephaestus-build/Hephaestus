@@ -99,24 +99,6 @@
 		"reason": "root-cause: Establish the complete constraint for this existing control; a nearby comment fragment does not justify a permanent exception."
 	},
 	{
-		"file": ".github/workflows/cd-docs-teardown.yml",
-		"category": "failure-bypass",
-		"source": "continue-on-error: true",
-		"context": "<module> -> - name: Teardown Storybook preview",
-		"count": 1,
-		"owner": "ROOTFIX / CI3",
-		"reason": "root-cause: ROOTFIX T8 owns distinguishing an absent preview from real teardown failure and admitting the combined outcome."
-	},
-	{
-		"file": ".github/workflows/cd-docs-teardown.yml",
-		"category": "failure-bypass",
-		"source": "continue-on-error: true",
-		"context": "<module> -> - name: Retire preview comments and their continuation parts",
-		"count": 1,
-		"owner": "ROOTFIX / CI3",
-		"reason": "root-cause: ROOTFIX T8 owns distinguishing an absent preview from real teardown failure and admitting the combined outcome."
-	},
-	{
 		"file": ".github/workflows/cd-docs.yml",
 		"category": "failure-bypass",
 		"source": "continue-on-error: true",
@@ -3292,15 +3274,6 @@
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "constraint: What `ensureDatabasePassword` did to `server/.env`: - `present`: the file or the environment already names a password; nothing changed. - `generated`: a random password was written, for a database that does not exist yet. - `legacy`: a database already existed, so it holds the password that the old Compose file gave it. PostgreSQL reads `POSTGRES_PASSWORD` only when it creates a database. A new password would lock the developer out of their data, so the old one is kept until `dev:reset` removes the data."
-	},
-	{
-		"file": "scripts/docs-preview.ts",
-		"category": "debt-marker",
-		"source": "until",
-		"context": "<module> -> export async function shouldTeardownPreviews(",
-		"count": 1,
-		"owner": "BANDAID",
-		"reason": "constraint: A closed event can wait behind an upload until after the pull request reopens."
 	},
 	{
 		"file": "scripts/download-trivy-db.test.ts",

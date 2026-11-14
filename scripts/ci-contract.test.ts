@@ -2505,53 +2505,24 @@ void describe("CI contract", () => {
 		assert.match(storybook, /test -s webapp\/storybook-static\/preview-stats\.json/u);
 		assert.match(storybook, /storybookBuildDir: storybook-static/u);
 		assert.match(storybook, /onlyChanged: true/u);
-		assert.match(storybook, /surge \.\/webapp\/storybook-static/u);
-		assert.match(storybook, /render-preview-comment\.ts storybook webapp\/storybook-static/u);
+		assert.doesNotMatch(storybook, /surge/u);
+		assert.match(storybook, /render-preview-comment\.ts webapp\/storybook-static/u);
+		assert.match(
+			storybook,
+			/CHROMATIC_STORYBOOK_URL: \$\{\{ steps\.chromatic\.outputs\.storybookUrl \}\}/u,
+		);
 		assert.match(storybook, /github\.event\.pull_request\.base\.sha/u);
 		assert.match(
 			storybook,
 			/PREVIEW_COMMENT_PATH: \$\{\{ runner\.temp \}\}\/storybook-preview\.json/u,
 		);
-		assert.match(storybook, /name: Create Storybook status check\s+if: >-\s+success\(\)/u);
+		assert.match(storybook, /name: Create Storybook status check\s+if: success\(\)/u);
 	});
 
-	void test("publishes documentation links derived from the built pages", async () => {
-		const docs = await readFile(".github/workflows/cd-docs.yml", "utf8");
-		assert.ok(
-			String(parseDocument(docs).getIn(["on", "pull_request", "paths"])).includes(
-				"scripts/render-preview-comment.ts",
-			),
-		);
-		const buildPreview = job(docs, "build-preview");
-		assert.match(buildPreview, /fetch-depth: 0/u);
-		assert.match(buildPreview, /render-preview-comment\.ts docs docs\/\.docusaurus/u);
-		assert.match(buildPreview, /github\.event\.pull_request\.base\.sha/u);
-		assert.match(
-			job(docs, "preview"),
-			/PREVIEW_COMMENT_PATH: preview-comment\/docs-preview-comment\.json/u,
-		);
-	});
-
-	void test("shares a continuation-aware publisher across both previews and teardown", async () => {
-		for (const [file, kind] of [
-			["ci-quality-gates.yml", "storybook"],
-			["cd-docs.yml", "docs"],
-		] as const) {
-			const source = await readFile(`.github/workflows/${file}`, "utf8");
-			assert.match(source, /scripts\/publish-preview-comments\.ts/u);
-			assert.ok(source.includes(`kind: "${kind}", path: process.env.PREVIEW_COMMENT_PATH`));
-		}
-		const docs = parseDocument(await readFile(".github/workflows/cd-docs.yml", "utf8"));
-		for (const dependency of [
-			"scripts/publish-preview-comments.ts",
-			"scripts/lib/preview-comment.ts",
-		]) {
-			assert.ok(String(docs.getIn(["on", "pull_request", "paths"])).includes(dependency));
-		}
-		const teardown = await readFile(".github/workflows/cd-docs-teardown.yml", "utf8");
-		assert.match(teardown, /scripts\/publish-preview-comments\.ts/u);
-		assert.match(teardown, /for \(const kind of \["docs", "storybook"\]\)/u);
-		assert.match(teardown, /publishPreviewComments\(\{ github, context, kind \}\)/u);
+	void test("the Storybook preview publishes its links with the continuation-aware publisher", async () => {
+		const source = await readFile(".github/workflows/ci-quality-gates.yml", "utf8");
+		assert.match(source, /scripts\/publish-preview-comments\.ts/u);
+		assert.ok(source.includes("path: process.env.PREVIEW_COMMENT_PATH"));
 	});
 
 	void test("routes tooling-only changes away from server infrastructure", async () => {
@@ -5200,8 +5171,6 @@ void test("a workflow triggered by main does not cancel the run main is judged b
  * the cancelled one left, such as `pull-request.yml`'s sticky comments, cancels like any other.
  */
 const UNCANCELLED_PULL_REQUEST_RUNS: Record<string, string> = {
-	".github/workflows/cd-docs-teardown.yml":
-		"It deletes the docs and Storybook previews; a teardown cancelled halfway leaves them published.",
 	".github/workflows/openapi-autocommit.yml":
 		"Any label starts it, so an unrelated label would cancel the run that commits the regeneration.",
 };
@@ -5668,22 +5637,16 @@ void test("Stories enforces visual evidence independently of preview publication
 	);
 	const chromatic = namedStep(workflow, jobPath, "Chromatic visual testing");
 	assert.equal(chromatic.get("if"), "success() && env.CHROMATIC_POLICY_SKIP != 'true'");
-	const preview = namedStep(workflow, jobPath, "Deploy public Storybook preview");
-	assert.equal(preview.get("continue-on-error"), true);
-	assert.equal(
-		preview.get("if"),
-		"success() && github.event_name == 'pull_request' && env.CHROMATIC_POLICY_SKIP != 'true'",
-	);
+	// The preview is the Storybook that Chromatic published, so every link and the status need its URL.
 	for (const name of ["Prepare Storybook preview links", "Publish Storybook preview links"]) {
 		assert.equal(
 			namedStep(workflow, jobPath, name).get("if"),
-			"steps.storybook_preview.outcome == 'success'",
+			"github.event_name == 'pull_request' && startsWith(steps.chromatic.outputs.storybookUrl, 'http')",
 		);
 	}
 	assert.equal(
 		namedStep(workflow, jobPath, "Create Storybook status check").get("if"),
-		"success() && ((github.event_name == 'pull_request' && steps.storybook_preview.outcome == 'success') || " +
-			"(github.event_name != 'pull_request' && startsWith(steps.chromatic.outputs.storybookUrl, 'http')))",
+		"success() && startsWith(steps.chromatic.outputs.storybookUrl, 'http')",
 	);
 	assert.equal(chromatic.getIn(["with", "autoAcceptChanges"]), false);
 	assert.equal(chromatic.getIn(["with", "exitZeroOnChanges"]), false);
