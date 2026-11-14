@@ -53,6 +53,11 @@ export interface OutlineConnectCardProps {
 	connectUnavailable?: boolean;
 	onConnect: (input: OutlineConnectInput) => void;
 	onDisconnect: () => void;
+	isReplacingToken?: boolean;
+	/** Why the last key replacement failed, in the server's words. */
+	replaceTokenError?: string;
+	/** Stores a new key on the existing connection. Resolves to whether Outline accepted it. */
+	onReplaceToken: (token: string) => Promise<boolean>;
 }
 
 // Client-side format hint only — the server re-validates the URL through the SSRF guard on connect.
@@ -84,6 +89,9 @@ export function OutlineConnectCard({
 	connectUnavailable = false,
 	onConnect,
 	onDisconnect,
+	isReplacingToken = false,
+	replaceTokenError,
+	onReplaceToken,
 }: OutlineConnectCardProps) {
 	const [serverUrl, setServerUrl] = useState("");
 	const [token, setToken] = useState("");
@@ -129,6 +137,12 @@ export function OutlineConnectCard({
 							</div>
 
 							<OutlineTokenPanel tokenStatus={tokenStatus} isLoading={isTokenStatusLoading} />
+
+							<ReplaceOutlineKeyForm
+								isReplacing={isReplacingToken}
+								error={replaceTokenError}
+								onReplace={onReplaceToken}
+							/>
 						</>
 					) : (
 						<FieldGroup>
@@ -217,8 +231,8 @@ export function OutlineConnectCard({
 						<AlertDialogTitle>Disconnect Outline?</AlertDialogTitle>
 						<AlertDialogDescription>
 							Hephaestus stops syncing Outline and erases every mirrored document for this
-							workspace. Documents in Outline itself are not affected. You cannot undo this. You can
-							reconnect later with a token.
+							workspace. Documents in Outline itself are not affected. You cannot undo this. To use
+							a new API key, cancel and use Replace API key instead.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
@@ -262,10 +276,11 @@ function OutlineTokenPanel({ tokenStatus, isLoading }: OutlineTokenPanelProps) {
 		return (
 			<Alert variant="destructive">
 				<TriangleAlertIcon />
-				<AlertTitle>Outline no longer accepts this token. Reconnect with a new one</AlertTitle>
+				<AlertTitle>Outline no longer accepts this key</AlertTitle>
 				<AlertDescription>
 					Syncing is stopped until you store a working API key. Create a new key in Outline under{" "}
-					<strong>Settings → API Keys</strong>, then disconnect and reconnect here with it.
+					<strong>Settings → API Keys</strong>, then enter it under <strong>Replace API key</strong>
+					. Your collections and mirrored documents stay.
 				</AlertDescription>
 			</Alert>
 		);
@@ -321,11 +336,65 @@ function OutlineTokenPanel({ tokenStatus, isLoading }: OutlineTokenPanelProps) {
 					</AlertTitle>
 					<AlertDescription>
 						Outline API keys cannot be rotated through the API. Create a new key in Outline under{" "}
-						<strong>Settings → API Keys</strong> and enter it here before this one expires. The
-						mirror stops the moment it expires.
+						<strong>Settings → API Keys</strong> and enter it under <strong>Replace API key</strong>{" "}
+						before this one expires. The mirror stops the moment it expires.
 					</AlertDescription>
 				</Alert>
 			)}
 		</div>
+	);
+}
+
+interface ReplaceOutlineKeyFormProps {
+	isReplacing: boolean;
+	error?: string;
+	onReplace: (token: string) => Promise<boolean>;
+}
+
+/**
+ * A new key for the existing connection. The connection, its collections and its mirrored documents
+ * stay, which Disconnect would erase.
+ */
+function ReplaceOutlineKeyForm({ isReplacing, error, onReplace }: ReplaceOutlineKeyFormProps) {
+	const [token, setToken] = useState("");
+	return (
+		<form
+			className="space-y-3"
+			onSubmit={(event) => {
+				event.preventDefault();
+				if (!hasText(token.trim()) || isReplacing) {
+					return;
+				}
+				void onReplace(token.trim()).then((replaced) => {
+					if (replaced) {
+						setToken("");
+					}
+				});
+			}}
+		>
+			<Field data-invalid={error !== undefined}>
+				<FieldLabel htmlFor="outline-replace-token">Replace API key</FieldLabel>
+				<Input
+					id="outline-replace-token"
+					type="password"
+					autoComplete="new-password"
+					value={token}
+					disabled={isReplacing}
+					onChange={(event) => setToken(event.target.value)}
+					placeholder="ol_api_…"
+					aria-invalid={error !== undefined}
+				/>
+				<FieldDescription>
+					Create the key in Outline under <em>Settings → API Keys</em>, with the same team as the
+					current one. The connection, its collections and mirrored documents stay. Revoke the old
+					key in Outline after Hephaestus accepts the new one.
+				</FieldDescription>
+				{hasText(error) && <FieldError>{error}</FieldError>}
+			</Field>
+			<Button type="submit" variant="outline" disabled={!hasText(token.trim()) || isReplacing}>
+				{isReplacing && <Spinner />}
+				{isReplacing ? "Replacing key…" : "Replace key"}
+			</Button>
+		</form>
 	);
 }

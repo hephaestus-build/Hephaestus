@@ -20,6 +20,7 @@ const meta = {
 		connected: false,
 		onConnect: fn(),
 		onDisconnect: fn(),
+		onReplaceToken: fn(async () => true),
 	},
 } satisfies Meta<typeof OutlineConnectCard>;
 
@@ -155,7 +156,7 @@ export const TokenExpiringSoon: Story = {
 	},
 };
 
-/** Outline rejects the stored token — the mirror is dead until an admin reconnects with a new key. */
+/** Outline rejects the stored token: the mirror waits until an admin enters a new key, which keeps it. */
 export const TokenRejected: Story = {
 	args: {
 		connected: true,
@@ -163,8 +164,54 @@ export const TokenRejected: Story = {
 		tokenStatus: { accepted: false },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/outline no longer accepts this token\. reconnect with a new one/iu);
+		canvas.getByText(/outline no longer accepts this key/iu);
+		canvas.getByText(/your collections and mirrored documents stay/iu);
 		await expect(canvas.queryByText(/expires in/iu)).not.toBeInTheDocument();
+	},
+};
+
+/** A new key replaces the stored one on the same connection; nothing is disconnected. */
+export const ReplaceKey: Story = {
+	args: {
+		connected: true,
+		connectionLabel: "Acme Wiki",
+		tokenStatus: healthyToken,
+	},
+	play: async ({ args, canvas, userEvent }) => {
+		const replace = canvas.getByRole("button", { name: "Replace key" });
+		await expect(replace).toBeDisabled();
+		await userEvent.type(canvas.getByLabelText("Replace API key"), "ol_api_new");
+		await userEvent.click(replace);
+		await expect(args.onReplaceToken).toHaveBeenCalledWith("ol_api_new");
+		await expect(args.onDisconnect).not.toHaveBeenCalled();
+	},
+};
+
+/** The replacement is under way: the field and the button wait for its answer. */
+export const ReplacingKey: Story = {
+	args: {
+		connected: true,
+		connectionLabel: "Acme Wiki",
+		tokenStatus: healthyToken,
+		isReplacingToken: true,
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Replacing key…" })).toBeDisabled();
+		await expect(canvas.getByLabelText("Replace API key")).toBeDisabled();
+	},
+};
+
+/** The server refused the key and says why, under the field. */
+export const ReplaceKeyRefused: Story = {
+	args: {
+		connected: true,
+		connectionLabel: "Acme Wiki",
+		tokenStatus: healthyToken,
+		replaceTokenError: "This key belongs to another Outline team. Use a key of the connected team.",
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/belongs to another outline team/iu)).toBeVisible();
+		await expect(canvas.getByLabelText("Replace API key")).toHaveAttribute("aria-invalid", "true");
 	},
 };
 
