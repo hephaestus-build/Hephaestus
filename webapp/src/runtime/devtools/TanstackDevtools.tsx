@@ -1,25 +1,36 @@
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import type { AnyRouter } from "@tanstack/react-router";
-import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
+import { lazy, Suspense } from "react";
 
-import environment from "@/environment";
-import { sanitizeEnvironmentBoolean } from "@/lib/environment";
-
-const isTanstackDevtoolsEnabled = sanitizeEnvironmentBoolean(environment.devtools.tanstack);
+/**
+ * Release builds of the TanStack devtools render nothing, so a release image has no use for them.
+ * `import.meta.env.DEV` is a build-time constant: a production build drops the dynamic imports with
+ * the branch, and the devtools packages do not reach the bundle.
+ */
+const Devtools = import.meta.env.DEV
+	? lazy(async () => {
+			const [{ ReactQueryDevtools }, { TanStackRouterDevtools }] = await Promise.all([
+				import("@tanstack/react-query-devtools"),
+				import("@tanstack/react-router-devtools"),
+			]);
+			return {
+				default: ({ router }: TanstackDevtoolsProps) => (
+					<>
+						<ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
+						{router ? <TanStackRouterDevtools router={router} position="bottom-right" /> : null}
+					</>
+				),
+			};
+		})
+	: null;
 
 interface TanstackDevtoolsProps {
 	router?: AnyRouter;
 }
 
 export function TanstackDevtools({ router }: TanstackDevtoolsProps) {
-	if (!isTanstackDevtoolsEnabled) {
-		return null;
-	}
-
-	return (
-		<>
-			<ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
-			{router ? <TanStackRouterDevtools router={router} position="bottom-right" /> : null}
-		</>
+	return Devtools === null ? null : (
+		<Suspense fallback={null}>
+			<Devtools router={router} />
+		</Suspense>
 	);
 }
