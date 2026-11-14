@@ -193,6 +193,16 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldLimitAnEncodedApiPathAsTheDecodedPath() throws Exception {
+        // Handler mapping and Spring Security decode /%61pi to /api, so the limit must too.
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/%61pi/auth/refresh");
+
+        filter(props()).doFilter(request, new MockHttpServletResponse(), mock(FilterChain.class));
+
+        assertThat(store).isNotEmpty();
+    }
+
+    @Test
     void disabledFilterPassesThroughWithoutTouchingBuckets() throws Exception {
         AuthRateLimitProperties disabled = new AuthRateLimitProperties(
                 false,

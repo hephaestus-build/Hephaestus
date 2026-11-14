@@ -153,14 +153,10 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
      */
     @Nullable
     private static Endpoint match(HttpServletRequest request) {
-        String servletPath = request.getServletPath();
-        if (servletPath == null || servletPath.isEmpty()) {
-            servletPath = request.getRequestURI();
-        }
-        if (!servletPath.startsWith(ApiPath.PREFIX + "/")) {
+        String path = ApiPath.relative(request);
+        if (path == null) {
             return null;
         }
-        String path = servletPath.substring(ApiPath.PREFIX.length());
         String method = request.getMethod();
         if (!"GET".equals(method) && path.startsWith("/user/passkeys")) {
             return Endpoint.PASSKEY;

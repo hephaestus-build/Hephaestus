@@ -228,14 +228,19 @@ async function waitUntilReady(
 }
 
 /**
- * Where a release answers its API. The server serves it under `/api` since 1.0; an earlier release answered at the
- * root, behind a proxy that removed the prefix. The previous release can be either.
+ * Where the previous release answers its API. The server serves it under `/api` since 1.0; an earlier release
+ * answered at the root, behind a proxy that removed the prefix. The candidate never falls back: see `candidateApiOf`.
  */
-async function apiOf(port: number): Promise<string> {
+async function previousApiOf(port: number): Promise<string> {
 	const origin = `http://127.0.0.1:${port}`;
 	const prefixed = await fetchWithTimeout(`${origin}/api/identity-providers`);
 	await prefixed.body?.cancel();
 	return prefixed.ok ? `${origin}/api` : origin;
+}
+
+/** The candidate serves its API under `/api`, so a candidate that answers at the root fails the run. */
+function candidateApiOf(port: number): string {
+	return `http://127.0.0.1:${port}/api`;
 }
 
 /**
@@ -676,7 +681,7 @@ async function assertPreviousReleaseRuns(database: string, schema: string): Prom
 			agentImage: previousAgentImage,
 		});
 		await waitUntilReady(name, port, ["/readyz", "/actuator/health/readiness"]);
-		const api = await apiOf(port);
+		const api = await previousApiOf(port);
 		const session = await login(api, "alice");
 		await completeTransparencyNotice(api, session);
 		await assertCoreReads(api, session);
@@ -977,7 +982,7 @@ try {
 	let port = startApplication(application, previousImage);
 	// A previous release without the management port answers readiness only on the actuator path.
 	await waitUntilReady(application, port, ["/readyz", "/actuator/health/readiness"]);
-	let api = await apiOf(port);
+	let api = await previousApiOf(port);
 	const previousSession = await login(api, "alice");
 	await completeTransparencyNotice(api, previousSession);
 	await login(api, "root");
@@ -1013,7 +1018,7 @@ try {
 	application = `${runId}-candidate`;
 	port = startApplication(application, candidateImage, "hephaestus", false);
 	await waitUntilReady(application, port);
-	api = await apiOf(port);
+	api = candidateApiOf(port);
 	const upgradedData = dataFingerprint(preserved);
 	executeFixture("assert-migrated.sql");
 	if (upgradedData !== seededData) {
@@ -1041,7 +1046,7 @@ try {
 	docker("restart", "--time", "30", application);
 	port = publishedPort(application);
 	await waitUntilReady(application, port);
-	api = await apiOf(port);
+	api = candidateApiOf(port);
 	const restartedSession = await login(api, "alice");
 	await assertInstalledCatalog(api, restartedSession);
 	if (

@@ -52,7 +52,7 @@
 					"title": "Activity page p95",
 					"description": "The server time of the Activity reads.",
 					"expr": [
-						"histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{job=\"hephaestus\",runtime_role=\"server\",method=\"GET\",status!~\"5..\",uri=~\"(/public)?/workspaces/[^/]+/activity(/.*)?\"}[5m])))"
+						"histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{job=\"hephaestus\",runtime_role=\"server\",method=\"GET\",status!~\"5..\",uri=~\"/api(/public)?/workspaces/[^/]+/activity(/.*)?\"}[5m])))"
 					],
 					"alias": ["p95"],
 					"unit": "s",

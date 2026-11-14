@@ -1758,9 +1758,9 @@ tests:
   - name: server errors at 8 % of API requests burn the error budget fast
     interval: 1m
     input_series:
-      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200"}'
+      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200"}'
         values: "0+100x80"
-      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="500"}'
+      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="500"}'
         values: "0+8x80"
     alert_rule_test:
       - eval_time: 75m
@@ -1775,9 +1775,9 @@ tests:
   - name: server errors at 7 % of API requests stay under the fast burn
     interval: 1m
     input_series:
-      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200"}'
+      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200"}'
         values: "0+100x80"
-      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="500"}'
+      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="500"}'
         values: "0+7x80"
     alert_rule_test:
       - eval_time: 75m
@@ -1787,7 +1787,7 @@ tests:
   - name: server errors on the internal sandbox routes do not count against the API
     interval: 1m
     input_series:
-      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200"}'
+      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200"}'
         values: "0+100x80"
       - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/internal/llm/chat/completions",status="502"}'
         values: "0+1000x80"
@@ -1802,9 +1802,9 @@ tests:
   - name: one server error in two on an almost idle API does not page
     interval: 1m
     input_series:
-      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200"}'
+      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200"}'
         values: "0+0.5x80"
-      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="500"}'
+      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="500"}'
         values: "0+0.5x80"
     alert_rule_test:
       - eval_time: 75m
@@ -1814,9 +1814,9 @@ tests:
   - name: a fast error burn ends when the last five minutes are clean, though the hour is not
     interval: 1m
     input_series:
-      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200"}'
+      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200"}'
         values: "0+100x80"
-      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="500"}'
+      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="500"}'
         values: "0+20x60 1200+0x20"
     alert_rule_test:
       - eval_time: 55m
@@ -1834,9 +1834,9 @@ tests:
   - name: server errors at 4 % for six hours burn the error budget slowly, and not fast
     interval: 5m
     input_series:
-      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200"}'
+      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200"}'
         values: "0+500x90"
-      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="500"}'
+      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="500"}'
         values: "0+20x90"
     alert_rule_test:
       - eval_time: 7h
@@ -1854,9 +1854,9 @@ tests:
   - name: server errors at 2 % for six hours stay under the slow burn
     interval: 5m
     input_series:
-      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200"}'
+      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200"}'
         values: "0+500x90"
-      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="500"}'
+      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="500"}'
         values: "0+10x90"
     alert_rule_test:
       - eval_time: 7h
@@ -1866,9 +1866,9 @@ tests:
   - name: reads over 2 seconds at 8 % burn the latency budget fast
     interval: 1m
     input_series:
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200",le="+Inf"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200",le="+Inf"}'
         values: "0+100x80"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200",le="2.0"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200",le="2.0"}'
         values: "0+92x80"
     alert_rule_test:
       - eval_time: 75m
@@ -1883,9 +1883,9 @@ tests:
   - name: reads over 2 seconds at 6 % stay under the fast latency burn
     interval: 1m
     input_series:
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200",le="+Inf"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200",le="+Inf"}'
         values: "0+100x80"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200",le="2.0"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200",le="2.0"}'
         values: "0+94x80"
     alert_rule_test:
       - eval_time: 75m
@@ -1895,33 +1895,33 @@ tests:
   - name: slow event streams, downloads, exports, server errors and writes do not count against reads
     interval: 1m
     input_series:
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200",le="+Inf"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200",le="+Inf"}'
         values: "0+100x80"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200",le="2.0"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200",le="2.0"}'
         values: "0+100x80"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces/{workspaceSlug}/mentor/events",status="200",le="+Inf"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces/{workspaceSlug}/mentor/events",status="200",le="+Inf"}'
         values: "0+100x80"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces/{workspaceSlug}/mentor/events",status="200",le="2.0"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces/{workspaceSlug}/mentor/events",status="200",le="2.0"}'
         values: "0x80"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/user/exports/{id}/download",status="200",le="+Inf"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/user/exports/{id}/download",status="200",le="+Inf"}'
         values: "0+100x80"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/user/exports/{id}/download",status="200",le="2.0"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/user/exports/{id}/download",status="200",le="2.0"}'
         values: "0x80"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/admin/audit/export",status="200",le="+Inf"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/admin/audit/export",status="200",le="+Inf"}'
         values: "0+100x80"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/admin/audit/export",status="200",le="2.0"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/admin/audit/export",status="200",le="2.0"}'
         values: "0x80"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces/{workspaceSlug}/practices/scans/{scanId}/report/sarif",status="200",le="+Inf"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces/{workspaceSlug}/practices/scans/{scanId}/report/sarif",status="200",le="+Inf"}'
         values: "0+100x80"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces/{workspaceSlug}/practices/scans/{scanId}/report/sarif",status="200",le="2.0"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces/{workspaceSlug}/practices/scans/{scanId}/report/sarif",status="200",le="2.0"}'
         values: "0x80"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="503",le="+Inf"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="503",le="+Inf"}'
         values: "0+100x80"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="503",le="2.0"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="503",le="2.0"}'
         values: "0x80"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="POST",uri="/workspaces",status="200",le="+Inf"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="POST",uri="/api/workspaces",status="200",le="+Inf"}'
         values: "0+100x80"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="POST",uri="/workspaces",status="200",le="2.0"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="POST",uri="/api/workspaces",status="200",le="2.0"}'
         values: "0x80"
     alert_rule_test:
       - eval_time: 75m
@@ -1934,11 +1934,11 @@ tests:
   - name: a server without the 2 second bucket, before the upgrade, does not count as slow
     interval: 1m
     input_series:
-      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200",instance="old"}'
+      - series: 'http_server_requests_seconds_count{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200",instance="old"}'
         values: "0+100x80"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200",le="+Inf"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200",le="+Inf"}'
         values: "_x60 0+100x20"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200",le="2.0"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200",le="2.0"}'
         values: "_x60 0+100x20"
     alert_rule_test:
       - eval_time: 75m
@@ -1948,9 +1948,9 @@ tests:
   - name: slow reads on an almost idle API do not page
     interval: 1m
     input_series:
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200",le="+Inf"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200",le="+Inf"}'
         values: "0+0.5x80"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200",le="2.0"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200",le="2.0"}'
         values: "0x80"
     alert_rule_test:
       - eval_time: 75m
@@ -1960,9 +1960,9 @@ tests:
   - name: reads over 2 seconds at 4 % for six hours burn the latency budget slowly
     interval: 5m
     input_series:
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200",le="+Inf"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200",le="+Inf"}'
         values: "0+500x90"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200",le="2.0"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200",le="2.0"}'
         values: "0+480x90"
     alert_rule_test:
       - eval_time: 7h
@@ -1980,9 +1980,9 @@ tests:
   - name: reads over 2 seconds at 2 % for six hours stay under the slow latency burn
     interval: 5m
     input_series:
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200",le="+Inf"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200",le="+Inf"}'
         values: "0+500x90"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/workspaces",status="200",le="2.0"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",uri="/api/workspaces",status="200",le="2.0"}'
         values: "0+490x90"
     alert_rule_test:
       - eval_time: 7h
@@ -2356,13 +2356,13 @@ tests:
   - name: slow Activity reads burn the budget fast and slow, other routes and a quiet hour do not
     interval: 1m
     input_series:
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/activity/me",le="1.0"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/activity/me",le="1.0"}'
         values: "0+1x420"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/activity/me",le="+Inf"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/activity/me",le="+Inf"}'
         values: "0+10x420"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/team",le="1.0"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/team",le="1.0"}'
         values: "0x420"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/team",le="+Inf"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/team",le="+Inf"}'
         values: "0+5x420"
     alert_rule_test:
       - eval_time: 1m
@@ -2516,13 +2516,13 @@ tests:
   - name: fast Activity reads and slow other routes do not burn the Activity budget
     interval: 1m
     input_series:
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/public/workspaces/{slug}/activity",le="1.0"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/api/public/workspaces/{slug}/activity",le="1.0"}'
         values: "0+10x420"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/public/workspaces/{slug}/activity",le="+Inf"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/api/public/workspaces/{slug}/activity",le="+Inf"}'
         values: "0+10x420"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/team",le="1.0"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/team",le="1.0"}'
         values: "0x420"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/team",le="+Inf"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/team",le="+Inf"}'
         values: "0+10x420"
     alert_rule_test:
       - eval_time: 400m
@@ -2677,9 +2677,9 @@ tests:
   - name: server errors at 0.6 % open a ticket, 0.4 % does not
     interval: 10m
     input_series:
-      - series: 'http_server_requests_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/team"}'
+      - series: 'http_server_requests_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/team"}'
         values: "0+994x15"
-      - series: 'http_server_requests_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="500",uri="/workspaces/{workspaceSlug}/team"}'
+      - series: 'http_server_requests_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="500",uri="/api/workspaces/{workspaceSlug}/team"}'
         values: "0+6x15"
     alert_rule_test:
       - eval_time: 2h
@@ -2698,9 +2698,9 @@ tests:
   - name: an error rate within the budget, or an idle instance, opens no ticket
     interval: 10m
     input_series:
-      - series: 'http_server_requests_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/team"}'
+      - series: 'http_server_requests_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/team"}'
         values: "0+996x15"
-      - series: 'http_server_requests_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="500",uri="/workspaces/{workspaceSlug}/team"}'
+      - series: 'http_server_requests_seconds_count{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="500",uri="/api/workspaces/{workspaceSlug}/team"}'
         values: "0+4x15"
       - series: 'http_server_requests_seconds_count{job="hephaestus",instance="server-b:9090",runtime_role="server",method="GET",status="500",uri="/idle"}'
         values: "0x15"
@@ -2712,9 +2712,9 @@ tests:
   - name: slow reads at 0.6 % open a ticket, 0.3 % does not
     interval: 10m
     input_series:
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/team",le="2.0"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/team",le="2.0"}'
         values: "0+994x15"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/team",le="+Inf"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/team",le="+Inf"}'
         values: "0+1000x15"
     alert_rule_test:
       - eval_time: 2h
@@ -2729,9 +2729,9 @@ tests:
   - name: slow reads within the budget open no ticket
     interval: 10m
     input_series:
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/team",le="2.0"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/team",le="2.0"}'
         values: "0+997x15"
-      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/workspaces/{workspaceSlug}/team",le="+Inf"}'
+      - series: 'http_server_requests_seconds_bucket{job="hephaestus",instance="server:9090",runtime_role="server",method="GET",status="200",uri="/api/workspaces/{workspaceSlug}/team",le="+Inf"}'
         values: "0+1000x15"
     alert_rule_test:
       - eval_time: 2h

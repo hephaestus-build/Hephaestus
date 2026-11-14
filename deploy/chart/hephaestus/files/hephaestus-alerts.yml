@@ -688,9 +688,9 @@ groups:
       # Activity reads: 95 % within 1 s. The Activity route templates are the workspace and public activity routes.
       - alert: HephaestusActivityLatencyBudgetBurnFast
         expr: >-
-          (1 - sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"(/public)?/workspaces/[^/]+/activity(/.*)?",le="1.0"}[1h])) / sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"(/public)?/workspaces/[^/]+/activity(/.*)?",le="+Inf"}[1h]))) > 14.4 * 0.05
-          and (1 - sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"(/public)?/workspaces/[^/]+/activity(/.*)?",le="1.0"}[5m])) / sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"(/public)?/workspaces/[^/]+/activity(/.*)?",le="+Inf"}[5m]))) > 14.4 * 0.05
-          and sum(increase(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"(/public)?/workspaces/[^/]+/activity(/.*)?",le="+Inf"}[1h])) >= 20
+          (1 - sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"/api(/public)?/workspaces/[^/]+/activity(/.*)?",le="1.0"}[1h])) / sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"/api(/public)?/workspaces/[^/]+/activity(/.*)?",le="+Inf"}[1h]))) > 14.4 * 0.05
+          and (1 - sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"/api(/public)?/workspaces/[^/]+/activity(/.*)?",le="1.0"}[5m])) / sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"/api(/public)?/workspaces/[^/]+/activity(/.*)?",le="+Inf"}[5m]))) > 14.4 * 0.05
+          and sum(increase(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"/api(/public)?/workspaces/[^/]+/activity(/.*)?",le="+Inf"}[1h])) >= 20
         for: 2m
         labels:
           severity: warning
@@ -699,9 +699,9 @@ groups:
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusActivityLatencyBudgetBurnSlow
         expr: >-
-          (1 - sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"(/public)?/workspaces/[^/]+/activity(/.*)?",le="1.0"}[6h])) / sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"(/public)?/workspaces/[^/]+/activity(/.*)?",le="+Inf"}[6h]))) > 6 * 0.05
-          and (1 - sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"(/public)?/workspaces/[^/]+/activity(/.*)?",le="1.0"}[30m])) / sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"(/public)?/workspaces/[^/]+/activity(/.*)?",le="+Inf"}[30m]))) > 6 * 0.05
-          and sum(increase(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"(/public)?/workspaces/[^/]+/activity(/.*)?",le="+Inf"}[6h])) >= 60
+          (1 - sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"/api(/public)?/workspaces/[^/]+/activity(/.*)?",le="1.0"}[6h])) / sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"/api(/public)?/workspaces/[^/]+/activity(/.*)?",le="+Inf"}[6h]))) > 6 * 0.05
+          and (1 - sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"/api(/public)?/workspaces/[^/]+/activity(/.*)?",le="1.0"}[30m])) / sum(rate(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"/api(/public)?/workspaces/[^/]+/activity(/.*)?",le="+Inf"}[30m]))) > 6 * 0.05
+          and sum(increase(http_server_requests_seconds_bucket{job="hephaestus",runtime_role="server",method="GET",status!~"5..",uri=~"/api(/public)?/workspaces/[^/]+/activity(/.*)?",le="+Inf"}[6h])) >= 60
         for: 15m
         labels:
           severity: warning
