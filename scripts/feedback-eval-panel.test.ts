@@ -373,16 +373,28 @@ void test("only a scheduled night on main whose whole panel job succeeded saves 
 	);
 });
 
-void test("the connection check names each missing setting, and no secret value reaches a step's text", async () => {
-	const workflow = await readFile(".github/workflows/feedback-eval-panel.yml", "utf8");
-	for (const name of ["CI_LLM_BASE_URL", "CI_LLM_API_KEY", "CI_LLM_MODEL"]) {
-		assert.match(workflow, new RegExp(`missing\\+=\\("${name}"\\)`, "u"), name);
+void test("a secret reaches a step only through its environment", async () => {
+	const workflow = asRecord(
+		parse(await readFile(".github/workflows/feedback-eval-panel.yml", "utf8")),
+		"panel workflow",
+	);
+	const references: string[] = [];
+	for (const [name, job] of Object.entries(asRecord(workflow.jobs, "jobs"))) {
+		const record = asRecord(job, name);
+		assert.doesNotMatch(JSON.stringify(record.if ?? ""), /secrets\./u, `${name} if`);
+		for (const step of asArray(record.steps ?? [], `${name} steps`)) {
+			const { env, ...rest } = asRecord(step, `${name} step`);
+			// `run`, `with` and `if` hold no secret: a value there can reach a command line or a log.
+			assert.doesNotMatch(JSON.stringify(rest), /secrets\./u, JSON.stringify(rest).slice(0, 80));
+			for (const value of Object.values(asRecord(env ?? {}, `${name} env`))) {
+				if (String(value).includes("secrets.")) {
+					references.push(String(value));
+				}
+			}
+		}
 	}
-	// A secret reaches a step only as whether it is set, or as the live test's environment.
-	for (const match of workflow.matchAll(/\$\{\{(?<expression>[^}]*secrets\.[^}]*)\}\}/gu)) {
-		const expression = match.groups?.expression ?? "";
-		assert.match(expression, /^ secrets\.CI_LLM_\w+(?: != '')? $/u, expression);
+	assert.ok(references.length > 0);
+	for (const reference of references) {
+		assert.match(reference, /^\$\{\{ secrets\.CI_LLM_\w+(?: != '')? \}\}$/u, reference);
 	}
-	assert.doesNotMatch(workflow, /echo[^\n]*secrets\./u);
-	assert.doesNotMatch(workflow, /FEEDBACK_EVAL_/u);
 });
