@@ -7,12 +7,14 @@ title: Local verification
 | Command                 | What success proves                                                | Excludes                                                                                                                         |
 | ----------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
 | `vp run check:affected` | Selected gates passed, including any tests they contain            | Unselected scopes, verification-only suites and builds, and CI-only checks                                                       |
-| `vp run check:push`     | Selected static checks, prose checks and focused unit tests passed | Complete Node suites, Java unit and integration tests, browser suites, builds and live-service tests                             |
+| `vp run check:push`     | Selected static checks, prose checks and focused unit tests passed | Complete frontend unit projects and Node suites, Java unit and integration tests, Storybook, browser suites, builds other than the webapp bundle, and live-service tests |
 | `vp run check`          | Every gate the `quality` task in `vite.config.ts` runs passed      | Distributable builds, browser and live-service tests, images, mutation analysis, and release security                            |
 | `vp run verify`         | The local verification suites and builds passed                    | Server integration and database tests, full-application E2E, live-service tests, images, mutation analysis, and release security |
 
 While you work, run `check:affected`.
-Before you push, let the pre-push hook run `check:push`: it runs the checks that pull request CI runs for the changed trees.
+Before you push, let the pre-push hook run `check:push`.
+It runs the static checks of the changed trees and the tests that the change touches directly ([Pre-push hook](#pre-push-hook)).
+PR CI runs the complete suites.
 Run `check` when you change a shared input, such as the lockfile, or before you push another local ref.
 
 `check` validates the contents of all pending changeset files through `gate:changesets`.
@@ -154,25 +156,36 @@ The Java unit and integration tiers remain in CI.
 Instruction changes also run the instruction gate.
 The workflow parser and CI linters remain outside the hook.
 
-For frontend source files, the hook runs the changed test files and the colocated test of each changed source, such as `Dialog.test.tsx` beside `Dialog.tsx`.
-It does not follow the import graph: through the router, one component reaches most route tests, which take minutes on one worker.
-CI runs the complete unit project.
-A source without a colocated test runs no test here.
-The hook then prints that CI runs the tests that reach the change through imports.
+For the webapp and the extension, the hook runs the changed test files and the colocated test of each changed source, such as `Dialog.test.tsx` beside `Dialog.tsx`.
+It never runs a complete unit project.
 
-Shared inputs, test helpers, network mocks, deleted files and non-code resources select the complete unit project.
-The extension selects its unit project only.
+Through the router, one component reaches most route tests.
+A test helper, a network mock, the setup file, a shared input such as `package.json`, or a resource reaches every test.
+A complete unit project is too slow for a hook on one worker.
+The type check and lint of the tree catch a broken import or a deleted file.
+When a changed file can reach tests that did not run, the hook says so.
+
+| The hook checks | Only PR CI checks |
+| --- | --- |
+| Format, lint and type check of each changed tree | The complete webapp and extension unit projects |
+| The changed frontend tests and the colocated tests of changed sources | Tests that reach a change through imports, a helper, a mock, the setup file or a shared input |
+| Changed Node tests, their source companions, the CI contract suites for workflow changes, and the tests that run a hook for a hook change | The complete Node suites |
+| Spotless, PMD, the test compilation and the architecture tier for a server change | The Java unit and integration tiers |
+| The webapp build and its bundle budget, for a webapp change | Storybook, the browser suites, the other builds and the images |
+
+Without a merge base, the hook cannot choose, so it runs the complete unit projects.
+For the extension, that is the unit project, without Storybook.
+To run a complete frontend unit project before you push, run `vp run test:webapp` or `vp run test:extension`.
 Each test runner uses one worker.
 If a frontend unit run prints nothing for five minutes, the hook stops it and fails.
 On Linux and macOS, each Node process of the run first writes a diagnostic report, and the hook prints their directory.
 
-A webapp change also builds the webapp, which enforces the bundle budget.
-The build takes seconds, and the browser suites in CI build the same bundle.
+The webapp build takes seconds, and the browser suites in CI build the same bundle.
 
 A change under `scripts/` selects the tooling checks and each tree whose CI path filter in `cicd.yml` names the file.
 Pull request CI runs the same trees for that change.
 
-An unknown path or missing merge base selects every scoped check and both frontend unit projects.
+An unknown path selects every scoped check.
 The hook does not fetch, install tools, start a browser or build an artifact other than the webapp bundle.
 If a pinned tool is absent from the shared cache, run `vp run check` once in any worktree of the clone.
 The hook reports its selected scope and the suites that still require the full gate or CI.

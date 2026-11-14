@@ -144,7 +144,8 @@ Codex reads only `.agents/skills/`, so the six contribution skills have byte-ide
 - Backend behavior changes ship with focused tests in the right tier, asserting on the rows they
   created (`server/AGENTS.md` § Test tiers).
 - Before you push, run `vp run format`.
-  The pre-push hook then runs the checks that pull request CI runs for the changed trees, in minutes. Do not skip it with `--no-verify`.
+  The pre-push hook then runs the static checks and the touched tests, in minutes.
+  Do not skip it with `--no-verify`.
   `vp run check` runs every gate. Run it when you change a shared input, such as the lockfile.
   `vp run verify` adds the credential-free builds and suites.
   CI owns images, browser suites, and live-service suites (`docs/contributor/local-verification.mdx`).

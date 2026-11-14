@@ -186,6 +186,9 @@ export function focusedTests(paths: string[], cwd = process.cwd()): string[] {
 export function colocatedTests(files: readonly string[], cwd = process.cwd()): string[] {
 	const tests = new Set<string>();
 	for (const file of files) {
+		if (!/\.[jt]sx?$/u.test(file)) {
+			continue;
+		}
 		const candidates = /\.test\.[jt]sx?$/u.test(file)
 			? [file]
 			: [".test.ts", ".test.tsx"].map((suffix) => file.replace(/\.[jt]sx?$/u, suffix));
@@ -198,50 +201,38 @@ export function colocatedTests(files: readonly string[], cwd = process.cwd()): s
 	return [...tests].toSorted();
 }
 
-/**
- * For source files, the changed and colocated tests. Their import graph reaches most route tests
- * through the router, which took minutes on one worker; CI runs the complete unit project.
- * Resources, deleted files, test helpers and shared inputs need the whole unit project here too.
- */
-/** Whether only source files of `tree` changed, so its changed and colocated tests suffice here. */
-function sourceOnly(tree: "webapp" | "extension", paths: string[], cwd: string): boolean {
-	const files = paths.filter((file) => file.startsWith(`${tree}/`));
-	return (
-		files.length > 0 &&
-		files.every(
-			(file) =>
-				file.startsWith(`${tree}/src/`) &&
-				// Test helpers and the shared network mocks reach many tests, as a resource does.
-				!/^[^/]+\/src\/(?:test|mocks)\//u.test(file) &&
-				/\.[jt]sx?$/u.test(file) &&
-				existsSync(path.join(cwd, file)),
-		) &&
-		paths.every(
-			(file) =>
-				!scopesFor([file]).includes("full") &&
-				(file.startsWith(`${tree}/`) || !scopesFor([file]).includes(tree)),
-		)
-	);
-}
-
 const frontendTrees = (paths: string[] | undefined) =>
 	(["webapp", "extension"] as const).filter((tree) => pushScopes(paths).includes(tree));
 
-/** Whether some tests that reach a changed frontend file only through its imports did not run. */
+const treeFiles = (tree: "webapp" | "extension", paths: string[]) =>
+	paths.filter((file) => file.startsWith(`${tree}/`));
+
+/** Whether a changed frontend file can reach tests that the hook did not run. */
 export function skipsImportedTests(paths: string[] | undefined, cwd = process.cwd()): boolean {
-	return paths !== undefined && frontendTrees(paths).some((tree) => sourceOnly(tree, paths, cwd));
+	return (
+		paths !== undefined &&
+		frontendTrees(paths).some((tree) => {
+			const files = treeFiles(tree, paths);
+			const tests = new Set(colocatedTests(files, cwd));
+			return files.length === 0 || files.some((file) => !tests.has(file));
+		})
+	);
 }
 
+/**
+ * The frontend tests that the hook runs: each changed test file, and the colocated test of each changed
+ * source file. Never the whole unit project: a test helper, a mock, a setup file or a shared input reaches
+ * every test, and the whole webapp project is too slow for a hook on one worker. The type check and lint of
+ * the tree catch a broken import there; PR CI runs the complete unit projects.
+ */
 export function frontendCommands(paths: string[] | undefined, cwd = process.cwd()): string[][] {
 	return frontendTrees(paths).flatMap((tree) => {
-		const selective = paths !== undefined && sourceOnly(tree, paths, cwd);
-		const tests = selective
-			? colocatedTests(
-					paths.filter((file) => file.startsWith(`${tree}/`)),
-					cwd,
-				)
-			: [];
-		if (selective && tests.length === 0) {
+		// The extension's unit project holds only src/**/*.test.ts; another file would match no test.
+		const tests = (paths === undefined ? [] : colocatedTests(treeFiles(tree, paths), cwd)).filter(
+			(file) => tree === "webapp" || /^extension\/src\/.+\.test\.ts$/u.test(file),
+		);
+		// Without a merge base the hook cannot choose, so it runs the whole unit project.
+		if (paths !== undefined && tests.length === 0) {
 			return [];
 		}
 		return [
@@ -449,11 +440,11 @@ async function main(): Promise<void> {
 	}
 	if (skipsImportedTests(paths)) {
 		console.log(
-			"Tests that reach the changed frontend files only through their imports did not run here; CI runs the complete unit project.",
+			"Tests that reach the changed frontend files through imports, setup files or shared inputs did not run here; PR CI runs the complete unit projects.",
 		);
 	}
 	console.log(
-		"Push checks passed. Complete Node suites, Java unit and integration tests, browser suites and builds did not run; CI runs them.",
+		"Push checks passed. Complete frontend unit projects and Node suites, Java unit and integration tests, Storybook, browser suites and other builds did not run; CI runs them.",
 	);
 }
 
