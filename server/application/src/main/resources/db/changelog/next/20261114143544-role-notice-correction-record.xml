@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794666944691-1" author="hephaestus">
+        <preConditions onFail="HALT" onFailMessage="Queued copies of the general role notice are open again after 20261114013648-harvest-role-change-notifications.xml closed them, so a server of the previous release ran beside the upgrade. Stop every role, restore the backup taken before the upgrade, and upgrade again in the stopped window.">
+            <sqlCheck expectedResult="0">
+                SELECT count(*) FROM agent_action
+                WHERE kind = 'EMAIL'
+                  AND state IN ('PROPOSED', 'ADMITTED', 'EXECUTING')
+                  AND payload ->> 'kind' = 'ACCOUNT_SECURITY_CHANGED'
+                  AND payload #>> '{event,kind}' = 'APP_ROLE_CHANGED'
+            </sqlCheck>
+            <sqlCheck expectedResult="0">
+                SELECT count(*) FROM event_publication
+                WHERE event_type = 'de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent'
+                  AND serialized_event::jsonb ->> 'kind' = 'APP_ROLE_CHANGED'
+            </sqlCheck>
+        </preConditions>
+        <comment>Records the data correction of 20261114013648-harvest-role-change-notifications.xml change set 1794580948952-1, which reached main without its safeguards and so cannot change. That correction closed the queued copies of the general role notice (ACCOUNT_SECURITY_CHANGED with APP_ROLE_CHANGED): a copy whose send had started became UNCERTAIN, every other one CANCELLED, each without its payload. It deleted their open event publications. Role-change emails replaced the general notice, so no later code writes those rows again. The precondition proves that the correction holds. A rollback stops here and names the backup, because the closed rows cannot be rebuilt.</comment>
+        <empty/>
+        <rollback>
+            <stop>The role notice correction of 20261114013648-harvest-role-change-notifications.xml cannot be reversed. Restore the backup taken before the upgrade.</stop>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

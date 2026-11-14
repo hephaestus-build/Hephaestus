@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.database;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.core.action.ActionState;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
 @Tag("database")
 class RoleChangeNoticeCutoverMigrationTest {
     private static final String CHANGELOG = "20261114013648-harvest-role-change-notifications.xml";
+    private static final String RECORD = "20261114143544-role-notice-correction-record.xml";
 
     @Test
     void shouldEndOldRoleNoticesWithoutResendingUncertainWritesOrChangingOtherSecurityMail() throws Exception {
@@ -71,6 +73,45 @@ class RoleChangeNoticeCutoverMigrationTest {
                         "SELECT serialized_event::jsonb ->> 'kind' FROM event_publication WHERE id='" + otherPublication
                                 + "'"))
                 .containsExactly("PASSKEY_CHANGED");
+    }
+
+    @Test
+    void shouldConfirmTheCorrectionWhenNoOldNoticeIsOpen() throws Exception {
+        TestDatabase database = PostgreSQLTestContainer.createDatabase(
+                "role_notice_record_" + UUID.randomUUID().toString().replace("-", ""));
+        PracticeMigrationFixture.upgradeBefore(database, "prod", RECORD);
+        UUID sent = action(database, ActionState.DONE, true, "APP_ROLE_CHANGED");
+        UUID other = action(database, ActionState.ADMITTED, false, "PASSKEY_CHANGED");
+
+        update(database, RECORD);
+
+        assertThat(outcome(database, sent)).isEqualTo("DONE:COMPLETED");
+        assertThat(PracticeMigrationFixture.column(database, "SELECT state FROM agent_action WHERE id='" + other + "'"))
+                .containsExactly("ADMITTED");
+    }
+
+    @Test
+    void shouldHaltWhenAnOldNoticeIsOpenAgainAfterTheCorrection() throws Exception {
+        TestDatabase database = PostgreSQLTestContainer.createDatabase(
+                "role_notice_reopened_" + UUID.randomUUID().toString().replace("-", ""));
+        PracticeMigrationFixture.upgradeBefore(database, "prod", RECORD);
+        // A server of the previous release that ran beside the upgrade queues the old notice again.
+        action(database, ActionState.PROPOSED, false, "APP_ROLE_CHANGED");
+
+        assertThatThrownBy(() -> update(database, RECORD))
+                .hasStackTraceContaining("Queued copies of the general role notice are open again");
+    }
+
+    private static void update(TestDatabase database, String changelog) throws Exception {
+        try (var connection =
+                        DriverManager.getConnection(database.jdbcUrl(), database.username(), database.password());
+                var liquibase = new Liquibase(
+                        "db/changelog/next/" + changelog,
+                        new ClassLoaderResourceAccessor(),
+                        DatabaseFactory.getInstance()
+                                .findCorrectDatabaseImplementation(new JdbcConnection(connection)))) {
+            liquibase.update(new Contexts("prod"), new LabelExpression());
+        }
     }
 
     private static UUID action(TestDatabase database, ActionState state, boolean writeStarted, String eventKind) {
