@@ -1,0 +1,3 @@
+# DOGFOOD-UI-01: reviewSelected was a per-member flag that means nothing while the people scope is all eligible members.
+# A membership now carries inReviewScope, the fact Review settings counts; only the Members page read the removed flag.
+in API GET /workspaces/{workspaceSlug}/members removed the required property `content/items/reviewSelected` from the response with the `200` status
