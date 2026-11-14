@@ -12,6 +12,9 @@ permissions: {}
 jobs:
   cancel:
     name: Cancel this run
+    # The caller already decided to cancel. Without a status function GitHub adds `success()`, whose
+    # meaning inside a called workflow after the caller ran past a failed need is undocumented.
+    if: ${{ always() }}
     runs-on: ubuntu-slim
     timeout-minutes: 15
     permissions:
