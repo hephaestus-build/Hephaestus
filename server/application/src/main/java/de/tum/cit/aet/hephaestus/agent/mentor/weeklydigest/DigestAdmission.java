@@ -2,10 +2,9 @@ package de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
-import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorConversationAccess;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestFacts;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestPayload;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestWindow;
@@ -23,9 +22,8 @@ import tools.jackson.databind.ObjectMapper;
 public class DigestAdmission {
     public static final String REFUSED = "digest_no_longer_eligible";
 
-    private final MentorTurnRepository turns;
-    private final MentorTurnService turnService;
-    private final MentorEntryRepository entries;
+    private final MentorTurnAccess turns;
+    private final MentorConversationAccess conversations;
     private final WeeklyDigestSubscriptions subscriptions;
     private final WeeklyDigestAvailability availability;
     private final WeeklyDigestFacts facts;
@@ -35,17 +33,16 @@ public class DigestAdmission {
     /** Ordinary questions keep their existing admission. Missing or no-longer-eligible digest work is refused. */
     @Transactional(readOnly = true)
     public boolean refuses(long workspaceId, UUID turnId) {
-        var turn = turns.findByIdAndWorkspaceId(turnId, workspaceId).orElse(null);
+        var turn = turns.find(workspaceId, turnId).orElse(null);
         if (turn == null) return true;
-        if (turn.getSurface() != MentorTurn.Surface.SYSTEM) return false;
-        long accountId = turnService.accountId(turn);
+        if (turn.surface() != MentorTurn.Surface.SYSTEM) return false;
+        long accountId = conversations.accountId(workspaceId, turn.conversationId());
         var since = subscriptions.enabledSince(accountId);
-        if (since.isEmpty()
-                || since.get().isAfter(turn.getCreatedAt())
-                || !availability.available(workspaceId, accountId)) return true;
-        var stimulus = entries.findStimulus(workspaceId, turnId);
-        if (stimulus.getKind() != MentorEntry.Kind.DIGEST || stimulus.isRedacted()) return true;
-        var payload = WeeklyDigestPayload.fromJson(stimulus.getPayload(), mapper);
+        if (since.isEmpty() || since.get().isAfter(turn.createdAt()) || !availability.available(workspaceId, accountId))
+            return true;
+        var stimulus = conversations.stimulus(workspaceId, turnId);
+        if (stimulus.kind() != MentorEntry.Kind.DIGEST || stimulus.redacted()) return true;
+        var payload = WeeklyDigestPayload.fromJson(stimulus.payload(), mapper);
         if (payload.isEmpty()) return true;
         var window = payload.get().window();
         var now = clock.instant();

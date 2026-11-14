@@ -2,11 +2,10 @@ package de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
-import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorConversationAccess;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestPayload;
 import java.time.Clock;
 import java.util.Comparator;
@@ -24,9 +23,8 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 public class DigestDelivery {
-    private final MentorTurnRepository turns;
-    private final MentorTurnService turnService;
-    private final MentorEntryRepository entries;
+    private final MentorTurnAccess turns;
+    private final MentorConversationAccess conversations;
     private final DigestAdmission admission;
     private final List<WeeklyDigestTransport> transports;
     private final ObjectMapper mapper;
@@ -37,25 +35,20 @@ public class DigestDelivery {
     @Transactional(propagation = Propagation.MANDATORY)
     public void on(MentorLedgerEvents.TurnChanged changed) {
         if (changed.status() != MentorTurn.Status.DONE || changed.surface() != MentorTurn.Surface.SYSTEM) return;
-        var turn = turns.findByIdAndWorkspaceId(changed.turnId(), changed.workspaceId())
-                .filter(row ->
-                        row.getStatus() == MentorTurn.Status.DONE && row.getSurface() == MentorTurn.Surface.SYSTEM)
+        var turn = turns.find(changed.workspaceId(), changed.turnId())
+                .filter(row -> row.status() == MentorTurn.Status.DONE && row.surface() == MentorTurn.Surface.SYSTEM)
                 .orElse(null);
         if (turn == null) return;
-        long accountId = turnService.accountId(turn);
+        long accountId = conversations.accountId(changed.workspaceId(), turn.conversationId());
         if (admission.refuses(changed.workspaceId(), changed.turnId())) return;
-        var stimulus = entries.findStimulus(changed.workspaceId(), changed.turnId());
-        if (stimulus.getKind() != MentorEntry.Kind.DIGEST
-                || stimulus.isRedacted()
-                || entries
-                        .findByWorkspaceIdAndTurnIdAndKindOrderBySeqAsc(
-                                changed.workspaceId(), changed.turnId(), MentorEntry.Kind.HEPH)
-                        .stream()
-                        .noneMatch(entry -> !entry.isRedacted())) return;
-        var payload = WeeklyDigestPayload.fromJson(stimulus.getPayload(), mapper);
+        var stimulus = conversations.stimulus(changed.workspaceId(), changed.turnId());
+        if (stimulus.kind() != MentorEntry.Kind.DIGEST
+                || stimulus.redacted()
+                || !conversations.answered(changed.workspaceId(), changed.turnId())) return;
+        var payload = WeeklyDigestPayload.fromJson(stimulus.payload(), mapper);
         if (payload.isEmpty()) return;
         events.publishEvent(new MentorLedgerEvents.EntryChanged(
-                changed.workspaceId(), changed.conversationId(), List.of(stimulus.getId())));
+                changed.workspaceId(), changed.conversationId(), List.of(stimulus.id())));
         var pointer = transports.stream()
                 .sorted(Comparator.comparing(WeeklyDigestTransport::pointer))
                 .filter(transport -> transport.reaches(changed.workspaceId(), accountId))
@@ -63,7 +56,7 @@ public class DigestDelivery {
                 .findFirst()
                 .orElse(WeeklyDigestPointer.NONE);
         events.publishEvent(new WeeklyDigestWritten(
-                stimulus.getId(),
+                stimulus.id(),
                 changed.workspaceId(),
                 accountId,
                 payload.get().window().days(),

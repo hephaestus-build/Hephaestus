@@ -7,8 +7,8 @@ import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntry;
-import de.tum.cit.aet.hephaestus.mentor.MentorEntryRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorConversationAccess;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestFacts;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestPayload;
 import java.util.List;
@@ -37,7 +37,7 @@ public class WeeklyDigestContentSource implements ContentSource {
 
     private final MentorConversationService conversations;
     private final MentorEntryService entries;
-    private final MentorEntryRepository rows;
+    private final MentorConversationAccess ledger;
     private final WeeklyDigestFacts facts;
     private final ObjectMapper objectMapper;
 
@@ -94,17 +94,18 @@ public class WeeklyDigestContentSource implements ContentSource {
         }
         return entries.find(workspaceId, parentEntryId)
                 .filter(entry -> !entry.isRedacted())
-                .flatMap(entry -> digestStimulus(workspaceId, entry))
-                .flatMap(entry -> WeeklyDigestPayload.fromJson(entry.getPayload(), objectMapper));
+                .flatMap(entry -> digestPayload(workspaceId, entry));
     }
 
-    private Optional<MentorEntry> digestStimulus(long workspaceId, MentorEntry parent) {
-        if (parent.getKind() == MentorEntry.Kind.DIGEST) return Optional.of(parent);
+    private Optional<WeeklyDigestPayload> digestPayload(long workspaceId, MentorEntry parent) {
+        if (parent.getKind() == MentorEntry.Kind.DIGEST)
+            return WeeklyDigestPayload.fromJson(parent.getPayload(), objectMapper);
         UUID turnId = parent.getTurnId();
         if (parent.getKind() != MentorEntry.Kind.HEPH
                 || parent.getSurface() != MentorEntry.Surface.SYSTEM
                 || turnId == null) return Optional.empty();
-        return rows.findByWorkspaceIdAndTurnIdAndKind(workspaceId, turnId, MentorEntry.Kind.DIGEST)
-                .filter(entry -> !entry.isRedacted());
+        return ledger.digest(workspaceId, turnId)
+                .filter(entry -> !entry.redacted())
+                .flatMap(entry -> WeeklyDigestPayload.fromJson(entry.payload(), objectMapper));
     }
 }
