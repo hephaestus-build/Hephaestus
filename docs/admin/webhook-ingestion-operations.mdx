@@ -41,10 +41,20 @@ A workspace handles the events of one resource, such as a repository or a Slack 
 ## Failed GitHub deliveries
 
 When PostgreSQL is slow or down, the receiver cannot store a delivery in time, and GitHub records the delivery as failed.
-Every 10 minutes, the server reads the GitHub App's deliveries of the past two hours from the
+Every 10 minutes, the server reads the GitHub App's recent deliveries from the
 [GitHub App webhook API](https://docs.github.com/en/rest/apps/webhooks).
 For each event with no successful delivery, it asks GitHub to redeliver the latest attempt once the next redelivery is due.
 This is the procedure that GitHub [recommends](https://docs.github.com/en/webhooks/using-webhooks/automatically-redelivering-failed-deliveries-for-a-github-app-webhook).
+
+How far a run reads back:
+
+- A run reads back 2 hours from the start of the previous run, and further for an event that it still redelivers.
+- A run that cannot read the deliveries changes nothing, so the next run reads the whole gap.
+  This also covers a database outage: the run then does not start, because its lock is in the database.
+- The first run after a server starts reads back 71 hours.
+  GitHub keeps deliveries for 3 days, and a redelivery requested an hour before that limit is still accepted.
+  A server that stops on a Friday evening and starts on a Monday morning thus recovers the deliveries of the weekend.
+- A run reads at most 10,000 deliveries. Older ones are not redelivered, and the run counts `outcome=truncated`.
 
 - Runs never overlap, also across server replicas: each run holds a lock for 9 minutes.
   A run sends requests for at most 5 minutes, and at most 5 a second.
@@ -68,9 +78,9 @@ This is the procedure that GitHub [recommends](https://docs.github.com/en/webhoo
 - Silent mode does not stop redelivery. A redelivery sends nothing to people. It only asks GitHub to send the event to the receiver again.
 
 The job needs the GitHub App credentials and runs in the server role.
-An event that failed all six attempts is counted in `github.webhook.unrecovered`.
-For an outage longer than that, redeliver older failed deliveries in the GitHub App settings under **Advanced** → **Recent Deliveries**, within three days.
-After that, only the reconciliation sync recovers their effect.
+An event that failed all six attempts is counted in `github.webhook.unrecovered` for 2 hours after its last attempt.
+Redeliver such an event in the GitHub App settings under **Advanced** → **Recent Deliveries**, within three days.
+For an outage longer than three days, only the reconciliation sync recovers the effect of the lost events.
 
 ## Which providers deliver again
 
@@ -98,7 +108,7 @@ The server exports these Micrometer meters on its private management listener.
 | `integration.message.dropped` | counter | Attempts stopped by the write fence, by provider kind and reason: `erased-during-processing` or `lease-lost`. Erased events do not retry. |
 | `integration.consumer.inbox.retention.failures` | counter | Retention passes that failed. |
 | `github.webhook.redelivery` | counter | Redelivery requests that GitHub accepted (`requested`) or refused (`refused`). Runs that could not read the deliveries (`unavailable`), only probed a failing receiver (`paused`), or stopped listing at a bound (`truncated`). |
-| `github.webhook.unrecovered` | gauge | GitHub events of the past two hours that failed all six attempts. Above zero means events that Hephaestus did not receive. |
+| `github.webhook.unrecovered` | gauge | GitHub events that failed all six attempts, the last one in the past two hours. Above zero means events that Hephaestus did not receive. |
 
 1. Alert when `integration.consumer.oldest.due.seconds` stays above a few minutes.
    No server claims, or a handler holds a resource's order.

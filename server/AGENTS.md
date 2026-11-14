@@ -213,7 +213,7 @@ That endpoint verifies a route credential and calls `WebhookIngestPipeline#publi
 
 - **Reception stops while no server runs.** The chart uses a rolling update. Inbox leases order provider events across replicas.
   GitHub never retries a failed delivery itself. `GitHubWebhookRedelivery` asks it to redeliver failed
-  GitHub App deliveries of the past two hours. A GitLab webhook missed during a restart is lost. Reconciliation
+  GitHub App deliveries, back to its previous run or, after a server start, 71 hours. A GitLab webhook missed during a restart is lost. Reconciliation
   recovers its effect.
 - **Subject grammar**: `github.<owner>.<repo>.<event>`, where dots inside a path segment become `~`.
   `ConsumerSubjectMath#buildSubjectPrefix` matches it.

@@ -49,12 +49,19 @@ import org.springframework.web.util.UriComponentsBuilder;
  * {@code X-GitHub-Delivery}, which the inbox deduplicates.
  *
  * <p>This follows GitHub's own procedure: group the recent deliveries by GUID, and redeliver one delivery of each
- * GUID that has no successful delivery. Only a GUID whose original delivery is younger than {@link #WINDOW} is
- * considered, so its attempts all stay in view and {@link #MAX_ATTEMPTS} bounds them. Each redelivery waits for its
+ * GUID that has no successful delivery. A run reads back to where the previous run left events open: the start of
+ * that run less {@link #WINDOW}, or the oldest event that it was still redelivering. A run that cannot read the
+ * deliveries, or that never starts because the database refused its lock, leaves that point where it was, so the
+ * next run reads the whole gap. A server's first run reads back {@link #RECOVERY_WINDOW}, so a stopped server loses
+ * no event that GitHub still keeps. An event's attempts all stay in view while it is open, so {@link #MAX_ATTEMPTS}
+ * bounds them. Each redelivery waits for its
  * time in {@link #REDELIVERY_DUE}, counted from the original delivery: the gaps double, so the attempts of one event
  * outlast a long inbox admission stall instead of being spent on the next few runs while it lasts. A GUID whose latest answer
  * was a client error is left alone, because the receiver refused it on purpose. The unrecovered gauge counts the
- * GUIDs that failed every attempt; the reconciliation sync is what remains for them.
+ * GUIDs that failed every attempt, while their last attempt is younger than {@link #WINDOW}; the reconciliation sync
+ * is what remains for them.
+ *
+ * @see <a href="https://docs.github.com/en/webhooks/testing-and-troubleshooting-webhooks/redelivering-webhooks">Redelivering webhooks</a>: deliveries of the past 3 days
  *
  * @see <a href="https://docs.github.com/en/webhooks/using-webhooks/automatically-redelivering-failed-deliveries-for-a-github-app-webhook">Automatically redelivering failed deliveries for a GitHub App webhook</a>
  * @see <a href="https://docs.github.com/en/rest/apps/webhooks">REST API endpoints for GitHub App webhooks</a>
@@ -86,9 +93,19 @@ public class GitHubWebhookRedelivery {
     /** The original delivery and one redelivery for each due time. */
     static final int MAX_ATTEMPTS = REDELIVERY_DUE.size() + 1;
 
-    /** How old an event's original delivery may be. It covers the last due time and the run that requests it. */
-    // Public so a test can hold the stream's dedup window above it.
-    public static final Duration WINDOW = Duration.ofHours(2);
+    /**
+     * How far a run reads back behind the previous run's start. It covers the last due time and the run that
+     * requests it.
+     */
+    static final Duration WINDOW = Duration.ofHours(2);
+
+    /**
+     * How far a run reads back when it does not know where the previous run left off: GitHub keeps a delivery for 3
+     * days, and this stays an hour short of that, so a redelivery requested at its end is still accepted. It covers
+     * a server stopped from a Friday evening to a Monday morning.
+     */
+    // Public so a test can hold the inbox's dedup window above it.
+    public static final Duration RECOVERY_WINDOW = Duration.ofDays(3).minusHours(1);
 
     /** At GitHub's largest page, a run reads at most 10,000 deliveries. */
     static final int MAX_PAGES = 100;
@@ -135,6 +152,12 @@ public class GitHubWebhookRedelivery {
     private final AtomicInteger unrecovered = new AtomicInteger();
     private final Sleeper sleeper;
 
+    /**
+     * How far the next run reads back, or null before this server's first complete read. Runs of one server never
+     * overlap, and another server reads back from its own value.
+     */
+    private @Nullable Instant readFrom;
+
     /** Waits between requests; a test replaces it. */
     @FunctionalInterface
     interface Sleeper {
@@ -178,7 +201,8 @@ public class GitHubWebhookRedelivery {
         this.truncated = outcome(meterRegistry, "truncated");
         // The registry holds its gauge's state weakly by default, and the gauge reads NaN once nothing else holds it.
         Gauge.builder(GitHubMetrics.GITHUB_WEBHOOK_UNRECOVERED, unrecovered, AtomicInteger::get)
-                .description("GitHub webhook events of the last two hours that failed every delivery attempt")
+                .description("GitHub webhook events whose last delivery attempt in the past two hours failed and that"
+                        + " have no attempts left")
                 .strongReference(true)
                 .register(meterRegistry);
     }
@@ -196,10 +220,11 @@ public class GitHubWebhookRedelivery {
         if (!tokens.isConfigured()) {
             return;
         }
-        Instant deadline = clock.instant().plus(RUN_BUDGET);
+        Instant start = clock.instant();
+        Instant deadline = start.plus(RUN_BUDGET);
         Map<String, List<Delivery>> recent;
         try {
-            recent = recentByGuid(deadline);
+            recent = recentByGuid(since(start), deadline);
         } catch (RestClientException e) {
             unavailable.increment();
             log.warn(
@@ -210,13 +235,25 @@ public class GitHubWebhookRedelivery {
         int lost = 0;
         Instant now = clock.instant();
         List<List<Delivery>> due = new ArrayList<>();
+        Instant nextReadFrom = start.minus(WINDOW);
         for (List<Delivery> attempts : recent.values()) {
-            switch (next(attempts, now)) {
-                case EXHAUSTED -> lost++;
+            Next next = next(attempts, now);
+            switch (next) {
+                case EXHAUSTED -> {
+                    // Counted while its last attempt is recent: a first run that reads back days must not count
+                    // events that used their attempts long ago again.
+                    if (!attempts.getFirst().deliveredAt().isBefore(start.minus(WINDOW))) lost++;
+                }
                 case REDELIVER -> due.add(attempts);
                 case OUT_OF_VIEW, DELIVERED, REFUSED, WAIT -> {}
             }
+            if (next == Next.REDELIVER || next == Next.WAIT) {
+                // An open event stays in view until it is delivered or used its attempts.
+                Instant originalAt = Objects.requireNonNull(original(attempts)).deliveredAt();
+                if (originalAt.isBefore(nextReadFrom)) nextReadFrom = originalAt;
+            }
         }
+        readFrom = nextReadFrom;
         // The oldest events leave the window first.
         due.sort(Comparator.comparing(
                 attempts -> Objects.requireNonNull(original(attempts)).deliveredAt()));
@@ -288,12 +325,20 @@ public class GitHubWebhookRedelivery {
         return attempts.stream().filter(Delivery::original).findFirst().orElse(null);
     }
 
+    /** Where this run reads back to: never further than GitHub keeps deliveries. */
+    private Instant since(Instant start) {
+        Instant oldest = start.minus(RECOVERY_WINDOW);
+        Instant from = readFrom;
+        if (from == null) return oldest;
+        Instant earliest = from.isBefore(start.minus(WINDOW)) ? from : start.minus(WINDOW);
+        return earliest.isBefore(oldest) ? oldest : earliest;
+    }
+
     /**
-     * The deliveries of the last {@link #WINDOW}, newest first within each GUID. It reads no page after
-     * {@code deadline}; an event whose original is on an unread page is then out of view, not miscounted.
+     * The deliveries since {@code since}, newest first within each GUID. It reads no page after {@code deadline}; an
+     * event whose original is on an unread page is then out of view, not miscounted.
      */
-    private Map<String, List<Delivery>> recentByGuid(Instant deadline) {
-        Instant since = clock.instant().minus(WINDOW);
+    private Map<String, List<Delivery>> recentByGuid(Instant since, Instant deadline) {
         Map<String, List<Delivery>> byGuid = new LinkedHashMap<>();
         String cursor = null;
         int page = 0;
