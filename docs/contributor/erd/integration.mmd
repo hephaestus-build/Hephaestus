@@ -603,6 +603,11 @@ erDiagram
         TIMESTAMPTZ decided_at "NOT NULL"
     }
 
+    SlackRequestClaim {
+        VARCHAR(80) signature PK
+        TIMESTAMPTZ claimed_at "NOT NULL"
+    }
+
     SlackThread {
         BIGINT id PK,UK
         BIGINT workspace_id FK,UK "NOT NULL"

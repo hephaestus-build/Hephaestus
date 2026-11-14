@@ -14,11 +14,11 @@ import org.springframework.validation.annotation.Validated;
  * {@code OAuthCallbackProperties}); kept separate so the security-sensitive HMAC secret has its
  * own namespace.
  *
- * <p>{@code secret} is nullable here: {@link HmacOAuthStateService} falls back to
- * {@code hephaestus.webhook.secret} when it is unset (a pre-existing shared infrastructure secret)
- * and throws at construction if neither is configured — that policy stays in the service.
+ * <p>{@code secret} is nullable here: when it is unset, {@link HmacOAuthStateService} derives a key for state tokens
+ * from {@code hephaestus.webhook.secret}, and it throws at construction if neither is configured.
  *
- * @param secret HMAC-SHA256 key for state tokens; {@code null}/blank → webhook-secret fallback
+ * @param secret Key that signs OAuth state tokens. Without it, the server derives a separate key from the webhook
+ *     secret.
  * @param ttl freshness window for issued state tokens (default 10 minutes)
  * @param nonceRetention how long consumed/expired nonce rows are kept before the daily sweep
  *     prunes them (default 7 days)

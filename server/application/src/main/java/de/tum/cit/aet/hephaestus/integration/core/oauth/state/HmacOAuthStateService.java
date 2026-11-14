@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -71,11 +72,12 @@ public class HmacOAuthStateService implements OAuthStateService {
      * {@link OAuthStateProperties}; the {@code nonceStore} provides the single-use guarantee on
      * top of HMAC + TTL.
      *
-     * <p>If {@code hephaestus.integration.oauth-state.secret} is unset, falls back to the shared
-     * {@code hephaestus.webhook.secret} (pre-existing infrastructure secret). When neither is
-     * configured, production ({@code prod} profile) fails fast; outside production an ephemeral
-     * random secret is generated with a WARN so local development boots without
-     * webhook/OAuth config — mirroring the {@code AttemptSigningKey} dev-vs-prod contract.
+     * <p>If {@code hephaestus.integration.oauth-state.secret} is unset, the key derives from
+     * {@code hephaestus.webhook.secret} with a fixed purpose label, so a state token and a webhook
+     * signature never share a key. When neither is configured, production ({@code prod} profile)
+     * fails fast; outside production an ephemeral random secret is generated with a WARN so local
+     * development boots without webhook/OAuth config — mirroring the {@code AttemptSigningKey}
+     * dev-vs-prod contract.
      *
      * <p>{@code @Autowired} is required to disambiguate from the private core constructor (used by
      * the static test factories): with two declared constructors and no marker, Spring falls back
@@ -91,6 +93,18 @@ public class HmacOAuthStateService implements OAuthStateService {
         this(resolveSecret(properties, webhookProperties, environment), properties.ttl(), nonceStore, clock);
     }
 
+    /** HMAC-SHA256 of a purpose label under {@code secret}: a key for OAuth state alone. */
+    private static String purposeKey(String secret) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] key = mac.doFinal("hephaestus oauth state v1".getBytes(StandardCharsets.UTF_8));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(key);
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("HMAC-SHA256 is unavailable", e);
+        }
+    }
+
     private static String resolveSecret(
             OAuthStateProperties properties, WebhookProperties webhookProperties, Environment environment) {
         String configured = properties.secret();
@@ -99,7 +113,7 @@ public class HmacOAuthStateService implements OAuthStateService {
         }
         String webhookSecret = webhookProperties.secret();
         if (webhookSecret != null && !webhookSecret.isBlank()) {
-            return webhookSecret;
+            return purposeKey(webhookSecret);
         }
         if (environment.matchesProfiles("prod")) {
             throw new IllegalStateException(
