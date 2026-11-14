@@ -15,10 +15,12 @@ import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
+import de.tum.cit.aet.hephaestus.core.security.HostAddresses;
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import jakarta.annotation.PostConstruct;
 import jakarta.validation.Valid;
+import java.net.InetAddress;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -65,6 +67,20 @@ class SpringCorrectnessArchitectureTest extends HephaestusArchitectureTest {
                                         + " must own capture and erasure independently of the dispatch thread"));
                     }
                 })
+                .check(classes);
+    }
+
+    @Test
+    void shouldTurnTextIntoAnAddressOnlyThroughHostAddresses() {
+        noClasses()
+                .that()
+                .doNotHaveFullyQualifiedName(HostAddresses.class.getName())
+                .should()
+                .callMethod(InetAddress.class, "getByName", String.class)
+                .orShould()
+                .callMethod(InetAddress.class, "getAllByName", String.class)
+                .because("getByName asks DNS unless the text is an IP literal, and a DNS answer inside a transaction"
+                        + " holds a pooled connection; HostAddresses parses literals and keeps lookups in one place")
                 .check(classes);
     }
 

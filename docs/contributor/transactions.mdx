@@ -66,6 +66,12 @@ Spring: "self-invocation (in effect, a method within the target object calling a
   A review job fails, and its preparation failure says that a database operation failed.
   A person-data erasure step stops with `STORE_ERASURE_FAILED` until an administrator resumes it.
   An HTTP request answers `500`.
+- In the integration tier, `HttpInTransactionCheck` fails each test during which an HTTP request starts in a transaction that the application opened.
+  The failure names the caller.
+  It sees every client built from an injected builder, as the counter does.
+- DNS is a network call. `HostAddresses` is the only class that calls `InetAddress#getByName` or `InetAddress#getAllByName`.
+  `HostAddresses#literal` parses an IP literal and never asks DNS; `HostAddresses#resolve` asks DNS, so call it with no transaction.
+  `SpringCorrectnessArchitectureTest` refuses any other call to `InetAddress#getByName` or `InetAddress#getAllByName`.
 
 PostgreSQL keeps row locks until the transaction ends ([Explicit locking](https://www.postgresql.org/docs/18/explicit-locking.html)).
 A slow call therefore blocks every writer of the same rows, and it holds a pooled connection.

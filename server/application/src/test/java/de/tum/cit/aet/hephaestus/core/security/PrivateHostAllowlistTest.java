@@ -24,6 +24,12 @@ class PrivateHostAllowlistTest extends BaseUnitTest {
         return InetAddress.getByName(literal);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"[fd00:3::]/48", "[fd00:3::7]"})
+    void shouldAcceptAnIpv6EntryWrittenInBrackets(String entry) throws UnknownHostException {
+        assertThat(parse(entry).permits("other.lab.test", ip("fd00:3::7"))).isTrue();
+    }
+
     @Test
     void shouldPermitListedHostNameIgnoringCase() throws UnknownHostException {
         assertThat(ALLOWLIST.permits("vllm.LAB.test", ip("172.16.4.4"))).isTrue();

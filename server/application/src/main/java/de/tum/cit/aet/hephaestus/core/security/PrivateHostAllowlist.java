@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.core.security;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -181,15 +180,13 @@ public final class PrivateHostAllowlist {
     private record Range(InetAddressMatcher matcher, InetAddress network, int prefix) {
 
         static Range parse(String cidr) {
-            // The matcher validates the literal, so the lookup below parses it without DNS.
             InetAddressMatcher matcher = InetAddressMatchers.fromIpAddress(cidr);
             int slash = cidr.indexOf('/');
-            InetAddress network;
-            try {
-                network = InetAddress.getByName(slash < 0 ? cidr : cidr.substring(0, slash));
-            } catch (UnknownHostException e) {
-                throw new IllegalArgumentException("Not an IP address or CIDR range: " + cidr, e);
-            }
+            String address = slash < 0 ? cidr : cidr.substring(0, slash);
+            // An IPv6 entry may be written in brackets, as in a URL.
+            if (address.startsWith("[") && address.endsWith("]")) address = address.substring(1, address.length() - 1);
+            InetAddress network = HostAddresses.literal(address)
+                    .orElseThrow(() -> new IllegalArgumentException("Not an IP address or CIDR range: " + cidr));
             int prefix = slash < 0 ? network.getAddress().length * 8 : Integer.parseInt(cidr.substring(slash + 1));
             return new Range(matcher, network, prefix);
         }

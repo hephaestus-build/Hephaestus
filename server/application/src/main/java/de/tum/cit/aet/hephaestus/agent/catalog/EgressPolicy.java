@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import de.tum.cit.aet.hephaestus.core.security.HostAddresses;
 import de.tum.cit.aet.hephaestus.agent.LlmProperties;
 import de.tum.cit.aet.hephaestus.core.SsrfGuardedResolverGroup;
 import de.tum.cit.aet.hephaestus.core.security.PrivateAddressGuard;
@@ -137,7 +138,7 @@ public class EgressPolicy {
 
     private static InetAddress[] resolve(String host) {
         try {
-            return InetAddress.getAllByName(host);
+            return HostAddresses.resolve(host);
         } catch (UnknownHostException e) {
             throw new IllegalArgumentException(NOT_PUBLIC_HTTPS, e);
         }

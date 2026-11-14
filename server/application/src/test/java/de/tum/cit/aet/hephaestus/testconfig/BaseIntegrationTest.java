@@ -24,6 +24,7 @@ import org.springframework.test.context.TestPropertySource;
 @AutoConfigureWebTestClient(timeout = "30s")
 @Import({
     AuditedRequestCheck.class,
+    HttpInTransactionCheck.class,
     AuditedEchoController.class,
     ApiWebTestClient.class,
     TestSecurityConfig.class,
@@ -58,11 +59,17 @@ public abstract class BaseIntegrationTest {
     @BeforeEach
     void forgetEarlierAuditedRequests() {
         AuditedRequestCheck.reset();
+        HttpInTransactionCheck.reset();
     }
 
     @AfterEach
     void auditedRequestsWroteTheirRows() {
         AuditedRequestCheck.assertNoViolations();
+    }
+
+    @AfterEach
+    void noRequestLeftInATransaction() {
+        HttpInTransactionCheck.assertNoViolations();
     }
 
     @DynamicPropertySource

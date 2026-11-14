@@ -5,7 +5,6 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.UnknownHostException;
 import java.util.Locale;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -142,14 +141,9 @@ public final class ServerUrlValidator {
         // A name is never resolved here: getByName would look it up in DNS, on every check of a stored URL. The
         // connect-time resolver checks the addresses a name has when a client connects.
         if (!host.startsWith("[") && !isCanonicalDottedQuad(ipCandidate)) return;
-        InetAddress addr;
-        try {
-            // Only an IP literal reaches this point, which getByName parses without a lookup.
-            addr = InetAddress.getByName(ipCandidate);
-        } catch (UnknownHostException e) {
-            // Brackets always hold an IP literal, so one that does not parse is refused, not taken for a name.
-            throw new InvalidInputException("The IPv6 server host is not valid.", e);
-        }
+        // Brackets always hold an IP literal, so one that does not parse is refused, not taken for a name.
+        InetAddress addr = HostAddresses.literal(ipCandidate)
+                .orElseThrow(() -> new InvalidInputException("The IPv6 server host is not valid."));
 
         // Only range-check IP literals (canonical dotted-quad or bracketed IPv6); a DNS hostname's resolved
         // address varies over time and is the HTTP client's concern. Non-canonical numeric forms are already

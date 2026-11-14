@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus;
 
+import de.tum.cit.aet.hephaestus.core.security.HostAddresses;
 import de.tum.cit.aet.hephaestus.config.CorsProperties;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry;
@@ -20,7 +21,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -196,11 +196,7 @@ public class SecurityConfig {
 
     /** The address the request arrived on: always a literal, so parsing it does no name lookup. */
     private static @Nullable InetAddress localAddress(HttpServletRequest request) {
-        try {
-            return InetAddress.getByName(request.getLocalAddr());
-        } catch (UnknownHostException e) {
-            return null;
-        }
+        return HostAddresses.literal(request.getLocalAddr()).orElse(null);
     }
 
     /**

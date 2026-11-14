@@ -1,12 +1,12 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.claim;
 
+import de.tum.cit.aet.hephaestus.core.security.HostAddresses;
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.time.Duration;
 import org.springframework.context.annotation.Bean;
@@ -71,7 +71,7 @@ public class AgentSandboxConfiguration {
 
     private static String address(String host) {
         try {
-            return InetAddress.getByName(host).getHostAddress();
+            return HostAddresses.resolve(host)[0].getHostAddress();
         } catch (UnknownHostException e) {
             throw new IllegalStateException("The sandbox gateway host does not resolve", e);
         }

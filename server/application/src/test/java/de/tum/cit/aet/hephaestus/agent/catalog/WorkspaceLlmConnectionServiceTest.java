@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import static org.mockito.Mockito.mock;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -11,6 +12,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditAction;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
@@ -66,6 +70,9 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
     @Mock
     private EntityManager entityManager;
 
+    @Mock
+    private TransactionTemplate transactions;
+
     private WorkspaceLlmConnectionService connectionService;
 
     private WorkspaceContext workspaceContext;
@@ -84,7 +91,11 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
                 instanceLlmSettingsService,
                 limitDiscovery,
                 configAudit,
-                SECRETS);
+                SECRETS,
+                transactions);
+        lenient()
+                .when(transactions.execute(any()))
+                .thenAnswer(call -> call.<TransactionCallback<?>>getArgument(0).doInTransaction(mock(TransactionStatus.class)));
         ReflectionTestUtils.setField(connectionService, "entityManager", entityManager);
         lenient().when(entityManager.getReference(Workspace.class, 1L)).thenReturn(workspace);
         workspaceContext =
@@ -148,10 +159,8 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void doesNotCreateAConnectionWhoseBaseUrlTheEgressPolicyRejects() {
+        void shouldRefuseABaseUrlTheEgressPolicyRejectsBeforeATransactionOpens() {
             byoEnabled(true);
-            when(connectionRepository.findByWorkspaceIdAndSlug(1L, "openai-prod"))
-                    .thenReturn(Optional.empty());
             doThrow(new IllegalArgumentException("Base URL must be a public https:// address"))
                     .when(egressPolicy)
                     .validate("https://api.openai.com");
@@ -160,8 +169,7 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("public https");
 
-            verify(connectionRepository, never()).save(any());
-            verifyNoInteractions(configAudit);
+            verifyNoInteractions(transactions, connectionRepository, configAudit);
         }
 
         @Test

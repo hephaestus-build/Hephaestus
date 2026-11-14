@@ -1,10 +1,8 @@
 package de.tum.cit.aet.hephaestus.core.security;
 
 import java.net.Inet6Address;
-import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.UnknownHostException;
 import java.util.Locale;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -49,14 +47,10 @@ public final class ScmOrigin {
         if (literal.contains("%")) {
             return Optional.empty();
         }
-        try {
-            // A literal containing ':' is parsed, never looked up. An IPv4-mapped address comes back as IPv4,
-            // which a browser does not do, so it has no origin; nor does a zone id, which a browser rejects.
-            return InetAddress.getByName(literal) instanceof Inet6Address address
-                    ? Optional.of("[" + address.getHostAddress() + "]")
-                    : Optional.empty();
-        } catch (UnknownHostException e) {
-            return Optional.empty();
-        }
+        // An IPv4-mapped address comes back as IPv4, which a browser does not do, so it has no origin; nor does a zone
+        // id, which a browser rejects.
+        return HostAddresses.literal(literal)
+                .filter(Inet6Address.class::isInstance)
+                .map(address -> "[" + address.getHostAddress() + "]");
     }
 }

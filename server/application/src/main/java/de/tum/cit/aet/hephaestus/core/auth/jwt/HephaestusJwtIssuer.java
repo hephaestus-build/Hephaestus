@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.jwt;
 
+import de.tum.cit.aet.hephaestus.core.security.HostAddresses;
 import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
@@ -7,8 +8,6 @@ import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import jakarta.servlet.http.HttpServletRequest;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -248,27 +247,17 @@ public class HephaestusJwtIssuer {
     }
 
     /**
-     * Return {@code raw} only if it parses as a literal IP address; otherwise null. The char pre-check
-     * (only {@code 0-9 a-f . : %}) keeps {@code getByName} off DNS for the inputs we actually see — this
-     * is always {@code request.getRemoteAddr()}, a numeric peer IP, never a hostname. (A contrived
-     * all-hex label like {@code "cafe"} would still be a resolvable name, so this is a fast-path filter,
-     * not a hard guarantee.) Keeps a malformed audit IP from failing the {@code ip_inet} (Postgres
-     * {@code inet}) INSERT and thus blocking issuance.
+     * Return {@code raw} only if it is an IP literal; otherwise null. It never looks a name up: the peer address can come
+     * from a forwarded header, and issuance runs in a transaction. Keeps a malformed audit IP from failing the
+     * {@code ip_inet} (Postgres {@code inet}) INSERT and thus blocking issuance.
      */
     @Nullable
     static String sanitizeIp(@Nullable String raw) {
         if (raw == null || raw.isBlank()) {
             return null;
         }
-        if (!raw.chars().allMatch(c -> Character.digit(c, 16) >= 0 || c == '.' || c == ':' || c == '%')) {
-            return null;
-        }
-        try {
-            InetAddress.getByName(raw);
-            return raw;
-        } catch (UnknownHostException e) {
-            return null;
-        }
+        // PostgreSQL's inet type has no zone id.
+        return raw.indexOf('%') < 0 && HostAddresses.literal(raw).isPresent() ? raw : null;
     }
 
     /**
