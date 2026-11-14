@@ -69,11 +69,11 @@ public class OutlineConnectionAdminService {
                     : 0;
             if (status == 401) {
                 throw new IllegalArgumentException(
-                        "Outline does not accept this key. Check that you copied all of it.");
+                        "Outline does not accept this key. Check that you copied all of it.", e);
             }
             if (status == 403) {
                 throw new IllegalArgumentException(
-                        "Outline refused this key for reading. Give the key read access to the API.");
+                        "Outline refused this key for reading. Give the key read access to the API.", e);
             }
             throw e;
         }
