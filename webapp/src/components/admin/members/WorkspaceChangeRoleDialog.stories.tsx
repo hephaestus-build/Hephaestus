@@ -12,6 +12,7 @@ const makeOwner: WorkspaceRoleChange = {
 	from: "ADMIN",
 	to: "OWNER",
 	own: false,
+	rejoins: false,
 };
 const ownDemotion: WorkspaceRoleChange = {
 	accountId: "42",
@@ -19,6 +20,7 @@ const ownDemotion: WorkspaceRoleChange = {
 	from: "ADMIN",
 	to: "MEMBER",
 	own: true,
+	rejoins: false,
 };
 
 /**
@@ -44,6 +46,21 @@ export const MakeOwner: Story = {
 			"Ada Lovelace can then delete this workspace and change the role of anyone in it, including you.",
 		);
 		await expect(args.onConfirm).not.toHaveBeenCalled();
+	},
+};
+
+/** Adding back a member who left as an owner asks first, as making an owner does. */
+export const AddBackFormerOwner: Story = {
+	args: { change: { ...makeOwner, from: "OWNER", rejoins: true } },
+	play: async () => {
+		const dialog = await screen.findByRole("alertdialog", {
+			name: "Add Ada Lovelace back as an owner?",
+		});
+		await expectSettledVisible(dialog);
+		await expect(dialog).toHaveAccessibleDescription(
+			/^Ada Lovelace can then delete this workspace/u,
+		);
+		await expect(within(dialog).getByRole("button", { name: "Add back as owner" })).toBeEnabled();
 	},
 };
 

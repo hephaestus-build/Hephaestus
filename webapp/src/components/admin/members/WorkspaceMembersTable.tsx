@@ -6,7 +6,17 @@ import {
 	type SortingState,
 	useTable,
 } from "@tanstack/react-table";
-import { ChevronDown, EyeIcon, EyeOffIcon, Filter, Search, Users } from "lucide-react";
+import {
+	ChevronDown,
+	EyeIcon,
+	EyeOffIcon,
+	Filter,
+	MoreHorizontal,
+	Search,
+	UserMinus,
+	UserPlus,
+	Users,
+} from "lucide-react";
 // oxlint-disable-next-line no-restricted-imports -- TanStack Table keys its caches on identity, which the compiler memoises as an optimisation rather than promises; each `useMemo` below says what breaks without it.
 import { type ComponentProps, type ReactElement, useMemo, useRef, useState } from "react";
 import { useSpinDelay } from "spin-delay";
@@ -31,6 +41,7 @@ import {
 	DropdownMenuCheckboxItem,
 	DropdownMenuContent,
 	DropdownMenuGroup,
+	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
@@ -48,6 +59,7 @@ import { getProviderLabel } from "@/lib/provider/provider-labels";
 import { hasText } from "@/lib/text";
 import type { WorkspaceRole } from "@/lib/workspace-roles";
 
+import { PendingMembers, useMemberPending } from "./pending-members";
 import { WORKSPACE_ROLE_LABELS, type WorkspaceMemberRow } from "./workspace-members";
 
 const columnHelper = createColumnHelper<DataTableFeatures, WorkspaceMemberRow>();
@@ -64,6 +76,7 @@ const SKELETON_WIDTHS: Record<string, string> = {
 	"review scope": "w-16",
 	"public activity": "w-24",
 	visibility: "w-6",
+	actions: "w-6",
 };
 
 interface WorkspaceMembersTableProps {
@@ -101,6 +114,18 @@ interface WorkspaceMembersTableProps {
 	onFollowProvider?: (member: WorkspaceMemberRow) => void;
 	/** The member whose role is about to follow the provider; only that member's action waits. */
 	pendingFollowAccountId?: string;
+	/**
+	 * Present for a reader who may remove members. The server lets the reader remove exactly the
+	 * members whose role they may manage (`assignableRoles`). `trigger` is the row's Actions menu,
+	 * where focus returns after the confirmation.
+	 */
+	onRemove?: (member: WorkspaceMemberRow, trigger: HTMLElement) => void;
+	/** The members whose removal is in flight; only their rows wait. */
+	removingAccountIds?: ReadonlySet<string>;
+	/** Adds back a member who left, with the role they had. Offered on the rows the reader manages. */
+	onAddBack?: (member: WorkspaceMemberRow, trigger: HTMLElement) => void;
+	/** The reader's own account. Their own row offers no removal: leaving locks them out of this page. */
+	readerAccountId?: string;
 	view: WorkspaceMembersTableView;
 	onViewChange: (patch: Partial<WorkspaceMembersTableView>) => void;
 	renderPageLink?: (page: number, props: ComponentProps<"a">) => ReactElement;
@@ -118,13 +143,14 @@ export interface WorkspaceMembersTableView {
 interface MemberRoleSelectProps {
 	member: WorkspaceMemberRow;
 	items: { value: WorkspaceRole; label: string }[];
-	pending: boolean;
 	onRoleChange: NonNullable<WorkspaceMembersTableProps["onRoleChange"]>;
 }
 
-function MemberRoleSelect({ member, items, pending, onRoleChange }: MemberRoleSelectProps) {
+function MemberRoleSelect({ member, items, onRoleChange }: MemberRoleSelectProps) {
 	const trigger = useRef<HTMLButtonElement>(null);
 	const { role } = member.membership;
+	// A role change must not race the member's removal.
+	const pending = useMemberPending(member.membership.account.id);
 	return (
 		<Select
 			value={role}
@@ -212,6 +238,55 @@ function PublicActivityStatus({ row }: { row: WorkspaceMemberRow }) {
 	);
 }
 
+interface MemberActionsProps {
+	member: WorkspaceMemberRow;
+	onRemove?: WorkspaceMembersTableProps["onRemove"];
+	onAddBack?: WorkspaceMembersTableProps["onAddBack"];
+}
+
+/**
+ * Remove for a current member, Add back for one who left. While the change is out, the trigger
+ * stays focusable, so the confirmation dialog can return focus to it: Base UI's menu trigger has no
+ * focusable disabled state, and a disabled button drops focus to the page. The item waits instead.
+ */
+function MemberActions({ member, onRemove, onAddBack }: MemberActionsProps) {
+	const trigger = useRef<HTMLButtonElement>(null);
+	const pending = useMemberPending(member.membership.account.id);
+	const left = member.membership.leftAt !== null;
+	const act = left ? onAddBack : onRemove;
+	if (act === undefined) {
+		return null;
+	}
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger
+				ref={trigger}
+				aria-busy={pending || undefined}
+				render={<Button variant="ghost" size="icon-xs" aria-label={`Actions for ${member.name}`} />}
+			>
+				{pending ? <Spinner /> : <MoreHorizontal className="size-4" />}
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end">
+				<DropdownMenuGroup>
+					<DropdownMenuItem
+						variant={left ? "default" : "destructive"}
+						disabled={pending}
+						onClick={() => {
+							if (trigger.current !== null) {
+								act(member, trigger.current);
+							}
+						}}
+					>
+						{left ? <UserPlus className="size-4" /> : <UserMinus className="size-4" />}
+						{left ? "Add back to workspace" : "Remove from workspace"}
+						{pending && <Spinner />}
+					</DropdownMenuItem>
+				</DropdownMenuGroup>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
 // An unclaimed account has not signed in; it does not indicate a fault.
 function AccountStatus({ row }: { row: WorkspaceMemberRow }) {
 	const { account, leftAt } = row.membership;
@@ -241,6 +316,10 @@ export function WorkspaceMembersTable({
 	providerLabel,
 	onFollowProvider,
 	pendingFollowAccountId,
+	onRemove,
+	removingAccountIds,
+	onAddBack,
+	readerAccountId,
 	view,
 	onViewChange,
 	renderPageLink,
@@ -306,7 +385,6 @@ export function WorkspaceMembersTable({
 								<MemberRoleSelect
 									member={row.original}
 									items={roleItems}
-									pending={pendingRoleAccountId === account.id}
 									onRoleChange={onRoleChange}
 								/>
 							) : (
@@ -384,16 +462,36 @@ export function WorkspaceMembersTable({
 						}),
 					]
 				: []),
+			...(onRemove || onAddBack
+				? [
+						columnHelper.display({
+							id: "actions",
+							enableHiding: false,
+							header: () => <span className="sr-only">Actions</span>,
+							cell: ({ row }) => {
+								const { account, role } = row.original.membership;
+								if (!assignableRoles.includes(role) || account.id === readerAccountId) {
+									return null;
+								}
+								return (
+									<MemberActions member={row.original} onRemove={onRemove} onAddBack={onAddBack} />
+								);
+							},
+						}),
+					]
+				: []),
 		]);
 	}, [
 		onToggleHidden,
 		onRoleChange,
 		assignableRoles,
-		pendingRoleAccountId,
 		providerLabel,
 		onFollowProvider,
 		pendingFollowAccountId,
 		showsPublicActivity,
+		onRemove,
+		onAddBack,
+		readerAccountId,
 	]);
 
 	const sortedTeams = [...teams].sort((a, b) => a.name.localeCompare(b.name));
@@ -578,7 +676,9 @@ export function WorkspaceMembersTable({
 						rows={view.size}
 					/>
 				) : (
-					<TableBody>{body}</TableBody>
+					<PendingMembers value={{ role: pendingRoleAccountId, removing: removingAccountIds }}>
+						<TableBody>{body}</TableBody>
+					</PendingMembers>
 				)}
 			</Table>
 

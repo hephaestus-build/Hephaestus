@@ -33,6 +33,8 @@ export interface WorkspaceRoleChange {
 	to: WorkspaceRole;
 	/** The account is the reader's own. */
 	own: boolean;
+	/** The member left, so the role adds them back with it. */
+	rejoins: boolean;
 }
 
 /**

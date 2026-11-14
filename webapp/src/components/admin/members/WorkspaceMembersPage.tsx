@@ -30,6 +30,10 @@ interface WorkspaceMembersPageProps {
 	providerLabel?: string;
 	onFollowProvider?: (member: WorkspaceMemberRow) => void;
 	pendingFollowAccountId?: string;
+	onRemove?: (member: WorkspaceMemberRow, trigger: HTMLElement) => void;
+	removingAccountIds?: ReadonlySet<string>;
+	onAddBack?: (member: WorkspaceMemberRow, trigger: HTMLElement) => void;
+	readerAccountId?: string;
 	teamsError?: unknown;
 	teamsRetrying?: boolean;
 	onRetryTeams?: () => void;
@@ -57,6 +61,10 @@ export function WorkspaceMembersPage({
 	providerLabel,
 	onFollowProvider,
 	pendingFollowAccountId,
+	onRemove,
+	removingAccountIds,
+	onAddBack,
+	readerAccountId,
 	view,
 	onViewChange,
 	renderPageLink,
@@ -68,8 +76,8 @@ export function WorkspaceMembersPage({
 				title="Members"
 				description={
 					<>
-						Browse workspace members, filter by team, and change their roles. Review scope shows
-						whose work Hephaestus reviews.{" "}
+						Browse workspace members, filter by team, change their roles, and remove them. Review
+						scope shows whose work Hephaestus reviews.{" "}
 						<Link
 							to="/w/$workspaceSlug/admin/practices/review"
 							params={{ workspaceSlug }}
@@ -105,6 +113,10 @@ export function WorkspaceMembersPage({
 						providerLabel={providerLabel}
 						onFollowProvider={onFollowProvider}
 						pendingFollowAccountId={pendingFollowAccountId}
+						onRemove={onRemove}
+						removingAccountIds={removingAccountIds}
+						onAddBack={onAddBack}
+						readerAccountId={readerAccountId}
 						view={view}
 						onViewChange={onViewChange}
 						renderPageLink={renderPageLink}

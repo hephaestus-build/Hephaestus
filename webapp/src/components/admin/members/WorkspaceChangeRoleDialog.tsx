@@ -13,7 +13,15 @@ export interface WorkspaceChangeRoleDialogProps {
 }
 
 /** `roleChangeAsksFirst` admits only these: someone becomes or stops being an owner, or you lower your own role. */
-function copyFor({ name, from, to, own }: WorkspaceRoleChange) {
+function copyFor({ name, from, to, own, rejoins }: WorkspaceRoleChange) {
+	if (to === "OWNER" && rejoins) {
+		return {
+			title: `Add ${name} back as an owner?`,
+			description: `${name} can then delete this workspace and change the role of anyone in it, including you.`,
+			action: "Add back as owner",
+			lowers: false,
+		};
+	}
 	if (to === "OWNER") {
 		return {
 			title: `Make ${name} an owner?`,
