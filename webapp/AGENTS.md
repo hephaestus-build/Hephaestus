@@ -232,7 +232,7 @@ It also builds the commit that the change merges onto.
 A change fails when it grows a size by more than 1 KiB, a new lazy chunk counting from zero.
 The build fails when the entry holds a route-only package.
 
-For intended growth, run `BUNDLE_BUDGET=update BUNDLE_ACCEPTED_REASON="<why>" vp run verification:webapp-build` and commit `tools/bundle-budget/accepted-growth.json`.
+For intended growth, run `BUNDLE_BUDGET=update BUNDLE_ACCEPTED_REASON="<why>" vp run verification:webapp-build` and commit its changes in `tools/bundle-budget/accepted-growth/`.
 It records each grown load with the pull request that accepts it and the reason, and counts only in that change.
 
 The route's `workspaceSlug` is the only source for workspace-scoped data. There is no store.

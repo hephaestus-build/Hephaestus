@@ -1,10 +1,12 @@
 /**
  * Compares a build's bundle with the build of the commit it merges onto:
- * `node tools/bundle-budget/compare.ts <metadata> <base metadata> <base name> <base accepted-growth.json>`.
+ * `node tools/bundle-budget/compare.ts <metadata> <base metadata> <base name> <base accepted-growth directory>`.
  * `scripts/verify-webapp-build.ts` makes both builds with one install. With `BUNDLE_BUDGET=update`,
- * it writes this change's acceptances, by `BUNDLE_ACCEPTED_BY`, to `accepted-growth.json`.
+ * it writes this change's acceptances, by `BUNDLE_ACCEPTED_BY`, to its own file in `accepted-growth/`.
  */
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
 	type Acceptance,
@@ -18,18 +20,76 @@ import {
 	TOLERANCE_BYTES,
 } from "./bundle-budget.ts";
 
-const ACCEPTED = new URL("accepted-growth.json", import.meta.url);
-
 const UPDATE_COMMAND =
 	'BUNDLE_BUDGET=update BUNDLE_ACCEPTED_REASON="<why the growth is worth it>" vp run verification:webapp-build';
 
-/** The acceptances in `file`; a base from before this file has none. */
-function acceptancesIn(file: string | URL): Acceptance[] {
-	if (!existsSync(file)) {
-		return [];
-	}
+/** The acceptances in one change's file. */
+function acceptancesOf(file: string): Acceptance[] {
 	const parsed = acceptedGrowth.safeParse(JSON.parse(readFileSync(file, "utf8")));
-	return parsed.success ? parsed.data.accepted : [];
+	if (!parsed.success) {
+		throw new Error(`${file} is not an accepted-growth file: ${parsed.error.message}`);
+	}
+	return parsed.data.accepted;
+}
+
+/** The `.json` files of `directory`, one per change; a base from before the directory has none. */
+function changeFiles(directory: string): string[] {
+	return existsSync(directory)
+		? readdirSync(directory)
+				.filter((name) => name.endsWith(".json"))
+				.sort()
+		: [];
+}
+
+/** The acceptances of every change in `directory`, as one set. */
+export function acceptancesIn(directory: string): Acceptance[] {
+	return changeFiles(directory).flatMap((name) => acceptancesOf(path.join(directory, name)));
+}
+
+/** The file of the change that `acceptedBy` names: `pr-<number>.json`, or the branch's name. */
+export function acceptanceFile(acceptedBy: string): string {
+	const pullRequest = /\/pull\/(?<number>\d+)$/u.exec(acceptedBy)?.groups?.number;
+	if (pullRequest !== undefined) {
+		return `pr-${pullRequest}.json`;
+	}
+	const slug = acceptedBy
+		.replace(/^branch /u, "")
+		.toLowerCase()
+		.replaceAll(/[^a-z0-9]+/gu, "-")
+		.replaceAll(/^-|-$/gu, "");
+	if (slug === "") {
+		throw new Error(`Cannot name an accepted-growth file after '${acceptedBy}'`);
+	}
+	return `${slug}.json`;
+}
+
+/**
+ * Writes this change's acceptances to its own file. It removes the files of earlier changes whose
+ * acceptances the base build already holds: their growth is in the base, so they grant nothing. A
+ * removed file is in the base, so a parallel change never adds or edits it. Git history keeps it.
+ */
+export function recordAcceptances(
+	directory: string,
+	acceptedBy: string,
+	accepted: readonly Acceptance[],
+	base: readonly Acceptance[],
+): { file: string; removed: string[] } {
+	mkdirSync(directory, { recursive: true });
+	const own = acceptanceFile(acceptedBy);
+	const removed = changeFiles(directory).filter(
+		(name) =>
+			name !== own && ownAcceptances(acceptancesOf(path.join(directory, name)), base).length === 0,
+	);
+	for (const name of removed) {
+		rmSync(path.join(directory, name));
+	}
+	const file = path.join(directory, own);
+	if (accepted.length === 0) {
+		rmSync(file, { force: true });
+	} else {
+		writeFileSync(file, `${JSON.stringify({ accepted }, null, "\t")}\n`);
+	}
+	return { file, removed };
 }
 
 function sizesOf(file: string): BundleSizes {
@@ -53,6 +113,9 @@ export function summary(head: BundleSizes, base: BundleSizes, baseName: string):
 }
 
 if (import.meta.main) {
+	// One file per change, so parallel changes that each accept growth never edit the same file. The
+	// check reads all files as one set.
+	const ACCEPTED = fileURLToPath(new URL("accepted-growth/", import.meta.url));
 	const [headFile, baseFile, baseName, baseAccepted] = process.argv.slice(2);
 	if (
 		headFile === undefined ||
@@ -61,7 +124,7 @@ if (import.meta.main) {
 		baseAccepted === undefined
 	) {
 		throw new Error(
-			"Usage: node tools/bundle-budget/compare.ts <metadata> <base metadata> <base name> <base accepted-growth.json>",
+			"Usage: node tools/bundle-budget/compare.ts <metadata> <base metadata> <base name> <base accepted-growth directory>",
 		);
 	}
 	const head = sizesOf(headFile);
@@ -74,9 +137,14 @@ if (import.meta.main) {
 			throw new Error(`Say why the growth is worth it: ${UPDATE_COMMAND}`);
 		}
 		const accepted = acceptGrowth(head, base, acceptedBy, reason);
-		writeFileSync(ACCEPTED, `${JSON.stringify({ accepted }, null, "\t")}\n`);
+		const { file, removed } = recordAcceptances(
+			ACCEPTED,
+			acceptedBy,
+			accepted,
+			acceptancesIn(baseAccepted),
+		);
 		process.stdout.write(
-			`Recorded ${accepted.length} accepted growth for ${acceptedBy} in ${ACCEPTED.pathname}\n`,
+			`Recorded ${accepted.length} accepted growth for ${acceptedBy} in ${file}${removed.length > 0 ? `; removed the spent ${removed.join(", ")}` : ""}\n`,
 		);
 	} else {
 		const own = ownAcceptances(acceptancesIn(ACCEPTED), acceptancesIn(baseAccepted));
@@ -85,7 +153,7 @@ if (import.meta.main) {
 			process.stderr.write(
 				`${[
 					...violations,
-					`When the growth is intended, run \`${UPDATE_COMMAND}\` and commit webapp/tools/bundle-budget/accepted-growth.json.`,
+					`When the growth is intended, run \`${UPDATE_COMMAND}\` and commit what it changes in webapp/tools/bundle-budget/accepted-growth/.`,
 				].join("\n")}\n`,
 			);
 			process.exitCode = 1;

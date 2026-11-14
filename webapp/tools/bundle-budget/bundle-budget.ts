@@ -123,7 +123,7 @@ const acceptance = z.object({
 	reason: z.string().min(1).optional(),
 });
 
-/** `accepted-growth.json`: the acceptances of the change that commits it. */
+/** A file in `accepted-growth/`: the acceptances of the one change that it is named after. */
 export const acceptedGrowth = z.object({ accepted: z.array(acceptance) });
 
 export type Acceptance = z.infer<typeof acceptance>;
