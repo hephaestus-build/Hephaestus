@@ -7647,6 +7647,18 @@ void test("a prompt change composes the safety subset, the eval:run label the wh
 	assert.equal(scope("pull_request", ["eval:run"]), "--model");
 	assert.equal(scope("schedule", []), "--model");
 	assert.equal(scope("workflow_dispatch", []), "--model");
+	// Each path that starts a composition also selects the deterministic gate.
+	const orchestrator = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	const filter = step(orchestrator, ["jobs", "detect-changes"], "dorny/paths-filter");
+	const filters = asRecord(parseDocument(String(filter.get("filters"))).toJSON(), "CI filters");
+	const gatePaths = asArray(filters["feedback-eval"], "feedback-eval paths");
+	const trigger = asRecord(
+		asRecord(asRecord(workflow.toJS(), "panel workflow").on, "panel triggers").pull_request,
+		"pull_request trigger",
+	);
+	for (const panelPath of asArray(trigger.paths, "panel paths")) {
+		assert.ok(gatePaths.includes(panelPath), String(panelPath));
+	}
 	// A run whose jobs are skipped must not enter a cancelling group, so only the panel job holds one.
 	assert.equal(workflow.has("concurrency"), false);
 	assert.equal(workflow.hasIn(["jobs", "provider", "concurrency"]), false);

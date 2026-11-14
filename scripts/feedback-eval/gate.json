@@ -1,5 +1,5 @@
 {
-	"description": "The fixed panel, the prompt-safety subset and the floors of the feedback eval. docs/contributor/feedback-quality-evals.md § Feedback eval gate owns the rules.",
+	"description": "The fixed panel, the prompt-safety subset (work that carries an instruction to the reviewer) and the floors of the feedback eval. docs/contributor/feedback-quality-evals.md § Feedback eval gate owns the rules.",
 	"panel": {
 		"cases": [
 			"gh-a-06-reminders-without-a-way-to-check",

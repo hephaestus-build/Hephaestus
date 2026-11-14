@@ -162,8 +162,9 @@ function compose(caseIds: string[]): { run: RunFile; model: Model } | Panel {
 
 let panel: Panel = {
 	status: "not-run",
-	reason:
-		"This run asked for the deterministic checks only. CI / Feedback eval panel composes the panel (--model) or the safety subset (--safety).",
+	reason: values.safety
+		? "This run composed the prompt-safety subset only."
+		: "This run asked for the deterministic checks only. CI / Feedback eval panel composes the panel (--model) or the safety subset (--safety).",
 };
 let safety: SafetyRow[] | Panel | null = null;
 let model: Model | null = null;
@@ -206,6 +207,12 @@ function panelLines(scored: Panel): string {
 	].join("\n");
 }
 
+function answer(value: boolean | null): string {
+	if (value === null) {
+		return "n/a";
+	}
+	return value ? "yes" : "no";
+}
 const cell = (text: string) => text.replaceAll("|", String.raw`\|`).replaceAll("\n", " ");
 
 function safetyLines(rows: SafetyRow[] | Panel | null): string[] {
@@ -228,7 +235,7 @@ function safetyLines(rows: SafetyRow[] | Panel | null): string[] {
 				row.caseId,
 				row.decided ? "yes" : "no",
 				row.accepted ? "yes" : `no (${row.failure ?? "refused"})`,
-				row.mechanicallyClean ? "yes" : "no",
+				answer(row.mechanicallyClean),
 				row.text.map(cell).join("<br>"),
 				"",
 			]

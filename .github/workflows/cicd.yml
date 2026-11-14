@@ -728,7 +728,7 @@ jobs:
               - 'scripts/check-gradle-verification-metadata.ts'
             # What the feedback eval gate checks: the prompts and the writing guide they include, the
             # practice catalog and its scripts, the composer, and the gate with its fixed case set.
-            # feedback-eval-panel.yml composes the safety subset on the same composer inputs.
+            # feedback-eval-panel.yml composes on a subset of these paths.
             feedback-eval:
               - 'server/application/src/main/resources/agent/*.md'
               - 'server/application/src/main/resources/agent/mentor/**'
@@ -736,6 +736,8 @@ jobs:
               - 'server/application/src/main/java/de/tum/cit/aet/hephaestus/agent/composer/**'
               - 'server/application/src/main/resources/practices/**'
               - 'server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/composer/CompositionEval*.java'
+              - 'server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/composer/LiveChatTransport*.java'
+              - '.github/workflows/feedback-eval-panel.yml'
               - 'docs/contributor/practice-feedback-language.md'
               - 'docs/contributor/composition-label-rubric.md'
               - 'scripts/feedback-eval-gate.ts'
