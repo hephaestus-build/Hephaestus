@@ -137,8 +137,8 @@ public class WorkspaceSettingsService {
                 "Updated workspace features: workspaceId={}, practices={}, autoTrigger={}, manualTrigger={}",
                 workspaceId,
                 request.practicesEnabled(),
-                request.practiceReviewAutoTriggerEnabled(),
-                request.practiceReviewManualTriggerEnabled());
+                request.practiceReviewEventEnabled(),
+                request.practiceReviewRequestEnabled());
         return workspaceRepository.save(workspace);
     }
 

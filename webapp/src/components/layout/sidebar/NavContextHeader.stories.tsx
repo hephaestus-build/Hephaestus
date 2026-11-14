@@ -10,7 +10,7 @@ const meta = {
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],
 	args: {
-		title: "Conversations",
+		title: "Ask Hephaestus",
 		backLink: <Link to="/" />,
 	},
 	decorators: [withSidebarFrame],

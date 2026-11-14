@@ -48,7 +48,7 @@ dependencies {
     implementation(libs.angus.mail)
     implementation(libs.spring.boot.starter.thymeleaf)
     implementation(libs.spring.boot.starter.aspectj)
-    // The Heph ledger listens for PostgreSQL notifications through the driver's own API.
+    // The Hephaestus ledger listens for PostgreSQL notifications through the driver's own API.
     implementation(libs.postgresql)
     runtimeOnly(libs.h2)
     compileOnly(libs.lombok)

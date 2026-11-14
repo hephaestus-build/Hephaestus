@@ -66,7 +66,7 @@ public class SlackThread {
     private @Nullable String lastReviewedTs;
 
     /**
-     * Resolved participant member ids for the mentor-context participant firewall ({@code bigint[]}; a GIN index
+     * Resolved participant member ids for the conversation-context participant firewall ({@code bigint[]}; a GIN index
      * backs the {@code = ANY(...)} membership lookup, which stays a native query because Postgres array membership
      * has no portable JPQL form). {@code NOT NULL DEFAULT '{}'} — never null, empty until participants resolve.
      */

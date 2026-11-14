@@ -45,7 +45,7 @@ public interface FeedbackQueryRepository extends Repository<Feedback, UUID> {
               WHEN 'PRACTICE_PAGE' THEN 'PRACTICE_PAGES'
               WHEN 'ON_WORK' THEN CASE WHEN provider.type IN ('GITHUB','GITLAB') THEN provider.type ELSE 'OTHER_WORK' END
               WHEN 'CONVERSATION' THEN CASE WHEN conversation.surface='SLACK' THEN 'SLACK'
-                WHEN conversation.surface IS NOT NULL THEN 'HEPH' ELSE 'NEXT_CONVERSATION' END
+                WHEN conversation.surface IS NOT NULL THEN 'APP' ELSE 'NEXT_CONVERSATION' END
             END AS location,
             (SELECT d.action='WITHDRAW' FROM (""" + FeedbackVisibilitySql.LATEST + """
             ) d) AS withdrawn,
@@ -63,7 +63,7 @@ public interface FeedbackQueryRepository extends Repository<Feedback, UUID> {
             WHEN 'scm.file' THEN holder.source_id ELSE work.repository_id END
           LEFT JOIN identity_provider provider ON provider.id=repo.provider_id
           LEFT JOIN LATERAL (SELECT e.surface FROM feedback_copy c
-            JOIN mentor_entry e ON e.id=c.mentor_entry_id AND e.workspace_id=c.workspace_id
+            JOIN conversation_entry e ON e.id=c.conversation_entry_id AND e.workspace_id=c.workspace_id
             WHERE c.workspace_id=f.workspace_id AND c.feedback_id=f.id AND c.kind='CHAT_TURN' AND c.state='POSTED'
             ORDER BY c.position,c.id LIMIT 1) conversation ON true
           WHERE f.workspace_id=:workspaceId
@@ -98,8 +98,8 @@ public interface FeedbackQueryRepository extends Repository<Feedback, UUID> {
 
     @Query(value = """
         SELECT e.conversation_id FROM feedback_copy c
-        JOIN mentor_entry e ON e.id=c.mentor_entry_id AND e.workspace_id=c.workspace_id
-        JOIN mentor_conversation mc ON mc.id=e.conversation_id AND mc.workspace_id=e.workspace_id
+        JOIN conversation_entry e ON e.id=c.conversation_entry_id AND e.workspace_id=c.workspace_id
+        JOIN conversation mc ON mc.id=e.conversation_id AND mc.workspace_id=e.workspace_id
         JOIN feedback f ON f.id=c.feedback_id AND f.workspace_id=c.workspace_id
         WHERE c.workspace_id=:workspaceId AND c.feedback_id=:feedbackId
           AND c.kind='CHAT_TURN' AND c.posted_at IS NOT NULL

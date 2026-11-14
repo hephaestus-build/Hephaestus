@@ -33,7 +33,7 @@ class ProxyStreamingDeadlineTest extends BaseUnitTest {
 
     @ParameterizedTest(name = "bodyLimit={0}")
     @ValueSource(booleans = {false, true})
-    @DisplayName("frequent frames do not restart the total exchange or mentor body allowance")
+    @DisplayName("frequent frames do not restart the total exchange or conversation body allowance")
     void shouldKeepTheOriginalLimitWhenFramesKeepArriving(boolean bodyLimit) throws Exception {
         var executor = Executors.newSingleThreadExecutor();
         // Keep the blocking servlet owner off the scheduler that virtual time replaces.

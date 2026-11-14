@@ -91,9 +91,9 @@ Each interface carries the name of its Java type or route. "Provider SPI" is the
 
 | Part | Requires | From |
 | --- | --- | --- |
-| Web API, through the port `/api` | `MentorConversationService`, `ReviewService` | Conversation, review pipeline |
+| Web API, through the port `/api` | `ConversationService`, `ReviewService` | Conversation, review pipeline |
 | Provider events, through the port `/webhooks` | `IntegrationMessageHandler` | Integration adapters |
-| Integration adapters | `MentorConversationService`, `ItemEventRecorded` (an event that sync publishes). Provider APIs, through a port. | Conversation, review pipeline |
+| Integration adapters | `ConversationService`, `ItemEventRecorded` (an event that sync publishes). Provider APIs, through a port. | Conversation, review pipeline |
 | Review pipeline | The provider SPI (`ItemSource`, `SummaryWriter`, `LineNoteWriter`), `AgentActions`, `AgentRuns` | Integration adapters, action outbox, agent control |
 | Conversation | `AgentActions`, `AgentRuns` | Action outbox, agent control |
 | Action outbox | `ActionAdapter` | Review pipeline (feedback copies), integration adapters (Slack posts) |
@@ -104,11 +104,11 @@ Each interface carries the name of its Java type or route. "Provider SPI" is the
 
 | Part | What it owns | Code |
 | --- | --- | --- |
-| Web API | The `/api` endpoints in `server/openapi.yaml`, the live stream of server-sent events, and sign-in. Review requests and feedback approvals reach the review pipeline here. | each module's controllers, `core.auth`, `agent.mentor.web` |
+| Web API | The `/api` endpoints in `server/openapi.yaml`, the live stream of server-sent events, and sign-in. Review requests and feedback approvals reach the review pipeline here. | each module's controllers, `core.auth`, `agent.conversation.web` |
 | Provider events | The `/webhooks/**` endpoints, the `provider_event` inbox, and the event consumer that leases the oldest open event of each scope ([ADR 0080](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0080-provider-events-go-to-a-postgresql-inbox.md)). | `integration.core.webhook`, `integration.core.consumer` |
 | Integration adapters | One for each provider: GitHub, GitLab, Slack and Outline. Each owns sync and implements the provider SPI: the capture reads behind `ItemSource`, and the feedback writes behind `SummaryWriter` and `LineNoteWriter`. Slack posts its answers behind `ActionAdapter`. Sync records item events and publishes `ItemEventRecorded`. | `integration.scm`, `integration.slack`, `integration.outline` |
 | Review pipeline | Selection, capture, admission, composition and delivery ([Practice review pipeline](./practice-review-pipeline.mdx)). It captures each item through `ItemSource`. Its `FeedbackSendAdapter` delivers each copy for the outbox and reads it back. | `practices`, `agent.practice` |
-| Conversation | The conversation of each account, its turns and its digests ([Conversation runtime](./unified-pi-runtime)). | `mentor`, `agent.mentor` |
+| Conversation | The conversation of each account, its turns and its digests ([Conversation runtime](./unified-pi-runtime)). | `conversation`, `agent.conversation` |
 | Agent control | The run queue behind `AgentRuns`, the sandbox of each subject and the reapers ([Agent runs](./agent-runs.mdx)). It writes the `SandboxClaim` to the Kubernetes API. | `agent.run`, `agent.sandbox` |
 | Sandbox gateway | Port 8081, for sandbox tokens only. `/internal/agent` serves the next run, its context, the lease, the proposals and the answer deltas. Each run kind plugs in as a `SandboxRunKind`. `/internal/llm` serves the LLM proxy, which holds the model API keys and the call permits, and the staging and sealing of review results. | `agent.gateway`, `agent.proxy` |
 | Action outbox | The `agent_action` table behind `AgentActions`, and its executor: every effect on the outside world ([The outbox](./outbox.md)). The view leaves out the `ActionAdapter` for email (`EmailAdapter`) and those for product feedback. | `core.action`, `notification.email` |
@@ -189,7 +189,7 @@ Do not keep a hand-drawn copy of the graph. The table below owns the relationshi
 | --- | --- | --- | --- |
 | `account` | Account profile and sign-in views | Customer/Supplier: workspace and practice queries | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
 | `activity` | Engineering activity and its public pages | Conformist: the provider-neutral SCM kernel | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
-| `agent` | Review and conversation execution and admission | Customer/Supplier: practices, mentor and integration ports | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
+| `agent` | Review and conversation execution and admission | Customer/Supplier: practices, conversation and integration ports | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
 | `config` | Shared Spring properties and executor names | Shared Kernel: technical configuration | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
 | `contributors` | Contributor information | Customer/Supplier: core services | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
 | `core` | Shared auth, privacy, logging, action and web contracts | Shared Kernel: platform contracts | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
@@ -204,7 +204,7 @@ Do not keep a hand-drawn copy of the graph. The table below owns the relationshi
 | `integration.scm.github` | GitHub adapter | Anticorruption Layer: GitHub API to SCM and integration ports | [ADR 0095](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) |
 | `integration.scm.gitlab` | GitLab adapter | Anticorruption Layer: GitLab API to SCM and integration ports | [ADR 0095](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) |
 | `integration.slack` | Slack adapter | Anticorruption Layer: Slack API to chat and integration ports | [ADR 0095](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) |
-| `mentor` | Conversation, entries and turn ledger | Customer/Supplier: conversation execution and delivery | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
+| `conversation` | Conversation, entries and turn ledger | Customer/Supplier: conversation execution and delivery | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
 | `notification` | Account notifications and their transports | Customer/Supplier: notification-producing domains | [ADR 0044](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0044-email-is-a-notification-transport.md) |
 | `observability` | Structured logging and metric contracts | Shared Kernel: observability | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
 | `practices` | Definitions, reviews, results and feedback | Customer/Supplier: evidence providers and execution | [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) |
@@ -313,7 +313,7 @@ These are the parts of the turn that the arrows alone do not explain:
 - **Durability.** A Slack event is a row in the `provider_event` inbox before Slack gets its `202` ([Ingest durability](./ingest-durability.md)). A question from the app is a row before the server answers. A server can stop at any step, and the next one starts again from PostgreSQL.
 - **The fence.** The lease raises the run's epoch. The gateway accepts a call on a run (`…/runs/{runId}/…`) only with the current epoch. A sandbox that lost its lease cannot write.
 - **Two streams.** The LLM proxy forwards the model's tokens to the sandbox and accounts for them in the usage row. The answer that a person sees is a separate stream of deltas that the sandbox sends.
-- **Any replica.** The server writes no row for a delta. It sends the delta to every server as PostgreSQL notification frames. Each server keeps the partial answer in memory (`MentorTurnProgress`). The live hub of the server that holds the app's stream sends it on. The sandbox and the app can therefore use different server replicas.
+- **Any replica.** The server writes no row for a delta. It sends the delta to every server as PostgreSQL notification frames. Each server keeps the partial answer in memory (`ConversationTurnProgress`). The live hub of the server that holds the app's stream sends it on. The sandbox and the app can therefore use different server replicas.
 - **Only the end is stored.** The entries are stored once, when the turn ends. A server that misses a frame shows the partial answer again at the next whole snapshot. A whole snapshot comes at least every two seconds.
 - **Slack delivery.** The answer for Slack is an `agent_action` row that the outbox executes ([The outbox](./outbox.md)). The executor confirms the post with the message timestamp that Slack returns.
 - **Out of scope.** This success path leaves out a stopped turn and a retry. [Conversation runtime](./unified-pi-runtime) owns them.

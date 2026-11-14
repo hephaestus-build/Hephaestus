@@ -290,7 +290,7 @@ class OutlineCollectionAdminServiceTest extends BaseUnitTest {
 
         verify(documentRepository).deleteByWorkspaceIdAndConnectionIdAndCollectionId(WS, CONNECTION_ID, COLLECTION_ID);
         verify(collectionRepository).delete(row);
-        // Running Heph turns drop the erased documents from their context folders.
+        // Running Hephaestus turns drop the erased documents from their context folders.
         verify(eventPublisher).publishEvent(new AgentContextChangedEvent(WS));
     }
 

@@ -7,8 +7,8 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmDataOperator;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
@@ -59,7 +59,7 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
     private LlmModelRepository models;
 
     @Autowired
-    private WorkspaceAgentBindingRepository bindings;
+    private WorkspaceModelAssignmentRepository bindings;
 
     private Workspace workspace(String slug, User member) {
         var workspace = createWorkspace(slug, "Engineering", slug, AccountType.ORG, persistUser("owner-" + slug));
@@ -342,17 +342,17 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
                 .getResponseBody());
     }
 
-    /** An enabled Heph binding of a fresh model in {@code tier}; an in-house model declares its own operator. */
-    private WorkspaceAgentBinding bindHeph(Workspace workspace, DataHandlingTier tier) {
+    /** An enabled Hephaestus binding of a fresh model in {@code tier}; an in-house model declares its own operator. */
+    private WorkspaceModelAssignment bindConversation(Workspace workspace, DataHandlingTier tier) {
         String slug = workspace.getWorkspaceSlug() + "-" + tier.name().toLowerCase(Locale.ROOT);
         var connection = connections.save(LlmCatalogTestFixtures.connection(slug));
-        LlmModel model = LlmCatalogTestFixtures.model(connection, slug, "heph-model");
+        LlmModel model = LlmCatalogTestFixtures.model(connection, slug, "ask-model");
         if (tier == DataHandlingTier.IN_HOUSE) {
             model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.OWN_ORGANISATION, null));
         } else if (tier == DataHandlingTier.CLOUD) {
             model.setDataHandling(DataHandlingFacts.of(LlmDataOperator.PROVIDER, null));
         }
-        WorkspaceAgentBinding binding = LlmCatalogTestFixtures.mentorBinding(workspace, models.save(model));
+        WorkspaceModelAssignment binding = LlmCatalogTestFixtures.conversationBinding(workspace, models.save(model));
         binding.setDataHandlingTier(tier);
         return bindings.saveAndFlush(binding);
     }
@@ -361,94 +361,95 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
     @EnumSource(DataHandlingTier.class)
     void shouldFollowBindingAndModelAvailabilityInEverySupportedTier(DataHandlingTier tier) {
         var workspace = workspace(
-                "onboarding-heph-states-" + tier.name().toLowerCase(Locale.ROOT).replace('_', '-'),
+                "onboarding-ask-states-" + tier.name().toLowerCase(Locale.ROOT).replace('_', '-'),
                 persistUser("testuser"));
-        var binding = bindHeph(workspace, tier);
+        var binding = bindConversation(workspace, tier);
         var initial = switch (tier) {
             case IN_HOUSE -> choose(workspace.getWorkspaceSlug(), "IN_HOUSE_ONLY");
             case CLOUD -> choose(workspace.getWorkspaceSlug(), "CLOUD");
             case UNDECLARED -> state(workspace.getWorkspaceSlug());
         };
-        assertThat(initial.mentorRefusal()).isNull();
+        assertThat(initial.conversationRefusal()).isNull();
         if (tier == DataHandlingTier.UNDECLARED) {
             assertThat(initial.aiChoice()).isNull();
-            assertThat(initial.aiOptions()).noneMatch(WorkspaceOnboardingDTO.WorkspaceAiOptionDTO::mentorReady);
+            assertThat(initial.aiOptions()).noneMatch(WorkspaceOnboardingDTO.WorkspaceAiOptionDTO::conversationReady);
         }
 
         binding.setEnabled(false);
         bindings.saveAndFlush(binding);
-        assertThat(state(workspace.getWorkspaceSlug()).mentorRefusal()).isEqualTo(AiRefusalReason.UNAVAILABLE);
+        assertThat(state(workspace.getWorkspaceSlug()).conversationRefusal()).isEqualTo(AiRefusalReason.UNAVAILABLE);
 
         binding.setEnabled(true);
         bindings.saveAndFlush(binding);
-        assertThat(state(workspace.getWorkspaceSlug()).mentorRefusal()).isNull();
+        assertThat(state(workspace.getWorkspaceSlug()).conversationRefusal()).isNull();
 
         var model = Objects.requireNonNull(binding.getInstanceModel());
         model.setEnabled(false);
         models.saveAndFlush(model);
-        assertThat(state(workspace.getWorkspaceSlug()).mentorRefusal()).isEqualTo(AiRefusalReason.UNAVAILABLE);
+        assertThat(state(workspace.getWorkspaceSlug()).conversationRefusal()).isEqualTo(AiRefusalReason.UNAVAILABLE);
 
         model.setEnabled(true);
         models.saveAndFlush(model);
-        assertThat(state(workspace.getWorkspaceSlug()).mentorRefusal()).isNull();
+        assertThat(state(workspace.getWorkspaceSlug()).conversationRefusal()).isNull();
 
         bindings.delete(binding);
         bindings.flush();
-        assertThat(state(workspace.getWorkspaceSlug()).mentorRefusal()).isEqualTo(AiRefusalReason.UNAVAILABLE);
+        assertThat(state(workspace.getWorkspaceSlug()).conversationRefusal()).isEqualTo(AiRefusalReason.UNAVAILABLE);
     }
 
     @Test
     void shouldKeepRequiredChoiceAndNoAiRefusalsWithAnAvailableUndeclaredBinding() {
-        var workspace = workspace("onboarding-heph-required", persistUser("testuser"));
-        bindHeph(workspace, DataHandlingTier.UNDECLARED);
+        var workspace = workspace("onboarding-ask-required", persistUser("testuser"));
+        bindConversation(workspace, DataHandlingTier.UNDECLARED);
         var policy = new WorkspaceOnboardingSettings();
         policy.setWorkspace(workspace);
         policy.setAiChoiceRequired(true);
         settings.saveAndFlush(policy);
 
-        assertThat(state(workspace.getWorkspaceSlug()).mentorRefusal()).isEqualTo(AiRefusalReason.CHOICE_REQUIRED);
-        assertThat(choose(workspace.getWorkspaceSlug(), "NO_AI").mentorRefusal())
+        assertThat(state(workspace.getWorkspaceSlug()).conversationRefusal())
+                .isEqualTo(AiRefusalReason.CHOICE_REQUIRED);
+        assertThat(choose(workspace.getWorkspaceSlug(), "NO_AI").conversationRefusal())
                 .isEqualTo(AiRefusalReason.NO_AI);
-        assertThat(choose(workspace.getWorkspaceSlug(), "CLOUD").mentorRefusal())
+        assertThat(choose(workspace.getWorkspaceSlug(), "CLOUD").conversationRefusal())
                 .isEqualTo(AiRefusalReason.UNAVAILABLE);
     }
 
     @Test
-    void shouldReportThatHephAnswersWhenAModelFitsTheMembersAiChoice() {
-        var workspace = workspace("onboarding-heph-ready", persistUser("testuser"));
-        bindHeph(workspace, DataHandlingTier.IN_HOUSE);
+    void shouldReportThatHephaestusAnswersWhenAModelFitsTheMembersAiChoice() {
+        var workspace = workspace("onboarding-ask-ready", persistUser("testuser"));
+        bindConversation(workspace, DataHandlingTier.IN_HOUSE);
 
-        assertThat(choose(workspace.getWorkspaceSlug(), "IN_HOUSE_ONLY").mentorRefusal())
+        assertThat(choose(workspace.getWorkspaceSlug(), "IN_HOUSE_ONLY").conversationRefusal())
                 .isNull();
     }
 
     @Test
-    void shouldReportThatHephIsUnavailableWhenTheWorkspaceHasNoHephModel() {
-        var workspace = workspace("onboarding-heph-none", persistUser("testuser"));
+    void shouldReportThatHephaestusIsUnavailableWhenTheWorkspaceHasNoHephaestusModel() {
+        var workspace = workspace("onboarding-ask-none", persistUser("testuser"));
 
-        assertThat(state(workspace.getWorkspaceSlug()).mentorRefusal()).isEqualTo(AiRefusalReason.UNAVAILABLE);
-        assertThat(choose(workspace.getWorkspaceSlug(), "NO_AI").mentorRefusal())
+        assertThat(state(workspace.getWorkspaceSlug()).conversationRefusal()).isEqualTo(AiRefusalReason.UNAVAILABLE);
+        assertThat(choose(workspace.getWorkspaceSlug(), "NO_AI").conversationRefusal())
                 .isEqualTo(AiRefusalReason.NO_AI);
     }
 
     @Test
-    void shouldReportThatHephIsUnavailableWhenNoModelFitsTheMembersAiChoice() {
-        var workspace = workspace("onboarding-heph-mismatch", persistUser("testuser"));
-        bindHeph(workspace, DataHandlingTier.UNDECLARED);
+    void shouldReportThatHephaestusIsUnavailableWhenNoModelFitsTheMembersAiChoice() {
+        var workspace = workspace("onboarding-ask-mismatch", persistUser("testuser"));
+        bindConversation(workspace, DataHandlingTier.UNDECLARED);
 
-        assertThat(choose(workspace.getWorkspaceSlug(), "IN_HOUSE_ONLY").mentorRefusal())
+        assertThat(choose(workspace.getWorkspaceSlug(), "IN_HOUSE_ONLY").conversationRefusal())
                 .isEqualTo(AiRefusalReason.UNAVAILABLE);
     }
 
     @Test
-    void shouldReportThatHephAnswersAMemberWithoutAChoiceFromTheUndeclaredModel() {
-        var workspace = workspace("onboarding-heph-undeclared", persistUser("testuser"));
-        bindHeph(workspace, DataHandlingTier.UNDECLARED);
+    void shouldReportThatHephaestusAnswersAMemberWithoutAChoiceFromTheUndeclaredModel() {
+        var workspace = workspace("onboarding-ask-undeclared", persistUser("testuser"));
+        bindConversation(workspace, DataHandlingTier.UNDECLARED);
 
         WorkspaceOnboardingDTO onboarding = state(workspace.getWorkspaceSlug());
 
         assertThat(onboarding.aiChoice()).isNull();
-        assertThat(onboarding.aiOptions()).noneMatch(WorkspaceOnboardingDTO.WorkspaceAiOptionDTO::mentorReady);
-        assertThat(onboarding.mentorRefusal()).isNull();
+        assertThat(onboarding.aiOptions()).noneMatch(WorkspaceOnboardingDTO.WorkspaceAiOptionDTO::conversationReady);
+        assertThat(onboarding.conversationRefusal()).isNull();
     }
 }

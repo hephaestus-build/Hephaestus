@@ -152,7 +152,7 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
         UPDATE feedback_copy c SET state='PLANNED',stop_reason=NULL,last_error=NULL
         WHERE c.workspace_id=:workspaceId AND c.feedback_id=:feedbackId AND c.state='WITHHELD'
           AND c.stop_reason='RESULT_MARKED_INCORRECT' AND (c.write_started_at IS NULL OR c.readback='ABSENT')
-          AND c.posted_at IS NULL AND c.external_ref IS NULL AND c.mentor_turn_id IS NULL AND NOT""" + RESTS_ON_INCORRECT_RESULT, nativeQuery = true)
+          AND c.posted_at IS NULL AND c.external_ref IS NULL AND c.conversation_turn_id IS NULL AND NOT""" + RESTS_ON_INCORRECT_RESULT, nativeQuery = true)
     int restoreUnsent(@Param("workspaceId") long workspaceId, @Param("feedbackId") UUID feedbackId);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
@@ -207,13 +207,13 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
     int failUnstarted(@Param("workspaceId") long workspaceId, @Param("feedbackId") UUID feedbackId);
 
     /**
-     * When the running attempt of a Heph turn of {@code developerId} started, or empty when the turn is not running
+     * When the running attempt of a Hephaestus turn of {@code developerId} started, or empty when the turn is not running
      * with that attempt. Shares the turn row, so a claim waits for an end that holds it and then sees the turn ended:
      * an ended attempt claims nothing.
      */
     @Query(value = """
-        SELECT t.started_at FROM mentor_turn t
-        JOIN mentor_conversation mc ON mc.id=t.conversation_id AND mc.workspace_id=t.workspace_id
+        SELECT t.started_at FROM conversation_turn t
+        JOIN conversation mc ON mc.id=t.conversation_id AND mc.workspace_id=t.workspace_id
         WHERE t.id=:turnId AND t.workspace_id=:workspaceId AND mc.account_id=:developerId
           AND t.status='RUNNING' AND t.attempt=:attempt AND t.started_at IS NOT NULL
         FOR SHARE OF t
@@ -225,16 +225,16 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
             @Param("attempt") int attempt);
 
     /**
-     * Claims the conversation copy for a Heph turn. The database clock stamps the claim, as it stamps the start of the
+     * Claims the conversation copy for a Hephaestus turn. The database clock stamps the claim, as it stamps the start of the
      * turn's attempt, so a claim compares with the attempt that made it.
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
-        UPDATE feedback_copy SET state='WRITE_STARTED',write_started_at=now(),mentor_turn_id=:turnId,
+        UPDATE feedback_copy SET state='WRITE_STARTED',write_started_at=now(),conversation_turn_id=:turnId,
           stop_reason='DELIVERY_UNCONFIRMED',last_error=NULL,readback='UNKNOWN'
         WHERE workspace_id=:workspaceId AND feedback_id=:feedbackId AND id=:copyId AND kind='CHAT_TURN'
           AND state='PLANNED' AND write_started_at IS NULL AND posted_at IS NULL AND external_ref IS NULL
-          AND mentor_turn_id IS NULL AND mentor_entry_id IS NULL AND body IS NULL AND write_key IS NOT NULL
+          AND conversation_turn_id IS NULL AND conversation_entry_id IS NULL AND body IS NULL AND write_key IS NOT NULL
         """, nativeQuery = true)
     int claimConversation(
             @Param("workspaceId") long workspaceId,
@@ -243,7 +243,7 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
             @Param("turnId") UUID turnId);
 
     /**
-     * The words a completed Heph answer showed for one piece of feedback, by the database function
+     * The words a completed Hephaestus answer showed for one piece of feedback, by the database function
      * {@code conversation_receipt_words}: the one rule that the receipt guard on this table applies too.
      */
     @Query(
@@ -257,10 +257,10 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
-        UPDATE feedback_copy SET state='POSTED',posted_at=:at,body=:body,mentor_entry_id=:entryId,
+        UPDATE feedback_copy SET state='POSTED',posted_at=:at,body=:body,conversation_entry_id=:entryId,
           stop_reason=NULL,last_error=NULL,readback=NULL
         WHERE workspace_id=:workspaceId AND feedback_id=:feedbackId AND id=:copyId AND kind='CHAT_TURN'
-          AND mentor_turn_id=:turnId AND write_started_at IS NOT NULL AND posted_at IS NULL
+          AND conversation_turn_id=:turnId AND write_started_at IS NOT NULL AND posted_at IS NULL
           AND state IN ('WRITE_STARTED','FAILED') AND body IS NULL
         """, nativeQuery = true)
     int recordConversationDelivered(
@@ -275,9 +275,9 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
         UPDATE feedback_copy SET state=:state,stop_reason=:reason,last_error=:detail,readback=:readback,
-          mentor_entry_id=COALESCE(CAST(:entryId AS uuid),mentor_entry_id)
+          conversation_entry_id=COALESCE(CAST(:entryId AS uuid),conversation_entry_id)
         WHERE workspace_id=:workspaceId AND feedback_id=:feedbackId AND id=:copyId AND kind='CHAT_TURN'
-          AND mentor_turn_id=:turnId AND write_started_at IS NOT NULL AND posted_at IS NULL
+          AND conversation_turn_id=:turnId AND write_started_at IS NOT NULL AND posted_at IS NULL
           AND state IN ('WRITE_STARTED','FAILED')
         """, nativeQuery = true)
     int recordConversationOutcome(
@@ -292,13 +292,13 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
             @Param("detail") @Nullable String detail);
 
     /**
-     * The conversation copies a Heph turn claimed from {@code since} to {@code until} that have no receipt yet. A
+     * The conversation copies a Hephaestus turn claimed from {@code since} to {@code until} that have no receipt yet. A
      * receipt sets
      * {@code posted_at}, the state FAILED, or for an unconfirmed write its reason in {@code last_error}.
      */
     @Query(value = """
         SELECT c.* FROM feedback_copy c
-        WHERE c.workspace_id=:workspaceId AND c.mentor_turn_id=:turnId AND c.kind='CHAT_TURN'
+        WHERE c.workspace_id=:workspaceId AND c.conversation_turn_id=:turnId AND c.kind='CHAT_TURN'
           AND c.posted_at IS NULL AND c.state='WRITE_STARTED' AND c.last_error IS NULL
           AND c.write_started_at>=:since AND c.write_started_at<=:until
         ORDER BY c.write_started_at, c.id

@@ -1,11 +1,11 @@
 package de.tum.cit.aet.hephaestus.integration.outline.capture;
 
+import de.tum.cit.aet.hephaestus.conversation.spi.ConversationMessageQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
-import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
+import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
 import de.tum.cit.aet.hephaestus.integration.docs.item.DocumentProjection;
 import de.tum.cit.aet.hephaestus.integration.docs.item.DocumentProjection.ProjectedDocument;
-import de.tum.cit.aet.hephaestus.mentor.spi.MentorMessageQuery;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -23,7 +23,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Document bodies and author names supplied through {@link DocumentProjection} are untrusted data, never instructions.
- * The server builds the context of a Heph turn, so this source exists wherever capture runs.
+ * The server builds the context of a Hephaestus turn, so this source exists wherever capture runs.
  */
 @Component
 @ConditionalOnServerRole
@@ -32,7 +32,7 @@ public class DocumentCaptureSource implements ContentSource {
 
     public static final String OUTPUT_KEY = ContentSource.OUTPUT_PREFIX + "outline_docs.json";
 
-    static final int MAX_MENTOR_DOCUMENTS = 15;
+    static final int MAX_CONVERSATION_DOCUMENTS = 15;
 
     static final int MAX_QUERY_TERMS = 24;
 
@@ -41,21 +41,21 @@ public class DocumentCaptureSource implements ContentSource {
 
     private static final Pattern NON_TERM = Pattern.compile("[^\\p{L}\\p{Nd}]+");
 
-    static final int MENTOR_BODY_CHARS = 4_000;
+    static final int CONVERSATION_BODY_CHARS = 4_000;
 
     private final DocumentProjection projection;
     private final ObjectMapper objectMapper;
-    private final MentorMessageQuery mentorMessages;
+    private final ConversationMessageQuery conversationMessages;
 
     public DocumentCaptureSource(
-            DocumentProjection projection, ObjectMapper objectMapper, MentorMessageQuery mentorMessages) {
+            DocumentProjection projection, ObjectMapper objectMapper, ConversationMessageQuery conversationMessages) {
         this.projection = projection;
         this.objectMapper = objectMapper;
-        this.mentorMessages = mentorMessages;
+        this.conversationMessages = conversationMessages;
     }
 
     @Override
-    public boolean supports(MentorContextRequest request) {
+    public boolean supports(ConversationContextRequest request) {
         return true;
     }
 
@@ -67,19 +67,19 @@ public class DocumentCaptureSource implements ContentSource {
 
     @Override
     @Transactional(readOnly = true)
-    public void contribute(MentorContextRequest request, Map<String, byte[]> files) {
-        contributeMentor(request, files);
+    public void contribute(ConversationContextRequest request, Map<String, byte[]> files) {
+        contributeConversation(request, files);
     }
 
-    private void contributeMentor(MentorContextRequest request, Map<String, byte[]> files) {
-        List<ProjectedDocument> documents = rankedMentorDocuments(request);
+    private void contributeConversation(ConversationContextRequest request, Map<String, byte[]> files) {
+        List<ProjectedDocument> documents = rankedConversationDocuments(request);
         if (documents.isEmpty()) {
             return;
         }
         ArrayNode array = objectMapper.createArrayNode();
         int emitted = 0;
         for (ProjectedDocument doc : documents) {
-            if (emitted >= MAX_MENTOR_DOCUMENTS) {
+            if (emitted >= MAX_CONVERSATION_DOCUMENTS) {
                 break;
             }
             ObjectNode node = array.addObject();
@@ -91,7 +91,7 @@ public class DocumentCaptureSource implements ContentSource {
             }
             node.put("body", excerptBody(doc));
             String full = doc.bodyMarkdown();
-            if (!doc.deleted() && full != null && full.length() > MENTOR_BODY_CHARS) {
+            if (!doc.deleted() && full != null && full.length() > CONVERSATION_BODY_CHARS) {
                 node.put("bodyTruncated", true);
                 node.put("bodyChars", full.length());
             }
@@ -136,7 +136,7 @@ public class DocumentCaptureSource implements ContentSource {
         try {
             var root = objectMapper.createObjectNode();
             root.set("documents", array);
-            root.put("hasMore", documents.size() > MAX_MENTOR_DOCUMENTS);
+            root.put("hasMore", documents.size() > MAX_CONVERSATION_DOCUMENTS);
             files.put(OUTPUT_KEY, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root));
         } catch (JacksonException e) {
             throw new IllegalStateException("Failed to serialize Outline documents context", e);
@@ -144,11 +144,11 @@ public class DocumentCaptureSource implements ContentSource {
     }
 
     // Fall back to recency when no query matches; documentation enrichment must not require a matching user message.
-    private List<ProjectedDocument> rankedMentorDocuments(MentorContextRequest request) {
+    private List<ProjectedDocument> rankedConversationDocuments(ConversationContextRequest request) {
         String query = deriveQueryText(null, currentUserMessageText(request));
         if (!query.isBlank()) {
             List<ProjectedDocument> ranked =
-                    projection.searchDocuments(request.workspaceId(), query, MAX_MENTOR_DOCUMENTS + 1);
+                    projection.searchDocuments(request.workspaceId(), query, MAX_CONVERSATION_DOCUMENTS + 1);
             if (!ranked.isEmpty()) {
                 return ranked;
             }
@@ -157,11 +157,11 @@ public class DocumentCaptureSource implements ContentSource {
     }
 
     @Nullable
-    private String currentUserMessageText(MentorContextRequest request) {
+    private String currentUserMessageText(ConversationContextRequest request) {
         if (request.stimulusEntryId() == null) {
             return null;
         }
-        return mentorMessages
+        return conversationMessages
                 .textForMessage(request.workspaceId(), request.developerId(), request.stimulusEntryId())
                 .orElse(null);
     }
@@ -193,10 +193,10 @@ public class DocumentCaptureSource implements ContentSource {
             return "(document removed upstream or evicted from the local mirror)";
         }
         String body = doc.bodyMarkdown();
-        if (body.length() <= MENTOR_BODY_CHARS) {
+        if (body.length() <= CONVERSATION_BODY_CHARS) {
             return body;
         }
-        int end = MENTOR_BODY_CHARS;
+        int end = CONVERSATION_BODY_CHARS;
         // Never split a UTF-16 surrogate pair at the excerpt boundary.
         if (Character.isHighSurrogate(body.charAt(end - 1))) {
             end--;

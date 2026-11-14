@@ -48,8 +48,8 @@ const SCOPES = [
 	"integration",
 	// Source control: GitHub and GitLab.
 	"scm",
-	// Heph.
-	"mentor",
+	// Ask Hephaestus.
+	"conversation",
 	"notifications",
 	"teams",
 	"workspace",

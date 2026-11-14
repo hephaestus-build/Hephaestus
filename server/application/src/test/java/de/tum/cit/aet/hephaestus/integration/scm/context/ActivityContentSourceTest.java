@@ -31,8 +31,8 @@ class ActivityContentSourceTest extends BaseUnitTest {
 
     private static final Instant NOW = Instant.parse("2026-10-14T10:00:00Z");
 
-    private final MentorContextQueryRepository queries = mock(MentorContextQueryRepository.class);
-    private final ScmMentorWorkQuery work = mock(ScmMentorWorkQuery.class);
+    private final ConversationContextQueryRepository queries = mock(ConversationContextQueryRepository.class);
+    private final ScmConversationWorkQuery work = mock(ScmConversationWorkQuery.class);
     private final ObjectMapper mapper = new ObjectMapper();
     private ActivityContentSource source;
 
@@ -43,7 +43,7 @@ class ActivityContentSourceTest extends BaseUnitTest {
 
     @Test
     void shouldDropWordsThenTheOldestRowsOfTheLongestListAndNameWhatItLeftOut() {
-        when(work.actors(1L, 2L)).thenReturn(Optional.of(new ScmMentorWorkQuery.Actors(5L, List.of(200L))));
+        when(work.actors(1L, 2L)).thenReturn(Optional.of(new ScmConversationWorkQuery.Actors(5L, List.of(200L))));
         Repository repository = new Repository();
         repository.setNameWithOwner("course/intro");
         List<PullRequestReview> reviews = IntStream.range(0, 30)

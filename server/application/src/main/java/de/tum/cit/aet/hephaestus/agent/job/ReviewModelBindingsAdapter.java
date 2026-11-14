@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.spi.BoundModelSlot;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
@@ -24,7 +24,7 @@ public class ReviewModelBindingsAdapter implements ReviewModelBindings {
     @Transactional(readOnly = true)
     public List<BoundModelSlot> models(long workspaceId, List<@Nullable Long> developerIds) {
         if (developerIds.isEmpty()) return List.of(new BoundModelSlot("review", ModelKind.CHAT, null));
-        var review = routing.bindingForPeople(workspaceId, AgentPurpose.PRACTICE_REVIEW, developerIds);
+        var review = routing.bindingForPeople(workspaceId, ModelPurpose.PRACTICE_REVIEW, developerIds);
         return List.of(new BoundModelSlot(
                 "review", ModelKind.CHAT, review.map(row -> methods.freeze(row)).orElse(null)));
     }

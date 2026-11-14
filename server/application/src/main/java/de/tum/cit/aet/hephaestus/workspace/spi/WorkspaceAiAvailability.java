@@ -11,7 +11,7 @@ public interface WorkspaceAiAvailability {
     List<Option> options(long workspaceId);
 
     /** {@code models} are the ones that would serve this answer today, practice reviews first. */
-    record Option(AiChoice choice, boolean practiceReviewsReady, boolean mentorReady, List<Model> models) {}
+    record Option(AiChoice choice, boolean practiceReviewsReady, boolean conversationReady, List<Model> models) {}
 
     /** Visible model facts; platform and operator are independent declarations. */
     record Model(

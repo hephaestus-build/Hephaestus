@@ -46,14 +46,14 @@ class PersonDataRegistryTest extends BaseUnitTest {
 
         assertThat(registry.stores())
                 .extracting(PersonDataContributor::store)
-                .containsExactly("profile", "provider_event_replay", "mentor_entry_tool_result_copy");
+                .containsExactly("profile", "provider_event_replay", "conversation_entry_tool_result_copy");
     }
 
     @Test
     void shouldRejectAnotherStoreAtTheFinalCopyScrubOrder() {
         assertThatThrownBy(() -> new PersonDataRegistry(List.of(new FinalStores(Integer.MAX_VALUE, Integer.MAX_VALUE))))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessage("The mentor copy store must be the only store at the last erasure order");
+                .hasMessage("The conversation copy store must be the only store at the last erasure order");
     }
 
     @Test
@@ -61,7 +61,7 @@ class PersonDataRegistryTest extends BaseUnitTest {
         assertThatThrownBy(() ->
                         new PersonDataRegistry(List.of(new FinalStores(Integer.MAX_VALUE - 1, Integer.MAX_VALUE))))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessage("The mentor copy store must be the only store at the last erasure order");
+                .hasMessage("The conversation copy store must be the only store at the last erasure order");
     }
 
     @Test
@@ -69,16 +69,16 @@ class PersonDataRegistryTest extends BaseUnitTest {
         assertThatThrownBy(() ->
                         new PersonDataRegistry(List.of(new FinalStores(Integer.MAX_VALUE - 1, Integer.MAX_VALUE - 1))))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessage("The mentor copy store must be the only store at the last erasure order");
+                .hasMessage("The conversation copy store must be the only store at the last erasure order");
     }
 
-    @PersonDataStores({"profile", "mentor_entry_tool_result_copy", "provider_event_replay"})
+    @PersonDataStores({"profile", "conversation_entry_tool_result_copy", "provider_event_replay"})
     private record FinalStores(int copyOrder, int replayOrder) implements PersonDataCatalog {
         @Override
         public List<PersonDataContributor> contributors() {
             return List.of(
                     new SelectedStore("profile"),
-                    new SelectedStore("mentor_entry_tool_result_copy", copyOrder),
+                    new SelectedStore("conversation_entry_tool_result_copy", copyOrder),
                     new SelectedStore("provider_event_replay", replayOrder));
         }
     }

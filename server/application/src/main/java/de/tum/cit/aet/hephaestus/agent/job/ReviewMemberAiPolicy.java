@@ -1,10 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -35,12 +35,13 @@ public class ReviewMemberAiPolicy {
     private final PersonProcessingSuppression suppression;
     private final ReviewJobAssignments assignments;
 
-    public Optional<WorkspaceAgentBinding> binding(ReviewJob job) {
+    public Optional<WorkspaceModelAssignment> binding(ReviewJob job) {
         if (!permitsReview(job)) return Optional.empty();
-        return routing.bindingForPeople(job.getWorkspaceId(), AgentPurpose.PRACTICE_REVIEW, people(job));
+        return routing.bindingForPeople(job.getWorkspaceId(), ModelPurpose.PRACTICE_REVIEW, people(job));
     }
 
-    public Optional<WorkspaceAgentBinding> binding(long workspaceId, UUID reviewId, List<ReviewAssignmentId> selected) {
+    public Optional<WorkspaceModelAssignment> binding(
+            long workspaceId, UUID reviewId, List<ReviewAssignmentId> selected) {
         var pinned = assignments.load(
                 workspaceId, reviewId, new ReviewJobInput(selected.getFirst().itemId(), selected));
         if (pinned.stream()
@@ -57,7 +58,7 @@ public class ReviewMemberAiPolicy {
         if (people.stream()
                 .anyMatch(person -> person != null
                         && !preferences.forDeveloper(workspaceId, person).permitsAi())) return Optional.empty();
-        return routing.bindingForPeople(workspaceId, AgentPurpose.PRACTICE_REVIEW, people);
+        return routing.bindingForPeople(workspaceId, ModelPurpose.PRACTICE_REVIEW, people);
     }
 
     public boolean isProcessingSuppressed(ReviewJob job) {

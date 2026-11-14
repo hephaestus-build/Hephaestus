@@ -47,7 +47,7 @@ it("withholds the floating composer for No AI and after a failed preference refe
 	const preference: WorkspaceOnboarding = {
 		...workspaceOnboarding(),
 		aiChoice: "NO_AI",
-		mentorRefusal: "NO_AI",
+		conversationRefusal: "NO_AI",
 	};
 	mockConversationPanel(preference);
 	const { queryClient } = renderRouteAtWithRouter("/w/acme/teams");
@@ -58,7 +58,7 @@ it("withholds the floating composer for No AI and after a failed preference refe
 		...workspaceOnboarding(),
 		aiChoice: "IN_HOUSE_ONLY",
 		aiOptions: [
-			{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true, models: [] },
+			{ choice: "IN_HOUSE_ONLY", conversationReady: true, practiceReviewsReady: true, models: [] },
 		],
 	};
 	server.use(http.get("*/workspaces/acme/onboarding/me", () => HttpResponse.json(optedIn)));
@@ -83,7 +83,9 @@ it("withholds the floating composer for No AI and after a failed preference refe
 function conversationReady(): WorkspaceOnboarding {
 	return {
 		...workspaceOnboarding(),
-		aiOptions: [{ choice: "CLOUD", mentorReady: true, practiceReviewsReady: false, models: [] }],
+		aiOptions: [
+			{ choice: "CLOUD", conversationReady: true, practiceReviewsReady: false, models: [] },
+		],
 	};
 }
 
@@ -91,8 +93,10 @@ it("withholds the floating composer where no conversation model is ready for any
 	mockConversationPanel({
 		...workspaceOnboarding(),
 		aiChoice: "CLOUD",
-		mentorRefusal: "UNAVAILABLE",
-		aiOptions: [{ choice: "CLOUD", mentorReady: false, practiceReviewsReady: true, models: [] }],
+		conversationRefusal: "UNAVAILABLE",
+		aiOptions: [
+			{ choice: "CLOUD", conversationReady: false, practiceReviewsReady: true, models: [] },
+		],
 	});
 	renderRouteAtWithRouter("/w/acme/teams");
 	await screen.findByRole("heading", { name: "Teams" }, ROUTE_RENDER_WAIT);
@@ -163,7 +167,7 @@ it("keeps setup free of the floating composer even when AI is available", async 
 		needsSetup: true,
 		aiChoice: "IN_HOUSE_ONLY",
 		aiOptions: [
-			{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true, models: [] },
+			{ choice: "IN_HOUSE_ONLY", conversationReady: true, practiceReviewsReady: true, models: [] },
 		],
 	});
 	renderRouteAtWithRouter("/w/acme/onboarding");
@@ -174,7 +178,7 @@ it("keeps setup free of the floating composer even when AI is available", async 
 it("shares the conversation with the conversation page and sends the page it was asked from", async () => {
 	const user = userEvent.setup();
 	const { acme } = mockConversationPanel(conversationReady());
-	acme.add({ kind: "HEPH", text: "Earlier in this conversation." });
+	acme.add({ kind: "ANSWER", text: "Earlier in this conversation." });
 	const { router } = renderRouteAtWithRouter("/w/acme/teams");
 	await user.click(
 		await screen.findByRole("button", { name: "Ask Hephaestus" }, ROUTE_RENDER_WAIT),
@@ -209,7 +213,7 @@ it("shares the conversation with the conversation page and sends the page it was
 it("opens a thread as a view over the conversation, and carries it to the conversation page", async () => {
 	const user = userEvent.setup();
 	const { acme } = mockConversationPanel(conversationReady());
-	const parent = acme.add({ kind: "HEPH", text: "Three pull requests left the reason out." });
+	const parent = acme.add({ kind: "ANSWER", text: "Three pull requests left the reason out." });
 	acme.add({ kind: "USER", text: "Which ones?", parentEntryId: parent.id });
 	const { router } = renderRouteAtWithRouter("/w/acme/teams");
 	await user.click(
@@ -236,7 +240,7 @@ it("opens a thread as a view over the conversation, and carries it to the conver
 it("goes back from a thread to the conversation on Escape, and closes the panel on the next", async () => {
 	const user = userEvent.setup();
 	const { acme } = mockConversationPanel(conversationReady());
-	const parent = acme.add({ kind: "HEPH", text: "Three pull requests left the reason out." });
+	const parent = acme.add({ kind: "ANSWER", text: "Three pull requests left the reason out." });
 	acme.add({ kind: "USER", text: "Which ones?", parentEntryId: parent.id });
 	renderRouteAtWithRouter("/w/acme/teams");
 	await user.click(
@@ -341,7 +345,7 @@ it("marks the launcher when an answer lands while the panel is closed, and clear
 	});
 
 	const answer = acme.add({
-		kind: "HEPH",
+		kind: "ANSWER",
 		text: "You opened two pull requests.",
 		turnId: question.turnId,
 	});
@@ -373,7 +377,7 @@ it("marks the launcher when Hephaestus answers in a thread", async () => {
 	renderRouteAtWithRouter("/w/acme/teams");
 	const stream = await openStream(acme);
 	const reply = acme.add({
-		kind: "HEPH",
+		kind: "ANSWER",
 		text: "Share blockers earlier.",
 		parentEntryId: parent.id,
 	});
@@ -386,7 +390,7 @@ it("marks the launcher when Hephaestus answers in a thread", async () => {
 it("marks the launcher on reconnect for a whole Slack turn that ran while the stream was down, and opening clears it", async () => {
 	const user = userEvent.setup();
 	const { acme } = mockConversationPanel(conversationReady());
-	acme.lastReadAt = acme.add({ kind: "HEPH", text: "An answer read long ago." }).createdAt;
+	acme.lastReadAt = acme.add({ kind: "ANSWER", text: "An answer read long ago." }).createdAt;
 	renderRouteAtWithRouter("/w/acme/teams");
 	const stream = await openStream(acme);
 	expect(screen.queryByRole("button", { name: /new answer/u })).toBeNull();
@@ -394,7 +398,7 @@ it("marks the launcher on reconnect for a whole Slack turn that ran while the st
 	// Asked and answered in Slack while no event reached this tab.
 	const turn = acme.addTurn({ status: "DONE", surface: "SLACK" });
 	acme.add({ kind: "USER", surface: "SLACK", text: "Asked from Slack", turnId: turn.id });
-	acme.add({ kind: "HEPH", surface: "SLACK", text: "Answered in Slack.", turnId: turn.id });
+	acme.add({ kind: "ANSWER", surface: "SLACK", text: "Answered in Slack.", turnId: turn.id });
 	act(() => {
 		stream.emit("snapshot", acme.conversation());
 	});
@@ -412,7 +416,7 @@ it("marks the launcher on reconnect for the first answer ever, written while the
 
 	const turn = acme.addTurn({ status: "DONE" });
 	acme.add({ kind: "USER", text: "My first question", turnId: turn.id });
-	acme.add({ kind: "HEPH", text: "My first answer.", turnId: turn.id });
+	acme.add({ kind: "ANSWER", text: "My first answer.", turnId: turn.id });
 	act(() => {
 		stream.emit("snapshot", acme.conversation());
 	});
@@ -421,11 +425,11 @@ it("marks the launcher on reconnect for the first answer ever, written while the
 
 it("leaves the launcher unmarked on reconnect when the only new answer was deleted", async () => {
 	const { acme } = mockConversationPanel(conversationReady());
-	acme.lastReadAt = acme.add({ kind: "HEPH", text: "An answer read long ago." }).createdAt;
+	acme.lastReadAt = acme.add({ kind: "ANSWER", text: "An answer read long ago." }).createdAt;
 	renderRouteAtWithRouter("/w/acme/teams");
 	const stream = await openStream(acme);
 
-	const answer = acme.add({ kind: "HEPH", text: "Deleted before this tab saw it." });
+	const answer = acme.add({ kind: "ANSWER", text: "Deleted before this tab saw it." });
 	answer.deleted = true;
 	await act(async () => {
 		stream.emit("snapshot", acme.conversation());
@@ -436,7 +440,7 @@ it("leaves the launcher unmarked on reconnect when the only new answer was delet
 it("shares what was read between devices: opening the panel on one clears the dot on the other", async () => {
 	const user = userEvent.setup();
 	const { acme } = mockConversationPanel(conversationReady());
-	const answer = acme.add({ kind: "HEPH", text: "An answer nobody read yet." });
+	const answer = acme.add({ kind: "ANSWER", text: "An answer nobody read yet." });
 
 	// This device opens the panel, which tells the server how far the developer read.
 	renderRouteAtWithRouter("/w/acme/teams");
@@ -455,7 +459,7 @@ it("shares what was read between devices: opening the panel on one clears the do
 
 it("clears the dot when another device reads the answer and this one reconnects", async () => {
 	const { acme } = mockConversationPanel(conversationReady());
-	const answer = acme.add({ kind: "HEPH", text: "An answer nobody read yet." });
+	const answer = acme.add({ kind: "ANSWER", text: "An answer nobody read yet." });
 	renderRouteAtWithRouter("/w/acme/teams");
 	await screen.findByRole("button", { name: "Ask Hephaestus, new answer" }, ROUTE_RENDER_WAIT);
 	const stream = await waitFor(() => {
@@ -473,7 +477,7 @@ it("clears the dot when another device reads the answer and this one reconnects"
 
 it("clears the dot live when the developer reads the answer on another device", async () => {
 	const { acme } = mockConversationPanel(conversationReady());
-	const answer = acme.add({ kind: "HEPH", text: "An answer nobody read yet." });
+	const answer = acme.add({ kind: "ANSWER", text: "An answer nobody read yet." });
 	renderRouteAtWithRouter("/w/acme/teams");
 	await screen.findByRole("button", { name: "Ask Hephaestus, new answer" }, ROUTE_RENDER_WAIT);
 	const stream = await waitFor(() => {
@@ -507,7 +511,10 @@ it.each([
 			);
 		const user = userEvent.setup();
 		const { acme } = mockConversationPanel(conversationReady());
-		const answer = acme.add({ kind: "HEPH", text: "Three pull requests left the reason out." });
+		const answer = acme.add({
+			kind: "ANSWER",
+			text: "Three pull requests left the reason out.",
+		});
 		acme.lastReadAt = answer.createdAt;
 		renderRouteAtWithRouter("/w/acme/teams");
 		await user.click(
@@ -542,7 +549,7 @@ it("closes the panel when a link in an answer opens another page, which is then 
 	);
 	acme.add({ kind: "USER", text: "What should I fix in my pull request?" });
 	const answer = acme.add({
-		kind: "HEPH",
+		kind: "ANSWER",
 		text: "One thing stands out.",
 		links: [
 			{
@@ -625,7 +632,7 @@ it.each([
 		const user = userEvent.setup();
 		const { acme } = mockConversationPanel(conversationReady());
 		const answer = acme.add({
-			kind: "HEPH",
+			kind: "ANSWER",
 			text: "One thing stands out.",
 			links: [
 				{
@@ -663,7 +670,7 @@ const PAUSED = "Live updates paused. Reconnecting…";
 it("says in an open thread that live updates are paused, where the conversation under it is hidden", async () => {
 	const user = userEvent.setup();
 	const { acme } = mockConversationPanel(conversationReady());
-	const parent = acme.add({ kind: "HEPH", text: "Three pull requests left the reason out." });
+	const parent = acme.add({ kind: "ANSWER", text: "Three pull requests left the reason out." });
 	acme.lastReadAt = parent.createdAt;
 	acme.add({ kind: "USER", text: "Which ones?", parentEntryId: parent.id });
 	renderRouteAtWithRouter("/w/acme/teams");

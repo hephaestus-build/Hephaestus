@@ -11,7 +11,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelJoinNoticeHandler;
-import de.tum.cit.aet.hephaestus.integration.slack.events.SlackMentorService;
+import de.tum.cit.aet.hephaestus.integration.slack.events.SlackConversationService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackUninstallService;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackAppHomeService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -30,7 +30,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
             new EventPayloadDeserializer(JsonMapper.builder().build());
 
     @Mock
-    private SlackMentorService mentorService;
+    private SlackConversationService conversationService;
 
     @Mock
     private SlackAppHomeService appHomeService;
@@ -41,7 +41,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     @Mock
     private SlackUninstallService uninstallService;
 
-    private SlackMentorDmMessageHandler dmHandler;
+    private SlackConversationDmMessageHandler dmHandler;
     private SlackAppHomeOpenedMessageHandler appHomeHandler;
     private SlackMemberJoinedChannelMessageHandler joinHandler;
     private SlackAppUninstalledMessageHandler appUninstalledHandler;
@@ -49,7 +49,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        dmHandler = new SlackMentorDmMessageHandler(mentorService, deserializer);
+        dmHandler = new SlackConversationDmMessageHandler(conversationService, deserializer);
         appHomeHandler = new SlackAppHomeOpenedMessageHandler(appHomeService, deserializer);
         joinHandler = new SlackMemberJoinedChannelMessageHandler(joinNoticeHandler, deserializer);
         appUninstalledHandler = new SlackAppUninstalledMessageHandler(uninstallService, deserializer);
@@ -57,12 +57,12 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
     }
 
     @Test
-    void dmMessageRoutesToMentorService() {
+    void dmMessageRoutesToConversationService() {
         dmHandler.onMessage(
                 inbox(
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel_type\":\"im\",\"channel\":\"D1\",\"user\":\"U1\",\"text\":\"help\",\"ts\":\"100.2\",\"thread_ts\":\"100.1\"}}"));
 
-        verify(mentorService).handleDm("T1", "D1", "U1", "help", "100.2", "100.1");
+        verify(conversationService).handleDm("T1", "D1", "U1", "help", "100.2", "100.1");
     }
 
     @Test
@@ -71,7 +71,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
                 inbox(
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel_type\":\"im\",\"channel\":\"D1\",\"user\":\"U1\",\"text\":\"help\",\"ts\":\"100.2\"}}"));
 
-        verify(mentorService).handleDm("T1", "D1", "U1", "help", "100.2", "100.2");
+        verify(conversationService).handleDm("T1", "D1", "U1", "help", "100.2", "100.2");
     }
 
     @Test
@@ -80,7 +80,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
                 inbox(
                         "{\"authorizations\":[{\"team_id\":\"T1\"}],\"event\":{\"type\":\"message\",\"channel_type\":\"im\",\"channel\":\"D1\",\"user\":\"U1\",\"text\":\"help\",\"ts\":\"100.2\"}}"));
 
-        verify(mentorService).handleDm("T1", "D1", "U1", "help", "100.2", "100.2");
+        verify(conversationService).handleDm("T1", "D1", "U1", "help", "100.2", "100.2");
     }
 
     @Test
@@ -89,16 +89,16 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
                 inbox(
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel_type\":\"im\",\"channel\":\"D1\",\"user\":\"U1\",\"bot_id\":\"B1\",\"text\":\"help\",\"ts\":\"100.1\"}}"));
 
-        verify(mentorService, never()).handleDm(any(), any(), any(), any(), any(), any());
+        verify(conversationService, never()).handleDm(any(), any(), any(), any(), any(), any());
     }
 
     @Test
-    void channelMessagesNeverRouteToMentorDm() {
+    void channelMessagesNeverRouteToConversationDm() {
         dmHandler.onMessage(
                 inbox(
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel_type\":\"channel\",\"channel\":\"C1\",\"user\":\"U1\",\"text\":\"hello\",\"ts\":\"100.1\"}}"));
 
-        verify(mentorService, never()).handleDm(any(), any(), any(), any(), any(), any());
+        verify(conversationService, never()).handleDm(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -124,7 +124,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
                 inbox(
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"subtype\":\"message_changed\",\"channel_type\":\"im\",\"channel\":\"D1\",\"message\":{\"user\":\"U1\",\"text\":\"new words\",\"ts\":\"100.2\",\"edited\":{\"user\":\"U1\",\"ts\":\"100.9\"}}}}"));
 
-        verify(mentorService).handleEdit("T1", "D1", "U1", "100.2", "new words");
+        verify(conversationService).handleEdit("T1", "D1", "U1", "100.2", "new words");
     }
 
     @Test
@@ -133,7 +133,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
                 inbox(
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"subtype\":\"message_changed\",\"channel_type\":\"im\",\"channel\":\"D1\",\"message\":{\"user\":\"U1\",\"text\":\"same\",\"ts\":\"100.2\",\"reply_count\":1}}}"));
 
-        verify(mentorService, never()).handleEdit(any(), any(), any(), any(), any());
+        verify(conversationService, never()).handleEdit(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -142,7 +142,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
                 inbox(
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"subtype\":\"message_changed\",\"channel_type\":\"im\",\"channel\":\"D1\",\"message\":{\"bot_id\":\"B1\",\"text\":\"streamed\",\"ts\":\"100.3\",\"edited\":{\"user\":\"B1\",\"ts\":\"100.9\"}}}}"));
 
-        verify(mentorService, never()).handleEdit(any(), any(), any(), any(), any());
+        verify(conversationService, never()).handleEdit(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -151,7 +151,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
                 inbox(
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"subtype\":\"message_deleted\",\"channel_type\":\"im\",\"channel\":\"D1\",\"deleted_ts\":\"100.2\",\"previous_message\":{\"user\":\"U1\",\"text\":\"old\",\"ts\":\"100.2\"}}}"));
 
-        verify(mentorService).handleDelete("T1", "D1", "U1", "100.2");
+        verify(conversationService).handleDelete("T1", "D1", "U1", "100.2");
     }
 
     @Test
@@ -160,7 +160,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
                 inbox(
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"subtype\":\"bot_message\",\"channel_type\":\"im\",\"channel\":\"D1\",\"bot_id\":\"B1\",\"text\":\"hi\",\"ts\":\"100.4\"}}"));
 
-        verify(mentorService, never()).handleDm(any(), any(), any(), any(), any(), any());
+        verify(conversationService, never()).handleDm(any(), any(), any(), any(), any(), any());
     }
 
     @Test

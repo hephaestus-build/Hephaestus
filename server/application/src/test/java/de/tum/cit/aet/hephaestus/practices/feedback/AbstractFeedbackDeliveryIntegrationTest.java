@@ -45,6 +45,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendTransac
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.PostedCopyCorrector;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.spi.ConversationReadinessQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackBasisInput;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheck;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheckFacts;
@@ -61,7 +62,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
-import de.tum.cit.aet.hephaestus.practices.spi.MentorReadinessQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
@@ -96,7 +96,7 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
     protected FeedbackGate gate;
 
     @MockitoBean
-    MentorReadinessQuery conversationReadiness;
+    ConversationReadinessQuery conversationReadiness;
 
     @Autowired
     protected ActionExecutor executor;

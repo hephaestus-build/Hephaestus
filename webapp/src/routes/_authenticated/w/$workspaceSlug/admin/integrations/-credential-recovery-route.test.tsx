@@ -65,8 +65,8 @@ function mockConnection(kind: "GITHUB" | "GITLAB", installationId?: number) {
 		hasPersonalAccessToken: installationId == null,
 		hasSlackToken: false,
 		publicActivityEnabled: false,
-		practiceReviewAutoTriggerEnabled: false,
-		practiceReviewManualTriggerEnabled: false,
+		practiceReviewEventEnabled: false,
+		practiceReviewRequestEnabled: false,
 		updatedAt: listed.createdAt,
 	} satisfies Workspace;
 	const entry = {

@@ -296,19 +296,6 @@ erDiagram
         INTEGER duration_ms
     }
 
-    WorkspaceAgentBinding {
-        BIGINT id PK
-        BIGINT workspace_id FK,UK "NOT NULL"
-        VARCHAR(32) purpose UK "NOT NULL"
-        BOOLEAN enabled "NOT NULL"
-        INTEGER timeout_seconds "NOT NULL"
-        BIGINT instance_model_id FK
-        BIGINT workspace_model_id FK
-        TIMESTAMPTZ created_at "NOT NULL"
-        TIMESTAMPTZ updated_at
-        VARCHAR(24) data_handling_tier UK "NOT NULL"
-    }
-
     WorkspaceLlmConnection {
         BIGINT id PK,UK
         BIGINT workspace_id FK,UK "NOT NULL"
@@ -353,6 +340,19 @@ erDiagram
         INTEGER discovered_max_output_tokens
     }
 
+    WorkspaceModelAssignment {
+        BIGINT id PK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        VARCHAR(32) purpose UK "NOT NULL"
+        BOOLEAN enabled "NOT NULL"
+        INTEGER timeout_seconds "NOT NULL"
+        BIGINT instance_model_id FK
+        BIGINT workspace_model_id FK
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ updated_at
+        VARCHAR(24) data_handling_tier UK "NOT NULL"
+    }
+
     Account["Account · Core"]
     PracticeVersion["PracticeVersion · Practices"]
     Review["Review · Practices"]
@@ -384,15 +384,15 @@ erDiagram
     ReviewJob ||--o{ ReviewJobScriptRun : reviewed
     PracticeVersion ||--o{ ReviewJobScriptRun : reviewed
     Workspace ||--o{ ReviewJobScriptRun : reviewed
-    LlmModel ||--o{ WorkspaceAgentBinding : references
-    Workspace ||--o{ WorkspaceAgentBinding : has
-    WorkspaceLlmModel ||--o{ WorkspaceAgentBinding : workspace_model_id
-    WorkspaceLlmModel ||--o{ WorkspaceAgentBinding : workspace_model_id
     Workspace ||--o{ WorkspaceLlmConnection : has
     WorkspaceLlmConnection ||--o{ WorkspaceLlmModel : connection_id
     Workspace ||--o{ WorkspaceLlmModel : has
     LlmCallPool ||--o{ WorkspaceLlmModel : has
     WorkspaceLlmConnection ||--o{ WorkspaceLlmModel : connection_id
+    LlmModel ||--o{ WorkspaceModelAssignment : references
+    Workspace ||--o{ WorkspaceModelAssignment : has
+    WorkspaceLlmModel ||--o{ WorkspaceModelAssignment : workspace_model_id
+    WorkspaceLlmModel ||--o{ WorkspaceModelAssignment : workspace_model_id
 
     %% Many-to-Many relationships
     LlmModel }o--o{ LlmModelWorkspaceGrant : has

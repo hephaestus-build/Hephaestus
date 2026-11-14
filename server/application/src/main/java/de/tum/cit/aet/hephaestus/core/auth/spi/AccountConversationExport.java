@@ -6,7 +6,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The messages of the account's conversations as the app shows them: what the account wrote, Heph's replies and its
+ * The messages of the account's conversations as the app shows them: what the account wrote, Hephaestus's replies and its
  * weekly digests (GDPR Art. 15(1)). Raw tool results stay out: they are where other people's data enters a
  * conversation, which Art. 15(4) protects. A reply only quotes what the account could already see. Redacted messages
  * stay out too.
@@ -14,7 +14,7 @@ import org.jspecify.annotations.Nullable;
 public interface AccountConversationExport {
     List<Message> messages(long accountId);
 
-    /** @param author {@code USER} for the account's own words, {@code HEPH} for a reply, {@code DIGEST} for a digest */
+    /** @param author {@code USER} for the account's own words, {@code ANSWER} for a reply, {@code DIGEST} for a digest */
     record Message(
             String workspace,
             UUID conversationId,

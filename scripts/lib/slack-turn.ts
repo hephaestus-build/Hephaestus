@@ -110,7 +110,7 @@ function nullable(record: Record<string, unknown>, key: string): string | null {
  * server stored that question. Another turn's reply never stands for it.
  *
  * A row lists the turn's Hephaestus entries in order. The drill does not choose the answer itself. After Slack accepts the
- * reply, the server records its `ts` on the one entry that it posted as the answer (`MentorSlackMessages.link`), so
+ * reply, the server records its `ts` on the one entry that it posted as the answer (`ConversationSlackMessages.link`), so
  * `replyTs` is the `ts` of the entry that carries one, whatever that entry shows. The answer text is the text of all the
  * turn's entries.
  */

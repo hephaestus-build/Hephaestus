@@ -2,7 +2,7 @@ import type { Decorator, Meta, StoryObj } from "@storybook/react-vite";
 import { useEffect, useState } from "react";
 import { expect, fn, screen, spyOn, waitFor, within } from "storybook/test";
 
-import type { MentorEntry } from "@/api/types.gen";
+import type { ConversationEntry } from "@/api/types.gen";
 import { Button } from "@/components/ui/button";
 import type { PendingMessage } from "@/lib/conversation-entry";
 import { isRecord } from "@/lib/is-record";
@@ -42,7 +42,7 @@ const BEFORE_FOLLOW_UP = CONVERSATION.slice(0, 4);
  * A page older than the conversation fixture, on the same day as its first message, headed by the
  * message a link points to.
  */
-const OLDER_PAGE: MentorEntry[] = CONVERSATION.map((message, index) => ({
+const OLDER_PAGE: ConversationEntry[] = CONVERSATION.map((message, index) => ({
 	...message,
 	id: `older-${message.id}`,
 	seq: message.seq - 100,
@@ -396,7 +396,7 @@ export const WaitingForCapacity: Story = {
 	args: {
 		state: ready({
 			entries: [...BEFORE_FOLLOW_UP, FOLLOW_UP],
-			turns: [turn({ id: FOLLOW_UP.turnId ?? "", status: "QUEUED", waitingFor: "FREE_HEPH" })],
+			turns: [turn({ id: FOLLOW_UP.turnId ?? "", status: "QUEUED", waitingFor: "CAPACITY" })],
 		}),
 	},
 	play: async ({ canvas }) => {
@@ -510,7 +510,7 @@ export const OpensAtTheEndWhenTheLastTurnFits: Story = {
 				FOLLOW_UP,
 				entry({
 					id: "e1000000-0000-4000-8000-000000000010",
-					kind: "HEPH",
+					kind: "ANSWER",
 					text: "Yes, the cache keeps its entries for a day.",
 					turnId: FOLLOW_UP.turnId,
 					createdAt: FOLLOW_UP.createdAt,
@@ -546,7 +546,7 @@ export const OpensAtTheEndWhenTheLastTurnFits: Story = {
 const REPLIES = Array.from({ length: 60 }, (_, index) =>
 	entry({
 		id: `e2000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
-		kind: "HEPH",
+		kind: "ANSWER",
 		text: `Reply ${index + 1}: the cache keeps its entries for a day.`,
 	}),
 );
@@ -560,7 +560,7 @@ const AFTER_REPLIES = [
 	}),
 	entry({
 		id: "e2000000-0000-4000-8000-000000000101",
-		kind: "HEPH",
+		kind: "ANSWER",
 		text: "Yes, it does.",
 		turnId: "t2000000-0000-4000-8000-000000000100",
 	}),
@@ -630,7 +630,7 @@ export const LongAnswerStoredWhileReadingItsStart: Story = {
 					FOLLOW_UP,
 					entry({
 						id: "e1000000-0000-4000-8000-000000000009",
-						kind: "HEPH",
+						kind: "ANSWER",
 						text: wordsOf(220),
 						turnId: FOLLOW_UP.turnId,
 						createdAt: FOLLOW_UP.createdAt,
@@ -698,7 +698,7 @@ function sendsUpTo(send: number, phase: number): ConversationTimelineState {
 		}),
 		entry({
 			id: `a-send-${earlier}`,
-			kind: "HEPH",
+			kind: "ANSWER",
 			text: wordsOf(150),
 			turnId: `t-send-${earlier}`,
 			createdAt,
@@ -737,7 +737,7 @@ function sendsUpTo(send: number, phase: number): ConversationTimelineState {
 	}
 	const answer = entry({
 		id: `a-send-${send}`,
-		kind: "HEPH",
+		kind: "ANSWER",
 		text: wordsOf(150),
 		turnId,
 		createdAt,
@@ -1199,7 +1199,7 @@ export const LinkedMessagePastReadLimit: Story = {
 			entries: Array.from({ length: 250 }, (_, index) =>
 				entry({
 					id: `many-${index}`,
-					kind: index % 2 === 0 ? "USER" : "HEPH",
+					kind: index % 2 === 0 ? "USER" : "ANSWER",
 					text: `Message ${index}`,
 				}),
 			),

@@ -15,8 +15,8 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
-import de.tum.cit.aet.hephaestus.integration.chat.item.ConversationThreadProjection;
 import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadEvents;
+import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadProjection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionFixtures;
@@ -29,9 +29,9 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCaptureFixtures;
-import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationProjector;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThread;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
+import de.tum.cit.aet.hephaestus.integration.slack.thread.SlackThreadProjector;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.ItemFixtures;
@@ -55,7 +55,7 @@ class ThreadCaptureSourceTest extends BaseUnitTest {
 
     private final JsonMapper mapper = JsonMapper.builder().build();
     private final SlackThreadRepository threads = mock(SlackThreadRepository.class);
-    private final SlackConversationProjector projection = mock(SlackConversationProjector.class);
+    private final SlackThreadProjector projection = mock(SlackThreadProjector.class);
     private final ConnectionService connections = mock(ConnectionService.class);
     private final SlackThread thread = new SlackThread();
 
@@ -75,7 +75,7 @@ class ThreadCaptureSourceTest extends BaseUnitTest {
     @Test
     void shouldWithholdSourceBytesWhenChannelConsentIsPausedAfterPinning() {
         when(projection.threadReadability(7L, "C1", THREAD_TS))
-                .thenReturn(ConversationThreadProjection.ThreadReadability.CONSENT_NOT_ACTIVE);
+                .thenReturn(ThreadProjection.ThreadReadability.CONSENT_NOT_ACTIVE);
         var request = new CaptureRequest(
                 UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(ThreadCaptureSource.SOURCE), "3.0.0", 3);
         var captured = captureSource().capture(snapshot(new ItemVersion("frozen", null)), request);
@@ -100,8 +100,7 @@ class ThreadCaptureSourceTest extends BaseUnitTest {
                 .put("text", question);
         payload.put("messageCount", 1).put("truncated", false);
         thread.setLastTs(THREAD_TS);
-        when(projection.threadReadability(7L, "C1", THREAD_TS))
-                .thenReturn(ConversationThreadProjection.ThreadReadability.READABLE);
+        when(projection.threadReadability(7L, "C1", THREAD_TS)).thenReturn(ThreadProjection.ThreadReadability.READABLE);
         when(projection.threadPayload(7L, "C1", THREAD_TS)).thenReturn(payload);
         var pinned = snapshot(ThreadEvents.version(mapper.writeValueAsBytes(payload), THREAD_TS));
 

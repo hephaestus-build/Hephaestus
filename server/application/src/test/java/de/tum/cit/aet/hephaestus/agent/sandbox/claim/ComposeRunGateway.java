@@ -31,13 +31,13 @@ import de.tum.cit.aet.hephaestus.agent.job.SandboxReviewClaims;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
 import de.tum.cit.aet.hephaestus.agent.proxy.SandboxModelProxy;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackRepair;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -181,7 +181,7 @@ public final class ComposeRunGateway implements AutoCloseable {
             factory.registerSingleton("agentSandboxes", sandboxes);
             factory.registerSingleton("reviewJobRepository", jobs);
             factory.registerSingleton("agentRuns", runs);
-            factory.registerSingleton("mentorTurnRepository", mock(MentorTurnRepository.class));
+            factory.registerSingleton("conversationTurnRepository", mock(ConversationTurnRepository.class));
             factory.registerSingleton(
                     "attemptTokenVerifier",
                     new AttemptTokenVerifier(AttemptKeyFixtures.keyring(KEY), new SimpleMeterRegistry()));

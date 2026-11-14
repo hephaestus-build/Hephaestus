@@ -113,8 +113,8 @@ public class WorkspaceQueriesAdapter implements WorkspaceQueries, WorkspaceProvi
                 workspace.getStatus() == Workspace.WorkspaceStatus.ACTIVE,
                 new ReviewFeatures(
                         Boolean.TRUE.equals(features.getPracticesEnabled()),
-                        Boolean.TRUE.equals(features.getPracticeReviewAutoTriggerEnabled()),
-                        Boolean.TRUE.equals(features.getPracticeReviewManualTriggerEnabled())),
+                        Boolean.TRUE.equals(features.getPracticeReviewEventEnabled()),
+                        Boolean.TRUE.equals(features.getPracticeReviewRequestEnabled())),
                 settings.snapshot(),
                 workspace.getPracticeCatalogInstalledAt());
     }

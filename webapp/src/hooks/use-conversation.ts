@@ -10,14 +10,14 @@ import { toast } from "@/lib/toast";
 
 import { useEffect } from "react";
 import {
-	clearMentorVoteMutation,
-	deleteMentorEntryMutation,
-	markMentorConversationReadMutation,
-	setMentorVoteMutation,
-	submitMentorTurnMutation,
-	updateMentorTurnStatusMutation,
+	clearConversationVoteMutation,
+	deleteConversationEntryMutation,
+	markConversationReadMutation,
+	setConversationVoteMutation,
+	submitConversationTurnMutation,
+	updateConversationTurnStatusMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { MentorEntry, MentorTurnRequest } from "@/api/types.gen";
+import type { ConversationEntry, ConversationTurnRequest } from "@/api/types.gen";
 import type {
 	EarlierMessages,
 	ConversationThreadState,
@@ -52,7 +52,7 @@ const VIEW_POLL_MS = 15_000;
 
 const NOT_SENT = "Hephaestus did not get this message.";
 
-const submitKey = (workspaceSlug: string) => ["submitMentorTurn", workspaceSlug] as const;
+const submitKey = (workspaceSlug: string) => ["submitConversationTurn", workspaceSlug] as const;
 
 function earlierOf<TData, TError>(
 	query: Pick<
@@ -83,7 +83,7 @@ function earlierOf<TData, TError>(
 function usePendingMessages(
 	workspaceSlug: string,
 	parentEntryId: string | undefined,
-	stored: MentorEntry[],
+	stored: ConversationEntry[],
 ): PendingMessage[] {
 	const sends = useMutationState({
 		filters: { mutationKey: submitKey(workspaceSlug) },
@@ -225,16 +225,16 @@ function reportFailure(fallback: string) {
 function useVote(workspaceSlug: string) {
 	const queryClient = useQueryClient();
 	const callbacks = {
-		onSuccess: (entry: MentorEntry) => {
+		onSuccess: (entry: ConversationEntry) => {
 			inOrder(queryClient, workspaceSlug, () => applyVote(queryClient, workspaceSlug, entry));
 		},
 		onError: reportFailure("We could not save your vote. Try again."),
 	};
-	const set = useMutation({ ...setMentorVoteMutation(), ...callbacks });
-	const clear = useMutation({ ...clearMentorVoteMutation(), ...callbacks });
-	const show = (entry: MentorEntry, vote: MessageVote | undefined) =>
+	const set = useMutation({ ...setConversationVoteMutation(), ...callbacks });
+	const clear = useMutation({ ...clearConversationVoteMutation(), ...callbacks });
+	const show = (entry: ConversationEntry, vote: MessageVote | undefined) =>
 		patchShownEntry(queryClient, workspaceSlug, entry, (shown) => ({ ...shown, vote }));
-	const submit = async (entry: MentorEntry, vote: MessageVote | null) => {
+	const submit = async (entry: ConversationEntry, vote: MessageVote | null) => {
 		const previous = entry.vote;
 		await cancelScope(queryClient, workspaceSlug, entry.parentEntryId);
 		show(entry, vote ?? undefined);
@@ -246,7 +246,7 @@ function useVote(workspaceSlug: string) {
 			set.mutate({ path, body: { vote } }, restore);
 		}
 	};
-	return (entry: MentorEntry, vote: MessageVote | null) => {
+	return (entry: ConversationEntry, vote: MessageVote | null) => {
 		void submit(entry, vote);
 	};
 }
@@ -264,7 +264,7 @@ export function useConversationActions(workspaceSlug: string): ConversationActio
 		}
 	};
 	const submit = useMutation({
-		...submitMentorTurnMutation(),
+		...submitConversationTurnMutation(),
 		mutationKey: submitKey(workspaceSlug),
 		// A message the server did not store, unreachable or refused, stays on screen with Retry until
 		// the developer deletes it or the page reloads.
@@ -282,19 +282,19 @@ export function useConversationActions(workspaceSlug: string): ConversationActio
 		},
 	});
 	const stop = useMutation({
-		...updateMentorTurnStatusMutation(),
+		...updateConversationTurnStatusMutation(),
 		onSuccess: (turn) => {
 			inOrder(queryClient, workspaceSlug, () => applyTurn(queryClient, workspaceSlug, turn));
 		},
 		onError: reportFailure("We could not stop the answer. Try again."),
 	});
 	const remove = useMutation({
-		...deleteMentorEntryMutation(),
+		...deleteConversationEntryMutation(),
 		onError: reportFailure("We could not delete your message. Try again."),
 	});
 	const vote = useVote(workspaceSlug);
 
-	const submitRequest = (body: MentorTurnRequest) => {
+	const submitRequest = (body: ConversationTurnRequest) => {
 		submit.mutate({ path: { workspaceSlug }, body });
 	};
 
@@ -338,7 +338,7 @@ export function useConversationActions(workspaceSlug: string): ConversationActio
 	};
 }
 
-const readKey = (workspaceSlug: string) => ["markMentorConversationRead", workspaceSlug] as const;
+const readKey = (workspaceSlug: string) => ["markConversationRead", workspaceSlug] as const;
 
 /**
  * The read this device is still sending: the time it asked the server to mark. It shows as read
@@ -384,7 +384,7 @@ export function useMarkConversationRead(workspaceSlug: string, enabled: boolean)
 	}).data;
 	const pendingRead = usePendingRead(workspaceSlug);
 	const mark = useMutation({
-		...markMentorConversationReadMutation(),
+		...markConversationReadMutation(),
 		mutationKey: readKey(workspaceSlug),
 		// The dot clears at once; a request that fails is sent again a few times, each wait longer.
 		retry: READ_RETRIES,

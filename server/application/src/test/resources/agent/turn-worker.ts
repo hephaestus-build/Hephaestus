@@ -17,7 +17,7 @@ import {
 	type StopReason,
 	type TurnContext,
 	type TurnEnd,
-} from "../../../main/resources/agent/heph-host-protocol.ts";
+} from "../../../main/resources/agent/conversation-host-protocol.ts";
 import {
 	haltTurn,
 	type HaltReason,
@@ -29,17 +29,17 @@ import {
 	type TurnApi,
 } from "../../../main/resources/agent/turn.ts";
 
-export const AGENT_DIR = mkdtempSync(nodePath.join(tmpdir(), "heph-turn-agent-"));
+export const AGENT_DIR = mkdtempSync(nodePath.join(tmpdir(), "ask-turn-agent-"));
 export const SITUATION = "<situation>\nNow: Thu 2026-10-08 09:12 UTC.\n</situation>";
 
 /** A new, empty context folder: each turn has its own, so no test reads the files of another. */
 function newFolder(): string {
-	return mkdtempSync(nodePath.join(tmpdir(), "heph-turn-folder-"));
+	return mkdtempSync(nodePath.join(tmpdir(), "ask-turn-folder-"));
 }
 
 /** A tar archive of `files`, as the server builds one: paths relative to its root. */
 export function tarOf(files: Readonly<Record<string, string>>): Buffer {
-	const dir = mkdtempSync(nodePath.join(tmpdir(), "heph-archive-src-"));
+	const dir = mkdtempSync(nodePath.join(tmpdir(), "ask-archive-src-"));
 	try {
 		for (const [name, text] of Object.entries(files)) {
 			mkdirSync(nodePath.dirname(nodePath.join(dir, name)), { recursive: true });

@@ -76,9 +76,9 @@ hephaestus:
         drain-timeout: 0s
         enabled: false
         capacity:
-            # One Heph slot, as a deployment with one worker that runs one turn: a question that a worker may start
-            # says that Heph answers other questions once any turn runs. Tests leave turns running, so a test that
-            # needs a free slot builds its own MentorTurnWaits, and a test's claims take no cap of their own.
+            # One Hephaestus slot, as a deployment with one worker that runs one turn: a question that a worker may start
+            # says that Hephaestus answers other questions once any turn runs. Tests leave turns running, so a test that
+            # needs a free slot builds its own ConversationTurnWaits, and a test's claims take no cap of their own.
             turns: 1
     # Each item event reaches its readiness edge at once; the quiet window's own tests open one.
     item-event-ledger:

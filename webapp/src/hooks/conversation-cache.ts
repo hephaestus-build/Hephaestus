@@ -7,20 +7,20 @@ import {
 } from "@tanstack/react-query";
 
 import {
-	getMentorConversationOptions,
-	getMentorConversationQueryKey,
-	getMentorThreadInfiniteOptions,
-	getMentorThreadInfiniteQueryKey,
-	listMentorEntriesInfiniteOptions,
-	listMentorEntriesInfiniteQueryKey,
+	getConversationOptions,
+	getConversationQueryKey,
+	getConversationThreadInfiniteOptions,
+	getConversationThreadInfiniteQueryKey,
+	listConversationEntriesInfiniteOptions,
+	listConversationEntriesInfiniteQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 import type {
-	MentorConversation,
-	CursorPageDtoMentorEntry,
-	MentorEntry,
-	MentorThread,
-	MentorThreadSummary,
-	MentorTurn,
+	Conversation,
+	CursorPageDtoConversationEntry,
+	ConversationEntry,
+	ConversationThread,
+	ConversationThreadSummary,
+	ConversationTurn,
 	ProblemDetail,
 } from "@/api/types.gen";
 import { isRemovedEntry } from "@/lib/conversation-entry";
@@ -38,18 +38,18 @@ import { invalidateWorkspaceReads } from "@/runtime/tanstack-query/invalidate-wo
  */
 export function conversationEntriesOptions(workspaceSlug: string) {
 	const options = { path: { workspaceSlug } };
-	const read = listMentorEntriesInfiniteOptions(options);
+	const read = listConversationEntriesInfiniteOptions(options);
 	return {
 		...read,
 		queryFn: orderedRead(workspaceSlug, read.queryFn),
 		initialPageParam: options,
-		getNextPageParam: (older: CursorPageDtoMentorEntry) => older.nextCursor,
+		getNextPageParam: (older: CursorPageDtoConversationEntry) => older.nextCursor,
 	};
 }
 
 export function conversationThreadOptions(workspaceSlug: string, parentEntryId: string) {
 	const options = { path: { workspaceSlug, entryId: parentEntryId } };
-	const read = getMentorThreadInfiniteOptions(options);
+	const read = getConversationThreadInfiniteOptions(options);
 	return infiniteQueryOptions<
 		ConversationThreadPage,
 		ProblemDetail,
@@ -68,10 +68,14 @@ export function conversationThreadOptions(workspaceSlug: string, parentEntryId: 
  * A thread as the cache keeps it: the message and its page of replies at one level, so the functions
  * here patch a thread's pages and the timeline's pages alike.
  */
-export type ConversationThreadPage = Omit<MentorThread, "replies"> & CursorPageDtoMentorEntry;
+export type ConversationThreadPage = Omit<ConversationThread, "replies"> &
+	CursorPageDtoConversationEntry;
 
 function flatThread<Context>(
-	read: ((context: Context) => MentorThread | Promise<MentorThread>) | undefined | symbol,
+	read:
+		| ((context: Context) => ConversationThread | Promise<ConversationThread>)
+		| undefined
+		| symbol,
 ): (context: Context) => Promise<ConversationThreadPage> {
 	return async (context) => {
 		if (typeof read !== "function") {
@@ -84,23 +88,23 @@ function flatThread<Context>(
 
 /** The conversation's state: its active turns, threads and read marker. */
 export function conversationOptions(workspaceSlug: string) {
-	const read = getMentorConversationOptions({ path: { workspaceSlug } });
+	const read = getConversationOptions({ path: { workspaceSlug } });
 	return { ...read, queryFn: orderedRead(workspaceSlug, read.queryFn) };
 }
 
 /** The loaded entries in the order they were written: the oldest page first. */
-export function entriesOf(pages: { content: MentorEntry[] }[]): MentorEntry[] {
+export function entriesOf(pages: { content: ConversationEntry[] }[]): ConversationEntry[] {
 	return [...pages].reverse().flatMap((page) => page.content);
 }
 
 const entriesKey = (workspaceSlug: string) =>
-	listMentorEntriesInfiniteQueryKey({ path: { workspaceSlug } });
+	listConversationEntriesInfiniteQueryKey({ path: { workspaceSlug } });
 
 const threadKey = (workspaceSlug: string, parentEntryId: string) =>
-	getMentorThreadInfiniteQueryKey({ path: { workspaceSlug, entryId: parentEntryId } });
+	getConversationThreadInfiniteQueryKey({ path: { workspaceSlug, entryId: parentEntryId } });
 
 const conversationKey = (workspaceSlug: string) =>
-	getMentorConversationQueryKey({ path: { workspaceSlug } });
+	getConversationQueryKey({ path: { workspaceSlug } });
 
 const CONVERSATION_PAGES: ReadonlySet<string> = new Set(
 	[entriesKey(""), threadKey("", "")].map(([key]) => key._id),
@@ -234,9 +238,9 @@ export function rereadInOrder(
 	);
 }
 
-type Pages<P extends { content: MentorEntry[] }> = InfiniteData<P>;
+type Pages<P extends { content: ConversationEntry[] }> = InfiniteData<P>;
 
-function newestSeq(pages: { content: MentorEntry[] }[]): number | undefined {
+function newestSeq(pages: { content: ConversationEntry[] }[]): number | undefined {
 	return pages[0]?.content.at(-1)?.seq;
 }
 
@@ -244,7 +248,7 @@ function newestSeq(pages: { content: MentorEntry[] }[]): number | undefined {
  * A copy of a message that arrives late, such as a send's answer, never brings back words the
  * developer deleted and never reopens its ended turn.
  */
-function laterCopy(stored: MentorEntry, incoming: MentorEntry): MentorEntry {
+function laterCopy(stored: ConversationEntry, incoming: ConversationEntry): ConversationEntry {
 	if (stored.deleted && !incoming.deleted) {
 		return stored;
 	}
@@ -264,9 +268,9 @@ function laterCopy(stored: MentorEntry, incoming: MentorEntry): MentorEntry {
  * or in order inside the loaded range. An entry older than every loaded page is left for the read
  * that reaches it.
  */
-function upsertEntry<P extends { content: MentorEntry[]; nextCursor?: string }>(
+function upsertEntry<P extends { content: ConversationEntry[]; nextCursor?: string }>(
 	data: Pages<P>,
-	entry: MentorEntry,
+	entry: ConversationEntry,
 ): Pages<P> {
 	const remove = isRemovedEntry(entry);
 	const index = data.pages.findIndex((page) => page.content.some(({ id }) => id === entry.id));
@@ -311,10 +315,10 @@ function upsertEntry<P extends { content: MentorEntry[]; nextCursor?: string }>(
 	};
 }
 
-function patchEntry<P extends { content: MentorEntry[] }>(
+function patchEntry<P extends { content: ConversationEntry[] }>(
 	data: Pages<P>,
 	entryId: string,
-	patch: (entry: MentorEntry) => MentorEntry,
+	patch: (entry: ConversationEntry) => ConversationEntry,
 ): Pages<P> {
 	return {
 		...data,
@@ -331,9 +335,9 @@ function patchEntry<P extends { content: MentorEntry[] }>(
 
 /** A reply moves its parent's summary forward; the server sends the reply, not the parent again. */
 function summaryAfter(
-	summary: MentorThreadSummary | undefined,
-	reply: MentorEntry & { parentEntryId: string },
-): MentorThreadSummary | undefined {
+	summary: ConversationThreadSummary | undefined,
+	reply: ConversationEntry & { parentEntryId: string },
+): ConversationThreadSummary | undefined {
 	if (isRemovedEntry(reply)) {
 		return summary && { ...summary, replyCount: Math.max(0, summary.replyCount - 1) };
 	}
@@ -365,13 +369,13 @@ function patchThreadSummary(
 	queryClient: QueryClient,
 	workspaceSlug: string,
 	parentEntryId: string,
-	update: (summary: MentorThreadSummary | undefined) => MentorThreadSummary | undefined,
+	update: (summary: ConversationThreadSummary | undefined) => ConversationThreadSummary | undefined,
 ) {
-	const patch = (parent: MentorEntry): MentorEntry => ({
+	const patch = (parent: ConversationEntry): ConversationEntry => ({
 		...parent,
 		thread: update(parent.thread),
 	});
-	queryClient.setQueryData<Pages<CursorPageDtoMentorEntry>>(
+	queryClient.setQueryData<Pages<CursorPageDtoConversationEntry>>(
 		entriesKey(workspaceSlug),
 		(data) => data && patchEntry(data, parentEntryId, patch),
 	);
@@ -390,7 +394,7 @@ function patchThreadSummary(
  * and `pendingReadAt`, a read this device is still sending.
  */
 export function hasUnreadAnswer(
-	conversation: MentorConversation | undefined,
+	conversation: Conversation | undefined,
 	pendingReadAt?: Date,
 ): boolean {
 	const answered = conversation?.lastAnswerAt;
@@ -404,7 +408,7 @@ export function hasUnreadAnswer(
 
 /** The server's read marker, from a snapshot, a `read` event or a read request's answer: it only moves forward. */
 export function applyRead(queryClient: QueryClient, workspaceSlug: string, at: Date) {
-	queryClient.setQueryData<MentorConversation>(
+	queryClient.setQueryData<Conversation>(
 		conversationKey(workspaceSlug),
 		(conversation) =>
 			conversation && {
@@ -418,11 +422,11 @@ export function applyRead(queryClient: QueryClient, workspaceSlug: string, at: D
 }
 
 /** A shown Hephaestus answer, in the conversation or any thread, moves the conversation's newest answer. */
-function applyAnswer(queryClient: QueryClient, workspaceSlug: string, entry: MentorEntry) {
-	if (entry.kind !== "HEPH" || entry.deleted) {
+function applyAnswer(queryClient: QueryClient, workspaceSlug: string, entry: ConversationEntry) {
+	if (entry.kind !== "ANSWER" || entry.deleted) {
 		return;
 	}
-	queryClient.setQueryData<MentorConversation>(
+	queryClient.setQueryData<Conversation>(
 		conversationKey(workspaceSlug),
 		(conversation) =>
 			conversation && {
@@ -435,11 +439,15 @@ function applyAnswer(queryClient: QueryClient, workspaceSlug: string, entry: Men
 	);
 }
 
-export function applyEntry(queryClient: QueryClient, workspaceSlug: string, entry: MentorEntry) {
+export function applyEntry(
+	queryClient: QueryClient,
+	workspaceSlug: string,
+	entry: ConversationEntry,
+) {
 	applyAnswer(queryClient, workspaceSlug, entry);
 	const { parentEntryId } = entry;
 	if (parentEntryId === undefined) {
-		queryClient.setQueryData<Pages<CursorPageDtoMentorEntry>>(
+		queryClient.setQueryData<Pages<CursorPageDtoConversationEntry>>(
 			entriesKey(workspaceSlug),
 			(data) => data && upsertEntry(data, entry),
 		);
@@ -468,11 +476,11 @@ export function applyEntry(queryClient: QueryClient, workspaceSlug: string, entr
 export function patchShownEntry(
 	queryClient: QueryClient,
 	workspaceSlug: string,
-	entry: Pick<MentorEntry, "id" | "parentEntryId">,
-	patch: (entry: MentorEntry) => MentorEntry,
+	entry: Pick<ConversationEntry, "id" | "parentEntryId">,
+	patch: (entry: ConversationEntry) => ConversationEntry,
 ) {
 	if (entry.parentEntryId === undefined) {
-		queryClient.setQueryData<Pages<CursorPageDtoMentorEntry>>(
+		queryClient.setQueryData<Pages<CursorPageDtoConversationEntry>>(
 			entriesKey(workspaceSlug),
 			(data) => data && patchEntry(data, entry.id, patch),
 		);
@@ -497,7 +505,11 @@ export function patchShownEntry(
  * The server's answer to a vote. It carries the whole message as the vote saw it, but only the vote
  * is news: words edited or deleted since stay, and a message no longer shown is not shown again.
  */
-export function applyVote(queryClient: QueryClient, workspaceSlug: string, voted: MentorEntry) {
+export function applyVote(
+	queryClient: QueryClient,
+	workspaceSlug: string,
+	voted: ConversationEntry,
+) {
 	patchShownEntry(queryClient, workspaceSlug, voted, (shown) => ({ ...shown, vote: voted.vote }));
 }
 
@@ -514,21 +526,21 @@ export async function cancelScope(
 	await queryClient.cancelQueries({ queryKey: scopeKey(workspaceSlug, parentEntryId) });
 }
 
-const isEnded = (status: MentorTurn["status"] | undefined) =>
+const isEnded = (status: ConversationTurn["status"] | undefined) =>
 	status === "DONE" || status === "FAILED" || status === "STOPPED";
 
 /**
  * Where a turn's state falls in its life: by attempt, and within one attempt RUNNING before QUEUED
  * (a lost lease queues it again) and an end last. A turn that ended stays ended.
  */
-function turnOrder(turn: Pick<MentorTurn, "attempt" | "status">): number {
+function turnOrder(turn: Pick<ConversationTurn, "attempt" | "status">): number {
 	if (isEnded(turn.status)) {
 		return Infinity;
 	}
 	return turn.attempt * 2 + (turn.status === "QUEUED" ? 1 : 0);
 }
 
-function withActiveTurn(turns: MentorTurn[], turn: MentorTurn): MentorTurn[] {
+function withActiveTurn(turns: ConversationTurn[], turn: ConversationTurn): ConversationTurn[] {
 	const others = turns.filter(({ id }) => id !== turn.id);
 	if (turn.status !== "QUEUED" && turn.status !== "RUNNING") {
 		return others;
@@ -537,7 +549,7 @@ function withActiveTurn(turns: MentorTurn[], turn: MentorTurn): MentorTurn[] {
 }
 
 /** The question a turn answers carries how the turn ended, so a stopped or failed turn reads the same after a reload. */
-function withTurnOutcome(entry: MentorEntry, turn: MentorTurn): MentorEntry {
+function withTurnOutcome(entry: ConversationEntry, turn: ConversationTurn): ConversationEntry {
 	if (entry.kind !== "USER" || entry.turnId !== turn.id) {
 		return entry;
 	}
@@ -549,9 +561,9 @@ function withTurnOutcome(entry: MentorEntry, turn: MentorTurn): MentorEntry {
 	};
 }
 
-function patchQuestion<P extends { content: MentorEntry[] }>(
+function patchQuestion<P extends { content: ConversationEntry[] }>(
 	data: Pages<P>,
-	turn: MentorTurn,
+	turn: ConversationTurn,
 ): Pages<P> {
 	return {
 		...data,
@@ -567,16 +579,16 @@ function patchQuestion<P extends { content: MentorEntry[] }>(
 function cachedTurn(
 	queryClient: QueryClient,
 	workspaceSlug: string,
-	turn: MentorTurn,
-): { active?: MentorTurn; order?: number } {
+	turn: ConversationTurn,
+): { active?: ConversationTurn; order?: number } {
 	const active = queryClient
-		.getQueryData<MentorConversation>(conversationKey(workspaceSlug))
+		.getQueryData<Conversation>(conversationKey(workspaceSlug))
 		?.activeTurns.find(({ id }) => id === turn.id);
 	if (active !== undefined) {
 		return { active, order: turnOrder(active) };
 	}
 	const question = queryClient
-		.getQueryData<Pages<CursorPageDtoMentorEntry | ConversationThreadPage>>(
+		.getQueryData<Pages<CursorPageDtoConversationEntry | ConversationThreadPage>>(
 			scopeKey(workspaceSlug, turn.parentEntryId),
 		)
 		?.pages.flatMap(({ content }) => content)
@@ -588,17 +600,17 @@ function cachedTurn(
  * A state older than the one the cache shows, from a snapshot, a read or the live stream, such as a
  * send's answer that arrives after the turn started or ended.
  */
-function isStale(queryClient: QueryClient, workspaceSlug: string, turn: MentorTurn): boolean {
+function isStale(queryClient: QueryClient, workspaceSlug: string, turn: ConversationTurn): boolean {
 	const { order } = cachedTurn(queryClient, workspaceSlug, turn);
 	return order !== undefined && turnOrder(turn) < order;
 }
 
-export function applyTurn(queryClient: QueryClient, workspaceSlug: string, turn: MentorTurn) {
+export function applyTurn(queryClient: QueryClient, workspaceSlug: string, turn: ConversationTurn) {
 	if (isStale(queryClient, workspaceSlug, turn)) {
 		return;
 	}
 	if (turn.parentEntryId === undefined) {
-		queryClient.setQueryData<Pages<CursorPageDtoMentorEntry>>(
+		queryClient.setQueryData<Pages<CursorPageDtoConversationEntry>>(
 			entriesKey(workspaceSlug),
 			(data) => data && patchQuestion(data, turn),
 		);
@@ -608,7 +620,7 @@ export function applyTurn(queryClient: QueryClient, workspaceSlug: string, turn:
 			(data) => data && patchQuestion(data, turn),
 		);
 	}
-	queryClient.setQueryData<MentorConversation>(
+	queryClient.setQueryData<Conversation>(
 		conversationKey(workspaceSlug),
 		(conversation) =>
 			conversation && {
@@ -625,7 +637,7 @@ export function applyTurn(queryClient: QueryClient, workspaceSlug: string, turn:
 export function applySubmission(
 	queryClient: QueryClient,
 	workspaceSlug: string,
-	{ question, turn }: { question: MentorEntry; turn: MentorTurn },
+	{ question, turn }: { question: ConversationEntry; turn: ConversationTurn },
 ) {
 	if (isStale(queryClient, workspaceSlug, turn)) {
 		const { active } = cachedTurn(queryClient, workspaceSlug, turn);
@@ -644,9 +656,9 @@ export function applySubmission(
 export async function applySnapshot(
 	queryClient: QueryClient,
 	workspaceSlug: string,
-	snapshot: MentorConversation,
+	snapshot: Conversation,
 ): Promise<void> {
-	queryClient.setQueryData<MentorConversation>(conversationKey(workspaceSlug), snapshot);
+	queryClient.setQueryData<Conversation>(conversationKey(workspaceSlug), snapshot);
 	// Patch before invalidating: a later `setQueryData` would mark the invalidated pages fresh again.
 	for (const summary of snapshot.threads) {
 		patchThreadSummary(queryClient, workspaceSlug, summary.parentEntryId, () => summary);

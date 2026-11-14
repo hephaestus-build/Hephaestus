@@ -87,12 +87,13 @@ public class FeedbackStoreService implements FeedbackStore, ConversationClaims {
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Optional<CopyWriteFence> claimConversationCopy(
-            long workspaceId, UUID feedbackId, UUID mentorTurnId, int attempt) {
+            long workspaceId, UUID feedbackId, UUID conversationTurnId, int attempt) {
         var existing = feedback.findByIdAndWorkspaceId(feedbackId, workspaceId);
         if (existing.isEmpty() || !privacy.holdForAccountWrite(existing.get().getDeveloperId()))
             return Optional.empty();
         var row = lock(workspaceId, feedbackId);
-        var attemptStartedAt = copies.runningAttemptStartedAt(workspaceId, row.getDeveloperId(), mentorTurnId, attempt);
+        var attemptStartedAt =
+                copies.runningAttemptStartedAt(workspaceId, row.getDeveloperId(), conversationTurnId, attempt);
         if (attemptStartedAt.isEmpty()
                 || row.getDestination() != FeedbackDestination.CONVERSATION
                 || visibility.withdrawn(workspaceId, feedbackId)) return Optional.empty();
@@ -103,27 +104,28 @@ public class FeedbackStoreService implements FeedbackStore, ConversationClaims {
         // A repeat in the same attempt keeps the fence it holds: the copy is that attempt's, and not settled.
         var held = copy.getWriteStartedAt();
         if (copy.getState() == FeedbackCopyState.WRITE_STARTED
-                && mentorTurnId.equals(copy.getMentorTurnId())
+                && conversationTurnId.equals(copy.getConversationTurnId())
                 && held != null
                 && !held.isBefore(attemptStartedAt.get())
                 && copy.getPostedAt() == null
                 && copy.getLastError() == null)
-            return Optional.of(new CopyWriteFence(feedbackId, copy.getId(), mentorTurnId, held));
+            return Optional.of(new CopyWriteFence(feedbackId, copy.getId(), conversationTurnId, held));
         if (row.getState() != FeedbackState.READY
                 || !check(row, true).allowed()
                 || copy.getState() != FeedbackCopyState.PLANNED
-                || copies.claimConversation(workspaceId, feedbackId, copy.getId(), mentorTurnId) != 1)
+                || copies.claimConversation(workspaceId, feedbackId, copy.getId(), conversationTurnId) != 1)
             return Optional.empty();
         var recorded = copies.findByIdAndWorkspaceId(copy.getId(), workspaceId).orElseThrow();
         outcomes.update(row, FeedbackState.UNCONFIRMED, FeedbackStopReason.DELIVERY_UNCONFIRMED, row.getDeliveredAt());
         return Optional.of(new CopyWriteFence(
-                feedbackId, copy.getId(), mentorTurnId, Objects.requireNonNull(recorded.getWriteStartedAt())));
+                feedbackId, copy.getId(), conversationTurnId, Objects.requireNonNull(recorded.getWriteStartedAt())));
     }
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordConversationReceipt(long workspaceId, CopyWriteFence fence, ConversationCopyReceipt receipt) {
-        if (!fence.mentorTurnId().equals(receipt.mentorTurnId()) || receipt.at().isBefore(fence.writeStartedAt()))
+        if (!fence.conversationTurnId().equals(receipt.conversationTurnId())
+                || receipt.at().isBefore(fence.writeStartedAt()))
             throw new IllegalArgumentException("The receipt does not belong to this conversation write.");
         var existing =
                 feedback.findByIdAndWorkspaceId(fence.feedbackId(), workspaceId).orElseThrow();
@@ -136,23 +138,23 @@ public class FeedbackStoreService implements FeedbackStore, ConversationClaims {
                 .orElseThrow();
         if (row.getDestination() != FeedbackDestination.CONVERSATION
                 || copy.getKind() != FeedbackCopyKind.CHAT_TURN
-                || !Objects.equals(copy.getMentorTurnId(), fence.mentorTurnId())
+                || !Objects.equals(copy.getConversationTurnId(), fence.conversationTurnId())
                 || !Objects.equals(copy.getWriteStartedAt(), fence.writeStartedAt()))
             throw conflict("The conversation write no longer has its recorded authority.");
         if (copy.getPostedAt() != null) return;
         switch (receipt.outcome()) {
             case DELIVERED -> {
-                var entryId = receipt.mentorEntryId();
+                var entryId = receipt.conversationEntryId();
                 if (entryId == null) throw conflict("A delivered conversation copy names the answer that showed it.");
                 var words = copies.completedConversationText(
-                                workspaceId, fence.mentorTurnId(), entryId, fence.feedbackId())
+                                workspaceId, fence.conversationTurnId(), entryId, fence.feedbackId())
                         .filter(text -> !text.isBlank())
                         .orElseThrow(() -> conflict("The completed assistant words are unavailable."));
                 if (copies.recordConversationDelivered(
                                 workspaceId,
                                 fence.feedbackId(),
                                 fence.copyId(),
-                                fence.mentorTurnId(),
+                                fence.conversationTurnId(),
                                 entryId,
                                 words,
                                 receipt.at())
@@ -169,8 +171,8 @@ public class FeedbackStoreService implements FeedbackStore, ConversationClaims {
                                 workspaceId,
                                 fence.feedbackId(),
                                 fence.copyId(),
-                                fence.mentorTurnId(),
-                                receipt.mentorEntryId(),
+                                fence.conversationTurnId(),
+                                receipt.conversationEntryId(),
                                 unknown ? "WRITE_STARTED" : "FAILED",
                                 unknown ? "DELIVERY_UNCONFIRMED" : null,
                                 unknown ? FeedbackCopyReadback.UNKNOWN.name() : FeedbackCopyReadback.ABSENT.name(),
@@ -188,12 +190,12 @@ public class FeedbackStoreService implements FeedbackStore, ConversationClaims {
     @Override
     @Transactional(readOnly = true)
     public List<CopyWriteFence> unsettledConversationClaims(
-            long workspaceId, UUID mentorTurnId, Instant since, Instant until) {
-        return copies.findUnsettledConversationClaims(workspaceId, mentorTurnId, since, until).stream()
+            long workspaceId, UUID conversationTurnId, Instant since, Instant until) {
+        return copies.findUnsettledConversationClaims(workspaceId, conversationTurnId, since, until).stream()
                 .map(copy -> new CopyWriteFence(
                         copy.getFeedbackId(),
                         copy.getId(),
-                        mentorTurnId,
+                        conversationTurnId,
                         Objects.requireNonNull(copy.getWriteStartedAt())))
                 .toList();
     }

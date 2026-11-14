@@ -19,8 +19,8 @@ import org.junit.jupiter.api.Test;
  * read-path off agent's raw-JDBC tunnel").
  *
  * <p>The {@code agent} module consumes settled Slack conversation threads only through the
- * {@code integration.chat.item} SPIs ({@code ConversationThreadProjection} / {@code ConversationSourceLiveness} /
- * {@code ConversationCandidateSource}), which {@code integration.slack} implements. The agent never imports an {@code integration.slack} type
+ * {@code integration.chat.item} SPIs ({@code ThreadProjection} / {@code ThreadSourceLiveness} /
+ * {@code ThreadCandidateSource}), which {@code integration.slack} implements. The agent never imports an {@code integration.slack} type
  * ({@link PracticeReviewModuleBoundaryTest} forbids it for the agent module). The agent must also:
  *
  * <ul>

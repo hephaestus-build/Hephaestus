@@ -65,7 +65,7 @@ public class LlmCallPermits {
     static final Duration DEFAULT_COOLDOWN = Duration.ofSeconds(5);
     private static final Duration RECOVERY_POLL = Duration.ofSeconds(2);
     /** A call without a work deadline: its exchange and the one retry of it each get their own ceiling. */
-    private static final Duration UNDATED_CALL = LlmProxyService.HEPH_CALL_CEILING.multipliedBy(2);
+    private static final Duration UNDATED_CALL = LlmProxyService.CONVERSATION_CALL_CEILING.multipliedBy(2);
 
     private final LlmCallPoolRepository pools;
     private final LlmCallPermitRepository rows;
@@ -700,7 +700,7 @@ public class LlmCallPermits {
      * A served stream that ended without a content token. A provider can fail this way with no error: it sends its head,
      * a comment or a role, and then nothing, or it ends the stream. Such a call never raises the limit. It lowers the
      * limit like a refusal when the provider stopped answering: it ended the stream, or sent no content for the proxy's
-     * silence bound, {@code hephaestus.mentor.turn.model-idle-timeout}. Without that, it lowers the limit when the call
+     * silence bound, {@code hephaestus.conversation.turn.model-idle-timeout}. Without that, it lowers the limit when the call
      * waited past what the first-token baseline allows. A caller that ended the call sooner says nothing about the
      * provider.
      */

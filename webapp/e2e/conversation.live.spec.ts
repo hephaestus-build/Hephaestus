@@ -15,7 +15,7 @@ import { E2E_SERVER_URL } from "./urls.ts";
 // sandboxes in a k3d cluster, as `vp run dev` starts them, and an OpenAI-compatible model. The model is read and provisioned by the same code as
 // `scripts/e2e-setup.ts`, so the variables and defaults are the same. The key goes to the server in a
 // request body and nowhere else.
-const SEEDED_MENTOR_MODEL = 2;
+const SEEDED_CONVERSATION_MODEL = 2;
 const ANSWER_TIMEOUT = 240_000;
 
 const configured = ["E2E_LLM_BASE_URL", "E2E_LLM_KEY", "E2E_MODEL"].every(
@@ -54,11 +54,17 @@ function apiOf(context: APIRequestContext): Api {
 		body(await context.fetch(path, { method, ...(data === undefined ? {} : { data }) }));
 }
 
-async function bindMentor(context: APIRequestContext, instanceModelId: number): Promise<void> {
+async function bindConversation(
+	context: APIRequestContext,
+	instanceModelId: number,
+): Promise<void> {
 	await body(
-		await context.put("/workspaces/e2e/agents/MENTOR?dataHandlingTier=UNDECLARED", {
-			data: { instanceModelId, enabled: true, timeoutSeconds: 300 },
-		}),
+		await context.put(
+			"/workspaces/e2e/model-assignments/CONVERSATION?dataHandlingTier=UNDECLARED",
+			{
+				data: { instanceModelId, enabled: true, timeoutSeconds: 300 },
+			},
+		),
 	);
 }
 
@@ -86,11 +92,11 @@ test.beforeAll(async () => {
 		(_flag, name, fallback = "") => process.env[name] ?? fallback,
 		process.env,
 	);
-	await bindMentor(api, await liveModel(api, route));
+	await bindConversation(api, await liveModel(api, route));
 });
 
 test.afterAll(async () => {
-	await bindMentor(api, SEEDED_MENTOR_MODEL);
+	await bindConversation(api, SEEDED_CONVERSATION_MODEL);
 	await api.dispose();
 });
 

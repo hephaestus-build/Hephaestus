@@ -25,7 +25,7 @@ const entries: ConfigAuditEntryView[] = [
 		elevatedViaInstanceAdmin: false,
 		occurredAt: new Date("2026-07-24T09:14:32Z"),
 		action: "UPDATED",
-		entityType: "AGENT_BINDING",
+		entityType: "MODEL_ASSIGNMENT",
 		entityId: "PRACTICE_REVIEW",
 		actorKind: "USER",
 		actorAccountId: 7,
@@ -99,7 +99,7 @@ export const Empty: Story = {
 
 export const FilteredToNothing: Story = {
 	args: {
-		search: { entityType: ["AGENT_BINDING"], from: "2026-07-01" },
+		search: { entityType: ["MODEL_ASSIGNMENT"], from: "2026-07-01" },
 		list: loaded([]),
 		total: 0,
 	},

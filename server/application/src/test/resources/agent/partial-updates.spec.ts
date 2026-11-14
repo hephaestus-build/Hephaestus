@@ -7,7 +7,7 @@ import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import {
 	MAX_PARTIAL_CHARS,
 	type PartialUpdate,
-} from "../../../main/resources/agent/heph-host-protocol.ts";
+} from "../../../main/resources/agent/conversation-host-protocol.ts";
 import { partialStream, partialUpdates, type TurnApi } from "../../../main/resources/agent/turn.ts";
 import { applied, contextOf, fakeWorker } from "./turn-worker.ts";
 

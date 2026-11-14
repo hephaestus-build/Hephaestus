@@ -5,9 +5,9 @@ import java.util.List;
 import java.util.function.BooleanSupplier;
 
 /**
- * Stages a heavy item into Heph's context folder when the model asks for it with {@code load_context}. Core routes a
+ * Stages a heavy item into Hephaestus's context folder when the model asks for it with {@code load_context}. Core routes a
  * path to the loader whose {@link #prefix} it starts with, and knows nothing else about the item. Each call acts for
- * one developer in one workspace, for conversational mentoring, and applies the same visibility rules as the
+ * one developer in one workspace, for a conversation, and applies the same visibility rules as the
  * integration's context documents.
  */
 public interface ContextLoader {

@@ -14,11 +14,11 @@ import {
 
 import {
 	CONTEXT_FOLDER_TOOL_NAMES,
-	HEPH_TOOL_NAMES,
+	CONVERSATION_TOOL_NAMES,
 	isRecord,
 	type PartialSnapshot,
 	type TurnEnd,
-} from "../../../main/resources/agent/heph-host-protocol.ts";
+} from "../../../main/resources/agent/conversation-host-protocol.ts";
 import {
 	breakpointBeforeSituation,
 	failureSummary,
@@ -623,9 +623,12 @@ void test("partial answers keep their interval when a write returns before the n
 });
 
 void test("search_conversation asks the worker in the shape the worker binds", async () => {
-	// HephTurnControllerIntegrationTest posts the same file to the real endpoint.
+	// ConversationTurnControllerIntegrationTest posts the same file to the real endpoint.
 	const query: unknown = JSON.parse(
-		readFileSync(new URL("heph-turn-contract/search.request.json", import.meta.url), "utf8"),
+		readFileSync(
+			new URL("conversation-turn-contract/search.request.json", import.meta.url),
+			"utf8",
+		),
 	);
 	assert.ok(isRecord(query));
 	const worker = fakeWorker(contextOf([], "what did we decide?"));
@@ -671,7 +674,10 @@ void test("Hephaestus has read, bash and load_context only in a turn whose conte
 
 	// A worker that does not name the field serves no context folder.
 	const served: unknown = JSON.parse(
-		readFileSync(new URL("heph-turn-contract/context.response.json", import.meta.url), "utf8"),
+		readFileSync(
+			new URL("conversation-turn-contract/context.response.json", import.meta.url),
+			"utf8",
+		),
 	);
 	assert.ok(isRecord(served));
 	const { contextFolder: _contextFolder, ...withoutFolder } = served;
@@ -724,7 +730,7 @@ void test("a turn without a context folder never reaches the worker for files an
 
 function contract(name: string): Record<string, unknown> {
 	const value: unknown = JSON.parse(
-		readFileSync(new URL(`heph-turn-contract/${name}`, import.meta.url), "utf8"),
+		readFileSync(new URL(`conversation-turn-contract/${name}`, import.meta.url), "utf8"),
 	);
 	assert.ok(isRecord(value));
 	return value;
@@ -849,7 +855,7 @@ void test("a folder whose archive is invalid fails each tool with the refusal's 
 });
 
 void test("load_context asks for the path the worker binds, puts the repository under repos/ and cites it", async () => {
-	// HephTurnGatewayIntegrationTest sends the same file to the real endpoint.
+	// ConversationTurnGatewayIntegrationTest sends the same file to the real endpoint.
 	const load = contract("sandbox-load.request.json");
 	const worker = fakeWorker(contextOf([], "what changed in pull request 42?"));
 	const requests: FauxRequest[] = [];
@@ -1028,7 +1034,7 @@ function toolResults(worker: FakeWorker): { name: string; text: string; isError:
 void test("Hephaestus has the tools to read its context folder, show feedback and search, and nothing else", () => {
 	assert.deepEqual([...CONTEXT_FOLDER_TOOL_NAMES], ["read", "bash", "load_context"]);
 	assert.deepEqual(
-		[...HEPH_TOOL_NAMES],
+		[...CONVERSATION_TOOL_NAMES],
 		["link_result", "link_problem", "show_feedback", "search_conversation"],
 	);
 });
@@ -1196,7 +1202,7 @@ function asksForSummary(request: FauxRequest): boolean {
 
 /**
  * A stored conversation past the working trigger. The last answer reports 40,000 tokens, below the working trigger
- * (MENTOR_WORKING_TOKENS). A question stored after it, from a turn that failed, adds about 10,000 more by Pi's
+ * (CONVERSATION_WORKING_TOKENS). A question stored after it, from a turn that failed, adds about 10,000 more by Pi's
  * estimate of one token per four characters. Pi's own check before a prompt reads only the last answer's usage; the
  * host's counts both and compacts.
  */

@@ -202,7 +202,7 @@ describe("subjectLabel", () => {
 	it("renders a slug identifier as-is", () => {
 		expect(
 			subjectLabel(
-				entry({ entityType: "AGENT_BINDING", entityId: "practice-config", newValue: "{}" }),
+				entry({ entityType: "MODEL_ASSIGNMENT", entityId: "practice-config", newValue: "{}" }),
 			),
 		).toStrictEqual({ label: "Model assignment practice-config" });
 	});

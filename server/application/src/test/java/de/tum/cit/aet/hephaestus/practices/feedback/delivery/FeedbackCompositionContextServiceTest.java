@@ -24,11 +24,11 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationDecision;
+import de.tum.cit.aet.hephaestus.practices.spi.ConversationReadinessQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheck;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
-import de.tum.cit.aet.hephaestus.practices.spi.MentorReadinessQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.PinnedPractice;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticePageDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticePageSupport;
@@ -63,7 +63,7 @@ class FeedbackCompositionContextServiceTest {
     final PracticePageSupportReader support = mock(PracticePageSupportReader.class);
     final FeedbackGate gate = mock(FeedbackGate.class);
     final ResultHistoryQuery history = mock(ResultHistoryQuery.class);
-    final MentorReadinessQuery mentor = mock(MentorReadinessQuery.class);
+    final ConversationReadinessQuery conversation = mock(ConversationReadinessQuery.class);
     final Instant now = Instant.parse("2026-10-14T00:00:00Z");
     final UUID reviewId = UUID.randomUUID();
     final Result current = result(3, reviewId), historical = result(4, UUID.randomUUID());
@@ -81,7 +81,7 @@ class FeedbackCompositionContextServiceTest {
             new PracticePageFeedbackRouter(),
             gate,
             history,
-            mentor,
+            conversation,
             Clock.fixed(now, ZoneOffset.UTC));
 
     @BeforeEach
@@ -105,7 +105,7 @@ class FeedbackCompositionContextServiceTest {
         when(check.allowed()).thenReturn(true);
         when(gate.evaluateComposition(any(), anyLong(), anyList(), any())).thenReturn(check);
         when(gate.mode(any())).thenReturn(FeedbackMode.AUTOMATIC);
-        when(mentor.isReady(1)).thenReturn(true);
+        when(conversation.isReady(1)).thenReturn(true);
         when(support.select(1, 7, 5, now))
                 .thenReturn(new PracticePageSupportReader.Selection(Optional.empty(), List.of(current, historical)));
     }
@@ -209,15 +209,15 @@ class FeedbackCompositionContextServiceTest {
         when(results.findByWorkspaceIdAndIdIn(1, List.of(current.getId()))).thenReturn(List.of(foreign));
         assertThatThrownBy(() -> service.read(1, reviewId, List.of(current.getId())))
                 .isInstanceOf(IllegalArgumentException.class);
-        verifyNoInteractions(history, mentor);
+        verifyNoInteractions(history, conversation);
     }
 
     @Test
-    void shouldReportTheMentorUnavailableWhenTheMentorIsNotReady() {
-        when(mentor.isReady(1)).thenReturn(false);
+    void shouldReportTheConversationUnavailableWhenTheConversationIsNotReady() {
+        when(conversation.isReady(1)).thenReturn(false);
         assertThat(service.conversationDecision(snapshot, current))
                 .isEqualTo(new FeedbackCompositionContextService.ConversationAdmission(
-                        ConversationDecision.MENTOR_UNAVAILABLE, FeedbackStopReason.RECIPIENT_UNAVAILABLE));
+                        ConversationDecision.CONVERSATION_UNAVAILABLE, FeedbackStopReason.RECIPIENT_UNAVAILABLE));
     }
 
     @Test

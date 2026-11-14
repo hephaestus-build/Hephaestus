@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.runtime;
 import java.nio.charset.StandardCharsets;
 
 /**
- * The product voice shared by the feedback composers and Heph. The build copies its owning docs page into the jar, so
+ * The product voice shared by the feedback composers and Hephaestus. The build copies its owning docs page into the jar, so
  * the prompts read the same section that contributors edit.
  */
 public final class FeedbackWritingGuide {

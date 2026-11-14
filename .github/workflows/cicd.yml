@@ -564,7 +564,7 @@ jobs:
               - 'server/application/src/main/resources/agent/gateway-*.ts'
               - 'server/application/src/main/resources/agent/review-composer*.ts'
               - 'server/application/src/main/resources/agent/turn.ts'
-              - 'server/application/src/main/resources/agent/heph-host-protocol.ts'
+              - 'server/application/src/main/resources/agent/conversation-host-protocol.ts'
               - 'server/application/src/main/resources/agent/context-folder.ts'
               - 'server/application/src/main/resources/agent/pi-agent-sandbox.ts'
               - 'server/application/src/main/resources/agent/pi-diagnostics.*'
@@ -750,7 +750,7 @@ jobs:
             # feedback-eval-panel.yml composes on a subset of these paths.
             feedback-eval:
               - 'server/application/src/main/resources/agent/*.md'
-              - 'server/application/src/main/resources/agent/mentor/**'
+              - 'server/application/src/main/resources/agent/conversation/**'
               - 'server/application/src/main/resources/agent/review-composer*.ts'
               - 'server/application/src/main/java/de/tum/cit/aet/hephaestus/agent/composer/**'
               - 'server/application/src/main/resources/practices/**'

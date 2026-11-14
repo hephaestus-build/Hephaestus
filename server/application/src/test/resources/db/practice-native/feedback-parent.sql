@@ -18,18 +18,18 @@ VALUES('00000000-0000-0000-0000-000000978042',978001,'00000000-0000-0000-0000-00
  'POSTED','provider:native',now(),now(),'00000000-0000-0000-0000-000000978042'),
  ('00000000-0000-0000-0000-000000978045',978001,'00000000-0000-0000-0000-000000978044','CHAT_TURN',0,
  'PLANNED',NULL,NULL,NULL,'00000000-0000-0000-0000-000000978045');
-INSERT INTO mentor_conversation(id,workspace_id,account_id,created_at,last_activity_at)
+INSERT INTO conversation(id,workspace_id,account_id,created_at,last_activity_at)
 VALUES('00000000-0000-0000-0000-000000978051',978001,978003,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z');
 INSERT INTO agent_run(id,workspace_id,kind,band,concurrency_key,state,attempt,lease_epoch,leased_until,available_at,
  start_within_seconds,created_at,started_at)
 VALUES('00000000-0000-0000-0000-000000978058',978001,'TURN','INTERACTIVE',
  'conversation:00000000-0000-0000-0000-000000978051','LEASED',0,1,now()+interval '5 minutes','2026-01-01T00:00:00Z',
  180,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z');
-INSERT INTO mentor_turn(id,workspace_id,conversation_id,request_id,status,surface,attempt,run_id,started_at,created_at)
+INSERT INTO conversation_turn(id,workspace_id,conversation_id,request_id,status,surface,attempt,run_id,started_at,created_at)
 VALUES('00000000-0000-0000-0000-000000978053',978001,'00000000-0000-0000-0000-000000978051','native-turn',
  'RUNNING','APP',1,'00000000-0000-0000-0000-000000978058','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z');
-INSERT INTO mentor_entry(id,workspace_id,conversation_id,seq,kind,surface,text,payload,turn_id,created_at)
-VALUES('00000000-0000-0000-0000-000000978052',978001,'00000000-0000-0000-0000-000000978051',1,'HEPH','APP',
+INSERT INTO conversation_entry(id,workspace_id,conversation_id,seq,kind,surface,text,payload,turn_id,created_at)
+VALUES('00000000-0000-0000-0000-000000978052',978001,'00000000-0000-0000-0000-000000978051',1,'ANSWER','APP',
  'Actual shown words.',
  '{"type":"message","id":"native-answer","message":{"role":"assistant","content":[{"type":"text","text":"Actual shown words."}]}}',
  '00000000-0000-0000-0000-000000978053','2026-01-01T00:00:00Z');

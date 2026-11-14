@@ -9,7 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditAction;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
@@ -52,7 +52,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
     private LlmModelPriceRepository instancePriceRepository;
 
     @Mock
-    private WorkspaceAgentBindingRepository agentBindingRepository;
+    private WorkspaceModelAssignmentRepository modelAssignmentRepository;
 
     @Mock
     private InstanceLlmSettingsService instanceLlmSettingsService;
@@ -449,12 +449,12 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
     class Delete {
 
         @Test
-        void rejectsDeleteWhileAnAgentBindingStillBindsTheModel() {
+        void rejectsDeleteWhileAModelAssignmentStillBindsTheModel() {
             byoEnabled(true);
             WorkspaceLlmModel model = new WorkspaceLlmModel();
             model.setId(7L);
             when(modelRepository.findByIdAndWorkspaceIdWithConnection(7L, 1L)).thenReturn(Optional.of(model));
-            when(agentBindingRepository.existsByWorkspaceModelIdAndWorkspaceId(7L, 1L))
+            when(modelAssignmentRepository.existsByWorkspaceModelIdAndWorkspaceId(7L, 1L))
                     .thenReturn(true);
 
             assertThatThrownBy(() -> modelService.delete(workspaceContext, 7L))
@@ -468,7 +468,7 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
             WorkspaceLlmModel model = new WorkspaceLlmModel();
             model.setId(7L);
             when(modelRepository.findByIdAndWorkspaceIdWithConnection(7L, 1L)).thenReturn(Optional.of(model));
-            when(agentBindingRepository.existsByWorkspaceModelIdAndWorkspaceId(7L, 1L))
+            when(modelAssignmentRepository.existsByWorkspaceModelIdAndWorkspaceId(7L, 1L))
                     .thenReturn(false);
 
             modelService.delete(workspaceContext, 7L);

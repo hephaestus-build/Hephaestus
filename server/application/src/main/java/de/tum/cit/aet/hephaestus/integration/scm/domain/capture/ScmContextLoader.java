@@ -6,8 +6,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryCheckoutException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryCheckouts;
-import de.tum.cit.aet.hephaestus.integration.scm.context.MentorContextQueryRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.context.ScmMentorWorkQuery;
+import de.tum.cit.aet.hephaestus.integration.scm.context.ConversationContextQueryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.context.ScmConversationWorkQuery;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -33,7 +33,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Loads a repository of the workspace into Heph's context folder, at {@code repos/<host>/<full path>/}: a checkout at
+ * Loads a repository of the workspace into Hephaestus's context folder, at {@code repos/<host>/<full path>/}: a checkout at
  * the resolved ref, with the Git history that the ref reaches and no credential ({@link RepositoryCheckouts}). The
  * workspace sees a repository only when its connection is active, it monitors the repository, and no team hides it
  * from contributions. Every other repository, of this or another workspace, gets the same refusal.
@@ -54,8 +54,8 @@ public class ScmContextLoader implements ContextLoader {
     private final ReviewRepositoryPreparer preparer;
     private final WorkspaceTeamRepositorySettingsRepository teamRepositorySettings;
     private final PullRequestRepository pullRequests;
-    private final ScmMentorWorkQuery work;
-    private final MentorContextQueryRepository authoredWork;
+    private final ScmConversationWorkQuery work;
+    private final ConversationContextQueryRepository authoredWork;
 
     /** Repositories the situation names, and authored pull requests it looks at to rank them. */
     static final int SITUATION_REPOSITORIES = 5;

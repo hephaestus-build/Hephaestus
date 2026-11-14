@@ -172,7 +172,7 @@ await test("queues separate conversation order from capacity and provider time",
 	const report = queueReport([
 		parseQueueObservation({
 			id: "turn-1",
-			kind: "mentor",
+			kind: "conversation",
 			submitted: 0,
 			eligible: 220_000,
 			granted: 221_000,
@@ -180,7 +180,7 @@ await test("queues separate conversation order from capacity and provider time",
 		}),
 		parseQueueObservation({
 			id: "turn-2",
-			kind: "mentor",
+			kind: "conversation",
 			submitted: 0,
 			eligible: 0,
 			granted: 5000,
@@ -201,18 +201,23 @@ await test("queues separate conversation order from capacity and provider time",
 			granted: 12_000,
 		}),
 	]);
-	assert.deepEqual(report.mentor.capacity, { count: 2, p50Ms: 1000, p95Ms: 5000, maxMs: 5000 });
-	assert.equal(report.mentor.intentionalConversationWait.p95Ms, 220_000);
-	assert.equal(report.mentor.endToEnd.p95Ms, 221_000);
-	assert.equal(report.mentor.upstreamFirstEvent.p95Ms, 3000);
+	assert.deepEqual(report.conversation.capacity, {
+		count: 2,
+		p50Ms: 1000,
+		p95Ms: 5000,
+		maxMs: 5000,
+	});
+	assert.equal(report.conversation.intentionalConversationWait.p95Ms, 220_000);
+	assert.equal(report.conversation.endToEnd.p95Ms, 221_000);
+	assert.equal(report.conversation.upstreamFirstEvent.p95Ms, 3000);
 	assert.equal(report.review.podReady.p95Ms, 5000);
 	assert.equal(report.review.modelAfterPodReady.p95Ms, 2000);
 	assert.equal(report.composition.capacity.p95Ms, 10_000);
-	assert.equal(report.mentor.sufficientForObjectives, false);
+	assert.equal(report.conversation.sufficientForObjectives, false);
 });
 
 await test("absent observations never become zero-latency evidence", () => {
-	assert.deepEqual(queueReport([]).mentor.capacity, {
+	assert.deepEqual(queueReport([]).conversation.capacity, {
 		count: 0,
 		p50Ms: null,
 		p95Ms: null,

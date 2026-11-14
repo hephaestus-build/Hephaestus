@@ -10,8 +10,8 @@ export const budgets = {
 		reads: [
 			"GET /user",
 			"GET /user/features",
+			"GET /w/conversation",
 			"GET /w/members/me",
-			"GET /w/mentor/conversation",
 			"GET /w/onboarding/me",
 			"GET /w/practice-groups/standings",
 			"GET /w/practice-profile/overview",
@@ -27,9 +27,9 @@ export const budgets = {
 		reads: [
 			"GET /user",
 			"GET /user/features",
+			"GET /w/conversation",
+			"GET /w/conversation/entries",
 			"GET /w/members/me",
-			"GET /w/mentor/conversation",
-			"GET /w/mentor/entries",
 			"GET /w/onboarding/me",
 			"GET /workspaces",
 		],
@@ -58,7 +58,7 @@ export const budgets = {
 		moved: ["other", "sidebar"],
 	},
 	profileToAsk: {
-		reads: ["GET /w/mentor/entries"],
+		reads: ["GET /w/conversation/entries"],
 		rounds: 1,
 		moved: [],
 	},

@@ -54,7 +54,7 @@ const detailReport: WorkspaceLlmUsageReport = {
 	unpricedEventCount: 0,
 	byJobType: [
 		{
-			jobType: "MENTOR_TURN",
+			jobType: "CONVERSATION_TURN",
 			instanceTotalCostUsd: 4.25,
 			ownProviderTotalCostUsd: 1.75,
 			unpricedEventCount: 0,

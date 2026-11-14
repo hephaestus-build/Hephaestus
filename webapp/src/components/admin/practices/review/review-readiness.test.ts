@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { AgentBinding } from "@/api/types.gen";
+import type { ModelAssignment } from "@/api/types.gen";
 
 import {
 	availableReviewBinding,
@@ -9,21 +9,21 @@ import {
 	unservedReviewTiers,
 } from "./review-readiness";
 
-const undeclared: AgentBinding = {
+const undeclared: ModelAssignment = {
 	purpose: "PRACTICE_REVIEW",
 	dataHandlingTier: "UNDECLARED",
 	enabled: true,
 	ready: false,
 	servedTiers: [],
 };
-const inHouse: AgentBinding = {
+const inHouse: ModelAssignment = {
 	purpose: "PRACTICE_REVIEW",
 	dataHandlingTier: "IN_HOUSE",
 	enabled: true,
 	ready: true,
 	servedTiers: ["IN_HOUSE"],
 };
-const cloud: AgentBinding = {
+const cloud: ModelAssignment = {
 	purpose: "PRACTICE_REVIEW",
 	dataHandlingTier: "CLOUD",
 	enabled: true,
@@ -46,7 +46,7 @@ describe("workspace review model readiness", () => {
 		expect(
 			availableReviewBinding([
 				{
-					purpose: "MENTOR",
+					purpose: "CONVERSATION",
 					dataHandlingTier: "IN_HOUSE",
 					enabled: true,
 					ready: true,
@@ -88,7 +88,7 @@ describe("member tiers without a review model", () => {
 	});
 
 	it("counts no other purpose as a review model", () => {
-		expect(unservedReviewTiers([{ ...cloud, purpose: "MENTOR" }], true)).toStrictEqual([
+		expect(unservedReviewTiers([{ ...cloud, purpose: "CONVERSATION" }], true)).toStrictEqual([
 			"IN_HOUSE",
 			"CLOUD",
 		]);

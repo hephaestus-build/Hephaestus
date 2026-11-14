@@ -61,7 +61,7 @@ it("updates workspace features immediately and rolls them back on failure", asyn
 			path: { workspaceSlug: "acme" },
 			body: {
 				practicesEnabled: true,
-				practiceReviewAutoTriggerEnabled: false,
+				practiceReviewEventEnabled: false,
 			},
 		});
 	});
@@ -69,7 +69,7 @@ it("updates workspace features immediately and rolls them back on failure", asyn
 	await waitFor(() => {
 		const optimistic = queryClient.getQueryData<WorkspaceListItem[]>(queryKey)?.[0];
 		expect(optimistic?.practicesEnabled).toBe(true);
-		expect(optimistic).not.toHaveProperty("practiceReviewAutoTriggerEnabled");
+		expect(optimistic).not.toHaveProperty("practiceReviewEventEnabled");
 	});
 
 	request.reject(new Error("rejected"));

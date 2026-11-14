@@ -3,8 +3,8 @@ package de.tum.cit.aet.hephaestus.integration.scm.context;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountSummaryQuery;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
-import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextPaths;
-import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
+import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextPaths;
+import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
@@ -25,7 +25,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Materialises {@code inputs/context/recent_authored_work.json}: the developer's own authored pull requests and
- * issues — number, title, URL, repository, state, size and dates — so Heph can name and link the real work, recognise
+ * issues — number, title, URL, repository, state, size and dates — so Hephaestus can name and link the real work, recognise
  * what the conversation is about and bound it in time. Most recently active first; a repository a team hides from
  * contributions is left out. No diffs: one pull request's detail is read on demand from its {@code resource}.
  * Personal context is read for each turn, not cached.
@@ -34,17 +34,17 @@ import tools.jackson.databind.node.ObjectNode;
 @RequiredArgsConstructor
 public class RecentAuthoredWorkContentSource implements ContentSource {
 
-    public static final String OUTPUT_KEY = MentorContextPaths.RECENT_AUTHORED_WORK;
+    public static final String OUTPUT_KEY = ConversationContextPaths.RECENT_AUTHORED_WORK;
 
     private static final int MAX_PULL_REQUESTS = 20;
     private static final int MAX_ISSUES = 20;
     private final AccountSummaryQuery accounts;
-    private final MentorContextQueryRepository queryRepository;
-    private final ScmMentorWorkQuery work;
+    private final ConversationContextQueryRepository queryRepository;
+    private final ScmConversationWorkQuery work;
     private final ObjectMapper objectMapper;
 
     @Override
-    public boolean supports(MentorContextRequest request) {
+    public boolean supports(ConversationContextRequest request) {
         return true;
     }
 
@@ -55,7 +55,7 @@ public class RecentAuthoredWorkContentSource implements ContentSource {
 
     @Override
     @Transactional(readOnly = true)
-    public void contribute(MentorContextRequest request, Map<String, byte[]> files) {
+    public void contribute(ConversationContextRequest request, Map<String, byte[]> files) {
         ObjectNode payload = buildPayload(request.workspaceId(), request.developerId());
         try {
             files.put(OUTPUT_KEY, objectMapper.writeValueAsBytes(payload));
@@ -73,7 +73,7 @@ public class RecentAuthoredWorkContentSource implements ContentSource {
         root.putObject("account").put("displayName", account.displayName());
 
         // A repository path names a repository only on one instance: no work without the connected one.
-        Optional<ScmMentorWorkQuery.Actors> actors = work.actors(workspaceId, developerId);
+        Optional<ScmConversationWorkQuery.Actors> actors = work.actors(workspaceId, developerId);
         if (actors.isEmpty()) {
             root.put("status", "UNAVAILABLE");
             root.put("reason", "The workspace has no connected GitHub or GitLab instance.");
@@ -92,7 +92,7 @@ public class RecentAuthoredWorkContentSource implements ContentSource {
             ObjectNode node = prArr.addObject();
             node.put("sourceId", pr.getId());
             node.put("resource", MergeReadinessContentSource.resourceOf(pr.getId()));
-            node.put("reviewsResource", MentorContextPaths.reviewAttempts("pull_request", pr.getId()));
+            node.put("reviewsResource", ConversationContextPaths.reviewAttempts("pull_request", pr.getId()));
             node.put("number", pr.getNumber());
             node.put("title", pr.getTitle());
             putRepository(node, pr);
@@ -117,7 +117,7 @@ public class RecentAuthoredWorkContentSource implements ContentSource {
             ObjectNode node = issueArr.addObject();
             node.put("sourceId", issue.getId());
             node.put("resource", IssueDetailSource.resourceOf(issue.getId()));
-            node.put("reviewsResource", MentorContextPaths.reviewAttempts("issue", issue.getId()));
+            node.put("reviewsResource", ConversationContextPaths.reviewAttempts("issue", issue.getId()));
             node.put("number", issue.getNumber());
             node.put("title", issue.getTitle());
             putRepository(node, issue);

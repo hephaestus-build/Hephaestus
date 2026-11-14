@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.attempt;
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.interfaces.JWTVerifier;
-import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
+import de.tum.cit.aet.hephaestus.agent.config.ModelAssignmentLimits;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
@@ -33,7 +33,7 @@ public class AttemptKeyring {
     private static final Logger log = LoggerFactory.getLogger(AttemptKeyring.class);
 
     /** The longest token life and a margin of 10 minutes; {@link #publish()} extends it while its server lives. */
-    static final Duration KEPT_FOR = Duration.ofSeconds(AgentBindingLimits.MAX_TIMEOUT_SECONDS)
+    static final Duration KEPT_FOR = Duration.ofSeconds(ModelAssignmentLimits.MAX_TIMEOUT_SECONDS)
             .plus(SandboxLayout.RESULT_UPLOAD_GRACE)
             .plus(Duration.ofMinutes(10));
 

@@ -4,11 +4,11 @@ import java.util.Map;
 import java.util.Optional;
 import tools.jackson.databind.JsonNode;
 
-/** Captured source data for an account's mentor conversation. */
+/** Captured source data for an account's conversation. */
 public interface ContentSource {
     String OUTPUT_PREFIX = "inputs/context/";
 
-    boolean supports(MentorContextRequest request);
+    boolean supports(ConversationContextRequest request);
 
     default boolean required() {
         return true;
@@ -22,5 +22,5 @@ public interface ContentSource {
         return Optional.empty();
     }
 
-    void contribute(MentorContextRequest request, Map<String, byte[]> files);
+    void contribute(ConversationContextRequest request, Map<String, byte[]> files);
 }

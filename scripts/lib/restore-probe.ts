@@ -1,6 +1,6 @@
 /**
  * The workspace the backup-restore and point-in-time-recovery drills seed before taking a backup, and what
- * they read back after restoring a clone. It has an enabled Heph binding, so the restore-clone lockdown has
+ * they read back after restoring a clone. It has an enabled Hephaestus binding, so the restore-clone lockdown has
  * one to turn off.
  */
 export const seedRestoreProbe = `
@@ -15,15 +15,15 @@ SELECT id, 'restore-probe', 'Restore probe', 'restore-probe', now()
 FROM llm_connection
 WHERE slug = 'restore-probe';
 
-INSERT INTO workspace_agent_binding(workspace_id, purpose, enabled, instance_model_id)
-SELECT workspace.id, 'MENTOR', TRUE, llm_model.id
+INSERT INTO workspace_model_assignment(workspace_id, purpose, enabled, instance_model_id)
+SELECT workspace.id, 'CONVERSATION', TRUE, llm_model.id
 FROM workspace, llm_model
 WHERE workspace.slug = 'restore-probe' AND llm_model.slug = 'restore-probe';
 `;
 
-/** A column of a query over `workspace`: whether each of its Heph bindings is enabled, comma-separated. */
-export const hephBindingsEnabled = `(
+/** A column of a query over `workspace`: whether each of its Hephaestus bindings is enabled, comma-separated. */
+export const conversationBindingsEnabled = `(
 	SELECT string_agg(binding.enabled::text, ',')
-	FROM workspace_agent_binding binding
-	WHERE binding.workspace_id = workspace.id AND binding.purpose = 'MENTOR'
+	FROM workspace_model_assignment binding
+	WHERE binding.workspace_id = workspace.id AND binding.purpose = 'CONVERSATION'
 )`;

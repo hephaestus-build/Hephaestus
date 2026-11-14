@@ -87,7 +87,7 @@ export async function startReviews(
 	const workspace = fixture.workspaceId;
 	// The slug must match the id, so that a mistyped id never switches on another workspace's reviews.
 	const [row] = await cluster.sql(
-		`SELECT slug, practice_review_auto_trigger_enabled FROM workspace WHERE id = ${workspace};`,
+		`SELECT slug, practice_review_event_enabled FROM workspace WHERE id = ${workspace};`,
 	);
 	if (row?.[0] !== fixture.workspaceSlug) {
 		throw new Error(`workspace ${workspace} is not "${fixture.workspaceSlug}": check the fixture`);
@@ -95,7 +95,7 @@ export async function startReviews(
 	const wasOn = row[1] === "t";
 	const unit = `qual-bench-reset-${label}`;
 	const { pod, container } = await cluster.postgres();
-	const restoreSql = `UPDATE workspace SET practice_review_auto_trigger_enabled = false WHERE id = ${workspace};`;
+	const restoreSql = `UPDATE workspace SET practice_review_event_enabled = false WHERE id = ${workspace};`;
 	const pushed: { commit: string; repo: string; pr: number; started: boolean }[] = [];
 	if (!wasOn) {
 		// The host's own timer restores the flag even if this process or its transport disappears.
@@ -132,7 +132,7 @@ export async function startReviews(
 	try {
 		if (!wasOn) {
 			const changed = await cluster.sqlWrite(
-				`UPDATE workspace SET practice_review_auto_trigger_enabled = true WHERE id = ${workspace} AND practice_review_auto_trigger_enabled = false RETURNING id;`,
+				`UPDATE workspace SET practice_review_event_enabled = true WHERE id = ${workspace} AND practice_review_event_enabled = false RETURNING id;`,
 			);
 			evidence.line("trigger.jsonl", { operation: "enable", workspace, rows: changed.length });
 		}

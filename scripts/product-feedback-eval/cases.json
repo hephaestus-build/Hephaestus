@@ -99,7 +99,7 @@
 			"id": "bug-steps",
 			"kind": "BUG",
 			"allowPublic": true,
-			"message": "Steps: 1. Open a pull request page in the browser extension. 2. Click 'Ask Heph'. 3. Close the panel while it is answering. Expected: the answer stops. Actual: the panel reopens by itself when the answer arrives.",
+			"message": "Steps: 1. Open a pull request page in the browser extension. 2. Click 'Ask Hephaestus'. 3. Close the panel while it is answering. Expected: the answer stops. Actual: the panel reopens by itself when the answer arrives.",
 			"context": {
 				"route": "/extension",
 				"browser": "Chrome 141, Windows"

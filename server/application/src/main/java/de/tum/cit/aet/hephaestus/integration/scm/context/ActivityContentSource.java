@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.scm.context;
 
 import de.tum.cit.aet.hephaestus.evidence.capture.ContentSource;
-import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextPaths;
-import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
+import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextPaths;
+import de.tum.cit.aet.hephaestus.evidence.capture.ConversationContextRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.Commit;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
@@ -40,7 +40,7 @@ import tools.jackson.databind.node.ObjectNode;
 @RequiredArgsConstructor
 public class ActivityContentSource implements ContentSource {
 
-    public static final String OUTPUT_KEY = MentorContextPaths.ACTIVITY;
+    public static final String OUTPUT_KEY = ConversationContextPaths.ACTIVITY;
 
     static final int WINDOW_DAYS = 14;
 
@@ -54,13 +54,13 @@ public class ActivityContentSource implements ContentSource {
     private static final List<String> LISTS =
             List.of("pullRequests", "issues", "reviewsGiven", "comments", "inlineComments", "commits");
 
-    private final MentorContextQueryRepository queryRepository;
-    private final ScmMentorWorkQuery work;
+    private final ConversationContextQueryRepository queryRepository;
+    private final ScmConversationWorkQuery work;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
     @Override
-    public boolean supports(MentorContextRequest request) {
+    public boolean supports(ConversationContextRequest request) {
         return true;
     }
 
@@ -71,7 +71,7 @@ public class ActivityContentSource implements ContentSource {
 
     @Override
     @Transactional(readOnly = true)
-    public void contribute(MentorContextRequest request, Map<String, byte[]> files) {
+    public void contribute(ConversationContextRequest request, Map<String, byte[]> files) {
         try {
             files.put(
                     OUTPUT_KEY,
@@ -98,7 +98,7 @@ public class ActivityContentSource implements ContentSource {
                         + "reviews they gave are here; Hephaestus's automated practice reviews are not.");
 
         // A repository path names a repository only on one instance: no activity without the connected one.
-        Optional<ScmMentorWorkQuery.Actors> actors = work.actors(workspaceId, developerId);
+        Optional<ScmConversationWorkQuery.Actors> actors = work.actors(workspaceId, developerId);
         if (actors.isEmpty()) {
             root.put("status", "UNAVAILABLE");
             root.put("reason", "The workspace has no connected GitHub or GitLab instance.");

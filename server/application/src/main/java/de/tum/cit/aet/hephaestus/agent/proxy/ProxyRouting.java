@@ -57,7 +57,7 @@ public record ProxyRouting(
     }
 
     public ProxyRouting {
-        if (attempt != null && attempt.sourceType() != UsageSourceType.MENTOR_TURN && workDeadline == null)
+        if (attempt != null && attempt.sourceType() != UsageSourceType.CONVERSATION_TURN && workDeadline == null)
             throw new IllegalArgumentException("A job route needs its attempt's work deadline");
         if (outputLimit != null && outputLimit <= 0)
             throw new IllegalArgumentException("An output limit must be positive");
@@ -75,20 +75,20 @@ public record ProxyRouting(
         return limit == null || limit <= 0 ? null : limit.longValue();
     }
 
-    /** Whether the call belongs to a Heph turn, which logs one line per model call with its turn. */
-    boolean hephTurn() {
-        return attempt.sourceType() == UsageSourceType.MENTOR_TURN;
+    /** Whether the call belongs to a Hephaestus turn, which logs one line per model call with its turn. */
+    boolean conversationTurn() {
+        return attempt.sourceType() == UsageSourceType.CONVERSATION_TURN;
     }
 
     /**
      * The one execution this credential bills to.
      *
-     * @param sourceId the {@code review_job} id, or the {@code mentor_turn} id
+     * @param sourceId the {@code review_job} id, or the {@code conversation_turn} id
      * @param number the row's {@code attempt} when the token was validated. The run reaper can requeue a row while a
      *     call this credential authenticated is still out, so the call stays this attempt's, never that of whoever owns
      *     the row now.
      * @param runId the run whose claim authenticated this attempt
-     * @param workspaceId the job's workspace when the call was authenticated. {@code null} for a mentor turn
+     * @param workspaceId the job's workspace when the call was authenticated. {@code null} for a conversation turn
      */
     public record BilledAttempt(
             UsageSourceType sourceType,
@@ -103,7 +103,7 @@ public record ProxyRouting(
 
         /** The claim of the run that this attempt holds: a turn's attempt is its epoch, a review's is one less. */
         public int epoch() {
-            return sourceType == UsageSourceType.MENTOR_TURN ? number : ReviewRunKind.epoch(number);
+            return sourceType == UsageSourceType.CONVERSATION_TURN ? number : ReviewRunKind.epoch(number);
         }
     }
 

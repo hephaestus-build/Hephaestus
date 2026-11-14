@@ -78,9 +78,9 @@ The advice handles this exception and returns the same `errors` map shape as bod
 
 Each heading is the slug at the end of a problem `type`.
 
-### agent-binding-slot-mismatch
+### model-assignment-slot-mismatch
 
-The selected model does not fill this agent binding row. `declaredTier` names the model's data-handling tier.
+The selected model does not fill this model assignment. `declaredTier` names the model's data-handling tier.
 
 ### agent-job-state-conflict
 
@@ -126,15 +126,15 @@ Another LLM model has this slug.
 
 Another LLM model on this connection has this upstream id.
 
-### mentor-lease-lost
+### conversation-lease-lost
 
 A Hephaestus host wrote for a turn attempt that lost its lease.
 
-### mentor-refused
+### conversation-refused
 
 Hephaestus does not reply to this member. The `detail` names the setting that changes it.
 
-### mentor-rejected
+### conversation-rejected
 
 The conversation refused a write that conflicts with its state.
 

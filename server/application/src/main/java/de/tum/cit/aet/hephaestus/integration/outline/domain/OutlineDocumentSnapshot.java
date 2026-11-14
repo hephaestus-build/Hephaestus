@@ -11,7 +11,7 @@ import org.jspecify.annotations.Nullable;
  * and the per-workspace mirror is capped at hundreds of megabytes. Loading the whole mirror as entities
  * to diff it would materialize every Markdown body as a UTF-16 {@code String} plus Hibernate's
  * dirty-check snapshot of it — a multi-hundred-megabyte spike in the application-server JVM on every
- * six-hourly reconcile, next to the mentor.
+ * six-hourly reconcile, next to the conversation.
  *
  * <p>The diff never needs a body: it decides on {@code outlineUpdatedAt} + {@code contentHash} (the
  * unchanged fast path), {@code deletedAt} (revive vs. tombstone), mere body <em>presence</em> (the

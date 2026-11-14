@@ -47,7 +47,7 @@ public record AuthRateLimitProperties(
         @Valid @NotNull Limit userView,
         @Valid @NotNull Limit deleteUser,
         @Valid @NotNull Limit export,
-        @Valid @NotNull Limit mentorTurns,
+        @Valid @NotNull Limit conversationTurns,
         @Valid @NotNull Limit reviewRequest,
         @Valid @NotNull Limit syncTrigger,
         @Valid @NotNull Limit publicActivity,

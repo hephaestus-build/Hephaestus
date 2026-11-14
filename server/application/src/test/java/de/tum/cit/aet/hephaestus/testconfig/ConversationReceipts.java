@@ -6,7 +6,7 @@ import java.time.Duration;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Waits for the conversation receipts that a Heph turn's outcome made due. The event publication registry runs them
+ * Waits for the conversation receipts that a Hephaestus turn's outcome made due. The event publication registry runs them
  * after the outcome commits, on another thread; a failed run stays in the registry until it is resubmitted.
  */
 public final class ConversationReceipts {
@@ -23,7 +23,7 @@ public final class ConversationReceipts {
     /** The receipt publications that failed and wait for resubmission. */
     public static int failed(JdbcTemplate jdbc) {
         Integer count = jdbc.queryForObject(
-                "SELECT count(*) FROM event_publication WHERE listener_id LIKE '%MentorTurnCompletion%'"
+                "SELECT count(*) FROM event_publication WHERE listener_id LIKE '%ConversationTurnCompletion%'"
                         + " AND status = 'FAILED'",
                 Integer.class);
         return count == null ? 0 : count;
@@ -31,7 +31,7 @@ public final class ConversationReceipts {
 
     private static int pending(JdbcTemplate jdbc) {
         Integer count = jdbc.queryForObject(
-                "SELECT count(*) FROM event_publication WHERE listener_id LIKE '%MentorTurnCompletion%'"
+                "SELECT count(*) FROM event_publication WHERE listener_id LIKE '%ConversationTurnCompletion%'"
                         + " AND completion_date IS NULL AND status IN ('PUBLISHED', 'PROCESSING', 'RESUBMITTED')",
                 Integer.class);
         return count == null ? 0 : count;

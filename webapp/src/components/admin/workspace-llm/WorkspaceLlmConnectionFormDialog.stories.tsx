@@ -14,7 +14,7 @@ const mockConnection: WorkspaceLlmConnection = {
 	displayName: "My OpenAI account",
 	authMode: "BEARER",
 	apiProtocol: "openai-completions",
-	purposes: ["PRACTICE_REVIEW", "MENTOR"],
+	purposes: ["PRACTICE_REVIEW", "CONVERSATION"],
 	baseUrl: "https://api.openai.com/v1",
 	enabled: true,
 	hasApiKey: true,

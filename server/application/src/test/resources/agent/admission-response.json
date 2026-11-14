@@ -157,7 +157,7 @@
 						"outcome": "NOT_MET"
 					}
 				],
-				"bodyRole": "MENTOR_NOTES",
+				"bodyRole": "CONVERSATION_NOTES",
 				"body": "Notes queued for Hephaestus about dropped errors."
 			}
 		]

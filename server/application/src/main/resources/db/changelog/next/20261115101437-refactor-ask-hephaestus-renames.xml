@@ -1,0 +1,303 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794659876000-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <sqlCheck expectedResult="4">SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename IN ('mentor_conversation','mentor_entry','mentor_turn','workspace_agent_binding')</sqlCheck>
+            <sqlCheck expectedResult="0">SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename IN ('conversation','conversation_entry','conversation_turn','workspace_model_assignment')</sqlCheck>
+        </preConditions>
+        <comment>Ask Hephaestus: the conversation tables and columns take the product's names, and a model assignment is no longer called an agent binding. Stopped upgrade only.</comment>
+        <renameTable oldTableName="mentor_conversation" newTableName="conversation"/>
+        <renameTable oldTableName="mentor_entry" newTableName="conversation_entry"/>
+        <renameTable oldTableName="mentor_turn" newTableName="conversation_turn"/>
+        <renameTable oldTableName="workspace_agent_binding" newTableName="workspace_model_assignment"/>
+        <renameColumn tableName="feedback_copy" oldColumnName="mentor_entry_id" newColumnName="conversation_entry_id"/>
+        <renameColumn tableName="feedback_copy" oldColumnName="mentor_turn_id" newColumnName="conversation_turn_id"/>
+        <renameColumn tableName="workspace" oldColumnName="practice_review_auto_trigger_enabled" newColumnName="practice_review_event_enabled"/>
+        <renameColumn tableName="workspace" oldColumnName="practice_review_manual_trigger_enabled" newColumnName="practice_review_request_enabled"/>
+        <rollback><stop>Stop every role, restore the verified pre-upgrade database backup and start the previous release.</stop></rollback>
+    </changeSet>
+    <changeSet id="1794659876000-2" author="hephaestus">
+        <comment>The indexes, constraints, sequences, triggers and trigger functions of these tables take the same names. A constraint trigger has a constraint and a trigger, and each renames on its own.</comment>
+        <sql splitStatements="false"><![CDATA[
+ALTER TABLE feedback_copy RENAME CONSTRAINT sfk_feedback_copy_mentor_entry TO sfk_feedback_copy_conversation_entry;
+ALTER TABLE feedback_copy RENAME CONSTRAINT sfk_feedback_copy_mentor_turn TO sfk_feedback_copy_conversation_turn;
+ALTER TABLE conversation RENAME CONSTRAINT chk_mentor_conversation_slack TO chk_conversation_slack;
+ALTER TABLE conversation RENAME CONSTRAINT chk_mentor_conversation_thread TO chk_conversation_thread;
+ALTER TABLE conversation RENAME CONSTRAINT "mentor_conversationPK" TO "conversationPK";
+ALTER TABLE conversation RENAME CONSTRAINT mentor_conversation_account_id_not_null TO conversation_account_id_not_null;
+ALTER TABLE conversation RENAME CONSTRAINT mentor_conversation_created_at_not_null TO conversation_created_at_not_null;
+ALTER TABLE conversation RENAME CONSTRAINT mentor_conversation_id_not_null TO conversation_id_not_null;
+ALTER TABLE conversation RENAME CONSTRAINT mentor_conversation_last_activity_at_not_null TO conversation_last_activity_at_not_null;
+ALTER TABLE conversation RENAME CONSTRAINT mentor_conversation_workspace_id_not_null TO conversation_workspace_id_not_null;
+ALTER TABLE conversation RENAME CONSTRAINT sfk_mentor_conversation_account TO sfk_conversation_account;
+ALTER TABLE conversation RENAME CONSTRAINT sfk_mentor_conversation_parent TO sfk_conversation_parent;
+ALTER TABLE conversation RENAME CONSTRAINT sfk_mentor_conversation_parent_entry TO sfk_conversation_parent_entry;
+ALTER TABLE conversation RENAME CONSTRAINT sfk_mentor_conversation_workspace TO sfk_conversation_workspace;
+ALTER TABLE conversation RENAME CONSTRAINT uk_mentor_conversation_parent_entry TO uk_conversation_parent_entry;
+ALTER TABLE conversation RENAME CONSTRAINT uk_mentor_conversation_tenant TO uk_conversation_tenant;
+ALTER TABLE conversation_entry RENAME CONSTRAINT chk_mentor_entry_kind TO chk_conversation_entry_kind;
+ALTER TABLE conversation_entry RENAME CONSTRAINT chk_mentor_entry_payload_shape TO chk_conversation_entry_payload_shape;
+ALTER TABLE conversation_entry RENAME CONSTRAINT chk_mentor_entry_surface TO chk_conversation_entry_surface;
+ALTER TABLE conversation_entry RENAME CONSTRAINT chk_mentor_entry_vote TO chk_conversation_entry_vote;
+ALTER TABLE conversation_entry RENAME CONSTRAINT "mentor_entryPK" TO "conversation_entryPK";
+ALTER TABLE conversation_entry RENAME CONSTRAINT mentor_entry_conversation_id_not_null TO conversation_entry_conversation_id_not_null;
+ALTER TABLE conversation_entry RENAME CONSTRAINT mentor_entry_created_at_not_null TO conversation_entry_created_at_not_null;
+ALTER TABLE conversation_entry RENAME CONSTRAINT mentor_entry_id_not_null TO conversation_entry_id_not_null;
+ALTER TABLE conversation_entry RENAME CONSTRAINT mentor_entry_kind_not_null TO conversation_entry_kind_not_null;
+ALTER TABLE conversation_entry RENAME CONSTRAINT mentor_entry_search_text_not_null TO conversation_entry_search_text_not_null;
+ALTER TABLE conversation_entry RENAME CONSTRAINT mentor_entry_seq_not_null TO conversation_entry_seq_not_null;
+ALTER TABLE conversation_entry RENAME CONSTRAINT mentor_entry_surface_not_null TO conversation_entry_surface_not_null;
+ALTER TABLE conversation_entry RENAME CONSTRAINT mentor_entry_text_not_null TO conversation_entry_text_not_null;
+ALTER TABLE conversation_entry RENAME CONSTRAINT mentor_entry_workspace_id_not_null TO conversation_entry_workspace_id_not_null;
+ALTER TABLE conversation_entry RENAME CONSTRAINT sfk_mentor_entry_conversation TO sfk_conversation_entry_conversation;
+ALTER TABLE conversation_entry RENAME CONSTRAINT sfk_mentor_entry_turn TO sfk_conversation_entry_turn;
+ALTER TABLE conversation_entry RENAME CONSTRAINT sfk_mentor_entry_workspace TO sfk_conversation_entry_workspace;
+ALTER TABLE conversation_entry RENAME CONSTRAINT uk_mentor_entry_conversation_seq TO uk_conversation_entry_conversation_seq;
+ALTER TABLE conversation_entry RENAME CONSTRAINT uk_mentor_entry_conversation_slack_ts TO uk_conversation_entry_conversation_slack_ts;
+ALTER TABLE conversation_entry RENAME CONSTRAINT uk_mentor_entry_tenant TO uk_conversation_entry_tenant;
+ALTER TABLE conversation_turn RENAME CONSTRAINT chk_mentor_turn_status TO chk_conversation_turn_status;
+ALTER TABLE conversation_turn RENAME CONSTRAINT chk_mentor_turn_surface TO chk_conversation_turn_surface;
+ALTER TABLE conversation_turn RENAME CONSTRAINT "mentor_turnPK" TO "conversation_turnPK";
+ALTER TABLE conversation_turn RENAME CONSTRAINT mentor_turn_attempt_not_null TO conversation_turn_attempt_not_null;
+ALTER TABLE conversation_turn RENAME CONSTRAINT mentor_turn_conversation_id_not_null TO conversation_turn_conversation_id_not_null;
+ALTER TABLE conversation_turn RENAME CONSTRAINT mentor_turn_created_at_not_null TO conversation_turn_created_at_not_null;
+ALTER TABLE conversation_turn RENAME CONSTRAINT mentor_turn_id_not_null TO conversation_turn_id_not_null;
+ALTER TABLE conversation_turn RENAME CONSTRAINT mentor_turn_queued_at_not_null TO conversation_turn_queued_at_not_null;
+ALTER TABLE conversation_turn RENAME CONSTRAINT mentor_turn_request_id_not_null TO conversation_turn_request_id_not_null;
+ALTER TABLE conversation_turn RENAME CONSTRAINT mentor_turn_run_agrees TO conversation_turn_run_agrees;
+ALTER TABLE conversation_turn RENAME CONSTRAINT mentor_turn_run_id_not_null TO conversation_turn_run_id_not_null;
+ALTER TABLE conversation_turn RENAME CONSTRAINT mentor_turn_run_outcome TO conversation_turn_run_outcome;
+ALTER TABLE conversation_turn RENAME CONSTRAINT mentor_turn_status_not_null TO conversation_turn_status_not_null;
+ALTER TABLE conversation_turn RENAME CONSTRAINT mentor_turn_surface_not_null TO conversation_turn_surface_not_null;
+ALTER TABLE conversation_turn RENAME CONSTRAINT mentor_turn_tools_loads_not_null TO conversation_turn_tools_loads_not_null;
+ALTER TABLE conversation_turn RENAME CONSTRAINT mentor_turn_workspace_id_not_null TO conversation_turn_workspace_id_not_null;
+ALTER TABLE conversation_turn RENAME CONSTRAINT sfk_mentor_turn_conversation TO sfk_conversation_turn_conversation;
+ALTER TABLE conversation_turn RENAME CONSTRAINT sfk_mentor_turn_run TO sfk_conversation_turn_run;
+ALTER TABLE conversation_turn RENAME CONSTRAINT sfk_mentor_turn_workspace TO sfk_conversation_turn_workspace;
+ALTER TABLE conversation_turn RENAME CONSTRAINT uk_mentor_turn_request TO uk_conversation_turn_request;
+ALTER TABLE conversation_turn RENAME CONSTRAINT uk_mentor_turn_run TO uk_conversation_turn_run;
+ALTER TABLE conversation_turn RENAME CONSTRAINT uk_mentor_turn_tenant TO uk_conversation_turn_tenant;
+ALTER TABLE workspace_model_assignment RENAME CONSTRAINT ck_agent_binding_data_handling_tier TO ck_model_assignment_data_handling_tier;
+ALTER TABLE workspace_model_assignment RENAME CONSTRAINT ck_workspace_agent_binding_single_model TO ck_workspace_model_assignment_single_model;
+ALTER TABLE workspace_model_assignment RENAME CONSTRAINT fk_workspace_agent_binding_instance_model TO fk_workspace_model_assignment_instance_model;
+ALTER TABLE workspace_model_assignment RENAME CONSTRAINT fk_workspace_agent_binding_workspace TO fk_workspace_model_assignment_workspace;
+ALTER TABLE workspace_model_assignment RENAME CONSTRAINT fk_workspace_agent_binding_workspace_model TO fk_workspace_model_assignment_workspace_model;
+ALTER TABLE workspace_model_assignment RENAME CONSTRAINT pk_workspace_agent_binding TO pk_workspace_model_assignment;
+ALTER TABLE workspace_model_assignment RENAME CONSTRAINT sfk_workspace_agent_binding_workspace_model_scope TO sfk_workspace_model_assignment_workspace_model_scope;
+ALTER TABLE workspace_model_assignment RENAME CONSTRAINT uk_workspace_agent_binding_purpose_tier TO uk_workspace_model_assignment_purpose_tier;
+ALTER TABLE workspace_model_assignment RENAME CONSTRAINT workspace_agent_binding_created_at_not_null TO workspace_model_assignment_created_at_not_null;
+ALTER TABLE workspace_model_assignment RENAME CONSTRAINT workspace_agent_binding_data_handling_tier_not_null TO workspace_model_assignment_data_handling_tier_not_null;
+ALTER TABLE workspace_model_assignment RENAME CONSTRAINT workspace_agent_binding_enabled_not_null TO workspace_model_assignment_enabled_not_null;
+ALTER TABLE workspace_model_assignment RENAME CONSTRAINT workspace_agent_binding_id_not_null TO workspace_model_assignment_id_not_null;
+ALTER TABLE workspace_model_assignment RENAME CONSTRAINT workspace_agent_binding_purpose_not_null TO workspace_model_assignment_purpose_not_null;
+ALTER TABLE workspace_model_assignment RENAME CONSTRAINT workspace_agent_binding_timeout_seconds_not_null TO workspace_model_assignment_timeout_seconds_not_null;
+ALTER TABLE workspace_model_assignment RENAME CONSTRAINT workspace_agent_binding_workspace_id_not_null TO workspace_model_assignment_workspace_id_not_null;
+ALTER INDEX idx_feedback_copy_mentor_entry RENAME TO idx_feedback_copy_conversation_entry;
+ALTER INDEX idx_feedback_copy_mentor_turn RENAME TO idx_feedback_copy_conversation_turn;
+ALTER INDEX idx_mentor_conversation_parent RENAME TO idx_conversation_parent;
+ALTER INDEX idx_mentor_conversation_slack RENAME TO idx_conversation_slack;
+ALTER INDEX idx_mentor_conversation_workspace_account RENAME TO idx_conversation_workspace_account;
+ALTER INDEX idx_mentor_entry_turn RENAME TO idx_conversation_entry_turn;
+ALTER INDEX idx_mentor_entry_workspace_surface RENAME TO idx_conversation_entry_workspace_surface;
+ALTER INDEX idx_mentor_turn_conversation_status RENAME TO idx_conversation_turn_conversation_status;
+ALTER INDEX idx_mentor_turn_status_created RENAME TO idx_conversation_turn_status_created;
+ALTER INDEX idx_mentor_turn_status_queued RENAME TO idx_conversation_turn_status_queued;
+ALTER INDEX idx_mentor_turn_workspace_surface RENAME TO idx_conversation_turn_workspace_surface;
+ALTER INDEX ux_mentor_conversation_main RENAME TO ux_conversation_main;
+ALTER INDEX ux_mentor_entry_request RENAME TO ux_conversation_entry_request;
+ALTER INDEX ux_mentor_turn_running RENAME TO ux_conversation_turn_running;
+ALTER INDEX ux_mentor_turn_stimulus RENAME TO ux_conversation_turn_stimulus;
+ALTER SEQUENCE workspace_agent_binding_id_seq RENAME TO workspace_model_assignment_id_seq;
+ALTER TRIGGER mentor_turn_forgets_run ON conversation_turn RENAME TO conversation_turn_forgets_run;
+ALTER TRIGGER mentor_turn_run_agrees ON conversation_turn RENAME TO conversation_turn_run_agrees;
+ALTER TRIGGER mentor_turn_run_outcome ON conversation_turn RENAME TO conversation_turn_run_outcome;
+ALTER FUNCTION enforce_mentor_turn_run() RENAME TO enforce_conversation_turn_run;
+ALTER FUNCTION forget_mentor_turn_run() RENAME TO forget_conversation_turn_run;
+        ]]></sql>
+        <rollback><stop>Stop every role, restore the verified pre-upgrade database backup and start the previous release.</stop></rollback>
+    </changeSet>
+    <changeSet id="1794659876000-3" author="hephaestus">
+        <comment>Stored values take the new names: the speaker HEPH is ANSWER, the model purpose MENTOR is CONVERSATION, the usage source MENTOR_TURN is CONVERSATION_TURN, and the subscription and email MENTOR_DIGEST is WEEKLY_DIGEST. A new configuration audit row names MODEL_ASSIGNMENT; the append-only audit log keeps earlier rows as written. Person-data requests and pending provider-event steps name the stores and steps by their new names. The function bodies that read the renamed tables and values change with them.</comment>
+        <sql splitStatements="false"><![CDATA[
+ALTER TABLE conversation_entry DROP CONSTRAINT chk_conversation_entry_kind;
+DROP INDEX ix_mentor_entry_text_search;
+UPDATE conversation_entry SET kind = 'ANSWER' WHERE kind = 'HEPH';
+ALTER TABLE conversation_entry ADD CONSTRAINT chk_conversation_entry_kind CHECK (kind IN ('USER', 'ANSWER', 'TOOL_RESULT', 'SYSTEM', 'SUMMARY', 'DIGEST'));
+CREATE INDEX ix_conversation_entry_text_search ON conversation_entry USING gin (to_tsvector('simple'::regconfig, search_text)) WHERE ((kind)::text = ANY (ARRAY[('USER'::character varying)::text, ('ANSWER'::character varying)::text, ('DIGEST'::character varying)::text]));
+ALTER TABLE llm_usage_event DROP CONSTRAINT ck_llm_usage_event_source_type;
+UPDATE llm_usage_event SET source_type = 'CONVERSATION_TURN' WHERE source_type = 'MENTOR_TURN';
+UPDATE llm_usage_event SET job_type = 'CONVERSATION_TURN' WHERE job_type = 'MENTOR_TURN';
+ALTER TABLE llm_usage_event ADD CONSTRAINT ck_llm_usage_event_source_type CHECK (source_type IN ('REVIEW_JOB', 'CONVERSATION_TURN', 'PRACTICE_SCRIPT_DECISION', 'PRACTICE_SCRIPT_EMBEDDING', 'PRACTICE_SCRIPT_RERANKING', 'PRODUCT_FEEDBACK_DRAFT', 'PROBE'));
+UPDATE workspace_model_assignment SET purpose = 'CONVERSATION' WHERE purpose = 'MENTOR';
+ALTER TABLE config_audit_event DROP CONSTRAINT ck_config_audit_event_entity_type;
+ALTER TABLE config_audit_event ADD CONSTRAINT ck_config_audit_event_entity_type CHECK (entity_type IN ('PROVIDER_RESOURCE_RELEASE', 'PRACTICE_REVIEW_SETTINGS', 'MODEL_ASSIGNMENT', 'AGENT_BINDING', 'AGENT_CONFIG', 'AI_CONFIG_BINDING', 'WORKSPACE_ROLE', 'ACTIVITY_AUTOMATION', 'WORKSPACE_FEATURES', 'WORKSPACE_STATUS', 'WORKSPACE_TOKEN', 'WORKSPACE_VISIBILITY', 'PRACTICE_ACTIVE', 'PRACTICE_USAGE', 'PRACTICE_DEFINITION', 'PRACTICE_GROUP', 'CATALOG_PRACTICE', 'CATALOG_GROUP', 'WORKSPACE_INSTANCE_LLM_BUDGET', 'WORKSPACE_OWN_PROVIDER_LLM_BUDGET', 'WORKSPACE_LLM_BUDGET', 'WORKSPACE_BYO_LLM_BUDGET', 'REVIEW_BATCH', 'REVIEW_SCHEDULE', 'FEEDBACK_DELIVERY_RECHECK', 'WORKSPACE_LLM_CONNECTION', 'WORKSPACE_LLM_MODEL'));
+UPDATE notification_subscription SET kind = 'WEEKLY_DIGEST' WHERE kind = 'MENTOR_DIGEST';
+-- The lifecycle guard keeps an action payload immutable for the application; the kind keeps its meaning.
+ALTER TABLE agent_action DISABLE TRIGGER agent_action_lifecycle;
+UPDATE agent_action SET payload = jsonb_set(payload, '{kind}', '"WEEKLY_DIGEST"') WHERE kind = 'EMAIL' AND payload ->> 'kind' = 'MENTOR_DIGEST';
+ALTER TABLE agent_action ENABLE TRIGGER agent_action_lifecycle;
+-- A person-data request keys its selections, counts and receipts by store; the stores take the table names.
+UPDATE person_data_request SET selections_json = (SELECT jsonb_object_agg(CASE key WHEN 'mentor_entry_tool_result_copy' THEN 'conversation_entry_tool_result_copy' WHEN 'mentor_entry_feedback_copy' THEN 'conversation_entry_feedback_copy' WHEN 'mentor_entry' THEN 'conversation_entry' WHEN 'mentor_turn' THEN 'conversation_turn' WHEN 'mentor_conversation' THEN 'conversation' ELSE key END, value) FROM jsonb_each(selections_json::jsonb))::text WHERE selections_json IS NOT NULL AND jsonb_exists_any(selections_json::jsonb, ARRAY['mentor_entry_tool_result_copy', 'mentor_entry_feedback_copy', 'mentor_entry', 'mentor_turn', 'mentor_conversation']);
+UPDATE person_data_request SET counts_json = (SELECT jsonb_object_agg(CASE key WHEN 'mentor_entry_tool_result_copy' THEN 'conversation_entry_tool_result_copy' WHEN 'mentor_entry_feedback_copy' THEN 'conversation_entry_feedback_copy' WHEN 'mentor_entry' THEN 'conversation_entry' WHEN 'mentor_turn' THEN 'conversation_turn' WHEN 'mentor_conversation' THEN 'conversation' ELSE key END, value) FROM jsonb_each(counts_json::jsonb))::text WHERE counts_json IS NOT NULL AND jsonb_exists_any(counts_json::jsonb, ARRAY['mentor_entry_tool_result_copy', 'mentor_entry_feedback_copy', 'mentor_entry', 'mentor_turn', 'mentor_conversation']);
+UPDATE person_data_request SET completed_json = (SELECT jsonb_object_agg(CASE key WHEN 'mentor_entry_tool_result_copy' THEN 'conversation_entry_tool_result_copy' WHEN 'mentor_entry_feedback_copy' THEN 'conversation_entry_feedback_copy' WHEN 'mentor_entry' THEN 'conversation_entry' WHEN 'mentor_turn' THEN 'conversation_turn' WHEN 'mentor_conversation' THEN 'conversation' ELSE key END, value) FROM jsonb_each(completed_json::jsonb))::text WHERE completed_json IS NOT NULL AND jsonb_exists_any(completed_json::jsonb, ARRAY['mentor_entry_tool_result_copy', 'mentor_entry_feedback_copy', 'mentor_entry', 'mentor_turn', 'mentor_conversation']);
+-- A provider event still pending at the stop keeps the steps it already committed, under their new names.
+UPDATE provider_event_step SET step_name = 'slack.conversation.' || substr(step_name, length('slack.mentor.') + 1) WHERE step_name LIKE 'slack.mentor.%';
+CREATE OR REPLACE FUNCTION public.conversation_receipt_words(p_workspace_id bigint, p_feedback_id uuid, p_entry_id uuid, p_turn_id uuid)
+ RETURNS text
+ LANGUAGE sql
+ STABLE
+AS $function$
+-- The one rule for the words of a conversation receipt: the text of each show_feedback call of the answer that
+-- names the feedback by a well-formed id in any letter case and whose tool result is no error, in call order.
+-- Only the completed answer of the claiming turn, to the developer of the feedback, counts.
+SELECT NULLIF((
+  SELECT string_agg(block.value->'arguments'->>'text',E'\n\n' ORDER BY block.position)
+  FROM jsonb_array_elements(CASE WHEN jsonb_typeof(e.payload->'message'->'content')='array'
+    THEN e.payload->'message'->'content' ELSE '[]'::jsonb END) WITH ORDINALITY AS block(value,position)
+  WHERE block.value->>'type'='toolCall' AND block.value->>'name'='show_feedback'
+    AND jsonb_typeof(block.value->'arguments'->'text')='string'
+    AND block.value->'arguments'->>'feedbackId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    AND lower(block.value->'arguments'->>'feedbackId')=CAST(p_feedback_id AS text)
+    AND EXISTS(SELECT 1 FROM conversation_entry r
+      WHERE r.workspace_id=e.workspace_id AND r.turn_id=e.turn_id AND r.kind='TOOL_RESULT' AND r.redacted_at IS NULL
+        AND r.payload->'message'->>'toolCallId'=block.value->>'id'
+        AND r.payload->'message'->>'toolName'='show_feedback'
+        AND COALESCE(r.payload->'message'->>'isError','false')<>'true')),'')
+FROM conversation_entry e
+JOIN conversation c ON(c.id,c.workspace_id)=(e.conversation_id,e.workspace_id)
+JOIN conversation_turn t ON(t.id,t.workspace_id)=(e.turn_id,e.workspace_id)
+JOIN feedback f ON(f.id,f.workspace_id)=(p_feedback_id,p_workspace_id) AND f.developer_id=c.account_id
+WHERE e.id=p_entry_id AND e.workspace_id=p_workspace_id AND e.turn_id=p_turn_id
+  AND e.kind='ANSWER' AND e.redacted_at IS NULL AND t.status='DONE'
+$function$;
+CREATE OR REPLACE FUNCTION public.enforce_agent_run_subject_outcome()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+ subject_run uuid;
+BEGIN
+ IF TG_TABLE_NAME='agent_run' THEN
+  subject_run := NEW.id;
+ ELSE
+  subject_run := NEW.run_id;
+ END IF;
+ IF NOT EXISTS (SELECT 1 FROM agent_run r WHERE r.id=subject_run AND r.workspace_id=NEW.workspace_id
+                AND r.state='ENDED' AND r.stop_reason='COMPLETED') THEN
+  RETURN NULL;
+ END IF;
+ IF EXISTS (SELECT 1 FROM review_job j WHERE j.run_id=subject_run AND j.workspace_id=NEW.workspace_id
+            AND j.status <> 'COMPLETED') THEN
+  RAISE EXCEPTION 'a review that did not complete cannot have a completed run' USING ERRCODE='23514';
+ END IF;
+ IF EXISTS (SELECT 1 FROM conversation_turn t WHERE t.run_id=subject_run AND t.workspace_id=NEW.workspace_id
+            AND t.status <> 'DONE') THEN
+  RAISE EXCEPTION 'a turn that did not complete cannot have a completed run' USING ERRCODE='23514';
+ END IF;
+ RETURN NULL;
+END $function$;
+CREATE OR REPLACE FUNCTION public.enforce_conversation_turn_run()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+ paired record;
+BEGIN
+ FOR paired IN
+  SELECT t.status, t.surface, t.id, r.state, r.kind, t.workspace_id, t.conversation_id, r.concurrency_key
+   FROM conversation_turn t JOIN agent_run r ON (r.id,r.workspace_id)=(t.run_id,t.workspace_id)
+   WHERE (TG_TABLE_NAME='conversation_turn' AND t.id=NEW.id)
+      OR (TG_TABLE_NAME='agent_run' AND t.run_id=NEW.id)
+ LOOP
+  IF NOT ((paired.kind='TURN' AND paired.surface IN ('APP','SLACK'))
+       OR (paired.kind='DIGEST' AND paired.surface='SYSTEM'))
+     THEN
+   RAISE EXCEPTION 'a conversation turn needs its conversation run kind' USING ERRCODE='23514';
+  END IF;
+  IF paired.status IN ('QUEUED','RUNNING') AND paired.concurrency_key <> 'conversation:' || paired.conversation_id THEN
+   RAISE EXCEPTION 'a queued or running turn must use its conversation subject' USING ERRCODE='23514';
+  END IF;
+  IF paired.kind='DIGEST' AND NOT EXISTS(SELECT 1 FROM conversation_entry e
+      WHERE (e.turn_id,e.workspace_id)=(paired.id,paired.workspace_id) AND e.kind='DIGEST' AND e.surface='SYSTEM') THEN
+   RAISE EXCEPTION 'a digest run needs its real system digest stimulus' USING ERRCODE='23514';
+  END IF;
+  IF NOT ((paired.status='QUEUED' AND paired.state='QUEUED')
+       OR (paired.status='RUNNING' AND paired.state='LEASED')
+       OR (paired.status='STOPPED' AND paired.state IN ('LEASED','ENDED'))
+       OR (paired.status IN ('DONE','FAILED') AND paired.state='ENDED')) THEN
+   RAISE EXCEPTION 'a turn that is % needs a run that agrees, not one that is %', paired.status, paired.state USING ERRCODE='23514';
+  END IF;
+ END LOOP;
+ RETURN NULL;
+END $function$;
+CREATE OR REPLACE FUNCTION public.forget_conversation_turn_run()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+ DELETE FROM agent_run WHERE id = OLD.run_id AND workspace_id = OLD.workspace_id;
+ RETURN NULL;
+END $function$;
+CREATE OR REPLACE FUNCTION public.guard_feedback_copy_fence()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE shown_text text;
+BEGIN
+ IF OLD.thread_ref IS NOT NULL AND NEW.thread_ref IS DISTINCT FROM OLD.thread_ref THEN
+  RAISE EXCEPTION 'physical copy thread binding is immutable' USING ERRCODE='55000';
+ END IF;
+ IF OLD.write_started_at IS NOT NULL THEN
+  IF NEW.write_started_at IS DISTINCT FROM OLD.write_started_at OR
+     ROW(NEW.id,NEW.workspace_id,NEW.feedback_id,NEW.position,NEW.write_key,NEW.write_marker,NEW.path,NEW.start_line,NEW.end_line,NEW.side)
+     IS DISTINCT FROM ROW(OLD.id,OLD.workspace_id,OLD.feedback_id,OLD.position,OLD.write_key,OLD.write_marker,OLD.path,OLD.start_line,OLD.end_line,OLD.side) THEN
+   RAISE EXCEPTION 'physical write fence is immutable' USING ERRCODE='55000';
+  END IF;
+  IF NEW.conversation_turn_id IS DISTINCT FROM OLD.conversation_turn_id AND NOT
+     (NEW.conversation_turn_id IS NULL AND NOT EXISTS(SELECT 1 FROM conversation_turn WHERE id=OLD.conversation_turn_id AND workspace_id=OLD.workspace_id)) THEN
+   RAISE EXCEPTION 'conversation turn binding is immutable' USING ERRCODE='55000';
+  END IF;
+  IF OLD.conversation_entry_id IS NOT NULL AND NEW.conversation_entry_id IS DISTINCT FROM OLD.conversation_entry_id AND NOT
+     (NEW.conversation_entry_id IS NULL AND NOT EXISTS(SELECT 1 FROM conversation_entry WHERE id=OLD.conversation_entry_id AND workspace_id=OLD.workspace_id)) THEN
+   RAISE EXCEPTION 'conversation answer binding is immutable' USING ERRCODE='55000';
+  END IF;
+  IF OLD.conversation_entry_id IS NULL AND NEW.conversation_entry_id IS NOT NULL AND OLD.posted_at IS NOT NULL THEN
+   RAISE EXCEPTION 'conversation answer binding is immutable' USING ERRCODE='55000';
+  END IF;
+  IF OLD.conversation_entry_id IS NULL AND NEW.conversation_entry_id IS NOT NULL AND NOT EXISTS(
+     SELECT 1 FROM conversation_entry e JOIN conversation c ON(c.id,c.workspace_id)=(e.conversation_id,e.workspace_id)
+     JOIN feedback f ON(f.id,f.workspace_id)=(NEW.feedback_id,NEW.workspace_id) AND f.developer_id=c.account_id
+     WHERE e.id=NEW.conversation_entry_id AND e.workspace_id=NEW.workspace_id AND e.kind='ANSWER' AND e.turn_id=NEW.conversation_turn_id) THEN
+   RAISE EXCEPTION 'conversation answer must be the claiming turn answer to its developer' USING ERRCODE='23514';
+  END IF;
+  IF NEW.body IS DISTINCT FROM OLD.body THEN
+   IF NOT(OLD.kind='CHAT_TURN' AND OLD.body IS NULL AND NEW.body IS NOT NULL AND
+          OLD.posted_at IS NULL AND NEW.posted_at IS NOT NULL AND NEW.posted_at>=OLD.write_started_at AND
+          OLD.state IN('WRITE_STARTED','FAILED') AND NEW.state='POSTED' AND
+          NEW.conversation_entry_id IS NOT NULL AND NEW.conversation_turn_id IS NOT NULL) THEN
+    RAISE EXCEPTION 'physical copy words are immutable' USING ERRCODE='55000';
+   END IF;
+   shown_text := conversation_receipt_words(NEW.workspace_id,NEW.feedback_id,NEW.conversation_entry_id,NEW.conversation_turn_id);
+   IF shown_text IS NULL OR shown_text ~ '^[[:space:]]*$' OR NEW.body IS DISTINCT FROM shown_text THEN
+    RAISE EXCEPTION 'conversation receipt must contain the words the completed answer showed' USING ERRCODE='23514';
+   END IF;
+  END IF;
+  IF OLD.kind='CHAT_TURN' AND OLD.posted_at IS NULL AND NEW.posted_at IS NOT NULL AND NEW.body IS NULL THEN
+   RAISE EXCEPTION 'conversation receipt requires actual words' USING ERRCODE='23514';
+  END IF;
+ ELSIF NEW.write_started_at IS NOT NULL AND NEW.kind='CHAT_TURN' THEN
+  IF NEW.body IS NOT NULL OR NEW.state<>'WRITE_STARTED' OR NOT EXISTS(
+     SELECT 1 FROM conversation_turn t JOIN conversation c ON(c.id,c.workspace_id)=(t.conversation_id,t.workspace_id)
+     JOIN feedback f ON(f.id,f.workspace_id)=(NEW.feedback_id,NEW.workspace_id) AND f.developer_id=c.account_id
+     WHERE t.id=NEW.conversation_turn_id AND t.workspace_id=NEW.workspace_id AND t.status='RUNNING' AND f.destination='CONVERSATION') THEN
+   RAISE EXCEPTION 'conversation fence requires a running conversation turn of its developer' USING ERRCODE='23514';
+  END IF;
+ END IF;
+ IF OLD.kind<>NEW.kind AND NOT(OLD.kind='LINE_NOTE' AND NEW.kind='FILE_NOTE') THEN RAISE EXCEPTION 'copy form cannot change except acknowledged fallback' USING ERRCODE='55000'; END IF;
+ IF OLD.external_ref IS NOT NULL AND NEW.external_ref IS DISTINCT FROM OLD.external_ref OR OLD.external_url IS NOT NULL AND NEW.external_url IS DISTINCT FROM OLD.external_url OR OLD.posted_at IS NOT NULL AND NEW.posted_at IS DISTINCT FROM OLD.posted_at THEN RAISE EXCEPTION 'physical write receipt is immutable' USING ERRCODE='55000'; END IF;
+ RETURN NEW;
+END $function$;
+        ]]></sql>
+        <rollback><stop>Stop every role, restore the verified pre-upgrade database backup and start the previous release.</stop></rollback>
+    </changeSet>
+</databaseChangeLog>

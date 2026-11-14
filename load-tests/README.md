@@ -18,7 +18,7 @@ both service objectives and saturation, following Google's SLO guidance
   elsewhere.
 - Populate a representative workspace before testing. `ARTIFACT_IDS` must contain distinct, reviewable
   pull requests so each request performs work rather than hitting deduplication/cooldown.
-- Bind practice review and mentor to a deterministic OpenAI-compatible test provider. Record its
+- Bind practice review and conversation to a deterministic OpenAI-compatible test provider. Record its
   response latency separately: provider time is not host capacity.
 - Use a short-lived workspace-admin token. Never commit it or the webhook secret.
 - Disable background sync and unrelated traffic. Restore PostgreSQL from the same
@@ -40,22 +40,22 @@ vp run test:load:webhook-burst
 
 export AUTH_TOKEN=... WORKSPACE_SLUG=capacity-test
 export ARTIFACT_IDS=101,102,103,104,105
-export REVIEW_REQUESTS=5 MENTOR_VUS=5 REVIEW_VUS=2
+export REVIEW_REQUESTS=5 CONVERSATION_VUS=5 REVIEW_VUS=2
 # Copy the actual deployed values from the isolated host; neither value changes that host.
 export SANDBOX_API_MAX_REQUEST_BYTES=4194304
 export SANDBOX_API_REQUESTS_PER_MINUTE=120
-vp run test:load:detection-mentor
+vp run test:load:detection-conversation
 ```
 
-`heph.js` loads Heph alone, with no review and no `ARTIFACT_IDS`. Each simulated developer has one
+`conversation.js` loads conversations alone, with no review and no `ARTIFACT_IDS`. Each simulated developer has one
 main conversation and `THREADS_PER_DEVELOPER` (default 2) threads, each with one question in flight.
 `STAGES` ramps the developers, for example `1:2m,5:3m,15:3m,30:3m`. Give each developer its own
 token in `AUTH_TOKENS` (comma-separated, at least one per developer at the peak), because the
-`mentor-turns` limit counts the questions of one account, and the follow-up queue is per conversation:
+`conversation-turns` limit counts the questions of one account, and the follow-up queue is per conversation:
 
 ```bash
 export AUTH_TOKENS=...,... WORKSPACE_SLUG=capacity-test STAGES=1:2m,5:3m,15:3m,30:3m
-vp run test:load:heph
+vp run test:load:conversation
 ```
 
 To load a server on this machine, k6 must use the host network, and the server serves the API at
@@ -66,16 +66,16 @@ export LOAD_TEST_NETWORK=host API_PREFIX= BASE_URL=http://127.0.0.1:8080
 ```
 
 `BASE_URL` is the externally reachable application root (without `/api`); every scenario uses it.
-The gateway remains private, and only the detection+mentor workload crosses it, so only that
+The gateway remains private, and only the detection+conversation workload crosses it, so only that
 scenario takes and records the gateway limits.
 Optional workload inputs are documented by the scenario's defaults.
-Keep mentor traffic running long enough to overlap practice reviews; the default mentor phase is
-10 minutes, while slow reviews can take longer. Each mentor VU asks once at the top level of the
-token owner's Heph conversation, then asks again in the thread of that message, so the VUs run as
+Keep conversation traffic running long enough to overlap practice reviews; the default conversation phase is
+10 minutes, while slow reviews can take longer. Each conversation VU asks once at the top level of the
+token owner's conversation, then asks again in the thread of that message, so the VUs run as
 concurrent conversations. This is a finite concurrent-conversation workload, not an arrival-rate
-claim for mentor throughput ([open versus closed models](https://grafana.com/docs/k6/latest/using-k6/scenarios/concepts/open-vs-closed/)).
-All mentor VUs ask as the token owner, so they share one `mentor-turns` rate limit: 20 questions in
-10 minutes by default. For a run that asks more, raise `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_CAPACITY` on
+claim for conversation throughput ([open versus closed models](https://grafana.com/docs/k6/latest/using-k6/scenarios/concepts/open-vs-closed/)).
+All conversation VUs ask as the token owner, so they share one `conversation-turns` rate limit: 20 questions in
+10 minutes by default. For a run that asks more, raise `HEPHAESTUS_RATE_LIMIT_CONVERSATION_TURNS_CAPACITY` on
 the isolated host ([Runtime roles](../docs/admin/runtime-roles.mdx#live-answers)).
 
 Each invocation prints a fresh `load-results/<scenario>-<timestamp>` directory. Set `LOAD_RESULTS_DIR`
@@ -101,8 +101,8 @@ the document names the k6 image the run used and whether the checkout has moved 
 k6 result alone does not qualify a host: supply the companion operator evidence listed in the
 document. Do not commit tokens, environment files or unredacted deployment configuration.
 
-A mentor VU submits a turn, then polls the conversation page for the status of its question.
-`detection-mentor.js` sets the poll interval. `mentor_turn_duration` measures completion to within that
+A conversation VU submits a turn, then polls the conversation page for the status of its question.
+`detection-conversation.js` sets the poll interval. `conversation_turn_duration` measures completion to within that
 interval. It does not measure the time to the first text of the answer.
 
 ## Collect host evidence
@@ -122,7 +122,7 @@ Reject a run with a reconciliation mismatch, dropped iterations, provider thrott
 ## Qualification matrix and sizing rule
 
 Run both scenarios at the **minimum** and **recommended** host shapes, then increase webhook rate and
-mentor/review concurrency independently until the first threshold or saturation failure. Do not add
+conversation/review concurrency independently until the first threshold or saturation failure. Do not add
 the maxima together: that invents a workload never tested.
 
 The documented size qualifies only when all three repeated runs meet thresholds, the busiest rolling
@@ -149,10 +149,10 @@ k6's verdict. Do not maintain a second set of threshold values in documentation.
   publish gate and fast-path timeout make it a different workload that needs its own scenario.
 - The mixed scenario requires every requested review to finish successfully. Exact completion
   counts catch interrupted iterations that never add a sample to a completion-rate metric.
-- Mentor HTTP failures and whole-turn success are independent of polling traffic. A turn counts as
+- Conversation HTTP failures and whole-turn success are independent of polling traffic. A turn counts as
   answered only when it ends `DONE`.
-- `heph.js` reads a turn's progress from the conversation's active turns every `POLL_MS`. Its
-  `heph_queue_wait`, `heph_first_partial` and `heph_first_text` are therefore accurate to that
+- `conversation.js` reads a turn's progress from the conversation's active turns every `POLL_MS`. Its
+  `conversation_queue_wait`, `conversation_first_partial` and `conversation_first_text` are therefore accurate to that
   interval. They include the provider's own latency: compare them with a direct call to the provider.
   A provider gateway that buffers its event stream delivers the whole answer at once, so the first
   text then arrives with the end of the turn.

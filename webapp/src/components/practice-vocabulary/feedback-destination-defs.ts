@@ -18,7 +18,7 @@ export const FEEDBACK_DESTINATION_DEFS: StatusDefs<FeedbackDestination> = {
 		icon: BotMessageSquareIcon,
 		badgeVariant: "outline",
 		description:
-			"Held back until the developer’s next chat with Hephaestus, then raised there. What is stored is the move to make, not the words, so it is withheld from every admin page, including this one.",
+			"Held back until the developer’s next conversation with Hephaestus, then raised there. What is stored is the move to make, not the words, so it is withheld from every admin page, including this one.",
 	},
 	PRACTICE_PAGE: {
 		label: "On the practice page",

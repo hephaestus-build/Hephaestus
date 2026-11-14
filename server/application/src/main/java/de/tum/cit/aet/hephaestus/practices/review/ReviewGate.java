@@ -71,8 +71,8 @@ public class ReviewGate {
                     new GateDecision.Skip("Practice reviews are disabled.", ReviewRequestReason.PRACTICES_DISABLED));
         boolean enabled = Boolean.TRUE.equals(
                 origin == ReviewOrigin.EVENT
-                        ? workspace.features().autoTriggerEnabled()
-                        : workspace.features().manualTriggerEnabled());
+                        ? workspace.features().eventReviewsEnabled()
+                        : workspace.features().requestReviewsEnabled());
         if (!enabled)
             return Optional.of(new GateDecision.Skip(
                     origin == ReviewOrigin.EVENT

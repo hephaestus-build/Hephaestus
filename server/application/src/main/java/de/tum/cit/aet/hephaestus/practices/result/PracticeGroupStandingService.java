@@ -36,7 +36,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** The weekly digest that Heph reads compares standings. */
+/** The weekly digest that Hephaestus reads compares standings. */
 @Service
 @ConditionalOnServerRole
 @RequiredArgsConstructor

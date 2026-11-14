@@ -20,13 +20,13 @@ class SlackConsentBlocksTest extends BaseUnitTest {
     void newlyRenderedChannelNoticesUseTheProductName() {
         assertThat(SlackConsentBlocks.activationNotice().toString())
                 .contains("helps Hephaestus answer them in direct messages")
-                .doesNotContainPattern("\\bHeph\\b");
+                .doesNotContainPattern("\\bConversation\\b");
         assertThat(SlackConsentBlocks.lateJoinNotice().toString())
                 .contains("helps Hephaestus answer you in direct messages")
-                .doesNotContainPattern("\\bHeph\\b");
+                .doesNotContainPattern("\\bConversation\\b");
         assertThat(SlackConsentBlocks.channelMessageOptOutConfirm().getText().getText())
                 .contains("Your direct messages with Hephaestus stay as they are.")
-                .doesNotContainPattern("\\bHeph\\b");
+                .doesNotContainPattern("\\bConversation\\b");
     }
 
     @Test
@@ -64,7 +64,7 @@ class SlackConsentBlocksTest extends BaseUnitTest {
                         "deletes the channel-message data that Hephaestus already collected from you",
                         "Do not use my channel messages")
                 .doesNotContain("AI-powered", "Opt me out", "Exclude my channel messages", "—", ";")
-                .doesNotContainPattern("\\bHeph\\b");
+                .doesNotContainPattern("\\bConversation\\b");
     }
 
     @Test
@@ -83,6 +83,6 @@ class SlackConsentBlocksTest extends BaseUnitTest {
                         "give you private feedback on software practices and helps Hephaestus answer you in direct messages",
                         "You can manage this at any time in App Home")
                 .doesNotContain("Starting now")
-                .doesNotContainPattern("\\bHeph\\b");
+                .doesNotContainPattern("\\bConversation\\b");
     }
 }

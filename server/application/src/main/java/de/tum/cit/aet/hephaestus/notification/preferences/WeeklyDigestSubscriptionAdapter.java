@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.notification.preferences;
 
-import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestSubscriptions;
+import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestSubscriptions;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Clock;
 import java.time.Instant;
@@ -10,7 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/** The weekly digest choice is one account-level subscription, {@link NotificationSubscriptionKind#MENTOR_DIGEST}. */
+/** The weekly digest choice is one account-level subscription, {@link NotificationSubscriptionKind#WEEKLY_DIGEST}. */
 @Component
 @RequiredArgsConstructor
 @WorkspaceAgnostic("Subscriptions belong to native accounts, not workspaces")
@@ -22,14 +22,14 @@ class WeeklyDigestSubscriptionAdapter implements WeeklyDigestSubscriptions {
     @Override
     @Transactional(readOnly = true)
     public List<Long> subscribedAccountIds() {
-        return subscriptions.subscribedAccountIds(NotificationSubscriptionKind.MENTOR_DIGEST);
+        return subscriptions.subscribedAccountIds(NotificationSubscriptionKind.WEEKLY_DIGEST);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<Instant> enabledSince(long accountId) {
         return subscriptions
-                .findByAccountIdAndKind(accountId, NotificationSubscriptionKind.MENTOR_DIGEST)
+                .findByAccountIdAndKind(accountId, NotificationSubscriptionKind.WEEKLY_DIGEST)
                 .filter(NotificationSubscription::isEnabled)
                 .flatMap(row -> Optional.ofNullable(row.getEnabledSince()));
     }
@@ -39,7 +39,7 @@ class WeeklyDigestSubscriptionAdapter implements WeeklyDigestSubscriptions {
     @Transactional
     public void turnOff(long accountId) {
         subscriptions.findForUpdate(accountId).stream()
-                .filter(row -> row.getKind() == NotificationSubscriptionKind.MENTOR_DIGEST)
+                .filter(row -> row.getKind() == NotificationSubscriptionKind.WEEKLY_DIGEST)
                 .forEach(row -> row.setEnabled(false, clock.instant()));
     }
 }

@@ -1,7 +1,7 @@
 import { formatDistance } from "date-fns";
 import type { ReactNode } from "react";
 
-import type { MentorEntry, MentorThreadSummary } from "@/api/types.gen";
+import type { ConversationEntry, ConversationThreadSummary } from "@/api/types.gen";
 import { useNow } from "@/components/common/use-now";
 import { Button } from "@/components/ui/button";
 import { Marker, MarkerContent } from "@/components/ui/marker";
@@ -20,7 +20,7 @@ type RowProps = Pick<
 	"developer" | "actions" | "threads" | "workspaceSlug" | "onCopy"
 >;
 
-function copyText(entry: Pick<MentorEntry, "text" | "links">): string {
+function copyText(entry: Pick<ConversationEntry, "text" | "links">): string {
 	return [entry.text, ...entry.links.map(({ text }) => text)].filter(hasText).join("\n\n");
 }
 
@@ -35,7 +35,7 @@ function ThreadSummary({
 	panelId,
 	onOpen,
 }: {
-	summary: MentorThreadSummary;
+	summary: ConversationThreadSummary;
 	/** As `MessageActions` takes it. */
 	subject: string;
 	open: boolean;
@@ -84,10 +84,10 @@ function stateOfOutcome(outcome: TurnOutcome, actions: TimelineActions | undefin
 }
 
 function messageActions(
-	entry: MentorEntry,
+	entry: ConversationEntry,
 	subject: string,
 	{ actions, threads, onCopy }: RowProps,
-	onDelete: (entry: MentorEntry) => void,
+	onDelete: (entry: ConversationEntry) => void,
 ): ReactNode {
 	if (entry.deleted || entry.kind === "DIGEST") {
 		return undefined;
@@ -99,7 +99,7 @@ function messageActions(
 			text={copyText(entry)}
 			onCopy={onCopy}
 			vote={
-				actions && entry.kind === "HEPH"
+				actions && entry.kind === "ANSWER"
 					? { value: entry.vote, onChange: (vote) => actions.onVote(entry, vote) }
 					: undefined
 			}
@@ -155,7 +155,7 @@ export function ConversationTimelineRow({
 	/** Names the running answer's Stop on its status line. Absent where the composer offers Stop. */
 	stopLabel: string | undefined;
 	props: RowProps;
-	onDelete: (entry: MentorEntry) => void;
+	onDelete: (entry: ConversationEntry) => void;
 }) {
 	const { developer, actions, threads, workspaceSlug, onCopy } = props;
 	switch (row.kind) {

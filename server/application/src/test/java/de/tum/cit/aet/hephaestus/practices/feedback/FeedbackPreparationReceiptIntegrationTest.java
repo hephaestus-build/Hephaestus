@@ -15,13 +15,13 @@ import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackPackage;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobInput;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRunRows;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
 import de.tum.cit.aet.hephaestus.integration.core.framework.RegisteredItemLabels;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemLabel;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRunRows;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackContentDigest;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.PracticePageFeedbackRouter;
 import de.tum.cit.aet.hephaestus.practices.feedback.page.PracticePageFeedbackService;
@@ -742,19 +742,19 @@ class FeedbackPreparationReceiptIntegrationTest extends AbstractFeedbackDelivery
                 .toList();
     }
 
-    /** A running first attempt of a Heph turn in the developer's main conversation. */
+    /** A running first attempt of a Hephaestus turn in the developer's main conversation. */
     private UUID runningTurn(long developer) {
         UUID conversationId = UUID.randomUUID(), turnId = UUID.randomUUID();
         jdbc.update(
-                "INSERT INTO mentor_conversation(id,workspace_id,account_id,created_at,last_activity_at)"
+                "INSERT INTO conversation(id,workspace_id,account_id,created_at,last_activity_at)"
                         + " VALUES (?,?,?,now(),now())",
                 conversationId,
                 workspace.getId(),
                 developer);
         UUID run = UUID.randomUUID();
-        jdbc.update(MentorTurnRunRows.insert(run, workspace.getId(), conversationId, "RUNNING", 1));
+        jdbc.update(ConversationTurnRunRows.insert(run, workspace.getId(), conversationId, "RUNNING", 1));
         jdbc.update(
-                "INSERT INTO mentor_turn(id,workspace_id,conversation_id,request_id,status,surface,attempt,run_id,"
+                "INSERT INTO conversation_turn(id,workspace_id,conversation_id,request_id,status,surface,attempt,run_id,"
                         + "started_at,created_at) VALUES (?,?,?,?,'RUNNING','APP',1,?,now(),now())",
                 turnId,
                 workspace.getId(),

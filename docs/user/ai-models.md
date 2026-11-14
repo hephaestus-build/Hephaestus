@@ -58,14 +58,14 @@ Hephaestus never substitutes a model from another tier.
 ## Assign models
 
 1. Under **Administration**, open **AI models**.
-2. Under **Reviews and conversations**, select **Practice reviews** or **Conversations**.
+2. Under **Reviews and conversations**, select **Practice reviews** or **Ask Hephaestus**.
 3. Under **In-house**, **Cloud**, or **Members who have not chosen**, choose the **Model**.
 4. Turn on **Use this model**.
 5. Select **Save assignment**.
 
 The assignment no longer shows **Not ready**.
-A ready **Conversations** assignment lets every member ask Hephaestus.
-If you turn off every **Conversations** assignment, Hephaestus cannot answer anyone in the workspace.
+A ready **Ask Hephaestus** assignment lets every member ask Hephaestus.
+If you turn off every **Ask Hephaestus** assignment, Hephaestus cannot answer anyone in the workspace.
 
 To stop using a model for one assignment, select **Clear assignment**.
 

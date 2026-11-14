@@ -72,9 +72,9 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
         if (selected.rows().isEmpty()) return List.of();
         return jdbc.query(
                 """
-                SELECT DISTINCT c.workspace_id,c.mentor_entry_id FROM feedback_copy c
-                WHERE c.mentor_entry_id IS NOT NULL AND EXISTS(SELECT 1 FROM jsonb_populate_recordset(NULL::feedback_copy,CAST(:keys AS jsonb)) s WHERE s.id=c.id AND s.workspace_id=c.workspace_id)
-                ORDER BY c.workspace_id,c.mentor_entry_id
+                SELECT DISTINCT c.workspace_id,c.conversation_entry_id FROM feedback_copy c
+                WHERE c.conversation_entry_id IS NOT NULL AND EXISTS(SELECT 1 FROM jsonb_populate_recordset(NULL::feedback_copy,CAST(:keys AS jsonb)) s WHERE s.id=c.id AND s.workspace_id=c.workspace_id)
+                ORDER BY c.workspace_id,c.conversation_entry_id
                 """,
                 Map.of(
                         "keys",
@@ -146,7 +146,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                                 "feedback_copy",
                                 "feedback_copy",
                                 "t.feedback_id IN(" + FEEDBACK_IDS + ")",
-                                "id,workspace_id,feedback_id,kind,position,body,path,start_line,end_line,side,stop_reason,last_error,state,write_started_at,write_key,write_marker,external_ref,thread_ref,external_url,mentor_turn_id,mentor_entry_id,created_at,posted_at",
+                                "id,workspace_id,feedback_id,kind,position,body,path,start_line,end_line,side,stop_reason,last_error,state,write_started_at,write_key,write_marker,external_ref,thread_ref,external_url,conversation_turn_id,conversation_entry_id,created_at,posted_at",
                                 "id,workspace_id",
                                 "",
                                 -210),

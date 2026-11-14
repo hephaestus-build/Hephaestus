@@ -183,11 +183,11 @@ void test("failed and errored JUnit cases are named by class and test", () => {
 });
 
 void test("Vitest suites without class names are named by their suite", () => {
-	const xml = `<testsuites><testsuite name="src/routes/-mentor-route.test.tsx">
+	const xml = `<testsuites><testsuite name="src/routes/-conversation-route.test.tsx">
   <testcase name="stops a live answer"><failure message="timed out"/></testcase>
 </testsuite></testsuites>`;
 	assert.deepEqual(failedTestCases(xml), [
-		"src/routes/-mentor-route.test.tsx > stops a live answer",
+		"src/routes/-conversation-route.test.tsx > stops a live answer",
 	]);
 });
 

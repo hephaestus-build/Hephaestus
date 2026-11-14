@@ -52,7 +52,7 @@ public record AdminWorkspaceLlmUsageDTO(
         @NonNull
         @Schema(
                 description =
-                        "Runs this month, either purse: job attempts and mentor turn attempts. A practice script call"
+                        "Runs this month, either purse: job attempts and conversation turn attempts. A practice script call"
                                 + " counts toward the run of its review.")
         Long events,
 

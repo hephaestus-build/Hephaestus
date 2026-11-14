@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRunRows;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRunRows;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackContentDigest;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationCopyOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationCopyReceipt;
@@ -35,8 +35,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * A conversation copy is claimed by the running attempt of a Heph turn of its developer, and settled by a receipt that
- * names the Heph answer that showed it. Turns and answers are ledger rows written here directly.
+ * A conversation copy is claimed by the running attempt of a Hephaestus turn of its developer, and settled by a receipt that
+ * names the Hephaestus answer that showed it. Turns and answers are ledger rows written here directly.
  */
 class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliveryIntegrationTest {
     @Autowired
@@ -45,15 +45,15 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
     @Autowired
     FeedbackCopyCleanupCustody custody;
 
-    UUID conversationId, copyId, mentorConversationId, turnId;
+    UUID conversationId, copyId, ledgerConversationId, turnId;
 
     @BeforeEach
     void prepareConversation() {
         conversationId =
                 FeedbackIds.conversation(workspace.getId(), reviewId, developerId, List.of(supportingResult.getId()));
         copyId = FeedbackIds.copy(conversationId, FeedbackCopyKind.CHAT_TURN, 0);
-        mentorConversationId = mentorConversation(developerId);
-        turnId = runningTurn(mentorConversationId);
+        ledgerConversationId = conversation(developerId);
+        turnId = runningTurn(ledgerConversationId);
         var draft = new FeedbackDraft(
                 conversationId,
                 workspace.getId(),
@@ -73,10 +73,10 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         store.prepareAll(workspace.getId(), reviewId, List.of(draft));
     }
 
-    private UUID mentorConversation(long account) {
+    private UUID conversation(long account) {
         UUID id = UUID.randomUUID();
         jdbc.update(
-                "INSERT INTO mentor_conversation(id,workspace_id,account_id,created_at,last_activity_at)"
+                "INSERT INTO conversation(id,workspace_id,account_id,created_at,last_activity_at)"
                         + " VALUES (?,?,?,now(),now())",
                 id,
                 workspace.getId(),
@@ -88,9 +88,9 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
     private UUID runningTurn(UUID conversation) {
         UUID id = UUID.randomUUID();
         UUID run = UUID.randomUUID();
-        jdbc.update(MentorTurnRunRows.insert(run, workspace.getId(), conversation, "RUNNING", 1));
+        jdbc.update(ConversationTurnRunRows.insert(run, workspace.getId(), conversation, "RUNNING", 1));
         jdbc.update(
-                "INSERT INTO mentor_turn(id,workspace_id,conversation_id,request_id,status,surface,attempt,run_id,"
+                "INSERT INTO conversation_turn(id,workspace_id,conversation_id,request_id,status,surface,attempt,run_id,"
                         + "started_at,created_at) VALUES (?,?,?,?,'RUNNING','APP',1,?,now(),now())",
                 id,
                 workspace.getId(),
@@ -102,16 +102,16 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
 
     /** The lease reaper's retry: the turn runs a second attempt, started after the first one's claims. */
     private void retry() {
-        jdbc.execute(MentorTurnRunRows.retry(turnId));
+        jdbc.execute(ConversationTurnRunRows.retry(turnId));
     }
 
-    /** Heph's answer: its words, and the successful {@code show_feedback} call whose text showed the feedback. */
+    /** Hephaestus's answer: its words, and the successful {@code show_feedback} call whose text showed the feedback. */
     private UUID answer() {
         return answer(new Call("call-1", conversationId.toString(), "Try a focused test.", true));
     }
 
     /**
-     * One {@code show_feedback} call of Heph's answer.
+     * One {@code show_feedback} call of Hephaestus's answer.
      *
      * @param succeeded whether its tool result is no error; {@code null} for a call without a result
      */
@@ -121,7 +121,7 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
             String text,
             @Nullable Boolean succeeded) {}
 
-    /** Heph's answer with its words and these calls, and the tool result of each call that has one. */
+    /** Hephaestus's answer with its words and these calls, and the tool result of each call that has one. */
     private UUID answer(Call... calls) {
         UUID entry = UUID.randomUUID();
         var content = new StringBuilder("{\"type\":\"text\",\"text\":\"Some context.\"}");
@@ -131,11 +131,11 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
                             .formatted(call.feedbackId(), call.text()));
         }
         jdbc.update(
-                "INSERT INTO mentor_entry(id,workspace_id,conversation_id,seq,kind,surface,text,payload,turn_id,"
-                        + "created_at) VALUES (?,?,?,1,'HEPH','APP','Some context.',?::jsonb,?,now())",
+                "INSERT INTO conversation_entry(id,workspace_id,conversation_id,seq,kind,surface,text,payload,turn_id,"
+                        + "created_at) VALUES (?,?,?,1,'ANSWER','APP','Some context.',?::jsonb,?,now())",
                 entry,
                 workspace.getId(),
-                mentorConversationId,
+                ledgerConversationId,
                 "{\"type\":\"message\",\"id\":\"a1\",\"message\":{\"role\":\"assistant\",\"content\":[" + content
                         + "]}}",
                 turnId);
@@ -143,11 +143,11 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         for (Call call : calls) {
             if (call.succeeded() == null) continue;
             jdbc.update(
-                    "INSERT INTO mentor_entry(id,workspace_id,conversation_id,seq,kind,surface,text,payload,turn_id,"
+                    "INSERT INTO conversation_entry(id,workspace_id,conversation_id,seq,kind,surface,text,payload,turn_id,"
                             + "created_at) VALUES (?,?,?,?,'TOOL_RESULT','APP','',?::jsonb,?,now())",
                     UUID.randomUUID(),
                     workspace.getId(),
-                    mentorConversationId,
+                    ledgerConversationId,
                     seq++,
                     ("{\"type\":\"message\",\"id\":\"r-%s\",\"message\":{\"role\":\"toolResult\","
                                     + "\"toolCallId\":\"%s\",\"toolName\":\"show_feedback\",\"isError\":%s,"
@@ -159,7 +159,7 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
     }
 
     private void endTurn() {
-        jdbc.update(MentorTurnRunRows.endDone(turnId));
+        jdbc.update(ConversationTurnRunRows.endDone(turnId));
     }
 
     private Optional<CopyWriteFence> claim(int attempt) {
@@ -188,10 +188,10 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         var fence = claim();
         assertThat(fence.feedbackId()).isEqualTo(conversationId);
         assertThat(fence.copyId()).isEqualTo(copyId);
-        assertThat(fence.mentorTurnId()).isEqualTo(turnId);
+        assertThat(fence.conversationTurnId()).isEqualTo(turnId);
         assertThat(chatCopy().getWriteStartedAt()).isEqualTo(fence.writeStartedAt());
-        assertThat(chatCopy().getMentorTurnId()).isEqualTo(turnId);
-        assertThat(chatCopy().getMentorEntryId()).isNull();
+        assertThat(chatCopy().getConversationTurnId()).isEqualTo(turnId);
+        assertThat(chatCopy().getConversationEntryId()).isNull();
         assertThat(chatCopy().getState()).isEqualTo(FeedbackCopyState.WRITE_STARTED);
         assertThat(chatCopy().getBody()).isNull();
         assertThat(conversation().getState()).isEqualTo(FeedbackState.UNCONFIRMED);
@@ -234,7 +234,7 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
     void shouldRefuseATurnOfAnotherDeveloperAndKeepTheCopyUnclaimed() {
         long other = Objects.requireNonNull(
                 persistAccount("Another conversation owner").getId());
-        UUID foreign = runningTurn(mentorConversation(other));
+        UUID foreign = runningTurn(conversation(other));
         assertThat(store.claimConversationCopy(workspace.getId(), conversationId, foreign, 1))
                 .isEmpty();
         assertThat(chatCopy().getState()).isEqualTo(FeedbackCopyState.PLANNED);
@@ -248,7 +248,7 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         CountDownLatch release = new CountDownLatch(1);
         var ending = CompletableFuture.runAsync(() -> new TransactionTemplate(transactionManager)
                 .executeWithoutResult(status -> {
-                    jdbc.queryForList("SELECT id FROM mentor_turn WHERE id=? FOR UPDATE", turnId);
+                    jdbc.queryForList("SELECT id FROM conversation_turn WHERE id=? FOR UPDATE", turnId);
                     locked.countDown();
                     try {
                         assertThat(release.await(30, TimeUnit.SECONDS)).isTrue();
@@ -256,7 +256,7 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
                         Thread.currentThread().interrupt();
                         throw new IllegalStateException(e);
                     }
-                    jdbc.update(MentorTurnRunRows.endDone(turnId));
+                    jdbc.update(ConversationTurnRunRows.endDone(turnId));
                 }));
         assertThat(locked.await(30, TimeUnit.SECONDS)).isTrue();
         var claiming = CompletableFuture.supplyAsync(() -> claim(1));
@@ -305,7 +305,7 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         assertThat(chatCopy().getBody())
                 .as("the receipt holds the words of the call, never the answer's other text")
                 .isEqualTo("Try a focused test.");
-        assertThat(chatCopy().getMentorEntryId()).isEqualTo(entry);
+        assertThat(chatCopy().getConversationEntryId()).isEqualTo(entry);
         assertThat(chatCopy().getPostedAt()).isEqualTo(at);
         assertThat(chatCopy().getState()).isEqualTo(FeedbackCopyState.POSTED);
         assertThat(conversation().getState()).isEqualTo(FeedbackState.DELIVERED);
@@ -415,7 +415,7 @@ class FeedbackConversationReceiptIntegrationTest extends AbstractFeedbackDeliver
         assertThat(conversation().getState()).isEqualTo(FeedbackState.FAILED);
         assertThat(chatCopy().getState()).isEqualTo(FeedbackCopyState.FAILED);
         assertThat(chatCopy().getWriteStartedAt()).isEqualTo(fence.writeStartedAt());
-        assertThat(chatCopy().getMentorTurnId()).isEqualTo(turnId);
+        assertThat(chatCopy().getConversationTurnId()).isEqualTo(turnId);
         assertThat(chatCopy().getBody()).isNull();
         assertThat(conversation().getDeliveredAt()).isNull();
         assertThat(claim(1)).isEmpty();

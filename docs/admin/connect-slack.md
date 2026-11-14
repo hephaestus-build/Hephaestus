@@ -83,7 +83,7 @@ After that, the server ignores the client ID and secret of the chart for account
    Slack returns you to Hephaestus.
    The Slack page shows **Connected**.
 4. In Slack, send the app a direct message.
-   Hephaestus answers when the member linked their Slack account and the workspace has a ready **Conversations** model ([Assign models](/user/ai-models#assign-models)).
+   Hephaestus answers when the member linked their Slack account and the workspace has a ready **Ask Hephaestus** model ([Assign models](/user/ai-models#assign-models)).
 
 ## Undo
 

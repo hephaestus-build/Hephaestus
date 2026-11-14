@@ -16,11 +16,11 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelPrice;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelPriceRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.PricingMode;
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
-import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignment;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceModelAssignmentRepository;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmittedResultFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
@@ -185,7 +185,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     private WorkspaceRepository workspaceRepository;
 
     @Autowired
-    private WorkspaceAgentBindingRepository agentBindingRepository;
+    private WorkspaceModelAssignmentRepository modelAssignmentRepository;
 
     @Autowired
     private LlmConnectionRepository connectionRepository;
@@ -304,12 +304,12 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         price.setEffectiveFrom(Instant.now().minusSeconds(60));
         priceRepository.save(price);
 
-        WorkspaceAgentBinding binding = new WorkspaceAgentBinding();
+        WorkspaceModelAssignment binding = new WorkspaceModelAssignment();
         binding.setWorkspace(workspace);
-        binding.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+        binding.setPurpose(ModelPurpose.PRACTICE_REVIEW);
         binding.setEnabled(true);
         binding.setInstanceModel(instanceModel);
-        agentBindingRepository.save(binding);
+        modelAssignmentRepository.save(binding);
 
         practice = runtimePracticeVersions.create(new PracticeVersionService.NewPractice(
                 workspace.getId(),
@@ -1025,7 +1025,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     private ReviewJobClaimService composeClaims() {
         var policy = mock(ReviewMemberAiPolicy.class);
         when(policy.permitsReview(any())).thenReturn(true);
-        when(policy.binding(any())).thenReturn(Optional.of(new WorkspaceAgentBinding()));
+        when(policy.binding(any())).thenReturn(Optional.of(new WorkspaceModelAssignment()));
         var assignments = mock(ReviewJobAssignments.class);
         when(assignments.load(any())).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
         var budgets = mock(LlmBudgetService.class);
@@ -1375,8 +1375,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     private void pinScriptAssignments(UUID jobId) {
         transactionTemplate.executeWithoutResult(status -> {
             ReviewJob job = jobRepository.findById(jobId).orElseThrow();
-            var binding = agentBindingRepository
-                    .findByWorkspaceIdAndPurpose(workspace.getId(), AgentPurpose.PRACTICE_REVIEW)
+            var binding = modelAssignmentRepository
+                    .findByWorkspaceIdAndPurpose(workspace.getId(), ModelPurpose.PRACTICE_REVIEW)
                     .getFirst();
             var frozen = methods.freeze(binding);
             var slots = List.of(new BoundModelSlot("review", ModelKind.CHAT, frozen));

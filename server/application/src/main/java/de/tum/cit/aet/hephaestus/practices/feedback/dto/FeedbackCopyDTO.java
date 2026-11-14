@@ -48,7 +48,7 @@ public record FeedbackCopyDTO(
                 requiredMode = Schema.RequiredMode.REQUIRED,
                 description = "The Hephaestus answer that showed a conversation copy")
         @Nullable
-        UUID mentorEntryId,
+        UUID conversationEntryId,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
         Instant postedAt,
@@ -76,7 +76,7 @@ public record FeedbackCopyDTO(
                 copy.getWriteStartedAt(),
                 copy.getExternalUrl(),
                 copy.getExternalRef(),
-                copy.getMentorEntryId(),
+                copy.getConversationEntryId(),
                 copy.getPostedAt(),
                 copy.getStopReason(),
                 copy.getLastError(),

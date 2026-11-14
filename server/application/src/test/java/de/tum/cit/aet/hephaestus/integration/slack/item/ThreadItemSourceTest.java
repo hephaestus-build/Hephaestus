@@ -33,11 +33,11 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SourceReadAudience;
 import de.tum.cit.aet.hephaestus.integration.slack.capture.ThreadCaptureSource;
-import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationProjector;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThread;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadMessageRow;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
+import de.tum.cit.aet.hephaestus.integration.slack.thread.SlackThreadProjector;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.nio.charset.StandardCharsets;
@@ -69,7 +69,7 @@ class ThreadItemSourceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        var projector = new SlackConversationProjector(threads, messages, mapper, mock(PersonDataCopyRecorder.class));
+        var projector = new SlackThreadProjector(threads, messages, mapper, mock(PersonDataCopyRecorder.class));
         source = new ThreadItemSource(
                 threads,
                 messages,

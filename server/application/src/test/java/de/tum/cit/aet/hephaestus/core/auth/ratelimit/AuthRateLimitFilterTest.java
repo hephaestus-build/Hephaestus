@@ -102,7 +102,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 defaults.userView(),
                 defaults.deleteUser(),
                 defaults.export(),
-                defaults.mentorTurns(),
+                defaults.conversationTurns(),
                 defaults.reviewRequest(),
                 defaults.syncTrigger(),
                 new AuthRateLimitProperties.Limit(1, Duration.ofHours(1)),
@@ -401,7 +401,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
     @ParameterizedTest
     @ValueSource(
             strings = {
-                "/workspaces/demo/mentor/turns",
+                "/workspaces/demo/conversation/turns",
                 "/workspaces/demo/practices/review-requests",
                 "/workspaces/demo/connections/7/sync/jobs"
             })
@@ -430,8 +430,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
                 new MockHttpServletRequest("GET", "/workspaces/example/activity/members/alex/open-work");
         activity.addHeader("X-User-View-Account", "1");
         f.doFilter(activity, new MockHttpServletResponse(), mock(FilterChain.class));
-        MockHttpServletRequest conversation =
-                new MockHttpServletRequest("GET", "/workspaces/other/mentor/conversation");
+        MockHttpServletRequest conversation = new MockHttpServletRequest("GET", "/workspaces/other/conversation");
         conversation.addHeader("X-User-View-Account", "2");
         f.doFilter(conversation, new MockHttpServletResponse(), mock(FilterChain.class));
         f.doFilter(new MockHttpServletRequest("GET", "/user"), new MockHttpServletResponse(), mock(FilterChain.class));
@@ -546,7 +545,7 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"POST,/workspaces/demo/mentor/turns", "GET,/public/workspaces/demo/activity"})
+    @CsvSource({"POST,/workspaces/demo/conversation/turns", "GET,/public/workspaces/demo/activity"})
     void costlyRequestFailsClosedWhenBucketBackendThrows(String method, String path) throws Exception {
         if (!path.startsWith("/public/")) authenticateAs("42");
         BucketResolver throwing = (key, config) -> {

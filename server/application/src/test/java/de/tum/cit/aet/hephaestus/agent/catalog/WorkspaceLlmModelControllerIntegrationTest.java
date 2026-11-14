@@ -7,7 +7,7 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
@@ -444,7 +444,7 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .filteredOn(model -> model.id().equals(chat.getId()))
                 .singleElement()
                 .extracting(AvailableLlmModelDTO::purposes)
-                .isEqualTo(List.of(AgentPurpose.PRACTICE_REVIEW, AgentPurpose.MENTOR));
+                .isEqualTo(List.of(ModelPurpose.PRACTICE_REVIEW, ModelPurpose.CONVERSATION));
     }
 
     @Test

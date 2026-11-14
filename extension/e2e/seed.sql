@@ -37,7 +37,7 @@ VALUES ('GITLAB', 'https://gitlab.example.test', now())
 ON CONFLICT (type, server_url) DO NOTHING;
 
 INSERT INTO workspace (id, account_login, account_type, created_at, display_name, public_activity_enabled, slug, status,
-  practices_enabled, practice_review_auto_trigger_enabled, practice_review_manual_trigger_enabled)
+  practices_enabled, practice_review_event_enabled, practice_review_request_enabled)
 SELECT w.* FROM (VALUES
   (20, 'ext', 'ORG', now(), 'Extension E2E', false, 'ext-e2e', 'ACTIVE', true, true, true),
   -- A separate repository is monitored by two workspaces, for frame-local workspace choice.

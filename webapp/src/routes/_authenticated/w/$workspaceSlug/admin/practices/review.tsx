@@ -14,7 +14,7 @@ import {
 	getFeedbackModeRollupOptions,
 	getPracticeReviewSettingsOptions,
 	getWorkspaceOptions,
-	listAgentsOptions,
+	listModelAssignmentsOptions,
 	listMembershipsInfiniteOptions,
 	listPracticeGroupsOptions,
 	listPracticesOptions,
@@ -297,7 +297,7 @@ function AutomatedReviewSection({ workspaceSlug }: { workspaceSlug: string }) {
 	const reviewSettingsQuery = useQuery(
 		getPracticeReviewSettingsOptions({ path: { workspaceSlug } }),
 	);
-	const bindingsQuery = useQuery(listAgentsOptions({ path: { workspaceSlug } }));
+	const bindingsQuery = useQuery(listModelAssignmentsOptions({ path: { workspaceSlug } }));
 	const settingsReviewModel = reviewModelOf(bindingsQuery);
 	const workspaceQuery = useQuery(getWorkspaceOptions({ path: { workspaceSlug } }));
 	const schedulesQuery = useQuery(listReviewSchedulesOptions({ path: { workspaceSlug } }));
@@ -469,8 +469,8 @@ function AutomatedReviewSection({ workspaceSlug }: { workspaceSlug: string }) {
 				}
 				workspace={{
 					enabled: workspaceQuery.data.practicesEnabled,
-					startsFromActivity: workspaceQuery.data.practiceReviewAutoTriggerEnabled,
-					startsOnRequest: workspaceQuery.data.practiceReviewManualTriggerEnabled,
+					startsFromActivity: workspaceQuery.data.practiceReviewEventEnabled,
+					startsOnRequest: workspaceQuery.data.practiceReviewRequestEnabled,
 					isSaving: updateFeatures.isPending,
 					onUpdate: (settings: PracticeReviewWorkspaceUpdate) =>
 						updateFeatures.mutate({ path: { workspaceSlug }, body: settings }),

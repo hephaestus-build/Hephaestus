@@ -1,0 +1,13 @@
+#### 🔴 Stop every role before Ask Hephaestus takes its names
+
+The conversation tables `mentor_conversation`, `mentor_entry` and `mentor_turn` become `conversation`, `conversation_entry` and `conversation_turn`. The table `workspace_agent_binding` becomes `workspace_model_assignment`. Their indexes, constraints, sequences and trigger functions follow. The workspace columns `practice_review_auto_trigger_enabled` and `practice_review_manual_trigger_enabled` become `practice_review_event_enabled` and `practice_review_request_enabled`. Stored values change with the code: `HEPH` answers become `ANSWER`, `MENTOR` model assignments become `CONVERSATION`, `MENTOR_TURN` usage becomes `CONVERSATION_TURN`, and `MENTOR_DIGEST` subscriptions and queued digest emails become `WEEKLY_DIGEST`. Person-data requests in progress and provider events still pending at the stop use the new store and step names. Unsubscribe links, Slack answers and their feedback buttons keep working.
+
+**Operators:** Apply this change in the stopped window before the 1.0.0 cut. Use [Stopped schema upgrades](https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades). Stop every runtime role before the migration and start only the upgraded roles afterward. An old server cannot read the renamed tables.
+
+Before the window, update what you keep outside the chart:
+
+- Prometheus queries and dashboards of your own: `mentor_turn_*` is `conversation_turn_*`, `mentor_live_streams` is `conversation_live_streams`, and the `surface` label value `mentor` is `conversation`. Log queries: `mentor.turn.ended`, `heph.turn.tool_call` and `heph.turn.model_call` are `conversation.turn.ended`, `conversation.turn.tool_call` and `conversation.turn.model_call`. The shipped alert rules and dashboards already use the new names.
+- Environment of an image outside the chart: `HEPHAESTUS_MENTOR_TURN_*` is `HEPHAESTUS_CONVERSATION_TURN_*`, and `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_CAPACITY` and `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_PERIOD` are `HEPHAESTUS_RATE_LIMIT_CONVERSATION_TURNS_CAPACITY` and `HEPHAESTUS_RATE_LIMIT_CONVERSATION_TURNS_PERIOD`. Settings under `hephaestus.mentor.*` are under `hephaestus.conversation.*`. `HEPHAESTUS_MENTOR_CONVERSATION_RETENTION` stays retired: the server still refuses to start while it is set, so use `HEPHAESTUS_FEEDBACK_RETENTION`.
+- API clients: `/api/workspaces/{slug}/mentor/…` is `/api/workspaces/{slug}/conversation/…`, and `/api/workspaces/{slug}/agents` is `/api/workspaces/{slug}/model-assignments`.
+
+To roll back, stop every role and restore the verified backup from before the migration before starting the previous version.

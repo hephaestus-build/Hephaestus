@@ -487,7 +487,7 @@ function memberSetupState(
 	const models = data?.aiOptions.find((option) => option.choice === choice)?.models ?? [];
 	const workspaceName = data?.workspaceName ?? "this workspace";
 	// Whether any choice would bring Hephaestus here, so the question names it.
-	const conversationSetUp = data?.aiOptions.some((option) => option.mentorReady) === true;
+	const conversationSetUp = data?.aiOptions.some((option) => option.conversationReady) === true;
 	let intro = "Your answer controls future AI requests across all your workspaces.";
 	if (firstVisit) {
 		intro = conversationSetUp

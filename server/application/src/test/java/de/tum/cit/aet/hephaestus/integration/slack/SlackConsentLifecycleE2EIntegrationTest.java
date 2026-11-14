@@ -9,7 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.adapter.ReviewJobService;
-import de.tum.cit.aet.hephaestus.agent.mentor.weeklydigest.WeeklyDigestSubscriptions;
+import de.tum.cit.aet.hephaestus.agent.conversation.weeklydigest.WeeklyDigestSubscriptions;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityRepository;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ProviderEventStore;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackChannelConsentService;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackMonitoredChannelDTO;
+import de.tum.cit.aet.hephaestus.integration.slack.conversation.SlackConversationIdentityResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackChannelConsentEventRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
@@ -29,15 +30,14 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelR
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelConsentGate;
+import de.tum.cit.aet.hephaestus.integration.slack.events.SlackConversationService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackIngestService;
-import de.tum.cit.aet.hephaestus.integration.slack.events.SlackMentorService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentGate;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackPersonErasureService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.identity.SlackRosterIdentityResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.interactivity.SlackInteractivityHandler;
-import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackAppHomeService;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
@@ -154,7 +154,7 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
 
     private final JsonMapper mapper = JsonMapper.builder().build();
 
-    private SlackConversationTestSupport support;
+    private SlackThreadTestSupport support;
     private SlackMessageService slackMessageService;
     private SlackChannelConsentService consentService;
     private SlackIngestService ingestService;
@@ -168,7 +168,7 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
     @BeforeEach
     void setUp() {
         databaseTestUtils.cleanDatabase();
-        support = new SlackConversationTestSupport(jdbcTemplate);
+        support = new SlackThreadTestSupport(jdbcTemplate);
 
         IdentityProvider provider = identityProviderRepository
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
@@ -176,15 +176,15 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
                         new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")));
         Workspace workspace = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("slack-e2e-lifecycle"));
         workspaceId = workspace.getId();
-        u1MemberId = SlackConversationTestSupport.accountWithIdentity(accounts, identities, provider, 100L, "e2e-u1");
+        u1MemberId = SlackThreadTestSupport.accountWithIdentity(accounts, identities, provider, 100L, "e2e-u1");
         memberships.createMembership(workspace, u1MemberId, Membership.WorkspaceRole.MEMBER);
-        u2MemberId = SlackConversationTestSupport.accountWithIdentity(accounts, identities, provider, 200L, "e2e-u2");
+        u2MemberId = SlackThreadTestSupport.accountWithIdentity(accounts, identities, provider, 200L, "e2e-u2");
         memberships.createMembership(workspace, u2MemberId, Membership.WorkspaceRole.MEMBER);
         practice = savePractice(workspace);
 
         SlackWorkspaceResolver workspaceResolver = mock(SlackWorkspaceResolver.class);
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(workspaceId));
-        SlackMentorIdentityResolver identityResolver = mock(SlackMentorIdentityResolver.class);
+        SlackConversationIdentityResolver identityResolver = mock(SlackConversationIdentityResolver.class);
         SlackRosterIdentityResolver roster = mock(SlackRosterIdentityResolver.class);
         when(roster.displayName(workspaceId, TEAM, "U1")).thenReturn(Optional.of("A person"));
         when(roster.humanAccountId(workspaceId, TEAM, "U1", "A person")).thenReturn(Optional.of(u1MemberId));
@@ -229,7 +229,7 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
                 new SlackParticipantConsentService(participantConsentRepository),
                 new SlackPersonErasureService(messageRepository, threadRepository, conversationFeedbackErasure),
                 slackMessageService,
-                mock(SlackMentorService.class),
+                mock(SlackConversationService.class),
                 mock(WeeklyDigestSubscriptions.class));
     }
 
@@ -277,10 +277,10 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
                 .findByWorkspaceIdAndSlackChannelIdAndSlackThreadTs(workspaceId, C1, rootTs)
                 .orElseThrow()
                 .getId();
-        SlackConversationTestSupport.BoundConversation u1Conv = seedBoundConversation(settledThreadId, u1MemberId);
+        SlackThreadTestSupport.BoundConversation u1Conv = seedBoundConversation(settledThreadId, u1MemberId);
         UUID u1Obs = u1Conv.resultId();
         UUID u1Fb = u1Conv.feedbackId();
-        SlackConversationTestSupport.BoundConversation u2Conv = seedBoundConversation(settledThreadId, u2MemberId);
+        SlackThreadTestSupport.BoundConversation u2Conv = seedBoundConversation(settledThreadId, u2MemberId);
         UUID u2Obs = u2Conv.resultId();
         UUID u2Fb = u2Conv.feedbackId();
 
@@ -376,8 +376,8 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
         return n == null ? 0 : n;
     }
 
-    private SlackConversationTestSupport.BoundConversation seedBoundConversation(long threadId, long aboutUserId) {
-        return SlackConversationTestSupport.seedBoundConversation(
+    private SlackThreadTestSupport.BoundConversation seedBoundConversation(long threadId, long aboutUserId) {
+        return SlackThreadTestSupport.seedBoundConversation(
                 reviews,
                 assignments,
                 reviewItems,
@@ -392,6 +392,6 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
     }
 
     private Practice savePractice(Workspace ws) {
-        return SlackConversationTestSupport.newPractice(practiceVersions, ws, "e2e-practice");
+        return SlackThreadTestSupport.newPractice(practiceVersions, ws, "e2e-practice");
     }
 }

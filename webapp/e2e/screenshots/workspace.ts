@@ -6,14 +6,14 @@
 import { HttpResponse, http } from "msw";
 
 import type {
-	AgentBinding,
+	ModelAssignment,
 	ConsentStatus,
 	CurrentUserView,
 	FeatureFlags,
 	IntegrationCatalogEntry,
 	ItemRef,
-	MentorConversation,
-	CursorPageDtoMentorEntry,
+	Conversation,
+	CursorPageDtoConversationEntry,
 	PracticeGroupStanding,
 	PracticePageFeedback,
 	PracticeProfileOverview,
@@ -359,7 +359,7 @@ const practiceFeedback: Wire<PracticePageFeedback>[] =
 
 const minutesAgo = (minutes: number) => new Date(NOW.getTime() - minutes * 60_000);
 
-const entries: CursorPageDtoMentorEntry = {
+const entries: CursorPageDtoConversationEntry = {
 	content: [
 		entry({
 			id: "entry-1",
@@ -371,7 +371,7 @@ const entries: CursorPageDtoMentorEntry = {
 		entry({
 			id: "entry-2",
 			seq: 2,
-			kind: "HEPH",
+			kind: "ANSWER",
 			turnStatus: "DONE",
 			text: [
 				"The description of #223 says what the new queue-depth metric is, but not how to see it.",
@@ -387,7 +387,7 @@ const entries: CursorPageDtoMentorEntry = {
 	],
 };
 
-const conversation: MentorConversation = {
+const conversation: Conversation = {
 	activeTurns: [],
 	id: entries.content[0]?.conversationId,
 	lastAnswerAt: minutesAgo(3),
@@ -443,8 +443,8 @@ const workspaceDetail: Wire<Workspace> = {
 	hasSlackToken: false,
 	id: 1,
 	installationId: 4242,
-	practiceReviewAutoTriggerEnabled: true,
-	practiceReviewManualTriggerEnabled: true,
+	practiceReviewEventEnabled: true,
+	practiceReviewRequestEnabled: true,
 	practicesEnabled: true,
 	providerType: "GITHUB",
 	publicActivityEnabled: false,
@@ -466,7 +466,7 @@ const integrations: IntegrationCatalogEntry[] = [
 	{ connected: false, displayName: "Outline", kind: "OUTLINE" },
 ];
 
-const agents: AgentBinding[] = [
+const agents: ModelAssignment[] = [
 	{
 		dataHandlingTier: "IN_HOUSE",
 		enabled: true,
@@ -478,7 +478,7 @@ const agents: AgentBinding[] = [
 	{
 		dataHandlingTier: "IN_HOUSE",
 		enabled: true,
-		purpose: "MENTOR",
+		purpose: "CONVERSATION",
 		ready: true,
 		servedTiers: ["IN_HOUSE"],
 		workspaceModelId: 1,
@@ -513,7 +513,7 @@ export const handlers = (role: WorkspaceMembership["role"]) => [
 	http.get("*/workspaces", () => HttpResponse.json([workspace])),
 	http.get(ws, () => HttpResponse.json(workspaceDetail)),
 	http.get(`${ws}/connections/catalog`, () => HttpResponse.json(integrations)),
-	http.get(`${ws}/agents`, () => HttpResponse.json(agents)),
+	http.get(`${ws}/model-assignments`, () => HttpResponse.json(agents)),
 	http.get(`${ws}/practices`, () => HttpResponse.json(feedbackModes.practices)),
 	http.get(`${ws}/practice-groups`, () => HttpResponse.json(feedbackModes.groups)),
 	http.get(`${ws}/practices/review-settings`, () => HttpResponse.json(feedbackModes.settings)),
@@ -526,12 +526,12 @@ export const handlers = (role: WorkspaceMembership["role"]) => [
 	http.get(`${ws}/practice-groups/standings`, () => HttpResponse.json(groupStandings)),
 	http.get(`${ws}/practice-profile/overview`, () => HttpResponse.json(overview)),
 	http.get(`${ws}/practices/feedback/practice-page`, () => HttpResponse.json(practiceFeedback)),
-	http.get(`${ws}/mentor/conversation`, () => HttpResponse.json(conversation)),
-	http.get(`${ws}/mentor/entries`, () => HttpResponse.json(entries)),
+	http.get(`${ws}/conversation`, () => HttpResponse.json(conversation)),
+	http.get(`${ws}/conversation/entries`, () => HttpResponse.json(entries)),
 	// An open stream with no events: each screen shows one moment. The long retry keeps the browser
 	// from reconnecting, and from showing that live updates paused, while it captures.
 	http.get(
-		`${ws}/mentor/events`,
+		`${ws}/conversation/events`,
 		() =>
 			new HttpResponse("retry: 3600000\n\n", { headers: { "Content-Type": "text/event-stream" } }),
 	),

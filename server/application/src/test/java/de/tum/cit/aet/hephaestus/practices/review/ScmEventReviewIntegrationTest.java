@@ -1800,7 +1800,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
             var published = executor.submit(() -> publish(prepared));
             awaitLatch(read.reading());
             var workspace = workspaces.findById(workspaceId).orElseThrow();
-            workspace.getFeatures().setPracticeReviewAutoTriggerEnabled(false);
+            workspace.getFeatures().setPracticeReviewEventEnabled(false);
             workspaces.saveAndFlush(workspace);
             read.release().countDown();
             published.get(30, TimeUnit.SECONDS);
@@ -3434,7 +3434,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     void shouldWithholdAutomaticEventsBeforePinningWhenActivityReviewsAreOff() {
         var prepared = prepare(IdentityProviderType.GITLAB, false);
         var workspace = workspaces.findById(prepared.item().workspaceId()).orElseThrow();
-        workspace.getFeatures().setPracticeReviewAutoTriggerEnabled(false);
+        workspace.getFeatures().setPracticeReviewEventEnabled(false);
         workspaces.saveAndFlush(workspace);
         publish(prepared);
         var event = event(prepared);
@@ -3452,7 +3452,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     void shouldStopRequestedScansBeforeCaptureWhenRequestsAreOff(ReviewOrigin origin) {
         var prepared = prepare(IdentityProviderType.GITLAB, false);
         var workspace = workspaces.findById(prepared.item().workspaceId()).orElseThrow();
-        workspace.getFeatures().setPracticeReviewManualTriggerEnabled(false);
+        workspace.getFeatures().setPracticeReviewRequestEnabled(false);
         workspaces.saveAndFlush(workspace);
         long account = Objects.requireNonNull(jdbc.queryForObject(
                 "SELECT account_id FROM membership WHERE workspace_id=?", Long.class, workspace.getId()));

@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.ModelPurpose;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
@@ -87,7 +87,7 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
         assertThat(created.hasApiKey()).isTrue();
         assertThat(created.apiKeyLast4()).isEqualTo("9999");
         assertThat(created.connectionPlatform()).isEqualTo(LlmConnectionPlatform.AZURE);
-        assertThat(created.purposes()).containsExactly(AgentPurpose.PRACTICE_REVIEW, AgentPurpose.MENTOR);
+        assertThat(created.purposes()).containsExactly(ModelPurpose.PRACTICE_REVIEW, ModelPurpose.CONVERSATION);
 
         assertThat(listedConnection(workspace, created.id())).hasValueSatisfying(listed -> {
             assertThat(listed.slug()).isEqualTo("my-openai");

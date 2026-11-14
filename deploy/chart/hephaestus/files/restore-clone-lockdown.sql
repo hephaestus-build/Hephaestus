@@ -16,20 +16,20 @@ UPDATE workspace
 SET practice_delivery_status = 'PAUSED',
     practice_rollout_revision = practice_rollout_revision + 1,
     practice_config_version = practice_config_version + 1,
-    practice_review_auto_trigger_enabled = FALSE,
-    practice_review_manual_trigger_enabled = FALSE;
+    practice_review_event_enabled = FALSE,
+    practice_review_request_enabled = FALSE;
 
 -- Hephaestus answers wherever a conversation model binding is enabled; disable every one, and an admin re-enables them under AI models.
-UPDATE workspace_agent_binding
+UPDATE workspace_model_assignment
 SET enabled = FALSE,
     updated_at = now()
-WHERE purpose = 'MENTOR';
+WHERE purpose = 'CONVERSATION';
 
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM instance_settings WHERE id = 1 AND NOT silent_mode_engaged)
         OR EXISTS (SELECT 1 FROM workspace WHERE practice_delivery_status <> 'PAUSED')
-        OR EXISTS (SELECT 1 FROM workspace_agent_binding WHERE purpose = 'MENTOR' AND enabled)
+        OR EXISTS (SELECT 1 FROM workspace_model_assignment WHERE purpose = 'CONVERSATION' AND enabled)
     THEN
         RAISE EXCEPTION 'restore clone lockdown did not engage';
     END IF;

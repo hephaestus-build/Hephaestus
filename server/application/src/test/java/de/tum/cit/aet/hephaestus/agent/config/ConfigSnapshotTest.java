@@ -38,7 +38,7 @@ class ConfigSnapshotTest extends BaseUnitTest {
 
     @Test
     void freezesOneResolutionAndPreservesModelIdentityWhenRepriced() {
-        var binding = mock(WorkspaceAgentBinding.class);
+        var binding = mock(WorkspaceModelAssignment.class);
         var resolver = mock(LlmModelResolver.class);
         when(binding.getTimeoutSeconds()).thenReturn(600);
         when(binding.getDataHandlingTier()).thenReturn(DataHandlingTier.IN_HOUSE);

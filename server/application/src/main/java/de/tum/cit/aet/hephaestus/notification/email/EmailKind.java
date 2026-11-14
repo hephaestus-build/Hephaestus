@@ -17,7 +17,7 @@ public enum EmailKind {
     PRODUCT_FEEDBACK("product-feedback", true),
     PRODUCT_FEEDBACK_UPDATE("product-feedback-update", true),
     /** The note that a weekly digest is ready, when the developer has no Slack identity. */
-    MENTOR_DIGEST("mentor-digest", true);
+    WEEKLY_DIGEST("weekly-digest", true);
 
     private final String templateName;
     private final boolean optional;

@@ -4,13 +4,13 @@
  * deployed release answers at all.
  *
  *   node scripts/qual-staging-hold.ts -- node scripts/qual-turn-smoke.ts --target staging \
- *     --mentor-url https://<host>/api/workspaces/<slug>/mentor --token-file <file> [--minutes 5]
+ *     --conversation-url https://<host>/api/workspaces/<slug>/conversation --token-file <file> [--minutes 5]
  *   node scripts/qual-staging-hold.ts -- node scripts/qual-turn-smoke.ts --target staging --await-workspace <id>
  *
  * The token file holds a member's bearer token; it is read, never printed. Where no token may leave a browser, the
  * member posts the question in the signed-in app and --await-workspace judges the first turn that the workspace gets
  * after the smoke starts. The turn is judged from its rows:
- * the mentor_turn ends DONE, its TURN run ends COMPLETED, a conversation sandbox held the conversation while it ran, at
+ * the conversation_turn ends DONE, its TURN run ends COMPLETED, a conversation sandbox held the conversation while it ran, at
  * least one model call was recorded for it, its holder renewed the run's lease at least once, and the server's longest
  * context read stayed within 20 s. The last two catch a holder that loses its lease even when a later attempt ends.
  */
@@ -24,11 +24,11 @@ import { Evidence, RULES } from "./lib/qual-evidence.ts";
 import { type RowOf, scrapeAll, type Shape, sqlRows } from "./lib/qual-state.ts";
 
 const USAGE =
-	"node scripts/qual-turn-smoke.ts --target k3d|staging (--mentor-url <https://host/api/workspaces/<slug>/mentor> --token-file <file> [--question <text>] | --await-workspace <id> [--await-minutes 10]) [--minutes 5]";
+	"node scripts/qual-turn-smoke.ts --target k3d|staging (--conversation-url <https://host/api/workspaces/<slug>/conversation> --token-file <file> [--question <text>] | --await-workspace <id> [--await-minutes 10]) [--minutes 5]";
 const { values } = parseArgs({
 	options: {
 		...COMMON,
-		"mentor-url": { type: "string" },
+		"conversation-url": { type: "string" },
 		"token-file": { type: "string" },
 		question: {
 			type: "string",
@@ -41,16 +41,16 @@ const { values } = parseArgs({
 });
 const common = commonFrom(values, USAGE);
 const { cluster } = common;
-const mentorUrl = values["mentor-url"];
+const conversationUrl = values["conversation-url"];
 const tokenFile = values["token-file"];
 const awaitWorkspace =
 	values["await-workspace"] === undefined ? null : Number(values["await-workspace"]);
 if (
 	awaitWorkspace === null
-		? mentorUrl === undefined || tokenFile === undefined
+		? conversationUrl === undefined || tokenFile === undefined
 		: !Number.isSafeInteger(awaitWorkspace)
 ) {
-	throw new Error(`give --mentor-url and --token-file, or --await-workspace <id>\n${USAGE}`);
+	throw new Error(`give --conversation-url and --token-file, or --await-workspace <id>\n${USAGE}`);
 }
 
 const TURN = {
@@ -124,9 +124,9 @@ async function watchTurn(turnId: string, errors: string[]): Promise<Watched> {
 	while (Date.now() < deadline) {
 		[turn] = await sqlRows(
 			cluster,
-			`SELECT id, conversation_id, status, attempt, run_id, failure_cause, failed_call, started_at, finished_at FROM mentor_turn WHERE id = '${turnId}'`,
+			`SELECT id, conversation_id, status, attempt, run_id, failure_cause, failed_call, started_at, finished_at FROM conversation_turn WHERE id = '${turnId}'`,
 			errors,
-			"mentor_turn",
+			"conversation_turn",
 			TURN,
 		);
 		if (turn !== undefined) {
@@ -228,7 +228,7 @@ function leaseMisses(watched: Watched): string[] {
 async function turnToJudge(errors: string[]): Promise<{ id: string } | { refused: string }> {
 	if (awaitWorkspace === null) {
 		const submitted = await submitTurn(
-			mentorUrl ?? "",
+			conversationUrl ?? "",
 			readFileSync(tokenFile ?? "", "utf8").trim(),
 			{
 				requestId: randomUUID(),
@@ -246,9 +246,9 @@ async function turnToJudge(errors: string[]): Promise<{ id: string } | { refused
 	while (Date.now() < deadline) {
 		const [turn] = await sqlRows(
 			cluster,
-			`SELECT id FROM mentor_turn WHERE workspace_id = ${awaitWorkspace} AND created_at >= '${evidence.started.toISOString()}'::timestamptz ORDER BY created_at LIMIT 1`,
+			`SELECT id FROM conversation_turn WHERE workspace_id = ${awaitWorkspace} AND created_at >= '${evidence.started.toISOString()}'::timestamptz ORDER BY created_at LIMIT 1`,
 			errors,
-			"mentor_turn",
+			"conversation_turn",
 			{ id: "string" },
 		);
 		if (turn !== undefined || errors.length > 0) {
@@ -278,7 +278,7 @@ async function smoke(): Promise<void> {
 	const watched = await watchTurn(submitted.id, errors);
 	const [usage] = await sqlRows(
 		cluster,
-		`SELECT count(*)::int AS rows, coalesce(sum(total_calls), 0)::int AS calls FROM llm_usage_event WHERE source_type = 'MENTOR_TURN' AND source_id = '${submitted.id}'`,
+		`SELECT count(*)::int AS rows, coalesce(sum(total_calls), 0)::int AS calls FROM llm_usage_event WHERE source_type = 'CONVERSATION_TURN' AND source_id = '${submitted.id}'`,
 		errors,
 		"llm_usage_event",
 		{ rows: "number", calls: "number" },

@@ -16,7 +16,7 @@ const mockConnection: LlmConnection = {
 	displayName: "OpenAI production",
 	authMode: "BEARER",
 	apiProtocol: "openai-responses",
-	purposes: ["PRACTICE_REVIEW", "MENTOR"],
+	purposes: ["PRACTICE_REVIEW", "CONVERSATION"],
 	baseUrl: "https://openai-production.example.com/openai",
 	enabled: true,
 	hasApiKey: true,

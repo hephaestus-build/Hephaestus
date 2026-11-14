@@ -175,7 +175,7 @@ public class FeedbackReadService {
                 copy.getWriteStartedAt(),
                 copy.getExternalUrl(),
                 copy.getExternalRef(),
-                copy.getMentorEntryId(),
+                copy.getConversationEntryId(),
                 copy.getPostedAt(),
                 copy.getStopReason(),
                 copy.getLastError(),

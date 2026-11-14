@@ -13,11 +13,11 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
+import de.tum.cit.aet.hephaestus.agent.conversation.turn.ConversationTurnAdmission;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRunKind;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
-import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnAdmission;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRun;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
@@ -25,9 +25,9 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
+import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
-import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
@@ -51,7 +51,7 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
 
     private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
     private final JsonMapper mapper = new JsonMapper();
-    private final MentorTurnAccess turns = mock(MentorTurnAccess.class);
+    private final ConversationTurnAccess turns = mock(ConversationTurnAccess.class);
     private final AgentRuns runs = mock(AgentRuns.class);
     private final ReviewSnapshotQuery reviews = mock(ReviewSnapshotQuery.class);
     private final ProxyRoutingService routing =
@@ -112,10 +112,10 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
 
         var route = routing.resolve(ProxyIdentity.of(jwt));
 
-        assertThat(route.principalDescription()).isEqualTo("mentor-turn:" + jwt.id());
+        assertThat(route.principalDescription()).isEqualTo("conversation-turn:" + jwt.id());
         assertThat(route.baseUrl()).isEqualTo("https://models.example/v1");
         assertThat(route.workspaceId()).isEqualTo(7L);
-        assertThat(route.attempt().sourceType()).isEqualTo(UsageSourceType.MENTOR_TURN);
+        assertThat(route.attempt().sourceType()).isEqualTo(UsageSourceType.CONVERSATION_TURN);
         assertThat(route.attempt().sourceId()).isEqualTo(jwt.id());
         assertThat(route.attempt().number()).isEqualTo(3);
         assertThat(route.attempt().runId()).isEqualTo(jwt.runId());
@@ -173,21 +173,21 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
                 BigDecimal.ONE,
                 null,
                 null);
-        var admission = new MentorTurnAdmission(
+        var admission = new ConversationTurnAdmission(
                         "model-1",
                         price,
-                        new MentorTurnAdmission.Route(
+                        new ConversationTurnAdmission.Route(
                                 "openai-responses", "https://models.example/v1", UsageFundingSource.WORKSPACE, 1L, 2L),
                         null,
                         null,
                         null)
                 .toJson();
-        var row = new MentorTurnAccess.TurnState(
+        var row = new ConversationTurnAccess.TurnState(
                 jwt.id(),
                 UUID.randomUUID(),
                 jwt.epoch(),
-                MentorTurn.Status.RUNNING,
-                MentorTurn.Surface.APP,
+                ConversationTurn.Status.RUNNING,
+                ConversationTurn.Surface.APP,
                 Instant.EPOCH,
                 admission);
         when(turns.find(jwt.workspaceId(), jwt.id())).thenReturn(Optional.of(row));

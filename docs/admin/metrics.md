@@ -215,11 +215,11 @@ A turn has a second attempt only after a lease expiry ([Server runtime](./runtim
 
 | Prometheus name                            | Type      | Labels    | Meaning                                                                 |
 | ------------------------------------------ | --------- | --------- | ----------------------------------------------------------------------- |
-| `mentor_turn_started_total`                | Counter   | none      | Attempts that a server handed to the sandbox driver                  |
-| `mentor_turn_completed_total`              | Counter   | `outcome` | Attempts that ended                                                     |
-| `mentor_turn_retried_total`                | Counter   | none      | Turns that went back to the queue after a lease expiry                  |
-| `mentor_turn_queued`                       | Gauge     | none      | Turns that wait for a server, sampled by the server every 30 seconds    |
-| `mentor_turn_queue_wait_seconds`           | Histogram | none      | From a question to the start of its first attempt, also while an earlier question of its conversation runs |
+| `conversation_turn_started_total`          | Counter   | none      | Attempts that a server handed to the sandbox driver                  |
+| `conversation_turn_completed_total`        | Counter   | `outcome` | Attempts that ended                                                     |
+| `conversation_turn_retried_total`          | Counter   | none      | Turns that went back to the queue after a lease expiry                  |
+| `conversation_turn_queued`                 | Gauge     | none      | Turns that wait for a server, sampled by the server every 30 seconds    |
+| `conversation_turn_queue_wait_seconds`     | Histogram | none      | From a question to the start of its first attempt, also while an earlier question of its conversation runs |
 | `llm_proxy_upstream_stalled_total`         | Counter   | `apiProtocol` | conversation model calls and streamed review model calls that the server's LLM proxy cut after the first-byte or the idle bound |
 | `resilience4j_circuitbreaker_state`        | Gauge     | `name`, `state` | The provider breaker of each connection, named `llm-connection-<scope>-<connection id>`. `state="open"` is 1 while it refuses calls |
 | `resilience4j_circuitbreaker_not_permitted_calls_total` | Counter | `name`, `kind` | Model calls that a provider breaker refused |
@@ -234,11 +234,11 @@ A turn has a second attempt only after a lease expiry ([Server runtime](./runtim
 | `agent_sandbox_dispatch_failure_total`   | Counter   | none      | Dispatch passes that failed to request the sandbox of a due run. It tries again at the next pass |
 | `agent_sandbox_reaper_failure_total`       | Counter   | none      | Sandbox reaper passes or claim deletes that failed. It tries each again next pass |
 | `agent_sandbox_revoked_total`            | Counter   | `reason`  | Live sandboxes that the server took back before the reaper would: `unisolated` for a sandbox whose network policy did not hold |
-| `mentor_turn_duration_seconds`             | Histogram | none      | An attempt, from its claim to its end                                   |
+| `conversation_turn_duration_seconds`       | Histogram | none      | An attempt, from its claim to its end                                   |
 | `agent_run_first_token_seconds`          | Histogram | `kind`, `start` | From the run start to the first part of the answer. `kind="turn"`, `start="cold"` or `"warm"`         |
-| `mentor_turn_cost_usd`                     | Summary   | none      | The cost of the calls of one attempt that ended by its end, in US dollars                            |
-| `mentor_turn_claim_failure_total`          | Counter   | none      | Claims and starts of a turn that failed with an error                   |
-| `mentor_live_streams`                      | Gauge     | none      | Live Hephaestus streams that the app holds open on this server                |
+| `conversation_turn_cost_usd`               | Summary   | none      | The cost of the calls of one attempt that ended by its end, in US dollars                            |
+| `conversation_turn_claim_failure_total`    | Counter   | none      | Claims and starts of a turn that failed with an error                   |
+| `conversation_live_streams`                | Gauge     | none      | Live Hephaestus streams that the app holds open on this server                |
 
 `outcome` is one of `success`, `stopped`, `failed`, or `lease_expired`.
 Slack delivery uses the [outbox metrics](#outbox-metrics), with `kind="SLACK_POST"`.
@@ -247,7 +247,7 @@ Slack delivery uses the [outbox metrics](#outbox-metrics), with `kind="SLACK_POS
 Web and Slack turns both count.
 An attempt that ends before any part of an answer records no first-token time.
 
-`mentor_turn_cost_usd` has `_count`, `_sum` and `_max` series.
+`conversation_turn_cost_usd` has `_count`, `_sum` and `_max` series.
 An attempt records a cost only when it made a model call and each of its ended calls has a price.
 
 Servers record most of these series.
@@ -258,8 +258,8 @@ The share of attempts that did not succeed shows problems that developers see.
 This query gives that share for the last hour:
 
 ```promql
-sum(increase(mentor_turn_completed_total{outcome=~"failed|lease_expired"}[1h]))
-  / sum(increase(mentor_turn_completed_total[1h]))
+sum(increase(conversation_turn_completed_total{outcome=~"failed|lease_expired"}[1h]))
+  / sum(increase(conversation_turn_completed_total[1h]))
 ```
 
 A high `lease_expired` share shows sandbox drivers that stop during turns, or turns whose calls reach no server.
@@ -285,13 +285,13 @@ A call that the end of its turn cancelled is not a failure.
 
 The turn row keeps the cause, so the cause stays after the server stops:
 
-| Column of `mentor_turn` | Holds |
+| Column of `conversation_turn` | Holds |
 |---|---|
 | `failure_cause` | The reason of the log line |
 | `failed_call` | The kind of the last failed model call of the attempt. From the provider: an exception class, `upstream_status`, `upstream_stalled`, `upstream_paused` or a stream outcome such as `upstream_idle`. From the proxy: a refusal such as `refused_budget`, or `gateway_error`. |
 | `failed_call_status` | The HTTP status that the provider or the proxy sent for that call, if one was sent |
 
-The model calls of an attempt are rows of `llm_usage_event`: `source_type` is `MENTOR_TURN`, `source_id` is the turn and `source_attempt` is the attempt.
+The model calls of an attempt are rows of `llm_usage_event`: `source_type` is `CONVERSATION_TURN`, `source_id` is the turn and `source_attempt` is the attempt.
 Each row keeps its first failure kind and optional HTTP status in `call_failure`, and its database recording time in `failed_at`.
 These fields survive a server restart and do not contain a provider response body.
 Late usage reports and repricing do not change them.
@@ -305,7 +305,7 @@ A turn that admission declines, for example because the budget is spent, is logg
 A turn whose second attempt loses its lease fails on the server role, which logs it at `INFO` as `Conversation turn lost its holder`.
 Its `failure_cause` is `its lease expired on its last attempt`.
 
-An increase in `mentor_turn_claim_failure_total` shows a server that claims turns but cannot start them.
+An increase in `conversation_turn_claim_failure_total` shows a server that claims turns but cannot start them.
 The server fails each turn that it cannot start, and claims the next one.
 A claim that fails answers the loop's pull with `503`. The loop then pulls again, maybe from another server.
 [Conversation runtime § Leases and retries](/contributor/unified-pi-runtime#leases-and-retries) tells what happens to the turns of a sandbox that stops.
@@ -499,7 +499,7 @@ histogram_quantile(0.95, sum by (uri, le) (rate(http_server_requests_seconds_buc
 `hikaricp_connections_acquire_seconds` has buckets at 1, 5, 10, 50, 100 and 500 milliseconds, and at 1, 5, 10 and 30 seconds.
 `agent_job_duration_seconds` has buckets from 1 second to 4 hours, so a review of many minutes has a percentile.
 `agent_run_first_token_seconds` has buckets from 0.5 to 60 seconds, with one at the conversation objective's 10 seconds.
-`mentor_turn_duration_seconds` has buckets from 1 second to 10 minutes.
+`conversation_turn_duration_seconds` has buckets from 1 second to 10 minutes.
 The roles register both turn timers at zero when they start.
 
 1. When the limit is reached, first inspect the actual `uri` tag values.

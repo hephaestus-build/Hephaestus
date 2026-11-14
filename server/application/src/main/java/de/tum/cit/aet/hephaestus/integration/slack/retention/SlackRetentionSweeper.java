@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.slack.retention;
 
+import de.tum.cit.aet.hephaestus.conversation.ConversationEntryService;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -7,7 +8,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
-import de.tum.cit.aet.hephaestus.mentor.MentorEntryService;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -53,17 +53,17 @@ public class SlackRetentionSweeper {
     private final SlackMessageRepository slackMessageRepository;
     private final ConnectionService connectionService;
     private final SlackRetentionPurger retentionPurger;
-    private final MentorEntryService mentorEntries;
+    private final ConversationEntryService conversationEntries;
 
     public SlackRetentionSweeper(
             SlackMessageRepository slackMessageRepository,
             ConnectionService connectionService,
             SlackRetentionPurger retentionPurger,
-            MentorEntryService mentorEntries) {
+            ConversationEntryService conversationEntries) {
         this.slackMessageRepository = slackMessageRepository;
         this.connectionService = connectionService;
         this.retentionPurger = retentionPurger;
-        this.mentorEntries = mentorEntries;
+        this.conversationEntries = conversationEntries;
     }
 
     @Scheduled(cron = "0 30 3 * * *")
@@ -126,7 +126,7 @@ public class SlackRetentionSweeper {
                 int done;
                 int inWorkspace = 0;
                 do {
-                    done = mentorEntries.redactCopyingToolResultsWrittenBefore(workspaceId, cutoff, COPY_BATCH);
+                    done = conversationEntries.redactCopyingToolResultsWrittenBefore(workspaceId, cutoff, COPY_BATCH);
                     inWorkspace += done;
                 } while (done == COPY_BATCH && inWorkspace < MAX_COPIES_PER_RUN);
                 if (inWorkspace >= MAX_COPIES_PER_RUN) {

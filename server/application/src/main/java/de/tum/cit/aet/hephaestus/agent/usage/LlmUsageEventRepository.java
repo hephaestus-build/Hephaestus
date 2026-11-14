@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.usage;
 
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -20,7 +20,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UUID> {
     /**
-     * The runs among the ledger rows of {@code e}: one per job attempt and one per mentor turn attempt. Every call of an
+     * The runs among the ledger rows of {@code e}: one per job attempt and one per conversation turn attempt. Every call of an
      * attempt, a practice script call included, carries the job or turn id and the attempt number, so it counts toward
      * that run and never as a run of its own.
      */
@@ -165,7 +165,7 @@ public interface LlmUsageEventRepository extends JpaRepository<LlmUsageEvent, UU
           AND e.call_failure IS NOT NULL
         ORDER BY e.failed_at DESC, e.id DESC LIMIT 1
         """)
-    Optional<MentorTurn.FailedCall> latestFailure(
+    Optional<ConversationTurn.FailedCall> latestFailure(
             @Param("workspaceId") long workspaceId, @Param("runId") UUID runId, @Param("epoch") int epoch);
 
     /**

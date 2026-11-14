@@ -6,7 +6,7 @@ import { nonEmpty } from "@/lib/search-params";
 import { listFacet } from "./AppliedFacetPills";
 import {
 	disagreementFacet,
-	hasAssessmentFilter,
+	hasObservationFilter,
 	markFilterPills,
 	type PracticeFacetOption,
 } from "./ResultFilters";
@@ -36,7 +36,7 @@ function hasProblemFacet(search: ProblemsSearch): boolean {
 	return (
 		(search.severity?.length ?? 0) > 0 ||
 		search.currentness !== undefined ||
-		hasAssessmentFilter(search)
+		hasObservationFilter(search)
 	);
 }
 
