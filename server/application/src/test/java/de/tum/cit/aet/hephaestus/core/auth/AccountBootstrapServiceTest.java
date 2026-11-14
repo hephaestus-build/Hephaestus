@@ -14,11 +14,13 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventData;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventWriter;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.event.RoleChangedEvent;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -33,16 +35,13 @@ class AccountBootstrapServiceTest extends BaseUnitTest {
 
     private final AccountRepository accountRepository = mock(AccountRepository.class);
     private final AuthEventWriter auditWriter = mock(AuthEventWriter.class);
+    private final List<Object> notices = new ArrayList<>();
 
     private AccountBootstrapService serviceWithToken(String configuredToken) {
         AuthProperties props = mock(AuthProperties.class);
         when(props.bootstrapToken()).thenReturn(configuredToken);
         return new AccountBootstrapService(
-                accountRepository,
-                new AuthEventLogger(auditWriter),
-                props,
-                Clock.systemUTC(),
-                mock(ApplicationEventPublisher.class));
+                accountRepository, new AuthEventLogger(auditWriter), props, Clock.systemUTC(), notices::add);
     }
 
     @Test
@@ -90,5 +89,19 @@ class AccountBootstrapServiceTest extends BaseUnitTest {
         verify(auditWriter).write(event.capture());
         assertThat(event.getValue().type()).isEqualTo(AuthEvent.EventType.APP_ROLE_CHANGED);
         assertThat(event.getValue().details()).contains("bootstrap-token");
+        assertThat(notices).isEmpty();
+    }
+
+    @Test
+    void shouldNotifyARecoveryBootstrapAfterTheInstanceHasHadAnAdministrator() {
+        AccountBootstrapService service = serviceWithToken(TOKEN);
+        when(accountRepository.promoteToFirstAdminIfNoneExists(7L)).thenReturn(1);
+        when(accountRepository.lockBootstrapAndCheckAdministratorHistory()).thenReturn(true);
+        service.bootstrapFirstAdmin(7L, TOKEN);
+        assertThat(notices).singleElement().isInstanceOfSatisfying(RoleChangedEvent.class, change -> {
+            assertThat(change.accountId()).isEqualTo(7L);
+            assertThat(change.actorAccountId()).isEqualTo(7L);
+            assertThat(change.role()).isEqualTo(RoleChangedEvent.Role.ADMIN);
+        });
     }
 }

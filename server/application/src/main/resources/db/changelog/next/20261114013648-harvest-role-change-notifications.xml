@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794580948952-1" author="hephaestus">
+        <sql><![CDATA[
+UPDATE agent_action
+SET state = CASE WHEN write_started_at IS NOT NULL THEN 'UNCERTAIN' ELSE 'CANCELLED' END,
+    stop_reason = CASE WHEN write_started_at IS NOT NULL THEN 'LEASE_LOST_AFTER_WRITE' ELSE 'WITHDRAWN' END,
+    payload = NULL,
+    leased_until = NULL,
+    ended_at = clock_timestamp(),
+    updated_at = clock_timestamp()
+WHERE kind = 'EMAIL'
+  AND state IN ('PROPOSED', 'ADMITTED', 'EXECUTING')
+  AND payload ->> 'kind' = 'ACCOUNT_SECURITY_CHANGED'
+  AND payload #>> '{event,kind}' = 'APP_ROLE_CHANGED';
+DELETE FROM event_publication
+WHERE event_type = 'de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent'
+  AND serialized_event::jsonb ->> 'kind' = 'APP_ROLE_CHANGED';
+        ]]></sql>
+    </changeSet>
+    <changeSet id="1794580948952-2" author="hephaestus"><sql splitStatements="false"><![CDATA[
+CREATE FUNCTION redact_role_change(notice jsonb, erased_account bigint) RETURNS jsonb
+LANGUAGE sql IMMUTABLE AS $redact$
+ WITH subject AS (
+   SELECT CASE WHEN notice ->> 'accountId' = erased_account::text
+     THEN notice - 'accountId' ELSE notice END AS redacted)
+ SELECT CASE WHEN notice ->> 'actorAccountId' = erased_account::text
+   THEN (subject.redacted - 'actorAccountId') || '{"actorAnonymized":true}'::jsonb
+   ELSE subject.redacted END FROM subject
+$redact$;
+CREATE OR REPLACE FUNCTION guard_agent_action() RETURNS trigger LANGUAGE plpgsql AS $_$
+BEGIN
+ IF ROW(NEW.id,NEW.workspace_id,NEW.kind,NEW.lane_key,NEW.idempotency_key,NEW.subject_account_id,NEW.max_attempts,NEW.created_at)
+    IS DISTINCT FROM ROW(OLD.id,OLD.workspace_id,OLD.kind,OLD.lane_key,OLD.idempotency_key,OLD.subject_account_id,OLD.max_attempts,OLD.created_at) THEN
+  RAISE EXCEPTION 'an action identity is immutable' USING ERRCODE='55000';
+ END IF;
+ IF OLD.state IN ('DONE','UNCERTAIN','FAILED','CANCELLED') THEN
+  RAISE EXCEPTION 'an ended action is immutable' USING ERRCODE='55000';
+ END IF;
+ IF NEW.state <> OLD.state AND NOT (
+    (OLD.state = 'PROPOSED' AND NEW.state IN ('ADMITTED','CANCELLED')) OR
+    (OLD.state = 'ADMITTED' AND NEW.state IN ('EXECUTING','CANCELLED')) OR
+    (OLD.state = 'EXECUTING' AND NEW.state IN ('ADMITTED','DONE','UNCERTAIN','FAILED','CANCELLED'))) THEN
+  RAISE EXCEPTION 'action transition % -> % is not allowed', OLD.state, NEW.state USING ERRCODE='23514';
+ END IF;
+ IF NEW.lease_epoch <> OLD.lease_epoch THEN
+  IF NEW.state <> 'EXECUTING' OR NEW.lease_epoch <> OLD.lease_epoch + 1 OR NEW.attempts <> OLD.attempts + 1 THEN
+   RAISE EXCEPTION 'a claim takes the next epoch and the next attempt' USING ERRCODE='23514';
+  END IF;
+  IF OLD.state = 'EXECUTING' AND OLD.leased_until > clock_timestamp() THEN
+   RAISE EXCEPTION 'a live lease cannot be taken' USING ERRCODE='55000';
+  END IF;
+  IF OLD.state = 'EXECUTING' AND OLD.write_started_at IS NOT NULL AND OLD.kind IN ('EMAIL') THEN
+   RAISE EXCEPTION 'an at-most-once action whose write started is never taken again' USING ERRCODE='55000';
+  END IF;
+ ELSIF NEW.state = 'EXECUTING' AND OLD.state <> 'EXECUTING' THEN
+  RAISE EXCEPTION 'a claim takes the next epoch' USING ERRCODE='23514';
+ END IF;
+ IF NEW.payload IS DISTINCT FROM OLD.payload AND NEW.payload IS NOT NULL AND NOT (
+    OLD.kind = 'EMAIL' AND OLD.payload ->> 'kind' = 'ROLE_CHANGED' AND (
+      NEW.payload = jsonb_set(OLD.payload, '{event,change}',
+        redact_role_change(OLD.payload #> '{event,change}', (OLD.payload #>> '{event,change,actorAccountId}')::bigint)) OR
+      NEW.payload = jsonb_set(OLD.payload, '{event,change}',
+        redact_role_change(OLD.payload #> '{event,change}', (OLD.payload #>> '{event,change,accountId}')::bigint)))) THEN
+  RAISE EXCEPTION 'an action payload changes only to erase role-notice identities' USING ERRCODE='55000';
+ END IF;
+ IF NEW.write_started_at IS DISTINCT FROM OLD.write_started_at AND NOT (
+    (OLD.write_started_at IS NULL AND OLD.state = 'EXECUTING' AND NEW.state = 'EXECUTING' AND NEW.lease_epoch = OLD.lease_epoch) OR
+    (NEW.write_started_at IS NULL AND OLD.state = 'EXECUTING' AND NEW.state = 'ADMITTED')) THEN
+  RAISE EXCEPTION 'a write fence is set under the lease and cleared only by a proven retry' USING ERRCODE='55000';
+ END IF;
+ RETURN NEW;
+END $_$;
+]]></sql></changeSet>
+    <changeSet id="1794580948952-3" author="hephaestus"><sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION guard_agent_action() RETURNS trigger LANGUAGE plpgsql AS $_$
+BEGIN
+ IF ROW(NEW.id,NEW.workspace_id,NEW.kind,NEW.lane_key,NEW.idempotency_key,NEW.subject_account_id,NEW.max_attempts,NEW.created_at)
+    IS DISTINCT FROM ROW(OLD.id,OLD.workspace_id,OLD.kind,OLD.lane_key,OLD.idempotency_key,OLD.subject_account_id,OLD.max_attempts,OLD.created_at) THEN
+  RAISE EXCEPTION 'an action identity is immutable' USING ERRCODE='55000';
+ END IF;
+ IF OLD.state IN ('DONE','UNCERTAIN','FAILED','CANCELLED') THEN
+  RAISE EXCEPTION 'an ended action is immutable' USING ERRCODE='55000';
+ END IF;
+ IF NEW.state <> OLD.state AND NOT (
+    (OLD.state = 'PROPOSED' AND NEW.state IN ('ADMITTED','CANCELLED')) OR
+    (OLD.state = 'ADMITTED' AND NEW.state IN ('EXECUTING','CANCELLED')) OR
+    (OLD.state = 'EXECUTING' AND NEW.state IN ('ADMITTED','DONE','UNCERTAIN','FAILED','CANCELLED'))) THEN
+  RAISE EXCEPTION 'action transition % -> % is not allowed', OLD.state, NEW.state USING ERRCODE='23514';
+ END IF;
+ IF NEW.lease_epoch <> OLD.lease_epoch THEN
+  IF NEW.state <> 'EXECUTING' OR NEW.lease_epoch <> OLD.lease_epoch + 1 OR NEW.attempts <> OLD.attempts + 1 THEN
+   RAISE EXCEPTION 'a claim takes the next epoch and the next attempt' USING ERRCODE='23514';
+  END IF;
+  IF OLD.state = 'EXECUTING' AND OLD.leased_until > clock_timestamp() THEN
+   RAISE EXCEPTION 'a live lease cannot be taken' USING ERRCODE='55000';
+  END IF;
+  IF OLD.state = 'EXECUTING' AND OLD.write_started_at IS NOT NULL AND OLD.kind IN ('EMAIL') THEN
+   RAISE EXCEPTION 'an at-most-once action whose write started is never taken again' USING ERRCODE='55000';
+  END IF;
+ ELSIF NEW.state = 'EXECUTING' AND OLD.state <> 'EXECUTING' THEN
+  RAISE EXCEPTION 'a claim takes the next epoch' USING ERRCODE='23514';
+ END IF;
+ IF NEW.payload IS DISTINCT FROM OLD.payload AND NEW.payload IS NOT NULL AND NOT COALESCE((
+    OLD.kind = 'EMAIL' AND OLD.payload ->> 'kind' = 'ROLE_CHANGED' AND (
+      NEW.payload = jsonb_set(OLD.payload, '{event,change}',
+        redact_role_change(OLD.payload #> '{event,change}', (OLD.payload #>> '{event,change,actorAccountId}')::bigint)) OR
+      NEW.payload = jsonb_set(OLD.payload, '{event,change}',
+        redact_role_change(OLD.payload #> '{event,change}', (OLD.payload #>> '{event,change,accountId}')::bigint)))), false) THEN
+  RAISE EXCEPTION 'an action payload changes only to erase role-notice identities' USING ERRCODE='55000';
+ END IF;
+ IF NEW.write_started_at IS DISTINCT FROM OLD.write_started_at AND NOT (
+    (OLD.write_started_at IS NULL AND OLD.state = 'EXECUTING' AND NEW.state = 'EXECUTING' AND NEW.lease_epoch = OLD.lease_epoch) OR
+    (NEW.write_started_at IS NULL AND OLD.state = 'EXECUTING' AND NEW.state = 'ADMITTED')) THEN
+  RAISE EXCEPTION 'a write fence is set under the lease and cleared only by a proven retry' USING ERRCODE='55000';
+ END IF;
+ RETURN NEW;
+END $_$;
+]]></sql></changeSet>
+</databaseChangeLog>

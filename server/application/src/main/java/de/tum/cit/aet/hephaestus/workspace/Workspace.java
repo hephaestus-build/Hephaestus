@@ -67,7 +67,7 @@ public class Workspace {
     /** Last sync time for organization teams structure */
     private @Nullable Instant teamsSyncedAt;
 
-    /** Last sync time for team membership assignments */
+    /** Last completed provider roster import */
     private @Nullable Instant membersSyncedAt;
 
     /** Last sync time for sub-issue relationships (parent-child) via GraphQL */

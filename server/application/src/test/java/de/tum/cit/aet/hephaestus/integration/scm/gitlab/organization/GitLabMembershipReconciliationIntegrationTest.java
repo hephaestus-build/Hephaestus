@@ -78,7 +78,6 @@ import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryTarget;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceReviewScope;
 import de.tum.cit.aet.hephaestus.workspace.spi.MembershipReviewSelection;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
@@ -213,9 +212,6 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
     private WorkspaceActorSelector actorSelector;
 
     @Autowired
-    private Clock clock;
-
-    @Autowired
     private AutowireCapableBeanFactory beanFactory;
 
     @Autowired
@@ -320,8 +316,7 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
                 teamSync,
                 gitLabUserService,
                 membershipService,
-                transactionTemplate,
-                clock);
+                transactionTemplate);
         // Its persistence context, as the container injects it.
         beanFactory.autowireBean(projection);
     }

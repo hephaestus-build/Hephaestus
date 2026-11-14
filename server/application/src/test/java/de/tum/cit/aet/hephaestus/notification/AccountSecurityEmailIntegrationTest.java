@@ -5,9 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionTestSupport;
-import de.tum.cit.aet.hephaestus.core.auth.AccountService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.core.settings.InstanceSettingsService;
 import de.tum.cit.aet.hephaestus.notification.email.CapturingJavaMailSender;
 import de.tum.cit.aet.hephaestus.notification.email.CapturingMailTestConfiguration;
@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
@@ -35,7 +36,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @TestPropertySource(properties = "hephaestus.email.from=noreply@hephaestus.test")
 class AccountSecurityEmailIntegrationTest extends BaseIntegrationTest {
     @Autowired
-    private AccountService accounts;
+    private ApplicationEventPublisher events;
 
     @Autowired
     private AccountRepository repository;
@@ -65,11 +66,13 @@ class AccountSecurityEmailIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldNotifyOnceForACommittedRoleChangeButNotItsNoOpReplay() throws MessagingException {
+    void shouldNotifyOnceForACommittedChangeEvenWhenItIsPublishedTwice() throws MessagingException {
         Account account = account(Account.Status.ACTIVE);
         long id = Objects.requireNonNull(account.getId());
-        accounts.adminSetRole(id, "APP_ADMIN", id);
-        accounts.adminSetRole(id, "APP_ADMIN", id);
+        var change =
+                new AccountSecurityChangedEvent(id, AccountSecurityChangedEvent.Kind.PASSKEY_CHANGED, Instant.now());
+        commit(change);
+        commit(change);
         ActionTestSupport.drain(executor, jdbc);
         var messages = sender.sent().stream()
                 .filter(m -> recipient(m).equals(account.getPrimaryEmail()))
@@ -80,19 +83,16 @@ class AccountSecurityEmailIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldSendNothingWhenTheRoleChangeRollsBack() {
+    void shouldSendNothingWhenTheChangeRollsBack() {
         Account account = account(Account.Status.ACTIVE);
         long id = Objects.requireNonNull(account.getId());
         new TransactionTemplate(transactions).executeWithoutResult(tx -> {
-            accounts.adminSetRole(id, "APP_ADMIN", id);
+            events.publishEvent(new AccountSecurityChangedEvent(
+                    id, AccountSecurityChangedEvent.Kind.PASSKEY_CHANGED, Instant.now()));
             tx.setRollbackOnly();
         });
         ActionTestSupport.drain(executor, jdbc);
         assertThat(sender.sent()).noneMatch(m -> recipient(m).equals(account.getPrimaryEmail()));
-        assertThat(repository.findById(id))
-                .get()
-                .extracting(Account::getAppRole)
-                .isEqualTo(Account.AppRole.USER);
     }
 
     @ParameterizedTest
@@ -102,9 +102,13 @@ class AccountSecurityEmailIntegrationTest extends BaseIntegrationTest {
     void shouldWithholdSecurityNoticesForInactiveAccounts(Account.Status status) {
         Account account = account(status);
         long id = Objects.requireNonNull(account.getId());
-        accounts.adminSetRole(id, "APP_ADMIN", id);
+        commit(new AccountSecurityChangedEvent(id, AccountSecurityChangedEvent.Kind.PASSKEY_CHANGED, Instant.now()));
         ActionTestSupport.drain(executor, jdbc);
         assertThat(sender.sent()).noneMatch(m -> recipient(m).equals(account.getPrimaryEmail()));
+    }
+
+    private void commit(AccountSecurityChangedEvent change) {
+        new TransactionTemplate(transactions).executeWithoutResult(tx -> events.publishEvent(change));
     }
 
     private Account account(Account.Status status) {

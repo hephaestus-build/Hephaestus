@@ -437,6 +437,36 @@ final class PersonErasureAllStoresFixture {
                         + "\"targetId\":1,\"sourceKey\":\"" + sourceKey + "\"}");
     }
 
+    /** Erasure removes personal references while preserving security notices addressed to other accounts. */
+    void seedRoleChangeNotifications(long account, long otherAccount) {
+        for (String field : List.of("accountId", "actorAccountId")) {
+            String event = "{\"accountId\":" + otherAccount + ",\"change\":{\"" + field + "\":" + account + "}}";
+            row(
+                    "event_publication",
+                    "event_type",
+                    "test.RoleChangeEmailRequested",
+                    "listener_id",
+                    "role-change-email-listener",
+                    "serialized_event",
+                    event);
+            String key = "email:role-erasure:" + UUID.randomUUID();
+            row(
+                    "agent_action",
+                    "kind",
+                    "EMAIL",
+                    "lane_key",
+                    key,
+                    "idempotency_key",
+                    key,
+                    "state",
+                    "ADMITTED",
+                    "subject_account_id",
+                    otherAccount,
+                    "payload",
+                    "{\"kind\":\"ROLE_CHANGED\",\"event\":" + event + "}");
+        }
+    }
+
     void seedScm(long user, long provider, long base) {
         row(
                 "organization",
@@ -803,6 +833,23 @@ final class PersonErasureAllStoresFixture {
                         "SELECT a.attname FROM pg_constraint c JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=ANY(c.conkey) WHERE c.contype='f' AND c.conrelid=CAST(? AS regclass) AND c.confrelid IN ('account'::regclass,'\"user\"'::regclass)",
                         row.table());
                 for (String reference : references) {
+                    if (row.table().equals("agent_action")
+                            && reference.equals("subject_account_id")
+                            && data.path("payload").path("kind").asString().equals("ROLE_CHANGED")) {
+                        assertThat(data.path(reference).asLong(-1))
+                                .as("the retained notice belongs to another recipient")
+                                .isNotEqualTo(person.account());
+                        for (String field : List.of("accountId", "actorAccountId")) {
+                            assertThat(data.path("payload")
+                                            .path("event")
+                                            .path("change")
+                                            .path(field)
+                                            .asLong(-1))
+                                    .as("the retained notice has no erased %s", field)
+                                    .isNotEqualTo(person.account());
+                        }
+                        continue;
+                    }
                     assertThat(data.path(reference).isNull())
                             .as("personal reference %s.%s", row.table(), reference)
                             .isTrue();

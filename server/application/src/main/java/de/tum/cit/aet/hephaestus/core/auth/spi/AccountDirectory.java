@@ -34,5 +34,11 @@ public interface AccountDirectory {
             String displayName,
             @Nullable AiChoice aiChoice,
             @Nullable Instant aiChoiceAt,
-            boolean feedbackDeliveryEnabled) {}
+            boolean feedbackDeliveryEnabled) {
+
+        /** Whether the account is in its erasure cooldown or already erased, so nothing may name it any more. */
+        public boolean erased() {
+            return status == Account.Status.DELETING || status == Account.Status.DELETED;
+        }
+    }
 }

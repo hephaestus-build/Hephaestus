@@ -19,7 +19,6 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
-import java.time.Clock;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +42,6 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
     private final TeamMembershipRepository teamMembershipRepository;
     private final WorkspaceActorSelector actorSelector;
     private final ConnectionRepository connections;
-    private final Clock clock;
 
     @PersistenceContext
     private @Nullable EntityManager entityManager;
@@ -55,8 +53,7 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
             OrganizationRepository organizationRepository,
             TeamMembershipRepository teamMembershipRepository,
             WorkspaceActorSelector actorSelector,
-            ConnectionRepository connections,
-            Clock clock) {
+            ConnectionRepository connections) {
         this.workspaceRepository = workspaceRepository;
         this.workspaceMembershipService = workspaceMembershipService;
         this.organizationMembershipRepository = organizationMembershipRepository;
@@ -64,7 +61,6 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
         this.teamMembershipRepository = teamMembershipRepository;
         this.actorSelector = actorSelector;
         this.connections = connections;
-        this.clock = clock;
     }
 
     /**
@@ -311,9 +307,6 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
         });
         // An owner stays owner whether or not the provider still lists them.
         workspaceMembershipService.syncWorkspaceMembers(workspace, desiredRoles);
-
-        workspace.setMembersSyncedAt(clock.instant());
-        workspaceRepository.save(workspace);
 
         return desiredRoles.size();
     }

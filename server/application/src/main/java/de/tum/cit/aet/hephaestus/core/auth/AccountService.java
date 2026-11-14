@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.event.AccountDeletionRequestedEvent;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
+import de.tum.cit.aet.hephaestus.core.event.RoleChangedEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.util.List;
@@ -215,8 +216,12 @@ public class AccountService {
                     .actingAccount(actingAccountId)
                     .details("{\"from\":\"" + previousRole.name() + "\",\"to\":\"" + role.name() + "\"}")
                     .record();
-            eventPublisher.publishEvent(new AccountSecurityChangedEvent(
-                    accountId, AccountSecurityChangedEvent.Kind.APP_ROLE_CHANGED, clock.instant()));
+            eventPublisher.publishEvent(RoleChangedEvent.instanceAdmin(
+                    accountId,
+                    previousRole == Account.AppRole.APP_ADMIN,
+                    role == Account.AppRole.APP_ADMIN,
+                    actingAccountId,
+                    clock.instant()));
         }
         return account;
     }

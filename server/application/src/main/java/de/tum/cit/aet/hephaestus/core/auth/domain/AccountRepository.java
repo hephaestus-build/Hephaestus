@@ -20,6 +20,19 @@ import org.springframework.stereotype.Repository;
 public interface AccountRepository extends JpaRepository<Account, Long> {
     Optional<Account> findByPasskeyUserHandle(String handle);
 
+    boolean existsByAppRole(Account.AppRole appRole);
+
+    /** Serializes the first-bootstrap decision across server replicas, including an initially empty admin set. */
+    @Query(
+            value = "SELECT count(pg_advisory_xact_lock(hashtextextended('account-admin-bootstrap',0)))",
+            nativeQuery = true)
+    long lockAdministratorBootstrap();
+
+    default boolean lockBootstrapAndCheckAdministratorHistory() {
+        lockAdministratorBootstrap();
+        return existsByAppRole(Account.AppRole.APP_ADMIN);
+    }
+
     @Modifying
     @Query(value = """
         INSERT INTO identity_restriction (id, provider_id, provider_user_key, team_key, kind)

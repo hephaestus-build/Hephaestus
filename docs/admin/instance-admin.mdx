@@ -29,6 +29,14 @@ Sensitive access changes require a recent sign-in.
 
 A connected provider account identifies a person. An instance role does not create workspace membership.
 
+When an instance admin grants or removes the instance-admin role, Hephaestus sends an email to the affected person and to the other instance admins.
+The email names who made the change, when, and links to the instance audit log.
+
+An admin who grants a higher role to their own account receives an email too. Lowering your own role sends none. Only the first bootstrap administrator of a fresh instance is silent.
+
+The `hephaestus.auth.bootstrap-admins` setting also grants the role. That email names the setting as the source.
+The email goes only to a verified address, and only if the instance [sends email](./production-setup#email).
+
 A force sign-out ends the current sessions only.
 The person can sign in again through their provider at once.
 

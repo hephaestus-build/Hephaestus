@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.spi.PeopleRegistry;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
+import de.tum.cit.aet.hephaestus.core.event.RoleChangedEvent;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -35,6 +36,8 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -191,14 +194,16 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
         assertThat(saved.getValue().getLinkedVia()).isEqualTo(Identity.LinkedVia.MANUAL);
     }
 
-    @Test
-    void jitCreate_whenOnBootstrapAllowlist_promotesToAppAdmin() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void jitCreate_whenOnBootstrapAllowlist_promotesToAppAdmin(boolean hadAdministrator) {
         when(identityRepository.findActiveByProviderSubject(eq(PROVIDER_ID), eq("sub-1"), any()))
                 .thenReturn(Optional.empty());
         when(verifiedEmailResolver.resolve(eq("github"), any()))
                 .thenReturn(new VerifiedEmailResolver.ResolvedEmail("u@v.de", true));
         when(adminBootstrapPolicy.shouldPromote(eq("github"), eq("sub-1"), any()))
                 .thenReturn(true);
+        when(accountRepository.lockBootstrapAndCheckAdministratorHistory()).thenReturn(hadAdministrator);
 
         var result =
                 service.resolveOrProvision("github", "sub-1", principal(), AuthIntentCookie.Intent.login(null, null));
@@ -207,6 +212,11 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
         assertThat(result.identityLinked())
                 .as("a JIT login is not an identity-link")
                 .isFalse();
+        if (hadAdministrator) {
+            var notice = ArgumentCaptor.forClass(RoleChangedEvent.class);
+            verify(events).publishEvent(notice.capture());
+            assertThat(notice.getValue().accountId()).isEqualTo(result.account().getId());
+        } else verify(events, never()).publishEvent(any(RoleChangedEvent.class));
     }
 
     @Test
