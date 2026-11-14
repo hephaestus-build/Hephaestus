@@ -939,6 +939,16 @@ Approval names the exact words, anchors and developer.
 Approve or reject is permitted only before a copy write begins or a send is claimed.
 A changed workspace policy cannot approve an older proposal implicitly.
 
+The send and the feedback gate read the work through its item source before they write.
+The source gives the reason when it cannot read the work, and each reason has its own stop reason.
+Removed work stops as `ITEM_GONE`.
+This covers deleted work, work whose content was erased, and work that this server no longer stores.
+An example is a document in a removed Outline collection.
+
+Work that this server may no longer read stops as `ITEM_NOT_VISIBLE`.
+Work whose consent ended stops as `CONSENT_WITHHELD`.
+A permission that this server lost while it still stores the work is never recorded as removed work.
+
 A write fence is not proof of visibility.
 Unknown visibility keeps feedback Unconfirmed and forbids automatic repeat writes.
 Readback records found copies and proved absence without guessing.

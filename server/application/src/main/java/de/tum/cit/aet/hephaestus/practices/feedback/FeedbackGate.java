@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.settings.spi.SilentModeQuery;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
@@ -218,7 +219,6 @@ public class FeedbackGate {
                         .allMatch(result -> Objects.equals(result.getDeveloperId(), feedback.getDeveloperId()))
                 && support.stream().map(Result::getId).distinct().count() == expectedResults
                 && reads.deliverable(support);
-        var itemSnapshot = reads.snapshot(feedback);
         boolean current = support.stream()
                 .allMatch(result -> reads.current(result) && sourceStates.get(result.getId()) == Currentness.CURRENT);
         boolean modelAllowed = policy.isPresent() && policy.get().getAiChoice() != AiChoice.NO_AI;
@@ -248,11 +248,7 @@ public class FeedbackGate {
                 approvalCurrent,
                 hasWriteFence);
         var workState = workStateRefusal(
-                feedback,
-                support,
-                itemSnapshot,
-                reads,
-                policy.map(this::deliversAfterMerge).orElse(false));
+                feedback, support, reads, policy.map(this::deliversAfterMerge).orElse(false));
         FeedbackStopReason refusal = null;
         if (review.isEmpty() || review.get().getStatus() == ReviewStatus.CANCELLED)
             refusal = FeedbackStopReason.REVIEW_CANCELLED;
@@ -325,9 +321,11 @@ public class FeedbackGate {
                 .toList();
     }
 
-    private Optional<ItemSnapshot> currentSnapshot(long workspaceId, long itemId) {
+    /** The work as it is now, or why it cannot be read: removed, no longer visible, or without consent. */
+    private CurrentWork currentWork(long workspaceId, long itemId) {
         var rows = basis.findItems(workspaceId, List.of(itemId));
-        if (rows.size() != 1 || rows.getFirst().getRemovedAt() != null) return Optional.empty();
+        if (rows.size() != 1 || rows.getFirst().getRemovedAt() != null)
+            return new CurrentWork.Unavailable(FeedbackStopReason.ITEM_GONE);
         var row = rows.getFirst();
         var ref = new ItemRef(
                 workspaceId,
@@ -337,7 +335,23 @@ public class FeedbackGate {
                 row.getParentId(),
                 row.getPath());
         var matching = sources.stream().filter(source -> source.supports(ref)).toList();
-        return matching.size() == 1 ? matching.getFirst().current(ref) : Optional.empty();
+        if (matching.size() != 1) return new CurrentWork.Unavailable(FeedbackStopReason.ITEM_NOT_VISIBLE);
+        try {
+            return new CurrentWork.Read(matching.getFirst().pin(ref, null));
+        } catch (ItemCaptureException unavailable) {
+            return switch (unavailable.code()) {
+                case ITEM_REMOVED -> new CurrentWork.Unavailable(FeedbackStopReason.ITEM_GONE);
+                case ITEM_NOT_VISIBLE -> new CurrentWork.Unavailable(FeedbackStopReason.ITEM_NOT_VISIBLE);
+                case CONSENT_WITHHELD -> new CurrentWork.Unavailable(FeedbackStopReason.CONSENT_WITHHELD);
+                default -> throw unavailable;
+            };
+        }
+    }
+
+    private sealed interface CurrentWork {
+        record Read(ItemSnapshot snapshot) implements CurrentWork {}
+
+        record Unavailable(FeedbackStopReason reason) implements CurrentWork {}
     }
 
     private boolean deliversAfterMerge(FeedbackBasisRepository.PolicyRow policy) {
@@ -353,18 +367,22 @@ public class FeedbackGate {
      * review of every practice again.
      */
     private static @Nullable FeedbackStopReason workStateRefusal(
-            Feedback feedback,
-            List<Result> support,
-            Optional<ItemSnapshot> snapshot,
-            GateReads reads,
-            boolean deliversAfterMerge) {
-        if (feedback.getDestination() != FeedbackDestination.ON_WORK || feedback.getItemId() == null) return null;
-        if (snapshot.isEmpty()) return FeedbackStopReason.ITEM_STATE_INELIGIBLE;
-        var state = snapshot.get().state();
+            Feedback feedback, List<Result> support, GateReads reads, boolean deliversAfterMerge) {
+        Long itemId = feedback.getItemId();
+        if (feedback.getDestination() != FeedbackDestination.ON_WORK || itemId == null) return null;
+        return switch (reads.work(itemId)) {
+            case CurrentWork.Unavailable(FeedbackStopReason reason) -> reason;
+            case CurrentWork.Read(ItemSnapshot snapshot) -> stateRefusal(support, snapshot, reads, deliversAfterMerge);
+        };
+    }
+
+    private static @Nullable FeedbackStopReason stateRefusal(
+            List<Result> support, ItemSnapshot snapshot, GateReads reads, boolean deliversAfterMerge) {
+        var state = snapshot.state();
         if (!deliversAfterMerge && "MERGED".equals(state.get("state"))) return FeedbackStopReason.ITEM_MERGED;
         if (!deliversAfterMerge && "CLOSED".equals(state.get("state"))) return FeedbackStopReason.ITEM_CLOSED;
         if ("DRAFT".equals(state.get("draftStatus"))) return FeedbackStopReason.ITEM_STATE_INELIGIBLE;
-        return eligibleState(support, snapshot.get(), reads) ? null : FeedbackStopReason.ITEM_STATE_INELIGIBLE;
+        return eligibleState(support, snapshot, reads) ? null : FeedbackStopReason.ITEM_STATE_INELIGIBLE;
     }
 
     private static boolean eligibleState(List<Result> support, ItemSnapshot snapshot, GateReads reads) {
@@ -399,7 +417,7 @@ public class FeedbackGate {
         private final Map<Long, Boolean> suppressed = new HashMap<>();
         private final Map<Long, Optional<PracticeVersion>> versionsById = new HashMap<>();
         private final Map<Long, Optional<Practice>> practicesById = new HashMap<>();
-        private final Map<Long, Optional<ItemSnapshot>> snapshots = new HashMap<>();
+        private final Map<Long, CurrentWork> works = new HashMap<>();
         private final Map<Long, FeedbackMode> modesByPractice = new HashMap<>();
         // Filled by prefetch for a batch; a single evaluation asks the evidence check for its own support.
         private @Nullable Set<UUID> deliverable;
@@ -449,10 +467,8 @@ public class FeedbackGate {
             return versionsById.computeIfAbsent(id, key -> versions.findByIdAndWorkspaceId(key, workspaceId));
         }
 
-        Optional<ItemSnapshot> snapshot(Feedback feedback) {
-            Long itemId = feedback.getItemId();
-            if (itemId == null) return Optional.empty();
-            return snapshots.computeIfAbsent(itemId, key -> currentSnapshot(workspaceId, key));
+        CurrentWork work(long itemId) {
+            return works.computeIfAbsent(itemId, key -> currentWork(workspaceId, key));
         }
 
         boolean current(Result result) {

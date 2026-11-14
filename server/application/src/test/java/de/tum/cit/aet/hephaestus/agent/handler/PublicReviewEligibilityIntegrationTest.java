@@ -31,7 +31,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -70,8 +69,8 @@ class PublicReviewEligibilityIntegrationTest extends AbstractFeedbackIntegration
         jdbc.update("UPDATE account SET feedback_delivery_enabled=true WHERE id=?", developerId);
         var item = new ItemRef(workspace.getId(), itemId, new ItemKind("scm.pull_request"), 42L, null, null);
         when(source.supports(item)).thenReturn(true);
-        when(source.current(item))
-                .thenReturn(Optional.of(ItemFixtures.snapshot(item, Map.of("state", "open"))
+        when(source.pin(item, null))
+                .thenReturn(ItemFixtures.snapshot(item, Map.of("state", "open"))
                         .version(new ItemVersion("v1", null))
                         .integration(new IntegrationRef(IntegrationKind.GITHUB, 1, null))
                         .label(ItemFixtures.label()
@@ -80,7 +79,7 @@ class PublicReviewEligibilityIntegrationTest extends AbstractFeedbackIntegration
                                 .noun("pull request")
                                 .integration(IntegrationKind.GITHUB)
                                 .build())
-                        .build()));
+                        .build());
         when(authorization.permitsForNewDelivery(
                         eq(workspace.getId()), any(), eq(SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)))
                 .thenAnswer(call -> call.<Collection<Result>>getArgument(1).stream()

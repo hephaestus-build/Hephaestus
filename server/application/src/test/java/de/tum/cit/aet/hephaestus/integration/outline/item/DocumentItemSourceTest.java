@@ -90,6 +90,7 @@ class DocumentItemSourceTest extends BaseUnitTest {
         document.setContentHash("body-hash");
         document.setTitle("Document");
         document.setBodyMarkdown("Full body");
+        when(documents.existsByWorkspaceIdAndIdAndDeletedAtIsNull(7L, 19L)).thenReturn(true);
         when(documents.findByWorkspaceIdAndIdForProjection(7L, 19L)).thenReturn(Optional.of(document));
         when(permission.identities(7L, 19L)).thenReturn(List.of());
         when(permission.permits(7L, 19L)).thenReturn(true);
@@ -152,9 +153,44 @@ class DocumentItemSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldReturnNoSnapshotForAnItemOwnedByAnotherWorkspace() {
-        assertThat(source.current(new ItemRef(8L, 41L, DocumentEvents.DOCUMENT, 19L, null, null)))
-                .isEmpty();
+    void shouldSayAnItemOwnedByAnotherWorkspaceIsRemovedThere() {
+        readyDocument();
+        assertCode(new ItemRef(8L, 41L, DocumentEvents.DOCUMENT, 19L, null, null), ItemCaptureCode.ITEM_REMOVED);
+    }
+
+    @Test
+    void shouldSayATombstonedDocumentIsRemovedNotInvisible() {
+        readyDocument();
+        when(documents.existsByWorkspaceIdAndIdAndDeletedAtIsNull(7L, 19L)).thenReturn(false);
+        assertCode(item, ItemCaptureCode.ITEM_REMOVED);
+    }
+
+    @Test
+    void shouldSayADocumentItsPeopleWithheldIsNotVisibleNotRemoved() {
+        readyDocument();
+        when(permission.permits(7L, 19L)).thenReturn(false);
+        assertCode(item, ItemCaptureCode.ITEM_NOT_VISIBLE);
+    }
+
+    @Test
+    void shouldSayADocumentOfADisconnectedOutlineIsNotVisible() {
+        readyDocument();
+        when(connections.findInWorkspace(7L, 21L)).thenReturn(Optional.empty());
+        assertCode(item, ItemCaptureCode.ITEM_NOT_VISIBLE);
+    }
+
+    @Test
+    void shouldSayADocumentWhoseContentWasErasedIsRemoved() {
+        readyDocument();
+        document.setContentHash(null);
+        assertCode(item, ItemCaptureCode.ITEM_REMOVED);
+    }
+
+    private void assertCode(ItemRef ref, ItemCaptureCode code) {
+        assertThatThrownBy(() -> source.pin(ref, null))
+                .isInstanceOfSatisfying(
+                        ItemCaptureException.class,
+                        failure -> assertThat(failure.code()).isEqualTo(code));
     }
 
     @ParameterizedTest

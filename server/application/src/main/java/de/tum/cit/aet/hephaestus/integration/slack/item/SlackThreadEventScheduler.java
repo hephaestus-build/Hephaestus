@@ -6,8 +6,12 @@ import de.tum.cit.aet.hephaestus.core.runtime.SweepRowFailures;
 import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadEvents;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FoundBy;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventInput;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.thread.SlackThreadCandidateSource;
@@ -87,13 +91,18 @@ public class SlackThreadEventScheduler {
                 Boolean recorded = transactions.execute(status -> {
                     var item = items.upsert(new ItemRegistration(
                             candidate.workspaceId(), ThreadEvents.THREAD, candidate.threadId(), null, null));
-                    var pinned = source.current(item);
-                    if (pinned.isEmpty()) return false;
+                    ItemSnapshot pinned;
+                    try {
+                        pinned = source.pin(item, null);
+                    } catch (ItemCaptureException unavailable) {
+                        // A removed, withheld or unreadable thread offers no review; its code is the source's.
+                        return false;
+                    }
                     items.record(new ItemEventInput(
                             candidate.workspaceId(),
                             item.itemId(),
                             ThreadEvents.SETTLED,
-                            pinned.get().version().value(),
+                            pinned.version().value(),
                             now,
                             FoundBy.SYNC,
                             null,
@@ -112,16 +121,25 @@ public class SlackThreadEventScheduler {
     @ApplicationModuleListener
     public void onReviewCompleted(ReviewCompleted event) {
         reviews.find(event.workspaceId(), event.reviewId()).ifPresent(review -> {
-            if (!ThreadEvents.THREAD.equals(review.item().kind()) || review.version() == null) return;
+            var reviewed = review.version();
+            if (!ThreadEvents.THREAD.equals(review.item().kind()) || reviewed == null) return;
             Long sourceId = review.item().sourceId();
             if (sourceId == null) return;
             threads.findByWorkspaceIdAndId(event.workspaceId(), sourceId).ifPresent(thread -> {
                 String reviewedThrough = thread.getLastTs();
                 if (reviewedThrough == null) return;
-                source.current(review.item())
-                        .filter(current -> current.version().equals(review.version()))
-                        .ifPresent(current -> candidates.markReviewed(event.workspaceId(), sourceId, reviewedThrough));
+                if (readsAt(review.item(), reviewed))
+                    candidates.markReviewed(event.workspaceId(), sourceId, reviewedThrough);
             });
         });
+    }
+
+    /** Whether the thread reads at {@code version} now. One that cannot be read stays unreviewed for a later offer. */
+    private boolean readsAt(ItemRef item, ItemVersion version) {
+        try {
+            return source.pin(item, null).version().equals(version);
+        } catch (ItemCaptureException unavailable) {
+            return false;
+        }
     }
 }

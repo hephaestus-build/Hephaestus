@@ -10,6 +10,10 @@ public enum FeedbackStopReason {
     CONVERSATION_EXPIRED,
     DELIVERY_UNCONFIRMED,
     ITEM_GONE,
+    /** Hephaestus may no longer read the work, for example after its access or connection ended. */
+    ITEM_NOT_VISIBLE,
+    /** Consent to read the work ended, for example in a Slack channel. */
+    CONSENT_WITHHELD,
     ITEM_CLOSED,
     ITEM_MERGED,
     ITEM_STATE_INELIGIBLE,
@@ -27,7 +31,6 @@ public enum FeedbackStopReason {
     STALE_ROLLOUT_REVISION,
     OUTSIDE_CURRENT_SCOPE,
     APPROVAL_STALE,
-    APPROVAL_NO_LONGER_ELIGIBLE,
     PRACTICE_REQUIRES_APPROVAL,
     BACKFILL_QUIET,
     RESULT_MARKED_INCORRECT,

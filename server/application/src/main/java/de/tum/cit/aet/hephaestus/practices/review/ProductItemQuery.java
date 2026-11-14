@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.exception.InvalidInputException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemChecksSource;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemFingerprintReader;
@@ -77,10 +78,6 @@ public class ProductItemQuery {
         return source(item).pinOccasion(item, version, eventId);
     }
 
-    public Optional<ItemSnapshot> current(ItemRef item) {
-        return source(item).current(item);
-    }
-
     private ItemSource source(ItemRef item) {
         var matched = sources.stream().filter(s -> s.supports(item)).toList();
         if (matched.size() != 1) throw new InvalidInputException("The item has no unambiguous source.");
@@ -93,9 +90,17 @@ public class ProductItemQuery {
                 .flatMap(resolver -> resolver.resolve(workspaceId, url).stream())
                 .limit(2)
                 .toList();
-        return matched.size() == 1 && current(matched.getFirst()).isPresent()
-                ? Optional.of(matched.getFirst())
-                : Optional.empty();
+        if (matched.size() != 1) return Optional.empty();
+        var item = matched.getFirst();
+        try {
+            source(item).pin(item, null);
+            return Optional.of(item);
+        } catch (ItemCaptureException unavailable) {
+            return switch (unavailable.code()) {
+                case ITEM_REMOVED, ITEM_NOT_VISIBLE, CONSENT_WITHHELD, SOURCE_NOT_READY -> Optional.empty();
+                default -> throw unavailable;
+            };
+        }
     }
 
     /**
@@ -154,14 +159,19 @@ public class ProductItemQuery {
             if (!readers.isEmpty())
                 return new FingerprintRead(readers.getFirst().fingerprints(item, kinds, occasion, mapper), null);
             var source = matching.getFirst();
-            var current = source.current(item);
-            return current.isEmpty()
-                    ? new FingerprintRead(Map.of(), "NO_CURRENT_WORK")
-                    // A source without its own reader captures only rows that this server stores.
-                    : new FingerprintRead(
-                            ItemSource.recordFingerprints(
-                                    source::capture, current.orElseThrow(), kinds, occasion, mapper),
-                            null);
+            ItemSnapshot current;
+            try {
+                current = source.pin(item, null);
+            } catch (ItemCaptureException unavailable) {
+                // Work that its source no longer shows, as current() named it; any other code is the read's failure.
+                if (unavailable.code() == ItemCaptureCode.ITEM_REMOVED
+                        || unavailable.code() == ItemCaptureCode.ITEM_NOT_VISIBLE)
+                    return new FingerprintRead(Map.of(), "NO_CURRENT_WORK");
+                throw unavailable;
+            }
+            // A source without its own reader captures only rows that this server stores.
+            return new FingerprintRead(
+                    ItemSource.recordFingerprints(source::capture, current, kinds, occasion, mapper), null);
         } catch (ItemCaptureException unavailable) {
             // Every source then reads as unverifiable, so the code is the only answer to why. It holds no content.
             log.info(

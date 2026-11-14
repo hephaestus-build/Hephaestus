@@ -10,6 +10,8 @@ import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
@@ -33,7 +35,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -42,6 +43,8 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -96,7 +99,7 @@ class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
         supportedPracticeId = result.getPracticeId();
         jdbc.update("UPDATE account SET feedback_delivery_enabled=true WHERE id=?", developerId);
         when(source.supports(supportedItem)).thenReturn(true);
-        when(source.current(supportedItem)).thenReturn(Optional.of(snapshot(supportedItem, "open", "v1")));
+        when(source.pin(supportedItem, null)).thenReturn(snapshot(supportedItem, "open", "v1"));
         when(authorization.permitsForNewDelivery(
                         eq(workspace.getId()), any(), eq(SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)))
                 .thenReturn(Set.of(result.getId()));
@@ -206,7 +209,7 @@ class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
     @Test
     void shouldRefuseChangedWorkAndClosedWorkAgainstThePersistedStateFilter() {
         supportOnWorkFeedback();
-        when(source.current(supportedItem)).thenReturn(Optional.of(snapshot(supportedItem, "open", "v2")));
+        when(source.pin(supportedItem, null)).thenReturn(snapshot(supportedItem, "open", "v2"));
         doReturn(new ProductItemQuery.FingerprintRead(Map.of(CORE, "b".repeat(64)), null))
                 .when(productItems)
                 .read(eq(supportedItem), any(), any());
@@ -214,7 +217,7 @@ class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
         doReturn(new ProductItemQuery.FingerprintRead(CURRENT_SOURCES, null))
                 .when(productItems)
                 .read(eq(supportedItem), any(), any());
-        when(source.current(supportedItem)).thenReturn(Optional.of(snapshot(supportedItem, "closed", "v1")));
+        when(source.pin(supportedItem, null)).thenReturn(snapshot(supportedItem, "closed", "v1"));
         var check = check();
         assertThat(check.reason()).isEqualTo(FeedbackStopReason.ITEM_STATE_INELIGIBLE);
         assertThat(check.facts().currentVersion()).isTrue();
@@ -223,25 +226,31 @@ class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
     @Test
     void shouldDeliverOnlyToWorkWhosePublishedDraftStatusTheVersionAllows() {
         supportOnWorkFeedback(resultWithStateFilter("draftStatus", "NOT_DRAFT"));
-        when(source.current(supportedItem))
-                .thenReturn(Optional.of(
-                        snapshot(supportedItem, Map.of("state", "OPEN", "draftStatus", "NOT_DRAFT"), "v1")));
+        when(source.pin(supportedItem, null))
+                .thenReturn(snapshot(supportedItem, Map.of("state", "OPEN", "draftStatus", "NOT_DRAFT"), "v1"));
         assertThat(check().allowed()).isTrue();
-        when(source.current(supportedItem))
-                .thenReturn(
-                        Optional.of(snapshot(supportedItem, Map.of("state", "OPEN", "draftStatus", "DRAFT"), "v1")));
+        when(source.pin(supportedItem, null))
+                .thenReturn(snapshot(supportedItem, Map.of("state", "OPEN", "draftStatus", "DRAFT"), "v1"));
         assertThat(check().reason()).isEqualTo(FeedbackStopReason.ITEM_STATE_INELIGIBLE);
         // A snapshot without the required dimension stays refused, as before the adapter published it.
-        when(source.current(supportedItem))
-                .thenReturn(Optional.of(
-                        snapshot(supportedItem, Map.of("state", "OPEN", "draft", "false", "merged", "false"), "v1")));
+        when(source.pin(supportedItem, null))
+                .thenReturn(
+                        snapshot(supportedItem, Map.of("state", "OPEN", "draft", "false", "merged", "false"), "v1"));
         assertThat(check().reason()).isEqualTo(FeedbackStopReason.ITEM_STATE_INELIGIBLE);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"ITEM_REMOVED,ITEM_GONE", "ITEM_NOT_VISIBLE,ITEM_NOT_VISIBLE", "CONSENT_WITHHELD,CONSENT_WITHHELD"})
+    void shouldWithholdUnreadableWorkWithItsOwnReason(ItemCaptureCode code, FeedbackStopReason reason) {
+        supportOnWorkFeedback(result());
+        when(source.pin(supportedItem, null)).thenThrow(new ItemCaptureException(code, "Unavailable"));
+        assertThat(check().reason()).isEqualTo(reason);
     }
 
     @Test
     void shouldAdmitAnyStateWhenTheVersionRequiresNone() {
         supportOnWorkFeedback(result());
-        when(source.current(supportedItem)).thenReturn(Optional.of(snapshot(supportedItem, Map.of(), "v1")));
+        when(source.pin(supportedItem, null)).thenReturn(snapshot(supportedItem, Map.of(), "v1"));
         assertThat(check().allowed()).isTrue();
     }
 
@@ -309,7 +318,7 @@ class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
     }
 
     private void workState(Map<String, String> state) {
-        when(source.current(supportedItem)).thenReturn(Optional.of(snapshot(supportedItem, state, "v1")));
+        when(source.pin(supportedItem, null)).thenReturn(snapshot(supportedItem, state, "v1"));
         when(authorization.permitsForNewDelivery(
                         eq(workspace.getId()), any(), eq(SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)))
                 .thenAnswer(call -> call.<Collection<Result>>getArgument(1).stream()
@@ -477,7 +486,7 @@ class FeedbackGateIntegrationTest extends AbstractFeedbackIntegrationTest {
             """);
         jdbc.update("UPDATE account SET feedback_delivery_enabled=true WHERE id=?", developerId);
         when(source.supports(supportedItem)).thenReturn(true);
-        when(source.current(supportedItem)).thenReturn(Optional.of(snapshot(supportedItem, "open", "v1")));
+        when(source.pin(supportedItem, null)).thenReturn(snapshot(supportedItem, "open", "v1"));
         when(authorization.permitsForNewDelivery(
                         eq(workspace.getId()), any(), eq(SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)))
                 .thenAnswer(call -> {

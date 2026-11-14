@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.result;
 
 import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.facts;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -23,6 +24,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryRefState;
@@ -570,7 +572,7 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
     void shouldReportAnUnknownStoredWorkVersionWhenNoStoredWorkCanBeRead() {
         var recorded = data.result(scenario, ResultOutcome.NOT_MET, Instant.now());
         var ref = productItems.require(recorded.getWorkspaceId(), recorded.getItemId());
-        assertThat(productItems.current(ref)).isEmpty();
+        assertThatThrownBy(() -> productItems.pin(ref, null)).isInstanceOf(ItemCaptureException.class);
         assertStoredWorkVersion(recorded, "UNKNOWN");
         assertStillAsRecorded(recorded);
     }
@@ -748,7 +750,7 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
         var recorded = data.result(work, ResultOutcome.NOT_MET, Instant.now(), Instant.now(), storedVersion(work));
         var kind = new SourceKind("scm.pull-request.core");
         var contribution = captureSource.capture(
-                productItems.current(ref).orElseThrow(),
+                productItems.pin(ref, null),
                 new CaptureRequest(recorded.getReviewId(), UUID.randomUUID(), 0, Set.of(kind), "3.0.0", 3));
         var facts = json.createObjectNode();
         try (var evidence = captureIndex.build(ref.kind(), Map.of(kind, contribution))) {
@@ -848,7 +850,7 @@ class ResultHistoryIntegrationTest extends BaseIntegrationTest {
 
     private String storedVersion(ReviewIntegrationData.Scenario work) {
         var ref = productItems.require(work.workspace().getId(), work.item().getId());
-        return productItems.current(ref).orElseThrow().version().value();
+        return productItems.pin(ref, null).version().value();
     }
 
     /** The conversation's overview and its detail read state the same comparison. */

@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.practices.profile.OwnReviewFilter;
 import de.tum.cit.aet.hephaestus.practices.profile.PracticeProfileReviewService;
@@ -56,13 +55,19 @@ public class ItemController {
         var item = items.require(ws.id(), itemId);
         Map<String, String> state;
         try {
-            state = items.current(item)
-                    .orElseThrow(() -> new EntityNotFoundException("Item", Long.toString(itemId)))
-                    .state();
+            state = items.pin(item, null).state();
         } catch (ItemCaptureException unavailable) {
-            if (unavailable.code() != ItemCaptureCode.VERSION_UNAVAILABLE) throw unavailable;
-            // Retained items can lack the provider revision needed to establish current facts.
-            return new ItemFactsDTO(trace.requireItem(ws.id(), itemId), List.of());
+            return switch (unavailable.code()) {
+                case ITEM_REMOVED, ITEM_NOT_VISIBLE, CONSENT_WITHHELD -> {
+                    var gone = new EntityNotFoundException("Item", Long.toString(itemId));
+                    gone.initCause(unavailable);
+                    throw gone;
+                }
+                // Retained items can lack the provider revision needed to establish current facts.
+                case VERSION_UNAVAILABLE, SOURCE_NOT_READY ->
+                    new ItemFactsDTO(trace.requireItem(ws.id(), itemId), List.of());
+                default -> throw unavailable;
+            };
         }
         return new ItemFactsDTO(
                 trace.requireItem(ws.id(), itemId),

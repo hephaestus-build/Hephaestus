@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -72,7 +73,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -194,10 +194,10 @@ class FeedbackPrivateHistoryIntegrationTest extends BaseIntegrationTest {
                         !unavailableItems.contains(call.<ItemRef>getArgument(0).itemId()));
         when(source.supports(any()))
                 .thenAnswer(call -> call.<ItemRef>getArgument(0).kind().equals(new ItemKind("scm.pull_request")));
-        when(source.current(any()))
-                .thenAnswer(call -> Optional.of(ItemFixtures.snapshot(call.getArgument(0), Map.of())
+        when(source.pin(any(), isNull()))
+                .thenAnswer(call -> ItemFixtures.snapshot(call.getArgument(0), Map.of())
                         .version(new ItemVersion(ITEM_VERSION, null))
-                        .build()));
+                        .build());
         doReturn(new ProductItemQuery.FingerprintRead(
                         Map.of(new SourceKind("scm.pull-request.core"), "a".repeat(64)), null))
                 .when(productItems)

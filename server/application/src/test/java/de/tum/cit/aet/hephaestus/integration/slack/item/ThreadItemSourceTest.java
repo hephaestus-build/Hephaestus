@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -101,23 +102,29 @@ class ThreadItemSourceTest extends BaseUnitTest {
     }
 
     private SlackThreadRepository.SettledCandidateRow readableThread() {
-        when(connections.findActiveConnections(7L, IntegrationKind.SLACK)).thenReturn(List.of(connection("T1", 21L)));
+        allowCapture();
+        lenient()
+                .when(connections.findActiveConnections(7L, IntegrationKind.SLACK))
+                .thenReturn(List.of(connection("T1", 21L)));
         var candidate = mock(SlackThreadRepository.SettledCandidateRow.class);
-        when(candidate.getSlackChannelId()).thenReturn("C1");
-        when(candidate.getSlackTeamId()).thenReturn("T1");
-        when(candidate.getSlackThreadTs()).thenReturn("1700000000.000000");
-        when(threads.findConsentedCandidateRow(7L, 19L)).thenReturn(Optional.of(candidate));
-        when(messages.countLiveTurns(7L, "C1", "1700000000.000000")).thenReturn(2L);
-        when(messages.countReadableTurns(7L, "C1", "1700000000.000000")).thenReturn(2L);
+        lenient().when(candidate.getSlackChannelId()).thenReturn("C1");
+        lenient().when(candidate.getSlackTeamId()).thenReturn("T1");
+        lenient().when(candidate.getSlackThreadTs()).thenReturn("1700000000.000000");
+        lenient().when(threads.findConsentedCandidateRow(7L, 19L)).thenReturn(Optional.of(candidate));
+        lenient().when(messages.countLiveTurns(7L, "C1", "1700000000.000000")).thenReturn(2L);
+        lenient()
+                .when(messages.countReadableTurns(7L, "C1", "1700000000.000000"))
+                .thenReturn(2L);
         return candidate;
     }
 
     private void readyThread() {
         var candidate = readableThread();
-        when(candidate.getLastTs()).thenReturn("1700000001.000000");
-        when(messages.findThreadMessages(anyLong(), any(), any(), any()))
+        lenient().when(candidate.getLastTs()).thenReturn("1700000001.000000");
+        lenient()
+                .when(messages.findThreadMessages(anyLong(), any(), any(), any()))
                 .thenReturn(List.of(turn("First", "U1", 55L), turn("Second", "U1", 55L)));
-        when(providers.findProviderId("SLACK", "https://slack.com")).thenReturn(Optional.of(3L));
+        lenient().when(providers.findProviderId("SLACK", "https://slack.com")).thenReturn(Optional.of(3L));
     }
 
     private void allowCapture() {
@@ -126,7 +133,7 @@ class ThreadItemSourceTest extends BaseUnitTest {
         thread.setSlackChannelId("C1");
         thread.setSlackThreadTs("1700000000.000000");
         thread.setLastTs("1700000001.000000");
-        when(threads.findByWorkspaceIdAndId(7L, 19L)).thenReturn(Optional.of(thread));
+        lenient().when(threads.findByWorkspaceIdAndId(7L, 19L)).thenReturn(Optional.of(thread));
     }
 
     @Test
@@ -229,10 +236,62 @@ class ThreadItemSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRefuseAThreadFromAnotherWorkspaceOrDisconnectedTeam() {
-        assertThat(source.current(new ItemRef(8L, 41L, ThreadEvents.THREAD, 19L, null, null)))
-                .isEmpty();
-        assertThat(source.current(item)).isEmpty();
+    void shouldSayAThreadFromAnotherWorkspaceIsRemovedThere() {
+        readyThread();
+        assertCode(new ItemRef(8L, 41L, ThreadEvents.THREAD, 19L, null, null), ItemCaptureCode.ITEM_REMOVED);
+    }
+
+    @Test
+    void shouldSayAThreadOfADisconnectedTeamIsNotVisible() {
+        readyThread();
+        when(connections.findActiveConnections(7L, IntegrationKind.SLACK)).thenReturn(List.of());
+        assertCode(item, ItemCaptureCode.ITEM_NOT_VISIBLE);
+    }
+
+    @Test
+    void shouldSayAThreadWhoseChannelConsentEndedIsWithheldNotRemoved() {
+        readyThread();
+        when(threads.findConsentedCandidateRow(7L, 19L)).thenReturn(Optional.empty());
+        assertCode(item, ItemCaptureCode.CONSENT_WITHHELD);
+    }
+
+    @Test
+    void shouldSayAThreadWithAWithheldParticipantIsWithheld() {
+        readyThread();
+        when(messages.countReadableTurns(7L, "C1", "1700000000.000000")).thenReturn(1L);
+        assertCode(item, ItemCaptureCode.CONSENT_WITHHELD);
+    }
+
+    @Test
+    void shouldSayAThreadWithNoLiveMessageIsRemoved() {
+        readyThread();
+        when(messages.countLiveTurns(7L, "C1", "1700000000.000000")).thenReturn(0L);
+        assertCode(item, ItemCaptureCode.ITEM_REMOVED);
+    }
+
+    @Test
+    void shouldSayAThreadWithNoStoredRowIsRemoved() {
+        readyThread();
+        when(threads.findByWorkspaceIdAndId(7L, 19L)).thenReturn(Optional.empty());
+        assertCode(item, ItemCaptureCode.ITEM_REMOVED);
+    }
+
+    @Test
+    void shouldSayAThreadWhoseMessagesWereAllErasedIsRemoved() {
+        readyThread();
+        var erased = new SlackThread();
+        erased.setWorkspaceId(7L);
+        erased.setSlackChannelId("C1");
+        erased.setSlackThreadTs("1700000000.000000");
+        when(threads.findByWorkspaceIdAndId(7L, 19L)).thenReturn(Optional.of(erased));
+        assertCode(item, ItemCaptureCode.ITEM_REMOVED);
+    }
+
+    private void assertCode(ItemRef ref, ItemCaptureCode code) {
+        assertThatThrownBy(() -> source.pin(ref, null))
+                .isInstanceOfSatisfying(
+                        ItemCaptureException.class,
+                        failure -> assertThat(failure.code()).isEqualTo(code));
     }
 
     @Test
@@ -255,7 +314,7 @@ class ThreadItemSourceTest extends BaseUnitTest {
     void shouldNotCreateAnIdentityNamespaceWhilePinningAThread() {
         readableThread();
         when(providers.findProviderId("SLACK", "https://slack.com")).thenReturn(Optional.empty());
-        assertThat(source.current(item)).isEmpty();
+        assertCode(item, ItemCaptureCode.ITEM_NOT_VISIBLE);
         verify(providers, never()).resolveProviderId("SLACK", "https://slack.com");
         verify(messages, never()).findThreadMessages(anyLong(), any(), any(), any());
     }

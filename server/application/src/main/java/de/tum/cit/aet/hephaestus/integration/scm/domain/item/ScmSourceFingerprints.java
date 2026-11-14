@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryMan
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -53,7 +54,7 @@ public class ScmSourceFingerprints implements ItemFingerprintReader {
         if (!item.kind().equals(ScmItemEvents.PULL_REQUEST)
                 && !item.kind().equals(ScmItemEvents.ISSUE)
                 && !item.kind().equals(ScmItemEvents.PULL_REQUEST_REVIEW)) return Map.of();
-        // Not current(): a removed or hidden item keeps its capture code, which the freshness read then names.
+        // Not readable(): a removed or hidden item keeps its capture code, which the freshness read then names.
         var snapshot = source.pin(item, null);
         var fingerprints = new HashMap<SourceKind, String>();
         var records = new HashSet<SourceKind>();
@@ -94,7 +95,7 @@ public class ScmSourceFingerprints implements ItemFingerprintReader {
                 .filter(kind -> !SourceFingerprint.contentAddressed(kind))
                 .collect(Collectors.toSet());
         if (records.isEmpty()) return;
-        var current = source.current(item);
+        var current = readable(item);
         if (current.isEmpty()) return;
         var snapshot = current.orElseThrow();
         var held = occasion == null ? null : held(item, snapshot, occasion);
@@ -112,6 +113,17 @@ public class ScmSourceFingerprints implements ItemFingerprintReader {
         if (!capture.readsClone(item.kind(), request)) return;
         var pinned = held != null ? held : snapshot;
         capture.fetch(transactions.read(() -> capture.reviewedRepository(pinned, read)));
+    }
+
+    /** The work now, or empty when it was removed or this server may no longer read it: no fingerprint then. */
+    private Optional<ItemSnapshot> readable(ItemRef item) {
+        try {
+            return Optional.of(source.pin(item, null));
+        } catch (ItemCaptureException unavailable) {
+            if (unavailable.code() == ItemCaptureCode.ITEM_REMOVED
+                    || unavailable.code() == ItemCaptureCode.ITEM_NOT_VISIBLE) return Optional.empty();
+            throw unavailable;
+        }
     }
 
     /**
