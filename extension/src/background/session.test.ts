@@ -6,6 +6,8 @@ import {
 	type RefreshOutcome,
 	type SessionRecord,
 	SessionStore,
+	transitionSession,
+	type SessionState,
 	type Tokens,
 } from "~/background/session";
 
@@ -42,19 +44,20 @@ function harness(initial: SessionRecord) {
 		.fn<(issuer: Issuer, refreshToken: string) => Promise<void>>()
 		.mockResolvedValue(undefined);
 	const onChange = vi.fn<(generation: number) => void>();
+	const write = vi.fn(async (next: SessionRecord) => {
+		record = structuredClone(next);
+	});
 	const store = new SessionStore({
 		storage: {
 			read: async () => structuredClone(record),
-			write: async (next) => {
-				record = structuredClone(next);
-			},
+			write,
 		},
 		refresh,
 		revoke,
 		now: () => NOW,
 		onChange,
 	});
-	return { store, refresh, revoke, onChange, current: () => record };
+	return { store, refresh, revoke, onChange, write, current: () => record };
 }
 
 /** Holds the next refresh until the test releases it. */
@@ -262,4 +265,71 @@ describe("SessionStore across an instance change", () => {
 		]);
 		expect(current().credentials).toStrictEqual(family(B, "b"));
 	});
+});
+
+describe("SessionStore when a new sign-in replaces a family during its refresh", () => {
+	it("revokes the replaced family and its late rotation, and keeps the new family", async () => {
+		const { store, refresh, revoke, current } = harness({
+			generation: 1,
+			epoch: 1,
+			credentials: family(A, "a", 0),
+		});
+		const reply = holdRefresh(refresh);
+		const pending = store.access();
+		await vi.waitFor(() => {
+			expect(refresh).toHaveBeenCalledOnce();
+		});
+		const { epoch } = await store.snapshot();
+		await expect(store.adopt(family(B, "b"), epoch)).resolves.toBe(true);
+		reply.resolve({ status: "ok", tokens: tokens("a2") });
+		await expect(pending).resolves.toBeUndefined();
+		expect(revoke.mock.calls).toStrictEqual([
+			[A, "refresh-a"],
+			[A, "refresh-a2"],
+		]);
+		expect(current().credentials).toStrictEqual(family(B, "b"));
+	});
+});
+
+describe("session transitions", () => {
+	const signedOut = { state: "signed-out", generation: 3, epoch: 2 } satisfies SessionState;
+	const signedIn = {
+		state: "signed-in",
+		generation: 3,
+		epoch: 2,
+		credentials: family(A, "a"),
+	} satisfies SessionState;
+
+	it.each([signedOut, signedIn])("rejects a late adoption in $state", (record) => {
+		expect(
+			transitionSession(record, { type: "adopt", epoch: 1, credentials: family(B, "late") }),
+		).toBeUndefined();
+	});
+
+	it.each(["end", "rotate"] as const)("rejects %s without the current family", (type) => {
+		for (const record of [signedOut, signedIn]) {
+			expect(
+				transitionSession(record, { type, refreshToken: "refresh-stale", tokens: tokens("late") }),
+			).toBeUndefined();
+		}
+	});
+	it("rejects a superseded refresh without a storage write", async () => {
+		const h = harness({ generation: 3, epoch: 2 });
+		await expect(
+			h.store.refresh({ token: "access-old", issuer: A, generation: 2, epoch: 1 }),
+		).resolves.toBeUndefined();
+		expect(h.current()).toStrictEqual({ generation: 3, epoch: 2 });
+		expect(h.refresh).not.toHaveBeenCalled();
+		expect(h.write).not.toHaveBeenCalled();
+	});
+});
+
+it("revokes the replaced family at its issuer after another sign-in", async () => {
+	const h = harness({ generation: 3, epoch: 2, credentials: family(A, "old") });
+	h.revoke.mockImplementationOnce(async () => {
+		expect(h.current()).toStrictEqual({ generation: 4, epoch: 3, credentials: family(B, "new") });
+		expect(h.onChange).toHaveBeenCalledWith(4);
+	});
+	await expect(h.store.adopt(family(B, "new"), 2)).resolves.toBe(true);
+	expect(h.revoke.mock.calls).toStrictEqual([[A, "refresh-old"]]);
 });

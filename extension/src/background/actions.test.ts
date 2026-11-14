@@ -16,6 +16,8 @@ import {
 	INTENT_LIFETIME_MS,
 	openAction,
 	previewAction,
+	transitionIntent,
+	type IntentState,
 } from "~/background/actions";
 import { type ContextEnvironment, WorkspaceDirectory } from "~/background/context";
 import { WorkerError } from "~/background/errors";
@@ -478,5 +480,63 @@ describe("what an intent is bound to", () => {
 			openAction(h.env, h.deps, SOURCE_TAB, "team", { kind: "request-review" }),
 		).rejects.toMatchObject({ code: "forbidden" });
 		expect(h.stored).toBeUndefined();
+	});
+});
+
+it("rejects binding or consuming an absent intent", () => {
+	expect(
+		transitionIntent({ state: "absent" }, { type: "bind", tabId: WINDOW_TAB }),
+	).toBeUndefined();
+	expect(
+		transitionIntent(
+			{ state: "absent" },
+			{ type: "consume", tabId: WINDOW_TAB, generation: 7, now: 0 },
+		),
+	).toBeUndefined();
+});
+
+it("cannot confirm an unbound intent", async () => {
+	const h = harness();
+	const id = await openAction(h.env, h.deps, SOURCE_TAB, "team", { kind: "request-review" });
+	await expect(confirmAction(h.env, h.deps, id, WINDOW_TAB)).rejects.toMatchObject({
+		code: "expired",
+	});
+	expect(h.api.requestReview).not.toHaveBeenCalled();
+});
+
+describe("confirmation transition guards", () => {
+	const bound = {
+		state: "bound",
+		id: "00000000-0000-4000-8000-000000000001",
+		generation: 7,
+		tabId: SOURCE_TAB,
+		pageUrl: PAGE,
+		workspaceSlug: "team",
+		itemId: ITEM.id,
+		action: { kind: "request-review" },
+		expiresAt: 100,
+		confirmationTabId: WINDOW_TAB,
+	} satisfies IntentState;
+
+	it.each([
+		{ name: "wrong tab", tabId: SOURCE_TAB, generation: 7, now: 100 },
+		{ name: "wrong generation", tabId: WINDOW_TAB, generation: 8, now: 100 },
+		{ name: "expired", tabId: WINDOW_TAB, generation: 7, now: 101 },
+	])("rejects consumption with $name", ({ tabId, generation, now }) => {
+		expect(transitionIntent(bound, { type: "consume", tabId, generation, now })).toBeUndefined();
+	});
+
+	it("consumes at the exact expiry boundary", () => {
+		expect(
+			transitionIntent(bound, { type: "consume", tabId: WINDOW_TAB, generation: 7, now: 100 }),
+		).toStrictEqual({ state: "absent" });
+	});
+
+	it("rejects rebinding without a write", async () => {
+		const h = harness();
+		const id = await h.launch();
+		const write = vi.spyOn(h.deps.store, "write");
+		await expect(bindConfirmation(h.deps, id, 99)).resolves.toBe(false);
+		expect(write).not.toHaveBeenCalled();
 	});
 });
