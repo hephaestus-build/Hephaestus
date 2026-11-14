@@ -4,6 +4,7 @@ import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSync
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import de.tum.cit.aet.hephaestus.core.WebClientConnectors;
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,6 +34,8 @@ import org.springframework.web.reactive.function.client.WebClient;
  * @see <a href="https://docs.github.com/en/rest/apps/installations#list-repositories-accessible-to-the-app-installation">GitHub REST API - List installation repositories</a>
  */
 @Service
+@WorkspaceAgnostic(
+        "Lists what a GitHub App installation reaches on GitHub; the caller assigns each repository to its workspace")
 public class GitHubInstallationRepositoryEnumerationService {
 
     private static final Logger log = LoggerFactory.getLogger(GitHubInstallationRepositoryEnumerationService.class);

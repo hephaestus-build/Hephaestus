@@ -9,6 +9,7 @@ import static com.slack.api.model.block.element.BlockElements.asElements;
 import static com.slack.api.model.block.element.BlockElements.button;
 
 import com.slack.api.model.block.LayoutBlock;
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true", matchIfMissing = false)
+@WorkspaceAgnostic("Builds fixed account-linking guidance and reads no workspace data")
 public class SlackOnboardingService {
 
     /** Distinct from the interactivity action_ids: this button only opens a URL, it posts no payload. */

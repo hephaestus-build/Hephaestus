@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.installation.adoption;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitHubInstallationDecisionAudit;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener;
@@ -24,6 +25,7 @@ import org.springframework.web.server.ResponseStatusException;
  */
 @Service
 @ConditionalOnServerRole
+@WorkspaceAgnostic("An instance admin decides on GitHub App installations before a workspace owns them")
 public class GitHubInstallationAdoptionService {
 
     private static final Logger log = LoggerFactory.getLogger(GitHubInstallationAdoptionService.class);

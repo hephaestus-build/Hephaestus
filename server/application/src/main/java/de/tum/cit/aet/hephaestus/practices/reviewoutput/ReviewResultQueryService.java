@@ -56,41 +56,42 @@ public class ReviewResultQueryService {
     private final ResultMarkService marks;
     private final ReviewResultListRepository listRows;
 
-    public Page<ReviewResultDTO> list(long ws, ResultQueryFilter filter, ResultSort sort, Pageable page) {
-        var rows = results.list(ws, filter, sort, false, page);
+    public Page<ReviewResultDTO> list(long workspaceId, ResultQueryFilter filter, ResultSort sort, Pageable page) {
+        var rows = results.list(workspaceId, filter, sort, false, page);
         if (rows.isEmpty()) return new PageImpl<>(List.of(), page, rows.getTotalElements());
-        var permitted = authorization.permitsAll(ws, rows.getContent(), SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);
+        var permitted =
+                authorization.permitsAll(workspaceId, rows.getContent(), SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);
         var ids = rows.getContent().stream().map(Result::getId).toList();
-        var marked = listRows.markTimes(ws, ids).stream()
+        var marked = listRows.markTimes(workspaceId, ids).stream()
                 .collect(Collectors.groupingBy(
                         ReviewResultListRepository.MarkTime::resultId,
                         Collectors.toMap(
                                 ReviewResultListRepository.MarkTime::kind,
                                 ReviewResultListRepository.MarkTime::createdAt)));
-        var counts = listRows.problemCounts(ws, ids).stream()
+        var counts = listRows.problemCounts(workspaceId, ids).stream()
                 .collect(Collectors.toMap(
                         ReviewResultListRepository.ProblemCount::resultId,
                         ReviewResultListRepository.ProblemCount::count));
         var permittedIds = ids.stream().filter(permitted::contains).toList();
         var summaries = permittedIds.isEmpty()
                 ? Map.<UUID, List<ProblemSummaryDTO>>of()
-                : listRows.problemSummaries(ws, permittedIds).stream()
+                : listRows.problemSummaries(workspaceId, permittedIds).stream()
                         .collect(Collectors.groupingBy(
                                 ReviewResultListRepository.ProblemSummary::resultId,
                                 Collectors.mapping(
                                         row -> new ProblemSummaryDTO(row.id(), row.severity(), row.summary()),
                                         Collectors.toList())));
-        var feedback = listRows.feedbackCounts(ws, ids).stream()
+        var feedback = listRows.feedbackCounts(workspaceId, ids).stream()
                 .collect(Collectors.groupingBy(ReviewResultListRepository.FeedbackCount::resultId));
         var developers = references.developers(
-                ws,
+                workspaceId,
                 rows.getContent().stream()
                         .map(Result::getDeveloperId)
                         .filter(Objects::nonNull)
                         .distinct()
                         .toList());
         return new PageImpl<>(
-                views.views(ws, rows.getContent()).stream()
+                views.views(workspaceId, rows.getContent()).stream()
                         .map(v -> {
                             var r = v.result();
                             var activeMarks = marked.getOrDefault(r.getId(), Map.of());
@@ -171,9 +172,9 @@ public class ReviewResultQueryService {
     }
 
     public Page<ReviewProblemDTO> listProblems(
-            long ws, ResultQueryFilter filter, ProblemQueryFilter child, Pageable page) {
-        var rows = results.problems(ws, filter, child, page);
-        return rows.map(p -> problemRow(ws, p));
+            long workspaceId, ResultQueryFilter filter, ProblemQueryFilter child, Pageable page) {
+        var rows = results.problems(workspaceId, filter, child, page);
+        return rows.map(p -> problemRow(workspaceId, p));
     }
 
     public ReviewProblemDetailDTO problem(long ws, UUID id) {

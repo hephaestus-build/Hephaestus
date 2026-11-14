@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.research;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.release.RunningRelease;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.PracticeReviewDigest;
@@ -33,6 +34,7 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @Service
 @ConditionalOnServerRole
+@WorkspaceAgnostic("Research datasets belong to the instance admin")
 public class ResearchDisclosureService {
 
     static final int MAX_WINDOW_DAYS = 400;
