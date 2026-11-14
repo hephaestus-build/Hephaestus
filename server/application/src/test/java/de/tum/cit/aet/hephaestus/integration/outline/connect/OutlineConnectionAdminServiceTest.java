@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.outline.connect;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -11,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionCommands;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
@@ -24,6 +26,8 @@ import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 class OutlineConnectionAdminServiceTest extends BaseUnitTest {
 
@@ -38,6 +42,12 @@ class OutlineConnectionAdminServiceTest extends BaseUnitTest {
     private OutlineApiClient apiClient;
 
     @Mock
+    private ConnectionCommands connectionCommands;
+
+    @Mock
+    private TransactionTemplate transactionTemplate;
+
+    @Mock
     private Connection connection;
 
     private OutlineConnectionAdminService service() {
@@ -48,7 +58,7 @@ class OutlineConnectionAdminServiceTest extends BaseUnitTest {
         lenient()
                 .when(connectionService.findActive(WS, IntegrationKind.OUTLINE))
                 .thenReturn(Optional.of(connection));
-        return new OutlineConnectionAdminService(connectionService, apiClient);
+        return new OutlineConnectionAdminService(connectionService, connectionCommands, apiClient, transactionTemplate);
     }
 
     private void storedToken(String token) {
@@ -137,5 +147,21 @@ class OutlineConnectionAdminServiceTest extends BaseUnitTest {
         when(connectionService.findActive(WS, IntegrationKind.OUTLINE)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.tokenStatus(WS)).isInstanceOf(EntityNotFoundException.class);
+    }
+
+    @Test
+    void shouldSayThatOutlineRefusedTheKeyAndStoreNothingWhenTheNewKeyIsRejected() {
+        OutlineConnectionAdminService service = service();
+        doThrow(new OutlineApiException(
+                        "Outline /api/auth.info failed (HTTP 401)",
+                        WebClientResponseException.create(401, "Unauthorized", null, null, null),
+                        false))
+                .when(apiClient)
+                .validateToken(SERVER_URL, "ol_typo");
+
+        assertThatThrownBy(() -> service.replaceToken(WS, "ol_typo", 1L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Outline does not accept this key. Check that you copied all of it.");
+        verify(connectionService, never()).rotateBearerToken(anyLong(), any(), any());
     }
 }

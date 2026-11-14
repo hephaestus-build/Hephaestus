@@ -68,7 +68,7 @@ function OutlineIntegrationPage() {
 							connectionState={outline.connectionState}
 							credentialsUnreadableSince={outline.credentialsUnreadableSince}
 							providerCleanupUnconfirmed={outline.providerCleanupUnconfirmed}
-							credentialRecovery="Replace it by disconnecting and connecting again"
+							credentialRecovery="Enter a new key under Replace API key below"
 							displayName="Outline"
 						/>
 					)}
