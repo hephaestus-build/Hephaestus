@@ -51,13 +51,16 @@ public class ConnectionCommands {
     /** The caller holds the workspace row first; even a no-op event invalidates an in-flight catalog. */
     @Transactional(propagation = Propagation.MANDATORY)
     public void fenceActiveInstallation(long workspaceId, long installationId) {
-        connectionRepository.findActiveInstallationForUpdateAndIncrementVersion(workspaceId, Long.toString(installationId));
+        connectionRepository.findActiveInstallationForUpdateAndIncrementVersion(
+                workspaceId, Long.toString(installationId));
     }
 
     /** Holds the scoped connection row before an existing use case revalidates its captured authority. */
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<Connection> holdConnection(long workspaceId, long connectionId) {
-        if (connectionRepository.findAndLockLifecycleConnection(connectionId, workspaceId).isEmpty()) return Optional.empty();
+        if (connectionRepository
+                .findAndLockLifecycleConnection(connectionId, workspaceId)
+                .isEmpty()) return Optional.empty();
         return connectionRepository.findByIdAndWorkspaceId(connectionId, workspaceId);
     }
 

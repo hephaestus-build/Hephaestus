@@ -116,8 +116,8 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     @WorkspaceAgnostic(
             "Installation reconciliation captures its current workspace and revalidates that exact connection before writes")
     @NativeQuery(ACTIVE_INSTALLATION_SNAPSHOT_SQL)
-    Optional<ConnectionQueries.InstallationSnapshot> findActiveInstallationSnapshot(@Param("instanceKey") String instanceKey);
-
+    Optional<ConnectionQueries.InstallationSnapshot> findActiveInstallationSnapshot(
+            @Param("instanceKey") String instanceKey);
 
     @Query("""
         SELECT new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository$WorkspaceMetadataRow(
