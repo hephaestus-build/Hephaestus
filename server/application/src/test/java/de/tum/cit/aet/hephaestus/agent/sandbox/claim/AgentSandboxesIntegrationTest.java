@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.attempt.SandboxJwt;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
@@ -98,7 +99,7 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
                         Duration.ofSeconds(1),
                         conversationIdle),
                 transactions,
-                new SimpleMeterRegistry());
+                meters);
     }
 
     private AgentSandboxes.LiveSandbox ensure(String subject, AgentSandboxKind kind) {
@@ -393,6 +394,35 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
 
         assertThat(repository.findById(silent.id())).isEmpty();
         assertThat(claims.created).doesNotContainKey(claimName(silent));
+    }
+
+    @Test
+    void shouldTakeBackAReadySandboxWhoseClaimIsGoneSoItsSubjectGetsANewOne() {
+        String subject = "review:" + UUID.randomUUID();
+        queueRun(subject);
+        var lost = ensure(subject, AgentSandboxKind.REVIEW);
+        sandboxes.authenticate(token(lost));
+        String starting = "review:" + UUID.randomUUID();
+        queueRun(starting);
+        var requested = ensure(starting, AgentSandboxKind.REVIEW);
+        // A stopped window deleted the claims outside the server, while every server was down.
+        claims.created.remove(claimName(lost));
+        claims.created.remove(claimName(requested));
+
+        reaper(Duration.ofHours(1)).reap();
+
+        assertThat(repository.findById(lost.id()))
+                .as("the next pass takes the ready row back")
+                .isEmpty();
+        assertThat(meters.counter(AgentMetrics.AGENT_SANDBOX_REAPED, "reason", "lost")
+                        .count())
+                .isEqualTo(1);
+        assertThat(state(requested))
+                .as("a requested sandbox can still be creating its claim, so the start limit decides it")
+                .isEqualTo("REQUESTED");
+        var next = ensure(subject, AgentSandboxKind.REVIEW);
+        assertThat(next.id()).isNotEqualTo(lost.id());
+        assertThat(claims.created).containsKey(claimName(next));
     }
 
     @Test

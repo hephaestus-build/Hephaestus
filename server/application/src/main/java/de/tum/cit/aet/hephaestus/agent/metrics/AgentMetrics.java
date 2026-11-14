@@ -27,7 +27,10 @@ public final class AgentMetrics {
     public static final String EVIDENCE_RECONCILE_LAST_SUCCESS = "evidence.reconcile.last.success";
     public static final String EVIDENCE_RECONCILE_FAILURES = "evidence.reconcile.failures";
     public static final String AGENT_RUN_REAPER_FAILURE = "agent.run.reaper.failure";
-    /** Sandboxes taken back, by reason: {@code expired}, {@code start_limit}, {@code idle} or {@code orphan}. */
+    /**
+     * Sandboxes taken back, by reason: {@code expired}, {@code start_limit}, {@code idle}, {@code lost} for a ready
+     * sandbox whose claim is gone, or {@code orphan}.
+     */
     public static final String AGENT_SANDBOX_REAPED = "agent.sandbox.reaped";
     /** Ticks or claim deletes of the sandbox reaper that failed; each is tried again on the next tick. */
     public static final String AGENT_SANDBOX_REAPER_FAILURE = "agent.sandbox.reaper.failure";

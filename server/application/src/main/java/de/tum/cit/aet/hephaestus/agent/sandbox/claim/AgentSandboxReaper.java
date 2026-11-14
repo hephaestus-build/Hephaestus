@@ -14,9 +14,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Takes back the sandboxes that no subject needs, on the database clock, on every replica that holds the Kubernetes
- * client. One rule decides it ({@link AgentSandboxRepository#retire}); then the claims of the taken-back sandboxes go,
- * and so does every claim that no row names, as after a workspace was deleted. No leader: each statement changes a
- * row once, and each claim call is idempotent.
+ * client. One rule decides it ({@link AgentSandboxRepository#retire}). A ready sandbox whose claim is gone, as after a
+ * stopped window deleted the claims, is taken back too, so its subject gets a new sandbox. Then every claim that no row
+ * names goes, as after a workspace was deleted, and so do the claims of the taken-back sandboxes. No leader: each
+ * statement changes a row once, and each claim call is idempotent.
  */
 @WorkspaceAgnostic("Takes back sandboxes of every workspace; each row carries its workspace")
 public class AgentSandboxReaper {
@@ -26,7 +27,7 @@ public class AgentSandboxReaper {
     /** The most sandboxes one tick takes back or deletes, so a backlog cannot hold the scheduler thread for long. */
     static final int BATCH = 100;
 
-    static final List<String> REASONS = List.of("expired", "start_limit", "idle", "orphan");
+    static final List<String> REASONS = List.of("expired", "start_limit", "idle", "lost", "orphan");
 
     private final AgentSandboxRepository sandboxes;
     private final AgentSandboxes owner;
@@ -56,8 +57,13 @@ public class AgentSandboxReaper {
     public void reap() {
         try {
             retire();
+            // Read before the claims: a row that was ready then had its claim, so a claim missing from the later list
+            // is gone, not still being created.
+            var ready = sandboxes.findReady();
+            var names = claims.names();
+            takeBackLost(ready, names);
+            deleteOrphans(names);
             deleteClaims();
-            deleteOrphans();
         } catch (RuntimeException e) {
             meters.counter(AgentMetrics.AGENT_SANDBOX_REAPER_FAILURE).increment();
             log.atWarn()
@@ -83,6 +89,21 @@ public class AgentSandboxReaper {
         }
     }
 
+    /** Each in a short transaction that takes the row back only while it is still ready with that claim. */
+    private void takeBackLost(List<AgentSandboxRepository.SandboxRow> ready, List<String> names) {
+        var live = new HashSet<>(names);
+        for (var row : ready) {
+            if (live.contains(row.getClaimName())) continue;
+            var lost = transactions.execute(
+                    status -> sandboxes.takeBackLost(row.getId(), row.getWorkspaceId(), row.getClaimName()));
+            if (lost == null || lost.isEmpty()) continue;
+            meters.counter(AgentMetrics.AGENT_SANDBOX_REAPED, "reason", "lost").increment();
+            SandboxEvents.event(log.atInfo(), "agent.sandbox.taken_back", lost.get())
+                    .addKeyValue("sandbox.reason", "lost")
+                    .log("Ready sandbox without a claim taken back; its subject can start a new one");
+        }
+    }
+
     /** Each claim on its own: one that the API refuses stays for the next tick, and the rest go on. */
     private void deleteClaims() {
         for (var row : sandboxes.findDeleting(BATCH)) {
@@ -99,10 +120,9 @@ public class AgentSandboxReaper {
 
     /**
      * A claim that no row names: its row was deleted with its workspace. A claim is created only after its row
-     * commits, so a claim that is being created always has its row.
+     * commits, so a claim that is being created always has its row. The rows are read after {@code names} was listed.
      */
-    private void deleteOrphans() {
-        var names = claims.names();
+    private void deleteOrphans(List<String> names) {
         if (names.isEmpty()) return;
         var known = new HashSet<>(sandboxes.findClaimNames(names));
         for (String name : names) {

@@ -38,6 +38,7 @@ Keep PostgreSQL running until the servers have drained:
    ```
 
    Check the sandbox namespace: `kubectl --namespace hephaestus-sandboxes get pods`. Expect no Pods.
+   When the servers start again, their first reaper pass takes back each ready sandbox whose claim you deleted. Its review or conversation then starts in a new sandbox.
    Do not proceed while server Pods or sandbox Pods remain.
 5. List the release's budgets: `kubectl --namespace hephaestus get pdb -l app.kubernetes.io/instance=hephaestus`.
    Remove only these budgets for this maintenance: `kubectl --namespace hephaestus delete pdb -l app.kubernetes.io/instance=hephaestus`.

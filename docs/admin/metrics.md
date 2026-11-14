@@ -230,7 +230,7 @@ A turn has a second attempt only after a lease expiry ([Server runtime](./runtim
 | `agent_run_oldest_due_age_seconds`         | Gauge     | `kind`, `band` | Seconds since the oldest due run became due. 0 when none is due |
 | `agent_run_sampler_failure_total`          | Counter   | none      | Samples of these gauges that failed. The gauges keep their last values |
 | `agent_run_claim_wait_seconds`             | Histogram | `kind`, `band` | From a run's `available_at` to its claim, recorded after the claim committed. A requeued run waits from its new `available_at` |
-| `agent_sandbox_reaped_total`             | Counter   | `reason`  | Sandboxes that the reaper took back: `expired`, `start_limit`, `idle`, or `orphan` for a claim that no sandbox row names |
+| `agent_sandbox_reaped_total`             | Counter   | `reason`  | Sandboxes that the reaper took back: `expired`, `start_limit`, `idle`, `lost` for a ready sandbox whose claim is gone, or `orphan` for a claim that no sandbox row names |
 | `agent_sandbox_dispatch_failure_total`   | Counter   | none      | Dispatch passes that failed to request the sandbox of a due run. It tries again at the next pass |
 | `agent_sandbox_reaper_failure_total`       | Counter   | none      | Sandbox reaper passes or claim deletes that failed. It tries each again next pass |
 | `agent_sandbox_revoked_total`            | Counter   | `reason`  | Live sandboxes that the server took back before the reaper would: `unisolated` for a sandbox whose network policy did not hold |
