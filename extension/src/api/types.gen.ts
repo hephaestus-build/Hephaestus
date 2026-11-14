@@ -8298,13 +8298,16 @@ export type WorkspaceMembership = {
 	account: AccountRef;
 	eligibleForPracticeReview: boolean;
 	hidden: boolean;
+	/**
+	 * Whether the workspace review scope admits this member's work: the member is eligible, and the people scope is all eligible members or selects them.
+	 */
+	inReviewScope: boolean;
 	joinedAt: string;
 	leftAt: string | null;
 	/**
 	 * Whether the member answered the public activity question in this workspace, without the answer. Null unless the reader is a workspace admin, the workspace publishes public activity, and the member has not left.
 	 */
 	publicActivityAnswered: boolean | null;
-	reviewSelected: boolean;
 	role: "OWNER" | "ADMIN" | "MEMBER";
 	/**
 	 * Who decided the role: PROVIDER while the organization or group roster sets it at each sync, PERSON after a person set it. An owner role is always PERSON.

@@ -146,6 +146,32 @@ class AccountMembershipQueryIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldMarkAndCountTheSamePeopleInScopeWhicheverPeopleScopeIsSaved() {
+        var first = accounts.saveAndFlush(new Account("Scope first"));
+        var member = membership(first, "people-scope-fact");
+        var workspace = member.getWorkspace();
+        var second = accounts.saveAndFlush(new Account("Scope second"));
+        addMember(workspace, second, Membership.WorkspaceRole.MEMBER, null);
+        long firstId = Objects.requireNonNull(first.getId());
+        long secondId = Objects.requireNonNull(second.getId());
+        var ids = List.of(firstId, secondId);
+
+        // Saving all eligible members clears every selection flag, and every eligible member stays in scope.
+        var all = coverage.replace(
+                WorkspacePortFixtures.reviewWorkspace(workspace),
+                new WorkspaceReviewScope(ReviewScopeMode.ALL, ReviewScopeMode.ALL, List.of(), List.of()));
+        assertThat(memberships.findSelectedAccountIds(workspace.getId())).isEmpty();
+        assertThat(selections.inScopeAccountIds(workspace.getId(), ids)).containsExactlyInAnyOrder(firstId, secondId);
+        assertThat(coverage.summary(all, 0).selectedPeople()).isEqualTo(2);
+
+        var selected = coverage.replace(
+                all,
+                new WorkspaceReviewScope(ReviewScopeMode.ALL, ReviewScopeMode.SELECTED, List.of(), List.of(secondId)));
+        assertThat(selections.inScopeAccountIds(workspace.getId(), ids)).containsExactly(secondId);
+        assertThat(coverage.summary(selected, 0).selectedPeople()).isEqualTo(1);
+    }
+
+    @Test
     void shouldKeepLoadedSelectionCurrentWhenReviewScopeIsReplaced() {
         var account = accounts.saveAndFlush(new Account("Selection cache"));
         var member = membership(account, "selection-cache");

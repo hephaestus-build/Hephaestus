@@ -52,6 +52,9 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByRole("textbox", { name: "Search members" }),
+		).toBeVisible();
 		// The sort lives in the URL, so a column is always sorted — and which one has to be legible
 		// to a screen reader, not only to whoever can see the arrow.
 		await expect(canvas.getByRole("columnheader", { name: "Name" })).toHaveAttribute(
@@ -108,6 +111,30 @@ export const MemberWhoLeft: Story = {
 			expect.objectContaining({ name: "Erin Former" }),
 			actions,
 		);
+	},
+};
+
+/**
+ * Review scope shows whether the workspace's review scope admits the member's work. It is the fact that
+ * Review settings counts: with All eligible members, every eligible member is included.
+ */
+export const InReviewScope: Story = {
+	args: { members: workspaceMemberRows([unclaimedMember]), rowCount: 1 },
+	play: async ({ canvas }) => {
+		await expect(within(rowOf(canvas, "Bob Smith")).getByText("Included")).toBeVisible();
+	},
+};
+
+/** A member whom the review scope does not admit: not selected, or not eligible for practice review. */
+export const OutOfReviewScope: Story = {
+	args: {
+		members: workspaceMemberRows([
+			membership(unclaimedMember.account, { eligibleForPracticeReview: true, inReviewScope: false }),
+		]),
+		rowCount: 1,
+	},
+	play: async ({ canvas }) => {
+		await expect(within(rowOf(canvas, "Bob Smith")).getByText("Excluded")).toBeVisible();
 	},
 };
 

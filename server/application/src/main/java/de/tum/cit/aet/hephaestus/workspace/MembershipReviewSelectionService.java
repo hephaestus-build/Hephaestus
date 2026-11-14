@@ -1,7 +1,10 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
+import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeMode;
+import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceReviewScope;
 import de.tum.cit.aet.hephaestus.workspace.spi.MembershipReviewSelection;
 import java.util.Collection;
 import java.util.List;
@@ -17,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MembershipReviewSelectionService implements MembershipReviewSelection {
     private final MembershipRepository memberships;
+    private final WorkspaceRepository workspaces;
     private final WorkspaceActorSelector actors;
     private final PersonProcessingSuppression suppression;
 
@@ -40,6 +44,18 @@ public class MembershipReviewSelectionService implements MembershipReviewSelecti
                 actors.connectedProviderId(workspaceId).orElse(null));
         var suppressed = suppression.suppressedAccountIds(eligible);
         return eligible.stream().filter(id -> !suppressed.contains(id)).collect(Collectors.toUnmodifiableSet());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<Long> inScopeAccountIds(long workspaceId, Collection<Long> accountIds) {
+        var people = workspaces
+                .findReviewScopePeople(workspaceId)
+                .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
+        var selected = people == ReviewScopeMode.ALL ? Set.<Long>of() : Set.copyOf(memberships.findSelectedAccountIds(workspaceId));
+        return eligibleAccountIds(workspaceId, accountIds).stream()
+                .filter(id -> WorkspaceReviewScope.admitsPerson(people, selected.contains(id)))
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     @Override

@@ -104,12 +104,14 @@ public class MembershipController {
                 .toList();
         var references = accounts.references(context.id(), accountIds);
         var eligible = selections.eligibleAccountIds(context.id(), accountIds);
+        var inScope = selections.inScopeAccountIds(context.id(), accountIds);
         var answered = workspaceMembershipService.publicActivityAnswered(context.id(), page.getContent());
         return ResponseEntity.ok(OffsetPageDTO.from(page.map(member -> toDTO(
                 member,
                 member.getRole(),
                 Objects.requireNonNull(references.get(member.getAccountId())),
                 eligible.contains(member.getAccountId()),
+                inScope.contains(member.getAccountId()),
                 answered.get(Objects.requireNonNull(member.getAccountId()))))));
     }
 
@@ -198,6 +200,7 @@ public class MembershipController {
                 role,
                 accounts.reference(workspaceId, accountId),
                 selections.eligibleAccountIds(workspaceId, Set.of(accountId)).contains(accountId),
+                selections.inScopeAccountIds(workspaceId, Set.of(accountId)).contains(accountId),
                 workspaceMembershipService
                         .publicActivityAnswered(workspaceId, List.of(member))
                         .get(accountId));
@@ -208,6 +211,7 @@ public class MembershipController {
             WorkspaceRole role,
             AccountRefDTO account,
             boolean eligible,
+            boolean inScope,
             @Nullable Boolean publicActivityAnswered) {
         return new WorkspaceMembershipDTO(
                 account,
@@ -216,8 +220,8 @@ public class MembershipController {
                 member.getJoinedAt(),
                 member.getLeftAt(),
                 member.isHidden(),
-                member.isReviewSelected(),
                 eligible,
+                inScope,
                 publicActivityAnswered);
     }
 }

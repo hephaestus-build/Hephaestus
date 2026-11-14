@@ -51,7 +51,7 @@ function member(
 		joinedAt: "2026-03-02T09:00:00Z",
 		leftAt: null,
 		hidden: false,
-		reviewSelected: true,
+		inReviewScope: true,
 		eligibleForPracticeReview: true,
 		roleSource: "PROVIDER",
 		publicActivityAnswered: null,
@@ -170,6 +170,15 @@ describe("workspace members route", () => {
 		const sam = within(rowOf("Sam Unclaimed"));
 		sam.getByText("Unclaimed");
 		expect(sam.queryByText("Active")).toBeNull();
+	});
+
+	it("shows Review scope from the server's in-scope fact", async () => {
+		mockMembersRoute([ADA, { ...SAM, inReviewScope: false }]);
+		renderRouteAt("/w/acme/admin/members");
+
+		await screen.findByText("Ada Lovelace", { selector: "div" }, ROUTE_RENDER_WAIT);
+		within(rowOf("Ada Lovelace")).getByText("Included");
+		within(rowOf("Sam Unclaimed")).getByText("Excluded");
 	});
 
 	it("reads only the selected page and uses the server count before an explicit page jump", async () => {

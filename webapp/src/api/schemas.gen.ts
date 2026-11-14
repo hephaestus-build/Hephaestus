@@ -17760,6 +17760,11 @@ export const WorkspaceMembershipSchema = {
 		hidden: {
 			type: "boolean",
 		},
+		inReviewScope: {
+			type: "boolean",
+			description:
+				"Whether the workspace review scope admits this member's work: the member is eligible, and the people scope is all eligible members or selects them.",
+		},
 		joinedAt: {
 			type: "string",
 			format: "date-time",
@@ -17772,9 +17777,6 @@ export const WorkspaceMembershipSchema = {
 			type: ["boolean", "null"],
 			description:
 				"Whether the member answered the public activity question in this workspace, without the answer. Null unless the reader is a workspace admin, the workspace publishes public activity, and the member has not left.",
-		},
-		reviewSelected: {
-			type: "boolean",
 		},
 		role: {
 			type: "string",
@@ -17791,10 +17793,10 @@ export const WorkspaceMembershipSchema = {
 		"account",
 		"eligibleForPracticeReview",
 		"hidden",
+		"inReviewScope",
 		"joinedAt",
 		"leftAt",
 		"publicActivityAnswered",
-		"reviewSelected",
 		"role",
 		"roleSource",
 	],

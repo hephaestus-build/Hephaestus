@@ -41,8 +41,8 @@ export function membership(
 		joinedAt: new Date("2026-03-02T09:00:00Z"),
 		leftAt: null,
 		hidden: false,
-		reviewSelected: true,
 		eligibleForPracticeReview: true,
+		inReviewScope: true,
 		roleSource: "PROVIDER",
 		publicActivityAnswered: null,
 		...overrides,
@@ -82,7 +82,7 @@ export const hiddenMember = membership(
 		displayName: "Diana Prince",
 		identities: [{ provider: "GITHUB", login: "diana", displayName: null, avatarUrl: null }],
 	}),
-	{ hidden: true, reviewSelected: false, eligibleForPracticeReview: false },
+	{ hidden: true, eligibleForPracticeReview: false, inReviewScope: false },
 );
 
 export const mockMemberships: WorkspaceMembership[] = [

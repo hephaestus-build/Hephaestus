@@ -23,8 +23,13 @@ public record WorkspaceMembershipDTO(
         @NonNull Instant joinedAt,
         @Nullable Instant leftAt,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean hidden,
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean reviewSelected,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean eligibleForPracticeReview,
+
+        @Schema(
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "Whether the workspace review scope admits this member's work: the member is eligible,"
+                        + " and the people scope is all eligible members or selects them.")
+        boolean inReviewScope,
 
         @Schema(
                 description = "Whether the member answered the public activity question in this workspace, without"

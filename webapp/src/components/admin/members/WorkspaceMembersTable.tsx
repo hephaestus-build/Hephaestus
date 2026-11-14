@@ -416,7 +416,7 @@ export function WorkspaceMembersTable({
 				header: () => "Review scope",
 				cell: ({ row }) => (
 					<span className="text-muted-foreground">
-						{row.original.membership.reviewSelected ? "Included" : "Excluded"}
+						{row.original.membership.inReviewScope ? "Included" : "Excluded"}
 					</span>
 				),
 			}),
@@ -582,11 +582,15 @@ export function WorkspaceMembersTable({
 		<div className="w-full space-y-4">
 			<div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:flex-wrap sm:items-center">
 				<div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+					<Label htmlFor="member-search" className="sr-only">
+						Search members
+					</Label>
 					<InputGroup className="w-full sm:w-auto">
 						<InputGroupAddon>
 							<Search />
 						</InputGroupAddon>
 						<InputGroupInput
+							id="member-search"
 							placeholder="Search by name or username…"
 							value={view.q}
 							onChange={(event) => onViewChange({ q: event.target.value, page: 0 })}
