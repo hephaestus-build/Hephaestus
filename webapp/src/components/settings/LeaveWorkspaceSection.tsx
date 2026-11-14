@@ -99,7 +99,7 @@ export function LeaveWorkspaceSection({
 				</h2>
 				<p className="text-sm text-muted-foreground">
 					Leave a workspace to lose access to it and stop getting its practice feedback. Sync with
-					GitHub or GitLab does not bring you back. A workspace admin can add you again.
+					GitHub or GitLab does not bring you back. A workspace admin can add you back.
 				</p>
 			</div>
 			{body}
@@ -119,7 +119,7 @@ export function LeaveWorkspaceSection({
 						<AlertDialogTitle>Leave {confirming?.name}?</AlertDialogTitle>
 						<AlertDialogDescription>
 							You lose access to the workspace and stop getting its practice feedback. Your history
-							there stays recorded. To come back, ask a workspace admin to add you again.
+							there stays recorded. To come back, ask a workspace admin to add you back.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					{leaveError !== undefined && (

@@ -976,7 +976,7 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @Test
     @WithMentorUser
-    void shouldKeepAMemberWhomAnAdminRemovedOutThroughProviderSync() {
+    void shouldLetProviderSyncAddBackAMemberWhomAnAdminRemoved() {
         User owner = persistUser("removal-owner");
         Workspace workspace = createWorkspace("removal-sticks", "Removal", "removal", AccountType.ORG, owner);
         ensureMembership(workspace, persistUser("mentor"), WorkspaceRole.ADMIN);
@@ -992,11 +992,12 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .expectStatus()
                 .isNoContent()
                 .expectBody(Void.class);
+        // Unlike leaving, a removal does not keep out a person whom the provider still lists.
         workspaceMembershipService.syncWorkspaceMembers(workspace, Map.of(member.getId(), WorkspaceRole.MEMBER));
 
         assertThat(workspaceMembershipService
                         .getMembership(workspace.getId(), accountId)
                         .getLeftAt())
-                .isNotNull();
+                .isNull();
     }
 }

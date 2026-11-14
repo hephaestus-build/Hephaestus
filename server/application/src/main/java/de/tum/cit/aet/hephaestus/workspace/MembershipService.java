@@ -132,8 +132,8 @@ public class MembershipService {
     }
 
     /**
-     * A person ended this membership in Hephaestus: the member left, or a workspace admin removed them. Provider sync
-     * does not bring it back. A workspace admin can, by giving the person a role again.
+     * The member ended this membership themselves, or it was an owner's. Provider sync does not bring it back. A
+     * workspace admin can, by giving the person a role again.
      */
     private static boolean endedByPerson(Membership member) {
         return member.getLeftAt() != null && member.getRoleSource() == Membership.RoleSource.PERSON;
@@ -278,7 +278,9 @@ public class MembershipService {
         authorizeRoleChange(workspace, accountId, member, null);
         if (member.getLeftAt() != null) return;
         member.setLeftAt(clock.instant());
-        member.setRoleSource(Membership.RoleSource.PERSON);
+        // A removal is undone by the provider: the next sync adds back a person it still lists. An owner's role is
+        // always a person's, so a removed owner stays out.
+        if (member.getRole() != Membership.WorkspaceRole.OWNER) member.setRoleSource(Membership.RoleSource.PROVIDER);
         audit.roleChanged(
                 ConfigAuditEntry.deleted(
                         ConfigAuditEntityType.WORKSPACE_ROLE, accountId, workspaceId, snapshot(member)),
