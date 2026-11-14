@@ -92,7 +92,7 @@ export const mockPullRequestReviewItemType = {
 	applicabilityClauses: ["HAS_ITEMS"],
 	applicabilitySources,
 	scanSupported: false,
-	feedbackOnWork: true,
+	feedbackOnWork: false,
 	scanItemKinds: [],
 } satisfies PracticeItemTypeOption;
 

@@ -258,7 +258,7 @@ If the workspace does not need the repository, remove it as [Repositories](#repo
 :::caution[You cannot undo this]
 
 Deleting a workspace permanently erases its memberships, settings, synced content, practice feedback, and conversations.
-Nobody can restore it, also not your instance operator.
+Hephaestus cannot restore it.
 
 :::
 
@@ -269,7 +269,8 @@ A suspended workspace can be deleted too.
 2. Under **Danger zone**, select **Delete workspace**.
 3. Read what the dialog says that deletion erases and what survives.
 4. Enter the short name of the workspace, and select **Delete workspace** again.
-   If you have not signed in recently, Hephaestus first asks you to sign in again.
+   If you have not signed in recently, Hephaestus then asks you to sign in again.
+   If a sync or a review still runs, Hephaestus refuses the deletion. Wait for it to end, and try again.
 
 These survive the deletion:
 

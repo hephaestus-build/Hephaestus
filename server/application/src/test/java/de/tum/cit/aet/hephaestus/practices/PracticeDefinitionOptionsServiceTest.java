@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewCapabilities;
 import de.tum.cit.aet.hephaestus.integration.docs.item.DocumentItemDescriptor;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.PullRequestItemDescriptor;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.item.PullRequestReviewItemDescriptor;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeItemTypeOptionDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
@@ -96,16 +97,23 @@ class PracticeDefinitionOptionsServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldSayThatOnlyWorkOnTheCodeHostCarriesFeedbackOnTheWork() {
+    void shouldSayThatOnlyWorkOnTheCodeHostAboutItsAuthorCarriesFeedbackOnTheWork() {
         var items = mock(PracticeItemOptions.class);
         when(items.all())
                 .thenReturn(List.of(
-                        new PullRequestItemDescriptor(), new ThreadItemDescriptor(), new DocumentItemDescriptor()));
+                        new PullRequestItemDescriptor(),
+                        new PullRequestReviewItemDescriptor(),
+                        new ThreadItemDescriptor(),
+                        new DocumentItemDescriptor()));
         var registry = new ClasspathSourceCatalogRegistry(JsonMapper.builder().build(), Clock.systemUTC());
         var result = new PracticeDefinitionOptionsService(items, registry, mock(ItemEventCoverage.class)).options(null);
         assertThat(result.itemTypes())
                 .extracting(PracticeItemTypeOptionDTO::kind, PracticeItemTypeOptionDTO::feedbackOnWork)
                 .containsExactly(
-                        tuple("scm.pull_request", true), tuple("chat.thread", false), tuple("docs.document", false));
+                        tuple("scm.pull_request", true),
+                        // A review is about its reviewer, and feedback about reviewing stays private.
+                        tuple("scm.pull_request_review", false),
+                        tuple("chat.thread", false),
+                        tuple("docs.document", false));
     }
 }

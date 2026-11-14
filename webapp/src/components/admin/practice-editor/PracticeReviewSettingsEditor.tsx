@@ -2,7 +2,7 @@ import { HandIcon, InboxIcon } from "lucide-react";
 
 import type { PracticeItemTypeOption, PracticeReadSource, ReviewOn } from "@/api/types.gen";
 import { FieldError } from "@/components/ui/field";
-import { itemKindIcon, itemKindNoun } from "@/lib/item-kinds";
+import { itemKindIcon } from "@/lib/item-kinds";
 import { hasText } from "@/lib/text";
 
 import { PracticeReadsEditor } from "./PracticeReadsEditor";
@@ -22,6 +22,8 @@ export interface PracticeReviewSettingsEditorProps {
 	value: ReviewSettings;
 	onChange: (value: ReviewSettings) => void;
 	reviewedBy: ReviewedByKind;
+	/** Whether this practice's feedback can appear on the work: its kind allows it and the practice is about the author. */
+	feedbackOnWork: boolean;
 	error?: string;
 	/** The control the error points at, so the field it names is the one that opens. */
 	errorFocusId?: string;
@@ -33,6 +35,7 @@ export function PracticeReviewSettingsEditor({
 	value,
 	onChange,
 	reviewedBy,
+	feedbackOnWork,
 	error,
 	errorFocusId,
 	disabled = false,
@@ -91,12 +94,12 @@ export function PracticeReviewSettingsEditor({
 				</p>
 			)}
 
-			{automated && !itemType.feedbackOnWork && (
+			{automated && !feedbackOnWork && (
 				<p className="flex items-start gap-2 text-sm text-muted-foreground">
 					<InboxIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
 					<span>
-						Hephaestus posts no feedback on a {itemKindNoun(itemType.kind, 1)}. Its author gets the
-						feedback on their Practice profile and in their conversation with Hephaestus.
+						This practice’s feedback never appears on the work itself. The developer it is about
+						gets it on their Practice profile and from Hephaestus when they ask.
 					</span>
 				</p>
 			)}
