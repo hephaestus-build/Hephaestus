@@ -5,10 +5,11 @@ import {
 	getPublicActivityOnboardingOptions,
 	getWorkspaceOptions,
 } from "@/api/@tanstack/react-query.gen";
+import type { WorkspaceListItem } from "@/api/types.gen";
 import { ModelLinkHostsContext } from "@/components/common/model-links";
 import { PublicActivityNotice } from "@/components/onboarding/PublicActivityNotice";
 import { noticeCannotOpenWorkspace } from "@/components/workspace/cannot-open-workspace";
-import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
+import { defaultWorkspace, useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { usePublicActivityOnboarding } from "@/hooks/use-public-activity-onboarding";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
 import { useAuth } from "@/runtime/auth/AuthContext";
@@ -35,7 +36,18 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
 		const workspace = workspaces?.find(
 			(candidate) => candidate.workspaceSlug === params.workspaceSlug,
 		);
+		const settingsPath = `/w/${encodeURIComponent(params.workspaceSlug)}/admin/settings`;
+		// Only an admin finds a suspended workspace, and its settings are the one page it still answers.
+		const leaveSuspended = (status: WorkspaceListItem["status"]) => {
+			if (status === "SUSPENDED" && location.pathname !== settingsPath) {
+				throw redirect({ to: "/w/$workspaceSlug/admin/settings", params, replace: true });
+			}
+		};
 		if (workspace) {
+			leaveSuspended(workspace.status);
+			if (workspace.status === "SUSPENDED") {
+				return { workspace, administrationWorkspace: undefined };
+			}
 			const userView = getUserViewSession() !== undefined;
 			const settingUp =
 				location.pathname === `/w/${encodeURIComponent(params.workspaceSlug)}/onboarding`;
@@ -82,6 +94,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
 				staleTime: 0,
 				retry: false,
 			});
+			leaveSuspended(administrationWorkspace.status);
 			return { workspace: undefined, administrationWorkspace };
 		}
 
@@ -92,7 +105,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug")({
 		}
 
 		// The reader followed a link and lands elsewhere, so say so. A preload is no arrival.
-		const fallback = workspaces[0];
+		const fallback = defaultWorkspace(workspaces);
 		const fallbackSlug = fallback?.workspaceSlug;
 		if (!preload) {
 			noticeCannotOpenWorkspace(

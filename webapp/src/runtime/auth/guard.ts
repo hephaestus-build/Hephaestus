@@ -144,15 +144,17 @@ async function startWorkspaceReads(
 	workspace: { slug: string; pathname: string } | undefined,
 ) {
 	const listed = await queryClient.query(workspaceListGateOptions());
-	if (
-		workspace === undefined ||
-		!listed.some(({ workspaceSlug }) => workspaceSlug === workspace.slug)
-	) {
+	const item =
+		workspace === undefined
+			? undefined
+			: listed.find(({ workspaceSlug }) => workspaceSlug === workspace.slug);
+	if (workspace === undefined || item === undefined) {
 		return;
 	}
 	await Promise.all([
 		queryClient.query(workspaceMembershipQueryOptions(workspace.slug)),
-		onboardingGateApplies(workspace.slug, workspace.pathname)
+		// A suspended workspace has no setup to finish: its gate sends the admin to its settings.
+		item.status === "ACTIVE" && onboardingGateApplies(workspace.slug, workspace.pathname)
 			? queryClient.query(memberOnboardingGateOptions(workspace.slug))
 			: undefined,
 	]);

@@ -125,9 +125,21 @@ public interface MembershipRepository extends JpaRepository<Membership, Membersh
     @WorkspaceAgnostic("An account reads its memberships across workspaces")
     List<Membership> findById_AccountId(Long accountId);
 
-    /** Registry discovery returns only tenant IDs for the account, not membership data across tenants. */
-    @Query("SELECT m.workspace.id FROM Membership m WHERE m.id.accountId = :accountId AND m.leftAt IS NULL")
-    List<Long> findActiveWorkspaceIdsByAccountId(@Param("accountId") Long accountId);
+    /**
+     * Registry discovery returns only tenant IDs for the account, not membership data across tenants. An admin or owner
+     * also finds a suspended workspace, because only they can resume it.
+     */
+    @Query("""
+        SELECT m.workspace.id FROM Membership m
+        WHERE m.id.accountId = :accountId
+          AND m.leftAt IS NULL
+          AND (m.workspace.status = de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus.ACTIVE
+            OR (m.workspace.status = de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus.SUSPENDED
+              AND m.role IN (
+                de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole.ADMIN,
+                de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole.OWNER)))
+        """)
+    List<Long> findListedWorkspaceIdsByAccountId(@Param("accountId") Long accountId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @WorkspaceAgnostic("Account absorption locks memberships across workspaces")
