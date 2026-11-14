@@ -4,7 +4,6 @@ The baseline stops new suppressions and failure bypasses while their owners fix 
 An entry records existing source. It does not approve that source as correct.
 
 Run `node scripts/check-band-aids.ts` to check the baseline.
-GUARDS registers the same command as `vp run gate:band-aids`.
 The tooling test suite runs `scripts/check-band-aids.test.ts`.
 
 Each entry names a category, file, source, code context, occurrence count, owner, and reason tag:

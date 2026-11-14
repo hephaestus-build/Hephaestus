@@ -716,46 +716,31 @@ await test("failures arrive in the order analyse lists its checks", () => {
 	);
 });
 
-await test("a vp run command reads the task it names, and a placeholder or flag is not a task", () => {
+await test("a vp run command reads the root task it names, and skips flags, placeholders and package scripts", () => {
 	assert.deepEqual(
 		namedTasks(
 			"Run `vp run check`, then `vp run --no-cache check:affected --base main`.\n" +
-				"```bash\nvp run --filter webapp test:e2e accessibility.spec.ts\nvp run pr:wait <n>\n```\n" +
-				"`vp run` lists every task. `vp run <task>` runs one. `vp run --last-details` explains it.",
+				"```bash\nvp run --log grouped verify\nvp run --concurrency-limit 2 format\nvp run pr:wait <n>\n```\n" +
+				"`vp run --filter webapp test:e2e`, `vp run -F ./webapp dev`, `vp run --filter=docs build` and " +
+				"`vp run webapp#test` run package scripts. `vp run` lists every task, `vp run <task>` runs one, " +
+				"and `vp run --last-details` explains the last run.",
 		),
-		[
-			{ task: "check" },
-			{ task: "check:affected" },
-			{ task: "test:e2e", filter: "webapp" },
-			{ task: "pr:wait" },
-		],
+		["check", "check:affected", "verify", "format", "pr:wait"],
 	);
 });
 
-await test("an instruction or contributor doc that names a task nobody defines fails", () => {
+await test("an agent file, a contributor doc or a README that names a task nobody defines fails", () => {
 	const failures = analyse(
 		snapshot({
 			"AGENTS.md": "# Hephaestus\n\nRun `vp run check` and `vp run chek`.\n",
 			"docs/contributor/setup.md": "Start with `vp run dev:env` and `vp run dev:setup`.\n",
+			"tools/README.md": "Run `vp run gate:gone`.\n",
 		}),
 	);
-	assert.equal(failures.length, 2, failures.join("\n"));
+	assert.equal(failures.length, 3, failures.join("\n"));
 	assert.match(failures[0] ?? "", /AGENTS\.md names `vp run chek`/u);
 	assert.match(failures[1] ?? "", /setup\.md names `vp run dev:setup`/u);
-});
-
-await test("a filtered task resolves against that package's scripts", () => {
-	const failures = analyse(
-		snapshot({
-			"webapp/package.json": JSON.stringify({
-				name: "webapp",
-				scripts: { "test:e2e": "playwright test" },
-			}),
-			"docs/contributor/setup.md":
-				"Run `vp run --filter webapp test:e2e`, not `vp run --filter webapp e2e`.\n",
-		}),
-	);
-	assert.match(only(failures), /package webapp has no script e2e/u);
+	assert.match(failures[2] ?? "", /tools\/README\.md names `vp run gate:gone`/u);
 });
 
 await test("a guide the instruction table does not name fails", () => {

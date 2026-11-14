@@ -15,7 +15,7 @@
  *   duplicated  — two agent files with one body.
  *   oversized   — an `AGENTS.md` chain longer than Codex loads, which cuts the tail off unannounced.
  *   stale       — a contributor document names a repository path or npm package that does not resolve.
- *   unknown     — an agent file or contributor document names a `vp run` task that does not exist.
+ *   unknown     — an agent file, contributor document or README names a root `vp run` task that does not exist.
  *   unlisted    — an `AGENTS.md` the instruction table of the agent workflow guide does not name.
  *
  * `unread` runs before all of them and reports this gate's own blind spot: an agent file the
@@ -912,57 +912,37 @@ function oversized(repo: Repo): readonly string[] {
 		);
 }
 
-/**
- * `codexSkills` is the repo's intent rather than the algorithm's, so it is supplied rather than
- * assumed: the CLI passes `CODEX_SKILLS`, and a caller reasoning about a snapshot alone passes none.
- */
-/** The scripts of each workspace package, which `vp run --filter <package> <script>` resolves. */
-function packageScripts(repo: Repo): ReadonlyMap<string, ReadonlySet<string>> {
-	const scripts = new Map<string, ReadonlySet<string>>();
-	for (const file of repo.present.values()) {
-		if (file.kind !== "text" || basename(file.path) !== "package.json") {
-			continue;
-		}
-		const json = asRecord(parseJson(file.content), file.path);
-		if (typeof json.name === "string") {
-			scripts.set(
-				json.name,
-				new Set(Object.keys(asRecord(json.scripts ?? {}, `${file.path} scripts`))),
-			);
-		}
-	}
-	return scripts;
-}
+/** A flag of `vp run` that takes the next word as its value (`vp run --help`). */
+const VALUE_FLAGS = new Set(["-F", "--filter", "--log", "--concurrency-limit"]);
 
 const TASK_NAME = /^[a-z][a-z0-9-]*(?::[a-z0-9-]+)*$/u;
 
 /**
- * The tasks that each `vp run` in `text` names. A command ends at a backtick, a quote, a shell operator or the end
- * of the line. A placeholder such as `<task>` is not a name. `--filter <package>` names a package script.
+ * The root tasks that each `vp run` in `text` names. A command ends at a backtick, a quote, a shell operator or the
+ * end of the line. A placeholder such as `<task>` is not a name. A command that selects packages (`--filter`,
+ * `package#task`) names a package script, which is not checked here.
  */
-export function namedTasks(
-	text: string,
-): readonly { readonly task: string; readonly filter?: string }[] {
-	const named: { task: string; filter?: string }[] = [];
+export function namedTasks(text: string): readonly string[] {
+	const named: string[] = [];
 	for (const match of text.matchAll(/\bvp run\b(?<rest>[^`"'|&;\n]*)/gu)) {
 		const tokens = (match.groups?.rest ?? "")
 			.trim()
 			.split(/\s+/u)
 			.filter((token) => token !== "");
-		let filter: string | undefined;
+		let selectsPackages = false;
 		for (let index = 0; index < tokens.length; index += 1) {
 			const token = tokens[index] ?? "";
-			if (token === "--filter") {
-				filter = tokens[index + 1];
-				index += 1;
-				continue;
-			}
 			if (token.startsWith("-")) {
+				const flag = token.split("=", 1)[0] ?? token;
+				selectsPackages ||= flag === "-F" || flag === "--filter";
+				if (VALUE_FLAGS.has(token)) {
+					index += 1;
+				}
 				continue;
 			}
 			const task = token.replace(/[.,:;)]+$/u, "");
-			if (TASK_NAME.test(task)) {
-				named.push(filter === undefined ? { task } : { task, filter });
+			if (!selectsPackages && !task.includes("#") && TASK_NAME.test(task)) {
+				named.push(task);
 			}
 			break;
 		}
@@ -970,25 +950,24 @@ export function namedTasks(
 	return named;
 }
 
+/** Where a contributor reads a command: agent files, contributor docs and every README. */
+const namesCommands = (path: string): boolean =>
+	isAgentMarkdown(path) || isContributorDoc(path) || basename(path) === "README.md";
+
 function unknownTasks(repo: Repo, tasks: readonly string[]): readonly string[] {
 	const known = new Set(tasks);
-	const scripts = packageScripts(repo);
 	const failures = new Set<string>();
 	for (const file of repo.present.values()) {
-		if (file.kind !== "text" || !(isAgentMarkdown(file.path) || isContributorDoc(file.path))) {
+		if (file.kind !== "text" || !namesCommands(file.path)) {
 			continue;
 		}
-		for (const { task, filter } of namedTasks(file.content)) {
-			if (filter === undefined ? known.has(task) : (scripts.get(filter)?.has(task) ?? false)) {
-				continue;
+		for (const task of namedTasks(file.content)) {
+			if (!known.has(task)) {
+				failures.add(
+					`${file.path} names \`vp run ${task}\`, but vite.config.ts defines no such task.\n` +
+						"  Use the task's current name, or remove the stale command.",
+				);
 			}
-			failures.add(
-				filter === undefined
-					? `${file.path} names \`vp run ${task}\`, but vite.config.ts defines no such task.\n` +
-							"  Use the task's current name, or remove the stale command."
-					: `${file.path} names \`vp run --filter ${filter} ${task}\`, but package ${filter} has no script ${task}.\n` +
-							"  Use the script's current name, or remove the stale command.",
-			);
 		}
 	}
 	return [...failures];
@@ -1010,6 +989,10 @@ function unlisted(repo: Repo): readonly string[] {
 		);
 }
 
+/**
+ * `codexSkills` is the repo's intent rather than the algorithm's, so it is supplied rather than
+ * assumed: the CLI passes `CODEX_SKILLS`, and a caller reasoning about a snapshot alone passes none.
+ */
 export const analyse = (
 	snapshot: Snapshot,
 	codexSkills: readonly string[] = [],
@@ -1050,8 +1033,7 @@ export async function scan(root: string = REPO_ROOT): Promise<Snapshot> {
 		if (stats.isSymbolicLink()) {
 			files.push({ path, kind: "symlink", target: await readlink(absolute) });
 		} else if (
-			isAgentMarkdown(path) ||
-			isContributorDoc(path) ||
+			namesCommands(path) ||
 			basename(path) === "package.json" ||
 			path === OPENCODE_CONFIG
 		) {

@@ -217,13 +217,11 @@ The file itself does not show these differences:
 - Any of these files is a committed symlink.
 - The root `AGENTS.md` and a nested one together are larger than 32 KiB.
 - An `AGENTS.md` is not in the table above.
-- An agent file or contributor doc names a `vp run` task that `vite.config.ts` or the filtered package does not define.
+- An agent file, contributor doc or README names a root `vp run` task that `vite.config.ts` does not define.
 
 Each failure explains itself.
 The gate compares bodies exactly.
 Thus, it detects a copy when someone makes it, not after the copies differ.
-
-`.github/CODEOWNERS` names the owner of these files, the skills and the local development configuration.
 
 ### Adding a tree, or a skill
 
