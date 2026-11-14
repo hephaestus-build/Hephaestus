@@ -122,6 +122,7 @@ Eight more checks need a read before the window:
 
 These migration entries also apply to a host that upgrades to 1.0:
 
+- *Use server.stopped instead of server.replicas=0*: use the procedure in that entry for each stopped phase.
 - *Stop every role before changing role-notice delivery*: use the procedure in that entry.
 - *Stop every role before replacing live Slack replies*: stop all replicas and keep a verified pre-upgrade backup. Existing replies with an unknown Slack outcome stay unconfirmed.
 - *Refresh the internal PostgreSQL certificate*: on one host, restart PostgreSQL after cert-manager issues the new certificate.

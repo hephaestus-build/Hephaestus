@@ -43,7 +43,8 @@ metadata:
     {{- include "hephaestus.labels" (dict "root" . "component" "server") | nindent 4 }}
 spec:
   # The migration Job owns the schema; the server waits for it. 0 stops it for database maintenance.
-  replicas: {{ include "hephaestus.replicas" (dict "root" . "replicas" .Values.server.replicas) }}
+  # server.stopped stops the servers; server.replicas keeps sizing PostgreSQL, so PostgreSQL does not restart.
+  replicas: {{ include "hephaestus.replicas" (dict "root" . "replicas" (ternary 0 .Values.server.replicas .Values.server.stopped)) }}
   # Allow the old servers to drain and their replacements to start before declaring a stalled rollout.
   progressDeadlineSeconds: {{ add $grace (mul 10 $startupFailures) }}
   # The inbox leases order each item across replicas; claim epochs fence sandbox results.

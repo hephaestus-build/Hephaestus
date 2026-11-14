@@ -1533,7 +1533,7 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 		"check",
 	]);
 
-	const paused = ["--set", "migration.enabled=false,server.replicas=0"];
+	const paused = ["--set", "migration.enabled=false,server.stopped=true"];
 	await install(work, [...backupOn, ...paused]);
 	await kubectl(["-n", NAMESPACE, "scale", `statefulset/${RELEASE}-postgresql`, "--replicas=0"]);
 	await kubectl([

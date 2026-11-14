@@ -124,20 +124,40 @@ It takes precedence over the normal upgrade and database-maintenance procedures.
 Do not use `--rollback-on-failure`: a rollback can restart old roles against a changed schema.
 Pause deployment automation that can change the release until this procedure is complete.
 
-Before the first phase, record the current chart, profile, site values and all three replica counts.
+Before the first phase, record the current chart, profile and site values.
 Prepare PostgreSQL backups, verify the restore, and keep the matching signed release lock and encryption keys.
 After phase 1, take and verify the final restore point while all roles are stopped, before phase 2 can change the schema.
 Verify the new release's chart before you use it.
 Each phase is a separate `helm upgrade` with that phase's chart, profile and site values:
 
-| Phase | Chart | `migration.enabled` | `server.replicas` | Before the next phase |
+| Phase | Chart | `migration.enabled` | `server.stopped` | Before the next phase |
 | --- | --- | --- | --- | --- |
-| 1. Stop every role | Current release | `false` | 0 | Every old role Pod, including terminating Pods, and its sandbox Pods and Jobs are gone. |
-| 2. Migrate | New release | `true` | 0 | The migration Job of this revision completed successfully. |
-| 3. Start the new roles | New release | `true` | Recorded count | Readiness, authenticated reads, a practice review and a conversation pass. |
+| 1. Stop every role | Current release | `false` | `true` | Every old role Pod, including terminating Pods, and its sandbox Pods and Jobs are gone. |
+| 2. Migrate | New release | `true` | `true` | The migration Job of this revision completed successfully. |
+| 3. Start the new roles | New release | `true` | `false` | Readiness, authenticated reads, a practice review and a conversation pass. |
 
 Keep PostgreSQL running throughout these phases.
-Use `server.replicas=0`, not `sandbox.enabled=false`, to stop the server.
+`server.stopped` stops the servers and keeps `server.replicas`, which sizes PostgreSQL's connections, so PostgreSQL does not restart.
+Do not stop the servers with `server.replicas=0` or `sandbox.enabled=false`.
+
+A current release from 1.0.0-rc.8 or earlier has no `server.stopped`.
+In phase 1, set `server.replicas=0` instead, and pin `postgresql.parameters.max_connections` for all three phases:
+
+1. Read the current value with `SHOW max_connections` in PostgreSQL.
+2. Read the value that the new chart derives for your site file:
+
+   ```bash
+   helm template hephaestus <new chart> -f <profile> -f <site file> --set server.stopped=true \
+     | grep -o 'max_connections=[0-9]*'
+   ```
+
+3. Set `postgresql.parameters.max_connections` to the larger of the two values in each phase.
+   The new chart refuses a smaller value, and a reviewing server needs more connections in the new release.
+   On a host with pull-based reconciliation, put it in `/etc/hephaestus/chart.yaml`, because the reconciler applies only that file.
+
+If the new value is larger, PostgreSQL restarts once, in phase 1, while the servers stop.
+Later phases do not restart it.
+Remove the setting at a later upgrade. The removal restarts PostgreSQL once.
 
 Before the cutover to conversation sandboxes, stop the source release's conversation loop too.
 After every server has stopped, foreground-delete its SandboxClaims and legacy sandbox Jobs, and wait for their Pods to disappear.

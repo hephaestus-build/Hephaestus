@@ -58,28 +58,28 @@ After a reboot or an interrupted drain, fenced attempts retry through durable re
 Use this procedure when the release notes require it, before you change PostgreSQL itself, or before you change the CA in its TLS Secret.
 The server is the database role and receives provider deliveries. Reception stops during these phases.
 GitHub redelivers failed deliveries, Slack retries them, and the routine sync repairs GitLab and Outline.
-Each phase is one `helm upgrade` with the replica counts of that phase:
+Each phase is one `helm upgrade` with the `server.stopped` value of that phase:
 
-| Phase | `server.replicas` | Before the next phase |
+| Phase | `server.stopped` | Before the next phase |
 | --- | --- | --- |
-| 1. Stop the writers | 0 | The old server Pods and their sandbox Pods are gone. |
-| 2. Change the database | 0 | PostgreSQL is ready and accepts connections. |
-| 3. Migrate | 0 | The migration Job of the revision completed. |
-| 4. Restore | The prior count | The server is ready and receives provider deliveries. |
+| 1. Stop the writers | `true` | The old server Pods and their sandbox Pods are gone. |
+| 2. Change the database | `true` | PostgreSQL is ready and accepts connections. |
+| 3. Migrate | `true` | The migration Job of the revision completed. |
+| 4. Restore | `false` | The server is ready and receives provider deliveries. |
 
-Phase 1 uses the verified chart and the values of the current release, with only the server count changed.
+Phase 1 uses the verified chart and the values of the current release, with only `server.stopped` changed.
 After the servers stop, remove the remaining sandbox workloads as in step 4 of [Planned node maintenance](#planned-node-maintenance) before phase 2.
 Phase 2 applies the change.
 The change can be the new release values, a new PostgreSQL configuration, or a new CA in the TLS Secret and a restart of PostgreSQL.
 Phase 3 runs the new release's migration Job while the server stays stopped.
 
-Before phase 1, record the current `server.replicas`, and back up the database.
+Before phase 1, back up the database.
 On a host with [pull-based reconciliation](./pull-based-deployment#settings-for-the-chart), pause the timer before phase 1 and resume it after phase 4.
-A tick applies `/etc/hephaestus/chart.yaml` with its own replica counts.
+A tick applies `/etc/hephaestus/chart.yaml` with its own values.
 
-A count of 0 is a desired state.
 Check on the cluster that the pods stopped, that the sandbox Pods and Jobs are gone, and that the migrations completed before the next phase.
-Set `server.replicas=0` to stop the servers.
+`server.stopped=true` stops the servers and keeps `server.replicas`, which sizes PostgreSQL's connections.
+A current release from 1.0.0-rc.8 or earlier has no `server.stopped`. For that case, follow [Stopped schema upgrades](./upgrade#stopped-schema-upgrades).
 `sandbox.enabled=false` removes the sandbox objects.
 
 ## Check that it worked

@@ -115,9 +115,9 @@ The restored database is readable only with the keys that sealed its values.
 Keep them as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes.
 Reconcile external writes, as [Reconcile external writes after restore](./production-operations-runbook#reconcile-external-writes-after-a-database-restore) describes.
 
-Before reducing application replicas, record `SHOW max_connections` and set `postgresql.parameters.max_connections` to that value.
-Keep this override until WAL replay finishes. Include it in the recovery set for a replacement host.
-Automatic connection sizing decreases with replica counts, but PostgreSQL rejects recovery below the source setting.
+Stop the servers with `server.stopped=true`, not with `server.replicas=0`.
+The chart sizes `max_connections` from `server.replicas`, and PostgreSQL rejects recovery below the source setting.
+On a replacement host, use the source's `server.replicas`, or set `postgresql.parameters.max_connections` to the source's `SHOW max_connections` until WAL replay finishes.
 The [PostgreSQL recovery requirements](https://www.postgresql.org/docs/18/hot-standby.html#HOT-STANDBY-ADMIN) describe this constraint.
 
 ### Prepare replacement storage
@@ -188,7 +188,7 @@ Rehearse a restore on a copy of the instance before you need one.
 2. Keep a copy of the failed data and record the chosen recovery point and expected lost writes.
 3. Check whether `DATABASE_ADMIN_PASSWORD` changed after the recovery point. If it changed, restore the matching value in the Secret before startup.
    The migration Job sets the passwords of `hephaestus_owner` and `hephaestus_app` again.
-   Complete steps 1, 2 and 4 of the isolated drill with application replicas at zero.
+   Complete steps 1, 2 and 4 of the isolated drill with `server.stopped=true`.
    Keep provider and model egress denied. Wait for `pg_is_in_recovery()` to return `f`.
 4. Do not apply `restore-clone-lockdown.sql` to the live recovery database.
    Verify silent mode, delivery status, review triggers and conversation bindings against the intended live settings.
