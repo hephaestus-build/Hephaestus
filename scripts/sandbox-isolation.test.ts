@@ -10,8 +10,10 @@ import {
 	namedTarget,
 	namespacedName,
 	parseAddress,
+	podSecurityFailures,
 	specFailures,
 	type Target,
+	unrestrictedPod,
 } from "./sandbox-isolation.ts";
 
 const pod = (spec: Record<string, unknown>) => ({
@@ -287,6 +289,41 @@ void test("no credential reaches a sandbox: no token, no Secret, and no Service 
 		[
 			"the service account directory exists",
 			"Service variables beside the API's: HEPH_SERVER_SERVICE_HOST",
+		],
+	);
+});
+
+void test("the sandbox namespace must refuse, by Pod Security admission, a Pod that only the Baseline level admits", () => {
+	const unrestricted = unrestrictedPod("sandboxes", "isolation-restricted-1", "agent");
+	// The Pod breaks the Restricted rules that Baseline does not have.
+	const broken = specFailures(unrestricted);
+	for (const rule of [
+		"runAsNonRoot is not set",
+		"seccomp is not RuntimeDefault",
+		"privilege escalation allowed",
+		"capabilities not dropped",
+	]) {
+		assert.ok(broken.includes(rule), rule);
+	}
+	const refused =
+		'Error from server (Forbidden): error when creating "STDIN": pods "isolation-restricted-1" is forbidden: violates PodSecurity "restricted:latest": allowPrivilegeEscalation != false';
+	assert.deepEqual(podSecurityFailures(refused, "restricted"), []);
+	// A cluster default can enforce the level without the label; the refusal is the proof.
+	assert.deepEqual(podSecurityFailures(refused, undefined), []);
+	assert.deepEqual(podSecurityFailures(null, "baseline"), [
+		"admits a Pod that the Restricted Pod Security Standard refuses (pod-security.kubernetes.io/enforce=baseline)",
+	]);
+	assert.deepEqual(podSecurityFailures(null, undefined), [
+		"admits a Pod that the Restricted Pod Security Standard refuses (no pod-security.kubernetes.io/enforce label)",
+	]);
+	// A warning of the warn level and a refusal by a quota prove nothing about enforcement.
+	assert.deepEqual(
+		podSecurityFailures(
+			'Warning: would violate PodSecurity "restricted:latest": runAsNonRoot != true\nError from server (Forbidden): error when creating "STDIN": pods "isolation-restricted-1" is forbidden: failed quota: disk: must specify requests.cpu for: baseline\n',
+			undefined,
+		),
+		[
+			'refused a Pod that the Restricted Pod Security Standard refuses, but not by Pod Security admission (no pod-security.kubernetes.io/enforce label): Error from server (Forbidden): error when creating "STDIN": pods "isolation-restricted-1" is forbidden: failed quota: disk: must specify requests.cpu for: baseline',
 		],
 	);
 });
