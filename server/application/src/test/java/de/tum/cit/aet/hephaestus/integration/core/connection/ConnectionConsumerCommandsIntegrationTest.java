@@ -139,6 +139,10 @@ class ConnectionConsumerCommandsIntegrationTest extends BaseIntegrationTest {
         assertThatThrownBy(
                         () -> service.holdAnsweringConnection(workspaceId, IntegrationKind.SLACK, connection.getId()))
                 .isInstanceOf(IllegalTransactionStateException.class);
+        assertThatThrownBy(() -> service.fenceActiveInstallation(workspaceId, 123L))
+                .isInstanceOf(IllegalTransactionStateException.class);
+        assertThatThrownBy(() -> service.holdConnection(workspaceId, connection.getId()))
+                .isInstanceOf(IllegalTransactionStateException.class);
         assertThatThrownBy(() -> service.recordAdministrativeChange(
                         connection,
                         "PROJECT_SELECTION_CHANGED",
@@ -167,7 +171,7 @@ class ConnectionConsumerCommandsIntegrationTest extends BaseIntegrationTest {
                 IntegrationKind.SLACK,
                 "T-" + suffix,
                 new ConnectionConfig.SlackConfig("T-" + suffix, "Engineering", null, Set.of()));
-        connection.setState(IntegrationState.ACTIVE);
+        ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         connection.setDisplayName("Before the lock");
         return connections.saveAndFlush(connection);
     }
