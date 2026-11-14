@@ -31,7 +31,7 @@ A private report also leaves the instance when GitHub filing is enabled.
 7. Check that its installation is available and its visibility is private.
 8. Choose an instance-level chat model in **Model**.
 9. Set **Daily draft limit** for the instance.
-10. After the private smoke test below, enter the public repository in **Public repository**.
+10. After the private test in [Check that it worked](#check-that-it-worked), enter the public repository in **Public repository**.
 11. Check its installation and visibility.
 
 The default daily draft limit is 50.
@@ -61,19 +61,12 @@ Product feedback drafts have no workspace, so that screen excludes them.
 A person's data export includes the calls for their reports.
 
 For instance accounting, run this read-only query against PostgreSQL.
-It shows measured cost in USD and the number of calls whose cost remains unknown.
-An unknown call is not a free call.
+`measured_cost_usd` leaves out the calls whose cost is unknown, so it is a lower bound.
 
 ```sql
 SELECT date_trunc('month', occurred_at AT TIME ZONE 'UTC') AS month,
        count(*) AS calls,
-       sum(input_tokens + cache_read_tokens + cache_write_tokens) AS input_tokens,
-       sum(output_tokens) AS output_tokens,
-       sum(cost_usd) FILTER (WHERE measurement_verification = 'VERIFIED'
-                            AND pricing_state <> 'UNPRICED') AS measured_cost_usd,
-       count(*) FILTER (WHERE call_state <> 'ENDED'
-                        OR measurement_verification <> 'VERIFIED'
-                        OR pricing_state = 'UNPRICED') AS unknown_calls
+       sum(cost_usd) FILTER (WHERE measurement_verification = 'VERIFIED') AS measured_cost_usd
 FROM llm_usage_event
 WHERE workspace_id IS NULL AND source_type = 'PRODUCT_FEEDBACK_DRAFT'
 GROUP BY 1
@@ -99,22 +92,17 @@ Each private issue starts with a reason:
 
 | Reason | Meaning |
 | --- | --- |
-| `opted out` | The reporter did not allow a public issue. |
+| `the reporter kept it private` | The reporter did not allow a public issue, or reached the limit of 5 public issues in a UTC day. |
 | `security` | The report can describe a security problem. |
 | `redaction` | Code found a secret, credential, email address, or known person’s name. |
 | `about a person` | The report concerns a named person. |
 | `low confidence` | The report is unclear or is not an actionable issue. |
 | `abuse` | The safety check found abuse. |
-| `no model draft finished` | The model was unavailable, the limit was reached, the model response stayed invalid, or no draft finished within 10 minutes. |
+| `no model draft finished, and only a drafted report can go public` | The model was unavailable, the limit was reached, the model response stayed invalid, or no draft finished within 10 minutes. |
 
-Security, blocking redaction, or a report about a named person sets a persistent risk latch.
-An edit or retry cannot clear it.
-Without a draft, the private issue uses the original report after code redaction.
-The public route never uses this fallback text.
-
-The model is instructed to classify praise and support questions as non-issues.
-A misclassified report can still become public if the reporter allowed it and the other checks pass.
-The selected report kind alone does not keep it private.
+Security, blocking redaction, or a report about a named person keeps a report private for good. An edit or retry cannot change that.
+Without a draft, the private issue uses the original report after code redaction. The public route never uses this text.
+Each account can file at most 5 public issues in a UTC day. Later reports that day go to the private route.
 
 The app uses Bug or Feature issue types where available. It adds no labels.
 A possible duplicate becomes a new issue with a reference to the possible match.
@@ -146,7 +134,6 @@ Once a private repository is set, select **File on GitHub** on a report to send 
 
 Once a repository is connected, the list offers to move everything that waits, with **Move to GitHub**.
 A move that stops can run again: it continues with what is left, and no report gets a second issue.
-A report sent before this version told people about the AI model moves as written, and no model reads it.
 Filing keeps its pace, so a large move takes a while.
 The action needs a recent sign-in, and the audit log records who filed it. An admin can never publish a report: only the reporter can allow that.
 
@@ -155,7 +142,7 @@ It also lists the erased reports' issues that need a maintainer, in one email pe
 It carries the kind and a link, never the report text or attached context.
 Active instance admins need a verified address and the relevant email subscription to receive it.
 Without email delivery, the saved report remains available in the console.
-See [Email setup](./production-setup.mdx#email) for relay setup.
+[Set up email](./set-up-email) describes the relay.
 
 ## Publish a private issue
 
@@ -213,25 +200,17 @@ Do not remove app access or destinations before cleanup finishes.
 Product improvement does not authorize research reuse of identifiable reports or quotations.
 Agree any research purpose, lawful basis, notice, retention, and safeguards separately with your institution.
 
-## Run it
-
-Start with the private route before you enable the public route.
-
-1. Configure the private destination, model, and daily limit.
-2. Send a synthetic report through **Send feedback** with public permission off.
-3. Check for one private issue with the report number and model disclosure.
-4. Check that `product_feedback_steps_total` records `step=file` with `outcome=ok`.
-5. Close the test issue.
-6. Configure the public destination after the private test passes.
-7. Monitor the first real public report, its hold, route, and alerts.
-
-Do not send test issues to a production public repository.
-Use a separate test repository with synthetic data to test public behavior.
-
 ## Check that it worked
 
+Test the private route before you set the public repository.
+Do not send test issues to a production public repository.
+
+1. Send a synthetic report through **Send feedback**, with public permission off.
+2. Check for one private issue with the report number and the model disclosure, and no public issue.
+3. Check that `product_feedback_steps_total` records `step=file` with `outcome=ok`.
+4. Close the test issue.
+
 The destinations card shows available app installations and a usable model.
-The private smoke test produces one issue and no public issue.
 **Needs action** explains stopped reports. If email delivery is set up, the admin email reaches its subscribed recipients.
 The first real public report waits for its hold and contains no detected personal details.
 

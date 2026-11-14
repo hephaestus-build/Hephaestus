@@ -125,9 +125,52 @@ For budget state, the copy says what happens ("paused", "resumes"), not which en
 - **`formatCapUsd`** — a cap someone typed, rendered the way they typed it: `$50`, not `$50.00`.
 - **`formatAverageUsd`** — an average spend, such as **Avg per use**.
   One column has one number of decimals, which `averageFractionDigits` takes from all its averages, the total included.
-  The [worked example](/admin/ai-providers#worked-example) owns the decimal places and display thresholds.
+  The [worked example](#worked-example) gives the decimal places and display thresholds.
 
 `formatRateUsd`, `formatCostUsd` and `formatCapUsd` render an absent value as `—`.
+
+### Worked example
+
+The example model has these rates per 1M tokens:
+
+- Input: **$2.50**.
+- Output: **$10.00**.
+- Cache read: **$0.25**.
+- Cache write: unpriced.
+
+One completed run reports 12 345 input, 3 210 output, 40 000 cache-read, and 0 cache-write tokens.
+Each bucket uses `tokens ÷ 1 000 000 × rate`:
+
+| Bucket      | Tokens | Rate / 1M |                                                                        Amount |
+| ----------- | -----: | --------: | ----------------------------------------------------------------------------: |
+| Input       | 12 345 |     $2.50 |                                              0.012345 × 2.50 = **$0.0308625** |
+| Output      |  3 210 |    $10.00 |                                             0.003210 × 10.00 = **$0.0321000** |
+| Cache read  | 40 000 |     $0.25 |                                              0.040000 × 0.25 = **$0.0100000** |
+| Cache write |      0 |         — | 0 tokens, so **$0** — an unpriced bucket with no tokens is not a missing rate |
+|             |        |   **raw** |                                                                **$0.0729625** |
+
+The ledger column is `NUMERIC(18,6)`.
+It rounds the total to six decimals with **banker's rounding**.
+The seventh digit is exactly 5, and the sixth (`2`) is already even.
+The stored amount is therefore **$0.072962**, not `$0.072963`.
+Half-to-even rather than half-up rounding prevents a long sequence of amounts from drifting upward against you.
+
+Two further limits apply:
+
+- **A tiny paid call never stores $0.** One input token at $0.05 / 1M costs $0.00000005.
+  Six-decimal rounding would make it zero.
+  The ledger stores **$0.000001** instead to distinguish a paid call from a free call.
+  The excess charge is less than a millionth of a dollar per call.
+- **The UI rounds differently from the ledger.** Published *rates* show up to four decimals (`$0.075 / 1M`) for price-list checks.
+  *Spend* appears as cents, with `<$0.01` for a non-zero amount below one cent.
+  Each cell of an *average* column, such as **Avg per use**, has the same decimals.
+  Thus, the decimal points line up.
+  The column shows whole cents when no average in it is below one cent.
+  If an average is below one cent, the column shows three decimals, such as `$0.004`.
+  If an average is below a tenth of a cent, it shows four, such as `$0.0004`.
+  Thus, a small unit cost stays visible.
+  An average above zero but below `$0.00005` shows `<$0.0001`.
+  No display is the stored number.
 
 ## Rule 6 — Client-side money arithmetic is display-only, and may never decide anything
 

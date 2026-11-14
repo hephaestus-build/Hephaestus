@@ -24,8 +24,8 @@ features:
 
 oauth_config:
   redirect_urls:
-    - <api-public-base-url>/oauth/callback/slack
-    - <api-public-base-url>/login/oauth2/code/slack
+    - https://<host>/api/oauth/callback/slack
+    - https://<host>/api/login/oauth2/code/slack
   scopes:
     bot:
       - chat:write
@@ -43,7 +43,7 @@ oauth_config:
 
 settings:
   event_subscriptions:
-    request_url: https://<webhook-host>/webhooks/slack
+    request_url: https://<host>/webhooks/slack
     bot_events:
       - message.im
       - message.channels

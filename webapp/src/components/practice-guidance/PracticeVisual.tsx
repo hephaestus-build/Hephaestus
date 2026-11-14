@@ -2,7 +2,7 @@ import { cn } from "cn";
 
 import { sanitizePracticeSvg, usesThemeClasses } from "./practice-svg";
 
-/** The `pv-*` classes as theme tokens and fonts; `docs/admin/writing-practices.mdx` names them for authors. */
+/** The `pv-*` classes as theme tokens and fonts; `docs/user/practice-visual-rules.md` names them for authors. */
 const PRACTICE_SVG_THEME = [
 	"[&_text]:font-sans",
 	"[&_.pv-mono]:font-mono",

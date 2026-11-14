@@ -1,376 +1,149 @@
 ---
 title: Publish the legal pages
-description: Publish the /imprint and /privacy pages of your instance, and meet the duties of the operator of a self-hosted deployment.
+description: Publish the imprint and privacy notice of your instance, and add the notice text that each optional feature needs.
 page_type: how-to
 ---
 
-Hephaestus ships with two legal pages: `/imprint` and `/privacy`.
-The webapp renders them from Markdown files that nginx serves directly.
-This page explains how the webapp resolves them and each self-hosted operator's responsibilities.
+Hephaestus serves two legal pages: `/imprint` and `/privacy`.
+Until you publish your own, it serves a placeholder that says that no legal content is configured, with a red banner.
+Publish both pages before the first user signs in.
 
 :::caution[CAUTION: Configure legal notices before admitting users]
-The built-in “not configured” pages are placeholders, not legal notices.
-Each operator must supply their own notices.
-On the Helm chart, put them in a ConfigMap and name it in `webapp.legalOverrides`, as [Deployment-specific overrides](#deployment-specific-overrides) describes.
+The built-in placeholder pages are not legal notices.
+On a deployment that serves the placeholder, the first-login screen links to no legal notice.
 :::
 
-## First-login consent notice
+## Before you start
 
-The first-login screen carries no operator-specific text.
-It states the terms of use and links to `/privacy` and `/imprint`.
-Those pages identify the deployment operator, the data it stores, and its retention periods.
-Thus, the same text is accurate on every instance.
-These overrides make it complete.
+You are the controller of your deployment under [Art. 4(7) GDPR](https://eur-lex.europa.eu/eli/reg/2016/679/oj), not the upstream project.
+Links to the upstream notices do not describe your deployment.
 
-The sign-in and first-login screens have their own `/privacy` and `/imprint` links.
-They render without the site footer.
-On a deployment that still serves the placeholder, the first-login screen links to no legal notice.
+- Identify the organization responsible for your deployment and its purposes.
+- Determine a lawful basis for each purpose with your data-protection adviser. Neither self-hosting nor acceptance of the terms supplies one. Art. 6(1)(f) GDPR does not apply to public authorities in the performance of their tasks.
+- Find out which operator identification your jurisdiction requires, such as [§ 5 DDG](https://www.gesetze-im-internet.de/ddg/__5.html) for qualifying German digital services.
 
-1. Configure both pages before the first user signs in.
+## Write the privacy notice
 
-When the account holder selects **Save and continue**, the ledger records two facts against the notice version shown:
+Use Art. 13 GDPR as the outline, and include the information that Art. 14 GDPR requires for contributors who never sign in.
+Your notice must cover at least these categories:
 
-- The account accepted the terms with **I accept the terms of use**.
-- The screen presented this text, which links to the privacy notice.
+- **Identity and sign-in**: the provider, ID, login, sign-up email address, and display name of each linked GitHub or GitLab identity.
+- **Repository synchronization**: pull and merge requests, issues, reviews, review comments, commit metadata, and author profiles of each monitored repository. State the retention triggers that [Data retention](./data-retention) lists.
+- **Account settings and email**: preferences and the verified primary email address. With a mail relay, also notification subscriptions. Name the relay operator as a recipient.
+- **AI features**: messages to the configured model providers, stored conversations, and practice results.
+- **Server logs**: IP addresses and request metadata.
+- **Log collection**: if you ship container logs to a store such as Loki ([Collect logs](./monitoring.md#collect-logs)), name its operator and retention.
+- **Optional features** that you turn on: use the texts in [Notice texts for optional features](#notice-texts-for-optional-features).
 
-Both facts come from one checkbox.
-The ledger records the text presented to the account and its agreement.
-It does not establish that anybody opened the link.
-
-Where the screen asks the research question below, it records the research answer as a third, separate decision.
-Either answer completes setup.
-Hephaestus records nothing until the account holder selects **Save and continue**.
-[Your data in Hephaestus](/user/privacy#signing-in-and-choosing-research-participation) describes the same screen for the person who answers it.
-
-## The optional research question
-
-`HEPHAESTUS_RESEARCH_ORGANIZATION` names the organization that runs research on this deployment.
-Its presence determines whether the research question appears.
-[Integration settings](./production-setup#base-environment-variables) lists the setting with the other deployment settings.
-The organization does not need to be academic.
-Choose a name that reads correctly in the sentence "If you say yes, the organization may use your data for research."
-
-Consent must be informed.
-This includes the controller's identity ([EDPB 05/2020](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf) § 3.3).
-Thus, the configured name appears beside the choice on the first-login screen and in account settings, not only in a link.
-
-```env
-HEPHAESTUS_RESEARCH_ORGANIZATION="Technical University of Munich (AET)"
-```
-
-By default, the variable is unset.
-In this state, no research question appears.
-First-login setup contains only the terms.
-The account-settings switch is hidden.
-`PUT /user/consent/research` returns 404.
-
-### What the question asks
-
-The screen asks **Allow research use of your data?** with two answers: **Yes, allow research use** and **No, keep my data out of research**.
-The legal basis is consent under Art. 6(1)(a) GDPR.
-It is a broad consent to an area of research, not to one research project.
-
-[Recital 33 GDPR](https://gdpr-info.eu/recitals/no-33/) allows this when the purpose of the research cannot be fully specified at collection.
-[EDPB 05/2020](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf) paragraphs 153 to 163 set the conditions.
-The obligations below follow from those conditions.
-
-The area of research is how developers work and learn, and how AI systems can review and support that work.
-It includes building and running benchmarks and evaluation datasets for such AI systems.
-The data it may use is:
-
-- The participant's work in the tools that the project connects.
-- Hephaestus results and problems and feedback about that work.
-- The participant's responses to that feedback.
-- How the participant uses Hephaestus, including conversations with Hephaestus.
-
-Sign-in credentials and access tokens are never used.
-Slack messages that a participant stops Hephaestus from using stay out of research too.
-
-The consent is optional and separate from the terms.
-Saying no or withdrawing has no disadvantage ([Art. 7(4) GDPR](https://gdpr-info.eu/art-7-gdpr/)).
-
-Research that falls outside this area is not covered by this consent.
-For such research, change the wording with a new `WORDING_VERSION` after legal review.
-
-### When a new decision is required
-
-**A change to the organization name is a new question. Hephaestus treats it as one.**
-Every research decision records the organization that the question named in `consent_decision.research_organization`.
-Consent to research is consent to the organization that runs it.
-After a rename, no other record identifies the organization that the account saw in the question.
-
-If the setting has a different name, no account's grant to the previous one authorizes anything.
-`participatesInResearch` reports false.
-Setup asks the research question again.
-Earlier decisions stay in the ledger as a record of the questions and answers at that time.
-Terms acceptance stays unchanged because the terms did not change.
-
-**A wording version records what the person saw. Scope determines whether a decision still applies.**
-
-New consent decisions record the current `WORDING_VERSION`.
-A wording change that adds a research purpose, recipient, or use of data needs a new decision.
-A change to the kind of research also needs a new decision.
-A narrower wording can keep a decision that already covers every retained purpose.
-The configured organization must still match, and the latest answer still applies.
-
-The `2026-10-31` wording removes survey answers from the `2026-10-04` scope.
-It adds no research purpose, recipient, or use of data.
-Existing grants and refusals therefore remain valid without another setup screen.
-The ledger keeps their original wording versions and decision IDs.
-A withdrawal still applies at once.
-The `2026-09-11` wording did not cover benchmarks and evaluation datasets, so it does not authorize the retained scope.
-
-`ConsentService` lists the wording versions that cover the current scope.
-A later version is not accepted automatically.
-[EDPB Guidelines 05/2020](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf), paragraphs 57–58 and 110, relate consent to the purposes and scope originally accepted.
-This removal stays within those purposes.
-
-Both the setup screen and the settings switch return the organization that they displayed.
-If a submission names an organization that this instance no longer runs, Hephaestus refuses it with `409`.
-A tab left open across a change cannot record a decision about an organization that its reader never saw.
-
-Practice research requires a current grant for the configured organization.
-Withdrawal stops new research use. It does not stop ordinary practice reviews or erase rows in the instance database. The research team removes the data from its datasets that are not yet anonymized. The Slack App Home
-links to account settings rather than maintaining a separate research decision.
-
-### Withdrawal
-
-A participant withdraws with one switch, **Allow research use of my data**, in **User settings → Research participation**.
-This is as easy as giving consent ([Art. 7(3) GDPR](https://gdpr-info.eu/art-7-gdpr/)).
-New research use stops.
-The research organization removes the participant's data from datasets that are not yet anonymized.
-Research done before the withdrawal stays lawful.
-
-Anonymized data in a published result or dataset cannot be traced back and cannot be removed.
-
-Withdrawal does not erase other stored data by itself.
-Account erasure is a separate request.
-
-### Release a structured research dataset
-
-A research disclosure is a JSON file for the configured research organization.
-It contains structured practice history for people whose current research grant permits it.
-It is **pseudonymous personal data**, not anonymous data.
-Keep it within the authorized research team.
-
-The file excludes participant and model text, source code, credentials, and provider identities.
-It retains historical records with their recorded limits.
-A legacy record does not prove a capture contract.
-
-Every operation below requires the instance-admin role and the administrator's own session.
-By default, every operation also requires the administrator's own fresh passkey verification.
-This requirement applies even when the instance does not require passkeys for ordinary admin access.
-An isolated test instance can turn off this additional confirmation.
-See [Test instances without additional confirmation](./passkeys.mdx#test-instances-without-additional-confirmation).
-
-A user view or installed-client session cannot perform these operations.
-Browser requests also need normal CSRF protection.
-
-1. When the instance requires the additional confirmation, verify your passkey through **User settings → Passkeys**.
-2. Submit `POST /admin/research-disclosures` with the workspace ID as a string, `firstDay`, `lastDay`, and `useUntil`.
-   The window uses UTC days and includes the last day.
-   Choose a window of 1 to 400 days that ends no later than today.
-   Set `useUntil` to the future date and time that the study protocol permits.
-   The request cannot change the research purpose, organization, or notice version.
-3. Save the returned attachment and its dataset ID from the filename.
-   Hephaestus records the disclosure and its protected participant mapping, but stores no copy of the file.
-   There is no redownload operation.
-   A new request creates a new disclosure, including after an interrupted download.
-
-Before further analysis, check whether a participant's removal is owed:
-
-1. When the instance requires the additional confirmation, verify your passkey again if it is no longer recent.
-   Then submit `POST /admin/research-disclosures/removal-checks`.
-   This operation records newly detected obligations.
-   It returns open disclosures with a removal owed or an expired use-until date.
-   An empty list does not mean no datasets were released.
-2. Remove each listed participant key's rows from every retained copy that is not yet anonymized.
-   Remove dependent rows and every whole-review fact that names the key too.
-   If this is not possible, delete the copy.
-3. After removal, submit `POST /admin/research-disclosures/{datasetId}/removal-receipts` with `participantKeys`.
-   This records your statement that the removals were completed.
-   A later research grant does not cancel a removal owed under the earlier grant.
-
-Stop using the file at its use-until date.
-After every retained copy is destroyed or anonymized, submit `POST /admin/research-disclosures/{datasetId}/closure`.
-Set `closure` to `DESTROYED` or `ANONYMIZED`, according to what was done.
-Closure removes the protected participant mapping and keeps the disclosure receipt.
-
-Hephaestus cannot reach or revoke a downloaded copy.
-A removal receipt or closure is an operator's statement, not a check of the research team's storage.
-
-### No separate consent for datasets
-
-The consent has no second choice for sharing or publishing datasets.
-Only anonymized data leaves the research team.
-Anonymous data is outside the GDPR ([Recital 26](https://gdpr-info.eu/recitals/no-26/)).
-Paragraph 47 of [EDPB Guidelines 1/2026](https://www.edpb.europa.eu/system/files/2026-05/edpb_guidelines_202601_scientificresearch_en.pdf) (draft, adopted 15 April 2026) lets a broad consent cover the provision of data within the research area.
-
-A release needs a separate choice and a new wording version when it would do any of the following:
-
-- Contain data that is not anonymized.
-- Serve a purpose outside the stated area of research.
-- Go to a third country without adequate safeguards.
-
-### What operators must do
-
-The broad consent is valid only if the operator meets these obligations.
-Meet all of them before you set `HEPHAESTUS_RESEARCH_ORGANIZATION`, and keep to them while the research runs.
-
-1. Before any research export, analysis, or benchmark run, apply the latest `RESEARCH_PARTICIPATION` decision of each account.
-   Use only a grant whose wording covers the retained scope and names the current organization.
-2. Remove the data of withdrawn accounts from datasets that are not yet anonymized without undue delay.
-   Treat an erasure request for data in such a dataset the same way.
-   Treat a Slack message-use opt-out the same way for the affected messages.
-3. Keep participants regularly informed about the research.
-   Give the current research purpose, working methods, projects and released datasets.
-   Give a way to receive updates as the research progresses.
-   Use a research information page or a named research contact who answers questions and sends these updates.
-   An email address that only waits for questions does not meet this duty.
-   See [EDPB 05/2020](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf) paragraphs 161 and 162 and footnote 74.
-   See also [EDPB 1/2026](https://www.edpb.europa.eu/system/files/2026-05/edpb_guidelines_202601_scientificresearch_en.pdf) (draft) paragraphs 48 and 49.
-4. Assess whether the research needs an ethics committee vote.
-   Get the approval where your institution or the research process requires it.
-   Do not state an approval in the notice that you do not hold.
-   A vote is not required for every study ([TUM ethics committee](https://www.tum.de/en/about-tum/organization/ethics-committee)).
-5. Keep the research team separate from grading and line management.
-   A power imbalance can weaken the free choice of a participant.
-   See [EDPB 05/2020](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf) paragraphs 16 to 24 and 46 to 48.
-   See also [Recital 43](https://gdpr-info.eu/recitals/no-43/).
-6. Test a dataset for re-identification before you call it anonymous.
-   Release it only if the test passes.
-   Free text and code are hard to anonymize ([EDPB 1/2026](https://www.edpb.europa.eu/system/files/2026-05/edpb_guidelines_202601_scientificresearch_en.pdf) paragraph 164).
-7. Honor the AI choice of each participant in benchmark runs.
-   Model providers may see only pseudonymized data, under a data processing agreement.
-8. Do not use the consent for browsing activity from the browser extension.
-   The privacy notice already says so.
-9. Keep each safeguard that the consent text states.
-   The research team replaces identifiers with a code, stores the key apart, and screens text for names.
-   It restricts access to the team and its processors.
-   It sends model providers only pseudonymized data, under a data processing agreement.
-
-Publish the retention and recipient details of the research in your privacy notice.
-
-Each ledger row’s `notice_version` identifies the text that the account saw.
-A research disclosure records the wording in force when released, while each linked grant row keeps the wording that its participant accepted.
-
-`ConsentService.WORDING_VERSION` identifies the text shown for new decisions.
-That text is the first-login screen, published in a signed release and immutable in git.
-The webapp holds the same constant beside the text.
-It submits its own constant.
-Thus, a browser tab that predates a deployment cannot record acceptance of text it never rendered.
-
-A fork that changes the text must change both `WORDING_VERSION` constants and review `ConsentService.ACCEPTED_NOTICE_VERSIONS` in the same commit.
-The current version must be in that set.
-Follow [When a new decision is required](#when-a-new-decision-is-required) to decide which earlier versions can stay in the set.
-Make it on purpose.
-
-## Operator obligations
-
-Under [Art. 4(7) GDPR](https://eur-lex.europa.eu/eli/reg/2016/679/oj), the controller determines the purposes and means of processing.
-Use of Hephaestus does not make the upstream project your controller.
-[§ 5 DDG](https://www.gesetze-im-internet.de/ddg/__5.html) applies to qualifying German digital services.
-Links to the upstream notices do not describe a separately operated deployment.
-
-1. Identify the organization responsible for your deployment and its processing purposes.
-2. Publish a privacy notice with the information that Arts. 13 and 14 GDPR require.
-   It must include data about contributors who never sign in.
-3. Publish the operator identification that your jurisdiction requires.
-
-## Resolution
-
-At page load, the webapp fetches the relevant Markdown file in this priority order.
-It uses the first file it finds:
-
-| Priority | Path                           | Typical source          |
-| -------: | ------------------------------ | ----------------------- |
-|       1. | `/legal-overrides/<page>.md`   | Mounted by the operator |
-|       2. | `/legal/_disclaimer/<page>.md` | Shipped safety-fallback |
-
-`<page>` is `imprint` or `privacy`.
-A banner alerts end users whenever the webapp serves the disclaimer.
+For each transfer outside the EU or EEA, document the Chapter V safeguard for the actual recipient, service, and destination.
 
 ## Publish your pages
 
 ### Deployment-specific overrides
 
-Every public deployment uses this configuration.
-You write two Markdown files, `imprint.md` and `privacy.md`, and the webapp serves them instead of the safety-fallback.
-
-1. Put both files in a ConfigMap in the release namespace:
+1. Write `imprint.md` and `privacy.md` in Markdown.
+2. Put both files in a ConfigMap in the release namespace:
 
    ```bash
    kubectl --namespace hephaestus create configmap hephaestus-legal-overrides \
      --from-file=imprint.md --from-file=privacy.md
    ```
 
-2. Name the ConfigMap in your values file:
+3. Name the ConfigMap in your values file, then run the install command again:
 
-   ```yaml
+   ```yaml title="values.yaml"
    webapp:
      legalOverrides: hephaestus-legal-overrides
    ```
 
-   The chart mounts it read-only at `/usr/share/nginx/html/legal-overrides`.
-   The webapp Pod waits until the ConfigMap that it names exists.
+The chart mounts the ConfigMap read-only at `/usr/share/nginx/html/legal-overrides`.
+The webapp Pod waits until the ConfigMap exists.
+A webapp container outside the chart reads the same two files from that path. The files must be readable by UID 101.
 
-A container that runs outside the chart reads the same two files from a read-only mount at `/usr/share/nginx/html/legal-overrides`.
-The webapp runs as UID 101, so that user must be able to read the files.
+The webapp reads the files on each page load.
+Kubernetes updates a mounted ConfigMap within about a minute, so a later edit needs no redeploy.
+Each page is resolved on its own: an override of one file leaves the other page on the placeholder.
 
-The webapp reads the files on each request.
-Kubernetes updates a mounted ConfigMap within about a minute, so a change needs no redeploy.
+## Check that it worked
 
-Resolution is per page: a single-file override leaves the other page on the built-in fallback. Verify both pages identify the correct operator.
+A 200 status alone proves nothing, because a catch-all route returns `200 text/html` for a missing file.
 
-### Built-in fallback (developer default, not a production configuration)
+1. Check the status and the content type of the override:
 
-If no overrides are mounted, the webapp serves a clear placeholder (`_disclaimer/*.md`).
-It tells visitors that no legal content is configured.
-It asks them to contact the operator directly.
-The UI shows a red banner.
+   ```sh
+   curl -sI https://<your-host>/legal-overrides/privacy.md | grep -E '^(HTTP|Content-Type)'
+   ```
 
-This is **not** a valid imprint or privacy notice.
-You must not use it in production.
-It is for local development and visible identification of misconfigured deployments.
+   Expect `200` and `text/markdown`.
+2. Check that the file starts with your own heading:
 
-## Authoring guidelines for a custom privacy notice
+   ```sh
+   curl -s https://<your-host>/legal-overrides/privacy.md | head -n 3
+   ```
 
-Use Art. 13 GDPR as the outline. Hephaestus processes personal data in at least the following categories, which your privacy notice must cover:
+3. Open `/imprint` and `/privacy` in a browser. Check that no red "not configured" banner appears and that both name the correct operator.
 
-- **Identity and authentication** — Hephaestus-native auth federates to GitHub or GitLab.
-  Each federated identity stores the provider, stable subject id, login, email-at-signup, and display name (ADR 0017).
-- **Repository synchronization** — each configured repository supplies pull/merge requests, issues, reviews, review comments, commit metadata, and author profile information.
-  The notice must state the retention triggers that [Data retention](./data-retention) lists.
-  The mirror is erased when the last workspace stops monitoring the source repository.
-  Disconnection of the workspace's integration or a workspace purge also erases it.
-- **Account settings and email notifications** — user preferences and the provider-verified primary email address for account-security and deletion email.
-  With a configured relay, this also includes optional notification subscriptions and unsubscribe capabilities.
-  The notice must name the relay operator as a recipient.
-- **AI-assisted features** — if enabled: messages sent to the configured LLM provider, persisted conversations, generated practice results.
-- **Server logs** — IP address and request metadata.
-- **Page experience** — if you turn it on, read [Page experience](#page-experience) first.
-- **Browser fault reports** — if you turn them on, read [Browser fault reports](#browser-fault-reports) first.
-- **Product feedback** — before you name a repository, complete [Product feedback on GitHub](#product-feedback-on-github).
-- **Log collection** — you can ship container logs to a log store such as Loki ([Collecting logs](./monitoring.md#collect-logs)).
-  Name the store's operator and retention in the notice.
-  Hephaestus ships no error telemetry service.
-- **Public activity page** — if you allow it, use the [template below](#the-public-activity-page).
-- **Workspace addresses** — if you turn them on, use the [template below](#workspace-addresses).
+Overrides are served with `Cache-Control: no-cache, must-revalidate`, so an edit shows on the next page load.
 
-Determine a lawful basis for each processing purpose with your data-protection adviser.
-Neither self-hosting nor acceptance of terms supplies one automatically. Art. 6(1)(f) GDPR does not apply to public
-authorities processing data in the performance of their tasks.
+## The first-login screen
 
-For international transfers, document the applicable Chapter V safeguard for the actual recipient,
-service and destination. Verify current adequacy decisions, certification scope where relevant, and
-contractual safeguards rather than inferring coverage from a provider's brand.
+The first-login screen carries no operator-specific text.
+It states the terms of use and links to `/privacy` and `/imprint`.
+When the person selects **Save and continue**, Hephaestus records the acceptance of **I accept the terms of use**.
+The record names the notice version shown.
+It does not record that anybody opened a link.
+[Your data in Hephaestus](/user/privacy#signing-in-and-choosing-research-participation) describes the screen for the person who answers it.
+
+## The optional research question
+
+`config.researchOrganization` names the organization that runs research on your deployment ([Values](./helm-chart#values)).
+While it is empty, the default, no research question appears, and the research switch in **User settings** is hidden.
+With a name, the first-login screen asks the research question as a separate decision, and either answer completes setup.
+Choose a name that reads correctly in "If you say yes, the organization may use your data for research."
+
+Before you set it, meet the duties in [Run a research program](./research-program#what-operators-must-do).
+
+### What the question asks
+
+The screen asks **Allow research use of your data?**, with **Yes, allow research use** and **No, keep my data out of research**.
+The configured organization appears beside the choice, because consent must name the controller ([EDPB 05/2020](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf) § 3.3).
+
+The legal basis is consent under Art. 6(1)(a) GDPR: a broad consent to an area of research, not to one project ([Recital 33 GDPR](https://gdpr-info.eu/recitals/no-33/)).
+The area is how developers work and learn, and how AI systems can review and support that work, including benchmarks and evaluation datasets.
+The research may use the participant's work in the connected tools, and the Hephaestus results and feedback about that work.
+It may also use the participant's responses and how they use Hephaestus, including conversations.
+It never uses sign-in credentials, access tokens, or Slack messages that the participant stopped Hephaestus from using.
+
+Saying no or withdrawing has no disadvantage ([Art. 7(4) GDPR](https://gdpr-info.eu/art-7-gdpr/)).
+
+Research outside this area needs a new wording after legal review.
+
+### When a new decision is required
+
+A change of `config.researchOrganization` is a new question.
+After a rename, earlier grants authorize nothing, and setup asks the research question again.
+Earlier decisions stay in the record, and terms acceptance stays unchanged.
+
+A wording that adds a research purpose, a recipient, a use of data, or a kind of research needs a new decision.
+A narrower wording can keep a decision that still covers every retained purpose for the same organization.
+A screen left open across a change cannot record a decision: Hephaestus refuses it with `409`.
+
+### Withdrawal
+
+A participant withdraws with **Allow research use of my data** in **User settings → Research participation**.
+New research use stops at once, and you remove the participant's data from datasets that are not anonymized.
+Research done before the withdrawal stays lawful, and anonymized published data cannot be removed.
+Withdrawal does not erase other data. Account erasure is a separate request.
+
+## Notice texts for optional features
 
 ### The public activity page
 
 **Allow public activity pages** is off by default.
 When it is on, a workspace admin can publish the activity of the workspace's public repositories to anyone.
-The page lists members and outside contributors who never signed in.
-Each person can hide.
+The page names a person with an account only after that person chooses to show.
+It counts contributors without an account but does not name them, unless the workspace admin turns on **Show contributors without an account**.
+Each named person can hide.
 
 Before you turn on the setting:
 
@@ -386,14 +159,16 @@ Before you turn on the setting:
 ### Public activity page
 
 If a workspace administrator publishes a public activity page, anyone can read it without sign-in.
-For each person who contributed to the workspace's public repositories, it shows the display name,
-login and avatar; the pull requests opened, merged and reviewed, the issues opened and the active weeks
-in a selected period; a Contributions total, a position number and links to the work. The data comes
-from the public repositories on [GitHub or GitLab]. The page never shows practices, practice results,
-feedback, Slack or Outline content, or AI review content.
+A person with an account is on the page only after they choose to show. Contributors without an
+account are counted but not named, unless the workspace administrator chooses to name them.
+For each person on the page, it shows the display name, login and avatar; the pull requests opened,
+merged and reviewed, the issues opened and the active weeks in a selected period; a Contributions
+total, a position number and links to the work. The data comes from the public repositories on
+[GitHub or GitLab]. The page never shows practices, practice results, feedback, Slack or Outline
+content, or AI review content.
 
 Purpose: [purpose]. Legal basis: [legal basis]. The page is computed on each request and holds no
-copy. Responses can be cached for up to 60 seconds.
+copy.
 
 **Right to object.** You can object at any time to your appearance on public activity pages. Turn off
 **Show me on public activity pages** in User settings, or select **Hide me** when a workspace with a
@@ -403,7 +178,7 @@ also leave every total on the page.
 
 ### Page experience
 
-**`PAGE_EXPERIENCE_METRICS`** is off by default.
+**`config.pageExperienceMetrics`** is off by default.
 When it is on, the browser of each signed-in reader measures how fast each page loaded and responded.
 It sends new measurements to your server when the reader leaves the page, and it sends each measurement once.
 The server adds them to counters that name no person, workspace or page address ([Page experience metrics](./metrics.md#page-experience-metrics)).
@@ -426,7 +201,7 @@ Before you turn it on:
 2. If it requires consent, keep the setting off.
 3. Determine and record a lawful basis for the processing of the report.
 4. Add the text below to your privacy notice.
-5. Set `PAGE_EXPERIENCE_METRICS=true`, or `config.pageExperienceMetrics: true` in the Helm chart.
+5. Set `config.pageExperienceMetrics: true` in the chart values.
 
 ```md
 ### Page experience
@@ -440,7 +215,7 @@ the server with your IP address and browser information, which the server logs k
 
 ### Browser fault reports
 
-**`BROWSER_FAULT_REPORTS`** is off by default.
+**`config.browserFaultReports`** is off by default.
 When it is on, the browser of each reader reports the failures that it meets on a page, also before sign-in.
 A report names the kind of failure, the page type, the class of the error, the release and positions in the web app's scripts.
 For a failed request, it also names the request's reference and its status code.
@@ -461,7 +236,7 @@ Before you turn it on:
 2. If it requires consent, keep the setting off.
 3. Record your lawful basis for the processing of the report. A common choice is a legitimate interest in a service that works and is secure (Art. 6(1)(f) GDPR), with the balancing test on file.
 4. Add the text below to your privacy notice. Replace each bracketed part.
-5. Set `BROWSER_FAULT_REPORTS=true`, or `config.browserFaultReports: true` in the Helm chart.
+5. Set `config.browserFaultReports: true` in the chart values.
 
 ```md
 ### Error reports
@@ -510,8 +285,8 @@ Before you name a private repository:
    Check whether the provider uses inputs for training.
 4. For each transfer outside the EU or EEA, document the Chapter V safeguard for the actual recipient and service.
 5. Add the [drafting and private filing notice](#drafting-and-private-filing-notice) to your privacy notice.
-6. Set the notice version on **Product feedback** in the instance admin console.
-   A new notice version clears every person's remembered choice, so each next report starts with a clear box.
+6. When your notice names a new recipient or purpose, turn on **Ask everyone to choose again** under **Product feedback → Destinations**.
+   It raises the notice version and clears every person's remembered choice, so each next report starts with a clear box.
 
 Before you name a public repository, also:
 
@@ -598,49 +373,3 @@ A workspace can have its own address, such as [team.example.org]. Sign-in and it
 remembers your light or dark mode for one year. [If a proxy or CDN serves these addresses: its
 provider, role and transfer basis.]
 ```
-
-## Check that it worked
-
-A 200 status is not sufficient.
-SPA-catchall proxies frequently return `200 text/html` for missing files.
-
-1. After deployment, confirm that the correct layer serves each page.
-2. Check both the status **and** the content type:
-
-   ```sh
-   curl -sI https://<your-host>/legal-overrides/privacy.md \
-     | grep -E '^(HTTP|Content-Type)'   # expect 200 + text/markdown if overrides are mounted
-   curl -sI https://<your-host>/legal/_disclaimer/privacy.md \
-     | grep -E '^(HTTP|Content-Type)'   # always 200 + text/markdown
-   ```
-
-3. Fetch the body of the layer that you expect to serve the page:
-   Confirm that it is your content.
-
-   ```sh
-   curl -s https://<your-host>/imprint | head -c 200   # SPA shell
-   curl -s https://<your-host>/legal-overrides/privacy.md | head -n 3   # should start with your heading
-   ```
-
-4. Open `/imprint` in a browser.
-5. Open `/privacy` in a browser.
-
-If the red "not configured" banner appears, the webapp serves the disclaimer.
-You must still configure the legal pages.
-
-## Changing the texts over time
-
-Markdown files are static resources.
-Overrides under `/legal-overrides/` use `Cache-Control: no-cache, must-revalidate`.
-An edit on the host takes effect on the next page load.
-Browsers revalidate every time.
-
-The bundled fallback under `/legal/` uses `max-age=300`.
-
-### Email activation
-
-Configuration and a successful test email are technical checks, not institutional approval.
-Your privacy notice must name the mail relay that you configure as a recipient.
-
-1. Keep email disabled until the deployment record confirms the actual service, institutional arrangement, and relay retention terms.
-2. If you use a different relay, update the public notice's recipient and transfer information before you enable it.

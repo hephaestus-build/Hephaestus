@@ -1,51 +1,65 @@
 ---
-title: Practice Catalog
-description: Curate the practices an instance includes, adopt them into a workspace, and review later changes before they apply.
-page_type: explanation
+title: Curate the practice catalog
+description: Choose the practices and practice groups that workspaces can add, add your own, and review updates to the Hephaestus defaults.
+page_type: how-to
 ---
 
-The instance catalog supplies practices and practice groups for workspaces to adopt.
-Workspace copies have independent versions and operational settings.
-Changing the instance entry does not silently rewrite a workspace practice.
+The instance catalog holds the practices and practice groups that workspaces can add.
+It starts with the Hephaestus defaults.
+Use this procedure to include or exclude entries, add instance entries, and decide on updates to the defaults.
+Workspace admins add practices from the catalog in their workspace, as [Practices](/user/practices) describes.
 
-## Include and exclude entries
+## Before you start
 
-Instance admins control whether workspaces can adopt each entry.
-Exclude makes it unavailable for new adoption. Include reverses that choice.
-Existing workspace definitions and earlier observations remain unchanged.
+You need the instance admin role.
+The catalog is at **Instance administration → Practices → Practice catalog**.
 
-## Adopt and customize
+## Include or exclude an entry
 
-A workspace admin adopts a practice from the catalog.
-Its complete definition becomes a fixed workspace version.
-The workspace retains the catalog base used for comparison.
-Local edits create another version rather than rewriting past observations.
+1. Open **Practice catalog**.
+2. Open **More actions** on a practice or a group.
+3. Select **Exclude from workspaces** or **Include for workspaces**.
+4. If Hephaestus asks you to confirm, read which practices the change also affects, and confirm.
 
-The shared editor separates definition, group organization and feedback mode.
-The [author guide](./writing-practices.mdx) owns definition controls.
-Feedback mode belongs to the workspace, not to the catalog's review standard.
+Workspace admins can no longer add an excluded entry.
+An excluded group also excludes its practices.
+Existing workspace copies do not change.
+To list only one state, filter by **Included** or **Excluded**.
 
-## Review an update
+## Add or edit an entry
 
-An update compares your current definition, its base and the offered definition.
-Select current or offered content for each changed field.
-A conflict means both sides changed the field.
-Accepting selected content creates a new version.
+1. Select **Create practice** or **Create group**.
+   To change an entry, open **More actions**, then select **Edit practice** or **Edit group**.
+2. Fill in the form. The practice form is the editor that workspaces use, as [Practices](/user/practices#create-a-practice) describes.
+3. Save the entry.
 
-Declining keeps local content and advances the catalog base.
-It does not permanently hide later offers.
-Reset replaces local customization with the current catalog definition.
-The interface shows the concrete difference before the reset.
+Saving updates the instance catalog.
+Existing workspace copies do not change.
+Each workspace with a copy gets the change as a catalog update that its admins accept or decline.
 
-## Practice versions
+To change the order that new workspaces see, drag groups and practices in the tree, or use **Move up** and **Move down**.
 
-Earlier observations retain the practice version used to judge them.
-Name, group and guidance edits do not change the review standard digest.
-The exact version still forms part of scan reuse identity.
-A changed script or source contract arrives through a new active version.
+## Decide on an update to a Hephaestus default
 
-An unchanged bundled script can receive its audited catalog update.
-A changed copy retains its text until an admin accepts an update or rewrites it.
-For the practice model cutover, follow the [operator migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) before you change scripts.
-A script that no longer meets the contract stops with a recorded reason.
-It never falls back silently to the built-in script.
+An entry that uses a Hephaestus default takes each release's update automatically, until you customize it.
+A customized entry shows **Hephaestus update available** when a release changes its default.
+
+1. Open the entry.
+2. Select **Review Hephaestus update**.
+3. Compare your saved version with the update.
+4. Select **Apply Hephaestus update**, or **Keep saved version**.
+
+A default that a release removes shows **Removed from Hephaestus defaults**.
+Select **Keep saved version as custom** to keep it as an instance entry, or exclude it from workspaces.
+To return a customized entry to the default, select **Restore Hephaestus default**.
+
+## Check that it worked
+
+1. In a workspace, open **Administration → Practices → Practice setup**.
+2. Select **Show catalog**.
+3. Check that an included entry appears and an excluded entry does not.
+
+## Undo
+
+- To reverse an exclusion, select **Include for workspaces** on the entry.
+- To reverse a customization, select **Restore Hephaestus default** on the entry.

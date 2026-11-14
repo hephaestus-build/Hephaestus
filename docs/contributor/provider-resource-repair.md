@@ -6,7 +6,7 @@ page_type: reference
 
 [ADR 0101](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0101-a-connection-cannot-adopt-an-upstream-resource-whose-removal-is-unresolved.md) owns this decision.
 The provider event inbox still checks ACTIVE state at admission.
-This repair removes upstream resources; it does not replace that admission check.
+This repair removes upstream resources. It does not replace that admission check.
 
 ## Capture before the lifecycle change commits
 
@@ -17,7 +17,7 @@ The [personal-data map](/admin/dsms/personal-data-map#security-retention) owns r
 
 Every adoption and removal takes the same identity advisory locks, sorted by identity hash, before the connection row lock.
 The removal does not start while another ACTIVE connection holds the resource.
-A SUSPENDED GitHub or Slack connection also keeps its installation or bot identity; suspended GitLab and Outline hooks must be removed.
+A SUSPENDED GitHub or Slack connection also keeps its installation or bot identity. Suspended GitLab and Outline hooks must be removed.
 Slack ownership includes the bot user, because revocation can affect a replacement token for that user.
 A reconnect uses a fresh resource when the old identity remains fenced.
 
@@ -25,9 +25,10 @@ GitLab and Outline persist a registration marker and callback URL hash before th
 A returned resource is adopted only by the connection version and lifecycle generation that requested it.
 A late result becomes a removal target.
 An unknown creation remains visible while discovery looks for its marker.
+
 OAuth state similarly binds the connection and its lifecycle generation before redirect.
 A Slack exchange commits intent before dispatch and stores the returned team, bot-user ID and token fingerprint before `auth.test`.
-A crash or ambiguous error keeps that attempt for admin repair; a deterministic refusal creates no resource fence.
+A crash or ambiguous error keeps that attempt for admin repair. A deterministic refusal creates no resource fence.
 Successful adoption removes the attempt in the same transaction.
 
 ## Separate inspection, dispatch and completion
@@ -54,6 +55,7 @@ Uncertain and unauthorized attempts back off from one minute to one hour.
 A GitHub App-scoped not-found result resolves an undispatched removal. After a possible dispatch, it requires admin confirmation and stops automatic polling.
 Replacing a connection credential wakes its NEEDS_AUTHORIZATION repairs without waiting for the backoff.
 If an earlier provider call is still in flight, the credential publication stays unfinished until its outcome is recorded.
+
 An uncertain Slack exchange does not block reauthorization by the existing ACTIVE or SUSPENDED team holder. It never dispatches revocation.
 Before DELETE or revocation, a short transaction records that this attempt can reach the provider.
 An epoch prevents an old inspection from acquiring a new dispatch permit after a competing claim or release.
@@ -74,7 +76,7 @@ Unreadable ownership, a hidden `404` and credential expiry never prove completio
 
 ## Repair a lost wake
 
-The Modulith publication wakes the dispatcher; persisted intent is authoritative.
+The Modulith publication wakes the dispatcher. Persisted intent is authoritative.
 The scheduled dispatcher revisits due targets and discovers late registrations.
 GitLab and Outline also scan suspended connections to capture a target whose lifecycle wake was lost.
 A successful terminal deletion clears matching inactive hook metadata.
@@ -84,5 +86,5 @@ Credentials expire independently of the fence.
 The capture receipt prevents an old teardown wake from recreating an already resolved or manually released fence.
 A pre-cutover removal or suspended-hook cleanup without that receipt counts as an earlier uncertain call.
 A later absence cannot release its fence.
-[Integration administration](/admin/integrations#confirm-a-provider-removal) describes confirmation and release.
+[Provider removals](/admin/instance-admin#provider-removals) describes confirmation and release.
 [Metrics](/admin/metrics) and the [operations runbook](/admin/production-operations-runbook) describe unresolved work.

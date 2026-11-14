@@ -12,12 +12,12 @@ The [product vocabulary](./practice-feedback-language.md) defines both terms.
 
 Other pages own the related facts:
 
-- [Add a visual and a guide](/admin/writing-practices#add-a-visual-and-a-guide) owns the markup that the server accepts, the limits, and the `pv-*` color classes.
+- [Practice visual rules](/user/practice-visual-rules) lists the markup that the server accepts, the limits, and the `pv-*` color classes.
 - [Bundled visuals and guides](./practice-catalog.md#bundled-visuals-and-guides) owns the files and the catalog fields.
 
 The rules below are strict.
 All bundled practices use one grammar, so a developer learns it once.
-The [starter templates](/admin/writing-practices#start-from-a-template) are the reference for the contrast pair, the fork, and the sequence.
+The [starter templates](/user/practice-visual-rules#starter-templates) are the reference for the contrast pair, the fork, and the sequence.
 The visual of `scope-one-reviewable-change` is the reference for the [whole versus parts](#whole-versus-parts) pattern.
 Its figure is the reference for a sequence figure.
 
@@ -98,7 +98,7 @@ Their contrast is below the 3:1 of [WCAG 1.4.11](https://www.w3.org/WAI/WCAG22/U
 - Do not use `opacity`, `fill-opacity`, or `stroke-opacity`. The same opacity gives a different contrast in each theme.
 - Do not write color values. `PRACTICE_SVG_THEME` in `webapp/src/components/practice-guidance/PracticeVisual.tsx` maps each class to a theme token.
 
-The prompt in [Draw a visual with an AI assistant](/admin/writing-practices#draw-a-visual-with-an-ai-assistant) repeats these meanings, because an admin sends it alone.
+The prompt in [Draw a visual with an AI assistant](#draw-a-visual-with-an-ai-assistant) repeats these meanings, because an admin sends it alone.
 When you change this table, change the prompt too.
 If the prompt and this page disagree, this page is correct.
 
@@ -611,6 +611,58 @@ Thus, the GitHub preview checks the paths and the text, not the colors.
 - The description follows the picture and names no drawing device.
 - Each guide sentence comes from the criteria or a source. **When it does not apply** agrees with the **Applies when**.
 - Each source is authoritative and supports the claim that the guide makes.
+
+## Draw a visual with an AI assistant
+
+An admin can ask an AI assistant to draw a visual.
+
+1. Copy the prompt below.
+2. Replace each value in angle brackets.
+3. Send the prompt to the AI assistant, with the [starter template](/user/practice-visual-rules#starter-templates) of the layout attached.
+4. Make sure that the picture adds no requirement to the practice criteria.
+5. Upload the SVG in **Visual**, as [Practices](/user/practices#add-a-visual) describes.
+6. Enter the description.
+
+```text
+Draw one SVG picture for a software engineering practice. Follow every rule below.
+
+Practice: <name of the practice>
+Why it matters: <text of Why it matters>
+What good looks like: <text of What good looks like>
+The one idea that the picture must show: <one sentence>
+Layout: <one of: contrast pair | fork | sequence (two rows that compare two orders)>
+
+Start from the attached starter template of the layout. Keep its coordinates. Change only the labels and the one part that differs, and delete what the idea does not need.
+
+Rules for the file:
+- Start with <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 H">, where H is the bottom of the lowest shape, at most 320. Do not set width or height.
+- Draw to the edges of the canvas: the first title at the top, the outermost shapes at x 0 and x 640. In a fork, the outcome labels end the picture and reach toward x 640. Leave no empty area larger than about a sixth of the canvas.
+- Put panes, frames, nodes, gutters, and content tops on a grid of 8. Keep the line heights, pitches, radii, and baselines of the template. Inset a stroked shape by half its stroke width.
+- Use only these elements: svg, g, path, rect, circle, ellipse, line, polyline, polygon, text, tspan, title, desc.
+- Use only these attributes: x, y, width, height, rx, ry, cx, cy, r, x1, y1, x2, y2, d, points, dx, dy, transform, class, fill, stroke, stroke-width, stroke-linecap, stroke-linejoin, stroke-dasharray, font-size, font-weight, text-anchor.
+- Do not use id, style, href, url(...), opacity, gradients, filters, markers, masks, images, scripts, or a DOCTYPE.
+- Color every shape and every text with one of these classes, not with a color value: pv-fill-ink, pv-fill-muted, pv-fill-surface, pv-fill-accent, pv-fill-accent-soft, pv-stroke-ink, pv-stroke-muted, pv-stroke-line, pv-stroke-accent. Add the class pv-mono to a text that is one code token.
+- Accent (pv-*-accent) means only what the practice asks for. Use it for one meaning, on the practice side only.
+- Muted (pv-*-muted) means context, the lapse, and a missing part. Ink (pv-*-ink) means titles and names. pv-fill-accent-soft fills only a node or region that holds the accent. pv-fill-surface fills the inside of an outlined shape. Use pv-stroke-line for nothing that matters.
+- Accent and muted have about the same lightness. Give every accent mark a shape or a position that differs too. A label alone is too small to read on a phone.
+- Use fill="none" on a shape that has only a stroke.
+- Do not set a font family. Use font-size 16 and font-weight 600 for titles, font-size 15 for labels, and no other size. Use weight 600 for one label only: the one that names what the practice asks for.
+- Use 24 words or fewer in the whole picture, in sentence case, with no period.
+- Show the difference as one short example on each side (6 words or fewer, or one code token with the class pv-mono), not as colored bars.
+- Draw a line of code as a bar 10 high with rx 3, and a line of prose as a bar 6 high. Draw one piece of work as a frame: rx 8, pv-fill-surface, pv-stroke-muted, stroke-width 1.5. Never put a frame inside a frame, and never draw a box around a group of shapes.
+- Write the part that the practice asks for as its example in accent text, and the lapse as its example in muted text, at the same place in both panes. Put no rule or other mark next to an example. Draw a missing part as a dashed muted outline with a muted label that names what is missing, such as "No test".
+- Make every mark explain itself. Name each piece of work with a word, such as "Pull request" or "Issue #57". Never draw a dot, a tick, or a glyph with no word next to it.
+- Draw an arrow as one line path and one small filled triangle path. Use arrows only for order, cause, or flow.
+- In a sequence, draw two rows: the lapse order on top, the practice order below. Put the row titles at baselines 16 and 132.
+- In a sequence, move the marks of each row 32 down, below its title. Delete the template's detail labels, and set H to 200.
+- In a sequence of two steps, use columns 304 wide at x 0 and x 336. Only the practice row has the solid accent marker.
+- Draw a person only as a filled circle of radius 8 with its role as a label, such as "Reviewer", never as a face or a figure. Do not draw mascots, logos, emoji, or decoration. Do not animate.
+- Do not show a number, a limit, or a threshold that the practice text does not state.
+- Keep the file smaller than 64 KB.
+
+Then write one description of 250 characters or fewer (Hephaestus accepts up to 300), in 1 or 2 sentences. Say what the picture means, in the order of the picture. Do not name colors or shapes.
+Return only the SVG markup and the description.
+```
 
 ## Basis for these rules
 

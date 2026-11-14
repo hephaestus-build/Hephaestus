@@ -89,7 +89,7 @@ A **GitHub App** reads the repositories, receives their webhooks, and posts feed
 4. In the settings of your GitHub App at GitHub, open **Advanced → Recent deliveries**.
    The latest deliveries show the response `202`.
    If the list is empty, open a pull request in a repository of the installation.
-   [Failed deliveries and redelivery](./github-integration#failed-deliveries-and-redelivery) helps with another response.
+   [Failed GitHub deliveries](./webhook-ingestion-operations#failed-github-deliveries) helps with another response.
 5. Optional: if you scrape metrics, check that Prometheus shows the target of each server Pod as up.
    [Scrape metrics](./monitoring#scrape-metrics) gives the scrape configuration and `networkPolicy.metrics`.
 
@@ -98,7 +98,7 @@ A **GitHub App** reads the repositories, receives their webhooks, and posts feed
 Practice reviews need sandboxes.
 The one-host install, `small.yaml` and `cluster.yaml` turn them on. `dev.yaml` runs no practice reviews.
 
-1. Connect the provider, then price, enable, and share a model, as [The staged flow](./ai-providers#1-the-staged-flow-and-why-it-is-staged) describes.
+1. Connect the provider, then price, enable, and share a model, as [Connect an AI provider](./ai-providers) describes.
 2. As a workspace admin, assign the model to **Practice reviews** on the **AI models** page of the workspace.
    The row shows the model and does not read **Not ready**.
 
@@ -110,12 +110,12 @@ The procedure runs one review and lets you read its feedback before anyone else 
 
 1. In the workspace, open **Administration → Practices → Practice setup**.
    Add at least one practice from the catalog.
-2. Open **Practices → Review settings → Feedback mode**.
-3. Set the **Workspace default** to **Approve first**.
+2. Under **Administration → Practices**, open **Review settings**.
+3. Under **Workspace default**, set **Feedback mode** to **Approve first**.
    Each piece of feedback waits for your approval.
 4. Open **Automated review**, and turn on **Start practice reviews**.
    You can turn it on when the model that you assigned in [Connect an AI provider](#6-connect-an-ai-provider) is ready.
-5. Follow [First successful review](./practice-review#first-successful-review).
+5. Request a review, as [Request a review](/user/practice-reviews#request-a-review) describes.
 6. When the review finishes, open **Practices → Practice reviews**.
    Its feedback is listed under **Needs you**, awaiting approval.
    Nothing reaches the pull request before you approve it.
@@ -128,7 +128,7 @@ The procedure runs one review and lets you read its feedback before anyone else 
 
 ## Next steps
 
-- [Integration settings](./production-setup): turn on GitLab, Slack, Outline, or email.
+- [Connect GitLab](./connect-gitlab), [Connect Slack](./connect-slack), [Connect Outline](./connect-outline), or [Set up email](./set-up-email).
 - [Publish the legal pages](./legal-pages): a public instance needs its own imprint and privacy notice before it admits users.
 - [Set up the Chrome extension](./browser-extension): show practice reviews on GitHub or GitLab work pages.
-- [Run practice reviews](./practice-review): widen review scope or raise the feedback mode.
+- [Practice reviews and feedback mode](/user/practice-reviews): widen review scope or raise the feedback mode.

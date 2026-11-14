@@ -16,7 +16,7 @@ Hephaestus connects to GitHub, GitLab, Slack and Outline. Before ADR 0015, each 
 ADR 0015 bundled four decisions: the package layout, the SPI, credential encryption and a one-time migration. ADR 0023 bundled eight for Outline, and its own update contradicted its title.
 Both named classes that no longer exist, and their webhook parts went with ADR 0066 and then [ADR 0080](0080-provider-events-go-to-a-postgresql-inbox.md).
 
-This ADR states the integration framework at 1.0 as rules. [Integrations](../admin/integrations.mdx) and [Sync lifecycle](../contributor/sync-lifecycle.md) keep the detail.
+This ADR states the integration framework at 1.0 as rules. The connect pages of the admin guide, such as [Connect GitLab](../admin/connect-gitlab.md), and [Sync lifecycle](../contributor/sync-lifecycle.md) keep the detail.
 A rule that main does not satisfy yet says "1.0 target".
 
 ## Decision drivers

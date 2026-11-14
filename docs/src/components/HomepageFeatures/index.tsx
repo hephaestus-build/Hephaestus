@@ -39,7 +39,7 @@ const FeatureList: FeatureItem[] = [
 		title: "Feedback Mode",
 		description:
 			"Off, Approve first, or Automatic, per workspace, practice group, or practice. Approve first holds feedback on the work until a workspace admin approves it.",
-		cta: { label: "Practice review", to: "/admin/practice-review" },
+		cta: { label: "Practice review", to: "/user/practice-reviews" },
 	},
 	{
 		title: "Your Stack",
