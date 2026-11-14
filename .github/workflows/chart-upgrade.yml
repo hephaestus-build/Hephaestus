@@ -39,7 +39,7 @@ jobs:
       # The candidate's images; a pull request's own images may not exist yet, so it uses its base commit's.
       COMMIT: ${{ inputs.commit || github.event.pull_request.base.sha || github.sha }}
       # The candidate's chart and scripts.
-      CHECKOUT: ${{ inputs.commit || github.event.pull_request.head.sha || github.sha }}
+      CHECKOUT: ${{ inputs.commit || github.sha }}
       NODE_IMAGE: docker.io/rancher/k3s:v1.37.2-k3s1@sha256:21ea6e0fac4e3930c2ce8aa40ddd41a8b18cb3e9a0222c030dc005e7e88c4332
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -73,5 +73,8 @@ jobs:
           kubectl -n hephaestus logs -l app.kubernetes.io/component=migration --all-containers --tail=400 --prefix || true
           kubectl -n hephaestus logs -l app.kubernetes.io/component=postgresql --all-containers --tail=200 --prefix || true
           kubectl -n hephaestus logs -l app.kubernetes.io/component=server --tail=300 --prefix || true
-          kubectl -n hephaestus get jobs -o wide || true
+          kubectl -n hephaestus get jobs,cronjobs -o wide || true
+          kubectl -n hephaestus-sandboxes get pods,jobs -o wide || true
+          kubectl -n hephaestus-sandboxes get sandboxtemplates,sandboxwarmpools,sandboxclaims,sandboxes -o wide || true
+          kubectl -n agent-sandbox-system logs deployment/agent-sandbox-controller --tail=200 || true
           helm -n hephaestus history hephaestus || true
