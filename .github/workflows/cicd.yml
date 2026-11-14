@@ -394,8 +394,11 @@ jobs:
               # test:alerts runs promtool on the alert rules in its files/ on this leg.
               - 'deploy/chart/**'
               # k3s-platform.test.ts renders the chart with these values and reads these files, and
-              # gate:config-format and gate:shell check them.
+              # gate:config-format checks them.
               - 'deploy/platform/**'
+              # gate:shell checks every tracked .sh script and the Git hooks.
+              - '**/*.sh'
+              - '.vite-hooks/**'
               # format:load:check and test:load:syntax run on this leg.
               - 'load-tests/**'
               # The catalog and guidance tests in scripts/ judge these bundled server resources.

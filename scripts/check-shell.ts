@@ -1,19 +1,32 @@
 /**
- * `gate:shell`: the pinned ShellCheck on every shell script of deploy/platform, the scripts that an
- * operator runs on a host without Node.
+ * `gate:shell`: the pinned ShellCheck on every tracked `.sh` script and the Git hooks. These run
+ * where Node is not available: on an operator's host, in a container image, or in a chart Job.
  */
-import { readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { run } from "./lib/process.ts";
+import { output, run } from "./lib/process.ts";
 import { prepareShellCheck } from "./lib/shellcheck.ts";
 
-const platform = path.join(import.meta.dirname, "..", "deploy", "platform");
-const entries = await readdir(platform);
-const scripts = entries
-	.filter((name) => name.endsWith(".sh"))
-	.map((name) => path.join(platform, name));
-if (scripts.length === 0) {
-	throw new Error(`no shell script in ${platform}`);
+const root = path.join(import.meta.dirname, "..");
+const listed = await output("git", ["ls-files", "-z", "--", "*.sh", ".vite-hooks/*"], {
+	cwd: root,
+});
+const files = listed.split("\0").filter(Boolean);
+if (files.length === 0) {
+	throw new Error("no tracked shell script");
 }
-await run(await prepareShellCheck(), ["--norc", "--shell=sh", "--severity=style", ...scripts]);
+// A script without a shebang is one the chart runs with `sh`.
+const byShell = new Map<string, string[]>();
+for (const file of files) {
+	const source = await readFile(path.join(root, file), "utf8");
+	const shebang = source.split("\n", 1)[0] ?? "";
+	const shell = /^#!.*\bbash\b/u.test(shebang) ? "bash" : "sh";
+	byShell.set(shell, [...(byShell.get(shell) ?? []), file]);
+}
+const shellcheck = await prepareShellCheck();
+for (const [shell, scripts] of byShell) {
+	await run(shellcheck, ["--norc", `--shell=${shell}`, "--severity=style", ...scripts], {
+		cwd: root,
+	});
+}

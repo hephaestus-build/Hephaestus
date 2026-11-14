@@ -8,7 +8,7 @@ shift
 if [ "${VP_GIT_HOOKS-}" = "0" ] || [ "${HUSKY-}" = "0" ] || [ "$(git config --type=bool vp.hooks.disabled 2>/dev/null)" = "true" ]; then
 	exit 0
 fi
-root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 if [ ! -x "$root/node_modules/.bin/vp" ]; then
 	echo "hooks: $root has no install, so its $hook checks cannot run." >&2
 	echo "hooks: run 'pnpm install --frozen-lockfile' in this worktree and retry, or set VP_GIT_HOOKS=0 to skip the hooks once." >&2
