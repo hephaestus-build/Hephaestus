@@ -187,12 +187,27 @@ public class DocumentItemSource implements ItemSource, ItemSourceAccess {
     @Override
     @Transactional(readOnly = true)
     public ItemSnapshot pin(ItemRef item, @Nullable ItemVersion requested) {
-        ItemSnapshot pinned = currentSnapshot(item)
-                .orElseThrow(
-                        () -> new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Document is not available"));
+        ItemSnapshot pinned = currentSnapshot(item).orElseThrow(() -> unavailable(item));
         if (requested != null && !requested.equals(pinned.version()))
             throw new ItemCaptureException(ItemCaptureCode.VERSION_UNAVAILABLE, "Document version changed");
         return pinned;
+    }
+
+    /**
+     * Why a document has no snapshot. A tombstone is Outline's answer that the document is gone, so it stops the review
+     * as removed work and never as missing evidence (ADR 0094 rule 9).
+     */
+    private ItemCaptureException unavailable(ItemRef item) {
+        Long sourceId = item.sourceId();
+        boolean removed = supports(item)
+                && sourceId != null
+                && documents
+                        .findByWorkspaceIdAndIdForProjection(item.workspaceId(), sourceId)
+                        .filter(OutlineDocument::isDeleted)
+                        .isPresent();
+        return removed
+                ? new ItemCaptureException(ItemCaptureCode.ITEM_REMOVED, "Document has been removed")
+                : new ItemCaptureException(ItemCaptureCode.ITEM_NOT_VISIBLE, "Document is not available");
     }
 
     @Override
