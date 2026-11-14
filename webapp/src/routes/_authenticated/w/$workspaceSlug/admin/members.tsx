@@ -12,6 +12,7 @@ import {
 	getUsersWithTeamsQueryKey,
 	listMembershipsOptions,
 	listMembershipsQueryKey,
+	removeMemberMutation,
 	setMemberHiddenMutation,
 } from "@/api/@tanstack/react-query.gen";
 import {
@@ -25,9 +26,11 @@ import {
 import { WorkspaceChangeRoleDialog } from "@/components/admin/members/WorkspaceChangeRoleDialog";
 import { WorkspaceMembersPage } from "@/components/admin/members/WorkspaceMembersPage";
 import type { WorkspaceMembersTableView } from "@/components/admin/members/WorkspaceMembersTable";
+import { WorkspaceRemoveMemberDialog } from "@/components/admin/members/WorkspaceRemoveMemberDialog";
 import { accountName } from "@/components/admin/users/account-labels";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
+import { filedUnder, pathString, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf, type StepUpChallenge, stepUpChallengeOf } from "@/lib/problem-detail";
@@ -72,6 +75,8 @@ function membersSearch(view: WorkspaceMembersTableView) {
 	};
 }
 
+const REMOVE_MEMBER_KEY = ["workspace-members", "remove"] as const;
+
 function AdminMembersContainer() {
 	const search = Route.useSearch();
 	const params = Route.useParams();
@@ -96,6 +101,9 @@ function AdminMembersContainer() {
 	// The Role menu the waiting change came from. The dialog opens while focus is still in that menu's
 	// closing list, so without it focus would return there.
 	const roleChangeTrigger = useRef<HTMLElement>(null);
+	const [removal, setRemoval] = useState<WorkspaceMemberRow | null>(null);
+	// The Actions menu the removal came from, for the same reason as `roleChangeTrigger`.
+	const removalTrigger = useRef<HTMLElement>(null);
 
 	const view: WorkspaceMembersTableView = {
 		q: search.q ?? "",
@@ -124,6 +132,9 @@ function AdminMembersContainer() {
 		placeholderData: keepSameSubject({ workspaceSlug: workspaceSlug ?? "", team }),
 	});
 	useQueryReadRefusal(membersQueryOptions.queryKey, membersQuery.isError, membersQuery.error);
+	const members = workspaceMemberRows(membersQuery.data?.content ?? []);
+	const memberOnPage = (accountId: string) =>
+		members.find((row) => row.membership.account.id === accountId);
 
 	const teamsQueryOptions = getAllTeamsOptions({
 		path: { workspaceSlug: workspaceSlug ?? "" },
@@ -154,16 +165,27 @@ function AdminMembersContainer() {
 			});
 		},
 	});
-	// Making or unmaking an owner needs a recent sign-in; the server says so instead of changing the role.
+	// Making, unmaking or removing an owner needs a recent sign-in; the server says so instead of changing it.
 	const [challenge, setChallenge] = useState<StepUpChallenge | undefined>(undefined);
 	const confirmAccess = useConfirmAccess(challenge !== undefined);
 	const assignRole = useMutation({
 		...assignMemberRoleMutation(),
-		onSuccess: (updated) => {
+		// A role for a member who left adds them back, so the outcome says that instead.
+		onMutate: (variables) => ({
+			rejoins: memberOnPage(variables.body.accountId)?.membership.leftAt != null,
+		}),
+		onSuccess: (updated, _variables, { rejoins }) => {
 			toast.success(
-				`${accountName(updated.account)}’s role is now ${WORKSPACE_ROLE_LABELS[updated.role]}`,
+				rejoins
+					? `${accountName(updated.account)} is back in this workspace`
+					: `${accountName(updated.account)}’s role is now ${WORKSPACE_ROLE_LABELS[updated.role]}`,
 			);
 			void queryClient.invalidateQueries({ queryKey: membersKey });
+			if (rejoins) {
+				void queryClient.invalidateQueries({
+					queryKey: getUsersWithTeamsQueryKey({ path: { workspaceSlug: workspaceSlug ?? "" } }),
+				});
+			}
 			// The admin may have changed their own role, which the navigation and guards read.
 			void queryClient.invalidateQueries({
 				queryKey: getOwnMembershipQueryKey({ path: { workspaceSlug: workspaceSlug ?? "" } }),
@@ -176,6 +198,32 @@ function AdminMembersContainer() {
 				return;
 			}
 			toast.error("We could not change the role", { description: problemDetailOf(error) });
+		},
+	});
+
+	const remove = useMutation({
+		...filedUnder(REMOVE_MEMBER_KEY, removeMemberMutation()),
+		// The server answers with no body, so the outcome names the member from the row it came from.
+		onMutate: (variables) => ({
+			name: memberOnPage(variables.path.accountId)?.name ?? "the member",
+		}),
+		onSuccess: (_data, _variables, { name }) => {
+			toast.success(`You removed ${name} from this workspace`);
+			void queryClient.invalidateQueries({ queryKey: membersKey });
+			void queryClient.invalidateQueries({
+				queryKey: getUsersWithTeamsQueryKey({ path: { workspaceSlug: workspaceSlug ?? "" } }),
+			});
+		},
+		onError: (error, _variables, context) => {
+			const stepUp = stepUpChallengeOf(error);
+			if (stepUp !== undefined) {
+				setChallenge(stepUp);
+				return;
+			}
+			// The dialog closed on confirm, so this toast is the only report (ADR 0027).
+			toast.error(`We could not remove ${context?.name ?? "the member"}`, {
+				description: problemDetailOf(error),
+			});
 		},
 	});
 
@@ -197,6 +245,11 @@ function AdminMembersContainer() {
 
 	const { mutate: changeHidden } = toggleHidden;
 	const { mutate: restoreProviderRole } = followProvider;
+	const { mutate: removeMember } = remove;
+	// Every removal still out, not only the latest: each of those rows waits until its own settles.
+	const removingAccountIds = usePendingMutationIds(REMOVE_MEMBER_KEY, (variables) =>
+		pathString(variables, "accountId"),
+	);
 	// `mutate` is stable and the mutation result is not. A role handler that closed over the result
 	// would change every render, so the table would rebuild its columns and close an open role list.
 	const { mutate: changeRole } = assignRole;
@@ -219,6 +272,17 @@ function AdminMembersContainer() {
 		}
 	};
 
+	const handleRemove = (member: WorkspaceMemberRow, trigger: HTMLElement) => {
+		removalTrigger.current = trigger;
+		setRemoval(member);
+	};
+
+	const confirmRemoval = (member: WorkspaceMemberRow) => {
+		if (hasText(workspaceSlug)) {
+			removeMember({ path: { workspaceSlug, accountId: member.membership.account.id } });
+		}
+	};
+
 	const handleRoleChange = (
 		member: WorkspaceMemberRow,
 		role: WorkspaceRole,
@@ -231,6 +295,7 @@ function AdminMembersContainer() {
 			from: member.membership.role,
 			to: role,
 			own: accountId === getUserId(),
+			rejoins: member.membership.leftAt !== null,
 		};
 		if (roleChangeAsksFirst(change)) {
 			roleChangeTrigger.current = trigger;
@@ -240,8 +305,11 @@ function AdminMembersContainer() {
 		}
 	};
 
+	// Adding back gives the member the role they had, through the same checks as any role change.
+	const handleAddBack = (member: WorkspaceMemberRow, trigger: HTMLElement) =>
+		handleRoleChange(member, member.membership.role, trigger);
+
 	const teams = teamsQuery.isError ? [] : (teamsQuery.data ?? []);
-	const members = workspaceMemberRows(membersQuery.data?.content ?? []);
 	const isLoading = isWorkspaceLoading || membersQuery.isPending;
 
 	if (!hasText(workspaceSlug) && !isWorkspaceLoading && workspaceError === undefined) {
@@ -281,6 +349,10 @@ function AdminMembersContainer() {
 				pendingFollowAccountId={
 					followProvider.isPending ? followProvider.variables.path.accountId : undefined
 				}
+				onRemove={handleRemove}
+				removingAccountIds={removingAccountIds}
+				onAddBack={handleAddBack}
+				readerAccountId={getUserId()}
 				view={view}
 				onViewChange={(patch) => {
 					void setSearch(
@@ -307,6 +379,13 @@ function AdminMembersContainer() {
 				onConfirm={sendRoleChange}
 				onClose={() => setRoleChange(null)}
 				finalFocus={roleChangeTrigger}
+			/>
+			<WorkspaceRemoveMemberDialog
+				member={removal}
+				providerLabel={providerLabel}
+				onConfirm={confirmRemoval}
+				onClose={() => setRemoval(null)}
+				finalFocus={removalTrigger}
 			/>
 			<ConfirmAccessDialog
 				open={challenge !== undefined}

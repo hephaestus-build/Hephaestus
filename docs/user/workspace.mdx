@@ -144,6 +144,24 @@ A workspace always keeps at least one owner.
 
 A member who leaves loses access, and their history stays recorded.
 
+To remove a member:
+
+1. Under **Administration**, open **Members**.
+2. Open the **⋯** menu in the member’s row.
+3. Select **Remove from workspace**, then confirm.
+
+The member loses access, and Hephaestus stops sending them practice feedback in this workspace.
+Their row shows when they left.
+To undo it, select **Add back to workspace** in the same menu.
+The member gets back the role they had, and the role is then set in Hephaestus.
+
+Admins can remove admins and members. Only an owner can remove an owner.
+You cannot remove yourself. Ask another owner, or an admin if you are not an owner.
+
+Removal does not change GitHub or GitLab.
+If the person is still a member there, the next sync adds them back. To keep them out, remove them there.
+If you add back someone who is no longer a member there, the next sync removes them again.
+
 When someone grants or removes your admin or owner role, Hephaestus sends you an email.
 The other owners of the workspace also get an email.
 The email names who made the change, or the sync with GitHub or GitLab, when it happened, and where to review it.

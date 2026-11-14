@@ -40,6 +40,8 @@ const meta = {
 		teams: mockTeams,
 		onToggleHidden: fn(),
 		onRoleChange: fn(),
+		onRemove: fn(),
+		onAddBack: fn(),
 		view: { q: "", team: "all", sort: "name", desc: false, page: 0, size: 10 },
 		onViewChange: fn(),
 	},
@@ -83,21 +85,29 @@ export const UnclaimedAccount: Story = {
 	},
 };
 
+const erinWhoLeft = membership(
+	memberAccount("21", {
+		displayName: "Erin Former",
+		identities: [{ provider: "GITHUB", login: "erin", displayName: null, avatarUrl: null }],
+	}),
+	{ leftAt: new Date("2026-06-30T12:00:00Z") },
+);
+
+/** A removed member keeps a row that says when they left, and the Actions menu adds them back. */
 export const MemberWhoLeft: Story = {
-	args: {
-		rowCount: 1,
-		members: workspaceMemberRows([
-			membership(
-				memberAccount("21", {
-					displayName: "Erin Former",
-					identities: [{ provider: "GITHUB", login: "erin", displayName: null, avatarUrl: null }],
-				}),
-				{ leftAt: new Date("2026-06-30T12:00:00Z") },
-			),
-		]),
-	},
-	play: async ({ canvas }) => {
-		await expect(within(rowOf(canvas, "Erin Former")).getByText(/^Left /u)).toBeVisible();
+	args: { rowCount: 1, members: workspaceMemberRows([erinWhoLeft]) },
+	play: async ({ args, canvas, userEvent }) => {
+		const row = within(rowOf(canvas, "Erin Former"));
+		await expect(row.getByText(/^Left /u)).toBeVisible();
+		const actions = row.getByRole("button", { name: "Actions for Erin Former" });
+		await userEvent.click(actions);
+		const addBack = await screen.findByRole("menuitem", { name: "Add back to workspace" });
+		await expect(screen.queryByRole("menuitem", { name: "Remove from workspace" })).toBeNull();
+		await userEvent.click(addBack);
+		await expect(args.onAddBack).toHaveBeenCalledWith(
+			expect.objectContaining({ name: "Erin Former" }),
+			actions,
+		);
 	},
 };
 
@@ -154,12 +164,57 @@ export const RoleChangePending: Story = {
 	},
 };
 
+/** Remove asks first: the table hands the member and the menu, where focus returns, to the caller. */
+export const RemoveMember: Story = {
+	play: async ({ args, canvas, userEvent }) => {
+		const actions = canvas.getByRole("button", { name: "Actions for Bob Smith" });
+		await userEvent.click(actions);
+		const remove = await screen.findByRole("menuitem", { name: "Remove from workspace" });
+		await expect(screen.queryByRole("menuitem", { name: "Add back to workspace" })).toBeNull();
+		await userEvent.click(remove);
+		await expect(args.onRemove).toHaveBeenCalledWith(
+			expect.objectContaining({ name: "Bob Smith" }),
+			actions,
+		);
+	},
+};
+
+/**
+ * Only the members whose removal is in flight wait. Their menu stays reachable, so focus can return
+ * to it, but it offers nothing to fire twice, and their role waits too.
+ */
+export const RemovalPending: Story = {
+	args: { removingAccountIds: new Set([unclaimedMember.account.id]) },
+	play: async ({ canvas, userEvent }) => {
+		await expect(canvas.getByRole("combobox", { name: "Role of Bob Smith" })).toBeDisabled();
+		await expect(canvas.getByRole("combobox", { name: "Role of Alice Johnson" })).toBeEnabled();
+		const actions = canvas.getByRole("button", { name: "Actions for Bob Smith" });
+		await expect(actions).toHaveAttribute("aria-busy", "true");
+		await userEvent.click(actions);
+		await expect(
+			await screen.findByRole("menuitem", { name: "Remove from workspace" }),
+		).toHaveAttribute("aria-disabled", "true");
+	},
+};
+
+/** Leaving would lock the reader out of this page, so their own row offers no removal. */
+export const OwnRowOffersNoRemoval: Story = {
+	args: { readerAccountId: multiProviderMember.account.id },
+	play: async ({ canvas }) => {
+		const own = within(rowOf(canvas, "Alice Johnson"));
+		await expect(own.queryByRole("button", { name: /^Actions for/u })).toBeNull();
+		await expect(canvas.getByRole("button", { name: "Actions for Bob Smith" })).toBeEnabled();
+	},
+};
+
 /** An admin manages admins and members only: an owner's row is read-only, and Owner is not offered. */
 export const AdminCannotAssignOwner: Story = {
 	args: { assignableRoles: ["ADMIN", "MEMBER"] },
 	play: async ({ args, canvas, userEvent }) => {
 		const owner = within(rowOf(canvas, "Charlie Brown"));
 		await expect(owner.queryByRole("combobox")).not.toBeInTheDocument();
+		// Only an owner removes an owner, as only an owner changes one's role.
+		await expect(owner.queryByRole("button", { name: /^Actions for/u })).toBeNull();
 		await expect(owner.getByText("Owner")).toBeVisible();
 
 		await userEvent.click(canvas.getByRole("combobox", { name: "Role of Alice Johnson" }));
@@ -308,9 +363,15 @@ export const EmptyPage: Story = {
 };
 
 export const ReadOnly: Story = {
-	args: { onRoleChange: undefined, onToggleHidden: undefined },
+	args: {
+		onRoleChange: undefined,
+		onToggleHidden: undefined,
+		onRemove: undefined,
+		onAddBack: undefined,
+	},
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("combobox", { name: /^Role of/u })).not.toBeInTheDocument();
+		await expect(canvas.queryByRole("button", { name: /^Actions for/u })).toBeNull();
 		await expect(canvas.getByText("Owner")).toBeVisible();
 	},
 };

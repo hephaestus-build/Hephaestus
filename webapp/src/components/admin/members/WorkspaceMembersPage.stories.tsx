@@ -25,6 +25,8 @@ const meta = {
 		isLoading: false,
 		onToggleHidden: fn(),
 		onRoleChange: fn(),
+		onRemove: fn(),
+		onAddBack: fn(),
 		view: { q: "", team: "all", sort: "name", desc: false, page: 0, size: 10 },
 		onViewChange: fn(),
 		renderPageLink: (page, props) => <a {...props} href={`?page=${page}`} />,

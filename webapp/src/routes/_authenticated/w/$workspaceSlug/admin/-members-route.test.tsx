@@ -746,6 +746,212 @@ it("renders the verified nonmember target's members without adding that target t
 	expect(screen.queryByText("Ada Lovelace", { selector: "div" })).toBeNull();
 });
 
+function mockOwnerRoute(members: Wire<WorkspaceMembership>[] = [ADA, SAM]) {
+	mockMembersRoute(members);
+	server.use(
+		http.get("*/workspaces/:workspaceSlug/members/me", () =>
+			HttpResponse.json(ownMembership("OWNER")),
+		),
+	);
+}
+
+async function chooseRemove(user: ReturnType<typeof userEvent.setup>, name: string) {
+	await user.click(
+		await screen.findByRole("button", { name: `Actions for ${name}` }, ROUTE_RENDER_WAIT),
+	);
+	await user.click(await screen.findByRole("menuitem", { name: "Remove from workspace" }));
+	return screen.findByRole("alertdialog", { name: `Remove ${name} from this workspace?` });
+}
+
+describe("removing a member", () => {
+	it("removes a member by account id only once confirmed, then shows them as left", async () => {
+		const removed: string[] = [];
+		let members = [ADA, SAM];
+		mockOwnerRoute();
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/members", () =>
+				HttpResponse.json(membershipPage(members)),
+			),
+			http.delete("*/workspaces/:workspaceSlug/members/:accountId", ({ params }) => {
+				removed.push(String(params.accountId));
+				members = [ADA, { ...SAM, leftAt: "2026-11-14T10:00:00Z" }];
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+		renderRouteAt("/w/acme/admin/members");
+		const user = userEvent.setup();
+
+		const dialog = await chooseRemove(user, "Sam Unclaimed");
+		within(dialog).getByText(/loses access to this workspace/u);
+		// The workspace has a GitHub connection, whose next sync adds back a person it still lists.
+		within(dialog).getByText(
+			/If they are still a member in GitHub, the next sync adds them back\./u,
+		);
+		expect(removed).toStrictEqual([]);
+
+		await user.click(within(dialog).getByRole("button", { name: "Remove from workspace" }));
+
+		await screen.findByText("You removed Sam Unclaimed from this workspace");
+		expect(removed).toStrictEqual(["8"]);
+		// Focus returns to the member's Actions menu, which stays focusable while the removal is out.
+		await waitFor(() =>
+			expect(document.activeElement).toBe(
+				screen.getByRole("button", { name: "Actions for Sam Unclaimed" }),
+			),
+		);
+		await waitFor(() => within(rowOf("Sam Unclaimed")).getByText(/^Left /u));
+		await user.click(screen.getByRole("button", { name: "Actions for Sam Unclaimed" }));
+		await screen.findByRole("menuitem", { name: "Add back to workspace" });
+	});
+
+	it("removes nobody when the reader cancels", async () => {
+		let removes = 0;
+		mockOwnerRoute();
+		server.use(
+			http.delete("*/workspaces/:workspaceSlug/members/:accountId", () => {
+				removes += 1;
+				return new HttpResponse(null, { status: 204 });
+			}),
+		);
+		renderRouteAt("/w/acme/admin/members");
+		const user = userEvent.setup();
+
+		const dialog = await chooseRemove(user, "Sam Unclaimed");
+		await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+		// Focus returns to the member's Actions menu.
+		await waitFor(() =>
+			expect(document.activeElement).toBe(
+				screen.getByRole("button", { name: "Actions for Sam Unclaimed" }),
+			),
+		);
+		expect(removes).toBe(0);
+	});
+
+	it("reports the server's reason when it refuses the removal", async () => {
+		mockOwnerRoute([ADA, { ...SAM, role: "OWNER" }]);
+		server.use(
+			http.delete("*/workspaces/:workspaceSlug/members/:accountId", () =>
+				HttpResponse.json(
+					{
+						title: "Workspace owner required",
+						status: 409,
+						detail:
+							"You cannot remove the last OWNER role from workspace 'acme'. Assign another user as OWNER first.",
+					},
+					{ status: 409 },
+				),
+			),
+		);
+		renderRouteAt("/w/acme/admin/members");
+		const user = userEvent.setup();
+
+		const dialog = await chooseRemove(user, "Sam Unclaimed");
+		await user.click(within(dialog).getByRole("button", { name: "Remove from workspace" }));
+
+		await screen.findByText("We could not remove Sam Unclaimed");
+		screen.getByText(/^You cannot remove the last OWNER role/u);
+		expect(within(rowOf("Sam Unclaimed")).queryByText(/^Left /u)).toBeNull();
+	});
+
+	it("asks an owner who has not signed in recently to confirm access before removing another owner", async () => {
+		mockOwnerRoute([ADA, { ...SAM, role: "OWNER" }]);
+		server.use(
+			http.delete("*/workspaces/:workspaceSlug/members/:accountId", () =>
+				HttpResponse.json(
+					{
+						title: "Confirm access",
+						status: 403,
+						detail: "This action requires a recent sign-in. Sign in again to confirm access.",
+						type: problemType("step-up-required"),
+						maxAgeSeconds: 300,
+					},
+					{ status: 403 },
+				),
+			),
+		);
+		renderRouteAt("/w/acme/admin/members");
+		const user = userEvent.setup();
+
+		const dialog = await chooseRemove(user, "Sam Unclaimed");
+		await user.click(within(dialog).getByRole("button", { name: "Remove from workspace" }));
+
+		await screen.findByRole("dialog", { name: "Confirm access" });
+		expect(screen.queryByText("We could not remove Sam Unclaimed")).toBeNull();
+	});
+
+	it("offers an admin no removal of an owner, and nobody a removal of their own row", async () => {
+		const own = member("42", { displayName: "The Octocat" }, { role: "ADMIN" });
+		mockMembersRoute([ADA, { ...SAM, role: "OWNER" }, own]);
+		renderRouteAt("/w/acme/admin/members");
+
+		await screen.findByRole("button", { name: "Actions for Ada Lovelace" }, ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("button", { name: "Actions for Sam Unclaimed" })).toBeNull();
+		expect(screen.queryByRole("button", { name: "Actions for The Octocat" })).toBeNull();
+	});
+
+	it("asks an owner before adding back a member who left as an owner", async () => {
+		const assigned: AssignRoleRequest[] = [];
+		mockOwnerRoute([ADA, { ...SAM, role: "OWNER", leftAt: "2026-11-01T10:00:00Z" }]);
+		server.use(
+			http.post<never, AssignRoleRequest>(
+				"*/workspaces/:workspaceSlug/members/assign",
+				async ({ request }) => {
+					assigned.push(await request.json());
+					return HttpResponse.json({ ...SAM, role: "OWNER" });
+				},
+			),
+		);
+		renderRouteAt("/w/acme/admin/members");
+		const user = userEvent.setup();
+
+		await user.click(
+			await screen.findByRole("button", { name: "Actions for Sam Unclaimed" }, ROUTE_RENDER_WAIT),
+		);
+		await user.click(await screen.findByRole("menuitem", { name: "Add back to workspace" }));
+		const dialog = await screen.findByRole("alertdialog", {
+			name: "Add Sam Unclaimed back as an owner?",
+		});
+		expect(assigned).toStrictEqual([]);
+
+		await user.click(within(dialog).getByRole("button", { name: "Add back as owner" }));
+
+		await screen.findByText("Sam Unclaimed is back in this workspace");
+		expect(assigned).toStrictEqual([{ accountId: "8", role: "OWNER" }]);
+	});
+
+	it("adds back a member who left, with the role they had", async () => {
+		let assigned: AssignRoleRequest | undefined;
+		let members = [ADA, { ...SAM, role: "ADMIN" as const, leftAt: "2026-11-01T10:00:00Z" }];
+		mockMembersRoute();
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/members", () =>
+				HttpResponse.json(membershipPage(members)),
+			),
+			http.post<never, AssignRoleRequest>(
+				"*/workspaces/:workspaceSlug/members/assign",
+				async ({ request }) => {
+					assigned = await request.json();
+					members = [ADA, { ...SAM, role: "ADMIN" }];
+					return HttpResponse.json({ ...SAM, role: "ADMIN" });
+				},
+			),
+		);
+		renderRouteAt("/w/acme/admin/members");
+		const user = userEvent.setup();
+
+		await user.click(
+			await screen.findByRole("button", { name: "Actions for Sam Unclaimed" }, ROUTE_RENDER_WAIT),
+		);
+		await user.click(await screen.findByRole("menuitem", { name: "Add back to workspace" }));
+
+		await screen.findByText("Sam Unclaimed is back in this workspace");
+		expect(assigned).toStrictEqual({ accountId: "8", role: "ADMIN" });
+		await waitFor(() => expect(within(rowOf("Sam Unclaimed")).queryByText(/^Left /u)).toBeNull());
+	});
+});
+
 describe("public activity answers", () => {
 	it("marks the members who have not answered, and says nothing of the others' answers", async () => {
 		mockMembersRoute([
