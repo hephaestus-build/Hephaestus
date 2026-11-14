@@ -10,7 +10,9 @@ import { test, type TestContext } from "node:test";
 
 import {
 	focusedTests,
+	hookTests,
 	frontendCommands,
+	pushScopeReason,
 	pushScopes,
 	pushTasks,
 	runUnlessStalled,
@@ -128,6 +130,18 @@ void test("a source change runs its changed and colocated tests, and resources r
 	assert.ok(extension !== undefined);
 	assert.ok(extension.includes("unit"));
 	assert.ok(!extension.includes("storybook"));
+});
+
+void test("a hook change runs every test that runs a hook as a process", () => {
+	const selected = focusedTests([".vite-hooks/pre-push"]);
+	// These run the hook through Git or directly, so no import ties them to it.
+	for (const file of ["scripts/enable-hooks.test.ts", "scripts/git-environment.test.ts"]) {
+		assert.ok(selected.includes(file), file);
+	}
+	assert.deepEqual(selected, hookTests());
+	assert.ok(
+		!focusedTests(["scripts/reorder-migrations.ts"]).includes("scripts/enable-hooks.test.ts"),
+	);
 });
 
 void test("focused Node tests include changed tests and existing source companions", () => {
@@ -522,4 +536,21 @@ void test("a push of shipped code without a changeset stops before any check run
 	} finally {
 		await rm(f.directory, { recursive: true, force: true });
 	}
+});
+
+void test("a migration fragment selects the changeset checks, and the first line names what escalated", () => {
+	// Docs, tooling and a fragment: no file selects every scope.
+	const docsDrift = [
+		".migration/durable-compose-claim.md",
+		"docs/admin/alert-rules.md",
+		"scripts/check-alert-rules.ts",
+		"scripts/check-docs-pages.test.ts",
+	];
+	assert.deepEqual(pushScopes([".migration/durable-compose-claim.md"]), ["changesets", "docs"]);
+	assert.equal(pushScopeReason(docsDrift), "scopes agents, changesets, docs");
+	assert.match(
+		pushScopeReason([...docsDrift, "README.md"]),
+		/^all scopes \(.*\), because README\.md selects them$/u,
+	);
+	assert.match(pushScopeReason(undefined), /because no merge base was found$/u);
 });

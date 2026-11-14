@@ -90,6 +90,11 @@ export function isReleaseNote(file: string): boolean {
 	return /^\.changeset\/(?!README\.md$)[^/]+\.md$/u.test(file);
 }
 
+/** A migration-guide fragment: `gate:changesets` checks it with its changeset, and `gate:docs-pages` checks its upgrade page. */
+export function isMigrationFragment(file: string): boolean {
+	return /^\.migration\/(?!README\.md$)[^/]+\.md$/u.test(file);
+}
+
 export function scopesFor(paths: string[]): Scope[] {
 	if (
 		paths.some(
@@ -100,7 +105,10 @@ export function scopesFor(paths: string[]): Scope[] {
 	}
 	const scopes = new Set<Scope>();
 	for (const file of paths) {
-		if (isReleaseNote(file)) {
+		if (isMigrationFragment(file)) {
+			scopes.add("changesets");
+			scopes.add("docs");
+		} else if (isReleaseNote(file)) {
 			scopes.add("changesets");
 		} else if (file === FEEDBACK_WRITING_GUIDE) {
 			scopes.add("docs");
@@ -158,11 +166,17 @@ function git(cwd: string, ...args: string[]): string[] {
 	return result.stdout.split("\n").filter(Boolean);
 }
 
-export function changedPaths(requestedBase: string, cwd = process.cwd()): string[] {
+/** The commit that HEAD and `requestedBase` share, which every changed path is measured from. */
+export function mergeBase(requestedBase: string, cwd = process.cwd()): string {
 	const base = git(cwd, "merge-base", "--end-of-options", "HEAD", requestedBase)[0];
 	if (base === undefined) {
 		throw new Error(`No merge base with ${requestedBase}`);
 	}
+	return base;
+}
+
+export function changedPaths(requestedBase: string, cwd = process.cwd()): string[] {
+	const base = mergeBase(requestedBase, cwd);
 	return [
 		...new Set([
 			...git(cwd, "diff", "--no-renames", "--name-only", `${base}...HEAD`),

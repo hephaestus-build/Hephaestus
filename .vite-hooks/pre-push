@@ -2,4 +2,13 @@
 # Git points every command a hook runs at the repository being pushed. The gate below creates and
 # drives its own throwaway repositories, so it addresses that one only by mistake.
 unset GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR GIT_DIR GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_PREFIX GIT_WORK_TREE
+# These are the checks of a pull request, so only a push to GitHub runs them. Git passes the
+# remote's name, or the URL as typed, and the URL that it pushes to after any insteadOf rewrite.
+case "${1-} ${2-}" in
+	*github.com*) ;;
+	*)
+		echo "pre-push: ${1-} is not a GitHub remote, so the push checks do not run." >&2
+		exit 0
+		;;
+esac
 exec "$(dirname -- "$0")/run" pre-push vp run check:push

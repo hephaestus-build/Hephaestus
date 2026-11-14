@@ -1,10 +1,17 @@
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { changedPaths, parseBase, pathFilters, scopesFor, type Scope } from "./check-affected.ts";
+import {
+	changedPaths,
+	mergeBase,
+	parseBase,
+	pathFilters,
+	scopesFor,
+	type Scope,
+} from "./check-affected.ts";
 import { NEXT_CHANGELOG_DIRECTORY } from "./lib/changelog.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { repositoryCli } from "./lib/process.ts";
@@ -95,6 +102,24 @@ export function pushScopes(paths: string[] | undefined): Exclude<Scope, "full">[
 	return [...selected].toSorted();
 }
 
+/**
+ * Why the push checks cover what they cover, for the hook's first line: a contributor who sees every scope
+ * selected can tell which file did it, or that no merge base was found.
+ */
+export function pushScopeReason(paths: string[] | undefined): string {
+	if (paths === undefined) {
+		return `all scopes (${allScopes.join(", ")}), because no merge base was found`;
+	}
+	const scopes = pushScopes(paths);
+	if (scopes.length === allScopes.length) {
+		const escalating = paths.find((file) => pushScopes([file]).length === allScopes.length);
+		if (escalating !== undefined) {
+			return `all scopes (${scopes.join(", ")}), because ${escalating} selects them`;
+		}
+	}
+	return scopes.length === 0 ? "no scopes" : `scopes ${scopes.join(", ")}`;
+}
+
 export function pushTasks(paths: string[] | undefined): string[] {
 	const scopes = pushScopes(paths);
 	const tasks = new Set(scopes.flatMap((scope) => pushStaticTasks[scope]));
@@ -111,8 +136,34 @@ const nativeTest =
 	/^(?:scripts\/.*\.test\.ts|docker\/agents\/.*\.test\.ts|server\/application\/src\/test\/resources\/agent\/[^/]+\.spec\.ts)$/u;
 
 /** Only explicit changed tests and existing source companions; full Node suites remain required. */
+/**
+ * The Node tests that run a Git hook: a test reaches a hook only through its path, Git's hook setting or the hook
+ * installer, and runs it as a process, which no import graph shows. A hook change runs each of them.
+ */
+export function hookTests(cwd = process.cwd()): string[] {
+	const scripts = path.join(cwd, "scripts");
+	if (!existsSync(scripts)) {
+		return [];
+	}
+	return readdirSync(scripts, { recursive: true })
+		.map(String)
+		.filter(
+			(entry) => entry.endsWith(".test.ts") && !entry.split(path.sep).includes("node_modules"),
+		)
+		.map((entry) => path.join("scripts", entry).split(path.sep).join("/"))
+		.filter((file) =>
+			/\.vite-hooks|core\.hooksPath|enable-hooks/u.test(readFileSync(path.join(cwd, file), "utf8")),
+		)
+		.toSorted();
+}
+
 export function focusedTests(paths: string[], cwd = process.cwd()): string[] {
 	const tests = new Set<string>();
+	if (paths.some((file) => file.startsWith(".vite-hooks/"))) {
+		for (const hookTest of hookTests(cwd)) {
+			tests.add(hookTest);
+		}
+	}
 	for (const file of paths) {
 		for (const candidate of [file, file.replace(/\.ts$/u, ".test.ts")]) {
 			if (nativeTest.test(candidate) && existsSync(path.join(cwd, candidate))) {
@@ -333,13 +384,19 @@ export async function runUnlessStalled(
 async function main(): Promise<void> {
 	const base = parseBase(process.argv.slice(2));
 	let paths: string[] | undefined;
+	let since = "";
 	try {
+		const shared = mergeBase(base);
 		paths = changedPaths(base);
+		since = ` since ${shared.slice(0, 10)}, the merge base with ${base}`;
 	} catch {
 		console.log(
 			`No usable merge base with ${base}; selecting all scoped checks and frontend unit projects without fetching.`,
 		);
 	}
+	console.log(
+		`Push checks for ${paths === undefined ? "every changed path" : `${paths.length} changed ${paths.length === 1 ? "path" : "paths"}`}${since}: ${pushScopeReason(paths)}.`,
+	);
 	// First, because it takes milliseconds and otherwise fails only in the merge queue.
 	if (paths?.some((file) => file.startsWith(`${NEXT_CHANGELOG_DIRECTORY}/`)) === true) {
 		let queued: string[] = [];

@@ -4781,12 +4781,16 @@ void describe("CI contract", () => {
 		// the pre-push hook probe needs a push to prove the hook runs, and writes nothing.
 		const pushes: string[] = [];
 		for (const [file, source] of await workflowSources()) {
-			for (const [index, line] of source.split("\n").entries()) {
+			// A command continued with a trailing backslash is one statement.
+			for (const [index, line] of source
+				.replaceAll(/\\\n\s*/gu, " ")
+				.split("\n")
+				.entries()) {
 				const statement = line.trim();
 				if (statement.startsWith("#")) {
 					continue;
 				}
-				const command = /\bgit push\b.*/u.exec(statement)?.[0];
+				const command = /\bgit\b(?:\s+-c\s+(?:"[^"]*"|\S+))*\s+push\b.*/u.exec(statement)?.[0];
 				if (command === undefined || /\s--dry-run(?:\s|$)/u.test(command)) {
 					continue;
 				}
@@ -5410,6 +5414,9 @@ void test("proves the toolchain on Windows and from a clean clone", async () => 
 	const prePushHook = runScript(workflow, qualityPath, "Pre-push hook");
 	assert.match(prePushHook, /node scripts\/enable-hooks\.ts/u);
 	assert.match(prePushHook, /git push --dry-run\b/u);
+	// A remote that is not GitHub skips the checks, and a GitHub URL runs them.
+	assert.match(prePushHook, /test ! -s "\$probe"/u);
+	assert.match(prePushHook, /insteadOf=https:\/\/github\.com\//u);
 	assert.match(prePushHook, /\[ "\$2" != check:push \]/u);
 	// The step moves the launcher aside, so it must put it back however it exits.
 	assert.match(prePushHook, /trap .*EXIT/u);

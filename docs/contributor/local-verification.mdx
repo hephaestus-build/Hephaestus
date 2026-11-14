@@ -131,6 +131,12 @@ To skip the hooks once, set `VP_GIT_HOOKS=0`.
 Do not run `vp hooks enable`: it points every worktree back at the generated dispatcher.
 A worktree on a branch from before the tracked launcher runs its old hook directly, so it needs `vp` on `PATH` until you rebase it.
 
+The pre-push hook runs only for a push to GitHub, because these are the checks of a pull request.
+The remote's name or URL must contain `github.com`.
+A push to another remote, such as a validation mirror, skips them and says so.
+An SSH host alias that hides `github.com`, such as `git@github-work:org/repo`, also skips them.
+Pull request CI still runs every check.
+
 The pre-push hook runs `vp run check:push` with one task worker.
 It compares the same paths as `check:affected` and runs selected format, lint, TypeScript and prose checks.
 It does not write source files.
@@ -139,6 +145,7 @@ A change under `db/changelog/next/` first checks that the branch's migrations so
 If the hook cannot read the queue, it says so and checks against `origin/main` only.
 
 For Node, it runs changed test files, existing source companion tests and the CI contract suites for workflow changes.
+A change under `.vite-hooks/` runs each test that runs a hook as a process: each test that names the hook directory, `core.hooksPath` or the hook installer.
 This selection does not cover every fixture or resource input.
 The complete Node suites remain in `check` and CI.
 

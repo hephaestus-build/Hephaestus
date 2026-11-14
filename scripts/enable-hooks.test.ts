@@ -69,6 +69,18 @@ function install(directory: string, env: NodeJS.ProcessEnv = hookFreeEnv()) {
 	return result;
 }
 
+/**
+ * A push to a local bare repository under a GitHub URL: the pre-push hook runs its checks only for GitHub, and
+ * insteadOf sends the push to the local repository.
+ */
+const pushAsGitHub = (remote: string, refspec: string) => [
+	"-c",
+	`url.${remote.replaceAll("\\", "/")}.insteadOf=https://github.com/hephaestus-build/hook-probe`,
+	"push",
+	"https://github.com/hephaestus-build/hook-probe",
+	refspec,
+];
+
 void test("an install points every worktree at the tracked hooks and is idempotent", () => {
 	const { repository, git } = clone();
 	install(repository);
@@ -143,7 +155,7 @@ void test("a fresh worktree runs the repository's hooks without an install, and 
 	// No install in the new worktree: no dispatcher, no node_modules.
 	assert.ok(!existsSync(path.join(worktree, "node_modules")));
 	const push = () =>
-		spawnSync("git", ["push", remote, "HEAD:refs/heads/fresh"], {
+		spawnSync("git", pushAsGitHub(remote, "HEAD:refs/heads/fresh"), {
 			cwd: worktree,
 			encoding: "utf8",
 			env: hookFreeEnv(),
@@ -206,11 +218,15 @@ void test("each worktree runs its own hooks, whichever worktree last ran an inst
 	temporaries.push(remote);
 	execFileSync("git", ["init", "--quiet", "--bare", remote], { env: hookFreeEnv() });
 	for (const tree of [first, second, fresh]) {
-		const pushed = spawnSync("git", ["push", remote, `HEAD:refs/heads/${path.basename(tree)}`], {
-			cwd: tree,
-			encoding: "utf8",
-			env: hookFreeEnv(),
-		});
+		const pushed = spawnSync(
+			"git",
+			pushAsGitHub(remote, `HEAD:refs/heads/${path.basename(tree)}`),
+			{
+				cwd: tree,
+				encoding: "utf8",
+				env: hookFreeEnv(),
+			},
+		);
 		assert.equal(pushed.status, 0, pushed.stderr);
 	}
 	assert.deepEqual(readFileSync(calls, "utf8").trim().split("\n"), ["first", "second", "fresh"]);
