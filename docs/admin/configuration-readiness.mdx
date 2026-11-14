@@ -43,7 +43,7 @@ The requirement is `REQUIRED`, `RECOMMENDED`, or `OPTIONAL`.
 `database.url` checks that `DATABASE_URL` is a PostgreSQL URL. The production profile adds the `jdbc:` prefix.
 `database.username` and `database.password` check that both values are not empty.
 Spring Boot and Liquibase check the connection and the migration separately.
-An `options` parameter in `DATABASE_URL` replaces the 10-second lock wait limit of the server's connections.
+An `options` parameter in `DATABASE_URL` replaces the server's connection limits: a lock wait of at most 10 seconds, and at most 60 seconds idle in a transaction.
 
 A remote database requires TLS, and production startup refuses a plaintext remote connection.
 The chart always connects with `sslmode=verify-full`, which encrypts the connection and verifies the server identity.

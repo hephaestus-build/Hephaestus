@@ -56,6 +56,16 @@ Spring: "self-invocation (in effect, a method within the target object calling a
 - `ReviewServiceImpl#request` refuses a call that starts in a transaction, because it pins the item and reads its sources.
 - `database_transaction_http_requests_total` counts the HTTP requests that start in a transaction, by boundary.
   It shows which boundaries still break this rule.
+- The database ends a pooled session that sits idle in a transaction for 60 seconds, with SQLState `25P03`.
+  The same `options` that set the lock bound (§ 6) set this limit, so Liquibase and the `LISTEN` listeners have no limit.
+  PostgreSQL rolls the transaction back when it ends the session.
+  `EndedSessionTransactionManager` therefore does not roll back on the closed connection, so the caller sees the `25P03` failure, not "Connection is closed".
+  A transaction left idle for a minute is a defect to fix, not an outage, so `TransientFailures` does not treat `25P03` as transient.
+  The provider event inbox counts the retries and then keeps the event as a dead letter for a replay.
+  A scheduled job logs an error and runs again on its next schedule.
+  A review job fails, and its preparation failure says that a database operation failed.
+  A person-data erasure step stops with `STORE_ERASURE_FAILED` until an administrator resumes it.
+  An HTTP request answers `500`.
 
 PostgreSQL keeps row locks until the transaction ends ([Explicit locking](https://www.postgresql.org/docs/18/explicit-locking.html)).
 A slow call therefore blocks every writer of the same rows, and it holds a pooled connection.
