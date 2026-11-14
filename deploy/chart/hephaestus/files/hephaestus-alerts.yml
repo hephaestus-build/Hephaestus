@@ -542,6 +542,22 @@ groups:
         annotations:
           summary: The outbox backlog gauges failed to refresh more than 10 times in 15 minutes and can show old values
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+      # An approximation: the database's own bytes against the volume that the chart gave it. The WAL, temporary files and
+      # the filesystem also take space, so the volume fills before the ratio reaches 1. It needs no kubelet metrics, so
+      # it works with the bundled monitoring stack. A failed read makes the size NaN until the next read, so the size
+      # counts over 10 minutes, and the failures count too. A server reads every five minutes, so 4 of the 6 reads in
+      # 30 minutes failed.
+      - alert: HephaestusDatabaseNearVolumeSize
+        expr: >-
+          max(max_over_time(database_size_bytes{job="hephaestus"}[10m]))
+          / max(database_volume_capacity_bytes{job="hephaestus"}) > 0.8
+          or max(increase(database_size_sampler_failures_total{job="hephaestus"}[30m])) >= 4
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: The database is approaching its volume size, or the server cannot read the database size
+          runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusOutboxUncertain
         expr: sum by (kind) (increase(action_ended_total{job="hephaestus",state="UNCERTAIN"}[1h])) > 0
         labels:

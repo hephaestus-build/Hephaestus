@@ -2143,6 +2143,21 @@ await test("email follows the relay's TLS mode, and authenticates only with a us
 	assert.deepEqual(mail(relay), ["false", "false", "true", "true"]);
 });
 
+const volumeSize = (layers: readonly Layer[]) =>
+	env(workload(rendered(layers), "server"), "HEPHAESTUS_DATABASE_VOLUME_SIZE");
+
+await test("the server knows the size of the bundled PostgreSQL volume, and of no external one", () => {
+	assert.equal(get(volumeSize(layersFor("small")), "value"), "20480MB");
+	assert.equal(
+		get(
+			volumeSize([...layersFor("small"), { postgresql: { persistence: { size: "1.5Ti" } } }]),
+			"value",
+		),
+		"1572864MB",
+	);
+	assert.equal(volumeSize([profile("small"), prepared, operator, reviews, external]), undefined);
+});
+
 await test("the server's operator settings reach the server alone", () => {
 	const settings = [
 		"HEPHAESTUS_RESEARCH_ORGANIZATION",

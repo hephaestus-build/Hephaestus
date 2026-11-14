@@ -1112,6 +1112,57 @@ tests:
               summary: PostgreSQL cannot archive its WAL, or the server cannot read whether it can
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
+  # 20 GiB is 21474836480 bytes; 80 % of it is 17179869184.
+  - name: a database past 80 % of its volume fires, one below it does not
+    interval: 1m
+    input_series:
+      - series: 'database_volume_capacity_bytes{job="hephaestus",instance="server:9090",runtime_role="server"}'
+        values: "21474836480x40"
+      - series: 'database_size_bytes{job="hephaestus",instance="server:9090",runtime_role="server"}'
+        values: "17000000000x10 18000000000x10 NaN NaN NaN NaN NaN 18000000000x14"
+      - series: 'database_size_sampler_failures_total{job="hephaestus",instance="server:9090",runtime_role="server"}'
+        values: "0x40"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HephaestusDatabaseNearVolumeSize
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: HephaestusDatabaseNearVolumeSize
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: HephaestusDatabaseNearVolumeSize
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: The database is approaching its volume size, or the server cannot read the database size
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
+  # An external database has no volume capacity, so only the failures can fire.
+  # A server reads every five minutes, so its failure counter steps once each five minutes.
+  - name: a database size that cannot be read for half an hour fires, one failed read does not
+    interval: 1m
+    input_series:
+      - series: 'database_size_bytes{job="hephaestus",instance="server:9090",runtime_role="server"}'
+        values: "1000 NaN 1000x8 NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN"
+      - series: 'database_size_sampler_failures_total{job="hephaestus",instance="server:9090",runtime_role="server"}'
+        values: "0 1 1 1 1 1 1 1 1 1 2 2 2 2 2 3 3 3 3 3 4 4 4 4 4 5 5 5 5 5 6 6 6 6 6 7 7 7 7 7 8 8 8 8 8 9 9 9 9 9 10 10 10 10 10 11 11 11 11 11 12"
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: HephaestusDatabaseNearVolumeSize
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: HephaestusDatabaseNearVolumeSize
+        exp_alerts: []
+      - eval_time: 55m
+        alertname: HephaestusDatabaseNearVolumeSize
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: The database is approaching its volume size, or the server cannot read the database size
+              runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
+
   - name: a connection timeout fires for its role, a role without timeouts does not
     interval: 1m
     input_series:
