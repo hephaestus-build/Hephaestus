@@ -35,14 +35,6 @@ final class RepositoryOwnershipRatchet {
                     Set.of("integration.core.oauth.state.OAuthStateNonceStore")),
             new Entry(
                     "integration.scm",
-                    "integration.core.item.ItemRepository",
-                    "DDD12 (integration.core)",
-                    "integration.core::spi ItemQueries and existing ItemIndexService commands",
-                    Set.of(
-                            "integration.scm.domain.item.ScmItemAccess",
-                            "integration.scm.domain.item.ScmRepositoryItemLifecycle")),
-            new Entry(
-                    "integration.scm",
                     "workspace.MembershipRepository",
                     "DDD9",
                     "workspace::spi WorkspaceMemberships",

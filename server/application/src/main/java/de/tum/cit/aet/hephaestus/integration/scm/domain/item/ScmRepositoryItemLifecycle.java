@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
-import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
@@ -19,7 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ScmRepositoryItemLifecycle {
     private final ItemIndexService writer;
-    private final ItemRepository items;
     private final RepositoryRepository repositories;
     private final ScmRepositoryAccess access;
     private final ScmWorkItemIndex work;
@@ -32,8 +30,8 @@ public class ScmRepositoryItemLifecycle {
                 event.repositoryIds().stream().distinct().sorted().toList()) {
             if (!repositories.isMonitored(event.workspaceId(), repositoryId)) {
                 if (event.retainIndex()) continue;
-                items.findSource(event.workspaceId(), ScmItemEvents.REPOSITORY.value(), repositoryId)
-                        .ifPresent(item -> writer.remove(event.workspaceId(), item.getId(), clock.instant()));
+                writer.findSource(event.workspaceId(), ScmItemEvents.REPOSITORY.value(), repositoryId)
+                        .ifPresent(item -> writer.remove(event.workspaceId(), item.itemId(), clock.instant()));
                 continue;
             }
             repositories.claimForIndex(repositoryId);
