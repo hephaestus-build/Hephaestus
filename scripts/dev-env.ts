@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
-import { readdir, readFile, realpath, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { chmod, copyFile, readdir, readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { isSet, readEnvFile } from "./lib/env.ts";
@@ -7,13 +8,18 @@ import { isSet, readEnvFile } from "./lib/env.ts";
 const server = path.join(import.meta.dirname, "../server");
 
 /**
- * What `ensureDatabasePassword` did to `server/.env`:
- * - `present`: the file or the environment already names a password; nothing changed.
- * - `generated`: a random password was written, for a database that does not exist yet.
+ * The values this script generates, with their random bytes, written as hex. PostgreSQL reads its password only
+ * when it creates a database, and the server reads stored secrets only with the keys that encrypted them, so
+ * those three are generated for a new database only. The two keys take 32 UTF-8 bytes, as
+ * docs/admin/secret-custody.mdx generates them.
  */
-export type DatabasePasswordOutcome = "present" | "generated";
-
-const assignment = /^POSTGRES_PASSWORD=.*$/mu;
+const GENERATED = [
+	{ name: "POSTGRES_PASSWORD", bytes: 24, newDatabaseOnly: true },
+	{ name: "HEPHAESTUS_SECURITY_ENCRYPTION_KEY", bytes: 16, newDatabaseOnly: true },
+	{ name: "HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY", bytes: 16, newDatabaseOnly: true },
+	{ name: "WEBHOOK_SECRET", bytes: 32, newDatabaseOnly: false },
+] as const;
+type Generated = (typeof GENERATED)[number]["name"];
 
 async function hasData(dataDirectory: string): Promise<boolean> {
 	try {
@@ -28,10 +34,34 @@ async function hasData(dataDirectory: string): Promise<boolean> {
 }
 
 /**
- * Gives this checkout's local PostgreSQL a password, once. `server/compose.yaml` creates the database
- * with it, and Spring Boot and every database script read it from the same `server/.env`.
+ * Creates `server/.env` from the template, once. Every later step only adds a value that is missing, so a
+ * value the developer set always stays. Returns whether it created the file.
  */
-export async function ensureDatabasePassword({
+export async function ensureEnvFile({
+	envFile,
+	template,
+}: {
+	envFile: string;
+	template: string;
+}): Promise<boolean> {
+	try {
+		await copyFile(template, envFile, constants.COPYFILE_EXCL);
+	} catch (error) {
+		if (error instanceof Error && "code" in error && error.code === "EEXIST") {
+			return false;
+		}
+		throw error;
+	}
+	// The file holds secrets, so only its owner reads it.
+	await chmod(envFile, 0o600);
+	return true;
+}
+
+/**
+ * Generates each value of `GENERATED` that neither the file nor the environment sets, and returns their names.
+ * Existing data refuses a missing database password: a new one would lock the developer out of the data.
+ */
+export async function ensureGeneratedValues({
 	envFile,
 	dataDirectory,
 	environment = process.env,
@@ -39,29 +69,36 @@ export async function ensureDatabasePassword({
 	envFile: string;
 	dataDirectory: string;
 	environment?: NodeJS.ProcessEnv;
-}): Promise<DatabasePasswordOutcome> {
+}): Promise<Generated[]> {
 	const values = await readEnvFile(envFile);
-	const configured = values.POSTGRES_PASSWORD;
-	if (isSet(environment.POSTGRES_PASSWORD) || isSet(configured)) {
-		return "present";
-	}
-	if (await hasData(dataDirectory)) {
+	const missing = GENERATED.filter(({ name }) => !isSet(environment[name]) && !isSet(values[name]));
+	const existingData = await hasData(dataDirectory);
+	if (existingData && missing.some(({ name }) => name === "POSTGRES_PASSWORD")) {
 		throw new Error(
-			"The local database has data but no POSTGRES_PASSWORD. Set its password in server/.env before running local database commands.",
+			"The local database has data but no POSTGRES_PASSWORD. Set its password in server/.env, or run `vp run dev:reset` to start again with a new database.",
 		);
 	}
-	const password = randomBytes(24).toString("hex");
-	await setEnvLine(envFile, assignment, `POSTGRES_PASSWORD=${password}`);
-	return "generated";
+	const written = missing.filter(({ newDatabaseOnly }) => !(existingData && newDatabaseOnly));
+	for (const { name, bytes } of written) {
+		await setEnvLine(envFile, name, randomBytes(bytes).toString("hex"));
+	}
+	return written.map(({ name }) => name);
 }
 
-/** Replaces the line that `pattern` matches, or appends one. The file holds secrets, so only its owner reads it. */
-async function setEnvLine(envFile: string, pattern: RegExp, line: string): Promise<void> {
+/**
+ * Sets `name`, which the file leaves blank or unset. Readers take the last assignment of a key, so the last one is
+ * replaced, or a line is appended. The file holds secrets, so only its owner reads it.
+ */
+async function setEnvLine(envFile: string, name: string, value: string): Promise<void> {
 	const current = await readFile(envFile, "utf8").catch(() => "");
-	const next = pattern.test(current)
-		? current.replace(pattern, () => line)
-		: `${current}${current === "" || current.endsWith("\n") ? "" : "\n"}${line}\n`;
-	await writeFile(envFile, next, { mode: 0o600 });
+	const last = [...current.matchAll(new RegExp(`^${name}=.*$`, "gmu"))].at(-1);
+	const line = `${name}=${value}`;
+	const next =
+		last === undefined
+			? `${current}${current === "" || current.endsWith("\n") ? "" : "\n"}${line}\n`
+			: `${current.slice(0, last.index)}${line}${current.slice(last.index + last[0].length)}`;
+	await writeFile(envFile, next);
+	await chmod(envFile, 0o600);
 }
 
 /**
@@ -99,23 +136,39 @@ export async function ensureComposeProject({
 		.digest("hex")
 		.slice(0, 8);
 	const name = `hephaestus-${folder}-${id}`;
-	await setEnvLine(envFile, /^COMPOSE_PROJECT_NAME=.*$/mu, `COMPOSE_PROJECT_NAME=${name}`);
+	await setEnvLine(envFile, "COMPOSE_PROJECT_NAME", name);
 	return name;
 }
 
 /**
- * Ensures the Compose project and the password for this checkout, and tells the developer what
- * happened when it changed the password.
+ * The one writer of `server/.env`: it creates the file from `server/.env.example`, then adds the Compose
+ * project and the generated values that are missing, and says what it wrote.
  */
 export async function ensureLocalEnvironment(): Promise<void> {
 	const paths = {
 		envFile: path.join(server, ".env"),
 		dataDirectory: path.join(server, "postgres-data"),
 	};
+	if (
+		await ensureEnvFile({ envFile: paths.envFile, template: path.join(server, ".env.example") })
+	) {
+		console.log(
+			"ℹ️  Created server/.env from server/.env.example. Edit it; never copy the example over it.",
+		);
+	}
 	await ensureComposeProject({ ...paths, checkout: path.dirname(server) });
-	const outcome = await ensureDatabasePassword(paths);
-	if (outcome === "generated") {
-		console.log("ℹ️  Generated POSTGRES_PASSWORD in server/.env for this checkout's database.");
+	const written = await ensureGeneratedValues(paths);
+	if (written.length > 0) {
+		console.log(`ℹ️  Generated ${written.join(", ")} in server/.env for this checkout.`);
+	}
+	const values = { ...(await readEnvFile(paths.envFile)), ...process.env };
+	const keys = GENERATED.filter(
+		({ newDatabaseOnly, name }) => newDatabaseOnly && !isSet(values[name]),
+	);
+	if (keys.length > 0) {
+		console.warn(
+			`⚠️  The local database has data but server/.env has no ${keys.map(({ name }) => name).join(" or ")}. Set the keys it was created with, or run \`vp run dev:reset\`.`,
+		);
 	}
 }
 

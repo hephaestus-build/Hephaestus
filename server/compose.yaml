@@ -1,5 +1,4 @@
-# Local development stack. From the repo root: `vp run dev` writes the database password to
-# server/.env, runs `docker compose up -d --wait`, then starts the server + webapp. Postgres is a bind mount (./postgres-data), so
+# Local development stack. From the repo root: `vp run dev` completes server/.env (`vp run dev:env`), runs `docker compose up -d --wait`, then starts the server + webapp. Postgres is a bind mount (./postgres-data), so
 # `docker compose down -v` won't clear it — use `vp run dev:reset` to reset the DB.
 #
 # Authentication is Hephaestus-native (no Keycloak — ADR 0017). For local login, register a
@@ -16,7 +15,7 @@ services:
       POSTGRES_DB: hephaestus
       # PostgreSQL reads it only when it creates the database. `vp run dev` writes a random value to
       # server/.env on first use, and Spring Boot reads the same file.
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run `vp run dev:compose` once, or set POSTGRES_PASSWORD in server/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run `vp run dev:env` once, or set POSTGRES_PASSWORD in server/.env}
       POSTGRES_USER: root
     ports:
       - '${POSTGRES_PORT:-5432}:5432'
