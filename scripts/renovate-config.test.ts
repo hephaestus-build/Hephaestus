@@ -522,7 +522,7 @@ void test("catalog packages keep their batch, the React hold and one TypeScript 
 	assert.ok(Array.isArray(config.packageRules));
 	const rules = config.packageRules.filter(isRecord);
 	const matching = (predicate: (rule: Record<string, unknown>) => boolean) =>
-		rules.filter(predicate).at(-1);
+		rules.findLast(predicate);
 	const catalog = matching(
 		(rule) =>
 			Array.isArray(rule.matchDepTypes) && rule.matchDepTypes.includes("pnpm.catalog.default"),
