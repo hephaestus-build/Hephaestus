@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+// oxlint-disable-next-line no-restricted-imports -- partial updates stream on a real interval, which the test samples
 import { setTimeout as sleep } from "node:timers/promises";
 
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";

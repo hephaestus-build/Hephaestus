@@ -213,7 +213,7 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
                 });
                 database.blackHole();
                 // A renewal already on its way may still land.
-                TimeUnit.SECONDS.sleep(1); // NOPMD - a late renewal may still land
+                TimeUnit.SECONDS.sleep(1); // NOPMD - lets a renewal in flight reach the database
                 Instant lastRenewal = renewedAt(poolId);
                 upstream.getInputStream().readAllBytes();
                 Duration closedAfter = Duration.between(lastRenewal, databaseNow());

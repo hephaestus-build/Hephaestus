@@ -4,6 +4,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import nodePath from "node:path";
 import test from "node:test";
+// oxlint-disable-next-line no-restricted-imports -- partial updates stream on a real interval, a race bounds a wait, and other tests run on fake timers
 import timers, { setTimeout as sleep } from "node:timers/promises";
 
 import {

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+// oxlint-disable-next-line no-restricted-imports -- proves that a start stays held for this window
 import { setTimeout as sleep } from "node:timers/promises";
 
 import {

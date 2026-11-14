@@ -1600,6 +1600,7 @@ void describe("CI contract", () => {
 			":application:testClasses",
 			":application:testInventory",
 			":application:pmdMain",
+			":application:pmdTest",
 			":application:spotlessCheck",
 		]) {
 			assert.ok(build.split(/\s+/u).includes(task), `the producer must run ${task}`);

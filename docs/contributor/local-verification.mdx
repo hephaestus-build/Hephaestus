@@ -242,7 +242,7 @@ A quiet warm run does not prove that the dependency is repaired.
 or configuration-cache reuse, run:
 
 ```sh
-./server/gradlew -p server :spotlessCheck :application:spotlessCheck :application:pmdMain \
+./server/gradlew -p server :spotlessCheck :application:spotlessCheck :application:pmdMain :application:pmdTest \
   --rerun-tasks --no-build-cache --no-configuration-cache --profile
 ```
 

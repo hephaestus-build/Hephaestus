@@ -231,9 +231,9 @@ export default defineConfig({
 				"gate:scripts-typecheck",
 				"gate:agents-typecheck",
 			]),
-			"lint:java": run(`${gradlew} :application:pmdMain --quiet`),
+			"lint:java": run(`${gradlew} :application:pmdMain :application:pmdTest --quiet`),
 			"lint:java:report": run(
-				`${gradlew} :application:pmdMain && echo 'Report: server/application/build/reports/pmd/main.html'`,
+				`${gradlew} :application:pmdMain :application:pmdTest && echo 'Reports: server/application/build/reports/pmd/main.html and test.html'`,
 			),
 			"lint:webapp": run("vp -C webapp lint ."),
 			"lint:webapp:fix": run("vp -C webapp lint --fix ."),
@@ -291,7 +291,8 @@ export default defineConfig({
 			"gate:server": run(
 				`${gradlew} :spotlessCheck :application:spotlessCheck :application:pmdMain :application:pmdTest --quiet`,
 			),
-			// After `gate:server`: one Gradle build per checkout, and `compileJava` is then up to date.
+			// After `gate:server`: one Gradle build per checkout. `pmdTest` compiled the tests there, so
+			// this reports what that compile found.
 			"gate:server-test-analysis": run(`${gradlew} :application:compileTestJava --quiet`, {
 				dependsOn: ["gate:server"],
 			}),
