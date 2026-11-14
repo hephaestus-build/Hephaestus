@@ -58,8 +58,17 @@ public class DigestSchedule {
                 && local.toLocalTime().isBefore(TOO_LATE);
     }
 
+    /**
+     * The scheduled pass. ShedLock's method proxy refuses a locked method that returns a primitive, so the locked entry
+     * returns nothing and delegates to {@link #enqueueDue()}.
+     */
     @Scheduled(fixedDelayString = "PT15M", initialDelayString = "PT5M")
     @SchedulerLock(name = "weekly-digest", lockAtMostFor = "PT14M", lockAtLeastFor = "PT1M")
+    public void enqueueDueDigests() {
+        enqueueDue();
+    }
+
+    /** Queues the digests that are due now, and returns how many it queued. */
     public int enqueueDue() {
         Instant now = clock.instant();
         int queued = 0;
