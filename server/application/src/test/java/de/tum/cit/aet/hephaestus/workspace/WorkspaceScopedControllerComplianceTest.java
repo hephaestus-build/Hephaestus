@@ -2,26 +2,19 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackChannelAdminController;
+import de.tum.cit.aet.hephaestus.testconfig.ApplicationClasses;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
-import java.io.IOException;
 import java.lang.reflect.Method;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.annotation.AnnotatedElementUtils;
-import org.springframework.core.type.classreading.MetadataReader;
-import org.springframework.core.type.filter.AnnotationTypeFilter;
-import org.springframework.util.ClassUtils;
 import org.springframework.util.ReflectionUtils;
 import org.springframework.web.bind.annotation.RequestMapping;
 
@@ -32,9 +25,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
  */
 @Tag("architecture")
 class WorkspaceScopedControllerComplianceTest {
-
-    private static final URL MAIN_CLASSES =
-            Application.class.getProtectionDomain().getCodeSource().getLocation();
 
     /**
      * Handlers whose answer does not depend on which workspace asked, so the rule has nothing to bind to.
@@ -66,21 +56,7 @@ class WorkspaceScopedControllerComplianceTest {
 
     /** The application's own classes that carry {@link WorkspaceScopedController}, directly or as a meta-annotation. */
     private static List<Class<?>> controllers() {
-        var annotated = new AnnotationTypeFilter(WorkspaceScopedController.class);
-        // Overridden rather than filtered: the default check also drops classes whose conditions this bare
-        // environment turns off, such as the Slack and Outline controllers.
-        var scanner = new ClassPathScanningCandidateComponentProvider(false) {
-            @Override
-            protected boolean isCandidateComponent(MetadataReader reader) throws IOException {
-                return annotated.match(reader, getMetadataReaderFactory());
-            }
-        };
-        List<Class<?>> types = scanner.findCandidateComponents(Application.class.getPackageName()).stream()
-                .<Class<?>>map(candidate ->
-                        ClassUtils.resolveClassName(Objects.requireNonNull(candidate.getBeanClassName()), null))
-                .filter(type -> MAIN_CLASSES.equals(
-                        type.getProtectionDomain().getCodeSource().getLocation()))
-                .toList();
+        List<Class<?>> types = ApplicationClasses.annotatedWith(WorkspaceScopedController.class);
         assertThat(types)
                 .as("workspace scoped controllers found on the classpath, also one that a property turns off")
                 .contains(SlackChannelAdminController.class);

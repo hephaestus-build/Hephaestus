@@ -62,6 +62,12 @@ public class WorkspaceContextFilter implements Filter {
 
     private static final Pattern WORKSPACE_PATH_PATTERN = Pattern.compile("^/workspaces/([a-z0-9-]{1,64})(/.*)?$");
 
+    /**
+     * First segments under {@code /workspaces/} that name a registry route, not a workspace. Each one is a reserved
+     * slug, so no workspace can have it. The filter compares whole segments: {@code providers-team} is a workspace.
+     */
+    static final Set<String> REGISTRY_SEGMENTS = Set.of("providers", "gitlab");
+
     private final WorkspaceRepository workspaceRepository;
     private final MembershipRepository workspaceMembershipRepository;
     private final CurrentAccountUsers currentAccountUsers;
@@ -104,11 +110,8 @@ public class WorkspaceContextFilter implements Filter {
 
         String path = httpRequest.getRequestURI();
 
-        // Allow workspace registry endpoints that are not slugged
-        if ("/workspaces".equals(path)
-                || "/workspaces/".equals(path)
-                || path.startsWith("/workspaces/providers")
-                || path.startsWith("/workspaces/gitlab/")) {
+        // The workspace registry root carries no slug.
+        if ("/workspaces".equals(path) || "/workspaces/".equals(path)) {
             chain.doFilter(request, response);
             return;
         }
@@ -124,6 +127,11 @@ public class WorkspaceContextFilter implements Filter {
 
         if (!matcher.matches()) {
             sendWorkspaceSlugValidationError(httpResponse, extractInvalidSlug(path));
+            return;
+        }
+        // A registry route names a reserved word where a slug would be, so no workspace has it.
+        if (REGISTRY_SEGMENTS.contains(matcher.group(1))) {
+            chain.doFilter(request, response);
             return;
         }
 
