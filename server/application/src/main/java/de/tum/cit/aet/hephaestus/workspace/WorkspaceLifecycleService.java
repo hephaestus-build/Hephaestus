@@ -4,8 +4,11 @@ import static de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus;
 
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
+import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredWorkspacePurges;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.workspace.audit.WorkspaceAuditSnapshots;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.exception.WorkspaceLifecycleViolationException;
@@ -19,7 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class WorkspaceLifecycleService {
+public class WorkspaceLifecycleService implements RestoredWorkspacePurges {
 
     private static final Logger log = LoggerFactory.getLogger(WorkspaceLifecycleService.class);
 
@@ -136,9 +139,28 @@ public class WorkspaceLifecycleService {
         }
 
         Long workspaceId = workspace.getId();
-
         purgeGuards.forEach(guard -> guard.verifyQuiescent(workspaceId));
+        return purge(workspace);
+    }
 
+    /**
+     * Purges again a workspace that a database restore brought back. The quiescence guards protect against live
+     * writers; erasure recovery runs with background work off and before the server takes requests, so no writer runs,
+     * and the restored in-flight rows that the guards would wait for are deleted with the rest.
+     *
+     * @return whether it purged: false when the restore has no such workspace or it is purged already
+     */
+    @Override
+    @Transactional
+    public boolean purgeAgain(long workspaceId) {
+        var workspace = workspaceRepository.findByIdForUpdate(workspaceId).orElse(null);
+        if (workspace == null || workspace.getStatus() == WorkspaceStatus.PURGED) return false;
+        purge(workspace);
+        return true;
+    }
+
+    private Workspace purge(Workspace workspace) {
+        Long workspaceId = workspace.getId();
         purgeContributors.stream()
                 .sorted(Comparator.comparingInt(WorkspacePurgeContributor::getOrder))
                 .forEach(contributor -> contributor.deleteWorkspaceData(workspaceId));
@@ -163,7 +185,12 @@ public class WorkspaceLifecycleService {
         workspace = workspaceRepository.save(workspace);
         recordStatusChange(workspace, previousStatus, WorkspaceStatus.PURGED);
 
-        log.info("Purged workspace: workspaceId={}", workspaceId);
+        // An erasure recovery manifest lists the purges after its recovery point (backup-restore.mdx), so only a
+        // committed purge is recorded.
+        TransactionCallbacks.afterCommit(() -> log.atInfo()
+                .addKeyValue("event.name", "workspace.purged")
+                .addKeyValue(StructuredLogKeys.WORKSPACE_ID, workspaceId)
+                .log("Purged workspace"));
         return workspace;
     }
 

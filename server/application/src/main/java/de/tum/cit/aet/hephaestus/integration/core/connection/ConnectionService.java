@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
+import de.tum.cit.aet.hephaestus.core.TransactionCallbacks;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.security.MissingCredentialKeyException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
@@ -12,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncStateChangedEvent;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.Clock;
@@ -707,6 +709,17 @@ public class ConnectionService {
                     saved.getCredentialsGeneration()));
         }
         lifecycleEffects.publishLifecycleEvent(saved, current, req.next());
+        if (req.next() == IntegrationState.UNINSTALLED && beforeLocalTransition != null) {
+            // An erasure recovery manifest lists the disconnects after its recovery point (backup-restore.mdx), so only
+            // a committed erasure is recorded.
+            long erasedId = Objects.requireNonNull(saved.getId());
+            long erasedWorkspaceId = saved.getWorkspace().getId();
+            TransactionCallbacks.afterCommit(() -> log.atInfo()
+                    .addKeyValue("event.name", "connection.erased")
+                    .addKeyValue("connection.id", erasedId)
+                    .addKeyValue(StructuredLogKeys.WORKSPACE_ID, erasedWorkspaceId)
+                    .log("Connection disconnected and its local data erased"));
+        }
         return saved;
     }
 

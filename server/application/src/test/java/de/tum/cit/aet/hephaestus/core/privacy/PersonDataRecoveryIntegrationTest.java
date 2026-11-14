@@ -46,6 +46,11 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.ObjectMapper;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.boot.env.YamlPropertySourceLoader;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnBackgroundWork;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredWorkspacePurges;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredDisconnects;
 
 @ExtendWith(OutputCaptureExtension.class)
 class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
@@ -77,13 +82,45 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldKeepProcessingStoppedWhenAnEmptyManifestDoesNotDeclareNoLaterErasures() throws Exception {
-        assertBlocked(manifest("{\"version\":1,\"restorePoint\":\"2026-01-01T00:00:00Z\",\"people\":[]}"));
+        assertBlocked(manifest("{\"version\":2,\"workspacePurges\":[],\"disconnects\":[],\"restorePoint\":\"2026-01-01T00:00:00Z\",\"people\":[]}"));
+    }
+
+    @Test
+    void shouldRefuseAVersionOneManifestThatCannotListPurgesOrDisconnects(CapturedOutput output) throws Exception {
+        assertBlocked(manifest(
+                "{\"version\":1,\"restorePoint\":\"2026-01-01T00:00:00Z\",\"noLaterErasures\":true,\"people\":[]}"));
+        assertThat(output).contains("MANIFEST_VERSION");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"true", ""})
+    void shouldRefuseToRecoverBesideBackgroundWork(String backgroundWork, CapturedOutput output) throws Exception {
+        Path manifest = manifest("""
+                {"version":2,"workspacePurges":[],"disconnects":[],"restorePoint":"2026-01-01T00:00:00Z",
+                 "noLaterErasures":true,"people":[]}
+                """);
+        var processing = new AtomicBoolean();
+        try (var context = context(manifest, processing, service, backgroundWork)) {
+            assertThatThrownBy(context::refresh).hasStackTraceContaining("Erasure recovery is incomplete");
+            assertThat(processing).isFalse();
+        }
+        assertThat(output).contains("BACKGROUND_WORK");
+    }
+
+    @Test
+    void shouldTurnBackgroundWorkOffInTheRecoveryProfile() throws Exception {
+        var sources = new YamlPropertySourceLoader()
+                .load("erasure-recovery", new ClassPathResource("application-erasure-recovery.yml"));
+        assertThat(sources)
+                .singleElement()
+                .satisfies(source ->
+                        assertThat(source.getProperty(ConditionalOnBackgroundWork.PROPERTY)).isEqualTo(false));
     }
 
     @Test
     void shouldStartProcessingWhenTheOperatorDeclaresNoLaterErasures() throws Exception {
         Path manifest = manifest(
-                "{\"version\":1,\"restorePoint\":\"2026-01-01T00:00:00Z\",\"noLaterErasures\":true,\"people\":[]}");
+                "{\"version\":2,\"workspacePurges\":[],\"disconnects\":[],\"restorePoint\":\"2026-01-01T00:00:00Z\",\"noLaterErasures\":true,\"people\":[]}");
         var processing = new AtomicBoolean();
         try (var context = context(manifest, processing)) {
             context.refresh();
@@ -101,7 +138,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
         person.setPrimaryEmail("restored-person@example.test");
         long personId = Objects.requireNonNull(accounts.saveAndFlush(person).getId());
         Path manifest = manifest("""
-                {"version":1,"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
+                {"version":2,"workspacePurges":[],"disconnects":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
                  "people":[{"accountId":%d,"identities":[]}]}
                 """.formatted(administratorId, personId));
         var processing = new AtomicBoolean();
@@ -137,7 +174,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                 state,
                 request.getId());
         Path manifest = manifest("""
-                {"version":1,"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
+                {"version":2,"workspacePurges":[],"disconnects":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
                  "people":[{"accountId":%d,"identities":[]}]}
                 """.formatted(administratorId, personId));
         var processing = new AtomicBoolean();
@@ -156,7 +193,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldKeepProcessingStoppedWhenReapplicationCannotComplete() throws Exception {
         assertBlocked(manifest("""
-                {"version":1,"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":-1,
+                {"version":2,"workspacePurges":[],"disconnects":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":-1,
                  "people":[{"accountId":1,"identities":[]}]}
                 """));
     }
@@ -164,7 +201,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldRejectDisplayNamesAndHideManifestContentFromStartupFailures() throws Exception {
         assertBlocked(manifest("""
-                {"version":1,"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":1,
+                {"version":2,"workspacePurges":[],"disconnects":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":1,
                  "people":[{"identities":[{"providerType":"GITHUB","serverUrl":"https://github.com",
                  "subject":"private-display-name-canary"}]}]}
                 """));
@@ -255,7 +292,7 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
         var initialized = beans.getAutowireCapableBeanFactory().initializeBean(recoveryService, "recoveryFaultService");
         var advisedService = PersonDataService.class.cast(initialized);
         Path manifest = manifest("""
-                {"version":1,"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
+                {"version":2,"workspacePurges":[],"disconnects":[],"restorePoint":"2026-01-01T00:00:00Z","administratorAccountId":%d,
                  "people":[{"accountId":%d,"identities":[]}]}
                 """.formatted(administratorId, personId));
         var processing = new AtomicBoolean();
@@ -298,8 +335,15 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
 
     private GenericApplicationContext context(
             Path manifest, AtomicBoolean processing, PersonDataService recoveryService) {
+        return context(manifest, processing, recoveryService, "false");
+    }
+
+    private GenericApplicationContext context(
+            Path manifest, AtomicBoolean processing, PersonDataService recoveryService, String backgroundWork) {
         var context = new GenericApplicationContext();
-        var environment = new MockEnvironment().withProperty(RuntimeRole.SERVER_PROPERTY, "true");
+        var environment = new MockEnvironment()
+                .withProperty(RuntimeRole.SERVER_PROPERTY, "true")
+                .withProperty(ConditionalOnBackgroundWork.PROPERTY, backgroundWork);
         context.registerBean(
                 PersonDataRecovery.class,
                 () -> new PersonDataRecovery(
@@ -308,6 +352,8 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
                         mapper,
                         environment,
                         beans.getBean(PersonDataRequestRepository.class),
+                        beans.getBean(RestoredWorkspacePurges.class),
+                        beans.getBean(RestoredDisconnects.class),
                         new PersonDataRecoveryProperties(manifest.toString())));
         context.registerBean("processing", SmartLifecycle.class, () -> new SmartLifecycle() {
             @Override
