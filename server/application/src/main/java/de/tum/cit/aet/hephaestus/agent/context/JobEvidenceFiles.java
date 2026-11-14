@@ -1231,9 +1231,12 @@ public class JobEvidenceFiles implements SandboxResultListener {
         return remaining;
     }
 
-    /** Whether the folder is the one that the job's running attempt reads: not yet admitted, and still its own. */
+    /**
+     * Whether the folder is the one that the job's running attempt reads. A composition reads the folder of its own
+     * run; the folder of the run that measured the review is then another run's, and admission has removed it.
+     */
     private boolean readsFolder(Path root, ReviewJob job) {
-        return matches(root, job) && job.getStatus() == ReviewJobStatus.RUNNING && !admitted(job);
+        return matches(root, job) && job.getStatus() == ReviewJobStatus.RUNNING;
     }
 
     /**
@@ -1318,10 +1321,6 @@ public class JobEvidenceFiles implements SandboxResultListener {
 
     private boolean matches(Path root, ReviewJob job) {
         return directory(job).equals(root);
-    }
-
-    private static boolean admitted(ReviewJob job) {
-        return ResultAdmissionService.isAdmitted(job);
     }
 
     private static void deleteAttempt(Path root) throws IOException {

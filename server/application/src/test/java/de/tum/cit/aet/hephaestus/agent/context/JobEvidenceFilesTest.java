@@ -335,7 +335,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRetainUnadmittedEvidenceForOneHourAfterTheOwningHandleCloses() throws Exception {
+    void shouldRemoveUnadmittedEvidenceOnceTheOwningHandleClosesAndNoAttemptRuns() throws Exception {
         var files = new JobEvidenceFiles(
                 new FabricLayout(root.toString()), jobs, clock, personCopies(), mock(AttemptInputs.class));
         var job = job();
@@ -359,14 +359,6 @@ class JobEvidenceFilesTest extends BaseUnitTest {
             RuntimeJobTestData.attempt(job, 0);
             assertThat(prepared.filesOnDisk().get("context/source.txt")).hasContent(content);
         }
-        assertThat(read(files, job, "context/source.txt", sha)).isPresent();
-        new JobEvidenceFiles(
-                        new FabricLayout(root.toString()),
-                        jobs,
-                        Clock.offset(clock, Duration.ofHours(1)),
-                        personCopies(),
-                        mock(AttemptInputs.class))
-                .cleanEndedAttempts();
         assertThat(read(files, job, "context/source.txt", sha)).isEmpty();
     }
 
@@ -413,7 +405,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldPreserveAnotherActiveWorkersFolderAndCleanLostAttemptsAfterGracePeriod() {
+    void shouldPreserveARunningAttemptsFolderAndRemoveItOnceTheJobEnds() {
         var files = new JobEvidenceFiles(
                 new FabricLayout(root.toString()), jobs, clock, personCopies(), mock(AttemptInputs.class));
         var job = job();
@@ -435,14 +427,6 @@ class JobEvidenceFilesTest extends BaseUnitTest {
             assertThat(read(files, job, "inputs/source", sha)).contains(bytes);
             job.setStatus(ReviewJobStatus.CANCELLED);
             later.cleanEndedAttempts();
-            assertThat(read(files, job, "inputs/source", sha)).contains(bytes);
-            new JobEvidenceFiles(
-                            new FabricLayout(root.toString()),
-                            jobs,
-                            Clock.offset(clock, Duration.ofHours(3)),
-                            personCopies(),
-                            mock(AttemptInputs.class))
-                    .cleanEndedAttempts();
             assertThat(read(files, job, "inputs/source", sha)).isEmpty();
             verify(jobs)
                     .expireCaptureInventory(job.getId(), 1L, job.getAttempt(), Objects.requireNonNull(job.getRunId()));
@@ -478,7 +462,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldCleanOrphanedPreparationAfterTheGracePeriod() throws Exception {
+    void shouldCleanTheOrphanedPreparationOfAnEndedJob() throws Exception {
         var layout = new FabricLayout(root.toString());
         var files = new JobEvidenceFiles(layout, jobs, clock, personCopies(), mock(AttemptInputs.class));
         var job = job();
@@ -490,14 +474,6 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         Path staging = Files.createTempDirectory(parent, "." + identity + ".preparing-");
         Files.writeString(staging.resolve("partial"), "not published");
         files.cleanEndedAttempts();
-        assertThat(staging).exists();
-        new JobEvidenceFiles(
-                        layout,
-                        jobs,
-                        Clock.offset(clock, Duration.ofHours(1)),
-                        personCopies(),
-                        mock(AttemptInputs.class))
-                .cleanEndedAttempts();
         assertThat(staging).doesNotExist();
     }
 
@@ -691,13 +667,15 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                 .withPropertyValues("hephaestus.runtime.server.enabled=true");
     }
 
+    /** An attempt whose job failed after its runtime released the inputs, so only a sweep removes its folder. */
     private ReviewJob endedAttempt(JobEvidenceFiles files, byte[] bytes) {
         var ended = job();
-        ended.setStatus(ReviewJobStatus.FAILED);
+        ended.setStatus(ReviewJobStatus.RUNNING);
         when(jobs.findByIdAndWorkspaceId(ended.getId(), 1L)).thenReturn(Optional.of(ended));
         PreparedJobInputsFixtures.prepare(
                         files, ended, PreparedJobInputsFixtures.filesOnly(Map.of("context/quote", bytes)))
                 .close();
+        ended.setStatus(ReviewJobStatus.FAILED);
         assertThat(read(files, ended, "context/quote", ProvenanceDigest.sha256Hex(bytes)))
                 .contains(bytes);
         return ended;

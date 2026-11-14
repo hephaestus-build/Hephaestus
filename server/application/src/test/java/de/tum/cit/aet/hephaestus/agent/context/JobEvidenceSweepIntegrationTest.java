@@ -58,7 +58,7 @@ class JobEvidenceSweepIntegrationTest extends BaseIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        workspace = workspaces.save(TestEntities.activeWorkspace("evidence-sweep-ws-" + UUID.randomUUID()));
+        workspace = workspaces.save(TestEntities.activeWorkspace("evsweep-" + UUID.randomUUID().toString().substring(0, 8)));
     }
 
     @Test
@@ -79,6 +79,30 @@ class JobEvidenceSweepIntegrationTest extends BaseIntegrationTest {
         sweep.assertOnlyTheRunningAttemptKeepsItsFolder();
     }
 
+    @Test
+    void shouldRemoveTheMeasuringFolderOfAReviewWhoseCompositionRuns() throws IOException {
+        // The job's run moved on to the composition, so the measuring folder is named after a run it no longer has.
+        var composing = job(ReviewJobStatus.RUNNING);
+        composing.setAdmissionAttempt(composing.getAttempt());
+        composing.setAdmissionDigest("b".repeat(64));
+        composing.setCapture(mapper.readTree("""
+                {"manifest": {"itemKind": "test.item", "citableTexts": [{"path": "src/A.java"}]}}
+                """));
+        composing = jobs.saveAndFlush(composing);
+        Path measured = folder(composing, UUID.randomUUID());
+        Path composition = folder(composing, composing.getRunId());
+
+        reconciler.reconcile();
+
+        assertThat(measured).doesNotExist();
+        assertThat(composition.resolve("context/source.txt")).exists();
+        // The composition still reads the inventory of the attempt it composes.
+        assertThat(Objects.requireNonNull(jobs.findById(composing.getId()).orElseThrow().getCapture())
+                        .path("manifest")
+                        .has("citableTexts"))
+                .isTrue();
+    }
+
     /** One job in each state that the sweep tells apart, each with the folders that it can leave behind. */
     private final class Folders {
         private final Path failed;
@@ -91,7 +115,7 @@ class JobEvidenceSweepIntegrationTest extends BaseIntegrationTest {
             var failedJob = job(ReviewJobStatus.FAILED);
             failed = folder(failedJob, failedJob.getRunId());
 
-            // An admitted review that went on to its composition: the folder of its measuring run stays behind.
+            // A composed review that ended: the folder of its measuring run stayed behind.
             var admittedJob = job(ReviewJobStatus.COMPLETED);
             admittedJob.setAdmissionAttempt(admittedJob.getAttempt());
             admittedJob.setAdmissionDigest("a".repeat(64));
@@ -113,7 +137,8 @@ class JobEvidenceSweepIntegrationTest extends BaseIntegrationTest {
             assertThat(superseded).doesNotExist();
             assertThat(running.resolve("context/source.txt")).exists();
             // The ended job's inventory went with its folder; the rest of its capture stays.
-            var manifest = Objects.requireNonNull(jobs.findById(admitted.getId()).orElseThrow().getCapture())
+            var manifest = Objects.requireNonNull(
+                            jobs.findById(admitted.getId()).orElseThrow().getCapture())
                     .path("manifest");
             assertThat(manifest.path("itemKind").asString()).isEqualTo("test.item");
             assertThat(manifest.has("files")).isFalse();
