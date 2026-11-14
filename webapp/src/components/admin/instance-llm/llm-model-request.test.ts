@@ -138,8 +138,13 @@ describe("modelPriceBodyOf", () => {
 	});
 
 	it("sends only the mode of an unpriced model", () => {
-		expect(modelPriceBodyOf({ ...priced, pricingMode: "UNPRICED" })).toEqual({
+		expect(modelPriceBodyOf({ ...priced, pricingMode: "UNPRICED" })).toStrictEqual({
 			pricingMode: "UNPRICED",
+			per1mInputUsd: undefined,
+			per1mOutputUsd: undefined,
+			per1mCacheReadUsd: undefined,
+			per1mCacheWriteUsd: undefined,
+			note: undefined,
 		});
 	});
 });
@@ -147,9 +152,13 @@ describe("modelPriceBodyOf", () => {
 describe("workspace model requests", () => {
 	it("carry the price inline, with the note named priceNote", () => {
 		const fields = fieldsOf({ price: { pricingMode: "NO_CHARGE", note: " Local " } });
-		expect(workspaceModelUpdateBodyOf(fields)).toEqual({
+		expect(workspaceModelUpdateBodyOf(fields)).toStrictEqual({
 			...modelUpdateBodyOf(fields),
 			pricingMode: "NO_CHARGE",
+			per1mInputUsd: undefined,
+			per1mOutputUsd: undefined,
+			per1mCacheReadUsd: undefined,
+			per1mCacheWriteUsd: undefined,
 			priceNote: "Local",
 		});
 		expect(workspaceModelUpdateBodyOf(fields)).not.toHaveProperty("note");
@@ -157,7 +166,7 @@ describe("workspace model requests", () => {
 
 	it("create the model inactive even when the form says active", () => {
 		const body = workspaceModelCreateBodyOf(fieldsOf({ enabled: true }));
-		expect(body).toEqual({
+		expect(body).toStrictEqual({
 			...modelCreateBodyOf(fieldsOf()),
 			enabled: false,
 			pricingMode: "PRICED",
@@ -165,6 +174,7 @@ describe("workspace model requests", () => {
 			per1mOutputUsd: 10,
 			per1mCacheReadUsd: 0.125,
 			per1mCacheWriteUsd: 1.5,
+			priceNote: undefined,
 		});
 	});
 
