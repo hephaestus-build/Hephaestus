@@ -416,7 +416,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                                 null)))
                 .when(gitLabUserService)
                 .fetchCanonicalUsers(anyLong(), anyCollection());
-        when(gitLabTokenRotationClient.getTokenInfo(anyLong()))
+        when(gitLabTokenRotationClient.getTokenInfo(any()))
                 .thenReturn(new GitLabTokenRotationClient.TokenInfo(1L, "hephaestus", null));
         when(gitLabWebhookClient.lookupGroup(anyLong(), eq(GROUP)))
                 .thenReturn(new GitLabWebhookClient.GroupInfo(GROUP_ID, "HephaestusTest", GROUP));
@@ -2035,7 +2035,8 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         Workspace saved = WorkspaceTestFixtures.persistGitLabWorkspace(
                 workspaceRepository, connectionRepository, WorkspaceTestFixtures.gitLabPatWorkspace(GROUP), SERVER_URL);
         workspace = saved;
-        connectionService.rotateBearerToken(saved.getId(), IntegrationKind.GITLAB, new BearerToken("glpat-test", null));
+        connectionService.rotateBearerToken(
+                saved.getId(), IntegrationKind.GITLAB, new BearerToken("glpat-test", null), null);
         connectionService.updateConfig(
                 saved.getId(),
                 IntegrationKind.GITLAB,

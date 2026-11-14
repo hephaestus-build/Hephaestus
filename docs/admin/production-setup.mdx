@@ -314,7 +314,10 @@ The `server` runtime role inspects GitLab tokens daily at **03:00 UTC**.
 This is independent of repository sync and webhook registration.
 A token within `hephaestus.webhook.token-rotation.threshold-days` of expiry (default 7 days) self-rotates with configured validity (default 90 days).
 It needs GitLab `api` or `self_rotate` scope and an instance version with self-rotation support.
-The server serializes rotation with token replacement.
+
+Only one server at a time checks the token of a workspace, and it holds no database transaction during GitLab calls.
+A server that stops responding keeps that lock until its database connection closes, so no other server can rotate the token in the meantime.
+The server stores a rotated token only if nobody paused, resumed or replaced the token during the call.
 
 :::caution[CAUTION: Do not share a token that Hephaestus rotates]
 
@@ -322,6 +325,8 @@ Rotation immediately revokes the old token.
 Do not share that token with other applications.
 Hephaestus never automatically retries an uncertain rotation response.
 If the provider rotated the token but its response was lost, replace the token.
+The connection audit records an uncertain attempt as `GITLAB_TOKEN_ROTATION_UNCERTAIN`.
+The server discards a late answer after a token replacement, a pause or a resume.
 
 :::
 

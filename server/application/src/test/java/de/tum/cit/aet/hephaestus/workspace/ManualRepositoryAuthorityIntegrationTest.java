@@ -313,7 +313,7 @@ class ManualRepositoryAuthorityIntegrationTest extends AbstractWorkspaceIntegrat
                 if (change.equals("MOVE_SERVER")) moveGitHubServer(own.getId());
                 if (change.equals("REPLACE_TOKEN")) {
                     var replacement = new BearerToken(tokenOf(own) + "-replaced", null);
-                    assertThat(connectionService.rotateBearerToken(own.getId(), kind, replacement))
+                    assertThat(connectionService.rotateBearerToken(own.getId(), kind, replacement, null))
                             .isPresent();
                     assertThat(connectionService.findActiveBearerToken(own.getId(), kind))
                             .contains(replacement);

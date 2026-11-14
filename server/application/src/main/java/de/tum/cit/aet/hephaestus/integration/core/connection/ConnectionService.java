@@ -364,11 +364,12 @@ public class ConnectionService {
      * Replace the credential blob on the workspace's ACTIVE Connection. Empty when no ACTIVE row
      * exists. A GitHub App connection runs on its installation, not on a stored token, so it refuses
      * one here, inside the write, rather than in a caller's earlier look at a row that may since have
-     * changed mode.
+     * changed mode. A non-null {@code expected} admits a provider answer only for the credential and
+     * lifecycle that authorized its request.
      */
     @Transactional
     public Optional<BearerTokenReplacement> rotateBearerToken(
-            long workspaceId, IntegrationKind kind, BearerToken bundle) {
+            long workspaceId, IntegrationKind kind, BearerToken bundle, @Nullable CredentialFence expected) {
         return connectionRepository.findActive(workspaceId, kind).flatMap(c -> {
             if (c.getConfig() instanceof ConnectionConfig.GitHubAppConfig) {
                 throw new ConnectionModeConflictException("The GitHub connection of workspace "
@@ -378,7 +379,9 @@ public class ConnectionService {
             resourceRepairs.requireAdoptableChange(c, c.getConfig(), bundle);
             connectionRepository.acquireLifecycleLock(c.getId(), workspaceId);
             Objects.requireNonNull(entityManager).refresh(c);
-            if (c.getState() != IntegrationState.ACTIVE || c.getConfig() instanceof ConnectionConfig.GitHubAppConfig) {
+            if (c.getState() != IntegrationState.ACTIVE
+                    || c.getConfig() instanceof ConnectionConfig.GitHubAppConfig
+                    || (expected != null && !expected.matches(c))) {
                 return Optional.empty();
             }
             boolean replacedExisting = c.hasCredentials();
@@ -389,6 +392,15 @@ public class ConnectionService {
             eventPublisher.publishEvent(new ConnectionCredentialsReplacedEvent(c.getId(), workspaceId, kind));
             return Optional.of(new BearerTokenReplacement(connectionRepository.save(c), replacedExisting));
         });
+    }
+
+    /** The credential and lifecycle that authorized an irreversible provider call. */
+    public record CredentialFence(long connectionId, long credentialsGeneration, long lifecycleGeneration) {
+        public boolean matches(Connection connection) {
+            return connection.getId() == connectionId
+                    && connection.getCredentialsGeneration() == credentialsGeneration
+                    && connection.getLifecycleGeneration() == lifecycleGeneration;
+        }
     }
 
     /**

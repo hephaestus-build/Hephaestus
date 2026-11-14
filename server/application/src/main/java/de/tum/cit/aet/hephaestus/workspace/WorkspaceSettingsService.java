@@ -61,7 +61,7 @@ public class WorkspaceSettingsService {
         // is the way out for a token the server can no longer read, and it refuses a row whose mode
         // takes no token.
         BearerTokenReplacement rotation = connectionService
-                .rotateBearerToken(workspaceId, kind, new BearerToken(token, null))
+                .rotateBearerToken(workspaceId, kind, new BearerToken(token, null), null)
                 .orElseThrow(
                         () -> new IllegalStateException(
                                 "This workspace has no active connection to update. Connect GitHub or GitLab, then try again."));

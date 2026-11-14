@@ -65,7 +65,8 @@ class GitHubCredentialRefusalIntegrationTest extends AbstractWorkspaceIntegratio
                 .isEmpty();
         assertThat(syncTargets.isScopeActiveForSync(workspace)).isFalse();
 
-        connections.rotateBearerToken(workspace, IntegrationKind.GITHUB, new BearerToken("ghp-replacement", null));
+        connections.rotateBearerToken(
+                workspace, IntegrationKind.GITHUB, new BearerToken("ghp-replacement", null), null);
 
         assertThat(attention(workspace)).isNull();
         assertThat(syncTargets.getSyncSession(workspace, IntegrationKind.GITHUB))
@@ -76,7 +77,7 @@ class GitHubCredentialRefusalIntegrationTest extends AbstractWorkspaceIntegratio
     void shouldKeepAReplacementTokenWhenGitHubRefusesTheTokenItReplaced() {
         long workspace = workspaceWithToken("ghp-old");
         HttpGraphQlClient inFlight = clients.forScope(workspace);
-        connections.rotateBearerToken(workspace, IntegrationKind.GITHUB, new BearerToken("ghp-new", null));
+        connections.rotateBearerToken(workspace, IntegrationKind.GITHUB, new BearerToken("ghp-new", null), null);
 
         call(inFlight, HttpStatus.UNAUTHORIZED);
 
@@ -93,7 +94,7 @@ class GitHubCredentialRefusalIntegrationTest extends AbstractWorkspaceIntegratio
                 new ConnectionConfig.GitHubPatConfig("acme", null, Set.of()));
         ConnectionFixtures.reachState(connection, IntegrationState.ACTIVE);
         repository.save(connection);
-        connections.rotateBearerToken(workspace.getId(), IntegrationKind.GITHUB, new BearerToken(token, null));
+        connections.rotateBearerToken(workspace.getId(), IntegrationKind.GITHUB, new BearerToken(token, null), null);
         // An observed rate limit keeps the client from probing the real GitHub REST API.
         rateLimits.updateFromRestRateLimit(workspace.getId(), 5000, 5000, null, Instant.now());
         return workspace.getId();

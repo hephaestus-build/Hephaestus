@@ -229,7 +229,7 @@ class GitLabStoppedProjectServiceIntegrationTest extends BaseIntegrationTest {
                     .isTrue();
             if (replaced) {
                 var replacement = new BearerToken(tokenOf(own) + "-replaced", null);
-                assertThat(connectionService.rotateBearerToken(own.getId(), IntegrationKind.GITLAB, replacement))
+                assertThat(connectionService.rotateBearerToken(own.getId(), IntegrationKind.GITLAB, replacement, null))
                         .isPresent();
                 assertThat(connectionService.findActiveBearerToken(own.getId(), IntegrationKind.GITLAB))
                         .contains(replacement);

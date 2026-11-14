@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.repository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
+import de.tum.cit.aet.hephaestus.integration.core.spi.BootstrapRepositoryLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryIdentityLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
@@ -11,8 +12,10 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncPropert
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHRepository;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Reads a repository's identity with a token-managed workspace's own token. An App installation grants its
@@ -20,7 +23,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @RequiredArgsConstructor
-public class GitHubRepositoryIdentityLookup implements RepositoryIdentityLookup {
+public class GitHubRepositoryIdentityLookup implements RepositoryIdentityLookup, BootstrapRepositoryLookup {
     private static final String QUERY_DOCUMENT = "GetRepository";
 
     /** The only origin the GraphQL client asks; a token for another origin is never sent through it. */
@@ -42,8 +45,8 @@ public class GitHubRepositoryIdentityLookup implements RepositoryIdentityLookup 
      */
     @Override
     public Optional<RepositoryIdentity> resolve(long workspaceId, String fullPath) {
-        var name = GitHubRepositoryNameParser.parse(fullPath).orElse(null);
-        if (name == null) return Optional.empty();
+        // A path that names no repository needs no credential read.
+        if (GitHubRepositoryNameParser.parse(fullPath).isEmpty()) return Optional.empty();
         var connection = connections
                 .findActiveBearerConnection(
                         workspaceId,
@@ -53,9 +56,21 @@ public class GitHubRepositoryIdentityLookup implements RepositoryIdentityLookup 
                                 : null)
                 .orElse(null);
         if (connection == null || connection.bearer().token().isBlank()) return Optional.empty();
-        var bearer = connection.bearer();
+        return resolve(connection.bearer().token(), fullPath, workspaceId);
+    }
+
+    @Override
+    public Optional<RepositoryIdentity> resolve(String token, String fullPath) {
+        return resolve(token, fullPath, null);
+    }
+
+    private Optional<RepositoryIdentity> resolve(String token, String fullPath, @Nullable Long workspaceId) {
+        if (TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("Repository lookup requires no active database transaction");
+        var name = GitHubRepositoryNameParser.parse(fullPath).orElse(null);
+        if (name == null) return Optional.empty();
         clients.acquirePermission();
-        ClientGraphQlResponse response = clients.withToken(bearer.token())
+        ClientGraphQlResponse response = clients.withToken(token)
                 .documentName(QUERY_DOCUMENT)
                 .variable("owner", name.owner())
                 .variable("name", name.name())
@@ -63,7 +78,7 @@ public class GitHubRepositoryIdentityLookup implements RepositoryIdentityLookup 
                 .block(syncProperties.graphqlTimeout());
         // A refusal, a repository the token cannot see and a partial answer all confirm nothing.
         if (response == null || !response.isValid() || !response.getErrors().isEmpty()) return Optional.empty();
-        clients.trackRateLimit(workspaceId, response);
+        if (workspaceId != null) clients.trackRateLimit(workspaceId, response);
         GHRepository repository = response.field("repository").toEntity(GHRepository.class);
         if (repository == null) return Optional.empty();
         var databaseId = repository.getDatabaseId();

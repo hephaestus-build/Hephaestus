@@ -46,9 +46,7 @@ Spring: "self-invocation (in effect, a method within the target object calling a
   A pause followed by resume still invalidates the earlier answer.
   Every repository add or removal event advances the connection version, even if no monitor row changes.
   The earlier answer cannot restore a repository whose removal committed during the call.
-- If a row lock must stay across a call, record the reason in an ADR.
-  `GitLabTokenLifecycleService` holds such a lock.
-  Provider removal uses the separate capture, dispatch and settle transactions in [ADR 0101](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0101-a-connection-cannot-adopt-an-upstream-resource-whose-removal-is-unresolved.md).
+- Provider removal uses the separate capture, dispatch and settle transactions in [ADR 0101](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0101-a-connection-cannot-adopt-an-upstream-resource-whose-removal-is-unresolved.md).
 - `LlmCallPermits` refuses a model call that starts in a transaction.
 - `JobEvidenceFiles#ensureAttemptFolder` refuses a call that starts in a transaction, because an evidence folder rebuild can fetch from the provider.
   Result admission rebuilds the folder before it takes its locks, or after a seal rolls back.

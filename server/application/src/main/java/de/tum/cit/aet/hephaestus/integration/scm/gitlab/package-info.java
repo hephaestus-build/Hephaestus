@@ -5,6 +5,8 @@
         allowedDependencies = {
             "activity::spi",
             "core",
+            // One token check per workspace across servers, held without a transaction (GitLabTokenLifecycleService).
+            "core::lock",
             "core::logging",
             "core::person-data",
             // Runtime-role gate (@ConditionalOnServerRole) on the connection-OAuth strategy.

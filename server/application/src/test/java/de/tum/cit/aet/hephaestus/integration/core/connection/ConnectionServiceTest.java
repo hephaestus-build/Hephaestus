@@ -706,8 +706,8 @@ class ConnectionServiceTest extends BaseUnitTest {
                 new ConnectionConfig.GitHubAppConfig(100L, null, null, Set.of()));
         when(connectionRepository.findActive(7L, IntegrationKind.GITHUB)).thenReturn(Optional.of(app));
 
-        assertThatThrownBy(
-                        () -> service.rotateBearerToken(7L, IntegrationKind.GITHUB, new BearerToken("ghp-new", null)))
+        assertThatThrownBy(() ->
+                        service.rotateBearerToken(7L, IntegrationKind.GITHUB, new BearerToken("ghp-new", null), null))
                 .isInstanceOf(ConnectionModeConflictException.class)
                 .hasMessageContaining("App installation");
         verify(connectionRepository, never()).save(any());
