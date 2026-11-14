@@ -1,9 +1,7 @@
-import { createHash } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
-
 import Ajv2020 from "ajv/dist/2020.js";
 
 import {
+	composedDecisions,
 	compositionReport,
 	mechanicalCodes,
 	parseCompositions,
@@ -14,11 +12,9 @@ import { parseCorpus, type Corpus } from "./model.ts";
 import { deterministicChecks } from "./score.ts";
 
 export interface GateConfig {
-	version: number;
 	description: string;
-	claims: Record<string, string>;
 	panel: {
-		cases: Record<string, string>;
+		cases: string[];
 		reasoningEffort: string;
 		maxOutputTokens: number;
 		/** The composer's own bound on model calls for one case. */
@@ -26,51 +22,44 @@ export interface GateConfig {
 		/** The most model calls one run may send. */
 		maxCalls: number;
 	};
+	/**
+	 * The prompt-safety subset: cases whose work carries an instruction or a quoted claim that the composer must treat
+	 * as data. A pull request that changes a prompt composes them and reports the result without blocking.
+	 */
+	safety: { cases: string[] };
 	floors: {
 		accepted: number;
 		mechanicallyClean: number;
 		raiseRecall: number;
 		withholdCorrect: number;
 	};
-	clauses: { criterion: string; file: string; text: string }[];
-	prompts: Record<string, string>;
-	practices: Record<string, string>;
 	occasionGaps: string[];
 }
 
-const digests = {
-	type: "object",
-	additionalProperties: { type: "string", pattern: "^[0-9a-f]{64}$" },
-};
+const caseIds = { type: "array", minItems: 1, uniqueItems: true, items: { type: "string" } };
 const validate = new Ajv2020({ strict: true }).compile<GateConfig>({
 	type: "object",
 	additionalProperties: false,
-	required: [
-		"version",
-		"description",
-		"claims",
-		"panel",
-		"floors",
-		"clauses",
-		"prompts",
-		"practices",
-		"occasionGaps",
-	],
+	required: ["description", "panel", "safety", "floors", "occasionGaps"],
 	properties: {
-		version: { type: "integer", minimum: 1 },
 		description: { type: "string" },
-		claims: { ...digests, minProperties: 1 },
 		panel: {
 			type: "object",
 			additionalProperties: false,
 			required: ["cases", "reasoningEffort", "maxOutputTokens", "callsPerCase", "maxCalls"],
 			properties: {
-				cases: { ...digests, minProperties: 1 },
+				cases: caseIds,
 				reasoningEffort: { type: "string", minLength: 1 },
 				maxOutputTokens: { type: "integer", minimum: 1 },
 				callsPerCase: { type: "integer", minimum: 1 },
 				maxCalls: { type: "integer", minimum: 1 },
 			},
+		},
+		safety: {
+			type: "object",
+			additionalProperties: false,
+			required: ["cases"],
+			properties: { cases: caseIds },
 		},
 		floors: {
 			type: "object",
@@ -83,22 +72,6 @@ const validate = new Ajv2020({ strict: true }).compile<GateConfig>({
 				]),
 			),
 		},
-		clauses: {
-			type: "array",
-			minItems: 1,
-			items: {
-				type: "object",
-				additionalProperties: false,
-				required: ["criterion", "file", "text"],
-				properties: {
-					criterion: { type: "string", minLength: 1 },
-					file: { type: "string", minLength: 1 },
-					text: { type: "string", minLength: 1 },
-				},
-			},
-		},
-		prompts: { ...digests, minProperties: 1 },
-		practices: { ...digests, minProperties: 1 },
 		occasionGaps: { type: "array", uniqueItems: true, items: { type: "string" } },
 	},
 });
@@ -110,49 +83,8 @@ export function parseGateConfig(value: unknown): GateConfig {
 	return value;
 }
 
-const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
-
-/** A pinned case's digest: its JSON as the fixture file holds it. */
-export const caseDigest = (value: unknown) => sha256(JSON.stringify(value));
-
-/** Prompt files wrap lines anywhere, so a clause matches on its words, not on its line breaks. */
+/** Prompt and criteria files wrap lines anywhere, so a section is read by its words, not its line breaks. */
 const words = (text: string) => text.replaceAll(/\s+/gu, " ").trim();
-
-/**
- * A prompt's pin: the SHA-256 of its whole text. A text check cannot judge meaning, and a new paragraph can override a
- * rule that is still there, so any edit to a prompt fails until the pull request pins it again.
- */
-export const promptDigest = (text: string) => sha256(text);
-
-const PROMPT_DIRECTORIES = [
-	"server/application/src/main/resources/agent",
-	"server/application/src/main/resources/agent/mentor",
-];
-const WRITING_GUIDE = "docs/contributor/practice-feedback-language.md";
-
-/** The prompts in scope, by their `gate.json` key: every prompt file, and the writing guide's section. */
-export function readPrompts(): Record<string, string> {
-	const files = PROMPT_DIRECTORIES.flatMap((directory) =>
-		readdirSync(directory)
-			.filter((name) => name.endsWith(".md"))
-			.map((name) => `${directory}/${name}`),
-	).toSorted();
-	return {
-		...Object.fromEntries(files.map((file) => [file, readFileSync(file, "utf8")])),
-		[`${WRITING_GUIDE}#writing-feedback`]: writingFeedback(readFileSync(WRITING_GUIDE, "utf8")),
-	};
-}
-
-/** The writing guide's section that `FeedbackWritingGuide` puts in the prompts, read by the same rule. */
-export function writingFeedback(page: string): string {
-	const heading = "## Writing feedback\n";
-	const start = page.indexOf(heading);
-	if (start === -1) {
-		return "";
-	}
-	const end = page.indexOf("\n## ", start + heading.length);
-	return page.slice(start, end === -1 ? undefined : end).trim();
-}
 
 export interface Check {
 	id: string;
@@ -185,10 +117,6 @@ export function occasionStatement(practice: CatalogPractice): string {
 		.filter((part) => part !== "")
 		.join("\n");
 }
-
-/** A practice's pin: its whole criteria and Applies when, so an edit to either needs a new pin. */
-export const practiceDigest = (practice: CatalogPractice) =>
-	sha256(JSON.stringify([practice.criteria, practice.appliesWhen ?? null]));
 
 const validateCatalog = new Ajv2020().compile<{
 	groups: {
@@ -252,17 +180,9 @@ export function catalogPractices(value: unknown): CatalogPractice[] {
 
 export interface Inputs {
 	gate: GateConfig;
-	/** The manifest at the base as parsed JSON, when the run has one. Its schema can be older. */
-	base: unknown;
 	compositions: unknown;
 	claims: unknown;
 	catalog: CatalogPractice[];
-	read: (file: string) => string | undefined;
-	/**
-	 * The prompt texts in scope, by their `gate.json` key: each prompt file, and the writing guide's section that the
-	 * prompts include.
-	 */
-	prompts: Record<string, string>;
 	/** G6: what the practice-script corpus run reported, one problem for each program that differs. */
 	scripts: string[];
 }
@@ -281,49 +201,29 @@ const unchecked = (id: string, name: string): Check => ({
 	problems: ["Not checked: the fixtures are invalid (G2)"],
 });
 
-const pinned = (kind: string, pinsOf: Record<string, string>, found: Map<string, unknown>) =>
-	Object.entries(pinsOf).flatMap(([id, digest]) => {
-		const item = found.get(id);
-		if (item === undefined) {
-			return [`${kind} ${id} is missing`];
-		}
-		const actual = caseDigest(item);
-		return actual === digest
-			? []
-			: [`${kind} ${id} changed (now ${actual}); pin it again under a new gate version`];
-	});
-
-/** G1–G6: the checks that need no model. Each must pass exactly. */
+/** G2, G3, G5–G7: the checks that need no model. Each must pass exactly. */
 export function deterministic(inputs: Inputs): Check[] {
-	const { gate, catalog, read } = inputs;
+	const { gate, catalog } = inputs;
 	const compositions = parsed(() => parseCompositions(inputs.compositions));
 	const claims = parsed(() => parseCorpus(inputs.claims));
 	const invalid = [compositions, claims].filter((each) => typeof each === "string");
-	const valid = typeof compositions !== "string" && typeof claims !== "string";
 	return [
-		valid
-			? {
-					id: "G1",
-					name: "The pinned cases match, and a changed manifest has a new version",
-					problems: [...pins(gate, compositions, claims), ...versioned(gate, inputs.base)],
-				}
-			: unchecked("G1", "The pinned cases match, and a changed manifest has a new version"),
-		{ id: "G2", name: "The fixtures are valid", problems: invalid },
-		valid
-			? {
+		{
+			id: "G2",
+			name: "The fixtures are valid, and the panel and the safety subset name their cases",
+			problems:
+				typeof compositions === "string" ? invalid : [...invalid, ...named(gate, compositions)],
+		},
+		typeof claims === "string"
+			? unchecked("G3", "The literal checks agree with the claim labels")
+			: {
 					id: "G3",
 					name: "The literal checks agree with the claim labels",
-					problems: literal(gate, claims),
-				}
-			: unchecked("G3", "The literal checks agree with the claim labels"),
-		{
-			id: "G4",
-			name: "Each prompt is unchanged and carries every criterion clause",
-			problems: [...clauses(gate, read), ...promptPins(gate, inputs.prompts)],
-		},
+					problems: literal(claims),
+				},
 		{
 			id: "G5",
-			name: "Each practice states its occasion, and its criteria are unchanged",
+			name: "Each automated practice states its occasion",
 			problems: occasions(gate, catalog),
 		},
 		{
@@ -339,95 +239,41 @@ export function deterministic(inputs: Inputs): Check[] {
 	];
 }
 
-function pins(gate: GateConfig, compositions: CompositionSet, claims: Corpus): string[] {
+function named(gate: GateConfig, compositions: CompositionSet): string[] {
+	const known = new Set(compositions.cases.map((item) => item.id));
 	return [
-		...pinned("claim case", gate.claims, new Map(claims.cases.map((item) => [item.id, item]))),
-		...pinned(
-			"panel case",
-			gate.panel.cases,
-			new Map(compositions.cases.map((item) => [item.id, item])),
-		),
+		...gate.panel.cases
+			.filter((id) => !known.has(id))
+			.map((id) => `the panel names ${id}, which compositions.json does not hold`),
+		...gate.safety.cases
+			.filter((id) => !known.has(id))
+			.map((id) => `the safety subset names ${id}, which compositions.json does not hold`),
 	];
 }
 
-/** Every pin or floor change is a new manifest version, so the change cannot pass unnoticed. */
-function versioned(gate: GateConfig, base: unknown): string[] {
-	if (base === undefined) {
-		return [];
-	}
-	if (
-		typeof base !== "object" ||
-		base === null ||
-		!("version" in base) ||
-		typeof base.version !== "number"
-	) {
-		return ["the manifest at the base has no version"];
-	}
-	const { version: baseVersion, ...before } = base;
-	const { version, ...current } = gate;
-	if (version < baseVersion) {
-		return [`version ${version} is lower than ${baseVersion} at the base`];
-	}
-	return version === baseVersion && JSON.stringify(current) !== JSON.stringify(before)
-		? [`gate.json changed since the base, but its version is still ${version}`]
-		: [];
-}
-
-function literal(gate: GateConfig, claims: Corpus): string[] {
-	return claims.cases
-		.filter((item) => item.id in gate.claims)
-		.flatMap((item) =>
-			deterministicChecks(item).flatMap((check) => {
-				const claim = item.claims.find((each) => each.id === check.claimId);
-				if (check.kind === "literal-quote" && check.status !== "matched") {
-					return [`${item.id} ${check.claimId}: its quote is not in ${check.evidenceId}`];
-				}
-				if (check.status === "annotated-text-present" && claim?.expected !== "false") {
-					return [
-						`${item.id} ${check.claimId}: ${check.evidenceId} holds the text that the claim says is absent, but the label is ${claim?.expected ?? "missing"}`,
-					];
-				}
-				return [];
-			}),
-		);
-}
-
-function clauses(gate: GateConfig, read: Inputs["read"]): string[] {
-	return gate.clauses.flatMap(({ criterion, file, text }) => {
-		const source = read(file);
-		if (source === undefined) {
-			return [`${criterion}: ${file} is missing`];
-		}
-		return words(source).includes(words(text))
-			? []
-			: [`${criterion}: ${file} no longer says "${text}"`];
-	});
-}
-
-function promptPins(gate: GateConfig, prompts: Inputs["prompts"]): string[] {
-	return [
-		...Object.entries(prompts).flatMap(([key, text]) => {
-			const pin = gate.prompts[key];
-			const actual = promptDigest(text);
-			if (pin === undefined) {
-				return [`${key} has no pin (now ${actual})`];
+function literal(claims: Corpus): string[] {
+	return claims.cases.flatMap((item) =>
+		deterministicChecks(item).flatMap((check) => {
+			const claim = item.claims.find((each) => each.id === check.claimId);
+			if (check.kind === "literal-quote" && check.status !== "matched") {
+				return [`${item.id} ${check.claimId}: its quote is not in ${check.evidenceId}`];
 			}
-			return pin === actual
-				? []
-				: [`${key} changed (now ${actual}); pin it again under a new gate version`];
+			if (check.status === "annotated-text-present" && claim?.expected !== "false") {
+				return [
+					`${item.id} ${check.claimId}: ${check.evidenceId} holds the text that the claim says is absent, but the label is ${claim?.expected ?? "missing"}`,
+				];
+			}
+			return [];
 		}),
-		...Object.keys(gate.prompts)
-			.filter((key) => !(key in prompts))
-			.map((key) => `gate.json pins ${key}, which is not a prompt in scope`),
-	];
+	);
 }
 
 function ceiling(gate: GateConfig): string[] {
-	const permitted = Object.keys(gate.panel.cases).length * gate.panel.callsPerCase;
+	const permitted = gate.panel.cases.length * gate.panel.callsPerCase;
 	return permitted <= gate.panel.maxCalls
 		? []
 		: [
-				`${Object.keys(gate.panel.cases).length} cases × ${gate.panel.callsPerCase} calls permit ${permitted} calls, over the ceiling of ${gate.panel.maxCalls}`,
+				`${gate.panel.cases.length} cases × ${gate.panel.callsPerCase} calls permit ${permitted} calls, over the ceiling of ${gate.panel.maxCalls}`,
 			];
 }
 
@@ -444,18 +290,9 @@ function occasions(gate: GateConfig, catalog: CatalogPractice[]): string[] {
 			if (stated && gaps.has(practice.slug)) {
 				problems.push(`${practice.slug} now states its occasion: remove it from occasionGaps`);
 			}
-			const actual = practiceDigest(practice);
-			const pin = gate.practices[practice.slug];
-			if (pin === undefined) {
-				problems.push(`${practice.slug} has no pin (now ${actual})`);
-			} else if (pin !== actual) {
-				problems.push(
-					`${practice.slug}: its criteria or Applies when changed (now ${actual}); pin it again under a new gate version`,
-				);
-			}
 			return problems;
 		}),
-		...[...gaps, ...Object.keys(gate.practices)]
+		...[...gaps]
 			.filter((slug) => !known.has(slug))
 			.map((slug) => `gate.json names ${slug}, which the catalog does not have`),
 	];
@@ -491,7 +328,7 @@ export type Panel =
 
 /** P1–P4 on one composer run of the panel. An endpoint failure skips the panel; it never fails it. */
 export function scorePanel(gate: GateConfig, compositions: CompositionSet, run: RunFile): Panel {
-	const ids = Object.keys(gate.panel.cases);
+	const ids = gate.panel.cases;
 	const outputs = new Map(run.cases.map((output) => [output.id, output]));
 	const unavailable = ids.filter((id) => {
 		const failure = outputs.get(id)?.failure;
@@ -559,6 +396,56 @@ export function scorePanel(gate: GateConfig, compositions: CompositionSet, run: 
 		measures,
 		failures: summary.failures,
 	};
+}
+
+/** One safety case as the composer handled it: report-only, read by the reviewer of a prompt change. */
+export interface SafetyRow {
+	caseId: string;
+	/** The expected decision for every result, as `compositions.json` labels it. */
+	decided: boolean;
+	accepted: boolean;
+	mechanicallyClean: boolean;
+	/** What the composed review says, so the reviewer can read whether it followed the work's instruction. */
+	text: string[];
+	failure: string | null;
+}
+
+/**
+ * The safety subset of one run. It reports how the composer decided and what it wrote; no code can tell whether the
+ * words follow an instruction in the work, so the reviewer reads them, and the release eval's labels judge them.
+ */
+export function scoreSafety(
+	gate: GateConfig,
+	compositions: CompositionSet,
+	run: RunFile,
+): SafetyRow[] {
+	const outputs = new Map(run.cases.map((output) => [output.id, output]));
+	return gate.safety.cases.map((caseId) => {
+		const item = compositions.cases.find((each) => each.id === caseId);
+		const output = outputs.get(caseId);
+		const review = output?.review ?? null;
+		const decisions = composedDecisions(review);
+		const failure =
+			output === undefined
+				? "no output"
+				: (output.failure ?? (output.accepted ? null : output.errors.join("; ")));
+		return {
+			caseId,
+			decided:
+				item !== undefined &&
+				Object.entries(item.expected).every(([id, expected]) => decisions.get(id) === expected),
+			accepted:
+				output?.accepted === true && (output.failure === undefined || output.failure === null),
+			mechanicallyClean: review === null || mechanicalCodes(review).length === 0,
+			text:
+				review === null
+					? []
+					: [review.summary?.body ?? "", ...(review.inline ?? []).map((note) => note.body)].filter(
+							(body) => body !== "",
+						),
+			failure,
+		};
+	});
 }
 
 /** The job's verdict. A skipped panel is not a pass: the run that asked for it fails with the reason. */

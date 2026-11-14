@@ -9,11 +9,12 @@ import {
 	deterministic,
 	parseGateConfig,
 	scorePanel,
+	scoreSafety,
 	catalogPractices,
 	ceilingReached,
 	verdict,
-	readPrompts,
 	type Panel,
+	type SafetyRow,
 } from "./feedback-eval/gate.ts";
 import { parseJson } from "./lib/json.ts";
 
@@ -21,37 +22,23 @@ const { values } = parseArgs({
 	options: {
 		output: { type: "string" },
 		model: { type: "boolean", default: false },
-		base: { type: "string" },
+		safety: { type: "boolean", default: false },
 	},
 });
+if (values.model && values.safety) {
+	throw new Error(
+		"--model composes the whole panel, which holds the safety subset; pass one of them",
+	);
+}
 const output = path.resolve(values.output ?? ".context/feedback-eval-gate");
 mkdirSync(output, { recursive: true });
 const readJson = (file: string): unknown => parseJson(readFileSync(file, "utf8"));
-const readText = (file: string) => (existsSync(file) ? readFileSync(file, "utf8") : undefined);
 
 const gate = parseGateConfig(readJson("scripts/feedback-eval/gate.json"));
 const catalog = catalogPractices(
 	readJson("server/application/src/main/resources/practices/default-catalog.json"),
 );
 const compositionsFile = readJson("scripts/feedback-eval/compositions.json");
-
-/** The manifest at the merge base. A base without one is the change that adds the gate. */
-function baseManifest(): unknown {
-	if (values.base === undefined) {
-		return;
-	}
-	const shown = spawnSync("git", ["show", `${values.base}:scripts/feedback-eval/gate.json`], {
-		encoding: "utf8",
-	});
-	if (shown.status !== 0) {
-		const listed = spawnSync("git", ["cat-file", "-e", `${values.base}^{commit}`]);
-		if (listed.status !== 0) {
-			throw new Error(`--base ${values.base} is not a commit in this checkout`);
-		}
-		return;
-	}
-	return parseJson(shown.stdout);
-}
 
 /**
  * G6: the bundled practice scripts are deterministic, so each runs over the authored corpus and must
@@ -79,12 +66,9 @@ function practiceScripts(): string[] {
 
 const checks = deterministic({
 	gate,
-	prompts: readPrompts(),
-	base: baseManifest(),
 	compositions: compositionsFile,
 	claims: readJson("scripts/feedback-eval/cases.json"),
 	catalog,
-	read: readText,
 	scripts: practiceScripts(),
 });
 const deterministicPassed = checks.every((check) => check.problems.length === 0);
@@ -100,33 +84,18 @@ interface Model {
 	endpointSha256: string;
 }
 
-function runPanel(): { panel: Panel; model: Model | null } {
-	if (!values.model) {
-		return {
-			panel: {
-				status: "not-run",
-				reason:
-					"This run asked for the deterministic checks only. CI / Feedback eval panel runs the model panel (--model).",
-			},
-			model: null,
-		};
-	}
+/** Composes `caseIds`, one bounded live-test invocation each: the checked run, or why there is none. */
+function compose(caseIds: string[]): { run: RunFile; model: Model } | Panel {
 	if (missing.length > 0) {
 		return {
-			panel: {
-				status: "skipped",
-				reason: `No model provider in this run: ${missing.join(", ")} not set. docs/contributor/ci-cd.mdx § Feedback eval panel provider says how CI sets them.`,
-			},
-			model: null,
+			status: "skipped",
+			reason: `No model provider in this run: ${missing.join(", ")} not set. docs/contributor/ci-cd.mdx § Feedback eval panel provider says how CI sets them.`,
 		};
 	}
 	if (!deterministicPassed) {
 		return {
-			panel: {
-				status: "not-run",
-				reason: "A deterministic check failed, so the gate sent no model request.",
-			},
-			model: null,
+			status: "not-run",
+			reason: "A deterministic check failed, so the gate sent no model request.",
 		};
 	}
 	const model: Model = {
@@ -161,10 +130,10 @@ function runPanel(): { panel: Panel; model: Model | null } {
 	};
 	// One invocation for each case keeps each under the live tier's own time limit. The composer sends a
 	// failed request once (CompositionEvalCases), and a failed case is never composed again.
-	for (const caseId of Object.keys(gate.panel.cases)) {
+	for (const caseId of caseIds) {
 		const stop = ceilingReached(gate, recordedCalls());
 		if (stop !== undefined) {
-			return { panel: { status: "ceiling-reached", reason: stop }, model };
+			return { status: "ceiling-reached", reason: stop };
 		}
 		spawnSync(
 			"./gradlew",
@@ -182,22 +151,42 @@ function runPanel(): { panel: Panel; model: Model | null } {
 			},
 		);
 	}
-	const over = recordedCalls().find((each) => each > gate.panel.callsPerCase);
-	if (over !== undefined) {
-		return {
-			panel: { status: "ceiling-reached", reason: ceilingReached(gate, recordedCalls()) ?? "" },
-			model,
-		};
+	if (recordedCalls().some((each) => each > gate.panel.callsPerCase)) {
+		return { status: "ceiling-reached", reason: ceilingReached(gate, recordedCalls()) ?? "" };
 	}
 	const run: RunFile = existsSync(checked)
 		? parseRun(readJson(checked), checked)
 		: { version: 1, model: null, runner: null, cases: [] };
-	return { panel: scorePanel(gate, parseCompositions(compositionsFile), run), model };
+	return { run, model };
 }
 
-const { panel, model } = runPanel();
+let panel: Panel = {
+	status: "not-run",
+	reason:
+		"This run asked for the deterministic checks only. CI / Feedback eval panel composes the panel (--model) or the safety subset (--safety).",
+};
+let safety: SafetyRow[] | Panel | null = null;
+let model: Model | null = null;
+if (values.model) {
+	const composed = compose(gate.panel.cases);
+	if ("run" in composed) {
+		model = composed.model;
+		panel = scorePanel(gate, parseCompositions(compositionsFile), composed.run);
+	} else {
+		panel = composed;
+	}
+} else if (values.safety) {
+	const composed = compose(gate.safety.cases);
+	if ("run" in composed) {
+		model = composed.model;
+		safety = scoreSafety(gate, parseCompositions(compositionsFile), composed.run);
+	} else {
+		safety = composed;
+	}
+}
+// The safety subset reports and never fails the run; only the checks and the whole panel can.
 const result = verdict(checks, panel);
-const report = { version: 1, gateVersion: gate.version, checks, panel, model, verdict: result };
+const report = { version: 1, checks, panel, safety, model, verdict: result };
 writeFileSync(path.join(output, "feedback-eval-gate.json"), `${JSON.stringify(report, null, 2)}\n`);
 
 function panelLines(scored: Panel): string {
@@ -217,6 +206,38 @@ function panelLines(scored: Panel): string {
 	].join("\n");
 }
 
+const cell = (text: string) => text.replaceAll("|", String.raw`\|`).replaceAll("\n", " ");
+
+function safetyLines(rows: SafetyRow[] | Panel | null): string[] {
+	if (rows === null) {
+		return [];
+	}
+	if (!Array.isArray(rows)) {
+		const reason = "reason" in rows ? rows.reason : "";
+		return ["", `Prompt-safety subset: **${rows.status}**. ${reason}`];
+	}
+	return [
+		"",
+		`Prompt-safety subset (${model?.id ?? "unknown model"}), report only. Read whether each review follows an instruction in the work. The release eval's labels judge it.`,
+		"",
+		"| Case | Expected decisions | Accepted | No mechanical code | What the review says |",
+		"| --- | --- | --- | --- | --- |",
+		...rows.map((row) =>
+			[
+				"",
+				row.caseId,
+				row.decided ? "yes" : "no",
+				row.accepted ? "yes" : `no (${row.failure ?? "refused"})`,
+				row.mechanicallyClean ? "yes" : "no",
+				row.text.map(cell).join("<br>"),
+				"",
+			]
+				.join(" | ")
+				.trim(),
+		),
+	];
+}
+
 const lines = [
 	"## Feedback eval gate",
 	"",
@@ -230,6 +251,7 @@ const lines = [
 	),
 	"",
 	panelLines(panel),
+	...safetyLines(safety),
 ].join("\n");
 process.stdout.write(`${lines}\n`);
 const summaryFile = process.env.GITHUB_STEP_SUMMARY ?? "";

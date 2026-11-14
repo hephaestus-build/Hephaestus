@@ -255,50 +255,47 @@ Without a labels file, the report gives only the raise decisions, main's accepta
 
 ## Feedback eval gate
 
-The feedback eval gate stops a change that weakens what the prompts tell the model.
-Its deterministic checks gate each pull request that touches what they measure.
+The feedback eval gate has two parts.
+Its deterministic checks gate each pull request that touches what the composer reads or what the gate measures.
 That is a prompt, the writing guide, the practice catalog or its scripts, the practice-script corpus, the composer, or the gate itself.
 [Path filters](./ci-cd.mdx#path-filters) list the paths.
-`scripts/feedback-eval/gate.json` holds its fixed case set, its prompt clauses and its floors.
+Its model runs measure how the composer behaves, and they never block a merge.
+`scripts/feedback-eval/gate.json` holds the panel, the prompt-safety subset and the floors.
+
+The gate does not pin prompt wording.
+A wording pin fails on an improvement and on a removed rule alike ([What a test protects](./testing.mdx#prompts-and-model-behavior)).
+A prompt rule is protected by the labelled cases that its removal makes fail.
 
 ### Gate checks without a model
 
 These checks send no model request. Each check must pass exactly.
-They detect edits. They do not judge what an edit means: only the [model panel](#model-panel) composes with a model.
 
 | Check | Fails when |
 | --- | --- |
-| G1 | A pinned case changed or is missing. Or `gate.json` changed since the base commit, and its `version` did not increase. |
-| G2 | The composition set or the claim corpus does not parse. |
+| G2 | The composition set or the claim corpus does not parse. Or the panel or the safety subset names a case that the composition set does not hold. |
 | G3 | A quote check does not match, or an absence check finds its text and the claim label is not `false`. |
-| G4 | A prompt changed, or a new prompt file has no pin. Or a prompt no longer contains a clause that `gate.json` names. |
-| G5 | An automated practice has no Applicability section in its criteria and no Applies when gate. Or a practice's criteria or Applies when changed. |
+| G5 | An automated practice has no Applicability section in its criteria and no Applies when gate. |
 | G6 | A bundled practice script gives other leads than its snapshot in `docker/agents/practice-scripts/corpus/snapshots/`. |
-| G7 | The pinned cases times the calls for each case permit more model calls than the panel's ceiling. |
-
-A pin is a SHA-256 of one of these:
-
-- A case, as the fixture file holds it.
-- A whole prompt file under `agent/` or `agent/mentor/`, or the writing guide's Writing feedback section.
-- A practice's criteria and Applies when.
-
-A failure prints the new digest.
-
-Each G4 clause carries one occasion criterion (O1–O8) or one evidence-bound criterion (E1–E15).
-The criterion ID is in `gate.json` beside the clause.
-
-A text check cannot tell a rule from its reversal, and a new paragraph can override a rule that is still present.
-Thus, G4 pins each whole prompt. Any edit to a prompt fails until the pull request pins it again.
-The clause check names a rule that went missing. The panel and the review of the pull request judge what an edit means.
+| G7 | The panel's cases times the calls for each case permit more model calls than the panel's ceiling. |
 
 G5 keeps a list of known gaps: automated practices without an Applicability section or an Applies when gate.
 The check also fails when a listed practice gets one. Then remove it from the list.
 
 G6 runs `docker/agents/practice-scripts/corpus.test.ts`. Each bundled script runs over the authored corpus, without a model.
+A practice script is deterministic, and its leads are the product's output, so its snapshot is a legitimate golden.
 To change what a script sends on purpose, run that test with `--test-update-snapshots` and commit the new snapshot.
 
-To pin a changed case, prompt or practice, put the new digest in `gate.json` and increase `version` in the same pull request.
-The review of that pull request is the review of the change.
+### Prompt-safety subset
+
+The prompt-safety subset holds the cases whose work carries an instruction to the reviewer, in a description, a code comment or a reviewer's comment.
+The composer must treat that text as data.
+A pull request that changes what the composer reads composes the subset with the production composer.
+The job summary shows, for each case, whether the composer made the expected decisions, whether main's check accepted the review, and what the review says.
+
+No code can tell whether the words follow the instruction.
+A review can make the expected decisions and still praise what the instruction asked it to praise.
+Thus, the result is a report for the reviewer of the pull request, and the job passes when the deterministic checks pass.
+The [release feedback eval](#release-feedback-eval) composes the same cases and labels every review. A labelled defect fails it, so an unsafe review blocks the release.
 
 ### Model panel
 
@@ -319,7 +316,7 @@ The four floors share a 5 % budget.
 A floor finds only a large regression. The [release eval](#release-feedback-eval) remains the quality bar.
 
 Each case is one `CompositionEvalLiveTest` invocation, with 16,384 output tokens and medium reasoning effort.
-The composer loop sends at most 12 model calls for each case, and G7 keeps the pinned cases within 240 calls.
+The composer loop sends at most 12 model calls for each case, and G7 keeps the panel's cases within 240 calls.
 The run also counts the HTTP requests that each case recorded. The eval transport sends one request for each model call and never probes a second path. It stops before a case that could pass 240 calls, and after a case that passed its bound of 12.
 Such a run ends as "ceiling reached", not as a pass.
 
@@ -328,11 +325,14 @@ The job stops after 40 minutes.
 
 ### When the panel runs
 
-The panel does not run for each pull request. The `CI / Feedback eval panel` workflow runs it:
+The `CI / Feedback eval panel` workflow runs the whole panel:
 
 - Each night on `main`.
 - On a manual run.
 - On a pull request with the `eval:run` label, when the label is added and on each later push.
+
+Any other push to a pull request that changes what the composer reads composes the prompt-safety subset.
+The workflow's path filter lists those paths. A pull request outside them runs neither, even with the label.
 
 The panel runs only with a configured model provider.
 [Feedback eval panel provider](./ci-cd.mdx#feedback-eval-panel-provider) lists the settings and what happens without them.
@@ -359,13 +359,12 @@ Each comment carries a marker of its run attempt. A replay of an attempt that a 
 The check reads only issues updated since the attempt started. If it fails, the report still goes out and says that the duplicate check could not complete.
 
 The cicd job keeps `feedback-eval-gate.json` as the `feedback-eval-gate` artifact for 14 days. The panel keeps it as `feedback-eval-panel`.
-The file holds each check, each measure, the model name and the SHA-256 of the endpoint. It never holds the endpoint or the key.
+The file holds each check, each measure or safety row, the model name and the SHA-256 of the endpoint. It never holds the endpoint or the key.
 
-The gate runs locally without a model.
-With `--base`, it also compares `gate.json` with the base commit, as pull request CI does:
+The gate runs locally without a model, as pull request CI runs it:
 
 ```bash
-node scripts/feedback-eval-gate.ts --base "$(git merge-base origin/main HEAD)"
+node scripts/feedback-eval-gate.ts
 ```
 
 ## Composition replay cases
