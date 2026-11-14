@@ -10,7 +10,7 @@ import {
 	claimHeaders,
 	discoverCapabilities,
 	present,
-	retryAfterMs,
+	fetchGatewayInput,
 } from "./gateway-capabilities.ts";
 
 const DOWNLOAD_ATTEMPTS = 3;
@@ -21,23 +21,21 @@ export async function downloadWorkspace(
 	endpoint: string,
 	token: string,
 	archive: string,
+	signal: AbortSignal,
 ): Promise<void> {
 	// A sandbox's run names its claim; a review Job has none.
 	const headers = {
 		Authorization: `Bearer ${token}`,
 		...claimHeaders(process.env.LLM_PROXY_CLAIM),
 	};
-	const { workspaceByteBudget: budget } = await discoverCapabilities(endpoint, headers);
+	const { workspaceByteBudget: budget } = await discoverCapabilities(endpoint, headers, signal);
 	for (let attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt += 1) {
 		let retryable = true;
-		let wait = DOWNLOAD_BACKOFF_MS * 2 ** (attempt - 1);
+		const wait = DOWNLOAD_BACKOFF_MS * 2 ** (attempt - 1);
 		try {
-			const response = await fetch(`${endpoint}/workspace`, { headers });
+			const response = await fetchGatewayInput(`${endpoint}/workspace`, headers, signal);
 			if (!response.ok || !response.body) {
-				retryable = response.status === 425 || response.status === 429 || response.status >= 500;
-				if (response.status === 429) {
-					wait = retryAfterMs(response);
-				}
+				retryable = response.status === 425 || response.status >= 500;
 				await response.body?.cancel();
 				throw new Error(`Workspace download refused: ${response.status}`);
 			}
@@ -65,7 +63,7 @@ export async function downloadWorkspace(
 				},
 			});
 			try {
-				await pipeline(response.body, bound, createWriteStream(archive));
+				await pipeline(response.body, bound, createWriteStream(archive), { signal });
 			} catch (error) {
 				if (bytes > budget) {
 					retryable = false;
@@ -82,7 +80,7 @@ export async function downloadWorkspace(
 				throw error;
 			}
 			console.error(`workspace download attempt ${attempt} failed: ${String(error)}`);
-			await sleep(wait);
+			await sleep(wait, undefined, { signal });
 		}
 	}
 }
@@ -174,10 +172,15 @@ async function main() {
 	if (!present(endpoint) || !present(token)) {
 		throw new Error("Gateway credential and runtime endpoint are required");
 	}
+	const workDeadline = Number(process.env.SANDBOX_WORK_DEADLINE_MS);
+	if (!Number.isSafeInteger(workDeadline) || workDeadline <= 0) {
+		throw new Error("The workspace requires its admitted work deadline");
+	}
+	const signal = AbortSignal.timeout(Math.max(0, workDeadline - Date.now()));
 	const directory = await mkdtemp("/workspace/.gateway-download-");
 	try {
 		const archive = path.join(directory, "workspace.tar");
-		await downloadWorkspace(endpoint, token, archive);
+		await downloadWorkspace(endpoint, token, archive, signal);
 		await extract(archive);
 	} finally {
 		await rm(directory, { recursive: true, force: true });

@@ -1036,7 +1036,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
                 .resolve(job.getId().toString());
         Path sandboxCopy = Files.writeString(root.resolve("sandbox-copy"), "personal evidence in the sandbox");
         Path archive = Files.writeString(root.resolve("input.tar"), "personal evidence archive");
-        gateway.register(job.getId(), "credential", archive, "out");
+        gateway.register(job.getId(), archive);
         jdbc.update(
                 "UPDATE person_evidence_copy SET state='ERASED' WHERE job_id=? AND workspace_id=?",
                 job.getId(),
@@ -1118,7 +1118,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         }
         Files.createDirectory(archive);
         Path obstruction = Files.writeString(archive.resolve("retained"), "personal evidence");
-        gateway.register(job.getId(), "credential", archive, "out");
+        var session = gateway.register(job.getId(), archive);
         assertThat(owner.removeErasedFolders()).isEqualTo(new ErasedFolders(folderAlreadyRemoved ? 0 : 1, 1));
         assertThat(jdbc.queryForObject(
                         "SELECT state FROM person_evidence_copy WHERE job_id=? AND workspace_id=?",
@@ -1154,8 +1154,7 @@ class EvidenceFolderAccountErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(archive).doesNotExist();
         assertThat(sandboxCopy).doesNotExist();
         assertThat(nonOwner.removeErasedFolders()).isEqualTo(new ErasedFolders(0, 0));
-        assertThatThrownBy(() -> gateway.require(job.getId(), "Bearer credential"))
-                .isInstanceOf(ResponseStatusException.class);
+        assertThatThrownBy(session::download).isInstanceOf(ResponseStatusException.class);
     }
 
     @Test

@@ -3,11 +3,10 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import de.tum.cit.aet.hephaestus.core.exception.ProblemType;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,17 +17,11 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
-import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -40,287 +33,105 @@ class SandboxGatewaySessionsTest {
     private final SandboxGatewaySessions sessions = new SandboxGatewaySessions();
 
     @Test
-    void shouldServeOnlyFrozenSelectedBytesAndRetryWithoutSpendingAgain() throws Exception {
-        Path archive = workspaceArchive();
-        long bytes = Files.size(archive);
-        var bounded = new SandboxGatewaySessions(bytes * 2);
-        Path selection;
-        try (var session = bounded.register(UUID.randomUUID(), "token", archive, "out")) {
-            byte[] first;
-            try (var download = session.download("area", "chat")) {
-                first = download.input().readAllBytes();
-                assertThat(first.length).isEqualTo(download.bytes());
-                try (var tar = new TarArchiveInputStream(new ByteArrayInputStream(first))) {
-                    assertThat(tar.getNextEntry().getName()).isEqualTo("context/chat/channel/2026-09.jsonl");
-                    assertThat(new String(tar.readAllBytes(), StandardCharsets.UTF_8))
-                            .isEqualTo("message");
-                    assertThat(tar.getNextEntry()).isNull();
-                }
-            }
-            try (var retry = session.download("area", "chat")) {
-                assertThat(retry.input().readAllBytes()).isEqualTo(first);
-            }
-            assertThatThrownBy(() -> session.download("repo", "7"))
-                    .isInstanceOf(WorkspaceBudgetExceededException.class);
-            try (var paths = Files.list(temporary)) {
-                selection = paths.filter(path -> path.getFileName().toString().contains("workspace-selection-"))
-                        .findFirst()
-                        .orElseThrow();
-            }
-        }
-        assertThat(selection).doesNotExist();
-        assertThat(archive).doesNotExist();
+    void shouldReceiveAColdReplicasResultWithoutAnInputArchive() throws Exception {
+        var job = new ReviewJob();
+        job.setId(UUID.randomUUID());
+        byte[] result = resultTar();
+        var upload =
+                sessions.receiveAttempt(job, "agent:test", new ByteArrayInputStream(result), contentDigest(result));
+        assertThat(upload.files()).containsOnlyKeys("observations.json");
+        assertThat(upload.etag()).isEqualTo(etag(result));
+        assertThat(sessions.jobIds()).isEmpty();
     }
 
     @Test
-    void shouldNotRegisterAnOverBudgetWorkspace() throws Exception {
-        Path archive = Files.writeString(temporary.resolve("large.tar"), "12345");
-        var bounded = new SandboxGatewaySessions(4);
+    void shouldVerifyTheResultDigestBeforeKeepingAnyListenerCopy() throws Exception {
+        var told = new ArrayList<Map<String, byte[]>>();
+        var receiver = new SandboxGatewaySessions(
+                SandboxGatewaySessions.WORKSPACE_BYTE_BUDGET, List.of((jobId, attempt, image) -> told::add));
+        var job = new ReviewJob();
+        job.setId(UUID.randomUUID());
+        byte[] result = resultTar();
+        String wrongDigest = contentDigest(new byte[0]);
+        assertThatThrownBy(
+                        () -> receiver.receiveAttempt(job, "agent:test", new ByteArrayInputStream(result), wrongDigest))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        refused -> assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+        assertThat(told).isEmpty();
+        receiver.receiveAttempt(job, "agent:test", new ByteArrayInputStream(result), contentDigest(result));
+        assertThat(told).singleElement().satisfies(files -> assertThat(files).containsOnlyKeys("observations.json"));
+    }
+
+    @Test
+    void shouldRetryTheSameFrozenArchiveAndRemoveItWhenCustodyEnds() throws Exception {
         UUID id = UUID.randomUUID();
-        assertThatThrownBy(() -> bounded.register(id, "token", archive, "out"))
-                .isInstanceOfSatisfying(WorkspaceBudgetExceededException.class, refusal -> {
-                    assertThat(refusal.getBody().getType()).isEqualTo(ProblemType.WORKSPACE_BUDGET_EXCEEDED.uri());
-                    assertThat(refusal.getStatusCode()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE);
-                });
-        assertThatThrownBy(() -> bounded.require(id, "Bearer token")).isInstanceOf(ResponseStatusException.class);
-    }
-
-    @Test
-    void shouldRefuseAbsentAndUnsafeSelectionsWithoutLeavingFiles() throws Exception {
-        Path archive = workspaceArchive();
-        try (var session = sessions.register(UUID.randomUUID(), "token", archive, "out")) {
-            for (String repository : List.of("8", "../7", "7/../8", "7%2fsecret")) {
-                assertThatThrownBy(() -> session.download("repo", repository))
-                        .isInstanceOfSatisfying(
-                                ResponseStatusException.class,
-                                refusal -> assertThat(refusal.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
-            }
-            assertThatThrownBy(() -> session.download("area", "docs")).isInstanceOf(ResponseStatusException.class);
-            try (var paths = Files.list(temporary)) {
-                assertThat(paths.toList()).containsExactly(archive);
-            }
-            try (var download = session.download("repo", "7");
-                    var tar = new TarArchiveInputStream(download.input())) {
-                assertThat(tar.getNextEntry().getName()).isEqualTo("repos/7/README.md");
-                assertThat(new String(tar.readAllBytes(), StandardCharsets.UTF_8))
-                        .isEqualTo("repository");
-                assertThat(tar.getNextEntry()).isNull();
-            }
-        }
-    }
-
-    private Path workspaceArchive() throws IOException {
-        Path archive = temporary.resolve("workspace.tar");
-        try (var tar = new TarArchiveOutputStream(Files.newOutputStream(archive))) {
-            for (var file : Map.of("context/chat/channel/2026-09.jsonl", "message", "repos/7/README.md", "repository")
-                    .entrySet()) {
-                byte[] content = file.getValue().getBytes(StandardCharsets.UTF_8);
-                var entry = new TarArchiveEntry(file.getKey());
-                entry.setSize(content.length);
-                tar.putArchiveEntry(entry);
-                tar.write(content);
-                tar.closeArchiveEntry();
-            }
-        }
-        return archive;
-    }
-
-    @Test
-    void shouldNotReplaceAnActiveJobSession() throws Exception {
-        UUID jobId = UUID.randomUUID();
-        Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
-        try (var session = sessions.register(jobId, "first-attempt", archive, "out")) {
-            assertThatThrownBy(() -> sessions.register(jobId, "second-attempt", archive, "out"))
-                    .isInstanceOf(IllegalStateException.class);
-            assertThat(sessions.require(jobId, "Bearer first-attempt")).isSameAs(session);
-        }
-    }
-
-    @Test
-    void shouldBindDownloadsToTheRegisteredCredentialAndAllowWholeFileRetry() throws Exception {
-        Path archive = Files.writeString(temporary.resolve("input.tar"), "exact bytes");
-        try (var session = sessions.register(UUID.randomUUID(), "attempt-credential", archive, "out")) {
-            assertThatThrownBy(() -> sessions.require(session.id(), "Bearer different-attempt"))
-                    .isInstanceOfSatisfying(
-                            ResponseStatusException.class,
-                            e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+        Path archive = Files.writeString(temporary.resolve("input.tar"), "frozen workspace");
+        var session = sessions.register(id, archive);
+        try (session) {
             assertThat(session.inputBytes()).isEqualTo(Files.size(archive));
-            try (var downloaded =
-                    sessions.require(session.id(), "Bearer attempt-credential").download()) {
-                assertThat(downloaded.readNBytes(3)).isEqualTo("exa".getBytes(StandardCharsets.UTF_8));
+            try (var first = session.download();
+                    var second = session.download()) {
+                assertThat(first.readAllBytes()).isEqualTo(second.readAllBytes());
             }
-            try (var retry =
-                    sessions.require(session.id(), "Bearer attempt-credential").download()) {
-                assertThat(retry.readAllBytes()).isEqualTo(Files.readAllBytes(archive));
-            }
-        }
-        assertThat(archive).doesNotExist();
-    }
-
-    @Test
-    void shouldRevokeAnAttemptWhenItsRuntimeIsRemoved() throws Exception {
-        Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
-        var session = sessions.register(UUID.randomUUID(), "token", archive, "out");
-
-        session.close();
-
-        assertThatThrownBy(() -> sessions.require(session.id(), "Bearer token"))
-                .isInstanceOfSatisfying(
-                        ResponseStatusException.class,
-                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
-        assertThatThrownBy(session::download)
-                .isInstanceOfSatisfying(
-                        ResponseStatusException.class,
-                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"Basic token", "Bearer "})
-    void shouldRefuseACredentialWhenItIsNotANonEmptyBearerToken(String authorization) throws Exception {
-        Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
-        try (var session = sessions.register(UUID.randomUUID(), "token", archive, "out")) {
-            assertThatThrownBy(() -> sessions.require(session.id(), authorization))
+            assertThat(sessions.jobIds()).containsExactly(id);
+            sessions.closeJob(id);
+            assertThat(archive).doesNotExist();
+            assertThat(sessions.jobIds()).isEmpty();
+            assertThatThrownBy(session::download)
                     .isInstanceOfSatisfying(
                             ResponseStatusException.class,
-                            e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+                            ended -> assertThat(ended.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
         }
     }
 
     @Test
-    void shouldKeepTheFirstCompleteResultAndRejectDuplicateUploads() throws Exception {
-        Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
-        try (var session = sessions.register(UUID.randomUUID(), "token", archive, "out")) {
-            byte[] result = resultTar();
-            String expectedEtag = etag(result);
-            upload(session, result);
-
-            assertThat(session.result().get("observations.json")).isEqualTo("{}".getBytes(StandardCharsets.UTF_8));
-            var duplicate = upload(session, result);
-            assertThat(duplicate.admitted()).isFalse();
-            assertThat(duplicate.etag()).isEqualTo(expectedEtag);
-            assertThat(session.result().get("observations.json")).isEqualTo("{}".getBytes(StandardCharsets.UTF_8));
-        }
+    void shouldRefuseAnArchiveAboveTheWorkspaceBudget() throws Exception {
+        Path archive = Files.writeString(temporary.resolve("input.tar"), "too large");
+        var bounded = new SandboxGatewaySessions(4);
+        assertThatThrownBy(() -> bounded.register(UUID.randomUUID(), archive))
+                .isInstanceOf(WorkspaceBudgetExceededException.class);
+        assertThat(bounded.jobIds()).isEmpty();
     }
 
     @Test
-    void shouldBindTheLaunchedAttemptAtRegistrationAndAdmitTheResultWhateverListenersDo() throws Exception {
-        UUID jobId = UUID.randomUUID();
+    void shouldBindTheCurrentReceiptAndKeepAdmissionIndependentOfListenerFailure() throws Exception {
         var bound = new ArrayList<String>();
         var told = new ArrayList<Map<String, byte[]>>();
-        var listening = new SandboxGatewaySessions(
+        var receiver = new SandboxGatewaySessions(
                 SandboxGatewaySessions.WORKSPACE_BYTE_BUDGET,
                 List.of(
                         (job, attempt, image) -> {
-                            throw new IllegalStateException("the job row is unavailable");
+                            throw new IllegalStateException("Receipt unavailable");
                         },
                         (job, attempt, image) -> files -> {
-                            throw new IllegalStateException("the transcript store is unavailable");
+                            throw new IllegalStateException("Transcript unavailable");
                         },
                         (job, attempt, image) -> {
                             bound.add(job + "#" + attempt + "@" + image);
                             return told::add;
                         }));
-        Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
-        try (var session = listening.registerAttempt(jobId, 2, "agent@sha256:pinned", "token", archive, "out")) {
-            assertThat(bound).as("bound before anything can upload").containsExactly(jobId + "#2@agent@sha256:pinned");
-            byte[] result = resultTar();
-
-            assertThat(upload(session, result).admitted()).isTrue();
-            assertThat(upload(session, result).admitted()).isFalse();
-
-            assertThat(told)
-                    .singleElement()
-                    .satisfies(files -> assertThat(files).containsOnlyKeys("observations.json"));
-            assertThat(session.result()).containsOnlyKeys("observations.json");
-        }
-        Path hostArchive = Files.writeString(temporary.resolve("host.tar"), "input");
-        try (var host = listening.register(UUID.randomUUID(), "token", hostArchive, "out")) {
-            upload(host, resultTar());
-            assertThat(bound)
-                    .as("a session without a launched attempt binds nothing")
-                    .hasSize(1);
-        }
+        var job = new ReviewJob();
+        job.setId(UUID.randomUUID());
+        byte[] result = resultTar();
+        var received =
+                receiver.receiveAttempt(job, "agent:test", new ByteArrayInputStream(result), contentDigest(result));
+        assertThat(received.files()).containsOnlyKeys("observations.json");
+        assertThat(bound).containsExactly(job.getId() + "#0@agent:test");
+        assertThat(told).hasSize(1);
     }
 
     @Test
-    void shouldNotAcceptAnInvalidArchiveAsACompletedResult() throws Exception {
-        Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
-        try (var session = sessions.register(UUID.randomUUID(), "token", archive, "out")) {
-            assertThatThrownBy(() -> upload(session, new byte[0])).isInstanceOf(IOException.class);
-            assertThatThrownBy(session::result).isInstanceOf(IllegalStateException.class);
-
-            upload(session, resultTar());
-
-            assertThat(session.result()).containsOnlyKeys("observations.json");
-        }
-    }
-
-    @Test
-    void shouldRejectADifferentSecondResultAndAFalseContentDigest() throws Exception {
-        Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
-        try (var session = sessions.register(UUID.randomUUID(), "token", archive, "out")) {
-            byte[] first = resultTar();
-            assertThatThrownBy(() -> session.upload(new ByteArrayInputStream(first), contentDigest(new byte[0])))
-                    .isInstanceOfSatisfying(
-                            ResponseStatusException.class,
-                            e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
-            String admittedEtag = upload(session, first).etag();
-
-            byte[] second = resultTar("{ }".getBytes(StandardCharsets.UTF_8));
-            var conflict = upload(session, second);
-            assertThat(conflict.admitted()).isFalse();
-            assertThat(conflict.etag()).isEqualTo(admittedEtag).isNotEqualTo(etag(second));
-            assertThat(session.result().get("observations.json")).isEqualTo("{}".getBytes(StandardCharsets.UTF_8));
-        }
-    }
-
-    @Test
-    void shouldKeepAnOverlappingRetryRetryableUntilAnUploadCompletes() throws Exception {
-        Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
-        var reading = new CountDownLatch(1);
-        var disconnect = new CountDownLatch(1);
-        try (var session = sessions.register(UUID.randomUUID(), "token", archive, "out");
-                var executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            var first = executor.submit(() -> {
-                session.upload(
-                        new InputStream() {
-                            @Override
-                            public int read() throws IOException {
-                                byte[] single = new byte[1];
-                                return read(single, 0, 1) < 0 ? -1 : single[0] & 0xFF;
-                            }
-
-                            @Override
-                            public int read(byte[] buffer, int offset, int length) throws IOException {
-                                reading.countDown();
-                                try {
-                                    if (!disconnect.await(5, TimeUnit.SECONDS)) throw new IOException("Read timed out");
-                                } catch (InterruptedException exception) {
-                                    Thread.currentThread().interrupt();
-                                    throw new IOException(exception);
-                                }
-                                throw new IOException("Connection lost");
-                            }
-                        },
-                        contentDigest(resultTar()));
-                return null;
-            });
-            try {
-                assertThat(reading.await(5, TimeUnit.SECONDS)).isTrue();
-                assertThatThrownBy(() -> upload(session, resultTar()))
-                        .isInstanceOfSatisfying(
-                                ResponseStatusException.class,
-                                e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
-                assertThatThrownBy(session::result).isInstanceOf(IllegalStateException.class);
-            } finally {
-                disconnect.countDown();
-            }
-            assertThatThrownBy(() -> first.get(5, TimeUnit.SECONDS)).hasRootCauseMessage("Connection lost");
-
-            upload(session, resultTar());
-
-            assertThat(session.result()).containsOnlyKeys("observations.json");
-        }
+    void shouldRejectAnInvalidArchiveBeforeReceivingACompleteResult() throws Exception {
+        var job = new ReviewJob();
+        job.setId(UUID.randomUUID());
+        assertThatThrownBy(() -> sessions.receiveAttempt(
+                        job, "agent:test", new ByteArrayInputStream(new byte[0]), contentDigest(new byte[0])))
+                .isInstanceOf(IOException.class);
+        byte[] result = resultTar();
+        assertThat(sessions.receiveAttempt(job, "agent:test", new ByteArrayInputStream(result), contentDigest(result))
+                        .files())
+                .containsOnlyKeys("observations.json");
     }
 
     private static byte[] resultTar() throws Exception {
@@ -337,11 +148,6 @@ class SandboxGatewaySessionsTest {
             tar.closeArchiveEntry();
         }
         return bytes.toByteArray();
-    }
-
-    private static SandboxGatewaySessions.Session.UploadResult upload(
-            SandboxGatewaySessions.Session session, byte[] bytes) throws Exception {
-        return session.upload(new ByteArrayInputStream(bytes), contentDigest(bytes));
     }
 
     private static String contentDigest(byte[] bytes) throws Exception {

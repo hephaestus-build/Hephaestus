@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -29,7 +30,6 @@ class ReviewSandboxControllerTest extends BaseUnitTest {
 
     private final ReviewSandboxRuns reviews = mock(ReviewSandboxRuns.class);
     private final AgentRuns runs = mock(AgentRuns.class);
-    private final SandboxGatewaySessions.Session session = mock(SandboxGatewaySessions.Session.class);
     private final SandboxRun run = new SandboxRun(
             new AgentSandboxes.LiveSandbox(UUID.randomUUID(), 1L, "review", AgentSandboxKind.REVIEW),
             new AgentRunFence(UUID.randomUUID(), 1L, 1),
@@ -61,9 +61,8 @@ class ReviewSandboxControllerTest extends BaseUnitTest {
 
     private void admittedUpload() throws Exception {
         when(runs.isCurrent(any(), anyInt())).thenReturn(true);
-        when(reviews.preparedSession(run)).thenReturn(session);
-        when(session.upload(any(), any())).thenReturn(new SandboxGatewaySessions.Session.UploadResult(true, ETAG));
-        when(session.result()).thenReturn(Map.of());
+        when(reviews.receive(eq(run), any(), any()))
+                .thenReturn(new SandboxGatewaySessions.ReceivedResult(Map.of(), ETAG));
     }
 
     private void upload(MockHttpServletResponse response) {

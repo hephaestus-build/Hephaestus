@@ -24,8 +24,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * the first request that needs them until the run ends, not for one request. Both review run kinds hold their inputs
  * here: a measuring run the capture, a composing run the inputs it restores.
  *
- * <p>The inputs are held in memory on the replica that prepared them, as the single server replica serves every
- * gateway request today.
+ * <p>Each replica holds its local inputs. A new replica restores the attempt's published snapshot from PostgreSQL.
  */
 @Component
 public class ReviewAttemptCustody {

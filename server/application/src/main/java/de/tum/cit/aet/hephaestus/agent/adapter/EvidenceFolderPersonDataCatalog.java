@@ -582,6 +582,24 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
         return vouchingReceipt(jdbc, copyId, jobId, workspaceId, attempt) != null;
     }
 
+    /** Whether this attempt began copying, even if its server died before publishing the receipt. */
+    public boolean hasAttemptCapture(ReviewJob job) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                """
+                SELECT EXISTS (SELECT 1 FROM person_evidence_copy
+                WHERE job_id=? AND workspace_id=? AND payload->>'attempt'=?)
+                """, Boolean.class, job.getId(), job.getWorkspaceId(), Integer.toString(job.getAttempt())));
+    }
+
+    /** Restores only a live capture, while erasure cannot revoke its receipt or remove its recorded bytes. */
+    public <T> T withLiveAttempt(ReviewJob job, Supplier<T> restore) {
+        try (var admission = layout.spool().capture(job.getWorkspaceId(), fence::capture)) {
+            if (!vouchesForLiveAttempt(admission.jdbc(), job.getId(), job.getWorkspaceId(), job.getAttempt()))
+                throw new CopyUnavailableException("The attempt's captured inputs are no longer held");
+            return restore.get();
+        }
+    }
+
     /** Holds the existing copy/erasure fence before a recovery transaction takes any job lock. */
     public void holdCopyAdmission() {
         fence.holdForCapture();
@@ -594,7 +612,11 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
      * with no lock, and asks again when the rebuild fails.
      */
     public boolean vouchesForLiveAttempt(UUID jobId, long workspaceId, int attempt) {
-        var payloads = jdbc.query(
+        return vouchesForLiveAttempt(jdbc, jobId, workspaceId, attempt);
+    }
+
+    private boolean vouchesForLiveAttempt(JdbcOperations controls, UUID jobId, long workspaceId, int attempt) {
+        var payloads = controls.query(
                 """
                 SELECT payload::text FROM person_evidence_copy
                 WHERE job_id=? AND workspace_id=? AND state='READY' AND payload->>'attempt'=?
@@ -611,7 +633,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
         } catch (RuntimeException malformedIdentities) {
             return false;
         }
-        return !isSuppressed(identities, jdbc);
+        return !isSuppressed(identities, controls);
     }
 
     /** A durable original receipt can vouch for retained inputs, whichever server wrote them. */

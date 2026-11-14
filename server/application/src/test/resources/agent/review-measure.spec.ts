@@ -6,12 +6,14 @@ import { chmod, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import type { RunContext } from "../../../main/resources/agent/driver.ts";
 
 import { extract, extractArguments } from "../../../../../../docker/agents/pi/gateway-init.ts";
 import {
 	emptyDirectory,
 	measureEnvironment,
 	parseMeasureContext,
+	readMeasureContext,
 } from "../../../main/resources/agent/review-measure.ts";
 
 const RUN = "0b1d4b71-5f1e-4a52-9a43-7e0c4b0d8a11";
@@ -158,3 +160,74 @@ void test(
 		}
 	},
 );
+
+/** One live claim: its driver owns renewals and aborts the signal on lease loss or its deadline. */
+function liveContext(signal = new AbortController().signal): RunContext {
+	return {
+		assignment: {
+			runId: RUN,
+			epoch: 3,
+			kind: "REVIEW",
+			leasedUntil: Date.now() + 60_000,
+			deadline: null,
+		},
+		gateway: {
+			url: "http://gateway.invalid",
+			headers: { authorization: "Bearer sandbox-token", "x-agent-run": RUN, "x-agent-epoch": "3" },
+		},
+		signal,
+	};
+}
+
+void test("a busy replica can answer again on the same claim without handing its work back", async () => {
+	let calls = 0;
+	const claim = liveContext();
+	const transport: typeof fetch = async (_input, init) => {
+		assert.deepEqual(init?.headers, claim.gateway.headers);
+		calls += 1;
+		return calls === 1
+			? new Response(null, { status: 503, headers: { "retry-after": "0" } })
+			: Response.json(context);
+	};
+	assert.deepEqual(await readMeasureContext(claim, transport), context);
+	assert.equal(calls, 2);
+});
+
+void test("a context connection lost in a rollout can reach the next server with the same claim", async () => {
+	let calls = 0;
+	const claim = liveContext();
+	const transport: typeof fetch = async (_input, init) => {
+		assert.deepEqual(init?.headers, claim.gateway.headers);
+		calls += 1;
+		if (calls === 1) {
+			throw new TypeError("fetch failed");
+		}
+		return Response.json(context);
+	};
+	assert.deepEqual(await readMeasureContext(claim, transport), context);
+	assert.equal(calls, 2);
+});
+
+void test("a lost lease stops the context read instead of retrying it", async () => {
+	let calls = 0;
+	assert.equal(
+		await readMeasureContext(liveContext(), async () => {
+			calls += 1;
+			return new Response(null, { status: 409 });
+		}),
+		null,
+	);
+	assert.equal(calls, 1);
+});
+
+void test("the driver's stop aborts a context wait without another request", async () => {
+	const stop = new AbortController();
+	let calls = 0;
+	const reading = readMeasureContext(liveContext(stop.signal), async () => {
+		calls += 1;
+		stop.abort();
+		return new Response(null, { status: 503 });
+	});
+	await assert.rejects(reading, { name: "AbortError" });
+	assert.equal(calls, 1);
+});

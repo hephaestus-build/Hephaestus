@@ -546,12 +546,11 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldRemoveGatewayArchivesAndSelectionsWithTheirReceiptOwnedAttempt() throws Exception {
+    void shouldRemoveGatewayArchivesWithTheirReceiptOwnedAttempt() throws Exception {
         var job = runningJob("receipt-owned-archives");
         var server = new Server(temporary.resolve("archives"), job);
         var sessions = new SandboxGatewaySessions();
         Path archive;
-        Path selection;
         try {
             try (var captured = server.capture(job)) {
                 record(job, captured, null);
@@ -562,17 +561,9 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                                 captured.filesOnDisk(),
                                 captured.directories());
                 assertThat(archive).startsWith(server.folder(job));
-                var session = sessions.register(job.getId(), "archive-token", archive, "results/");
-                try (var download = session.download("repo", "reviewed")) {
-                    assertThat(download.input().readAllBytes())
-                            .containsSequence(SOURCE.getBytes(StandardCharsets.UTF_8));
-                }
-                try (var paths = Files.list(Objects.requireNonNull(archive.getParent()))) {
-                    var selections = paths.filter(
-                                    path -> path.getFileName().toString().startsWith("workspace-selection-"))
-                            .toList();
-                    assertThat(selections).hasSize(1);
-                    selection = selections.getFirst();
+                var session = sessions.register(job.getId(), archive);
+                try (var download = session.download()) {
+                    assertThat(download.readAllBytes()).containsSequence(SOURCE.getBytes(StandardCharsets.UTF_8));
                 }
                 server.catalog.eraseJobEvidence(Set.of(job.getId()));
                 assertThat(jdbc.queryForObject(
@@ -583,11 +574,9 @@ class EvidenceAcrossServersIntegrationTest extends BaseIntegrationTest {
                         .isEqualTo("ERASED");
                 assertThat(server.catalog.removeErasedFolders().remaining()).isPositive();
                 assertThat(archive).exists();
-                assertThat(selection).exists();
             }
             assertThat(server.catalog.removeErasedFolders().remaining()).isZero();
             assertThat(archive).doesNotExist();
-            assertThat(selection).doesNotExist();
         } finally {
             sessions.closeJob(job.getId());
         }

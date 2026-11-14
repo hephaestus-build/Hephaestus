@@ -45,7 +45,12 @@ void test("retries a truncated workspace from byte zero", async () => {
 		const address = server.address();
 		assert.ok(address !== null && typeof address !== "string");
 		const archive = path.join(directory, "workspace.tar");
-		await downloadWorkspace(`http://127.0.0.1:${address.port}/runtime`, "attempt-token", archive);
+		await downloadWorkspace(
+			`http://127.0.0.1:${address.port}/runtime`,
+			"attempt-token",
+			archive,
+			AbortSignal.timeout(30_000),
+		);
 		assert.equal(requests, 2);
 		assert.deepEqual(await readFile(archive), workspace);
 	} finally {
@@ -89,7 +94,12 @@ void test("waits out a limit of the gateway on discovery and on the download", a
 		const address = server.address();
 		assert.ok(address !== null && typeof address !== "string");
 		const archive = path.join(directory, "workspace.tar");
-		await downloadWorkspace(`http://127.0.0.1:${address.port}/runtime`, "attempt-token", archive);
+		await downloadWorkspace(
+			`http://127.0.0.1:${address.port}/runtime`,
+			"attempt-token",
+			archive,
+			AbortSignal.timeout(30_000),
+		);
 		assert.equal(discoveries, 2);
 		assert.equal(downloads, 2);
 		assert.deepEqual(await readFile(archive), workspace);
@@ -128,6 +138,7 @@ void test("rejects an archive above the advertised budget without retry", async 
 				`http://127.0.0.1:${address.port}/runtime`,
 				"attempt-token",
 				path.join(directory, "workspace.tar"),
+				AbortSignal.timeout(30_000),
 			),
 			/Workspace exceeded its advertised byte budget/u,
 		);
@@ -168,6 +179,7 @@ void test("rejects a workspace without an exact transfer length without retry", 
 				`http://127.0.0.1:${address.port}/runtime`,
 				"attempt-token",
 				path.join(directory, "workspace.tar"),
+				AbortSignal.timeout(30_000),
 			),
 			/Workspace requires a valid Content-Length/u,
 		);

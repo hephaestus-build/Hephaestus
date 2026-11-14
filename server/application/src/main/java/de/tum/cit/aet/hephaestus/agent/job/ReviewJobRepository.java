@@ -520,6 +520,24 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("attempt") int attempt,
             @Param("capture") JsonNode capture);
 
+    /** Reads committed publication without returning a cached entity, under the caller's exact claim identity. */
+    @Query(value = """
+            SELECT CASE WHEN capture->>'runId'=CAST(:runId AS text)
+                AND capture->>'attempt'=CAST(:attempt AS text)
+                AND jsonb_typeof(capture->'program')='object' AND capture->>'programDigest' IS NOT NULL
+                AND (execution_started_at IS NOT NULL OR capture->'program'->>'image' IS NULL)
+                THEN true ELSE false END
+            FROM review_job j JOIN agent_run r ON r.id=j.run_id AND r.workspace_id=j.workspace_id
+            WHERE j.id=:id AND j.workspace_id=:workspaceId AND j.run_id=:runId AND (
+            """ + ReviewRunKind.ATTEMPT_OF_RUN + """
+            )=:attempt AND j.status='RUNNING' AND r.state='LEASED' AND r.leased_until>clock_timestamp()
+            """, nativeQuery = true)
+    Optional<Boolean> hasPublishedPreparation(
+            @Param("id") UUID id,
+            @Param("workspaceId") long workspaceId,
+            @Param("runId") UUID runId,
+            @Param("attempt") int attempt);
+
     @Modifying(flushAutomatically = true)
     @Query(
             value = "UPDATE review_job SET capture = jsonb_set(COALESCE(capture, '{}'::jsonb), '{preparationFailure}',"

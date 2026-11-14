@@ -547,8 +547,8 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     }
 
     /**
-     * A review session is registered with its signed job token. A revoked or expired job token is rejected by the
-     * signature check and must stay rejected, even while the review's session is open.
+     * A revoked or expired job token is rejected by the signature check, even while this replica still holds the
+     * review's input archive.
      */
     @ParameterizedTest
     @ValueSource(strings = {"revoked", "expired"})
@@ -558,8 +558,9 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         UUID job = UUID.randomUUID();
         String token = reason + "-job-token";
         when(jwtVerifier.verify(token)).thenThrow(new AttemptTokenInvalidException("job token " + reason, reason));
-        try (var review = sessions.register(job, token, Files.createFile(directory.resolve("input.tar")), "out")) {
-            assertThat(review.id()).isEqualTo(job);
+        var review = sessions.register(job, Files.createFile(directory.resolve("input.tar")));
+        try (review) {
+            assertThat(sessions.jobIds()).containsExactly(job);
             for (String suffix : List.of("", "/workspace")) {
                 String path = "/internal/llm/runtime/" + job + suffix;
                 assertThat(answerTo(withToken(request("GET", path, GATEWAY_PORT), token)))
