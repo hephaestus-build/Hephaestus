@@ -467,7 +467,7 @@
 				"vitest/no-restricted-vi-methods": [
 					"error",
 					{
-						"setConfig": "Load the route code in `beforeAll` with `loadRouteCode` (`@/test/router-harness`), or wait for the event the test needs. Do not raise the test's timeout."
+						"setConfig": "A longer timeout hides slow setup and still fails under load. Wait for the event the test needs, and do slow setup in `beforeAll`, such as `loadRouteCode` for a route test (docs/contributor/testing.mdx § Web app route tests)."
 					}
 				]
 			}

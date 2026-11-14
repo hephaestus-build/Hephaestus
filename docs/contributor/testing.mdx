@@ -222,6 +222,13 @@ Thus, no test request reaches a real host, such as another checkout's server on 
 The list only shrinks.
 A listed file that runs in full with every request answered fails until you remove its entry.
 
+## Web app route tests
+
+A route test loads the code of the routes that it renders in `beforeAll`, with `loadRouteCode` from `webapp/src/test/router-harness.tsx`.
+Otherwise, its first case pays for Vitest's transform of the lazy route modules, and that case can time out on a busy machine.
+No test raises its own timeout. The lint refuses `vi.setConfig`.
+A test waits for the event that it needs, not for a fixed time.
+
 ## Flaky tests
 
 A flaky test fails and then passes on the same commit.
