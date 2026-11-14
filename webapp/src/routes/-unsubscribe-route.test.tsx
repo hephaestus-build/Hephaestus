@@ -1,11 +1,18 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { unauthenticatedUser } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
-import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
+import {
+	ROUTE_RENDER_WAIT,
+	renderRouteAt,
+	renderRouteAtWithRouter,
+	loadRouteCode,
+} from "@/test/router-harness";
+
+beforeAll(async () => loadRouteCode("/unsubscribe"), ROUTE_RENDER_WAIT.timeout);
 
 const token = "069cc67f-750f-44b8-8808-57c23a2db046";
 
