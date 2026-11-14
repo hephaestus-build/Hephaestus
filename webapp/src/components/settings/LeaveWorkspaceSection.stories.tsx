@@ -36,7 +36,7 @@ export const Leave: Story = {
 
 /** A leave is under way: its row cannot start it again, and the other rows still can. */
 export const Leaving: Story = {
-	args: { leavingSlug: "ase", onLeave: fn(async () => new Promise<void>(() => undefined)) },
+	args: { leavingSlug: "ase" },
 	play: async ({ canvas }) => {
 		await expect(
 			canvas.getByRole("button", { name: "Leave Applied Software Engineering" }),
@@ -50,7 +50,9 @@ export const LastOwner: Story = {
 	args: {
 		leaveError:
 			"Applied Software Engineering needs an owner. Make another member an owner first, or delete the workspace.",
-		onLeave: fn(async () => Promise.reject(new Error("409"))),
+		onLeave: fn(async () => {
+			throw new Error("409");
+		}),
 	},
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(
