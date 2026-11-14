@@ -17,7 +17,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.EvidenceSpool;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.WriteListener;
@@ -58,7 +58,7 @@ class TurnContextControllerTest extends BaseUnitTest {
 
     private final PersonDataCopyFence copies = mock(PersonDataCopyFence.class);
     private final HephTurns turns = mock(HephTurns.class);
-    private final MentorTurnRepository rows = mock(MentorTurnRepository.class);
+    private final MentorTurnAccess rows = mock(MentorTurnAccess.class);
     private final SandboxRun run = mock(SandboxRun.class);
     private final AtomicBoolean held = new AtomicBoolean();
     private final TurnAttempt attempt =
@@ -93,7 +93,7 @@ class TurnContextControllerTest extends BaseUnitTest {
             return proposal.apply(attempt);
         });
         when(turns.workDeadline(run)).thenReturn(NOW.plusSeconds(300));
-        when(rows.countToolsLoad(any(), anyLong(), anyInt(), any(), anyInt())).thenReturn(1);
+        when(rows.countContextLoad(anyLong(), any(), anyInt(), any(), anyInt())).thenReturn(true);
         var beans = new DefaultListableBeanFactory();
         beans.registerSingleton("loader", new ContextLoader() {
             @Override

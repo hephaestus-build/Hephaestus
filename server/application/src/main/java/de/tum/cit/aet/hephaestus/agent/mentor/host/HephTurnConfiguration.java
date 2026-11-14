@@ -8,9 +8,9 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
-import de.tum.cit.aet.hephaestus.mentor.MentorConversationRepository;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorConversationAccess;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import java.time.Clock;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
@@ -27,7 +27,7 @@ public class HephTurnConfiguration {
 
     @Bean
     TurnContextLoads turnContextLoads(
-            MentorTurnRepository turns,
+            MentorTurnAccess turns,
             ObjectProvider<ContextLoader> loaders,
             Clock clock,
             PersonDataCopyFence copies,
@@ -37,8 +37,8 @@ public class HephTurnConfiguration {
 
     @Bean
     HephTurns hephTurns(
-            MentorTurnRepository rows,
-            MentorConversationRepository conversations,
+            MentorTurnAccess rows,
+            MentorConversationAccess conversations,
             PersonDataWriteFence writeFence,
             PersonDataCopyFence copyFence,
             Clock clock,

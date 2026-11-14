@@ -27,7 +27,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
@@ -51,7 +51,7 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
 
     private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
     private final JsonMapper mapper = new JsonMapper();
-    private final MentorTurnRepository turns = mock(MentorTurnRepository.class);
+    private final MentorTurnAccess turns = mock(MentorTurnAccess.class);
     private final AgentRuns runs = mock(AgentRuns.class);
     private final ReviewSnapshotQuery reviews = mock(ReviewSnapshotQuery.class);
     private final ProxyRoutingService routing =
@@ -159,14 +159,10 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
                 now.plusSeconds(30));
     }
 
-    private MentorTurn leasedTurn(AttemptJwt jwt, boolean live) {
-        var row = mock(MentorTurn.class);
+    private void leasedTurn(AttemptJwt jwt, boolean live) {
         // A turn that lost its lease is refused before its rates are read.
-        lenient().when(row.getId()).thenReturn(jwt.id());
-        lenient().when(row.getWorkspaceId()).thenReturn(jwt.workspaceId());
-        lenient().when(row.getAttempt()).thenReturn(jwt.epoch());
         lenient()
-                .when(turns.hasLiveLease(jwt.id(), jwt.workspaceId(), jwt.epoch(), jwt.runId()))
+                .when(turns.hasLiveLease(jwt.workspaceId(), jwt.id(), jwt.epoch(), jwt.runId()))
                 .thenReturn(live);
         var price = new LlmPriceSnapshot(
                 UsageFundingSource.WORKSPACE,
@@ -177,23 +173,24 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
                 BigDecimal.ONE,
                 null,
                 null);
-        lenient()
-                .when(row.getAdmission())
-                .thenReturn(new MentorTurnAdmission(
-                                "model-1",
-                                price,
-                                new MentorTurnAdmission.Route(
-                                        "openai-responses",
-                                        "https://models.example/v1",
-                                        UsageFundingSource.WORKSPACE,
-                                        1L,
-                                        2L),
-                                null,
-                                null,
-                                null)
-                        .toJson());
-        when(turns.findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId())).thenReturn(Optional.of(row));
-        return row;
+        var admission = new MentorTurnAdmission(
+                        "model-1",
+                        price,
+                        new MentorTurnAdmission.Route(
+                                "openai-responses", "https://models.example/v1", UsageFundingSource.WORKSPACE, 1L, 2L),
+                        null,
+                        null,
+                        null)
+                .toJson();
+        var row = new MentorTurnAccess.TurnState(
+                jwt.id(),
+                UUID.randomUUID(),
+                jwt.epoch(),
+                MentorTurn.Status.RUNNING,
+                MentorTurn.Surface.APP,
+                Instant.EPOCH,
+                admission);
+        when(turns.find(jwt.workspaceId(), jwt.id())).thenReturn(Optional.of(row));
     }
 
     private static FrozenModel model(LlmApiProtocol protocol, UsageFundingSource purse) {

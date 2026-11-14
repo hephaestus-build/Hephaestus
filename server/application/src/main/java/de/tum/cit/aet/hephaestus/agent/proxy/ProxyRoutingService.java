@@ -13,7 +13,7 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunRef;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import java.time.Instant;
@@ -28,7 +28,7 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnAgentRuntime
 class ProxyRoutingService {
     private final ReviewJobRepository agentJobRepository;
-    private final MentorTurnRepository mentorTurns;
+    private final MentorTurnAccess mentorTurns;
     private final ObjectMapper objectMapper;
     private final ReviewSnapshotQuery reviews;
     private final AgentRuns runs;
@@ -36,7 +36,7 @@ class ProxyRoutingService {
 
     ProxyRoutingService(
             ReviewJobRepository jobs,
-            MentorTurnRepository mentorTurns,
+            MentorTurnAccess mentorTurns,
             ObjectMapper mapper,
             ReviewSnapshotQuery reviews,
             AgentRuns runs,
@@ -82,7 +82,7 @@ class ProxyRoutingService {
         Long workspace = routing.workspaceId();
         if (lease == null || workspace == null) return false;
         return routing.hephTurn()
-                ? mentorTurns.hasLiveLease(attempt.sourceId(), workspace, attempt.number(), lease)
+                ? mentorTurns.hasLiveLease(workspace, attempt.sourceId(), attempt.number(), lease)
                 : runs.isCurrent(new AgentRunRef(lease, workspace), ReviewRunKind.epoch(attempt.number()));
     }
 
@@ -115,24 +115,23 @@ class ProxyRoutingService {
      */
     private ProxyRouting turnRouting(ProxyAttempt caller) {
         var turn = mentorTurns
-                .findByIdAndWorkspaceId(caller.id(), caller.workspaceId())
+                .find(caller.workspaceId(), caller.id())
                 .filter(found ->
-                        mentorTurns.hasLiveLease(caller.id(), caller.workspaceId(), caller.epoch(), caller.runId()))
+                        mentorTurns.hasLiveLease(caller.workspaceId(), caller.id(), caller.epoch(), caller.runId()))
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.CONFLICT, "This turn attempt no longer holds its lease"));
-        var admitted = MentorTurnAdmission.read(turn.getAdmission())
+        var admitted = MentorTurnAdmission.read(turn.admission())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "This turn attempt has no model"));
         var route = admitted.route();
         return new ProxyRouting(
-                "mentor-turn:" + turn.getId(),
+                "mentor-turn:" + turn.id(),
                 route.apiProtocol(),
                 route.baseUrl(),
                 route.connectionScope(),
                 route.connectionId(),
                 route.modelId(),
-                turn.getWorkspaceId(),
-                new ProxyRouting.BilledAttempt(
-                        UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), caller.runId()),
+                caller.workspaceId(),
+                new ProxyRouting.BilledAttempt(UsageSourceType.MENTOR_TURN, turn.id(), turn.attempt(), caller.runId()),
                 null,
                 ProxyRouting.outputLimitOf(admitted.contextWindow(), admitted.maxOutputTokens()));
     }

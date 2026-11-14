@@ -12,6 +12,9 @@ public interface MentorConversationAccess {
     /** The account whose conversation it is. */
     long accountId(long workspaceId, UUID conversationId);
 
+    /** The account whose conversation it is; empty when the workspace has no such conversation. */
+    Optional<Long> findAccountId(long workspaceId, UUID conversationId);
+
     /**
      * The user question or the system digest that started the turn.
      *

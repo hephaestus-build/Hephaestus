@@ -15,8 +15,8 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.claim.AgentSandboxes;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnAgentRuntime;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
@@ -46,7 +46,7 @@ public class TurnSandboxRunKind implements SandboxRunKind {
     private final AgentRuns runs;
     private final HephTurns turns;
     private final HephTurnContexts contexts;
-    private final MentorTurnRepository rows;
+    private final MentorTurnAccess rows;
     private final MentorTurnService turnService;
     private final MentorTurnCompletion completion;
     private final Clock clock;
@@ -59,7 +59,7 @@ public class TurnSandboxRunKind implements SandboxRunKind {
             AgentRuns runs,
             HephTurns turns,
             HephTurnContexts contexts,
-            MentorTurnRepository rows,
+            MentorTurnAccess rows,
             MentorTurnService turnService,
             MentorTurnCompletion completion,
             Clock clock,
@@ -122,14 +122,9 @@ public class TurnSandboxRunKind implements SandboxRunKind {
     @Override
     public Optional<ProxyAttempt> attempt(SandboxRun run) {
         AgentRunFence claim = run.fence();
-        return rows.findRunAttempt(claim.workspaceId(), claim.runId(), claim.epoch())
+        return rows.runAttempt(claim.workspaceId(), claim.runId(), claim.epoch())
                 .map(held -> new ProxyAttempt(
-                        ProxyAttempt.Caller.TURN,
-                        held.getId(),
-                        claim.workspaceId(),
-                        claim.epoch(),
-                        claim.runId(),
-                        null));
+                        ProxyAttempt.Caller.TURN, held.id(), claim.workspaceId(), claim.epoch(), claim.runId(), null));
     }
 
     /** The turn's system prompt, path, situation and model, as {@code GET …/context} answers it. */

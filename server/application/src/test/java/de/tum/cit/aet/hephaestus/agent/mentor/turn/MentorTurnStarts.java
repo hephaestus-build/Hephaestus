@@ -11,8 +11,8 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
-import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -43,7 +43,7 @@ public final class MentorTurnStarts {
                 beans.getBean(MentorTurnService.class),
                 admission,
                 digests,
-                beans.getBean(MentorTurnRepository.class),
+                beans.getBean(MentorTurnAccess.class),
                 beans.getBean(PersonDataWriteFence.class),
                 metrics,
                 new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()));
