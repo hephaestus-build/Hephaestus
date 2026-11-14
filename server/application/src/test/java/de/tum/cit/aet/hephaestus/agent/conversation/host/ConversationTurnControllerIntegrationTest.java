@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.conversation.host;
 
+import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.containsString;
@@ -703,8 +704,8 @@ class ConversationTurnControllerIntegrationTest extends AbstractWorkspaceIntegra
 
     @Test
     void shouldRecordTheLastFailedModelCallOnTheTurnWhenTheHostEndsItFailed() throws Exception {
-        UUID firstCall = failedCall(new ConversationTurn.FailedCall("WebClientRequestException", null));
-        UUID lastCall = failedCall(new ConversationTurn.FailedCall("upstream_status", 503));
+        UUID firstCall = failedCall(new ModelCallFailure("WebClientRequestException", null));
+        UUID lastCall = failedCall(new ModelCallFailure("upstream_status", 503));
 
         call("POST", "end", turn.getAttempt(), """
                         {"outcome":"FAILED","entries":[],"reason":"ERROR","detail":"provider_unavailable"}""").andExpect(status().isNoContent());
@@ -716,7 +717,7 @@ class ConversationTurnControllerIntegrationTest extends AbstractWorkspaceIntegra
         assertThat(ended.getFailedCallStatus()).isEqualTo(503);
         assertThat(usage.latestFailure(workspace.getId(), Objects.requireNonNull(turn.getRunId()), turn.getAttempt()))
                 .as("the committed end retains the durable failure")
-                .isEqualTo(new ConversationTurn.FailedCall("upstream_status", 503));
+                .isEqualTo(new ModelCallFailure("upstream_status", 503));
         assertThat(jdbc.queryForObject(
                         "SELECT call_failure ->> 'kind' FROM llm_usage_event WHERE id = ?", String.class, firstCall))
                 .isEqualTo("WebClientRequestException");
@@ -729,7 +730,7 @@ class ConversationTurnControllerIntegrationTest extends AbstractWorkspaceIntegra
 
     @Test
     void shouldStillRecordTheFailedModelCallWhenTheEndRollsBackAndTheHostRepeatsIt() throws Exception {
-        UUID failedCall = failedCall(new ConversationTurn.FailedCall("upstream_status", 503));
+        UUID failedCall = failedCall(new ModelCallFailure("upstream_status", 503));
         ConversationTurnCompletion failingOnce = mock(ConversationTurnCompletion.class);
         doThrow(new DataAccessResourceFailureException("the database went away"))
                 .doAnswer(AdditionalAnswers.delegatesTo(completion))
@@ -755,7 +756,7 @@ class ConversationTurnControllerIntegrationTest extends AbstractWorkspaceIntegra
         assertThat(ended.getFailedCallStatus()).isEqualTo(503);
     }
 
-    private UUID failedCall(ConversationTurn.FailedCall failure) {
+    private UUID failedCall(ModelCallFailure failure) {
         return Objects.requireNonNull(beans.getBean(TransactionTemplate.class).execute(tx -> {
             UUID id = usage.open(new LlmUsageRecorder.OpenCall(
                     workspace.getId(),

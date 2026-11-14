@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -16,7 +17,6 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import de.tum.cit.aet.hephaestus.productfeedback.drafting.ProductFeedbackDraftCalls;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -77,7 +77,7 @@ class InstanceDraftLedgerTest extends BaseUnitTest {
         assertThat(opened.getValue().model()).isEqualTo("draft-model");
         verifyNoInteractions(runs);
         var usage = new LlmUsageRecorder.CallUsage(10, 5, 3, 2, 0, 0);
-        var failure = new ConversationTurn.FailedCall("upstream_stalled", null);
+        var failure = new ModelCallFailure("upstream_stalled", null);
         when(recorder.complete(call, null, usage, failure)).thenReturn(true, false);
         ledger.complete(route, call, usage, failure);
         ledger.complete(route, call, usage, failure);

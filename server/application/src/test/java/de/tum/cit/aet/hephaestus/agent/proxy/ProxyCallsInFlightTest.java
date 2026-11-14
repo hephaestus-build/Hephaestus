@@ -1,9 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.ArrayList;
 import java.util.List;
@@ -110,9 +110,9 @@ class ProxyCallsInFlightTest extends BaseUnitTest {
     void shouldKeepEachCallsFirstFailureUntilItsCompletion() {
         var turn = attempt(UsageSourceType.CONVERSATION_TURN);
         try (var call = calls.begin(turn)) {
-            var first = new ConversationTurn.FailedCall("upstream_status", 503);
+            var first = new ModelCallFailure("upstream_status", 503);
             call.failed(first);
-            call.failed(new ConversationTurn.FailedCall("stream_failed", null));
+            call.failed(new ModelCallFailure("stream_failed", null));
             assertThat(call.failure()).isEqualTo(first);
         }
         try (var next = calls.begin(turn)) {

@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
-import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
+import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -30,7 +30,7 @@ public enum ProviderOutage {
     }
 
     /** The outage that {@code failure} shows; null when the provider or the proxy answered the call. */
-    public static @Nullable ProviderOutage of(ConversationTurn.FailedCall failure) {
+    public static @Nullable ProviderOutage of(ModelCallFailure failure) {
         Integer status = failure.status();
         return switch (failure.kind()) {
             case LlmProxyService.UPSTREAM_STALLED, LlmProxyService.UPSTREAM_PAUSED -> UNREACHABLE;

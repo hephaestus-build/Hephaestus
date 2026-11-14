@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -69,7 +70,6 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
-import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AiChoice;
 import de.tum.cit.aet.hephaestus.core.lock.ClusterLock;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
@@ -367,7 +367,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var job = queued(binding(DataHandlingTier.IN_HOUSE));
         var fence = claimLeased(job).orElseThrow().fence();
         var metrics = new SimpleMeterRegistry();
-        var unanswered = results(metrics, new ConversationTurn.FailedCall("upstream_stalled", null));
+        var unanswered = results(metrics, new ModelCallFailure("upstream_stalled", null));
 
         assertThat(measure(unanswered, job, fence, SandboxLayout.EXIT_PROVIDER_UNREACHABLE))
                 .isNull();
@@ -391,7 +391,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var job = queued(binding(DataHandlingTier.IN_HOUSE));
         var fence = claimLeased(job).orElseThrow().fence();
         var metrics = new SimpleMeterRegistry();
-        var limited = results(metrics, new ConversationTurn.FailedCall("upstream_status", 429));
+        var limited = results(metrics, new ModelCallFailure("upstream_status", 429));
 
         measure(limited, job, fence, SandboxLayout.EXIT_PROVIDER_UNREACHABLE);
 
@@ -415,7 +415,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 runs().modelOutageWindow().plusMinutes(1).toSeconds(),
                 job.getId());
         var metrics = new SimpleMeterRegistry();
-        var unanswered = results(metrics, new ConversationTurn.FailedCall("upstream_stalled", null));
+        var unanswered = results(metrics, new ModelCallFailure("upstream_stalled", null));
 
         measure(unanswered, job, fence, SandboxLayout.EXIT_PROVIDER_UNREACHABLE);
 
@@ -439,7 +439,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var handler = mock(DefaultReviewExecutionHandler.class);
         when(handler.hasStaged(any())).thenReturn(true);
         when(handler.completeStaged(any())).thenReturn(false);
-        var stalled = new ConversationTurn.FailedCall("upstream_stalled", null);
+        var stalled = new ModelCallFailure("upstream_stalled", null);
 
         measure(
                 results(new SimpleMeterRegistry(), stalled, handler),
@@ -475,7 +475,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var fence = claimLeased(job).orElseThrow().fence();
         var metrics = new SimpleMeterRegistry();
         // A revoked key: the sandbox reports no reply, but the provider answered.
-        var refused = results(metrics, new ConversationTurn.FailedCall("upstream_status", 401));
+        var refused = results(metrics, new ModelCallFailure("upstream_status", 401));
 
         measure(refused, job, fence, SandboxLayout.EXIT_PROVIDER_UNREACHABLE);
 
@@ -494,7 +494,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var job = queued(binding(DataHandlingTier.IN_HOUSE));
         var fence = claimLeased(job).orElseThrow().fence();
         var metrics = new SimpleMeterRegistry();
-        var unreached = results(metrics, new ConversationTurn.FailedCall("upstream_stalled", null));
+        var unreached = results(metrics, new ModelCallFailure("upstream_stalled", null));
 
         measure(unreached, job, fence, SandboxLayout.EXIT_SERVER_UNREACHABLE);
 
@@ -512,7 +512,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var deadline = runDeadline(claim.fence().runId());
         var metrics = new SimpleMeterRegistry();
 
-        assertThat(handOn(claim, new ConversationTurn.FailedCall("WebClientRequestException", null), metrics))
+        assertThat(handOn(claim, new ModelCallFailure("WebClientRequestException", null), metrics))
                 .isTrue();
 
         var waiting = jobs.findById(claim.job().getId()).orElseThrow();
@@ -534,7 +534,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var claim = composing();
         var metrics = new SimpleMeterRegistry();
 
-        assertThat(handOn(claim, new ConversationTurn.FailedCall("upstream_status", 429), metrics))
+        assertThat(handOn(claim, new ModelCallFailure("upstream_status", 429), metrics))
                 .isTrue();
 
         var waiting = jobs.findById(claim.job().getId()).orElseThrow();
@@ -550,7 +550,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var claim = composing();
         var metrics = new SimpleMeterRegistry();
 
-        assertThat(handOn(claim, new ConversationTurn.FailedCall("upstream_status", 400), metrics))
+        assertThat(handOn(claim, new ModelCallFailure("upstream_status", 400), metrics))
                 .isTrue();
 
         var retry = jobs.findById(claim.job().getId()).orElseThrow();
@@ -568,7 +568,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var claim = composing();
         var metrics = new SimpleMeterRegistry();
         // A 503 that the loop retried, then a hand-on for its deadline: the outage did not stop the composition.
-        assertThat(handOn(claim, new ConversationTurn.FailedCall("upstream_status", 503), metrics, false))
+        assertThat(handOn(claim, new ModelCallFailure("upstream_status", 503), metrics, false))
                 .isTrue();
 
         var waiting = jobs.findById(claim.job().getId()).orElseThrow();
@@ -591,7 +591,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 claim.job().getId());
         var metrics = new SimpleMeterRegistry();
 
-        assertThat(handOn(claim, new ConversationTurn.FailedCall("upstream_stalled", null), metrics))
+        assertThat(handOn(claim, new ModelCallFailure("upstream_stalled", null), metrics))
                 .isTrue();
 
         var ended = jobs.findById(claim.job().getId()).orElseThrow();
@@ -624,7 +624,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     /** Ends the composing claim handed on for a provider failure, after its newest failed call was {@code latestFailure}. */
     private boolean handOn(
             ReviewJobClaimService.ClaimResult claim,
-            ConversationTurn.FailedCall latestFailure,
+            ModelCallFailure latestFailure,
             SimpleMeterRegistry metrics) {
         return handOn(claim, latestFailure, metrics, true);
     }
@@ -632,7 +632,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     /** @param providerFailure whether the server closed the attempt for a provider failure, not another passing cause */
     private boolean handOn(
             ReviewJobClaimService.ClaimResult claim,
-            ConversationTurn.FailedCall latestFailure,
+            ModelCallFailure latestFailure,
             SimpleMeterRegistry metrics,
             boolean providerFailure) {
         var outages = outages(metrics, latestFailure);
@@ -647,7 +647,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 .toInstant();
     }
 
-    private ProviderOutages outages(SimpleMeterRegistry metrics, ConversationTurn.@Nullable FailedCall latestFailure) {
+    private ProviderOutages outages(SimpleMeterRegistry metrics, @Nullable ModelCallFailure latestFailure) {
         var usage = mock(LlmUsageRecorder.class);
         when(usage.latestFailure(anyLong(), any(), anyInt())).thenReturn(latestFailure);
         return new ProviderOutages(reviewRuns, usage, runs(), metrics);
@@ -838,13 +838,13 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
 
     /** @param latestFailure the newest failed model call of the attempt's claim, as the proxy recorded it */
     private ReviewAttemptResults results(
-            SimpleMeterRegistry metrics, ConversationTurn.@Nullable FailedCall latestFailure) {
+            SimpleMeterRegistry metrics, @Nullable ModelCallFailure latestFailure) {
         return results(metrics, latestFailure, mock(DefaultReviewExecutionHandler.class));
     }
 
     private ReviewAttemptResults results(
             SimpleMeterRegistry metrics,
-            ConversationTurn.@Nullable FailedCall latestFailure,
+            @Nullable ModelCallFailure latestFailure,
             DefaultReviewExecutionHandler handler) {
         var preparation = mock(ReviewAttemptPreparation.class);
         when(preparation.owned(any(), any()))

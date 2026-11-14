@@ -72,22 +72,6 @@ public class ConversationTurn implements Persistable<UUID> {
         }
     }
 
-    /**
-     * A model call of an attempt that failed, as the LLM proxy saw it. It holds no text of the provider, the call or
-     * an exception.
-     *
-     * @param kind the exception's simple class name, the stream's outcome, or a closed kind of the proxy, such as
-     *     {@code upstream_stalled} or {@code upstream_status}
-     * @param status the HTTP status the provider answered; {@code null} when it answered none
-     */
-    public record FailedCall(String kind, @Nullable Integer status) {
-
-        /** The kind, and the status when the provider answered one, for a log line. */
-        public String describe() {
-            return status == null ? kind : kind + " " + status;
-        }
-    }
-
     /** The attempts a turn gets: its first, and one retry after its holder is lost. */
     public static final int MAX_ATTEMPTS = 2;
 
@@ -212,12 +196,12 @@ public class ConversationTurn implements Persistable<UUID> {
     @Column(name = "failure_cause", length = 200)
     private String failureCause;
 
-    /** The kind of the failed attempt's last model call that failed: {@link FailedCall#kind}. */
+    /** The kind of the failed attempt's last model call that failed, as the LLM proxy names it. */
     @Nullable
     @Column(name = "failed_call", length = 64)
     private String failedCall;
 
-    /** The status the provider answered that call with: {@link FailedCall#status}. */
+    /** The status the provider answered that call with. */
     @Nullable
     @Column(name = "failed_call_status")
     private Integer failedCallStatus;
@@ -322,16 +306,14 @@ public class ConversationTurn implements Persistable<UUID> {
     }
 
     /** Records why a {@code FAILED} turn failed, for the operator; a turn in any other state records nothing. */
-    void recordFailure(@Nullable String cause, @Nullable FailedCall call) {
+    void recordFailure(@Nullable String cause, @Nullable String callKind, @Nullable Integer callStatus) {
         if (status != Status.FAILED) {
             return;
         }
         // Cut to the columns: a cause that does not fit must not roll back the end it belongs to.
         this.failureCause = cause == null ? null : cause.substring(0, Math.min(cause.length(), 200));
-        this.failedCall = call == null
-                ? null
-                : call.kind().substring(0, Math.min(call.kind().length(), 64));
-        this.failedCallStatus = call == null ? null : call.status();
+        this.failedCall = callKind == null ? null : callKind.substring(0, Math.min(callKind.length(), 64));
+        this.failedCallStatus = callKind == null ? null : callStatus;
     }
 
     /** Returns the turn to the queue for one more attempt after its lease expired. */

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import de.tum.cit.aet.hephaestus.agent.usage.ModelCallFailure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
@@ -37,7 +38,6 @@ import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
@@ -1395,7 +1395,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             any(),
                             eq(CALL),
                             any(),
-                            eq(new ConversationTurn.FailedCall(LlmProxyService.UPSTREAM_STALLED, null)));
+                            eq(new ModelCallFailure(LlmProxyService.UPSTREAM_STALLED, null)));
         }
 
         @Test
@@ -1427,14 +1427,14 @@ class LlmProxyServiceTest extends BaseUnitTest {
             // The same turn's next call goes silent after its headers, so only the idle bound can end it.
             stalledAfter(routing, "data: {\"choices\":[{\"delta\":{\"content\":\"Let me\"}}]}\n\n");
 
-            ArgumentCaptor<ConversationTurn.FailedCall> failures =
-                    ArgumentCaptor.forClass(ConversationTurn.FailedCall.class);
+            ArgumentCaptor<ModelCallFailure> failures =
+                    ArgumentCaptor.forClass(ModelCallFailure.class);
             verify(callLedger, times(3)).complete(any(), eq(CALL), any(), failures.capture());
             assertThat(failures.getAllValues())
                     .containsExactly(
-                            new ConversationTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503),
-                            new ConversationTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503),
-                            new ConversationTurn.FailedCall("upstream_idle", 200));
+                            new ModelCallFailure(LlmProxyService.UPSTREAM_STATUS, 503),
+                            new ModelCallFailure(LlmProxyService.UPSTREAM_STATUS, 503),
+                            new ModelCallFailure("upstream_idle", 200));
         }
 
         @Test
@@ -1504,7 +1504,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             any(),
                             eq(CALL),
                             any(),
-                            eq(new ConversationTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503)));
+                            eq(new ModelCallFailure(LlmProxyService.UPSTREAM_STATUS, 503)));
         }
 
         @Test
@@ -1809,7 +1809,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             any(),
                             eq(CALL),
                             eq(LlmUsageRecorder.CallUsage.NONE),
-                            eq(new ConversationTurn.FailedCall("refused_ai_choice", 403)));
+                            eq(new ModelCallFailure("refused_ai_choice", 403)));
         }
 
         @Test
