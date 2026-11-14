@@ -16,11 +16,14 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermission;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermissionRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubAccessReader;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.dto.GitHubTeamEventDTO;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,6 +57,7 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
     private final TeamRepository teamRepository;
     private final RepositoryRepository repositoryRepository;
     private final TeamRepositoryPermissionRepository permissionRepository;
+    private final GitHubAccessReader accessReader;
 
     GitHubTeamMessageHandler(
             GitHubTeamProcessor teamProcessor,
@@ -62,6 +66,7 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
             TeamRepository teamRepository,
             RepositoryRepository repositoryRepository,
             TeamRepositoryPermissionRepository permissionRepository,
+            GitHubAccessReader accessReader,
             EventPayloadDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
@@ -76,11 +81,85 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
         this.teamRepository = teamRepository;
         this.repositoryRepository = repositoryRepository;
         this.permissionRepository = permissionRepository;
+        this.accessReader = accessReader;
+    }
+
+    @Override
+    protected void dispatchEvent(GitHubTeamEventDTO event) {
+        dispatchTeamEvent(event, this::handleOnce);
     }
 
     @Override
     protected void handleEvent(GitHubTeamEventDTO event) {
         routeTeamEvent(event);
+    }
+
+    /**
+     * Dispatches one delivery through {@code once}, its handler's one write transaction. An event that adds a team to
+     * a repository or removes it names the pair; what is stored is the access GitHub reports now, read before that
+     * transaction. A delivery that arrives again after a later change cannot restore the older access.
+     */
+    void dispatchTeamEvent(GitHubTeamEventDTO event, Consumer<Runnable> once) {
+        if (!isRepositoryAccessEvent(event)) {
+            once.accept(() -> routeTeamEvent(event));
+            return;
+        }
+        currentRepositoryAccess(event).ifPresent(access -> once.accept(() -> applyRepositoryAccess(event, access)));
+    }
+
+    private static boolean isRepositoryAccessEvent(GitHubTeamEventDTO event) {
+        return event.actionType() == GitHubEventAction.Team.ADDED_TO_REPOSITORY
+                || event.actionType() == GitHubEventAction.Team.REMOVED_FROM_REPOSITORY;
+    }
+
+    /** The team's role on the repository as GitHub reports it now, or none. */
+    private record RepositoryAccess(@Nullable String role) {}
+
+    /**
+     * Reads the team's access without a transaction. Empty when the event cannot be handled: it lacks the team, the
+     * organization or the repository, or no workspace reads the organization. A removal that cannot be read is
+     * applied, because removing is the safe direction.
+     */
+    private Optional<RepositoryAccess> currentRepositoryAccess(GitHubTeamEventDTO event) {
+        var teamDto = event.team();
+        var repoRef = event.repository();
+        String orgLogin = event.organization() != null ? event.organization().login() : null;
+        if (teamDto == null
+                || teamDto.slug() == null
+                || orgLogin == null
+                || repoRef == null
+                || repoRef.fullName() == null) {
+            log.warn("Received team repository event with missing data: action={}", event.action());
+            return Optional.empty();
+        }
+        String[] ownerAndName = repoRef.fullName().split("/", 2);
+        Optional<Long> scopeId = scopeIdResolver.findScopeIdByOrgLogin(orgLogin);
+        if (ownerAndName.length != 2 || scopeId.isEmpty()) {
+            log.debug("Skipped team repository event: reason=noAssociatedScope, action={}", event.action());
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(new RepositoryAccess(accessReader
+                    .teamRepositoryRole(scopeId.get(), orgLogin, teamDto.slug(), ownerAndName[0], ownerAndName[1])
+                    .orElse(null)));
+        } catch (RuntimeException readFailed) {
+            if (event.actionType() != GitHubEventAction.Team.REMOVED_FROM_REPOSITORY) throw readFailed;
+            log.warn(
+                    "Applied team repository removal without reading GitHub: error={}",
+                    readFailed.getClass().getSimpleName());
+            return Optional.of(new RepositoryAccess(null));
+        }
+    }
+
+    private void applyRepositoryAccess(GitHubTeamEventDTO event, RepositoryAccess access) {
+        IdentityProvider gitHubProvider = providerNamespaces
+                .findForMirror(IdentityProviderType.GITHUB, "https://github.com")
+                .orElseThrow(() -> new IllegalStateException("GitHub provider not configured"));
+        if (access.role() != null) {
+            handleAddedToRepository(event, gitHubProvider, access.role());
+        } else {
+            handleRemovedFromRepository(event, gitHubProvider);
+        }
     }
 
     /**
@@ -125,13 +204,13 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
             case GitHubEventAction.Team.DELETED -> teamProcessor.delete(teamDto.id(), context);
             case GitHubEventAction.Team.CREATED, GitHubEventAction.Team.EDITED ->
                 teamProcessor.process(teamDto, orgLogin, context);
-            case GitHubEventAction.Team.ADDED_TO_REPOSITORY -> handleAddedToRepository(event, gitHubProvider);
-            case GitHubEventAction.Team.REMOVED_FROM_REPOSITORY -> handleRemovedFromRepository(event, gitHubProvider);
+            case GitHubEventAction.Team.ADDED_TO_REPOSITORY, GitHubEventAction.Team.REMOVED_FROM_REPOSITORY ->
+                currentRepositoryAccess(event).ifPresent(access -> applyRepositoryAccess(event, access));
             default -> log.debug("Skipped team event: reason=unhandledAction, action={}", event.action());
         }
     }
 
-    private void handleAddedToRepository(GitHubTeamEventDTO event, IdentityProvider provider) {
+    private void handleAddedToRepository(GitHubTeamEventDTO event, IdentityProvider provider, String role) {
         var repoRef = event.repository();
         var teamDto = event.team();
 
@@ -163,7 +242,7 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
         Team team = teamOpt.get();
         Repository repo = repoOpt.get();
 
-        TeamRepositoryPermission.PermissionLevel level = mapWebhookPermission(teamDto.permission());
+        TeamRepositoryPermission.PermissionLevel level = mapRestPermission(role);
 
         var existingOpt = permissionRepository.findByTeam_IdAndRepository_Id(team.getId(), repo.getId());
         if (existingOpt.isPresent()) {
@@ -239,11 +318,10 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
     }
 
     /**
-     * GitHub webhook payloads use REST-style permission names ({@code pull}, {@code triage}, {@code
-     * push}, {@code maintain}, {@code admin}), not the GraphQL enum ({@code READ}, {@code TRIAGE},
-     * {@code WRITE}, {@code MAINTAIN}, {@code ADMIN}) used elsewhere.
+     * GitHub's REST API names a team's repository role {@code read}, {@code triage}, {@code write}, {@code maintain}
+     * or {@code admin} (older payloads say {@code pull} and {@code push}), not the GraphQL enum used elsewhere.
      */
-    private static TeamRepositoryPermission.PermissionLevel mapWebhookPermission(@Nullable String permission) {
+    private static TeamRepositoryPermission.PermissionLevel mapRestPermission(@Nullable String permission) {
         if (permission == null) {
             return TeamRepositoryPermission.PermissionLevel.READ;
         }

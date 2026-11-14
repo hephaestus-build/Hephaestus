@@ -5,8 +5,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubWebhookEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.dto.GitHubUserDTO;
-import java.util.Map;
-import org.jspecify.annotations.Nullable;
 
 /**
  * DTO for GitHub member webhook events (collaborator changes).
@@ -16,8 +14,7 @@ public record GitHubMemberEventDTO(
         @JsonProperty("action") String action,
         @JsonProperty("member") GitHubUserDTO member,
         @JsonProperty("repository") GitHubRepositoryRefDTO repository,
-        @JsonProperty("sender") GitHubUserDTO sender,
-        @JsonProperty("changes") Map<String, Object> changes)
+        @JsonProperty("sender") GitHubUserDTO sender)
         implements GitHubWebhookEvent {
     @Override
     public GitHubEventAction.Member actionType() {
@@ -27,23 +24,5 @@ public record GitHubMemberEventDTO(
     @Override
     public GitHubRepositoryRefDTO repository() {
         return repository;
-    }
-
-    /**
-     * Extracts the permission value from the changes map.
-     * The permission is nested as changes.permission.to in the webhook payload.
-     *
-     * @return the permission string (e.g., "write", "admin"), or null if not present
-     */
-    public @Nullable String getPermission() {
-        if (changes == null) {
-            return null;
-        }
-        Object permissionObj = changes.get("permission");
-        if (permissionObj instanceof Map<?, ?> permissionMap) {
-            Object toValue = permissionMap.get("to");
-            return toValue != null ? toValue.toString() : null;
-        }
-        return null;
     }
 }

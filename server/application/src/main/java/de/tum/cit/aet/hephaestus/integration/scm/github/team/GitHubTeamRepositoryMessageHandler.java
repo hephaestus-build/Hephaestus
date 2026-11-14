@@ -17,10 +17,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * silently ACK-dropped by the consumer and only reconciled at the next full team sync.
  *
  * <p>This handler closes that gap by registering for {@code repository.team} and delegating to the same
- * {@link GitHubTeamMessageHandler#routeTeamEvent(GitHubTeamEventDTO)} dispatch, so both subject tiers
- * share one code path. The two handlers never collide: created/edited/deleted deliveries carry no
- * repository and arrive on {@code organization.team}; added/removed deliveries always carry a repository
- * and arrive here.
+ * {@link GitHubTeamMessageHandler#dispatchTeamEvent} dispatch, so both subject tiers share one code path.
+ * The two handlers never collide: created/edited/deleted deliveries carry no repository and arrive on
+ * {@code organization.team}; added/removed deliveries always carry a repository and arrive here.
  */
 @Component
 public class GitHubTeamRepositoryMessageHandler extends AbstractIntegrationMessageHandler<GitHubTeamEventDTO> {
@@ -38,6 +37,11 @@ public class GitHubTeamRepositoryMessageHandler extends AbstractIntegrationMessa
                 deserializer,
                 transactionTemplate);
         this.delegate = delegate;
+    }
+
+    @Override
+    protected void dispatchEvent(GitHubTeamEventDTO event) {
+        delegate.dispatchTeamEvent(event, this::handleOnce);
     }
 
     @Override

@@ -7,15 +7,18 @@ import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMes
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembership;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMembershipRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubAccessReader;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.dto.GitHubMembershipEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -35,12 +38,16 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
     private final IdentityProviderLookup identityProviders;
     private final TeamRepository teamRepository;
     private final TeamMembershipRepository teamMembershipRepository;
+    private final ScopeIdResolver scopeIdResolver;
+    private final GitHubAccessReader accessReader;
 
     GitHubMembershipMessageHandler(
             GitHubUserProcessor userProcessor,
             IdentityProviderLookup identityProviders,
             TeamRepository teamRepository,
             TeamMembershipRepository teamMembershipRepository,
+            ScopeIdResolver scopeIdResolver,
+            GitHubAccessReader accessReader,
             EventPayloadDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
@@ -53,17 +60,66 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
         this.identityProviders = identityProviders;
         this.teamRepository = teamRepository;
         this.teamMembershipRepository = teamMembershipRepository;
+        this.scopeIdResolver = scopeIdResolver;
+        this.accessReader = accessReader;
+    }
+
+    /**
+     * The event names the team and the person whose membership changed; what is stored is the membership GitHub
+     * reports now, read before the write transaction. A delivery that arrives again after a later change cannot restore
+     * the older membership.
+     */
+    @Override
+    protected void dispatchEvent(GitHubMembershipEventDTO event) {
+        Optional<Boolean> member = currentMembership(event);
+        if (member.isEmpty()) return;
+        handleOnce(() -> apply(event, member.get()));
     }
 
     @Override
     protected void handleEvent(GitHubMembershipEventDTO event) {
+        currentMembership(event).ifPresent(member -> apply(event, member));
+    }
+
+    /**
+     * Whether the person is a member of the team now, read without a transaction. Empty when the event cannot be
+     * handled: it lacks the team, the person or the organization, it is not an addition or removal, or no workspace
+     * reads the organization. A removal that cannot be read is applied, because removing is the safe direction.
+     */
+    private Optional<Boolean> currentMembership(GitHubMembershipEventDTO event) {
         var memberDto = event.member();
         var teamDto = event.team();
-
-        if (memberDto == null || teamDto == null) {
+        var organization = event.organization();
+        boolean removed = event.actionType() == GitHubEventAction.Membership.REMOVED;
+        if (memberDto == null || teamDto == null || organization == null) {
             log.warn("Received membership event with missing data: action={}", event.action());
-            return;
+            return Optional.empty();
         }
+        if (!removed && event.actionType() != GitHubEventAction.Membership.ADDED) {
+            log.debug("Skipped membership event: reason=unhandledAction, action={}", event.action());
+            return Optional.empty();
+        }
+        Optional<Long> scopeId = scopeIdResolver.findScopeIdByOrgLogin(organization.login());
+        if (scopeId.isEmpty()) {
+            log.debug("Skipped membership event: reason=noWorkspace, action={}", event.action());
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(accessReader
+                    .teamRole(scopeId.get(), organization.login(), teamDto.slug(), memberDto.login())
+                    .isPresent());
+        } catch (RuntimeException readFailed) {
+            if (!removed) throw readFailed;
+            log.warn(
+                    "Applied team membership removal without reading GitHub: error={}",
+                    readFailed.getClass().getSimpleName());
+            return Optional.of(false);
+        }
+    }
+
+    private void apply(GitHubMembershipEventDTO event, boolean member) {
+        var memberDto = event.member();
+        var teamDto = event.team();
 
         log.debug(
                 "Received membership event: action={}, userNativeId={}, teamNativeId={}, organizationNativeId={}",
@@ -99,11 +155,10 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
             return;
         }
 
-        // Handle the membership action
-        switch (event.actionType()) {
-            case GitHubEventAction.Membership.ADDED -> handleMemberAdded(team, user);
-            case GitHubEventAction.Membership.REMOVED -> handleMemberRemoved(team, user);
-            default -> log.debug("Skipped membership event: reason=unhandledAction, action={}", event.action());
+        if (member) {
+            handleMemberAdded(team, user);
+        } else {
+            handleMemberRemoved(team, user);
         }
     }
 

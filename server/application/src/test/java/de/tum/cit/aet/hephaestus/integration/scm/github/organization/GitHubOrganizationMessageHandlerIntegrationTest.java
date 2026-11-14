@@ -2,16 +2,28 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.organization;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
+import de.tum.cit.aet.hephaestus.integration.core.spi.OrganizationMembershipListener;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMemberRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationMembershipRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubAccessReader;
 import de.tum.cit.aet.hephaestus.integration.scm.github.organization.dto.GitHubOrganizationEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -19,17 +31,42 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 class GitHubOrganizationMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
-    @Autowired
+    // The handler reads GitHub's current membership; a plain mock answers for GitHub.
+    private final GitHubAccessReader accessReader = mock(GitHubAccessReader.class);
+
     private GitHubOrganizationMessageHandler handler;
+
+    @Autowired
+    private GitHubOrganizationProcessor organizationProcessor;
+
+    @Autowired
+    private GitHubUserProcessor userProcessor;
+
+    @Autowired
+    private IdentityProviderLookup identityProviders;
+
+    @Autowired
+    private OrganizationMembershipListener membershipListener;
+
+    @Autowired
+    private ScopeIdResolver scopeIdResolver;
+
+    @Autowired
+    private EventPayloadDeserializer deserializer;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     @Autowired
     private OrganizationRepository organizationRepository;
@@ -56,6 +93,24 @@ class GitHubOrganizationMessageHandlerIntegrationTest extends BaseIntegrationTes
     void setUp() {
         databaseTestUtils.cleanDatabase();
         setupTestData();
+        handler = new GitHubOrganizationMessageHandler(
+                organizationProcessor,
+                userProcessor,
+                identityProviders,
+                membershipRepository,
+                organizationRepository,
+                userRepository,
+                membershipListener,
+                scopeIdResolver,
+                accessReader,
+                deserializer,
+                transactionTemplate);
+        githubReportsMembership("member");
+    }
+
+    private void githubReportsMembership(@Nullable String role) {
+        when(accessReader.organizationRole(anyLong(), eq("HephaestusTest"), eq("hephaestususer")))
+                .thenReturn(Optional.ofNullable(role));
     }
 
     private void setupTestData() {
@@ -162,10 +217,60 @@ class GitHubOrganizationMessageHandlerIntegrationTest extends BaseIntegrationTes
         long organizationId = required(testOrganization.getId());
         assertThat(membershipRepository.findUserIdsByOrganizationId(organizationId))
                 .hasSize(1);
+        githubReportsMembership(null);
 
         handler.handleEvent(loadPayload("organization.member_removed"));
 
         assertThat(membershipRepository.findUserIdsByOrganizationId(organizationId))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldKeepARemovedMemberRemovedWhenTheirOldAdditionIsDeliveredAgain() throws Exception {
+        handler.handleEvent(loadPayload("organization.member_added"));
+        githubReportsMembership(null);
+        handler.handleEvent(loadPayload("organization.member_removed"));
+
+        handler.handleEvent(loadPayload("organization.member_added"));
+
+        assertThat(membershipRepository.findUserIdsByOrganizationId(required(testOrganization.getId())))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldStoreTheRoleGitHubReportsRatherThanTheRoleInTheDelivery() throws Exception {
+        githubReportsMembership("admin");
+
+        handler.handleEvent(loadPayload("organization.member_added"));
+
+        long organizationId = required(testOrganization.getId());
+        long userId = required(
+                membershipRepository.findUserIdsByOrganizationId(organizationId).getFirst());
+        assertThat(membershipRepository.findByOrganizationIdAndUserId(organizationId, userId))
+                .get()
+                .extracting(membership -> membership.getRole())
+                .isEqualTo(OrganizationMemberRole.ADMIN);
+    }
+
+    @Test
+    void shouldKeepTheMemberWhenTheirOldRemovalIsDeliveredAgain() throws Exception {
+        handler.handleEvent(loadPayload("organization.member_added"));
+
+        handler.handleEvent(loadPayload("organization.member_removed"));
+
+        assertThat(membershipRepository.findUserIdsByOrganizationId(required(testOrganization.getId())))
+                .hasSize(1);
+    }
+
+    @Test
+    void shouldRemoveTheMemberWhenGitHubCannotBeReadForARemoval() throws Exception {
+        handler.handleEvent(loadPayload("organization.member_added"));
+        when(accessReader.organizationRole(anyLong(), anyString(), anyString()))
+                .thenThrow(new IllegalStateException("GitHub unavailable"));
+
+        handler.handleEvent(loadPayload("organization.member_removed"));
+
+        assertThat(membershipRepository.findUserIdsByOrganizationId(required(testOrganization.getId())))
                 .isEmpty();
     }
 

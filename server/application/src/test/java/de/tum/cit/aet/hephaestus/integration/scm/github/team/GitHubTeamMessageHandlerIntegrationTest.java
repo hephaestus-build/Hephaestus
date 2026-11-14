@@ -2,10 +2,17 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.team;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
@@ -15,6 +22,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermission;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepositoryPermissionRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubAccessReader;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.dto.GitHubTeamEventDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -23,6 +33,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,6 +71,24 @@ class GitHubTeamMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private GitHubTeamProcessor teamProcessor;
+
+    @Autowired
+    private ScopeIdResolver scopeIdResolver;
+
+    @Autowired
+    private SourceProviderNamespaces providerNamespaces;
+
+    @Autowired
+    private TeamRepositoryPermissionRepository permissionRepository;
+
+    @Autowired
+    private EventPayloadDeserializer deserializer;
+
+    // Repository access events read GitHub's current access; a plain mock answers for GitHub.
+    private final GitHubAccessReader accessReader = mock(GitHubAccessReader.class);
 
     private IdentityProvider gitProvider;
     private Organization testOrganization;
@@ -215,6 +244,88 @@ class GitHubTeamMessageHandlerIntegrationTest extends BaseIntegrationTest {
                 .getRequestedTeams()
                 .isEmpty());
         assertThat(stillAsked).isFalse();
+    }
+
+    @Test
+    void shouldStoreTheRepositoryRoleGitHubReportsRatherThanTheOneInTheDelivery() throws Exception {
+        Team team = storeFixtureTeam();
+        githubReportsRepositoryRole("maintain");
+
+        applyInOneTransaction(loadPayload("team.repo.added_to_repository"));
+
+        assertThat(storedPermission(team))
+                .get()
+                .extracting(TeamRepositoryPermission::getPermission)
+                .isEqualTo(TeamRepositoryPermission.PermissionLevel.MAINTAIN);
+    }
+
+    @Test
+    void shouldKeepARemovedRepositoryAccessRemovedWhenTheOldAdditionIsDeliveredAgain() throws Exception {
+        Team team = storeFixtureTeam();
+        githubReportsRepositoryRole("pull");
+        applyInOneTransaction(loadPayload("team.repo.added_to_repository"));
+        githubReportsRepositoryRole(null);
+        applyInOneTransaction(loadPayload("team.repo.removed_from_repository"));
+
+        applyInOneTransaction(loadPayload("team.repo.added_to_repository"));
+
+        assertThat(storedPermission(team)).isEmpty();
+    }
+
+    @Test
+    void shouldKeepTheRepositoryAccessWhenTheOldRemovalIsDeliveredAgain() throws Exception {
+        Team team = storeFixtureTeam();
+        githubReportsRepositoryRole("pull");
+        applyInOneTransaction(loadPayload("team.repo.added_to_repository"));
+
+        applyInOneTransaction(loadPayload("team.repo.removed_from_repository"));
+
+        assertThat(storedPermission(team)).isPresent();
+    }
+
+    private Team storeFixtureTeam() {
+        Team team = new Team();
+        team.setNativeId(14170773L);
+        team.setProvider(gitProvider);
+        team.setName("hephaestussubteam");
+        team.setSlug("hephaestussubteam");
+        team.setHtmlUrl("https://github.com/orgs/HephaestusTest/teams/hephaestussubteam");
+        team.setOrganization(testOrganization.getLogin());
+        return teamRepository.save(team);
+    }
+
+    private void githubReportsRepositoryRole(@Nullable String role) {
+        when(accessReader.teamRepositoryRole(
+                        anyLong(),
+                        eq("HephaestusTest"),
+                        eq("hephaestussubteam"),
+                        eq("HephaestusTest"),
+                        eq("TestRepository")))
+                .thenReturn(Optional.ofNullable(role));
+    }
+
+    /** As production does: the read before, the write in one transaction (AbstractIntegrationMessageHandler). */
+    private void applyInOneTransaction(GitHubTeamEventDTO event) {
+        var accessHandler = new GitHubTeamMessageHandler(
+                teamProcessor,
+                scopeIdResolver,
+                providerNamespaces,
+                teamRepository,
+                repositoryRepository,
+                permissionRepository,
+                accessReader,
+                deserializer,
+                transactionTemplate);
+        accessHandler.dispatchTeamEvent(
+                event, write -> transactionTemplate.executeWithoutResult(status -> write.run()));
+    }
+
+    private Optional<TeamRepositoryPermission> storedPermission(Team team) {
+        Long repositoryId = repositoryRepository
+                .findByNativeIdAndProviderId(998279771L, required(gitProvider.getId()))
+                .orElseThrow()
+                .getId();
+        return permissionRepository.findByTeam_IdAndRepository_Id(team.getId(), repositoryId);
     }
 
     private GitHubTeamEventDTO loadPayload(String filename) throws IOException {

@@ -2,35 +2,73 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ScopeIdResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.collaborator.RepositoryCollaborator;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.collaborator.RepositoryCollaboratorRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubAccessReader;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.ProcessingContextFactory;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubMemberEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 class GitHubMemberMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
-    @Autowired
+    // The handler reads GitHub's current collaborator access; a plain mock answers for GitHub.
+    private final GitHubAccessReader accessReader = mock(GitHubAccessReader.class);
+
     private GitHubMemberMessageHandler handler;
+
+    @Autowired
+    private ProcessingContextFactory contextFactory;
+
+    @Autowired
+    private GitHubUserProcessor userProcessor;
+
+    @Autowired
+    private RepositoryCollaboratorRepository collaboratorRepository;
+
+    @Autowired
+    private RepositoryToMonitorRepository repositoryToMonitorRepository;
+
+    @Autowired
+    private ScopeIdResolver scopeIdResolver;
+
+    @Autowired
+    private EventPayloadDeserializer deserializer;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     @Autowired
     private RepositoryRepository repositoryRepository;
@@ -57,6 +95,20 @@ class GitHubMemberMessageHandlerIntegrationTest extends BaseIntegrationTest {
     void setUp() {
         databaseTestUtils.cleanDatabase();
         setupTestData();
+        handler = new GitHubMemberMessageHandler(
+                contextFactory,
+                userProcessor,
+                collaboratorRepository,
+                scopeIdResolver,
+                accessReader,
+                deserializer,
+                transactionTemplate);
+        githubReportsCollaborator("write");
+    }
+
+    private void githubReportsCollaborator(@Nullable String role) {
+        when(accessReader.collaboratorRole(anyLong(), eq("HephaestusTest"), eq("TestRepository"), eq("hephaestususer")))
+                .thenReturn(Optional.ofNullable(role));
     }
 
     private void setupTestData() {
@@ -101,7 +153,12 @@ class GitHubMemberMessageHandlerIntegrationTest extends BaseIntegrationTest {
         workspace.setOrganizationId(org.getId());
         workspace.setAccountLogin("HephaestusTest");
         workspace.setAccountType(AccountType.ORG);
-        workspaceRepository.save(workspace);
+        workspace = workspaceRepository.save(workspace);
+        RepositoryToMonitor monitor = new RepositoryToMonitor();
+        monitor.setNativeId(testRepository.getNativeId());
+        monitor.setNameWithOwner(testRepository.getNameWithOwner());
+        monitor.setWorkspace(workspace);
+        repositoryToMonitorRepository.save(monitor);
     }
 
     @Test
@@ -147,6 +204,48 @@ class GitHubMemberMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         // Then - handler processes without error
         assertThat(removeEvent.action()).isEqualTo("removed");
+    }
+
+    @Test
+    void shouldKeepARemovedCollaboratorRemovedWhenTheirOldAdditionIsDeliveredAgain() throws Exception {
+        handler.handleEvent(loadPayload("member.added"));
+        githubReportsCollaborator(null);
+        handler.handleEvent(loadPayload("member.removed"));
+
+        handler.handleEvent(loadPayload("member.added"));
+
+        assertThat(storedCollaborator()).isEmpty();
+    }
+
+    @Test
+    void shouldStoreThePermissionGitHubReportsRatherThanTheOneInTheDelivery() throws Exception {
+        githubReportsCollaborator("admin");
+
+        handler.handleEvent(loadPayload("member.added"));
+
+        assertThat(storedCollaborator())
+                .get()
+                .extracting(RepositoryCollaborator::getPermission)
+                .isEqualTo(RepositoryCollaborator.Permission.ADMIN);
+    }
+
+    @Test
+    void shouldKeepTheCollaboratorWhenTheirOldRemovalIsDeliveredAgain() throws Exception {
+        handler.handleEvent(loadPayload("member.added"));
+
+        handler.handleEvent(loadPayload("member.removed"));
+
+        assertThat(storedCollaborator()).isPresent();
+    }
+
+    private Optional<RepositoryCollaborator> storedCollaborator() {
+        Long userId = userRepository
+                .findByNativeIdAndProviderId(231_938_035L, gitProviderId())
+                .map(User::getId)
+                .orElse(null);
+        return userId == null
+                ? Optional.empty()
+                : collaboratorRepository.findByRepositoryIdAndUserId(testRepository.getId(), userId);
     }
 
     private GitHubMemberEventDTO loadPayload(String filename) throws IOException {
