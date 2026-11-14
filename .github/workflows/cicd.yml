@@ -1510,193 +1510,102 @@ jobs:
     name: Stop the merge group early
     needs: [vulnerability-database]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-workflow-lint:
     name: Stop the merge group early
     needs: [workflow-lint]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-Quality:
     name: Stop the merge group early
     needs: [Quality]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-server-package:
     name: Stop the merge group early
     needs: [server-package]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-Build:
     name: Stop the merge group early
     needs: [Build]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-upstream-images:
     name: Stop the merge group early
     needs: [upstream-images]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-Test:
     name: Stop the merge group early
     needs: [Test]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-Docker:
     name: Stop the merge group early
     needs: [Docker]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-Kubernetes:
     name: Stop the merge group early
     needs: [Kubernetes]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-Database-upgrade:
     name: Stop the merge group early
     needs: [Database-upgrade]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-Release-preflight:
     name: Stop the merge group early
     needs: [Release-preflight]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-Security:
     name: Stop the merge group early
     needs: [Security]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml
 
   fail-fast-Browser-tests:
     name: Stop the merge group early
     needs: [Browser-tests]
     if: ${{ always() && github.event_name == 'merge_group' && contains(needs.*.result, 'failure') }}
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
     permissions:
       actions: write
-    steps:
-      - name: Cancel this run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.run_id }}
-        run: gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"
+    uses: ./.github/workflows/merge-group-cancel.yml

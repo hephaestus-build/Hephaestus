@@ -81,12 +81,15 @@ A path-filtered stage can be skipped.
 A selected stage shows its servers directly, including static names for skipped servers.
 The tooling gates and the two halves of the tooling tests remain three jobs.
 Each server keeps its isolated cancel callback, named `Stop the merge group early`.
+Each callback calls `merge-group-cancel.yml`, the one workflow that cancels a run.
 
 The removed placeholder entries allocated no runner. Combining workflow linters saves one runner job when lint is selected. Folding chart lint into the latest k3s server saves one runner job when Kubernetes is selected. The checks remain the same.
 
 GitHub displays every job of a [reused workflow](https://docs.github.com/en/actions/concepts/workflows-and-actions/reusing-workflow-configurations).
 A skipped job remains a [skipped check](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-jobs-with-conditions).
 We use one stage workflow per group and [YAML step aliases](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#yaml-anchors-and-aliases) to share server steps without a second workflow level.
+The cancel callbacks are the one exception.
+A skipped call shows as one entry, so the second level appears only in a group that already failed.
 The image signing steps stay in `reusable-docker-build.yml`, which is part of the signature identity.
 
 `CI Status Gate` keeps its required context name.
@@ -513,7 +516,9 @@ A call job sets a permission ceiling.
 Each build and test server sets its own narrower permissions.
 Only each isolated cancel server receives a token that can cancel runs.
 
+The token goes to the one job of `merge-group-cancel.yml`.
 That job runs on `ubuntu-slim`, with no checkout and no action, so no other code holds the token.
+Each callback only grants the permission and calls the workflow, so its token never reaches a step.
 Each workflow keeps `permissions: {}` at the top level.
 `ACTIONS_WRITE_GRANTS` in `scripts/ci-contract.test.ts` lists each other job with this permission, and the reason.
 
@@ -529,6 +534,7 @@ Record it here from the first merge group that fails after this rule reached `ma
 `scripts/ci-contract.test.ts` holds each rule:
 
 - Each leg that runs in a merge group has its cancel job, for merge groups only.
+  Each cancel job calls `merge-group-cancel.yml`.
   The job's condition has `always()` and the leg's `failure` result.
 - No workflow, action or script force-cancels a run.
 - Only the cancel jobs, and the listed exceptions, have `actions: write`.
@@ -615,6 +621,7 @@ The required checks are job names, so a display name does not change them.
 | `ci-build.yml`                        | Called by cicd.yml                                                            | Runs the OpenAPI, schema, database and PostgreSQL drill gates against the server artifact packaged by cicd.yml                                                                                                                        |
 | `ci-tests.yml`                        | Called by cicd.yml                                                            | The server unit, architecture and integration suites, on the package job's compiled classes                                                                                                                                     |
 | `reusable-docker-build.yml`           | Called by cicd.yml                                                 | Builds every requested image in one job per platform, natively, and blocks on the release vulnerability policy there. One job merges each index, attests, signs and tags it                                                       |
+| `merge-group-cancel.yml` | Called by each `Stop the merge group early` job | Cancels its merge-group run gracefully. It is the only job with a token that can cancel runs |
 | `ci-security-scan.yml`                | Called by cicd.yml                                                            | Trivy dependency scan, secret detection and repository policy checks                                                                                                                                                             |
 | `dependency-review.yml`               | PR changing a dependency input                                                | Reports introduced dependency advisories independently of the required CI verdict                                                                                                                                                |
 | `dependency-graph.yml`                | PR changing a dependency input, push to main                                  | Resolves and uploads the verified Gradle dependency graph with read-only permissions                                                                                                                                             |

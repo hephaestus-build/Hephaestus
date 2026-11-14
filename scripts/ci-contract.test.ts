@@ -6603,8 +6603,9 @@ void test("the staging channel is signed by the release's keyless signer, over n
 });
 
 // docs/contributor/ci-cd.mdx § Fail fast in the merge queue owns the reasons for the tests below.
+const CANCEL_WORKFLOW = ".github/workflows/merge-group-cancel.yml";
 const isCancelWorker = (worker: Record<string, unknown>) =>
-	worker.name === "Stop the merge group early";
+	worker.name === "Stop the merge group early" && worker.uses === `./${CANCEL_WORKFLOW}`;
 
 // The legs that take most of a merge group's runner time. In a merge group they start only after
 // Security passed, so a base-wide advisory ends the group before they take runners.
@@ -6749,7 +6750,7 @@ void test("a failed leg cancels its own merge-group run, and only a merge-group 
 	);
 });
 
-void test("each cancel worker has the same readable name and runs only graceful cancellation with its token", async () => {
+void test("each cancel worker calls the one cancel workflow, which runs only graceful cancellation with its token", async () => {
 	let count = 0;
 	for (const [file, source] of await workflowSources()) {
 		const workflow = asRecord(parseDocument(source).toJSON(), file);
@@ -6759,21 +6760,32 @@ void test("each cancel worker has the same readable name and runs only graceful 
 				continue;
 			}
 			count += 1;
-			assert.equal(worker.name, "Stop the merge group early");
-			assert.equal(worker["runs-on"], "ubuntu-slim");
-			assert.deepEqual(worker.permissions, { actions: "write" });
-			const steps = asArray(worker.steps, "cancel steps");
-			assert.equal(steps.length, 1);
-			const cancelStep = asRecord(steps[0], "cancel step");
-			assert.equal(cancelStep.run, 'gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"');
-			assert.equal(cancelStep.uses, undefined);
-			assert.deepEqual(cancelStep.env, {
-				GH_TOKEN: `\${{ github.token }}`,
-				RUN_ID: `\${{ github.run_id }}`,
-			});
+			assert.ok(isCancelWorker(worker), `${file}#${key}`);
+			assert.deepEqual(worker.permissions, { actions: "write" }, `${file}#${key}`);
+			assert.equal("with" in worker || "secrets" in worker, false, `${file}#${key}`);
 		}
 	}
 	assert.ok(count > 0);
+	const cancel = asRecord(
+		parseDocument(await readFile(CANCEL_WORKFLOW, "utf8")).toJSON(),
+		CANCEL_WORKFLOW,
+	);
+	assert.deepEqual(cancel.on, { workflow_call: null });
+	assert.deepEqual(cancel.permissions, {});
+	const jobs = Object.values(asRecord(cancel.jobs, "cancel jobs"));
+	assert.equal(jobs.length, 1);
+	const job = asRecord(jobs[0], "cancel job");
+	assert.equal(job["runs-on"], "ubuntu-slim");
+	assert.deepEqual(job.permissions, { actions: "write" });
+	const steps = asArray(job.steps, "cancel steps");
+	assert.equal(steps.length, 1);
+	const cancelStep = asRecord(steps[0], "cancel step");
+	assert.equal(cancelStep.run, 'gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"');
+	assert.equal(cancelStep.uses, undefined);
+	assert.deepEqual(cancelStep.env, {
+		GH_TOKEN: `\${{ github.token }}`,
+		RUN_ID: `\${{ github.run_id }}`,
+	});
 });
 
 void test("no workflow, action or script force-cancels a run", async () => {
@@ -7014,6 +7026,9 @@ void test("only the fail-fast jobs, and the listed exceptions, can write to Acti
 	const grants: string[] = [];
 	const sources = await workflowSources();
 	const callsCancel = (file: string): boolean => {
+		if (file === CANCEL_WORKFLOW) {
+			return true;
+		}
 		const workflow = asRecord(parseDocument(sources.get(file) ?? "").toJSON(), file);
 		return Object.values(asRecord(workflow.jobs, "jobs")).some((value) => {
 			const workerDefinition = asRecord(value, "job");
@@ -7031,6 +7046,9 @@ void test("only the fail-fast jobs, and the listed exceptions, can write to Acti
 	for (const [file, source] of sources) {
 		const workflow = asRecord(parseDocument(source).toJSON(), file);
 		assert.equal(writesActions(workflow.permissions), false, `${file} grants it to every job`);
+		if (file === CANCEL_WORKFLOW) {
+			continue;
+		}
 		for (const [name, definition] of Object.entries(asRecord(workflow.jobs, `${file} jobs`))) {
 			const worker = asRecord(definition, name);
 			if (typeof worker.uses === "string") {
@@ -7138,9 +7156,9 @@ void test("the CI outline has static names and one reusable level, including ski
 		);
 		for (const [workerKey, value] of Object.entries(asRecord(callee.jobs, key))) {
 			const worker = asRecord(value, workerKey);
-			assert.equal(
-				worker.uses,
-				undefined,
+			// A skipped call shows as one entry; the cancel level appears only in a group that failed.
+			assert.ok(
+				worker.uses === undefined || isCancelWorker(worker),
 				`${key}/${workerKey}: a nested workflow adds a sidebar level`,
 			);
 			const label = asString(worker.name ?? workerKey, "worker name");

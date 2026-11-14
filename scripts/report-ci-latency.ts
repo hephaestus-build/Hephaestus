@@ -122,8 +122,9 @@ export function isFastTier(jobs: readonly { name: string }[]) {
 /** Fewer completed groups than this cannot support the revert criterion's 10 %. */
 export const MINIMUM_GROUPS = 20;
 
+// Since the cancel job became one called workflow, its check name ends with " / Cancel this run".
 const verdictJob =
-	/^(?:CI Status Gate|Report unsuccessful merge group|Fail fast: )|(?:^| \/ )Stop the merge group early$/u;
+	/^(?:CI Status Gate|Report unsuccessful merge group|Fail fast: )|(?:^| \/ )Stop the merge group early(?: \/ Cancel this run)?$/u;
 
 /**
  * The share of completed merge groups that a queue-tier job failed, apart from the groups only a

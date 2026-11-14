@@ -524,7 +524,10 @@ void test("cancellation attribution requires exact trees and causal timestamps",
 	assert.equal(
 		classifyCancellation(
 			run,
-			[{ name: "Build / Stop the merge group early", conclusion: "failure" }],
+			[
+				{ name: "Build / Stop the merge group early", conclusion: "failure" },
+				{ name: "Build / Stop the merge group early / Cancel this run", conclusion: "failure" },
+			],
 			[],
 			[],
 		).cause,
