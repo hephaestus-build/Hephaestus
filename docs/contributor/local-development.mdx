@@ -198,7 +198,8 @@ Each worktree of a clone has its own host ports, so several worktrees run at the
 `vp run dev:env` writes them to `server/.env` the first time, with the other [local settings](#local-settings).
 It takes the first port set that no other worktree of the clone uses.
 Set `n` adds `10 × n` to each default port. The first worktree gets the defaults.
-A worktree keeps its ports: the command never changes a `SERVER_PORT` that is set.
+
+A worktree keeps its ports: the command never changes a port that is set.
 Container-internal ports never change. Only the `localhost` binding moves.
 
 | Service            | Default | Variable            |
@@ -221,14 +222,25 @@ Every consumer reads the same file:
 - `vp run dev:webapp` serves on `WEBAPP_PORT` and points the app at `http://localhost:<SERVER_PORT>`.
 - `vp run check:ports` checks the ports before you start the stack.
 
-A worktree that has no `SERVER_PORT` in `server/.env` uses the defaults.
-Thus, a worktree from before this command counts as the first set until its next `dev*` or `db:*` command gives it its own ports.
-That command can move its ports, and its sandbox namespace with them ([Kubernetes](#kubernetes)).
+A worktree whose `server/.env` sets no ports runs on the defaults.
+A new `server/.env` avoids those ports, because such a worktree can be running.
+An existing `server/.env` without ports keeps the defaults, unless another worktree already wrote them.
+Then its ports move once, and its sandbox namespace with them ([Kubernetes](#kubernetes)).
+
 The command does not see other clones or other programs.
 If a port is in use, set the port in `server/.env` yourself.
 A port in your shell overrides the file.
 
-### Email
+#### The webapp's settings
+
+The web app reads its server URL and its own URL from a runtime environment script.
+In production, the container entrypoint writes that script.
+`vp run dev:webapp` serves it itself, with the URLs of this worktree.
+Do not edit the committed stub `webapp/public/env-config.js`.
+
+The app has no Vite-level environment variables: the config sets no `envPrefix`, and nothing in `src/` reads `import.meta.env` beyond `DEV`.
+A `webapp/.env` file has no effect.
+
 ### Email
 
 The `local` profile sends every email to the Mailpit container from `server/compose.yaml`. Nothing
@@ -240,15 +252,6 @@ The quickest end-to-end check is the **Send test email** button on the instance 
 
 Templates live in `server/application/src/main/resources/templates/email/` — `html/` and `text/`
 hold the two parts of one message, and `messages.properties` holds the subjects.
-
-#### The webapp's settings
-
-`vp run dev:webapp` serves `/env-config.js` itself, with the server URL and the webapp URL of this worktree.
-In production, the container entrypoint writes the same file.
-Do not edit the committed stub `webapp/public/env-config.js`.
-
-The app has no Vite-level environment variables: the config sets no `envPrefix`, and nothing in `src/` reads `import.meta.env` beyond `DEV`.
-A `webapp/.env` file has no effect.
 
 ### GitHub configuration
 
