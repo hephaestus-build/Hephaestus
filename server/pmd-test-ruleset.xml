@@ -8,7 +8,7 @@
 
     <rule name="SleepInTest" language="java"
           class="net.sourceforge.pmd.lang.rule.xpath.XPathRule"
-          message="Wait for the event, not for elapsed time: use Awaitility or a latch. Suppress with the reason only when the elapsed time is the behaviour under test.">
+          message="Wait for the event, not for elapsed time: use Awaitility or a latch. Suppress with the reason only when the elapsed time is the behavior under test.">
         <description>A fixed sleep makes a test slow when the event is early and flaky when it is late.</description>
         <priority>2</priority>
         <properties>

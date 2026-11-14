@@ -13,6 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+// oxlint-disable-next-line no-restricted-imports -- polls a real Docker child process until it exits
 import { setTimeout } from "node:timers/promises";
 
 import { isAlias, isMap, isSeq, parseDocument } from "yaml";

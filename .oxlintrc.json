@@ -498,7 +498,31 @@
 					"error",
 					{
 						"name": "setTimeout",
-						"message": "A test waits for an event, not for elapsed time: fake timers, vi.waitFor, expect.poll or a promise the code resolves. Suppress with the reason only when the elapsed time is the behaviour under test, or when fake timers are on."
+						"message": "A test waits for an event, not for elapsed time: fake timers, vi.waitFor, expect.poll or a promise the code resolves. Suppress with the reason only when the elapsed time is the behavior under test, or when fake timers are on."
+					}
+				]
+			}
+		},
+		{
+			// The same sleep as an import. The app trees restate their own import rules, so only the trees
+			// that use this config directly take it.
+			"files": [
+				"scripts/**/*.test.ts",
+				"docker/**/*.test.ts",
+				"server/**/*.spec.ts",
+				"server/**/*.test.ts"
+			],
+			"rules": {
+				"no-restricted-imports": [
+					"error",
+					{
+						"paths": [
+							{
+								"name": "node:timers/promises",
+								"importNames": ["setTimeout", "default"],
+								"message": "A test waits for an event, not for elapsed time. Suppress with the reason only when the elapsed time is the behavior under test, or when fake timers are on."
+							}
+						]
 					}
 				]
 			}

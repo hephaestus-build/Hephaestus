@@ -8,6 +8,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+// oxlint-disable-next-line no-restricted-imports -- a replacement server starts only after the client has waited longer than its answered-failure retries
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { syncBuiltinESMExports } from "node:module";
 import test from "node:test";
+// oxlint-disable-next-line no-restricted-imports -- a fake gateway answers slowly on purpose, and the other tests run on fake timers
 import { setImmediate, setTimeout as sleep } from "node:timers/promises";
 
 import type { Isolation } from "../../../main/resources/agent/driver-isolation.ts";

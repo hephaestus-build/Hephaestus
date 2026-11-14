@@ -5,6 +5,7 @@ import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, describe, test } from "node:test";
+// oxlint-disable-next-line no-restricted-imports -- fake reviews and tools take real time, which the host's timeouts and cancellation are tested against
 import { setTimeout as sleep } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 

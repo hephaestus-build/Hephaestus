@@ -50,4 +50,4 @@ jobs:
       # The inventory discovers the test runtime without executing tests.
       - name: Build what the server jobs restore
         working-directory: server
-        run: ./gradlew resolveDependencies :application:bootJar :application:testClasses :application:testInventory :spotlessCheck :application:spotlessCheck :application:pmdMain
+        run: ./gradlew resolveDependencies :application:bootJar :application:testClasses :application:testInventory :spotlessCheck :application:spotlessCheck :application:pmdMain :application:pmdTest
