@@ -31,15 +31,17 @@ export function SuspendedWorkspaceCard({
 					{workspaceName} is suspended
 				</CardTitle>
 			</CardHeader>
-			<CardContent className="space-y-2 text-sm leading-relaxed text-muted-foreground">
-				<p>
-					While it is suspended, it syncs nothing, runs no practice reviews, and sends no feedback.
-					Its members cannot open it. Its data stays.
-				</p>
-				<p>
-					If GitHub suspended the Hephaestus app for this workspace, unsuspend the app in GitHub
-					instead. The workspace then resumes by itself. A resume here would not last.
-				</p>
+			<CardContent className="space-y-3">
+				<div className="space-y-2 text-sm leading-relaxed text-muted-foreground">
+					<p>
+						While it is suspended, it syncs nothing, runs no practice reviews, and sends no
+						feedback. Its members cannot open it. Its data stays.
+					</p>
+					<p>
+						If GitHub suspended the Hephaestus app for this workspace, unsuspend the app in GitHub
+						instead. The workspace then resumes by itself. A resume here would not last.
+					</p>
+				</div>
 				{resumeError !== undefined && (
 					<Alert variant="destructive">
 						<AlertTitle>We could not resume the workspace</AlertTitle>

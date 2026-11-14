@@ -214,35 +214,34 @@ const initialSyncJob = (status: SyncJob["status"]): Wire<SyncJob> => ({
 	createdAt: "2026-10-01T00:00:00Z",
 });
 
-describe("a suspended workspace", () => {
-	function serveSuspended() {
-		const list = { status: "SUSPENDED" as WorkspaceListItem["status"] };
-		const resumed: unknown[] = [];
-		server.use(
-			http.get("*/workspaces/:workspaceSlug/members/me", () =>
-				HttpResponse.json(ownMembership("OWNER")),
-			),
-			http.get("*/workspaces", () =>
-				HttpResponse.json([
-					workspaceListItem("acme", { displayName: "Acme", status: list.status }),
-				]),
-			),
-			http.get("*/workspaces/:workspaceSlug/connections/catalog", () => HttpResponse.json([])),
-			http.patch("*/workspaces/acme/status", async ({ request }) => {
-				resumed.push(await request.json());
-				list.status = "ACTIVE";
-				return HttpResponse.json(workspaceListItem("acme", { status: "ACTIVE" }));
-			}),
-		);
-		return resumed;
-	}
+/** Acme, suspended, for its owner. Its resume makes the next list read say it is active. */
+function serveSuspended() {
+	const list = { status: "SUSPENDED" as WorkspaceListItem["status"] };
+	const resumed: unknown[] = [];
+	server.use(
+		http.get("*/workspaces/:workspaceSlug/members/me", () =>
+			HttpResponse.json(ownMembership("OWNER")),
+		),
+		http.get("*/workspaces", () =>
+			HttpResponse.json([workspaceListItem("acme", { displayName: "Acme", status: list.status })]),
+		),
+		http.get("*/workspaces/:workspaceSlug/connections/catalog", () => HttpResponse.json([])),
+		http.patch("*/workspaces/acme/status", async ({ request }) => {
+			resumed.push(await request.json());
+			list.status = "ACTIVE";
+			return HttpResponse.json(workspaceListItem("acme", { status: "ACTIVE" }));
+		}),
+	);
+	return resumed;
+}
 
+describe("a suspended workspace", () => {
 	it("sends its admin from any page to its settings, which offer only resume and deletion", async () => {
 		serveSuspended();
 		const { router } = renderRouteAtWithRouter("/w/acme/practice-profile");
 		await screen.findByText("Acme is suspended", { exact: false }, ROUTE_RENDER_WAIT);
 		expect(router.state.location.pathname).toBe("/w/acme/admin/settings");
-		expect(screen.getByRole("button", { name: "Delete workspace" })).toBeTruthy();
+		screen.getByRole("button", { name: "Delete workspace" });
 		expect(screen.queryByRole("heading", { name: "Capabilities" })).toBeNull();
 	});
 
