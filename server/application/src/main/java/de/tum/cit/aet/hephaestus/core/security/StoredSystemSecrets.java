@@ -35,9 +35,10 @@ public class StoredSystemSecrets implements SystemSecretOwner {
             try {
                 secret.value(secrets);
             } catch (EncryptionException mismatch) {
-                throw new IllegalStateException("hephaestus.security.encryption-key does not open the stored system"
-                        + " secret " + secret.getName() + ": " + secret.sealingMismatch(secrets)
-                        + ". Restore the system key that sealed it, as docs/admin/secret-custody.mdx describes.",
+                throw new IllegalStateException(
+                        "hephaestus.security.encryption-key does not open the stored system"
+                                + " secret " + secret.getName() + ": " + secret.sealingMismatch(secrets)
+                                + ". Restore the system key that sealed it, as docs/admin/secret-custody.mdx describes.",
                         mismatch);
             }
         }

@@ -117,7 +117,8 @@ public final class SystemSecrets {
                                 .findFirst()
                                 .map(id -> " and the prior key " + keyIdText(id))
                                 .orElse(" and no prior key");
-        return "the value was sealed by the system key with id " + keyIdText(stored) + ", and this server holds " + held;
+        return "the value was sealed by the system key with id " + keyIdText(stored) + ", and this server holds "
+                + held;
     }
 
     /** The identifier of the active key, as hex, for logs. Never the key. */

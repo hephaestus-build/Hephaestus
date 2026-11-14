@@ -12,8 +12,8 @@ import com.nimbusds.jose.proc.SecurityContext;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.core.security.SystemSecretOwner;
 import de.tum.cit.aet.hephaestus.core.security.EncryptionException;
+import de.tum.cit.aet.hephaestus.core.security.SystemSecretOwner;
 import de.tum.cit.aet.hephaestus.core.security.SystemSecrets;
 import java.security.KeyFactory;
 import java.security.interfaces.ECPrivateKey;
@@ -119,13 +119,16 @@ public class JwtSigningKeyService implements JWKSource<SecurityContext>, SystemS
      */
     @Transactional(readOnly = true)
     public void verifyActiveKeysOpen() {
+        // No guard for a missing system key, unlike StoredSystemSecrets#verifyAllOpen: a server that cannot open its
+        // signing keys cannot sign or verify a session, so it stops even in development.
         for (JwtSigningKey row : repository.findActive()) {
             try {
                 row.privateKey(secrets);
             } catch (EncryptionException mismatch) {
-                throw new IllegalStateException("hephaestus.security.encryption-key does not open the stored JWT signing"
-                        + " key " + row.getKid() + ": " + row.sealingMismatch(secrets)
-                        + ". Restore the system key that sealed it, as docs/admin/secret-custody.mdx describes.",
+                throw new IllegalStateException(
+                        "hephaestus.security.encryption-key does not open the stored JWT signing"
+                                + " key " + row.getKid() + ": " + row.sealingMismatch(secrets)
+                                + ". Restore the system key that sealed it, as docs/admin/secret-custody.mdx describes.",
                         mismatch);
             }
         }

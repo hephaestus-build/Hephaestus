@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.auth.jwt;
 
 import static de.tum.cit.aet.hephaestus.testconfig.TestSystemSecrets.systemSecrets;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
@@ -194,7 +195,9 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
         serviceWith(repo, systemSecrets(KEY, "dev")).ensureActiveKey();
         when(repo.findActive()).thenReturn(List.of(saved.getValue()));
 
-        serviceWith(repo, TestSystemSecrets.systemSecretsWithPrior("fedcba9876543210fedcba9876543210", KEY, "dev"))
-                .verifyActiveKeysOpen();
+        var rotating = serviceWith(
+                repo, TestSystemSecrets.systemSecretsWithPrior("fedcba9876543210fedcba9876543210", KEY, "dev"));
+
+        assertThatCode(rotating::verifyActiveKeysOpen).doesNotThrowAnyException();
     }
 }
