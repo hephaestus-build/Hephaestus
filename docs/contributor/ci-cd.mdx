@@ -339,7 +339,7 @@ The ruleset still requires `CI Status Gate`.
 
 A required context may be filtered because a ruleset accepts a skipped check as satisfied. The check
 still reports `skipped`, not `success`. A workflow that never triggers reports nothing.
-A pending required context blocks the queue indefinitely.
+A pending required context blocks the queue until the status check timeout.
 `merge_group` supports no `paths:` filter, so each job's `if` supplies the filter.
 
 The repository ruleset controls how many merge groups the queue builds in parallel through
@@ -351,13 +351,15 @@ apply across workflows, so queue parallelism competes with pull-request validati
 
 The ruleset's status check timeout is 45 minutes.
 GitHub removes an entry from the queue when its required checks do not report within that time.
-Thus, a run that never reports blocks the entries behind it for 45 minutes, not two hours.
+A run that never reports blocks the entries behind it for up to 45 minutes.
+CI does not comment on a removal by timeout. The pull request's timeline shows the removal.
 
-The timeout is about twice the merge-group p90.
+The timeout is about 1.8 times the merge-group p90 and 17 minutes above the slowest group.
 We measured 162 successful groups from 2026-11-12 to 2026-11-14, from group creation to the last job.
 The median was 17.0 minutes, the p90 25.1 minutes and the slowest 27.8 minutes.
 Release-candidate groups took 18 to 20 minutes.
-When `report:ci-latency` shows a merge-group p90 above half of the timeout, change the timeout and this paragraph together.
+Revisit the timeout when the full-verification p90 in `report:ci-latency` exceeds 30 minutes, or when its Unknown cancellation row grows.
+Change the timeout and this paragraph together.
 
 A failed merge group drops its pull requests from the queue without failing their checks.
 Thus, CI updates a comment with the run link on the pull request named by the merge group's head ref. It
@@ -475,7 +477,7 @@ changesets rather than adding one. [Release management](./release-management.mdx
 
 ### Fail fast in the merge queue
 
-The queue removes an entry only when a required check fails.
+The queue removes an entry when a required check fails or does not report within the status check timeout.
 `CI Status Gate` needs every leg, so it cannot fail before the slowest leg ends.
 Two rules end a failed merge group early and free its runners.
 Pull requests keep independent legs running after failure.
@@ -912,6 +914,7 @@ groups in the last 14 days in which a queue-tier job failed. It counts the group
 fast-tier jobs failed apart, and it gives no share for fewer than 20 groups. If the queue-tier share exceeds 10 %, the queue tier is catching too much that a pull request
 should have caught. Then run the queue tier on pull requests again: change `queue-tier` in
 `detect-changes` to `true` for every event.
+That brings back the runner contention of the old CI shape, so revisit the [status check timeout](#merge-policy) with it.
 
 ### Light tier for stacked layers
 
