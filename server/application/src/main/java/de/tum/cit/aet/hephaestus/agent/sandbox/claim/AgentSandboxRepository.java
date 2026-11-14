@@ -228,6 +228,19 @@ interface AgentSandboxRepository extends JpaRepository<AgentSandbox, UUID> {
             @Param("conversationIdleSeconds") long conversationIdleSeconds,
             @Param("batch") int batch);
 
+    /** The ready sandboxes of every workspace. A ready sandbox called the gateway, so its claim existed then. */
+    @WorkspaceAgnostic("The reaper compares the ready sandboxes of every workspace with the claims of the namespace")
+    @Query(value = "SELECT" + COLUMNS + "FROM agent_sandbox WHERE state = 'READY' ORDER BY id", nativeQuery = true)
+    List<SandboxRow> findReady();
+
+    /** Takes back a ready sandbox whose claim is gone, if it is still ready with that claim. */
+    @Query(value = """
+            UPDATE agent_sandbox SET state = 'DELETING'
+             WHERE id = :id AND workspace_id = :workspaceId AND claim_name = :claimName AND state = 'READY'
+            RETURNING""" + COLUMNS, nativeQuery = true)
+    Optional<SandboxRow> takeBackLost(
+            @Param("id") UUID id, @Param("workspaceId") long workspaceId, @Param("claimName") String claimName);
+
     /** The sandboxes whose claims are being deleted, oldest first, including the ones whose earlier delete failed. */
     @WorkspaceAgnostic("The reaper deletes the claims of every workspace; each row carries its workspace")
     @Query(value = "SELECT" + COLUMNS + """

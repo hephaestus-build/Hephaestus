@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.attempt.SandboxJwt;
+import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunBand;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunKind;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunLease;
@@ -99,7 +100,7 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
                         Duration.ofSeconds(1),
                         conversationIdle),
                 transactions,
-                new SimpleMeterRegistry());
+                meters);
     }
 
     private AgentSandboxes.LiveSandbox ensure(String subject, AgentSandboxKind kind) {
@@ -397,6 +398,60 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldTakeBackAReadySandboxWhoseClaimIsGoneSoItsSubjectGetsANewOne() {
+        String subject = "review:" + UUID.randomUUID();
+        queueRun(subject);
+        var lost = ensure(subject, AgentSandboxKind.REVIEW);
+        sandboxes.authenticate(token(lost));
+        String starting = "review:" + UUID.randomUUID();
+        queueRun(starting);
+        var requested = ensure(starting, AgentSandboxKind.REVIEW);
+        // A stopped window deleted the claims outside the server, while every server was down.
+        claims.created.remove(claimName(lost));
+        claims.created.remove(claimName(requested));
+        keepClaimsOfOtherReadySandboxes(Set.of(lost.id()));
+
+        reaper(Duration.ofHours(1)).reap();
+
+        assertThat(repository.findById(lost.id()))
+                .as("the next pass takes the ready row back")
+                .isEmpty();
+        assertThat(meters.counter(AgentMetrics.AGENT_SANDBOX_REAPED, "reason", "lost")
+                        .count())
+                .isEqualTo(1);
+        assertThat(state(requested))
+                .as("a requested sandbox can still be creating its claim, so the start limit decides it")
+                .isEqualTo("REQUESTED");
+        var next = ensure(subject, AgentSandboxKind.REVIEW);
+        assertThat(next.id()).isNotEqualTo(lost.id());
+        assertThat(claims.created).containsKey(claimName(next));
+    }
+
+    @Test
+    void shouldTakeBackAtMostOneBatchOfLostSandboxesPerTick() {
+        var lost = new ArrayList<UUID>();
+        for (int i = 0; i <= AgentSandboxReaper.BATCH; i++) {
+            String subject = "review:" + UUID.randomUUID();
+            queueRun(subject);
+            var sandbox = ensure(subject, AgentSandboxKind.REVIEW);
+            sandboxes.authenticate(token(sandbox));
+            claims.created.remove(claimName(sandbox));
+            lost.add(sandbox.id());
+        }
+        keepClaimsOfOtherReadySandboxes(Set.copyOf(lost));
+        var reaper = reaper(Duration.ofHours(1));
+
+        reaper.reap();
+        assertThat(stillReady(lost)).as("one tick takes back one batch").hasSize(1);
+
+        reaper.reap();
+        assertThat(stillReady(lost)).isEmpty();
+        assertThat(meters.counter(AgentMetrics.AGENT_SANDBOX_REAPED, "reason", "lost")
+                        .count())
+                .isEqualTo(AgentSandboxReaper.BATCH + 1);
+    }
+
+    @Test
     void shouldTakeBackASandboxAtItsShutdownWhileItsSubjectStillNeedsIt() {
         String subject = "review:" + UUID.randomUUID();
         queueRun(subject);
@@ -488,6 +543,31 @@ class AgentSandboxesIntegrationTest extends BaseIntegrationTest {
         assertThatThrownBy(() -> jdbc.update("UPDATE agent_sandbox SET state = 'READY' WHERE id = ?", sandbox.id()))
                 .isInstanceOf(DataAccessException.class)
                 .hasMessageContaining("never live again");
+    }
+
+    /** Taken back means no longer ready; its row goes once the claim delete of a later step or tick removes it. */
+    private List<UUID> stillReady(List<UUID> sandboxIds) {
+        return sandboxIds.stream()
+                .filter(id -> repository
+                        .findById(id)
+                        .map(row -> row.getState() == AgentSandboxState.READY)
+                        .orElse(false))
+                .toList();
+    }
+
+    /** The reaper reads every workspace: ready sandboxes that earlier tests left keep their claims here. */
+    private void keepClaimsOfOtherReadySandboxes(Set<UUID> lost) {
+        for (var other : repository.findReady()) {
+            if (lost.contains(other.getId())) continue;
+            claims.created.putIfAbsent(
+                    other.getClaimName(),
+                    new SandboxClaims.Claim(
+                            other.getClaimName(),
+                            other.getId(),
+                            AgentSandboxKind.valueOf(other.getKind()),
+                            other.getShutdownAt(),
+                            Map.of()));
+        }
     }
 
     private String state(AgentSandboxes.LiveSandbox sandbox) {

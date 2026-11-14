@@ -140,6 +140,7 @@ Use `server.replicas=0`, not `sandbox.enabled=false`, to stop the server.
 
 Before the cutover to conversation sandboxes, stop the source release's conversation loop too.
 After every server has stopped, foreground-delete its SandboxClaims and legacy sandbox Jobs, and wait for their Pods to disappear.
+The first reaper pass of the new servers takes back each ready sandbox whose claim you deleted, and its work starts in a new sandbox.
 [Upgrade to 1.0](./upgrade-to-1-0) gives the stopped cutover procedure. The pull-based reconciler checks that procedure before migration.
 
 Apply each row's values after your profile and site values, so that they take precedence.
