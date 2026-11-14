@@ -89,7 +89,8 @@ void test("the answer still reads when the provider left its last event open bef
 		refusal: null,
 	});
 	// Without the gateway's blank line, the provider's open event swallows the answer: no answer, a retry.
-	assert.equal((await open.gateway.model("openai-completions", "{}")).status, 502);
+	const swallowed = await open.gateway.model("openai-completions", "{}");
+	assert.equal(swallowed.status, 502);
 });
 
 void test("only the stream's last event can be the answer, so a provider cannot forge one", async () => {

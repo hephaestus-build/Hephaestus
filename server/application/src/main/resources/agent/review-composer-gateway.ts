@@ -234,8 +234,8 @@ export const ANSWER_EVENT = "hephaestus.answer";
  */
 export function answerEvent(stream: string): string | null {
 	const events = stream
-		.replaceAll(/\r\n?/g, "\n")
-		.split(/\n\n+/)
+		.replaceAll(/\r\n?/gu, "\n")
+		.split(/\n\n+/u)
 		.filter((event) => event.trim() !== "");
 	const last = events.at(-1);
 	if (last === undefined) {
@@ -247,7 +247,7 @@ export function answerEvent(stream: string): string | null {
 		if (line.startsWith("event:")) {
 			name = line.slice(6).trim();
 		} else if (line.startsWith("data:")) {
-			data.push(line.slice(5).replace(/^ /, ""));
+			data.push(line.slice(5).replace(/^ /u, ""));
 		}
 	}
 	return name === ANSWER_EVENT ? data.join("\n") : null;
