@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { BrainCircuit, Plus } from "lucide-react";
 import { type ReactNode, useState } from "react";
+import { DocLink } from "@/components/common/DocLink";
 import { toolChoiceTestState } from "@/lib/llm-tool-choice-test";
 import { toast } from "@/lib/toast";
 
@@ -388,7 +389,13 @@ function AdminLlmPage() {
 			<PageHeader
 				icon={<BrainCircuit />}
 				title="AI models"
-				description="Connect OpenAI-compatible endpoints and share models with workspaces."
+				description={
+					<>
+						Connect OpenAI-compatible endpoints and share models with workspaces. Nothing runs until
+						a model is priced, turned on, shared, and assigned to a purpose in a workspace.{" "}
+						<DocLink doc="modelSetup">Set up a model step by step</DocLink>.
+					</>
+				}
 				actions={
 					<Button
 						disabled={!connectionsQuery.isSuccess || createConnection.isPending}

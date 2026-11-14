@@ -86,6 +86,20 @@ async function confirmTurnOff(name: string) {
 }
 
 describe("instance AI models route", () => {
+	it("links the staged model setup in the admin guide", async () => {
+		mockPage();
+		renderRouteAt("/admin/models");
+
+		const guide = await screen.findByRole(
+			"link",
+			{ name: /^Set up a model step by step\s*\(opens in a new tab\)$/u },
+			ROUTE_RENDER_WAIT,
+		);
+		expect(guide.getAttribute("href")).toMatch(
+			/\/admin\/ai-providers#1-the-staged-flow-and-why-it-is-staged$/u,
+		);
+	});
+
 	it("draws the models table under its real headers while the first read of models is in flight", async () => {
 		const modelsRead = deferred();
 		let modelsRequested = false;
