@@ -281,6 +281,12 @@ final class RepositoryOwnershipRatchet {
                             "integration.scm.github.team.GitHubTeamMessageHandler")),
             new Entry(
                     "integration.scm.github",
+                    "workspace.MembershipRepository",
+                    "DDD9 (ROLE)",
+                    "workspace::spi WorkspaceMemberships.isActiveMember(workspaceId, accountId)",
+                    Set.of("integration.scm.github.installation.adoption.GitHubInstallationClaimService")),
+            new Entry(
+                    "integration.scm.github",
                     "workspace.RepositoryToMonitorRepository",
                     "DDD9",
                     "workspace::spi WorkspaceRepositoryMonitors",
