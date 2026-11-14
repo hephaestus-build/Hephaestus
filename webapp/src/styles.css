@@ -56,8 +56,8 @@ code {
 /*
  * GitHub's palette for the provider colors below. These are the values that GitHub Primer
  * (@primer/primitives 11.10.0, `light.css` and `dark.css`) gives these 26 tokens, copied once:
- * the whole package is 38 kB of gzip that every page would download for them. The root's `.dark`
- * class picks the dark values, as it does for `theme-tokens.css`.
+ * importing the whole theme put every Primer token in the CSS that every page loads. The root's
+ * `.dark` class picks the dark values, as it does for `theme-tokens.css`.
  */
 :root {
 	--bgColor-default: #ffffff;

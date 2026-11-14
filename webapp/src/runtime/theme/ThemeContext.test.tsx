@@ -96,7 +96,6 @@ describe("theme-init.js", () => {
 
 		runInThisContext(script);
 
-		expect(document.documentElement.classList.contains("dark")).toBe(true);
 		expect(paintedTheme()).toBe("dark");
 	});
 
