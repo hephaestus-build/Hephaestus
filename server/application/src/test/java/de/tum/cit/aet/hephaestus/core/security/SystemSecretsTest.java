@@ -219,7 +219,9 @@ class SystemSecretsTest extends BaseUnitTest {
         assertThat(holder.describeMismatch(sealed))
                 .contains("sealed by the system key with id " + sealedWith.activeKeyId())
                 .contains("the active key " + holder.activeKeyId())
-                .contains("the prior key " + systemSecrets("abcdefabcdefabcdefabcdefabcdefab", "test").activeKeyId())
+                .contains("the prior key "
+                        + systemSecrets("abcdefabcdefabcdefabcdefabcdefab", "test")
+                                .activeKeyId())
                 .doesNotContain(OLD_KEY)
                 .doesNotContain(NEW_KEY);
     }
