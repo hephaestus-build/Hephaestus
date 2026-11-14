@@ -126,24 +126,6 @@
 		"removeWhen": "Name an existing executable check in Confirmation."
 	},
 	{
-		"id": "docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md: missing check ContextMapCoverageTest",
-		"owner": "ADR-QUALITY",
-		"reason": "The accepted decision has no resolvable confirmation for this reference.",
-		"removeWhen": "Name an existing executable check in Confirmation."
-	},
-	{
-		"id": "docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md: missing check ModuleDeclarationTest",
-		"owner": "ADR-QUALITY",
-		"reason": "The accepted decision has no resolvable confirmation for this reference.",
-		"removeWhen": "Name an existing executable check in Confirmation."
-	},
-	{
-		"id": "docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md: missing check RepositoryOwnershipArchTest",
-		"owner": "ADR-QUALITY",
-		"reason": "The accepted decision has no resolvable confirmation for this reference.",
-		"removeWhen": "Name an existing executable check in Confirmation."
-	},
-	{
 		"id": "docs/decisions/0100-the-server-serves-the-web-app.md: Confirmation names no existing executable check",
 		"owner": "ADR-QUALITY",
 		"reason": "The accepted decision has no resolvable confirmation for this reference.",

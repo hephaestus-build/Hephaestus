@@ -3,33 +3,31 @@
         displayName = "Integration · SCM · GitLab",
         type = org.springframework.modulith.ApplicationModule.Type.OPEN,
         allowedDependencies = {
-            "integration.scm::spi",
-            "core::person-data",
-            "integration.scm::events",
-            "evidence",
-            "integration.core",
-            "integration.core::events",
-            "integration.core::spi",
-            "integration.core::framework",
-            "integration.core::handler",
-            "integration.core::oauth",
-            "integration.core::consumer",
-            "integration.core::webhook",
-            "integration.scm",
             "activity::spi",
             "core",
+            "core::logging",
+            "core::person-data",
             // Runtime-role gate (@ConditionalOnServerRole) on the connection-OAuth strategy.
             "core::runtime",
-            // Route credentials and token rotation use WebhookProperties; GitLabPreflightService validates URLs.
-            "core::webhook",
             "core::security",
             // The project list for workspace creation is a CursorPageDTO; hooks register at PublicApiUrls.
             "core::web",
+            // Route credentials and token rotation use WebhookProperties; GitLabPreflightService validates URLs.
+            "core::webhook",
+            "evidence",
+            "integration.core",
+            "integration.core::consumer",
+            "integration.core::events",
+            "integration.core::framework",
+            "integration.core::handler",
+            "integration.core::spi",
+            "integration.core::webhook",
+            "integration.scm",
+            "integration.scm::events",
+            "integration.scm::spi",
             "workspace",
             // GitLab workspace flows depend on the workspace named sub-surfaces.
             "workspace::context",
-            "workspace::spi",
-            "workspace::events",
             "workspace::dto",
         })
 @org.jspecify.annotations.NullMarked

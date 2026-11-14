@@ -6,23 +6,23 @@
 @org.springframework.modulith.ApplicationModule(
         displayName = "Notification",
         allowedDependencies = {
-            "core::person-data",
+            // The weekly digest's email note: the event it answers, the subscription port it implements, and whether
+            // a digest can be written for the account (shown in User settings).
+            "agent::weekly-digest",
+            "config",
             "core",
+            "core::action",
+            "core::auth-ratelimit",
+            "core::auth-spi",
             "core::current-account",
+            "core::event",
+            "core::person-data",
             "core::runtime",
             "core::web",
-            "core::action",
-            "core::auth-spi",
-            "core::auth-ratelimit",
-            "core::event",
-            "config",
             "integration.core",
             "integration.core::events",
             "integration.core::spi",
             "productfeedback::notification",
-            // The weekly digest's email note: the event it answers, the subscription port it implements, and whether
-            // a digest can be written for the account (shown in User settings).
-            "agent::weekly-digest",
         })
 @org.jspecify.annotations.NullMarked
 package de.tum.cit.aet.hephaestus.notification;

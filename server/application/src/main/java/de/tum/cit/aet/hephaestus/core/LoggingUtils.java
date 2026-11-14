@@ -1,11 +1,13 @@
 package de.tum.cit.aet.hephaestus.core;
 
 import org.jspecify.annotations.Nullable;
+import org.springframework.modulith.NamedInterface;
 
 /**
  * Utility class for safe logging operations.
  * Provides methods to sanitize user-controlled input before logging to prevent log injection attacks.
  */
+@NamedInterface("logging")
 public final class LoggingUtils {
 
     private LoggingUtils() {
