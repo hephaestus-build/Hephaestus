@@ -10,7 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceTeamScopeResolver;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -30,7 +30,7 @@ public class WorkspaceTeamSettingsService {
     private final WorkspaceTeamSettingsRepository teamSettingsRepository;
     private final WorkspaceTeamRepositorySettingsRepository repositorySettingsRepository;
     private final WorkspaceTeamLabelFilterRepository labelFilterRepository;
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceLookup workspaceLookup;
     private final TeamRepository teamRepository;
     private final RepositoryRepository repositoryRepository;
     private final LabelRepository labelRepository;
@@ -41,7 +41,7 @@ public class WorkspaceTeamSettingsService {
             WorkspaceTeamSettingsRepository teamSettingsRepository,
             WorkspaceTeamRepositorySettingsRepository repositorySettingsRepository,
             WorkspaceTeamLabelFilterRepository labelFilterRepository,
-            WorkspaceRepository workspaceRepository,
+            WorkspaceLookup workspaceLookup,
             TeamRepository teamRepository,
             RepositoryRepository repositoryRepository,
             LabelRepository labelRepository,
@@ -50,7 +50,7 @@ public class WorkspaceTeamSettingsService {
         this.teamSettingsRepository = teamSettingsRepository;
         this.repositorySettingsRepository = repositorySettingsRepository;
         this.labelFilterRepository = labelFilterRepository;
-        this.workspaceRepository = workspaceRepository;
+        this.workspaceLookup = workspaceLookup;
         this.teamRepository = teamRepository;
         this.repositoryRepository = repositoryRepository;
         this.labelRepository = labelRepository;
@@ -267,8 +267,8 @@ public class WorkspaceTeamSettingsService {
 
     @Transactional(readOnly = true)
     public Workspace requireWorkspace(Long workspaceId) {
-        return workspaceRepository
-                .findById(workspaceId)
+        return workspaceLookup
+                .find(workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId.toString()));
     }
 }

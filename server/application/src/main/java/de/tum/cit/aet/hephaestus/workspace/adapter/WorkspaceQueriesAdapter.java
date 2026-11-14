@@ -100,6 +100,11 @@ public class WorkspaceQueriesAdapter implements WorkspaceQueries, WorkspaceProvi
         return workspaces.existsByIdAndOrganizationId(workspaceId, organizationId);
     }
 
+    @Override
+    public long otherActiveWorkspacesOfOrganization(long organizationId, long workspaceId) {
+        return workspaces.countOtherActiveWorkspacesForOrganization(organizationId, workspaceId);
+    }
+
     private static ReviewWorkspace snapshot(Workspace workspace) {
         var features = workspace.getFeatures();
         var settings = workspace.getReviewSettings();

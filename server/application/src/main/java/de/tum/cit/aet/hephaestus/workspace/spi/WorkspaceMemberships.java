@@ -8,6 +8,9 @@ public interface WorkspaceMemberships {
 
     long accountIdForUser(long scmUserId);
 
+    /** Whether the account has a membership row in the workspace, also one it left. */
+    boolean hasMembership(long workspaceId, long accountId);
+
     /** The caller holds its capture and account-write fences before this command takes the workspace row lock. */
     void setContributorHidden(long workspaceId, long accountId, boolean hidden);
 }

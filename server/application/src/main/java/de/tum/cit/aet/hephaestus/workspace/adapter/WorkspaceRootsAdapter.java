@@ -38,6 +38,36 @@ public class WorkspaceRootsAdapter implements WorkspaceRoots, WorkspaceLookup, W
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Optional<Workspace> findBySlug(String slug) {
+        return workspaces.findByWorkspaceSlug(slug);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Workspace> findByOrganization(long organizationId) {
+        return workspaces.findByOrganizationId(organizationId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Workspace> findByAccountLogin(String accountLogin) {
+        return workspaces.findAllByAccountLoginIgnoreCase(accountLogin);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean anyExists() {
+        return workspaces.count() > 0;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Workspace> findAny() {
+        return workspaces.findAll().stream().findFirst();
+    }
+
+    @Override
     public Optional<Workspace> lock(long workspaceId) {
         return workspaces.findByIdForUpdate(workspaceId);
     }
@@ -45,6 +75,11 @@ public class WorkspaceRootsAdapter implements WorkspaceRoots, WorkspaceLookup, W
     @Override
     public Optional<Workspace> lockByInstallation(long installationId) {
         return workspaces.findByInstallationIdForUpdate(installationId);
+    }
+
+    @Override
+    public Optional<Workspace> lockActiveByInstallation(long installationId) {
+        return workspaces.findActiveByInstallationIdForUpdate(installationId);
     }
 
     @Override
@@ -90,6 +125,13 @@ public class WorkspaceRootsAdapter implements WorkspaceRoots, WorkspaceLookup, W
         if (Objects.equals(workspace.getOrganizationId(), organizationId)) return;
         workspace.setOrganizationId(organizationId);
         workspaces.save(workspace);
+    }
+
+    @Override
+    public void unlinkOrganization(long workspaceId) {
+        var workspace = locked(workspaceId);
+        workspace.setOrganizationId(null);
+        workspaces.saveAndFlush(workspace);
     }
 
     @Override

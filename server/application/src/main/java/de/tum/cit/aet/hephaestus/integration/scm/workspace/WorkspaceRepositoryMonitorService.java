@@ -20,11 +20,14 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceDataSyncTrigger;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.events.RepositoryAboutToBeDeletedEvent;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.spi.RepositoryMonitorCommands;
+import de.tum.cit.aet.hephaestus.workspace.spi.RepositoryMonitorSources;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import io.micrometer.common.util.StringUtils;
 import java.util.Collection;
 import java.util.EnumMap;
@@ -52,8 +55,12 @@ public class WorkspaceRepositoryMonitorService {
     private static final Logger log = LoggerFactory.getLogger(WorkspaceRepositoryMonitorService.class);
     private static final String GITHUB_SERVER_URL = "https://github.com";
 
-    private final WorkspaceRepository workspaceRepository;
-    private final RepositoryToMonitorRepository repositoryToMonitorRepository;
+    private final WorkspaceLocks workspaceLocks;
+
+    private final WorkspaceLookup workspaceLookup;
+    private final WorkspaceRepositoryMonitors monitors;
+    private final RepositoryMonitorSources monitorSources;
+    private final RepositoryMonitorCommands monitorCommands;
     private final RepositoryRepository repositoryRepository;
     private final IdentityProviderLookup identityProviders;
 
@@ -79,8 +86,11 @@ public class WorkspaceRepositoryMonitorService {
     private final ManualRepositoryMonitorService manualAdds;
 
     public WorkspaceRepositoryMonitorService(
-            WorkspaceRepository workspaceRepository,
-            RepositoryToMonitorRepository repositoryToMonitorRepository,
+            WorkspaceLocks workspaceLocks,
+            WorkspaceLookup workspaceLookup,
+            WorkspaceRepositoryMonitors monitors,
+            RepositoryMonitorSources monitorSources,
+            RepositoryMonitorCommands monitorCommands,
             RepositoryRepository repositoryRepository,
             IdentityProviderLookup identityProviders,
             WorkspaceScopeFilter workspaceScopeFilter,
@@ -95,8 +105,11 @@ public class WorkspaceRepositoryMonitorService {
             TransactionTemplate transactionTemplate,
             ManualRepositoryMonitorService manualAdds) {
         this.manualAdds = manualAdds;
-        this.workspaceRepository = workspaceRepository;
-        this.repositoryToMonitorRepository = repositoryToMonitorRepository;
+        this.workspaceLocks = workspaceLocks;
+        this.workspaceLookup = workspaceLookup;
+        this.monitors = monitors;
+        this.monitorSources = monitorSources;
+        this.monitorCommands = monitorCommands;
         this.repositoryRepository = repositoryRepository;
         this.identityProviders = identityProviders;
         this.workspaceScopeFilter = workspaceScopeFilter;
@@ -202,9 +215,8 @@ public class WorkspaceRepositoryMonitorService {
             }
 
             // Read after the GitLab lock, so a monitor that a concurrent discovery added while Stop waited is seen.
-            RepositoryToMonitor repositoryToMonitor = repositoryToMonitorRepository
-                    .findByWorkspaceIdAndNameWithOwner(workspace.getId(), nameWithOwner)
-                    .orElse(null);
+            RepositoryToMonitor repositoryToMonitor =
+                    monitors.monitorAt(workspace.getId(), nameWithOwner).orElse(null);
 
             if (repositoryToMonitor == null) {
                 log.debug(
@@ -220,8 +232,7 @@ public class WorkspaceRepositoryMonitorService {
                     LoggingUtils.sanitizeForLog(nameWithOwner),
                     workspace.getId());
 
-            List<Long> repositoryIds =
-                    repositoryToMonitorRepository.findSourceRepositoryIdsOfMonitor(repositoryToMonitor.getId());
+            List<Long> repositoryIds = monitorSources.sourceRepositoryIds(repositoryToMonitor.getId());
             if (gitLab) {
                 Long stoppedNativeId = repositoryToMonitor.getNativeId();
                 if (connectionService
@@ -257,7 +268,7 @@ public class WorkspaceRepositoryMonitorService {
             return Optional.empty();
         }
 
-        var workspaceOpt = workspaceRepository.findActiveByInstallationIdForUpdate(installationId);
+        var workspaceOpt = workspaceLocks.lockActiveByInstallation(installationId);
         if (workspaceOpt.isEmpty()) {
             return Optional.empty();
         }
@@ -272,7 +283,7 @@ public class WorkspaceRepositoryMonitorService {
             return Optional.empty();
         }
         connectionCommands.fenceActiveInstallation(workspaceId, installationId);
-        var monitorOpt = repositoryToMonitorRepository.findOneByWorkspaceIdAndNativeId(workspaceId, expectedNativeId);
+        var monitorOpt = monitors.monitorOf(workspaceId, expectedNativeId);
         if (monitorOpt.isEmpty()) {
             log.debug("Skipped repository removal: reason=notMonitored, workspaceId={}", workspaceId);
             return workspaceOpt;
@@ -282,7 +293,7 @@ public class WorkspaceRepositoryMonitorService {
     }
 
     private void removeMonitorAndOrphanedRepositories(Workspace workspace, RepositoryToMonitor monitor) {
-        List<Long> repositoryIds = repositoryToMonitorRepository.findSourceRepositoryIdsOfMonitor(monitor.getId());
+        List<Long> repositoryIds = monitorSources.sourceRepositoryIds(monitor.getId());
         deleteRepositoryMonitor(workspace, monitor, false);
         repositoryIds.forEach(this::deleteRepositoryIfOrphaned);
     }
@@ -293,13 +304,12 @@ public class WorkspaceRepositoryMonitorService {
     }
 
     private Optional<Workspace> removeAllRepositoriesInTransaction(long installationId, boolean deleteRepositories) {
-        var workspaceOpt = workspaceRepository.findActiveByInstallationIdForUpdate(installationId);
+        var workspaceOpt = workspaceLocks.lockActiveByInstallation(installationId);
         workspaceOpt.ifPresent(workspace -> {
-            List<RepositoryToMonitor> monitors = repositoryToMonitorRepository.findByWorkspaceId(workspace.getId());
-            for (RepositoryToMonitor monitor : monitors) {
-                List<Long> repositoryIds = deleteRepositories
-                        ? repositoryToMonitorRepository.findSourceRepositoryIdsOfMonitor(monitor.getId())
-                        : List.of();
+            List<RepositoryToMonitor> existing = monitors.monitors(workspace.getId());
+            for (RepositoryToMonitor monitor : existing) {
+                List<Long> repositoryIds =
+                        deleteRepositories ? monitorSources.sourceRepositoryIds(monitor.getId()) : List.of();
                 deleteRepositoryMonitor(workspace, monitor, false);
                 repositoryIds.forEach(this::deleteRepositoryIfOrphaned);
             }
@@ -314,7 +324,7 @@ public class WorkspaceRepositoryMonitorService {
             return;
         }
 
-        var workspaceOpt = workspaceRepository.findActiveByInstallationIdForUpdate(installationId);
+        var workspaceOpt = workspaceLocks.lockActiveByInstallation(installationId);
         if (workspaceOpt.isEmpty()) {
             return;
         }
@@ -377,9 +387,7 @@ public class WorkspaceRepositoryMonitorService {
             return false;
         }
         return Boolean.TRUE.equals(transactionTemplate.execute(status -> {
-            var workspace = workspaceRepository
-                    .findByIdForUpdate(authority.workspaceId())
-                    .orElse(null);
+            var workspace = workspaceLocks.lock(authority.workspaceId()).orElse(null);
             if (workspace == null || workspace.getStatus() != Workspace.WorkspaceStatus.ACTIVE) {
                 discardedEnumeration(installationId, authority, "workspaceChanged");
                 return false;
@@ -451,7 +459,7 @@ public class WorkspaceRepositoryMonitorService {
 
         // Removal runs first so a path the installation now uses for another repository is free before it is
         // monitored. A monitor with a native id is kept by that id, so a renamed repository keeps its monitor.
-        repositoryToMonitorRepository.findByWorkspaceId(workspace.getId()).stream()
+        monitors.monitors(workspace.getId()).stream()
                 .filter(monitor -> !StringUtils.isBlank(monitor.getNameWithOwner()))
                 .filter(monitor -> {
                     String name = monitor.getNameWithOwner().toLowerCase(Locale.ENGLISH);
@@ -481,7 +489,7 @@ public class WorkspaceRepositoryMonitorService {
      * source remains monitored.
      */
     public void deleteRepositoryIfOrphaned(Long repositoryId) {
-        long monitorCount = repositoryToMonitorRepository.countForRepository(repositoryId);
+        long monitorCount = monitorSources.countForRepository(repositoryId);
         if (monitorCount > 0) {
             log.debug(
                     "Skipped repository deletion: reason=stillMonitored, repositoryId={}," + " monitorCount={}",
@@ -491,7 +499,7 @@ public class WorkspaceRepositoryMonitorService {
         }
         if (repositoryRepository.acquireDeletionClaim(repositoryId).isEmpty()) return;
         // A publisher can claim the source between the fast check and our deletion claim.
-        if (repositoryToMonitorRepository.countForRepository(repositoryId) > 0) return;
+        if (monitorSources.countForRepository(repositoryId) > 0) return;
         if (repositoryRepository.isIndexedByAnyWorkspace(repositoryId)) {
             log.debug("Skipped repository deletion: reason=stillIndexed, repositoryId={}", repositoryId);
             return;
@@ -503,12 +511,10 @@ public class WorkspaceRepositoryMonitorService {
         });
     }
 
-    private void persistRepositoryMonitor(Workspace workspace, RepositoryToMonitor monitor, boolean deferSync) {
-        repositoryToMonitorRepository.saveAndFlush(monitor);
-        workspace.getRepositoriesToMonitor().add(monitor);
-        workspaceRepository.save(workspace);
+    private void persistRepositoryMonitor(Workspace workspace, String nameWithOwner, long nativeId, boolean deferSync) {
+        RepositoryToMonitor monitor = monitorCommands.add(workspace.getId(), nameWithOwner, nativeId);
         eventPublisher.publishEvent(new RepositoryMonitoringChangedEvent(
-                workspace.getId(), repositoryToMonitorRepository.findSourceRepositoryIdsOfMonitor(monitor.getId())));
+                workspace.getId(), monitorSources.sourceRepositoryIds(monitor.getId())));
         announceRepositoryMonitor(workspace, monitor, deferSync);
     }
 
@@ -542,10 +548,8 @@ public class WorkspaceRepositoryMonitorService {
     }
 
     private void deleteRepositoryMonitor(Workspace workspace, RepositoryToMonitor monitor, boolean retainIndex) {
-        List<Long> repositoryIds = repositoryToMonitorRepository.findSourceRepositoryIdsOfMonitor(monitor.getId());
-        // Remove from collection first - orphanRemoval=true will handle deletion
-        workspace.getRepositoriesToMonitor().remove(monitor);
-        workspaceRepository.saveAndFlush(workspace);
+        List<Long> repositoryIds = monitorSources.sourceRepositoryIds(monitor.getId());
+        monitorCommands.remove(workspace.getId(), monitor.getId());
         eventPublisher.publishEvent(
                 new RepositoryMonitoringChangedEvent(workspace.getId(), repositoryIds, retainIndex));
     }
@@ -557,28 +561,22 @@ public class WorkspaceRepositoryMonitorService {
     private void ensureRepositoryMonitorInternal(
             Workspace workspace, long nativeId, String nameWithOwner, boolean deferSync) {
         Long workspaceId = workspace.getId();
-        var existing = repositoryToMonitorRepository.findOneByWorkspaceIdAndNativeId(workspaceId, nativeId);
+        var existing = monitors.monitorOf(workspaceId, nativeId);
         if (existing.isEmpty()) {
-            if (repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(workspaceId, nameWithOwner)) {
+            if (monitors.monitorsPath(workspaceId, nameWithOwner)) {
                 log.warn(
                         "Skipped repository monitor: reason=nameHeldByAnotherMonitor, workspaceId={}, nativeId={}",
                         workspaceId,
                         nativeId);
                 return;
             }
-            RepositoryToMonitor monitor = new RepositoryToMonitor();
-            monitor.setNameWithOwner(nameWithOwner);
-            monitor.setNativeId(nativeId);
-            monitor.setWorkspace(workspace);
-            persistRepositoryMonitor(workspace, monitor, deferSync);
+            persistRepositoryMonitor(workspace, nameWithOwner, nativeId, deferSync);
             return;
         }
 
         RepositoryToMonitor monitor = existing.get();
         boolean renamed = !nameWithOwner.equals(monitor.getNameWithOwner());
-        if (renamed
-                && repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwnerAndIdNot(
-                        workspaceId, nameWithOwner, monitor.getId())) {
+        if (renamed && monitors.monitorsPathElsewhere(workspaceId, nameWithOwner, monitor.getId())) {
             log.warn(
                     "Skipped repository monitor re-key: reason=nameHeldByAnotherMonitor, workspaceId={},"
                             + " syncTargetId={}, nativeId={}",
@@ -595,13 +593,10 @@ public class WorkspaceRepositoryMonitorService {
                     monitor.getId(),
                     LoggingUtils.sanitizeForLog(monitor.getNameWithOwner()),
                     LoggingUtils.sanitizeForLog(nameWithOwner));
-            monitor.setNameWithOwner(nameWithOwner);
+            monitorCommands.rename(workspaceId, monitor.getId(), nameWithOwner);
         }
-        if (renamed) {
-            repositoryToMonitorRepository.saveAndFlush(monitor);
-        }
-        eventPublisher.publishEvent(new RepositoryMonitoringChangedEvent(
-                workspaceId, repositoryToMonitorRepository.findSourceRepositoryIdsOfMonitor(monitor.getId())));
+        eventPublisher.publishEvent(
+                new RepositoryMonitoringChangedEvent(workspaceId, monitorSources.sourceRepositoryIds(monitor.getId())));
     }
 
     /** Whether the mirrored repository with this id now has the snapshot's path. */
@@ -632,9 +627,7 @@ public class WorkspaceRepositoryMonitorService {
         if (StringUtils.isBlank(slug)) {
             throw new IllegalArgumentException("Workspace slug must not be blank.");
         }
-        return workspaceRepository
-                .findByWorkspaceSlug(slug)
-                .orElseThrow(() -> new EntityNotFoundException("Workspace", slug));
+        return workspaceLookup.findBySlug(slug).orElseThrow(() -> new EntityNotFoundException("Workspace", slug));
     }
 
     private String requireSlug(WorkspaceContext workspaceContext) {

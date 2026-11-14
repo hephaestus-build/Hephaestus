@@ -8,9 +8,12 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.RepositoryMonitorCommands;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProviderAccounts;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRoots;
 import io.micrometer.common.util.StringUtils;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -33,8 +36,11 @@ public class ScmWorkspaceContentEraser {
     private static final Logger log = LoggerFactory.getLogger(ScmWorkspaceContentEraser.class);
 
     private final WorkspaceOrganizationLookup organizations;
-    private final WorkspaceRepository workspaceRepository;
-    private final RepositoryToMonitorRepository repositoryToMonitorRepository;
+    private final WorkspaceRoots workspaces;
+    private final WorkspaceLookup workspaceLookup;
+    private final WorkspaceProviderAccounts providerAccounts;
+    private final WorkspaceRepositoryMonitors monitors;
+    private final RepositoryMonitorCommands monitorCommands;
     private final RepositoryRepository repositoryRepository;
     private final WorkspaceRepositoryMonitorService repositoryMonitorService;
     private final TeamRepository teamRepository;
@@ -43,17 +49,23 @@ public class ScmWorkspaceContentEraser {
     private final ApplicationEventPublisher eventPublisher;
 
     public ScmWorkspaceContentEraser(
-            WorkspaceRepository workspaceRepository,
+            WorkspaceRoots workspaces,
+            WorkspaceLookup workspaceLookup,
+            WorkspaceProviderAccounts providerAccounts,
             WorkspaceOrganizationLookup organizations,
-            RepositoryToMonitorRepository repositoryToMonitorRepository,
+            WorkspaceRepositoryMonitors monitors,
+            RepositoryMonitorCommands monitorCommands,
             RepositoryRepository repositoryRepository,
             WorkspaceRepositoryMonitorService repositoryMonitorService,
             TeamRepository teamRepository,
             OrganizationMembershipRepository organizationMembershipRepository,
             ApplicationEventPublisher eventPublisher) {
-        this.workspaceRepository = workspaceRepository;
+        this.workspaces = workspaces;
+        this.workspaceLookup = workspaceLookup;
+        this.providerAccounts = providerAccounts;
         this.organizations = organizations;
-        this.repositoryToMonitorRepository = repositoryToMonitorRepository;
+        this.monitors = monitors;
+        this.monitorCommands = monitorCommands;
         this.repositoryRepository = repositoryRepository;
         this.repositoryMonitorService = repositoryMonitorService;
         this.teamRepository = teamRepository;
@@ -69,7 +81,7 @@ public class ScmWorkspaceContentEraser {
      */
     @Transactional
     public void eraseWorkspaceScmMirror(long workspaceId) {
-        Workspace workspace = workspaceRepository.findById(workspaceId).orElse(null);
+        Workspace workspace = workspaceLookup.find(workspaceId).orElse(null);
         if (workspace == null) {
             log.debug("Skipped SCM mirror erase: reason=workspaceNotFound, workspaceId={}", workspaceId);
             return;
@@ -79,13 +91,12 @@ public class ScmWorkspaceContentEraser {
         eventPublisher.publishEvent(new ScmMirrorErasedEvent(workspaceId));
 
         // Stopped GitLab projects have no monitor but stay indexed, so their sources are found through the items.
-        Set<Long> sources = new LinkedHashSet<>(repositoryToMonitorRepository.findSourceRepositoryIds(workspaceId));
+        Set<Long> sources = new LinkedHashSet<>(monitors.workspaceSourceRepositoryIds(workspaceId));
         sources.addAll(repositoryRepository.findIndexedRepositoryIds(workspaceId));
         List<Long> repositoryIds = List.copyOf(sources);
 
         // Flush monitor removals before checking whether their repositories became orphaned.
-        workspace.getRepositoriesToMonitor().clear();
-        workspaceRepository.saveAndFlush(workspace);
+        monitorCommands.clear(workspaceId);
         // Unindexes this workspace's repository items; an item it kept would otherwise keep its source.
         eventPublisher.publishEvent(new RepositoryMonitoringChangedEvent(workspaceId, repositoryIds));
 
@@ -118,11 +129,10 @@ public class ScmWorkspaceContentEraser {
             return 0;
         }
 
-        workspace.setOrganizationId(null);
-        workspaceRepository.saveAndFlush(workspace);
+        workspaces.unlinkOrganization(workspace.getId());
 
         long otherTenants =
-                workspaceRepository.countOtherActiveWorkspacesForOrganization(organization.getId(), workspace.getId());
+                providerAccounts.otherActiveWorkspacesOfOrganization(organization.getId(), workspace.getId());
         if (otherTenants > 0) {
             log.debug(
                     "Skipped org-tier SCM erase: reason=organizationStillBound, organizationId={},"
