@@ -661,9 +661,6 @@ importers:
       '@playwright/test':
         specifier: 1.64.1
         version: 1.64.1
-      '@primer/primitives':
-        specifier: 11.10.0
-        version: 11.10.0
       '@shadcn/lint':
         specifier: 0.1.0
         version: 0.1.0(eslint@10.14.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@7.0.2)
@@ -3925,9 +3922,6 @@ packages:
     resolution: {integrity: sha512-KLGHFBK28ubfEhRf1+B4OzfLDO3ItXwqYsPAdrfOPPzN3uD2Jp7rYdE5rLkdCHCzkyjh14eH5vL0pHq8dyJmsA==}
     peerDependencies:
       react: '>=16.3'
-
-  '@primer/primitives@11.10.0':
-    resolution: {integrity: sha512-ihZxIst4Izry284StKFjpbYvX6R/IBFTLu+qiuAmR93PsKF2hdjoabhSYwKI8iCxOUx94jVP55bI3NoY7STjYQ==}
 
   '@protobufjs/aspromise@1.1.2':
     resolution: {integrity: sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ==}
@@ -15736,8 +15730,6 @@ snapshots:
   '@primer/octicons-react@19.42.0(react@19.2.8)':
     dependencies:
       react: 19.2.8
-
-  '@primer/primitives@11.10.0': {}
 
   '@protobufjs/aspromise@1.1.2': {}
 

@@ -67,7 +67,6 @@ export function ThemeProvider({
 		}
 
 		root.classList.add(appliedTheme);
-		root.dataset.colorMode = appliedTheme;
 
 		const metaThemeColor = document.querySelector('meta[name="theme-color"]');
 		if (metaThemeColor) {

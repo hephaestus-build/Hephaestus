@@ -1,7 +1,3 @@
-/* GitHub Primer CSS */
-@import "@primer/primitives/dist/css/functional/themes/light.css";
-@import "@primer/primitives/dist/css/functional/themes/dark.css";
-
 @import "tailwindcss";
 
 @source "../node_modules/streamdown/dist";
@@ -58,9 +54,73 @@ code {
 }
 
 /*
+ * GitHub's palette for the provider colors below. These are the values that GitHub Primer
+ * (@primer/primitives 11.10.0, `light.css` and `dark.css`) gives these 26 tokens, copied once:
+ * the whole package is 38 kB of gzip that every page would download for them. The root's `.dark`
+ * class picks the dark values, as it does for `theme-tokens.css`.
+ */
+:root {
+	--bgColor-default: #ffffff;
+	--bgColor-muted: #f6f8fa;
+	--bgColor-emphasis: #25292e;
+	--bgColor-inverse: #25292e;
+	--bgColor-disabled: #eff2f5;
+	--bgColor-white: #ffffff;
+	--bgColor-black: #1f2328;
+	--fgColor-default: #1f2328;
+	--fgColor-muted: #59636e;
+	--fgColor-onEmphasis: #ffffff;
+	--fgColor-onInverse: #ffffff;
+	--fgColor-disabled: #818b98;
+	--fgColor-white: #ffffff;
+	--fgColor-black: #1f2328;
+	--fgColor-accent: #0969da;
+	--fgColor-link: var(--fgColor-accent);
+	--fgColor-neutral: #59636e;
+	--fgColor-success: #1a7f37;
+	--fgColor-open: var(--fgColor-success);
+	--fgColor-attention: #9a6700;
+	--fgColor-severe: #bc4c00;
+	--fgColor-danger: #d1242f;
+	--fgColor-closed: var(--fgColor-danger);
+	--fgColor-done: #8250df;
+	--fgColor-upsell: var(--fgColor-done);
+	--fgColor-sponsors: #bf3989;
+}
+
+:root.dark {
+	--bgColor-default: #0d1117;
+	--bgColor-muted: #151b23;
+	--bgColor-emphasis: #3d444d;
+	--bgColor-inverse: #ffffff;
+	--bgColor-disabled: #212830;
+	--bgColor-white: #ffffff;
+	--bgColor-black: #010409;
+	--fgColor-default: #f0f6fc;
+	--fgColor-muted: #9198a1;
+	--fgColor-onEmphasis: #ffffff;
+	--fgColor-onInverse: #010409;
+	--fgColor-disabled: #656c76;
+	--fgColor-white: #ffffff;
+	--fgColor-black: #010409;
+	--fgColor-accent: #4493f8;
+	--fgColor-link: var(--fgColor-accent);
+	--fgColor-neutral: #9198a1;
+	--fgColor-success: #3fb950;
+	--fgColor-open: var(--fgColor-success);
+	--fgColor-attention: #d29922;
+	--fgColor-severe: #db6d28;
+	--fgColor-danger: #f85149;
+	--fgColor-closed: var(--fgColor-danger);
+	--fgColor-done: #ab7df8;
+	--fgColor-upsell: var(--fgColor-done);
+	--fgColor-sponsors: #db61a2;
+}
+
+/*
  * Provider-aware semantic colors.
- * Default values use @primer/primitives (GitHub), which handles light/dark via data-color-mode on
- * the root element. GitLab overrides are defined below via [data-provider="gitlab"] selectors.
+ * Default values are GitHub's, from the palette above. GitLab overrides are defined below via
+ * [data-provider="gitlab"] selectors.
  *
  * Not `inline`, unlike the block above: a utility such as `text-provider-done-foreground` has to
  * read `var(--color-provider-done-foreground)` where it is used, so that a `[data-provider]` scope
