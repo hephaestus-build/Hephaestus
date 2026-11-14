@@ -2,8 +2,8 @@ package de.tum.cit.aet.hephaestus.activity;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.activity.adapter.ActivityPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
@@ -24,7 +24,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -34,6 +33,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.events.RepositoryRef;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventIdentity;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.scm.spi.ActivityScmFacts;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -82,6 +82,9 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private RepositoryRepository repositoryRepository;
+
+    @Autowired
+    private ActivityScmFacts scm;
 
     @Autowired
     private IdentityProviderRepository gitProviderRepository;
@@ -533,7 +536,7 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
                             testRepository.getId(),
                             "issue",
                             301L));
-            var listener = listener(mock(PullRequestReviewThreadRepository.class));
+            var listener = listener(scm);
             var issue = new Issue();
             issue.setId(301L);
             issue.setNumber(12);
@@ -578,7 +581,7 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldRecordARedeliveredCommentEditOnceAndTwoEditsInOneSecondTwice() {
-            var listener = listener(mock(PullRequestReviewThreadRepository.class));
+            var listener = listener(scm);
             var edit = commentEdit(closedAt, "First words");
             var secondEditInTheSameSecond = commentEdit(closedAt, "Second words");
 
@@ -591,7 +594,7 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldRecordARedeliveredReviewCommentEditOnce() {
-            var listener = listener(mock(PullRequestReviewThreadRepository.class));
+            var listener = listener(scm);
             var comment = new ScmEventPayload.ReviewCommentData(
                     306L,
                     "Edited note",
@@ -614,7 +617,7 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldRecordEachDismissalOfOneReviewOnceEvenWhenGitLabDismissesItAgain() {
-            var listener = listener(mock(PullRequestReviewThreadRepository.class));
+            var listener = listener(scm);
             var dismissed = new ScmDomainEvent.ReviewDismissed(dismissedReview(closedAt), webhook());
             // GitLab reuses the review of an approver: a renewed approval, withdrawn again, is a second dismissal.
             var dismissedAgain =
@@ -629,7 +632,7 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldRecordARedeliveredResolutionOnceAndAResolutionAfterAReopenAgain() {
-            var threads = mock(PullRequestReviewThreadRepository.class);
+            var threads = mock(ActivityScmFacts.class);
             var listener = listener(threads);
             var pullRequest = new PullRequest();
             pullRequest.setId(54L);
@@ -640,7 +643,10 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
             thread.setState(PullRequestReviewThread.State.RESOLVED);
             thread.setResolvedBy(testUser);
             thread.setPullRequest(pullRequest);
-            when(threads.findById(307L)).thenReturn(Optional.of(thread));
+            doReturn(Optional.of(new ActivityScmFacts.ThreadFacts(
+                            testRepository.getId(), testUser.getId(), testUser.getId())))
+                    .when(threads)
+                    .reviewThread(307L);
 
             for (var resolvedAt : List.of(closedAt, closedAt, closedAt.plusSeconds(600))) {
                 thread.setResolvedAt(resolvedAt);
@@ -679,9 +685,8 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
         }
 
         /** The real listener, called in this thread: what it records is what an event records in production. */
-        private ActivityEventListener listener(PullRequestReviewThreadRepository threads) {
-            return new ActivityEventListener(
-                    activityEventService, activityFacts, threads, userRepository, repositoryRepository);
+        private ActivityEventListener listener(ActivityScmFacts facts) {
+            return new ActivityEventListener(activityEventService, activityFacts, facts);
         }
 
         private EventContext webhook() {

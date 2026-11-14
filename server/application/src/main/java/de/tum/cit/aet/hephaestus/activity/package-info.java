@@ -19,6 +19,7 @@
             "integration.core",
             "integration.scm",
             "integration.scm::events",
+            "integration.scm::spi",
             "workspace",
             "workspace::authorization",
             "workspace::context",

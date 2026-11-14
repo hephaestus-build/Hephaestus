@@ -7,7 +7,7 @@
             "core::security",
             "integration.core",
             "integration.core::spi",
-            "integration.scm",
+            "integration.scm::spi",
         })
 @org.jspecify.annotations.NullMarked
 package de.tum.cit.aet.hephaestus.integration;

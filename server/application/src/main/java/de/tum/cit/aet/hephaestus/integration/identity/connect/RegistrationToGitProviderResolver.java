@@ -6,14 +6,12 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNamespaces;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionQueries;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IdentityProviderLookup;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.spi.ScmIdentityLookup;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
@@ -26,17 +24,17 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
     private static final String UNKNOWN = "UNKNOWN";
 
     private final IdentityProviderLookup providers;
-    private final UserRepository userRepository;
+    private final ScmIdentityLookup users;
     private final ConnectionQueries connections;
     private final SourceProviderNamespaces namespaces;
 
     public RegistrationToGitProviderResolver(
             IdentityProviderLookup providers,
-            UserRepository userRepository,
+            ScmIdentityLookup users,
             ConnectionQueries connections,
             SourceProviderNamespaces namespaces) {
         this.providers = providers;
-        this.userRepository = userRepository;
+        this.users = users;
         this.connections = connections;
         this.namespaces = namespaces;
     }
@@ -121,13 +119,12 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
         }
         if (requested.isEmpty()) return Map.of();
         var result = new HashMap<IdentityKey, IdentityProfile>();
-        for (var user : userRepository.findIdentityProfiles(providerIds, nativeIds)) {
-            var key = new IdentityKey(user.getProviderId(), Long.toString(user.getNativeId()), "");
+        for (var user : users.profiles(providerIds, nativeIds)) {
+            var key = new IdentityKey(user.providerId(), Long.toString(user.nativeId()), "");
             if (requested.contains(key))
                 result.put(
                         key,
-                        new IdentityProfile(
-                                user.getLogin(), user.getDisplayName(), user.getAvatarUrl(), user.getProfileUrl()));
+                        new IdentityProfile(user.login(), user.displayName(), user.avatarUrl(), user.profileUrl()));
         }
         return Map.copyOf(result);
     }
@@ -145,22 +142,12 @@ public class RegistrationToGitProviderResolver implements GitProviderRegistry {
     @Override
     @Transactional(readOnly = true)
     public List<ActorProfile> accountActors(long accountId) {
-        return userRepository.findAccountActors(accountId);
+        return users.accountActors(accountId);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<ActorProfile> actor(long actorId) {
-        return userRepository
-                .findById(actorId)
-                .map(user -> new ActorProfile(
-                        user.getId(),
-                        Objects.requireNonNull(user.getProvider().getId(), "Persisted SCM provider requires an id"),
-                        user.getProvider().getType().name(),
-                        user.getProvider().getServerUrl(),
-                        Long.toString(user.getNativeId()),
-                        user.getLogin(),
-                        user.getName() == null ? user.getLogin() : user.getName(),
-                        user.getType() == User.Type.USER));
+        return users.actor(actorId);
     }
 }
