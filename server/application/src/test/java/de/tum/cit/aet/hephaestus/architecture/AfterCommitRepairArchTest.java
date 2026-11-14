@@ -40,7 +40,7 @@ class AfterCommitRepairArchTest extends HephaestusArchitectureTest {
 
     private static final Map<String, Repair> REPAIRS = Map.ofEntries(
             Map.entry(
-                    "integration.scm.workspace.WorkspaceRepositoryMonitorService.onExcludedFromWorkspaces",
+                    "integration.scm.workspace.ExcludedRepositoryWithdrawalService.onExcludedFromWorkspaces",
                     new Repair(
                             RepairKind.POLL,
                             "The saved destination is republished by the scheduled repair; each workspace rechecks the current exclusion under its own lock.",
