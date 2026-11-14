@@ -11,8 +11,8 @@ import { completeTransparencyNotice } from "../../scripts/lib/research-consent.t
 import { expect, loginAsDevAdmin, test } from "./fixtures";
 import { E2E_SERVER_URL } from "./urls.ts";
 
-// Hephaestus answering for real: a server with the worker role (the `e2e` profile, not `playwright`), Docker for the
-// Hephaestus host, and an OpenAI-compatible model. The model is read and provisioned by the same code as
+// Hephaestus answering for real: a server with the agent runtime on (the `e2e` profile, not `playwright`) and its
+// sandboxes in a k3d cluster, as `vp run dev` starts them, and an OpenAI-compatible model. The model is read and provisioned by the same code as
 // `scripts/e2e-setup.ts`, so the variables and defaults are the same. The key goes to the server in a
 // request body and nowhere else.
 const SEEDED_MENTOR_MODEL = 2;

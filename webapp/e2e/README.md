@@ -42,10 +42,12 @@ E2E_LIVE_USERNAME=e2e E2E_GITHUB_WORKSPACE=github-workspace \
 
 Set `E2E_MUTATE_LIVE_INTEGRATIONS=true` as well to run the provider-sync mutation test.
 
-`conversation.spec.ts` drives the Hephaestus page with no model: the packaged-server suite runs without a worker, so a
-question stays queued. `conversation.live.spec.ts` checks that Hephaestus answers. It needs a server with the worker role
-(the `e2e` profile without `playwright`), Docker and the agent image, as in
-[the testing guide](../../docs/contributor/testing.mdx#conversation-turn-live-test). It is skipped unless
+`conversation.spec.ts` drives the Hephaestus page with no model: the packaged-server suite has no sandbox runtime
+(`hephaestus.agent.enabled=false`), so a question stays queued. The CI proof that a seeded member's question, in the app
+or in Slack, gets its answer is the k3d turn drill, not this suite
+([End-to-end testing](../../docs/contributor/e2e-testing.md#conversation-turns)).
+`conversation.live.spec.ts` checks that Hephaestus answers from a real model. It needs a server with the agent runtime on
+(the `e2e` profile without `playwright`) and its sandboxes in a k3d cluster, as `vp run dev` starts them. It is skipped unless
 `E2E_LLM_BASE_URL`, `E2E_LLM_KEY` and `E2E_MODEL` are set. It reads and provisions the model with the same
 code as `scripts/e2e-setup.ts` (`scripts/lib/e2e-llm.ts`), so `E2E_LLM_PROTOCOL` (default
 `openai-responses`) and `E2E_LLM_AUTH_MODE` (default `BEARER`) apply too:

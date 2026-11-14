@@ -8,21 +8,21 @@ description: Running the live practice-review path end to end locally, and the P
 This setup runs the complete local path:
 
 - Workspace creation and SCM sync.
-- Job execution in Docker.
+- Job execution in a Kubernetes sandbox.
 - LLM calls through the application proxy.
 - Result persistence.
 - Feedback delivery to a PR or MR.
 
 The opt-in `e2e` profile enables these local-only capabilities:
 
-| Affordance | Property |
-| --- | --- |
-| Passwordless dev sign-in | `hephaestus.auth.dev-login-enabled=true` |
-| Plain-http cookies (drops `Secure` + `__Host-`) | `hephaestus.auth.cookie-secure=false` |
-| Self-service GitLab/GitHub workspace creation | `hephaestus.workspace.creation-policy=SELF_SERVICE` |
-| Persistable Connection credentials (PATs) | `hephaestus.security.encryption-key` (a fixed local dev key) |
-| Dev review trigger | `hephaestus.dev.trigger-enabled=true` |
-| Agent runtime | `hephaestus.agent.enabled=true`, unless `AGENT_ENABLED=false` |
+| Affordance                                      | Property                                                      |
+| ----------------------------------------------- | ------------------------------------------------------------- |
+| Passwordless dev sign-in                        | `hephaestus.auth.dev-login-enabled=true`                      |
+| Plain-http cookies (drops `Secure` + `__Host-`) | `hephaestus.auth.cookie-secure=false`                         |
+| Self-service GitLab/GitHub workspace creation   | `hephaestus.workspace.creation-policy=SELF_SERVICE`           |
+| Persistable Connection credentials (PATs)       | `hephaestus.security.encryption-key` (a fixed local dev key)  |
+| Dev review trigger                              | `hephaestus.dev.trigger-enabled=true`                         |
+| Agent runtime                                   | `hephaestus.agent.enabled=true`, unless `AGENT_ENABLED=false` |
 
 `vp run dev:server:e2e` starts PostgreSQL before activating the profile.
 
@@ -31,9 +31,9 @@ The auth issuer must use HTTP, and the cookie name must not have the `__Host-` p
 All other profiles require Secure cookies.
 
 Do not expose this profile outside a trusted development machine: it enables passwordless app-admin
-login. The setup script accepts only loopback application and database URLs. The application server
-still needs to be reachable from Docker through `host.docker.internal`, so enforce the boundary with
-the host firewall or an isolated development network.
+login. The setup script accepts only loopback application and database URLs. The sandboxes reach the
+server through its sandbox gateway, so enforce the boundary with the host firewall or an isolated
+development network.
 
 ## Local SCM simulation
 
@@ -109,10 +109,9 @@ requires the appropriate group role and license.
 The agent runs in a Kubernetes sandbox (`ghcr.io/hephaestus-build/agent-pi`) and calls the LLM through
 the in-app proxy, so provider keys never enter the sandbox.
 
-A practice review always runs on an internal Docker network.
-Only the server that started it joins this network.
-Thus, practice reviews need the server in a Docker container under its default hostname.
-A host-run server refuses them.
+A practice review runs in a review sandbox of the k3d cluster.
+A host-run server, as `vp run dev` starts it, creates its sandboxes there.
+They reach it through its sandbox gateway.
 
 Hephaestus posts feedback back to the MR.
 The workspace's **Practices → Practice reviews** view shows the results behind it.
@@ -126,8 +125,33 @@ budget admission, durable usage accounting, sandbox execution, or SCM delivery.
 SPA over plain http through the dev-login — see the `README.md` in that directory. It uses the same
 `cookie-secure=false` + `XSRF-TOKEN` wiring this page relies on.
 
+## Conversation turns
+
+A turn runs in a conversation sandbox, so it needs the sandbox runtime.
+The packaged browser suite has none (`hephaestus.agent.enabled=false`): a question stays queued there.
+Three tests cover a turn:
+
+| Test                                                  | Where it runs                                            | What it proves                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kubernetes-cluster.ts turn-roll`, the k3d turn drill | The drills job of the merge queue and of the nightly run | A seeded member's question in the app runs in a conversation sandbox through a server roll. The turn ends `DONE` on its first attempt, and its answer holds the output of each `bash` call. Then a signed Slack message from the member's linked Slack identity reaches a turn in the same sandbox. The turn ends `DONE`, the Slack fake receives the answer as `chat.postMessage` in the member's DM, and the answer holds the reply's `ts`. |
+| `conversation.live.spec.ts`                           | By hand, with a real model                               | The page shows a real model's answer, and a stop request ends a turn.                                                                                                                                                                                                                                                                                                                                                                         |
+| `conversation.spec.ts`                                | The packaged browser suite                               | The page around a turn: the queue, a thread, a deleted question, a rating.                                                                                                                                                                                                                                                                                                                                                                    |
+
+The drill reads the database. No CI test shows an answered turn in the page.
+
+The drill uses two stand-ins in the pod network, and it runs the product's own paths:
+
+- The capacity benchmark's fake model provider (`scripts/capacity-provider.ts`) answers the model calls.
+- `scripts/slack-fake.ts` is a Slack Web API. The server installs the app through its own OAuth callback against it, and it takes the posted messages.
+  The server reaches it through `hephaestus.integration.slack.api-base`.
+- The drill releases Silent Mode through the instance-admin API before the Slack message, because a release starts with it on.
+  The release has no real provider, so only the fakes receive what it posts.
+- The drill signs the Events API request.
+  It generates the signing secret for each run in the release's Secret.
+  The fake issues a new bot token each time it starts.
+
 ## Caveats
 
 - `Plan & scope issues` is evaluated in PR context. Use a PR or MR.
 - **Delivery needs a PR row with `author_id`** — synced MRs have it. A hand-seeded PR may not.
-- The sandbox runtime needs `/var/run/docker.sock`.
+- The sandbox runtime needs a Kubernetes cluster with the agent-sandbox controller. `vp run dev` creates one with k3d.

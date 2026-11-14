@@ -14,6 +14,7 @@ import com.slack.api.model.view.View;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
+import de.tum.cit.aet.hephaestus.integration.slack.SlackProperties;
 import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialProvider;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -52,7 +53,8 @@ class SlackMessageServiceTest extends BaseUnitTest {
         service = new SlackMessageService(
                 credentialProvider,
                 new SlackRateLimitTracker(new SimpleMeterRegistry()),
-                new OutboundEgressGuard(() -> silentModeEngaged));
+                new OutboundEgressGuard(() -> silentModeEngaged),
+                new SlackProperties(SlackProperties.SLACK));
     }
 
     @AfterEach
@@ -128,6 +130,16 @@ class SlackMessageServiceTest extends BaseUnitTest {
                 .isInstanceOf(SlackSendException.class)
                 .satisfies(
                         ex -> assertThat(((SlackSendException) ex).slackError()).isEqualTo("silent_mode_engaged"));
+    }
+
+    @Test
+    void shouldCallSlackAtTheConfiguredApiBase() {
+        assertThat(SlackMessageService.nativeConfig(new SlackProperties(SlackProperties.SLACK))
+                        .getMethodsEndpointUrlPrefix())
+                .isEqualTo("https://slack.com/api/");
+        assertThat(SlackMessageService.nativeConfig(new SlackProperties("http://slack.fake:8080/"))
+                        .getMethodsEndpointUrlPrefix())
+                .isEqualTo("http://slack.fake:8080/api/");
     }
 
     @Test

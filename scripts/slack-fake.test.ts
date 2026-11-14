@@ -1,0 +1,788 @@
+import assert from "node:assert/strict";
+import { once } from "node:events";
+import { test } from "node:test";
+
+import { asRecord, parseJson } from "./lib/json.ts";
+import {
+	directMessageEvent,
+	installCookie,
+	installState,
+	receivedCalls,
+	slackSignature,
+} from "./lib/slack-turn.ts";
+import {
+	conforms,
+	FAKE_BOT_USER,
+	FAKE_INSTALL_CODE,
+	FAKE_TEAM,
+	postRefusal,
+	SCHEMAS,
+	type Schema,
+	type Spec,
+	slackFake,
+} from "./slack-fake.ts";
+
+async function withFake(body: (base: string, token: string) => Promise<void>): Promise<void> {
+	const { server, token } = slackFake();
+	server.listen(0, "127.0.0.1");
+	await once(server, "listening");
+	const address = server.address();
+	if (address === null || typeof address === "string") {
+		throw new TypeError("the fake listens on no port");
+	}
+	try {
+		await body(`http://127.0.0.1:${address.port}`, token);
+	} finally {
+		server.close();
+	}
+}
+
+async function json(response: Response): Promise<unknown> {
+	return (await response.json()) as unknown;
+}
+
+/** The calls the fake listed, from the `after`th on, waiting at most `timeoutMs` for one. */
+async function received(base: string, query = ""): Promise<ReturnType<typeof receivedCalls>> {
+	const response = await fetch(`${base}/received${query}`);
+	return receivedCalls(await response.text());
+}
+
+const FORM = "application/x-www-form-urlencoded";
+
+async function postMessage(
+	base: string,
+	headers: Record<string, string>,
+	body: string,
+	contentType = FORM,
+): Promise<Record<string, unknown>> {
+	return asRecord(
+		await json(
+			await fetch(`${base}/api/chat.postMessage`, {
+				method: "POST",
+				headers: { "content-type": contentType, ...headers },
+				body,
+			}),
+		),
+		"chat.postMessage answer",
+	);
+}
+
+await test("the fake installs the app for its code only, and hands out one token per start", async () => {
+	await withFake(async (base, token) => {
+		const post = async (code: string) =>
+			json(
+				await fetch(`${base}/api/oauth.v2.access`, {
+					method: "POST",
+					headers: { "content-type": FORM },
+					body: new URLSearchParams({ code, client_id: "c", client_secret: "s" }),
+				}),
+			);
+		assert.deepEqual(await post("wrong"), { ok: false, error: "invalid_code" });
+		assert.deepEqual(await post(FAKE_INSTALL_CODE), {
+			ok: true,
+			access_token: token,
+			token_type: "bot",
+			team: FAKE_TEAM,
+			bot_user_id: FAKE_BOT_USER,
+		});
+	});
+	const tokens = new Set<string>();
+	for (let start = 0; start < 2; start += 1) {
+		await withFake(async (_base, token) => {
+			tokens.add(token);
+		});
+	}
+	assert.equal(tokens.size, 2);
+});
+
+await test("the fake names the bot of the install for its own token only", async () => {
+	await withFake(async (base, token) => {
+		const authTest = async (authorization: string) =>
+			json(
+				await fetch(`${base}/api/auth.test`, {
+					method: "POST",
+					headers: { authorization, "content-type": FORM },
+				}),
+			);
+		assert.deepEqual(await authTest("Bearer xoxb-other"), { ok: false, error: "invalid_auth" });
+		assert.deepEqual(await authTest(`Bearer ${token}`), {
+			ok: true,
+			team_id: FAKE_TEAM.id,
+			team: FAKE_TEAM.name,
+			user_id: FAKE_BOT_USER,
+			bot_id: "B0TURNROLL",
+		});
+		// The team and the bot user are the ones that `oauth.v2.access` handed out.
+		const installed = await json(
+			await fetch(`${base}/api/oauth.v2.access`, {
+				method: "POST",
+				headers: { "content-type": FORM },
+				body: new URLSearchParams({ code: FAKE_INSTALL_CODE }),
+			}),
+		);
+		assert.equal(asRecord(installed, "install").bot_user_id, FAKE_BOT_USER);
+		assert.deepEqual(asRecord(asRecord(installed, "install").team, "team"), FAKE_TEAM);
+	});
+});
+
+await test("the fake lists a posted message with its channel, its text and whether the install's token sent it", async () => {
+	await withFake(async (base, token) => {
+		const auth = { authorization: `Bearer ${token}` };
+		assert.deepEqual(
+			await postMessage(
+				base,
+				{ authorization: "Bearer xoxb-other" },
+				new URLSearchParams({ channel: "D1", text: "no" }).toString(),
+			),
+			{ ok: false, error: "invalid_auth" },
+		);
+		const posted = await postMessage(
+			base,
+			auth,
+			new URLSearchParams({
+				channel: "D1",
+				text: "an answer",
+				thread_ts: "1760000000.000100",
+			}).toString(),
+		);
+		assert.equal(posted.ok, true);
+		const asJson = await postMessage(
+			base,
+			auth,
+			JSON.stringify({ channel: "D2", text: "as JSON", blocks: [{ type: "markdown", text: "x" }] }),
+			"application/json; charset=utf-8",
+		);
+		assert.equal(asJson.channel, "D2");
+		assert.deepEqual(await received(base), [
+			{
+				method: "chat.postMessage",
+				authorized: false,
+				channel: "D1",
+				threadTs: null,
+				text: "no",
+				blocksText: null,
+				ts: null,
+				error: "invalid_auth",
+			},
+			{
+				method: "chat.postMessage",
+				authorized: true,
+				channel: "D1",
+				threadTs: "1760000000.000100",
+				text: "an answer",
+				blocksText: null,
+				ts: posted.ts,
+				error: null,
+			},
+			{
+				method: "chat.postMessage",
+				authorized: true,
+				channel: "D2",
+				threadTs: null,
+				text: "as JSON",
+				blocksText: "x",
+				ts: asJson.ts,
+				error: null,
+			},
+		]);
+	});
+});
+
+await test("the fake refuses another method, and lists it", async () => {
+	await withFake(async (base, token) => {
+		const answer = await fetch(`${base}/api/users.info`, {
+			method: "POST",
+			headers: { authorization: `Bearer ${token}` },
+			body: "user=U1",
+		});
+		assert.deepEqual(await json(answer), { ok: false, error: "unknown_method" });
+		const calls = await received(base);
+		assert.equal(calls[0]?.method, "users.info");
+		const health = await fetch(`${base}/health`);
+		assert.equal(health.status, 200);
+		const nothing = await fetch(`${base}/nothing`);
+		assert.equal(nothing.status, 404);
+	});
+});
+
+await test("Slack's signature is the v0 HMAC over the timestamp and the exact body", () => {
+	// The example of https://api.slack.com/authentication/verifying-requests-from-slack.
+	assert.equal(
+		slackSignature(
+			"8f742231b10e8888abcd99yyyzzz85a5",
+			1_531_420_618,
+			"token=xyzz0WbapA4vBCDEFasx0q6G&team_id=T1DC2JH3J&team_domain=testteamnow&channel_id=G8PSS9T3V&channel_name=foobar&user_id=U2CERLKJA&user_name=roadrunner&command=%2Fwebhook-collect&text=&response_url=https%3A%2F%2Fhooks.slack.com%2Fcommands%2FT1DC2JH3J%2F397700885554%2F96rGlfmibIGlgcZRskXaIFfN&trigger_id=398738663015.47445629121.803a0bc887a14d10d2c447fce8b6703c",
+		),
+		"v0=a2114d57b48eac39b9ad189dd8316235a7b4a8d21a10bd27519666489c69b503",
+	);
+});
+
+await test("a direct message event names its team, member, channel and delivery", () => {
+	const event = asRecord(
+		parseJson(
+			directMessageEvent({
+				team: "T1",
+				user: "U1",
+				channel: "D1",
+				text: "hi",
+				ts: "1760000000.000100",
+				eventId: "Ev1",
+			}),
+		),
+		"event",
+	);
+	assert.equal(event.team_id, "T1");
+	assert.equal(event.event_id, "Ev1");
+	assert.deepEqual(event.event, {
+		type: "message",
+		channel_type: "im",
+		channel: "D1",
+		user: "U1",
+		text: "hi",
+		ts: "1760000000.000100",
+	});
+});
+
+await test("the install's state and its browser cookie are what the server's callback expects", () => {
+	assert.equal(
+		installState("https://slack.com/oauth/v2/authorize?client_id=c&state=a.b-c&scope=x"),
+		"a.b-c",
+	);
+	assert.throws(
+		() => installState("https://slack.com/oauth/v2/authorize?client_id=c"),
+		/no state/u,
+	);
+	// sha256("abc"), as `OAuthBrowserBinding.cookieName` and `cookieValue` derive them.
+	assert.equal(
+		installCookie("abc"),
+		"__Host-CONNECT_ba7816bf8f01cfea=ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+	);
+});
+
+await test("the fake refuses what chat.postMessage refuses, with Slack's error, and lists the refusal", async () => {
+	const good: Record<string, string> = {
+		channel: "D1",
+		text: "an answer",
+		blocks: JSON.stringify([{ type: "markdown", text: "the visible answer" }]),
+		thread_ts: "1760000000.000100",
+		metadata: JSON.stringify({ event_type: "heph_entry", event_payload: { entry_id: "e" } }),
+	};
+	const refused = (changes: Record<string, string | undefined>) =>
+		postRefusal(
+			new Map(
+				Object.entries({ ...good, ...changes }).flatMap(([key, value]) =>
+					value === undefined ? [] : [[key, value] as const],
+				),
+			),
+		).error;
+	assert.equal(refused({}), null);
+	assert.equal(refused({ blocks: "not-json" }), "invalid_blocks_format");
+	assert.equal(refused({ blocks: '{"type":"markdown"}' }), "invalid_blocks_format");
+	assert.equal(refused({ blocks: '[{"text":"no type"}]' }), "invalid_blocks");
+	assert.equal(refused({ blocks: "[1]" }), "invalid_blocks");
+	assert.equal(refused({ channel: undefined }), "channel_not_found");
+	assert.equal(refused({ channel: "" }), "channel_not_found");
+	assert.equal(refused({ text: undefined, blocks: undefined }), "no_text");
+	assert.equal(refused({ text: "", blocks: "[]" }), "no_text");
+	assert.equal(refused({ text: undefined }), null);
+	assert.equal(refused({ blocks: undefined }), null);
+	for (const threadTs of [
+		"",
+		"1.2",
+		"not-a-ts",
+		"1760000000",
+		"1760000000.0001",
+		"x760000000.000100",
+	]) {
+		assert.equal(refused({ thread_ts: threadTs }), "invalid_arguments", threadTs);
+	}
+	assert.equal(refused({ metadata: "{" }), "invalid_metadata_format");
+	assert.equal(refused({ metadata: "[]" }), "invalid_metadata_schema");
+	assert.equal(refused({ metadata: '{"event_type":"x"}' }), "invalid_metadata_schema");
+	assert.equal(refused({ metadata: '{"event_payload":{}}' }), "invalid_metadata_schema");
+
+	await withFake(async (base, token) => {
+		const post = async (fields: Record<string, string>) =>
+			postMessage(
+				base,
+				{ authorization: `Bearer ${token}` },
+				new URLSearchParams(fields).toString(),
+			);
+		assert.deepEqual(await post({ channel: "D1", text: "x", blocks: "not-json" }), {
+			ok: false,
+			error: "invalid_blocks_format",
+		});
+		assert.deepEqual(await post({ channel: "D1", text: "x", thread_ts: "1.2" }), {
+			ok: false,
+			error: "invalid_arguments",
+		});
+		assert.deepEqual(await post({ channel: "D1" }), { ok: false, error: "no_text" });
+		const calls = await received(base);
+		assert.deepEqual(
+			calls.map((call) => [call.error, call.ts]),
+			[
+				["invalid_blocks_format", null],
+				["invalid_arguments", null],
+				["no_text", null],
+			],
+		);
+	});
+});
+
+const markdown = (text: string) => ({ type: "markdown", text });
+const mrkdwn = (text: string) => ({ type: "mrkdwn", text });
+const plain = (text: string) => ({ type: "plain_text", text });
+const feedbackButtons = {
+	type: "feedback_buttons",
+	action_id: "heph_feedback",
+	positive_button: { text: plain("Helpful"), value: "HELPFUL:1", accessibility_label: "Helpful" },
+	negative_button: { text: plain("Not helpful"), value: "NOT_HELPFUL:1" },
+};
+const confirm = {
+	title: plain("Sure?"),
+	text: plain("Do not use my messages."),
+	confirm: plain("Yes"),
+	deny: plain("No"),
+};
+const button = {
+	type: "button",
+	text: plain("Link account"),
+	action_id: "link",
+	url: "https://x.example",
+};
+
+/** The error that `chat.postMessage` answers for these blocks, or null when it accepts them. */
+const blocksError = (blocks: unknown) =>
+	postRefusal(
+		new Map([
+			["channel", "D1"],
+			["text", "fallback"],
+			["blocks", JSON.stringify(blocks)],
+		]),
+	).error;
+
+await test("the fake accepts the blocks that the server sends", () => {
+	for (const blocks of [
+		[
+			{
+				type: "actions",
+				elements: [
+					{
+						...button,
+						agent_prompt: "Explain this",
+						agent_prompt_display: "Explain",
+						visible_to_user_ids: ["U1", "U2"],
+					},
+				],
+			},
+		],
+		[markdown("an answer")],
+		[
+			markdown("an answer"),
+			{ type: "context", elements: [plain("Hephaestus answers with an AI model.")] },
+		],
+		[markdown("an answer"), { type: "context_actions", elements: [feedbackButtons] }],
+		[
+			{ type: "section", text: mrkdwn("*Your weekly digest is ready*") },
+			{ type: "actions", elements: [{ ...button, style: "primary", confirm }] },
+			{ type: "context", elements: [mrkdwn("Reply in this thread to go through it.")] },
+		],
+		[
+			{
+				type: "section",
+				fields: [mrkdwn("one"), plain("two")],
+				accessory: button,
+				block_id: "b".repeat(255),
+			},
+		],
+	]) {
+		assert.equal(blocksError(blocks), null, JSON.stringify(blocks));
+	}
+});
+
+await test("the fake refuses a block that lacks what Slack requires of its type", () => {
+	const invalid: [string, unknown][] = [
+		// A section needs a text object, not a string: the shape that once passed every assertion.
+		["a section with a text string", [{ type: "section", text: "The commands printed" }]],
+		["a section with no text and no fields", [{ type: "section" }]],
+		["a section whose text is no text object", [{ type: "section", text: { text: "x" } }]],
+		[
+			"a section whose text type is image",
+			[{ type: "section", text: { type: "image", text: "x" } }],
+		],
+		["a section with an empty text", [{ type: "section", text: mrkdwn("") }]],
+		[
+			"a section whose text is 3001 characters",
+			[{ type: "section", text: mrkdwn("x".repeat(3001)) }],
+		],
+		[
+			"a section with more than 10 fields",
+			[{ type: "section", fields: Array.from({ length: 11 }, () => mrkdwn("x")) }],
+		],
+		["a section with no field", [{ type: "section", fields: [] }]],
+		[
+			"a section field of 2001 characters",
+			[{ type: "section", fields: [mrkdwn("x".repeat(2001))] }],
+		],
+		["a section field that is a string", [{ type: "section", fields: ["x"] }]],
+		[
+			"a section accessory that is no button",
+			[{ type: "section", text: mrkdwn("x"), accessory: { type: "image" } }],
+		],
+		["a markdown block with no text", [{ type: "markdown" }]],
+		["a markdown block with an empty text", [markdown("")]],
+		[
+			"a markdown block whose text is no string",
+			[{ type: "markdown", text: { type: "mrkdwn", text: "x" } }],
+		],
+		["a context block with no elements", [{ type: "context" }]],
+		["a context block with an empty list", [{ type: "context", elements: [] }]],
+		[
+			"a context block with 11 elements",
+			[{ type: "context", elements: Array.from({ length: 11 }, () => plain("x")) }],
+		],
+		["a context element that is a string", [{ type: "context", elements: ["x"] }]],
+		[
+			"a context element of 3001 characters",
+			[{ type: "context", elements: [plain("x".repeat(3001))] }],
+		],
+		["a context_actions block with no elements", [{ type: "context_actions" }]],
+		[
+			"a context_actions block with 6 elements",
+			[{ type: "context_actions", elements: Array.from({ length: 6 }, () => feedbackButtons) }],
+		],
+		[
+			"a context_actions element of another type",
+			[{ type: "context_actions", elements: [{ type: "icon_button" }] }],
+		],
+		[
+			"feedback buttons without a negative button",
+			[{ type: "context_actions", elements: [{ ...feedbackButtons, negative_button: undefined }] }],
+		],
+		[
+			"a feedback button whose text is mrkdwn",
+			[
+				{
+					type: "context_actions",
+					elements: [
+						{ ...feedbackButtons, positive_button: { text: mrkdwn("Helpful"), value: "v" } },
+					],
+				},
+			],
+		],
+		[
+			"a feedback button without a value",
+			[
+				{
+					type: "context_actions",
+					elements: [{ ...feedbackButtons, positive_button: { text: plain("Helpful") } }],
+				},
+			],
+		],
+		[
+			"a feedback button value of 2001 characters",
+			[
+				{
+					type: "context_actions",
+					elements: [
+						{
+							...feedbackButtons,
+							positive_button: { text: plain("Helpful"), value: "v".repeat(2001) },
+						},
+					],
+				},
+			],
+		],
+		[
+			"a feedback button text of 76 characters",
+			[
+				{
+					type: "context_actions",
+					elements: [
+						{ ...feedbackButtons, positive_button: { text: plain("t".repeat(76)), value: "v" } },
+					],
+				},
+			],
+		],
+		[
+			"a feedback button label of 76 characters",
+			[
+				{
+					type: "context_actions",
+					elements: [
+						{
+							...feedbackButtons,
+							positive_button: {
+								text: plain("Helpful"),
+								value: "v",
+								accessibility_label: "l".repeat(76),
+							},
+						},
+					],
+				},
+			],
+		],
+		["an actions block with no elements", [{ type: "actions" }]],
+		[
+			"an actions block with 26 buttons",
+			[{ type: "actions", elements: Array.from({ length: 26 }, () => button) }],
+		],
+		[
+			"an actions element that is no button",
+			[{ type: "actions", elements: [{ type: "static_select" }] }],
+		],
+		[
+			"a button whose text is mrkdwn",
+			[{ type: "actions", elements: [{ ...button, text: mrkdwn("Link") }] }],
+		],
+		[
+			"a button with an unknown style",
+			[{ type: "actions", elements: [{ ...button, style: "loud" }] }],
+		],
+		[
+			"a button value of 2001 characters",
+			[{ type: "actions", elements: [{ ...button, value: "v".repeat(2001) }] }],
+		],
+		[
+			"a button confirmation without a deny label",
+			[{ type: "actions", elements: [{ ...button, confirm: { ...confirm, deny: undefined } }] }],
+		],
+		[
+			"a block id of 256 characters",
+			[{ type: "section", text: mrkdwn("x"), block_id: "b".repeat(256) }],
+		],
+		// The optional fields that once passed unchecked.
+		[
+			"a text object with an emoji that is no boolean",
+			[{ type: "section", text: { ...plain("x"), emoji: "wrong" } }],
+		],
+		[
+			"a text object with a verbatim that is no boolean",
+			[{ type: "section", text: { ...mrkdwn("x"), verbatim: 42 } }],
+		],
+		[
+			"a section with an expand that is no boolean",
+			[{ type: "section", text: mrkdwn("x"), expand: "wrong" }],
+		],
+		["a field that Slack does not define", [{ type: "section", text: mrkdwn("x"), unknown: true }]],
+		[
+			"a field that Slack does not define, with a null value",
+			[{ type: "section", text: mrkdwn("x"), unknown: null }],
+		],
+		[
+			"a button with an agent_prompt_display and no agent_prompt",
+			[{ type: "actions", elements: [{ ...button, agent_prompt_display: "x" }] }],
+		],
+		[
+			"a button with an agent_prompt of 4001 characters",
+			[{ type: "actions", elements: [{ ...button, agent_prompt: "p".repeat(4001) }] }],
+		],
+		[
+			"a button whose visible_to_user_ids holds a number",
+			[{ type: "actions", elements: [{ ...button, visible_to_user_ids: [42] }] }],
+		],
+		["a block type that the server never sends", [{ type: "divider" }]],
+		["a header block", [{ type: "header", text: plain("Hephaestus") }]],
+	];
+	for (const [name, blocks] of invalid) {
+		assert.equal(blocksError(blocks), "invalid_blocks", name);
+	}
+	// All markdown blocks of a payload share 12,000 characters.
+	assert.equal(blocksError([markdown("x".repeat(12_000))]), null);
+	assert.equal(
+		blocksError([markdown("x".repeat(6000)), markdown("x".repeat(6001))]),
+		"msg_blocks_too_long",
+	);
+});
+
+/** A value that satisfies `spec`. */
+function validValue(spec: Spec): unknown {
+	switch (spec.is) {
+		case "string": {
+			return spec.values?.[0] ?? "x".repeat(Math.max(spec.min ?? 1, 1));
+		}
+		case "boolean": {
+			return true;
+		}
+		case "object": {
+			return minimal(spec.of ?? "");
+		}
+		case "array": {
+			return Array.from({ length: Math.max(spec.min ?? 1, 1) }, () =>
+				spec.each === "string" ? "x" : minimal(spec.of ?? ""),
+			);
+		}
+	}
+}
+
+/** The smallest object that satisfies the schema `name`: its required fields, and the first group of `anyOf`. */
+function minimal(name: string): Record<string, unknown> {
+	const schema = SCHEMAS[name];
+	assert.ok(schema, name);
+	const wanted = (key: string, spec: Spec) =>
+		spec.required === true || schema.anyOf?.[0]?.includes(key) === true;
+	return Object.fromEntries(
+		Object.entries(schema.fields)
+			.filter(([key, spec]) => wanted(key, spec))
+			.map(([key, spec]) => [key, validValue(spec)]),
+	);
+}
+
+type Cases = [string, unknown][];
+
+/** Cases for the length or the count that one field of `base` may have. */
+function sizeCases(base: Record<string, unknown>, key: string, spec: Spec): Cases {
+	const cases: Cases = [];
+	if (spec.is === "string" && spec.max !== undefined) {
+		cases.push([`${key} over ${String(spec.max)}`, { ...base, [key]: "x".repeat(spec.max + 1) }]);
+	}
+	if (spec.is === "string" && (spec.min ?? 0) > 0) {
+		cases.push([`${key} empty`, { ...base, [key]: "" }]);
+	}
+	if (spec.is === "array") {
+		const item = spec.each === "string" ? "x" : minimal(spec.of ?? "");
+		if ((spec.min ?? 0) > 0) {
+			cases.push([`${key} with fewer than ${String(spec.min)} items`, { ...base, [key]: [] }]);
+		}
+		if (spec.max !== undefined) {
+			cases.push([
+				`${key} with more than ${String(spec.max)} items`,
+				{ ...base, [key]: Array.from({ length: spec.max + 1 }, () => item) },
+			]);
+		}
+		cases.push([
+			`${key} with an item of the wrong type`,
+			{ ...base, [key]: [spec.each === "string" ? 42 : "wrong"] },
+		]);
+	}
+	return cases;
+}
+
+/** Cases for the fields that a field depends on: the sibling it needs, or the value of `type` it goes with. */
+function dependencyCases(
+	base: Record<string, unknown>,
+	schema: Schema,
+	key: string,
+	spec: Spec,
+): Cases {
+	const cases: Cases = [];
+	if (spec.requires !== undefined) {
+		cases.push([`${key} without ${spec.requires}`, { ...base, [key]: validValue(spec) }]);
+	}
+	if (spec.onlyWhen !== undefined) {
+		const [sibling, value] = spec.onlyWhen;
+		const other = schema.fields[sibling]?.values?.find((candidate) => candidate !== value);
+		if (other !== undefined) {
+			cases.push([
+				`${key} while ${sibling} is ${other}`,
+				{ ...base, [sibling]: other, [key]: validValue(spec) },
+			]);
+		}
+	}
+	return cases;
+}
+
+/** Objects of the schema `name` that each break one rule of one field, as the table defines it. */
+function broken(name: string): Cases {
+	const schema = SCHEMAS[name];
+	assert.ok(schema, name);
+	const base = minimal(name);
+	const cases: Cases = [
+		["a field that is not defined", { ...base, unknown_field: true }],
+		["a field that is not defined, with a null value", { ...base, unknown_field: null }],
+	];
+	if (schema.anyOf !== undefined) {
+		cases.push(["none of its alternative groups", { ...base, text: undefined, fields: undefined }]);
+	}
+	for (const [key, spec] of Object.entries(schema.fields)) {
+		const wrongType = { string: 42, boolean: "wrong", object: "wrong", array: "wrong" }[spec.is];
+		cases.push([`${key} of the wrong type`, { ...base, [key]: wrongType }]);
+		if (spec.required === true) {
+			const { [key]: _removed, ...without } = base;
+			cases.push([`${key} missing`, without]);
+		}
+		if (spec.values !== undefined) {
+			cases.push([`${key} outside its values`, { ...base, [key]: "not-a-value" }]);
+		}
+		cases.push(...sizeCases(base, key, spec), ...dependencyCases(base, schema, key, spec));
+	}
+	return cases;
+}
+
+await test("every schema of the fake accepts its minimal object and each optional field with a valid value", () => {
+	for (const [name, schema] of Object.entries(SCHEMAS)) {
+		assert.equal(conforms(minimal(name), name), true, name);
+		for (const [key, spec] of Object.entries(schema.fields)) {
+			if (spec.onlyWhen === undefined) {
+				const sibling = spec.requires === undefined ? {} : { [spec.requires]: "x" };
+				assert.equal(
+					conforms({ ...minimal(name), ...sibling, [key]: validValue(spec) }, name),
+					true,
+					`${name}.${key}`,
+				);
+			}
+		}
+	}
+	// `emoji` goes with plain text and `verbatim` with mrkdwn.
+	assert.equal(conforms({ type: "plain_text", text: "x", emoji: true }, "text-3000"), true);
+	assert.equal(conforms({ type: "mrkdwn", text: "x", verbatim: false }, "text-3000"), true);
+	assert.equal(conforms({ type: "mrkdwn", text: "x", emoji: true }, "text-3000"), false);
+	assert.equal(conforms({ type: "plain_text", text: "x", verbatim: true }, "text-3000"), false);
+});
+
+await test("every field of every schema of the fake refuses a value that breaks its rule", () => {
+	let count = 0;
+	for (const name of Object.keys(SCHEMAS)) {
+		for (const [what, value] of broken(name)) {
+			count += 1;
+			assert.equal(conforms(value, name), false, `${name}: ${what}`);
+		}
+	}
+	assert.ok(count > 150, `${count} generated cases`);
+});
+
+await test("the fake lists the words of the blocks that a post carried", async () => {
+	await withFake(async (base, token) => {
+		const posted = await postMessage(
+			base,
+			{ authorization: `Bearer ${token}` },
+			JSON.stringify({
+				channel: "D1",
+				text: "fallback",
+				blocks: [
+					{ type: "markdown", text: "the visible answer" },
+					{ type: "context", elements: [{ type: "plain_text", text: "an AI label" }] },
+				],
+			}),
+			"application/json",
+		);
+		assert.equal(posted.ok, true);
+		const calls = await received(base);
+		assert.equal(calls[0]?.blocksText, "the visible answer\nan AI label");
+	});
+});
+
+await test("a request for the received calls returns as soon as one arrives, or empty at its deadline", async () => {
+	await withFake(async (base, token) => {
+		const started = Date.now();
+		assert.deepEqual(await received(base, "?after=0&timeoutMs=100"), []);
+		assert.ok(Date.now() - started >= 90);
+
+		const waiting = received(base, "?after=0&timeoutMs=20000");
+		await postMessage(
+			base,
+			{ authorization: `Bearer ${token}` },
+			new URLSearchParams({ channel: "D1", text: "hello" }).toString(),
+		);
+		const arrived = await waiting;
+		assert.deepEqual(
+			arrived.map((call) => call.text),
+			["hello"],
+		);
+		assert.ok(Date.now() - started < 10_000, "it did not wait for its deadline");
+		// A call that arrived before the request is not held back, and `after` skips what the caller has seen.
+		const heldBack = await received(base, "?after=0&timeoutMs=20000");
+		assert.equal(heldBack.length, 1);
+		assert.deepEqual(await received(base, "?after=1"), []);
+	});
+});

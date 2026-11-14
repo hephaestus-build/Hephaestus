@@ -74,7 +74,8 @@
     {
       "name": "hephaestus.integration.slack.api-base",
       "type": "java.lang.String",
-      "description": "Base URL of the Slack API. Override it only to point at a mock server in tests."
+      "description": "Base URL of the Slack API, for the OAuth exchange and for every message the server posts. For tests only: only the server's environment sets it, and a server that another address replaces sends every workspace's bot token and Slack traffic there. It must be an absolute http or https URL with a host and without user information, query or fragment, or the server does not start.",
+      "sourceType": "de.tum.cit.aet.hephaestus.integration.slack.SlackProperties"
     },
     {
       "name": "hephaestus.agent.image.reference",

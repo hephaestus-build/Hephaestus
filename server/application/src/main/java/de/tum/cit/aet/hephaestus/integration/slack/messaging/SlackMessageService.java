@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressSuppresse
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
+import de.tum.cit.aet.hephaestus.integration.slack.SlackProperties;
 import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialProvider;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import jakarta.annotation.PreDestroy;
@@ -81,8 +82,9 @@ public class SlackMessageService {
     public SlackMessageService(
             SlackCredentialProvider credentialProvider,
             SlackRateLimitTracker rateLimitTracker,
-            OutboundEgressGuard egressGuard) {
-        this(Slack.getInstance(nativeConfig()), credentialProvider, rateLimitTracker, egressGuard);
+            OutboundEgressGuard egressGuard,
+            SlackProperties properties) {
+        this(Slack.getInstance(nativeConfig(properties)), credentialProvider, rateLimitTracker, egressGuard);
     }
 
     /**
@@ -101,11 +103,13 @@ public class SlackMessageService {
 
     /**
      * The configuration of this gateway's own Slack client, with a deadline for each HTTP call
-     * ({@link #NATIVE_CALL_TIMEOUT_MS}). The SDK's shared default client and its configuration stay unchanged.
+     * ({@link #NATIVE_CALL_TIMEOUT_MS}) and the methods under the API origin of {@code properties}. The SDK's shared
+     * default client and its configuration stay unchanged.
      */
-    static SlackConfig nativeConfig() {
+    static SlackConfig nativeConfig(SlackProperties properties) {
         SlackConfig config = new SlackConfig();
         config.setHttpClientCallTimeoutMillis(NATIVE_CALL_TIMEOUT_MS);
+        config.setMethodsEndpointUrlPrefix(properties.apiBase() + "/api/");
         return config;
     }
 

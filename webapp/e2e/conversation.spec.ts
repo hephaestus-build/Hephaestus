@@ -2,8 +2,9 @@ import type { Locator, Page } from "@playwright/test";
 
 import { expect, loginAsDevAdmin, test } from "./fixtures";
 
-// The packaged-server suite runs without a worker (`application-playwright.yml`), so a question stays queued:
-// these tests prove what the app does around a turn, and `conversation.live.spec.ts` proves an answer.
+// The packaged-server suite has no sandbox runtime (`hephaestus.agent.enabled=false` in `application-playwright.yml`),
+// so a question stays queued: these tests prove what the app does around a turn. The k3d turn drill
+// (`kubernetes-cluster.ts turn-roll`) proves an answer, and `conversation.live.spec.ts` proves one from a real model.
 const SEEDED_ANSWER = "e2e0c0a0-0000-4000-8000-000000000003";
 
 /** A question nobody else asked, so a test finds its own message in a conversation that outlives it. */
