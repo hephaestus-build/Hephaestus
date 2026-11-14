@@ -191,7 +191,7 @@ Each record names what was erased by its ids alone.
 
 A database restore brings the erased data back.
 Keep these records for as long as your oldest backup, so that the erasure recovery can erase the data again.
-[Backup and restore](./backup-restore#reapply-erasure-decisions-before-processing-resumes) describes the recovery.
+[Reapply erasures after a restore](./erasure-recovery) describes the recovery.
 
 ## Agent run and outbox events
 

@@ -1,76 +1,71 @@
 ---
 title: Replay a failed webhook event
-description: Inspect and replay failed webhook events.
+description: List the provider events that became dead letters, and replay one after you fix its cause.
 page_type: how-to
 ---
 
-Each verified webhook delivery is a row in the provider event inbox in PostgreSQL.
-It waits there while a provider API or the handler is unavailable.
-A proven temporary failure retries with a backoff of 2 seconds up to 5 minutes, without a limit.
-An unknown exception retries up to `hephaestus.integration.consumer.poison.max-attempts` (default 10), then becomes a dead letter.
-A parsing failure becomes a dead letter on its first attempt.
+Replay a provider event after you fix the cause that made it a dead letter.
+An event becomes a dead letter when its parser fails, or when an unknown failure repeats 10 times.
+A temporary failure, such as a provider that is down, retries without a limit and does not become a dead letter.
+A dead letter keeps its payload in the provider event inbox for 30 days ([How long the inbox keeps an event](./webhook-ingestion-operations#how-long-the-inbox-keeps-an-event)).
 
-Each workspace handles the events of one resource, such as a repository or a Slack channel, one at a time and in arrival order.
-A later event of that resource waits until the first one is done or is a dead letter.
-Events of other resources and other workspaces do not wait.
-GitHub App installation events have no workspace yet. They wait in one order for the whole instance.
+No web app screen lists dead letters. Use the API.
 
-A dead letter keeps its payload and headers in PostgreSQL.
-The `integration.consumer.poison` counter counts new dead letters.
-`HephaestusConsumerRetryStalled` alerts when retries continue for 15 minutes.
-`HephaestusProviderEventsWaiting` alerts when the oldest due event of a provider waits more than 5 minutes.
+## Before you start
 
-For a repeated non-parse failure, inspect `error.root_type` and the sanitized stack frames.
-These diagnostics appear on the first attempt and when the event becomes a dead letter.
-Fix the cause, then replay the dead letter.
+- For a workspace's events, you need the workspace admin role.
+- For a GitHub App installation event that has no workspace, you need the instance admin role and a recent sign-in.
+- You need the access token of that account, as [Call the API](./instance-admin#call-the-api) describes.
+- Find the cause in the server log. Read `error.root_type` and the sanitized stack frames of the event's first attempt.
 
-A server that stops while it handles an event loses its lease.
-After 2 minutes, another server takes the event back and counts the attempt.
-An event that stops every server that handles it becomes a dead letter after its attempts.
+## List the dead letters
 
-## Inspect the records
+1. Fix the parser, or restore the connection that the handler needs.
+2. List the dead letters of the workspace:
 
-Use an authenticated API client with a workspace administrator's access token.
-Request `GET /workspaces/{workspaceSlug}/integrations/dead-letters`.
+   ```bash
+   curl --header "Authorization: Bearer <access token>" \
+     "https://<host>/api/workspaces/<workspace slug>/integrations/dead-letters"
+   ```
 
-The response is a cursor page: `content` holds up to 100 records in ID order.
-Pass its `nextCursor` as `cursor` to read the next page. The last page has no `nextCursor`.
+   Replace `<access token>` with the access token, `<host>` with the instance host name, and `<workspace slug>` with the slug of the workspace.
+   For installation events, use the path `/api/admin/integration/dead-letters`.
 
-Each record contains its ID, provider, error class, arrival time, failure time, last replay time and requesting account ID.
-The API does not return payloads or routing credentials.
+3. Find the record of the event in `content`.
+   Each record has its `id`, `provider`, `errorClass`, `receivedAt`, `failedAt`, `replayedAt` and `replayedBy`.
+4. If the response has a `nextCursor`, add `?cursor=<nextCursor>` to the path to read the next page.
 
-Installation lifecycle events can arrive before a workspace exists.
-Only an instance administrator can list these records, with `GET /admin/integration/dead-letters`.
-An installation replay requires a recent sign-in because it can change provider access.
-Its completion and refused sign-in checks appear in the authentication audit trail.
-This endpoint excludes every workspace-owned record.
-An instance administrator uses the workspace endpoint for workspace-owned records.
+A page holds up to 100 records in ID order.
+The API does not return payloads or headers.
 
 ## Replay a record
 
-1. Fix the parser or restore the required connection.
-2. Request `POST /workspaces/{workspaceSlug}/integrations/dead-letters/{id}/replays`.
-   For an unassigned installation event, use `POST /admin/integration/dead-letters/{id}/replays` instead.
-3. Check `replayedAt` in the response.
-   The event is queued again as its first attempt, at the head of its resource's order.
+1. Replay the record:
+
+   ```bash
+   curl --request POST --header "Authorization: Bearer <access token>" \
+     "https://<host>/api/workspaces/<workspace slug>/integrations/dead-letters/<id>/replays"
+   ```
+
+   Replace `<id>` with the `id` of the record.
+   For an installation event, use the path `/api/admin/integration/dead-letters/<id>/replays`.
+
+2. Check that the response has a `replayedAt` time.
+
+The event goes back to the inbox as a first attempt, at the head of its resource's order.
+A replay does not rewind the later events of that resource.
+The authentication audit trail records each installation replay.
 
 ## Check that it worked
 
-Request the list again.
-A replayed event that succeeds is no longer in the list.
-An event that fails again comes back with its `replayedAt`.
+1. List the dead letters again.
+2. Check that the replayed record is not in the list.
 
-A record that is not a dead letter of that workspace returns HTTP 404.
-This includes a record that you already replayed, and a record of another workspace.
-If an installation replay cannot be written to the audit trail, the request returns HTTP 503 and queues nothing.
+An event that fails again comes back with its `replayedAt` time.
 
-A replay is an explicit late event.
-It does not rewind later events.
-The handler skips the steps that an earlier attempt committed.
-Handlers must tolerate duplicate and stale events.
-A replay does not supply a new provider revision.
+## Troubleshooting
 
-Dead letters stay for `hephaestus.integration.consumer.dead-retention` (default `30d`) after they fail.
-Handled events stay for `hephaestus.integration.consumer.replay-window` (default `3d`), so a provider's redelivery in that time is not handled twice.
-Deleting a workspace deletes its events.
-Include PostgreSQL in the backup procedure and restrict database access to operators who can read provider data.
+| Answer | Cause |
+| --- | --- |
+| `404` | The record is not a dead letter of that workspace. You replayed it already, or it belongs to another workspace. |
+| `503` on an installation replay | The server could not write the audit record. It queued nothing. Try again. |

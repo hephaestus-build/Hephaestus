@@ -21,7 +21,7 @@ It requires a single catalog owner and citations in the dedicated implementation
 A mention elsewhere in prose cannot satisfy ownership.
 
 Workspace purge applies storage limitation when a workspace loses its purpose. A verified
-person-erasure request follows the [instance-admin procedure](../production-operations-runbook#access-and-erasure-for-one-person).
+person-erasure request follows the [instance-admin procedure](../person-data-requests).
 The implementation inventory below owns each store's exact selection, export and erasure citations.
 The frozen scope includes reviewed work where the person had any of these roles:
 
@@ -608,7 +608,7 @@ The `erasure-recovery` profile reapplies them through the existing store invento
 It fails closed until every request completes or the operator explicitly declares no later erasures.
 It creates no second decision journal and stores no manifest.
 
-The [restore procedure](../backup-restore.mdx#reapply-erasure-decisions-before-processing-resumes) owns the manifest, sequence and retention requirements.
+The [restore procedure](../erasure-recovery.md) owns the manifest, sequence and retention requirements.
 
 ### Running conversation copies
 

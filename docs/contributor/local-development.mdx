@@ -128,7 +128,7 @@ Create `application-local.yml` in `server/application/src/main/resources` to ove
 The server encrypts stored secrets with `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` and `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`.
 For a new database, the first `vp run dev` writes both keys to `server/.env` ([Local settings](#local-settings)).
 Keep these values across restarts.
-For an existing database, keep its current keys and versions and follow the [stored secret conversion procedure](../admin/upgrade#convert-stored-secrets-for-10).
+For an existing database, keep its current keys and versions.
 The server does not store plaintext credentials or JWT private keys.
 
 :::caution[Keep it local]

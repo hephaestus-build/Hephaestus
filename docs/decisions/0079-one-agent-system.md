@@ -744,7 +744,7 @@ Busy or unavailable serialization returns 503 with `Retry-After`. It changes no 
 
 A withholding composition begins a real capture, so it can hold the capture lease, the session lock and a transaction. The chart's connection budget reserves three connections for each concurrent capture.
 
-Compositions that were active under the previous release have no recorded decision. Their first upgrade requires the one-time drain in [Upgrade](../admin/upgrade.mdx#drain-legacy-reviews-before-removing-gateway-affinity).
+Compositions that were active under the previous release have no recorded decision. Their first upgrade requires the one-time drain in [Upgrade to 1.0](../admin/upgrade-to-1-0.mdx#drain-legacy-reviews-before-removing-gateway-affinity).
 
 `ReviewCompositionGatewayReplicasIntegrationTest` runs separate HTTP gateway applications over one database.
 In one case, a stopped server A hands the same claim to server B.
@@ -763,4 +763,4 @@ The chart's connection budget in [Database connections](../admin/sizing.mdx#data
 The sandbox's input archive has the same bytes on every server: entries in name order, with no time or host user.
 [PostgreSQL advisory locks](https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS) and [Kubernetes Service session affinity](https://kubernetes.io/docs/reference/networking/virtual-ips/#session-affinity) define these platform mechanisms.
 
-Old active reviews have no checkpoint. Their first upgrade requires the one-time drain in [Upgrade](../admin/upgrade.mdx#drain-legacy-reviews-before-removing-gateway-affinity).
+Old active reviews have no checkpoint. Their first upgrade requires the one-time drain in [Upgrade to 1.0](../admin/upgrade-to-1-0.mdx#drain-legacy-reviews-before-removing-gateway-affinity).
