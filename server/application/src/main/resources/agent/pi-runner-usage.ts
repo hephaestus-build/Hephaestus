@@ -50,6 +50,17 @@ export function outputTokensOf(msg: ReportedMessage): number {
 	return msg.role === "assistant" ? (msg.usage?.output ?? 0) : 0;
 }
 
+/**
+ * Input tokens one assistant message read: its whole prompt, uncached input and cache reads and writes alike; zero
+ * for a failed call that reported none.
+ */
+export function inputTokensOf(msg: ReportedMessage): number {
+	if (msg.role !== "assistant" || !msg.usage) {
+		return 0;
+	}
+	return (msg.usage.input || 0) + (msg.usage.cacheRead || 0) + (msg.usage.cacheWrite || 0);
+}
+
 export function addAssistantUsage(
 	ledger: UsageLedger,
 	msg: ReportedMessage | null | undefined,
