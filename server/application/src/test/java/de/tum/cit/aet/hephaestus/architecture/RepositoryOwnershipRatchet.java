@@ -82,15 +82,6 @@ final class RepositoryOwnershipRatchet {
                     Set.of("agent.mentor.host.HephTurnConfiguration", "agent.mentor.host.HephTurns")),
             new Entry(
                     "agent",
-                    "mentor.MentorEntryRepository",
-                    "DDD10",
-                    "mentor::spi MentorConversationAccess",
-                    Set.of(
-                            "agent.context.providers.mentor.WeeklyDigestContentSource",
-                            "agent.mentor.weeklydigest.DigestAdmission",
-                            "agent.mentor.weeklydigest.DigestDelivery")),
-            new Entry(
-                    "agent",
                     "mentor.MentorTurnRepository",
                     "DDD10",
                     "mentor::spi MentorTurnAccess and MentorConversationAccess",
@@ -101,9 +92,6 @@ final class RepositoryOwnershipRatchet {
                             "agent.mentor.sandbox.TurnContextLoads",
                             "agent.mentor.turn.MentorTurnQueueSampler",
                             "agent.mentor.turn.MentorTurnStarter",
-                            "agent.mentor.weeklydigest.DigestAdmission",
-                            "agent.mentor.weeklydigest.DigestDelivery",
-                            "agent.mentor.weeklydigest.WeeklyDigestNotes",
                             "agent.proxy.ProxyCallLedger",
                             "agent.proxy.ProxyRequestPolicy",
                             "agent.proxy.ProxyRoutingService")),

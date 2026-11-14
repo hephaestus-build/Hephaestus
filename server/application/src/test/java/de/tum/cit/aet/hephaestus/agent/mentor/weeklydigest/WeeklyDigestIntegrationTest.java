@@ -47,6 +47,8 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnProgress;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorConversationAccess;
+import de.tum.cit.aet.hephaestus.mentor.spi.MentorTurnAccess;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasis;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackBasisRepository;
@@ -138,6 +140,12 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private MentorTurnRepository turnRows;
+
+    @Autowired
+    private MentorTurnAccess turnAccess;
+
+    @Autowired
+    private MentorConversationAccess conversationAccess;
 
     @Autowired
     private AgentRuns runs;
@@ -646,9 +654,8 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
 
     private DigestAdmission eligibility() {
         return new DigestAdmission(
-                turnRows,
-                turns,
-                entryRepository,
+                turnAccess,
+                conversationAccess,
                 subscriptions,
                 new WeeklyDigestAvailability(memberships, readiness, admission),
                 facts,
@@ -658,7 +665,7 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
 
     private DigestDelivery delivery(List<WeeklyDigestTransport> transports) {
         return new DigestDelivery(
-                turnRows, turns, entryRepository, eligibility(), transports, objectMapper, events, Clock.systemUTC());
+                turnAccess, conversationAccess, eligibility(), transports, objectMapper, events, Clock.systemUTC());
     }
 
     private void finishDigest(List<WeeklyDigestTransport> transports) {
