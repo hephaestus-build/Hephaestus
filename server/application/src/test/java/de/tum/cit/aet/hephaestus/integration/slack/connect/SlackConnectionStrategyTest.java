@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.OAuthExchangeRepair;
 import de.tum.cit.aet.hephaestus.integration.slack.connect.SlackOAuthClient.OAuthV2Access;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.net.URI;
@@ -48,6 +49,9 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
     @Mock
     private SlackWorkspaceContentEraser workspaceContentEraser;
 
+    @Mock
+    private SlackMessageService messageService;
+
     private SlackConnectionStrategy strategy;
 
     @BeforeEach
@@ -57,6 +61,7 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
                 oauthClient,
                 mock(OAuthExchangeRepair.class),
                 workspaceContentEraser,
+                messageService,
                 "client-id",
                 new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create("https://app.test"), "/api")));
     }
@@ -123,6 +128,7 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
         ConnectionConfig.SlackConfig cfg = (ConnectionConfig.SlackConfig) c.config();
         assertThat(cfg.teamId()).isEqualTo("T9");
         assertThat(cfg.teamName()).isEqualTo("Hephaestus Test");
+        verify(messageService).evictBot(42L);
     }
 
     @Test
@@ -164,6 +170,7 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
                 oauthClient,
                 mock(OAuthExchangeRepair.class),
                 workspaceContentEraser,
+                messageService,
                 "",
                 new PublicApiUrls(AuthPropertiesFixture.withApiBasePath("/api")));
 
@@ -187,6 +194,7 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
                 oauthClient,
                 mock(OAuthExchangeRepair.class),
                 workspaceContentEraser,
+                messageService,
                 "client-id",
                 new PublicApiUrls(AuthPropertiesFixture.withApiBase(URI.create(issuer), prefix)));
         when(oauthStateService.issue(42L, IntegrationKind.SLACK, 42L)).thenReturn("state");
