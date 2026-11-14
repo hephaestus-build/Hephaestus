@@ -1,7 +1,9 @@
 {{- /*
 The platform owns the Gateway API resources, the controller, the Gateway, its TLS certificate and
-the HTTP to HTTPS redirect. This route needs one HTTPRoute filter from that controller:
-ResponseHeaderModifier for HSTS. The other security headers come from the responses themselves.
+the HTTP to HTTPS redirect. Every security header comes from the responses themselves, HSTS
+included: the server sends its own (SecurityHeaders, ADR 0100). nginx sends no HSTS, so only the
+web app's rules add it, with the server's value, through the controller's ResponseHeaderModifier.
+Those rules and this filter go when the server serves the web app (ADR 0100, stage 2).
 */}}
 {{- if and .Values.workspaceSubdomains.enabled (gt (len .Values.host) 189) }}
 {{- fail "workspace subdomains need a host of at most 189 characters" }}
@@ -10,6 +12,7 @@ ResponseHeaderModifier for HSTS. The other security headers come from the respon
 {{- if eq (len $parentRefs) 0 }}
 {{- fail "route.parentRefs is required: name the Gateway that the platform operates." }}
 {{- end }}
+{{- /* Keep the value equal to SecurityHeaders.HSTS_MAX_AGE_SECONDS in the server. */}}
 {{- $hsts := dict "type" "ResponseHeaderModifier" "responseHeaderModifier" (dict "set" (list (dict "name" "Strict-Transport-Security" "value" "max-age=2592000; includeSubDomains"))) }}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -29,8 +32,6 @@ spec:
         - path:
             type: PathPrefix
             value: /webhooks
-      filters:
-        - {{ toJson $hsts }}
       backendRefs:
         - name: {{ include "hephaestus.name" (dict "root" . "component" "server") }}
           port: 8080
@@ -39,8 +40,6 @@ spec:
         - path:
             type: PathPrefix
             value: /api
-      filters:
-        - {{ toJson $hsts }}
       # The conversation live stream under /api stays open far longer than one request. Zero
       # asks the controller to disable each deadline; a controller that cannot may use its longest
       # value instead. Both are set because either one alone leaves the other to the implementation.

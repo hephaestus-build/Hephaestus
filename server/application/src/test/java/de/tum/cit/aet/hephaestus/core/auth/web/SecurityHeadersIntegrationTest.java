@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import org.hamcrest.MatcherAssert;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
@@ -17,6 +18,8 @@ import org.springframework.test.web.reactive.server.WebTestClient;
  * {@code .apply()} from a chain or a Spring-default change would have been caught only by inspection.
  * Asserted against the public {@code GET /identity-providers} so no auth/CSRF is needed.
  */
+// As in production, the server trusts the proxy's X-Forwarded-Proto, so a forwarded HTTPS request is secure.
+@TestPropertySource(properties = "server.forward-headers-strategy=native")
 class SecurityHeadersIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
@@ -24,12 +27,10 @@ class SecurityHeadersIntegrationTest extends RealAuthIntegrationTest {
 
     @Test
     void publicResponseCarriesTheHardenedSecurityHeaders() {
-        // Strict-Transport-Security is intentionally NOT asserted here: Spring's HstsHeaderWriter only
-        // emits it over HTTPS (requireSecure), and WebTestClient drives the app over plain HTTP. The
-        // remaining hardening headers are protocol-independent and must always be present.
         webTestClient
                 .get()
                 .uri("/identity-providers")
+                .header("X-Forwarded-Proto", "https")
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -65,6 +66,22 @@ class SecurityHeadersIntegrationTest extends RealAuthIntegrationTest {
                 // A future accidental re-introduction of reportOnly() must fail this test.
                 .expectHeader()
                 .doesNotExist("Content-Security-Policy-Report-Only")
+                .expectHeader()
+                .valueEquals("Strict-Transport-Security", "max-age=2592000 ; includeSubDomains")
+                .expectBody(Void.class);
+    }
+
+    @Test
+    void probeAndWebhookChainCarriesTheSameHsts() {
+        webTestClient
+                .get()
+                .uri("/actuator/health")
+                .header("X-Forwarded-Proto", "https")
+                .exchange()
+                .expectHeader()
+                .valueEquals("Strict-Transport-Security", "max-age=2592000 ; includeSubDomains")
+                .expectHeader()
+                .valueEquals("X-Content-Type-Options", "nosniff")
                 .expectBody(Void.class);
     }
 }

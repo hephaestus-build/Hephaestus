@@ -12,7 +12,7 @@ import org.springframework.security.web.header.writers.StaticHeadersWriter;
  *
  * <p>Headers applied:
  * <ul>
- *   <li>{@code Strict-Transport-Security} — 1y, includeSubDomains (existing behaviour, preserved).</li>
+ *   <li>{@code Strict-Transport-Security} — 30 days, includeSubDomains. See {@link #HSTS_MAX_AGE_SECONDS}.</li>
  *   <li>{@code X-Frame-Options: DENY} + {@code X-Content-Type-Options: nosniff} (existing, preserved).</li>
  *   <li>{@code Content-Security-Policy} — enforced (not report-only) and fully instance-agnostic: it
  *       contains NO hardcoded partner hosts. See {@link #CONTENT_SECURITY_POLICY}.</li>
@@ -26,6 +26,14 @@ import org.springframework.security.web.header.writers.StaticHeadersWriter;
 public final class SecurityHeaders {
 
     private SecurityHeaders() {}
+
+    /**
+     * 30 days: the policy that browsers already keep, because the chart's route set it on every response. This class is
+     * the home of HSTS for server responses (ADR 0100). Until the server also serves the web app, the route sets the
+     * same value on the web app's rules only. A longer policy cannot be withdrawn before it expires, so raising it is a
+     * decision of its own.
+     */
+    private static final long HSTS_MAX_AGE_SECONDS = 2_592_000;
 
     /**
      * Enforced CSP for the server-rendered surface this header set covers (Swagger UI, {@code /auth/error},
@@ -59,7 +67,7 @@ public final class SecurityHeaders {
         http.headers(headers -> headers.frameOptions(frameOptions -> frameOptions.deny())
                 .contentTypeOptions(contentType -> {})
                 .httpStrictTransportSecurity(
-                        hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31536000))
+                        hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(HSTS_MAX_AGE_SECONDS))
                 .contentSecurityPolicy(csp -> csp.policyDirectives(CONTENT_SECURITY_POLICY))
                 .referrerPolicy(referrer -> referrer.policy(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
                 .crossOriginOpenerPolicy(coop -> coop.policy(CrossOriginOpenerPolicy.SAME_ORIGIN))

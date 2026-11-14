@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import {
 	componentOf,
@@ -123,7 +125,12 @@ await test("the route attaches to the platform Gateway and rewrites no path", ()
 	assert.deepEqual(backends(rule("PathPrefix", "/")), [{ name: "heph-webapp", port: 8080 }]);
 	for (const candidate of rules) {
 		const types = new Set(filters(candidate).map((filter) => get(filter, "type")));
-		assert.ok(types.has("ResponseHeaderModifier"), "HSTS on every rule");
+		// The server sends its own HSTS. Only the web app's rule adds it, because nginx sends none.
+		assert.equal(
+			types.has("ResponseHeaderModifier"),
+			candidate === rule("PathPrefix", "/"),
+			"HSTS only on the web app's rule",
+		);
 		// The server serves the paths it receives, so no rule rewrites one.
 		assert.ok(!types.has("URLRewrite"), "no rule rewrites a path");
 		// Only /api asks the controller to disable both deadlines, for the Hephaestus live stream.
@@ -136,10 +143,28 @@ await test("the route attaches to the platform Gateway and rewrites no path", ()
 		);
 		assert.equal(get(candidate, "retry"), undefined, "no rule retries");
 	}
-	const hsts = filters(rules[0]).find((filter) => get(filter, "type") === "ResponseHeaderModifier");
+	const hsts = filters(rule("PathPrefix", "/")).find(
+		(filter) => get(filter, "type") === "ResponseHeaderModifier",
+	);
 	assert.deepEqual(get(hsts, "responseHeaderModifier", "set"), [
 		{ name: "Strict-Transport-Security", value: "max-age=2592000; includeSubDomains" },
 	]);
+	// The web app's HSTS is the server's policy, so one host keeps one policy.
+	const securityHeaders = readFileSync(
+		fileURLToPath(
+			new URL(
+				"../server/application/src/main/java/de/tum/cit/aet/hephaestus/core/security/SecurityHeaders.java",
+				import.meta.url,
+			),
+		),
+		"utf8",
+	);
+	assert.equal(
+		/HSTS_MAX_AGE_SECONDS = (?<seconds>[\d_]+);/u
+			.exec(securityHeaders)
+			?.groups?.seconds?.replaceAll("_", ""),
+		"2592000",
+	);
 	// The Services the route names exist and listen on the same port.
 	for (const backend of rules.flatMap((candidate) => list(backends(candidate)))) {
 		const service = resources.find(
@@ -314,10 +339,8 @@ await test("with MCP on, OAuth discovery on the host root reaches the server wit
 		],
 	);
 	assert.deepEqual(get(rule, "backendRefs"), [{ name: "heph-server", port: 8080 }]);
-	assert.deepEqual(
-		list(get(rule, "filters")).map((filter) => get(filter, "type")),
-		["ResponseHeaderModifier"],
-	);
+	// The server's MCP discovery chain sends its own HSTS, so the route adds no header.
+	assert.deepEqual(list(get(rule, "filters")), []);
 });
 
 await test("workspace hosts reach only the SPA and share the apex origin settings", () => {
@@ -330,6 +353,13 @@ await test("workspace hosts reach only the SPA and share the apex origin setting
 		(resource) => get(resource, "spec", "hostnames", 0) === "*.hephaestus.example.com",
 	);
 	assert.ok(tenant);
+	// The tenant route serves only the SPA, and nginx sends no HSTS, so the route adds the server's policy.
+	for (const rule of list(get(tenant, "spec", "rules"))) {
+		assert.deepEqual(
+			list(get(rule, "filters")).map((filter) => get(filter, "responseHeaderModifier", "set")),
+			[[{ name: "Strict-Transport-Security", value: "max-age=2592000; includeSubDomains" }]],
+		);
+	}
 	assert.deepEqual(
 		list(get(tenant, "spec", "rules"))
 			.flatMap((rule) => list(get(rule, "backendRefs")))

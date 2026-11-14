@@ -259,7 +259,7 @@ The server serves each path as it receives it, so no rule changes a path.
 
 The Gateway controller must support the core `HTTPRoute` features and this extended feature:
 
-- `ResponseHeaderModifier`, for `Strict-Transport-Security` on each rule.
+- `ResponseHeaderModifier`, for `Strict-Transport-Security` on the web app's rules. The server sends this header itself.
 
 The chart cannot detect a controller without it. Confirm the feature for your controller.
 

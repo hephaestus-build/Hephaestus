@@ -232,6 +232,8 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(requests -> requests.anyRequest().permitAll());
+        // Webhook and probe responses reach the browser-facing host too, so they carry the same header set.
+        SecurityHeaders.apply(http);
         return http.build();
     }
 
