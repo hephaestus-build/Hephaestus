@@ -144,7 +144,6 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
         // A review's sandbox reaches the gateway at this address, as the claim passes it.
         registry.add("hephaestus.agent.sandbox.gateway-url", () -> "http://127.0.0.1:" + GATEWAY_PORT);
         registry.add("hephaestus.sandbox.kubernetes.namespace", () -> "review-end-to-end");
-        registry.add("hephaestus.agent.image.pull-policy", () -> "NEVER");
         // The stub provider listens on this host.
         registry.add("hephaestus.llm.egress.allow-loopback", () -> "true");
     }

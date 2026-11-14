@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiRuntimeFactory;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
-import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -34,7 +33,7 @@ class PracticePiAdapterTest extends BaseUnitTest {
         return new PracticePiAdapter(
                 new PiRuntimeFactory(mapper),
                 new PiResultParser(mapper, new SimpleMeterRegistry()),
-                new AgentImageProperties(IMAGE, ImagePullPolicy.IF_NOT_PRESENT),
+                new AgentImageProperties(IMAGE),
                 new PracticeReviewProperties(
                         false, 15, 5, samplingTemperature, 12, 16000, 342_000, Duration.ofMinutes(10)));
     }

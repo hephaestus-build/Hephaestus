@@ -17,7 +17,6 @@ import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiRuntimeFactory;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
-import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.agent.task.Task;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelope;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
@@ -105,7 +104,7 @@ final class LiveRunnerWorkspace {
         return new PracticePiAdapter(
                 new PiRuntimeFactory(MAPPER),
                 new PiResultParser(MAPPER, new SimpleMeterRegistry()),
-                new AgentImageProperties(image(), ImagePullPolicy.NEVER),
+                new AgentImageProperties(image()),
                 // The shipped defaults: a live run must get the budget that a review gets.
                 new Binder(List.of()).bindOrCreate("hephaestus.practice-review", PracticeReviewProperties.class));
     }

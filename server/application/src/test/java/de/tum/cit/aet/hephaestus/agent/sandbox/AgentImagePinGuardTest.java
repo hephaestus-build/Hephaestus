@@ -15,14 +15,14 @@ class AgentImagePinGuardTest extends BaseUnitTest {
 
     @Test
     void shouldAllowStartupWhenReferenceIsDigestPinned() {
-        var props = new AgentImageProperties(PINNED_AGENT, ImagePullPolicy.ALWAYS);
+        var props = new AgentImageProperties(PINNED_AGENT);
         assertThatCode(() -> new AgentImagePinGuard(props)).doesNotThrowAnyException();
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"ghcr.io/x/agent:0.73.2", "ghcr.io/x/agent@sha256:abc123"})
     void shouldFailFastWhenReferenceIsNotDigestPinned(String reference) {
-        var props = new AgentImageProperties(reference, ImagePullPolicy.ALWAYS);
+        var props = new AgentImageProperties(reference);
         assertThatThrownBy(() -> new AgentImagePinGuard(props))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining(reference)
@@ -34,8 +34,8 @@ class AgentImagePinGuardTest extends BaseUnitTest {
     @Test
     void shouldFailFastWhenNoReferenceResolved() throws ReflectiveOperationException {
         var props = AgentImageProperties.class
-                .getDeclaredConstructor(String.class, ImagePullPolicy.class)
-                .newInstance(null, ImagePullPolicy.ALWAYS);
+                .getDeclaredConstructor(String.class)
+                .newInstance((Object) null);
         assertThatThrownBy(() -> new AgentImagePinGuard(props))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("<not set>");
