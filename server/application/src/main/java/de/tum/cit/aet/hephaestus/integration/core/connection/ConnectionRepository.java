@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -11,7 +12,9 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.NativeQuery;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -89,6 +92,32 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     }
 
     List<Connection> findByWorkspaceIdAndState(long workspaceId, IntegrationState state);
+
+    /** Permission events invalidate catalog answers even when no monitor changes. JPA updates the managed version too. */
+    @Lock(LockModeType.PESSIMISTIC_FORCE_INCREMENT)
+    @Query("""
+        SELECT c FROM Connection c
+        WHERE c.workspace.id=:workspaceId AND c.instanceKey=:instanceKey
+          AND c.kind=de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.GITHUB
+          AND c.state=de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.ACTIVE
+        """)
+    Optional<Connection> findActiveInstallationForUpdateAndIncrementVersion(
+            @Param("workspaceId") Long workspaceId, @Param("instanceKey") String instanceKey);
+
+    String ACTIVE_INSTALLATION_SNAPSHOT_SQL = """
+        SELECT c.id, c.workspace_id, c.lifecycle_generation, c.version
+        FROM connection c JOIN workspace w ON w.id=c.workspace_id
+        WHERE c.kind='GITHUB' AND c.state='ACTIVE' AND c.instance_key=:instanceKey
+          AND c.config->>'type'='GITHUB_APP' AND w.status='ACTIVE'
+        """;
+
+    /** The JSON discriminator repeats the partial installation-ownership index predicate. No credentials are read. */
+    @WorkspaceAgnostic(
+            "Installation reconciliation captures its current workspace and revalidates that exact connection before writes")
+    @NativeQuery(ACTIVE_INSTALLATION_SNAPSHOT_SQL)
+    Optional<InstallationSnapshot> findActiveInstallationSnapshot(@Param("instanceKey") String instanceKey);
+
+    record InstallationSnapshot(Long connectionId, Long workspaceId, long lifecycleGeneration, Long version) {}
 
     @Query("""
         SELECT new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository$WorkspaceMetadataRow(

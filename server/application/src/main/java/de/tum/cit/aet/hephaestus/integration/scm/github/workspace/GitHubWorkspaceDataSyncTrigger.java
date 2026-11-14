@@ -117,9 +117,12 @@ public class GitHubWorkspaceDataSyncTrigger implements WorkspaceDataSyncTrigger 
         }
         long installationId = appInstallation.get();
         runLifecycleJob(workspaceId, connection.get(), SyncJobType.RECONCILIATION, handle -> {
-            repositoryMonitorServiceProvider
+            if (!repositoryMonitorServiceProvider
                     .getObject()
-                    .ensureAllInstallationRepositoriesCovered(installationId, null, true);
+                    .ensureAllInstallationRepositoriesCovered(installationId, null, true)) {
+                handle.reportWarnings(SyncProgress.of(SyncPhase.REPOSITORIES, "Repository discovery did not finish."));
+                return;
+            }
             if (fullSync) {
                 dataSyncServiceProvider.getObject().syncAllRepositories(workspaceId, handle);
             }

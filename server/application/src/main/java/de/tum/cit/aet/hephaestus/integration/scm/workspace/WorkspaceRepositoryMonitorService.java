@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.event.RepositoryMonitoringChangedEvent;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -39,6 +40,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -70,6 +72,7 @@ public class WorkspaceRepositoryMonitorService {
     private final ConnectionService connectionService;
     private final ConnectionRepository connectionRepository;
     private final TransactionTemplate transactionTemplate;
+    private final TransactionTemplate readTransactionTemplate;
     private final ManualRepositoryMonitorService manualAdds;
 
     public WorkspaceRepositoryMonitorService(
@@ -96,6 +99,9 @@ public class WorkspaceRepositoryMonitorService {
         this.connectionRepository = connectionRepository;
         this.eventPublisher = eventPublisher;
         this.transactionTemplate = transactionTemplate;
+        this.readTransactionTemplate = new TransactionTemplate(
+                Objects.requireNonNull(transactionTemplate.getTransactionManager()), transactionTemplate);
+        this.readTransactionTemplate.setReadOnly(true);
 
         Map<IntegrationKind, InstallationSuspensionTracker> suspensionMap = new EnumMap<>(IntegrationKind.class);
         for (InstallationSuspensionTracker t : suspensionTrackerList) {
@@ -260,6 +266,8 @@ public class WorkspaceRepositoryMonitorService {
                     workspaceId);
             return Optional.empty();
         }
+        connectionRepository.findActiveInstallationForUpdateAndIncrementVersion(
+                workspaceId, Long.toString(installationId));
         var monitorOpt = repositoryToMonitorRepository.findOneByWorkspaceIdAndNativeId(workspaceId, expectedNativeId);
         if (monitorOpt.isEmpty()) {
             log.debug("Skipped repository removal: reason=notMonitored, workspaceId={}", workspaceId);
@@ -309,6 +317,9 @@ public class WorkspaceRepositoryMonitorService {
 
         Workspace workspace = workspaceOpt.get();
 
+        connectionRepository.findActiveInstallationForUpdateAndIncrementVersion(
+                workspace.getId(), Long.toString(installationId));
+
         IdentityProvider provider = gitProviderRepository
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
                 .orElseThrow(() -> new IllegalStateException(
@@ -329,44 +340,81 @@ public class WorkspaceRepositoryMonitorService {
      * @param deferSync if true, skip immediate sync (use during provisioning when activation will
      *     sync in bulk)
      */
-    @Transactional
-    public void ensureAllInstallationRepositoriesCovered(
+    @Transactional(propagation = Propagation.NEVER)
+    public boolean ensureAllInstallationRepositoriesCovered(
             long installationId, @Nullable Collection<String> protectedRepositories, boolean deferSync) {
         // Suspended workspaces must not restart syncs when provider inbox replays creation events.
         if (isInstallationSuspended(installationId)) {
-            log.info(
-                    "Skipped repository enumeration: reason=installationSuspended," + " installationId={}",
-                    installationId);
-            return;
+            log.info("Skipped repository enumeration: reason=installationSuspended, installationId={}", installationId);
+            return false;
         }
-
-        var workspaceOpt = workspaceRepository.findActiveByInstallationIdForUpdate(installationId);
-        if (workspaceOpt.isEmpty()) {
-            return;
-        }
-
-        Workspace workspace = workspaceOpt.get();
-        if (!isGitHubAppWorkspace(workspace)) {
-            return;
-        }
-
         InstallationRepositoryEnumerator enumerator = installationEnumerators.get(IntegrationKind.GITHUB);
         if (enumerator == null) {
             log.debug(
-                    "Skipped repository enumeration: reason=noEnumeratorForKind, installationId={}," + " kind={}",
+                    "Skipped repository enumeration: reason=noEnumeratorForKind, installationId={}, kind={}",
                     installationId,
                     IntegrationKind.GITHUB);
-            return;
+            return false;
         }
+        var captured = readTransactionTemplate.execute(
+                status -> connectionRepository.findActiveInstallationSnapshot(Long.toString(installationId)));
+        if (captured == null || captured.isEmpty()) return false;
+        var authority = captured.orElseThrow();
         var snapshots = enumerator.enumerate(installationId);
         if (snapshots.isEmpty()) {
             log.warn(
-                    "Skipped repository enumeration: reason=noDataReturned, installationId={}," + " workspaceId={}",
+                    "Skipped repository enumeration: reason=noDataReturned, installationId={}, workspaceId={}",
                     installationId,
-                    workspace.getId());
-            return;
+                    authority.workspaceId());
+            return false;
         }
+        return Boolean.TRUE.equals(transactionTemplate.execute(status -> {
+            var workspace = workspaceRepository
+                    .findByIdForUpdate(authority.workspaceId())
+                    .orElse(null);
+            if (workspace == null || workspace.getStatus() != Workspace.WorkspaceStatus.ACTIVE) {
+                discardedEnumeration(installationId, authority, "workspaceChanged");
+                return false;
+            }
+            if (connectionRepository
+                    .findAndLockLifecycleConnection(authority.connectionId(), authority.workspaceId())
+                    .isEmpty()) {
+                discardedEnumeration(installationId, authority, "connectionMissing");
+                return false;
+            }
+            var connection = connectionRepository
+                    .findByIdAndWorkspaceId(authority.connectionId(), authority.workspaceId())
+                    .orElseThrow();
+            if (connection.getState() != IntegrationState.ACTIVE
+                    || connection.getLifecycleGeneration() != authority.lifecycleGeneration()
+                    || !Objects.equals(connection.getVersion(), authority.version())
+                    || !(connection.getConfig() instanceof ConnectionConfig.GitHubAppConfig config)
+                    || !Objects.equals(config.installationId(), installationId)
+                    || isInstallationSuspended(installationId)) {
+                discardedEnumeration(installationId, authority, "connectionChanged");
+                return false;
+            }
+            reconcileInstallationRepositories(workspace, installationId, snapshots, protectedRepositories, deferSync);
+            return true;
+        }));
+    }
 
+    private void discardedEnumeration(
+            long installationId, ConnectionRepository.InstallationSnapshot authority, String reason) {
+        log.info(
+                "Skipped repository enumeration result: reason={}, installationId={}, workspaceId={}, connectionId={}",
+                reason,
+                installationId,
+                authority.workspaceId(),
+                authority.connectionId());
+    }
+
+    private void reconcileInstallationRepositories(
+            Workspace workspace,
+            long installationId,
+            List<InstallationRepositoryEnumerator.InstallationRepository> snapshots,
+            @Nullable Collection<String> protectedRepositories,
+            boolean deferSync) {
         // Filter before processing so excluded repositories do not acquire mirror rows.
         List<InstallationRepositoryEnumerator.InstallationRepository> allowedSnapshots = snapshots.stream()
                 .filter(s -> workspaceScopeFilter.isRepositoryAllowed(s.nameWithOwner()))
