@@ -1,8 +1,12 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Settings2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useWorkspacePasskeySettings } from "@/hooks/use-workspace-passkey-settings";
 
+import { updateStatusMutation } from "@/api/@tanstack/react-query.gen";
+import { SuspendedWorkspaceCard } from "@/components/admin/settings/SuspendedWorkspaceCard";
+import { WorkspaceDangerZoneSettings } from "@/components/admin/settings/WorkspaceDangerZoneSettings";
 import { WorkspacePasskeyPolicySection } from "@/components/admin/settings/WorkspacePasskeyPolicySection";
 import { WorkspaceSettingsPage } from "@/components/admin/settings/WorkspaceSettingsPage";
 import { WorkspaceSetupSummary } from "@/components/admin/settings/WorkspaceSetupSummary";
@@ -15,8 +19,10 @@ import { useWorkspaceDangerZone } from "@/hooks/use-workspace-danger-zone";
 import { useWorkspacePublicActivity } from "@/hooks/use-workspace-public-activity";
 import { useWorkspaceSetup } from "@/hooks/use-workspace-setup";
 import { workspaceAdminHead } from "@/lib/page-title";
+import { problemDetailOf } from "@/lib/problem-detail";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
 import { hasText } from "@/lib/text";
+import { toast } from "@/lib/toast";
 import { NoWorkspaceContainer } from "@/routes/-NoWorkspaceContainer";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/settings")({
@@ -27,7 +33,75 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/set
 	component: AdminSettings,
 });
 
+const PAGE_HEADER = (
+	<PageHeader
+		icon={<Settings2 />}
+		title="Workspace settings"
+		description="What this workspace offers its members, and its lifecycle."
+	/>
+);
+
 function AdminSettings() {
+	const {
+		adminWorkspaceSlug,
+		administrationWorkspace,
+		administrationWorkspaceSlug,
+		chromeWorkspace,
+	} = useWorkspaceAccess();
+	const workspace =
+		administrationWorkspaceSlug === undefined ? chromeWorkspace : administrationWorkspace;
+	// A suspended workspace answers no settings read, so its page offers only what it can still do.
+	if (hasText(adminWorkspaceSlug) && workspace?.status === "SUSPENDED") {
+		return (
+			<SuspendedSettings
+				workspaceSlug={adminWorkspaceSlug}
+				workspaceName={workspace.displayName}
+				github={workspace.providerType === "GITHUB"}
+			/>
+		);
+	}
+	return <ActiveSettings />;
+}
+
+function SuspendedSettings({
+	workspaceSlug,
+	workspaceName,
+	github,
+}: {
+	workspaceSlug: string;
+	workspaceName: string;
+	github: boolean;
+}) {
+	const queryClient = useQueryClient();
+	const dangerZone = useWorkspaceDangerZone(workspaceSlug);
+	const resume = useMutation({
+		...updateStatusMutation(),
+		onSuccess: async () => {
+			toast.success(`${workspaceName} is active again`);
+			// Every read of the workspace failed while it was suspended, the app chrome's included.
+			await queryClient.invalidateQueries();
+		},
+	});
+	return (
+		<PageLayout>
+			{PAGE_HEADER}
+			<div className="max-w-4xl space-y-8">
+				<SuspendedWorkspaceCard
+					workspaceName={workspaceName}
+					github={github}
+					resuming={resume.isPending}
+					resumeError={resume.error == null ? undefined : problemDetailOf(resume.error)}
+					onResume={() => {
+						resume.mutate({ path: { workspaceSlug }, body: { status: "ACTIVE" } });
+					}}
+				/>
+				<WorkspaceDangerZoneSettings workspaceSlug={workspaceSlug} {...dangerZone} />
+			</div>
+		</PageLayout>
+	);
+}
+
+function ActiveSettings() {
 	const passkeys = useWorkspacePasskeySettings({ workspaceSlug: Route.useParams().workspaceSlug });
 	const {
 		adminWorkspaceSlug: workspaceSlug,
@@ -89,11 +163,7 @@ function AdminSettings() {
 
 	return (
 		<PageLayout>
-			<PageHeader
-				icon={<Settings2 />}
-				title="Workspace settings"
-				description="What this workspace offers its members, and its lifecycle."
-			/>
+			{PAGE_HEADER}
 			{settings}
 		</PageLayout>
 	);

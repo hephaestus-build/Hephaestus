@@ -147,8 +147,11 @@ export function AdminWorkspacesTable({
 								{formatCreatedAt(ws.createdAt)}
 							</TableCell>
 							<TableCell className="text-right">
-								{ws.status === "ACTIVE" ? (
+								{ws.status === "PURGED" ? (
+									<span className="text-sm text-muted-foreground">Available when active</span>
+								) : (
 									<div className="flex justify-end gap-2">
+										{/* A suspended workspace's administration offers only its resume and deletion. */}
 										<Link
 											to="/w/$workspaceSlug/admin/settings"
 											params={{ workspaceSlug: ws.workspaceSlug }}
@@ -158,19 +161,19 @@ export function AdminWorkspacesTable({
 											<Settings aria-hidden />
 											Open administration
 										</Link>
-										<Button
-											variant="outline"
-											size="sm"
-											aria-label={`View as user in ${ws.displayName}`}
-											onClick={() => onViewAsUser(ws)}
-										>
-											<Users aria-hidden />
-											View as user
-										</Button>
+										{/* The server answers no user-view read of a workspace that is not active. */}
+										{ws.status === "ACTIVE" && (
+											<Button
+												variant="outline"
+												size="sm"
+												aria-label={`View as user in ${ws.displayName}`}
+												onClick={() => onViewAsUser(ws)}
+											>
+												<Users aria-hidden />
+												View as user
+											</Button>
+										)}
 									</div>
-								) : (
-									// The server answers no administration or user-view read of a workspace that is not active.
-									<span className="text-sm text-muted-foreground">Available when active</span>
 								)}
 							</TableCell>
 						</TableRow>

@@ -29,7 +29,18 @@ const suspendedWorkspace: AdminWorkspaceView = {
 	createdAt: new Date("2026-03-01T00:00:00Z"),
 };
 
-const workspaces = [activeWorkspace, suspendedWorkspace];
+const deletedWorkspace: AdminWorkspaceView = {
+	id: 3,
+	workspaceSlug: "old-course",
+	displayName: "Old Course",
+	status: "PURGED",
+	accountLogin: "old-course",
+	providerType: "GITHUB",
+	memberCount: 0,
+	createdAt: new Date("2025-10-01T00:00:00Z"),
+};
+
+const workspaces = [activeWorkspace, suspendedWorkspace, deletedWorkspace];
 
 const meta = {
 	component: AdminWorkspacesTable,
@@ -48,7 +59,8 @@ type Story = StoryObj<typeof meta>;
 
 /**
  * An active workspace opens its administration on the workspace settings, or starts a user view. A
- * workspace that is not active offers neither, and says so in place of the actions.
+ * suspended workspace opens only its administration, where an admin can resume it. A workspace being
+ * deleted offers neither, and says so in place of the actions.
  */
 export const Default: Story = {
 	play: async ({ args, canvas }) => {
@@ -58,18 +70,24 @@ export const Default: Story = {
 		);
 		await userEvent.click(canvas.getByRole("button", { name: "View as user in AET" }));
 		await expect(args.onViewAsUser).toHaveBeenCalledWith(activeWorkspace);
-		// A workspace that is not active says why it offers no action, instead of showing dead buttons.
 		const suspended = canvas.getByRole("row", { name: /Intro Course/u });
-		await expect(within(suspended).queryByRole("link")).toBeNull();
+		await expect(
+			within(suspended).getByRole("link", { name: "Open administration of Intro Course" }),
+		).toHaveAttribute("href", "/w/intro-course/admin/settings");
 		await expect(within(suspended).queryByRole("button")).toBeNull();
-		await expect(within(suspended).getByText("Available when active")).toBeVisible();
+		// A workspace being deleted says why it offers no action, instead of showing dead buttons.
+		const deleted = canvas.getByRole("row", { name: /Old Course/u });
+		await expect(within(deleted).queryByRole("link")).toBeNull();
+		await expect(within(deleted).queryByRole("button")).toBeNull();
+		await expect(within(deleted).getByText("Available when active")).toBeVisible();
 		// Statuses and providers in words, never the constants the wire carries.
 		canvas.getByText("Active");
 		canvas.getByText("Suspended");
-		canvas.getByText("GitHub");
+		canvas.getByText("Being deleted");
+		await expect(canvas.getAllByText("GitHub")).toHaveLength(2);
 		canvas.getByText("GitLab");
 		await expect(
-			canvas.queryByText(/^(?:ACTIVE|SUSPENDED|GITHUB|GITLAB)$/u),
+			canvas.queryByText(/^(?:ACTIVE|SUSPENDED|PURGED|GITHUB|GITLAB)$/u),
 		).not.toBeInTheDocument();
 	},
 };

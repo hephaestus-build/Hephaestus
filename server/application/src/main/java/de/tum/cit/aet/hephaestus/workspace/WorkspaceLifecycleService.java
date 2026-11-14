@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.exception.WorkspaceLifecycleViolationException;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeContributor;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeGuard;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceResumeGuard;
 import java.util.Comparator;
 import java.util.List;
 import org.slf4j.Logger;
@@ -35,6 +36,7 @@ public class WorkspaceLifecycleService {
 
     private final List<WorkspacePurgeGuard> purgeGuards;
     private final List<WorkspacePurgeContributor> purgeContributors;
+    private final List<WorkspaceResumeGuard> resumeGuards;
 
     public WorkspaceLifecycleService(
             WorkspaceRepository workspaceRepository,
@@ -42,6 +44,7 @@ public class WorkspaceLifecycleService {
             WorkspaceSlugHistoryRepository workspaceSlugHistoryRepository,
             List<WorkspacePurgeGuard> purgeGuards,
             List<WorkspacePurgeContributor> purgeContributors,
+            List<WorkspaceResumeGuard> resumeGuards,
             ConfigAuditPort configAudit) {
         this.configAudit = configAudit;
         this.workspaceRepository = workspaceRepository;
@@ -49,6 +52,7 @@ public class WorkspaceLifecycleService {
         this.workspaceSlugHistoryRepository = workspaceSlugHistoryRepository;
         this.purgeGuards = purgeGuards;
         this.purgeContributors = purgeContributors;
+        this.resumeGuards = resumeGuards;
     }
 
     /**
@@ -105,6 +109,10 @@ public class WorkspaceLifecycleService {
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceSlug));
 
         WorkspaceStatus previous = workspace.getStatus();
+        if (previous == WorkspaceStatus.SUSPENDED) {
+            long workspaceId = workspace.getId();
+            resumeGuards.forEach(guard -> guard.verifyResumable(workspaceId));
+        }
         if (workspace.resume()) {
             workspace = workspaceRepository.save(workspace);
             recordStatusChange(workspace, previous, WorkspaceStatus.ACTIVE);

@@ -92,11 +92,11 @@ public class WorkspaceQueryService {
         var viewed = UserViewContextHolder.get();
         var ids = viewed == null
                 ? SecurityUtils.getCurrentAccountId()
-                        .map(workspaceMembershipRepository::findActiveWorkspaceIdsByAccountId)
+                        .map(workspaceMembershipRepository::findListedWorkspaceIdsByAccountId)
                         .orElseGet(List::of)
                 : List.of(viewed.workspaceId());
         if (ids.isEmpty()) return List.of();
-        var workspaces = workspaceRepository.findListDataByIds(ids, viewed != null);
+        var workspaces = workspaceRepository.findListDataByIds(ids);
         var workspaceIds = workspaces.stream().map(WorkspaceListData::id).toList();
         var connections = connectionMetadata.findActiveConnections(workspaceIds);
         var kinds = ConnectionMetadataQuery.providerKinds(connections);

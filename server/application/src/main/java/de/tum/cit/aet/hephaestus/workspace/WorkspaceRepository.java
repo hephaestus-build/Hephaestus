@@ -44,10 +44,8 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
             w.features.practicesEnabled, w.publicActivityEnabled)
         FROM Workspace w
         WHERE w.id IN :ids
-          AND (:includeInactive = true OR w.status = de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus.ACTIVE)
         """)
-    List<WorkspaceListData> findListDataByIds(
-            @Param("ids") Collection<Long> ids, @Param("includeInactive") boolean includeInactive);
+    List<WorkspaceListData> findListDataByIds(@Param("ids") Collection<Long> ids);
 
     @Query("""
         SELECT new de.tum.cit.aet.hephaestus.workspace.WorkspaceIdData(w.id)
