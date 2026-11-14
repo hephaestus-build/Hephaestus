@@ -118,13 +118,15 @@ class CompositionEvalLiveTest {
         for (var scenario : scenarios) {
             if (only != null && !List.of(only.split(",", -1)).contains(scenario.id())) continue;
             if (done.contains(scenario.id())) continue;
-            transport.resetServedModels();
+            transport.startCase();
             var entry = CompositionEvalCases.compose(
                     scenario.id(),
                     scenario.basis(),
                     scenario.destination(),
                     scenario.output(),
                     transport.answering(creds.model(), new ArrayList<>()));
+            // Every HTTP request counts toward the gate's call ceiling.
+            entry.put("requests", transport.requests());
             entry.set(
                     "servedModels",
                     CompositionEvalCases.strings(
