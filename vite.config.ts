@@ -383,7 +383,7 @@ export default defineConfig({
 			// The chart suites alone, for a chart change. test:tooling already runs both in the normal
 			// graph; the render suite needs the Helm CLI that .github/actions/setup-helm pins.
 			"test:kubernetes:chart": run(
-				"node --test scripts/kubernetes-chart.test.ts scripts/kubernetes-chart-render.test.ts",
+				"node --test scripts/kubernetes-chart.test.ts scripts/kubernetes-chart-render*.test.ts",
 			),
 			"test:tooling": run(
 				`node --test ${nodeTestFiles} scripts/*.test.ts scripts/api-generator/*.test.ts docs/src/lib/*.test.ts server/application/src/test/resources/integration/scm/sarif/*.test.ts`,

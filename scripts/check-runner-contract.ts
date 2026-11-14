@@ -18,7 +18,7 @@
  *     except on Windows, where automatic tracking misses it and the CI leg runs uncached.
  *
  * Shell parameter expansion is outside the contract because the runner's shell is not a POSIX
- * shell on every platform; `ci-contract.test.ts` keeps `$` out of every command instead.
+ * shell on every platform; `ci-contract*.test.ts` keeps `$` out of every command instead.
  *
  * The scratch workspace links only the pinned `vite-plus` and the repository's binaries, so its task
  * cache is its own, and declares its own `pnpm-workspace.yaml`, so no parent directory can claim it.

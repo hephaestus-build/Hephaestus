@@ -54,20 +54,20 @@ On k3s, a `HelmChart` resource in the auto-deploy folder could apply the applica
 6. **The chart installs only the release.** It renders the workloads, the migration Job, one `HTTPRoute`, the NetworkPolicies and the sandbox templates. At 1.0 the workloads are the server and the bundled PostgreSQL. The server also serves the web app. It creates no Namespace, Gateway, CRD or Secret, and no Helm hook. PriorityClasses are its only cluster-scoped objects.
    [#4079](https://github.com/hephaestus-build/Hephaestus/pull/4079) removed the worker. [#4100](https://github.com/hephaestus-build/Hephaestus/pull/4100) removed the webhook role. No pull request yet removes the web app container, as ADR 0100 decides.
    On a managed cluster, the `cluster` profile renders namespaced objects only. The cluster's admins apply every cluster-scoped object from `deploy/platform/hephaestus-cluster-admin.yaml`, and the agent-sandbox controller runs in the release namespace ([#4090](https://github.com/hephaestus-build/Hephaestus/pull/4090)).
-   Enforced by: the role image and route assertions in `kubernetes-chart-render.test.ts`.
+   Enforced by: the role image and route assertions in `kubernetes-chart-render*.test.ts`.
 7. **cert-manager issues every certificate.** On k3s, a public ACME issuer gives the host certificate through HTTP-01 on the Gateway. Workspace subdomains need an operator's DNS-01 `ClusterIssuer` for the wildcard certificate.
    Enforced by: `k3s-platform.test.ts` "workspace certificates use DNS-01, and backup Jobs get their own client identity".
 8. **The Kubernetes floor follows upstream support.** The chart supports the minors that the [Kubernetes project](https://kubernetes.io/releases/) maintains. `kubeVersion` in `deploy/chart/hephaestus/Chart.yaml` is the floor. When upstream ends a minor, the next release raises the floor. While the first managed cluster runs a maintained minor, the floor is that minor.
-   Enforced by: Helm refuses a cluster below `kubeVersion`. `ci-contract.test.ts` pins which run tests the floor and which tests the latest minor. No test ties `kubeVersion` to the CI floor or to an upstream end-of-life date.
+   Enforced by: Helm refuses a cluster below `kubeVersion`. `ci-contract*.test.ts` pins which run tests the floor and which tests the latest minor. No test ties `kubeVersion` to the CI floor or to an upstream end-of-life date.
 9. **CI installs and upgrades the chart on the floor and on the latest minor.** A kind cluster with three nodes, Calico and an external PostgreSQL runs on the floor. The `arm64` run on the floor runs each night. `.github/workflows/ci-kubernetes.yml` holds the matrix.
-   Enforced by: the same `ci-contract.test.ts` test.
+   Enforced by: the same `ci-contract*.test.ts` test.
 10. **Sandbox nodes need user namespaces**, as [ADR 0081](0081-one-server-role-and-sandboxes-that-reach-only-the-server.md) rule 6 decides. On the one-host platform, the sandbox templates use gVisor, and gVisor Pods keep host users ([google/gvisor#13303](https://github.com/google/gvisor/issues/13303)). Sandbox nodes need encrypted storage.
-    Enforced by: `KubernetesIsolationProbeTest#shouldRejectAProofWithoutUserNamespacesEvenWithAnIsolatingRuntime`. `kubernetes-chart-render.test.ts` "each sandbox kind has a cold-start template of one container, behind the namespace's own policies". Encrypted storage is not enforced. The admin guide states it.
+    Enforced by: `KubernetesIsolationProbeTest#shouldRejectAProofWithoutUserNamespacesEvenWithAnIsolatingRuntime`. `kubernetes-chart-render*.test.ts` "each sandbox kind has a cold-start template of one container, behind the namespace's own policies". Encrypted storage is not enforced. The admin guide states it.
 11. **PostgreSQL is the state.** The chart bundles one PostgreSQL StatefulSet with pgBackRest, or it uses an external PostgreSQL. [ADR 0038](0038-postgresql-18-release-baseline.md) sets the major version. High availability is not a 1.0 promise.
     Enforced by: the kind run with an external PostgreSQL. The latest-minor run backs up to S3 and restores to a point in time.
 12. **NATS goes**, as [ADR 0080](0080-provider-events-go-to-a-postgresql-inbox.md) decides. [#4100](https://github.com/hephaestus-build/Hephaestus/pull/4100) removed the webhook role. [#4150](https://github.com/hephaestus-build/Hephaestus/pull/4150) owns its removal from the chart and `server/compose.yaml`.
 13. **One migration owner.** Each Helm revision runs one migration Job, not a hook, because a hook runs before the bundled PostgreSQL exists. `--wait-for-jobs` fails an upgrade whose migration fails. `values.schema.json` refuses unknown keys.
-    Enforced by: the migration Job and values schema assertions in `kubernetes-chart-render.test.ts`.
+    Enforced by: the migration Job and values schema assertions in `kubernetes-chart-render*.test.ts`.
 
 Release signing, channels and host pulls stay with ADR 0034 and ADR 0042. Previews stay with ADR 0059.
 

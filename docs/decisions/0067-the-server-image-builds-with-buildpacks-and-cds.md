@@ -121,7 +121,7 @@ Paketo's memory calculator handles JVM memory parameters.
 
 ## Confirmation
 
-`scripts/ci-contract.test.ts` fails when the image build does not call `pack build` with the descriptor and the pinned run image.
+`scripts/ci-contract*.test.ts` fails when the image build does not call `pack build` with the descriptor and the pinned run image.
 It also fails when a workflow uses `bootBuildImage`.
 CDS on and AOT off are not enforced. Review of `server/application/project.toml` catches a change.
 

@@ -59,7 +59,7 @@ The comparison runs only when a pull request changes a file that the dependency 
 These files are package manifests and lockfiles, workflows and actions, and the Gradle build
 scripts, lockfiles and version catalog. Any other change has an empty comparison.
 `dependency-graph.yml` uses the same pull-request filter. Thus, the head snapshot that the review
-waits for exists whenever the review runs. `scripts/ci-contract.test.ts` holds both filters to one list.
+waits for exists whenever the review runs. `scripts/ci-contract*.test.ts` holds both filters to one list.
 
 Those filters use GitHub's bounded changed-file
 diff. A very large mixed change can omit this informational report. The required full-checkout

@@ -95,7 +95,7 @@ const QUEUE_ONLY_JOBS = [
 ];
 
 // The merge group's queue-tier failure classes, including database checks that also run on a
-// migration PR. ci-contract.test.ts ties this list to the jobs that carry the tier guard.
+// migration PR. ci-contract*.test.ts ties this list to the jobs that carry the tier guard.
 export const QUEUE_TIER_JOBS = [
 	...QUEUE_ONLY_JOBS,
 	/^Build \/ Database migrations$/u,
