@@ -10,8 +10,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.events.BotCommandReceivedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.handler.ProviderEvent;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmPullRequestItems;
@@ -30,6 +34,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeR
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLabReviewReconciler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiffNoteWebhookProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabCommentReplySink;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.time.Instant;
@@ -42,6 +47,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.TransactionStatus;
@@ -80,6 +86,9 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private ScmPullRequestItems pullRequestItems;
+
     private TransactionTemplate transactionTemplate;
     private GitLabNoteMessageHandler handler;
 
@@ -107,7 +116,7 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
                 deserializer,
                 transactionTemplate,
                 eventPublisher,
-                mock(ScmPullRequestItems.class));
+                pullRequestItems);
 
         lenient()
                 .when(contextResolver.resolve(eq(PROJECT_PATH), any(), any()))
@@ -308,6 +317,52 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
         }
     }
 
+    @Nested
+    class ReviewCommandNote {
+
+        /** The merge request has a workspace item, so only the grammar can stop a publish. */
+        @BeforeEach
+        void workspaceItem() {
+            PullRequest pullRequest = new PullRequest();
+            pullRequest.setId(77L);
+            lenient()
+                    .when(pullRequestRepository.findByRepositoryIdAndNumber(-246765L, 2))
+                    .thenReturn(Optional.of(pullRequest));
+            lenient()
+                    .when(pullRequestItems.find(1L, 77L))
+                    .thenReturn(Optional.of(new ItemRef(1L, 88L, new ItemKind("scm.pull_request"), 77L, null, null)));
+        }
+
+        @Test
+        void shouldAskForAReviewWhenANewNoteIsExactlyTheCommand() throws IOException {
+
+            handler.onMessage(mockMessage(createMergeRequestNote(" /Hephaestus Review \n")));
+
+            var published = ArgumentCaptor.forClass(BotCommandReceivedEvent.class);
+            verify(eventPublisher).publishEvent(published.capture());
+            assertThat(published.getValue())
+                    .isEqualTo(new BotCommandReceivedEvent(
+                            IntegrationKind.GITLAB,
+                            1L,
+                            88L,
+                            " /Hephaestus Review \n",
+                            "ab12cde",
+                            1L,
+                            90001L,
+                            4406174L,
+                            GitLabCommentReplySink.address(334047L, "abc123def456")));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"/hephaestus review please check the tests", "/hephaestus help", "/hephaestus"})
+        void shouldNotAskWhenTheNoteSaysAnythingElse(String body) throws IOException {
+            handler.onMessage(mockMessage(createMergeRequestNote(body)));
+
+            verify(eventPublisher, never()).publishEvent(any(BotCommandReceivedEvent.class));
+            verify(issueCommentProcessor).processMergeRequestNote(any(), any());
+        }
+    }
+
     private Repository setupRepository() {
         Repository repo = new Repository();
         repo.setId(-246765L);
@@ -344,6 +399,24 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
                 body,
                 "MergeRequest",
                 true,
+                false,
+                null,
+                "create",
+                "https://gitlab.lrz.de/hephaestustest/demo-repository/-/merge_requests/2#note_4406174",
+                "2026-01-31 19:03:37 +0100",
+                "2026-01-31 19:03:37 +0100",
+                "abc123def456",
+                null);
+        return new GitLabNoteEventDTO(
+                "note", "note", createUser(), createProject(), attrs, null, createEmbeddedMergeRequest());
+    }
+
+    private GitLabNoteEventDTO createMergeRequestNote(String body) {
+        NoteAttributes attrs = new NoteAttributes(
+                4406174L,
+                body,
+                "MergeRequest",
+                false,
                 false,
                 null,
                 "create",
