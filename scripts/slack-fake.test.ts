@@ -12,6 +12,7 @@ import {
 } from "./lib/slack-turn.ts";
 import {
 	conforms,
+	FAKE_BOT_USER,
 	FAKE_INSTALL_CODE,
 	FAKE_TEAM,
 	postRefusal,
@@ -82,7 +83,7 @@ await test("the fake installs the app for its code only, and hands out one token
 			access_token: token,
 			token_type: "bot",
 			team: FAKE_TEAM,
-			bot_user_id: "U0TURNROLLBOT",
+			bot_user_id: FAKE_BOT_USER,
 		});
 	});
 	const tokens = new Set<string>();
@@ -92,6 +93,36 @@ await test("the fake installs the app for its code only, and hands out one token
 		});
 	}
 	assert.equal(tokens.size, 2);
+});
+
+await test("the fake names the bot of the install for its own token only", async () => {
+	await withFake(async (base, token) => {
+		const authTest = async (authorization: string) =>
+			json(
+				await fetch(`${base}/api/auth.test`, {
+					method: "POST",
+					headers: { authorization, "content-type": FORM },
+				}),
+			);
+		assert.deepEqual(await authTest("Bearer xoxb-other"), { ok: false, error: "invalid_auth" });
+		assert.deepEqual(await authTest(`Bearer ${token}`), {
+			ok: true,
+			team_id: FAKE_TEAM.id,
+			team: FAKE_TEAM.name,
+			user_id: FAKE_BOT_USER,
+			bot_id: "B0TURNROLL",
+		});
+		// The team and the bot user are the ones that `oauth.v2.access` handed out.
+		const installed = await json(
+			await fetch(`${base}/api/oauth.v2.access`, {
+				method: "POST",
+				headers: { "content-type": FORM },
+				body: new URLSearchParams({ code: FAKE_INSTALL_CODE }),
+			}),
+		);
+		assert.equal(asRecord(installed, "install").bot_user_id, FAKE_BOT_USER);
+		assert.deepEqual(asRecord(asRecord(installed, "install").team, "team"), FAKE_TEAM);
+	});
 });
 
 await test("the fake lists a posted message with its channel, its text and whether the install's token sent it", async () => {

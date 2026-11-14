@@ -1,5 +1,5 @@
 /**
- * TEST ONLY. The Slack Web API of the turn-roll drill: it installs the app, takes the messages that the server
+ * TEST ONLY. The Slack Web API of the turn-roll drill: it installs the app, names its bot, takes the messages that the server
  * posts, and lists them at `GET /received`. It refuses a post that `chat.postMessage` refuses, with Slack's error
  * (https://docs.slack.dev/reference/methods/chat.postMessage/#errors), and lists the refusal. It holds no secret: the
  * bot token is new on each start.
@@ -12,6 +12,8 @@ import type { ReceivedCall } from "./lib/slack-turn.ts";
 
 /** What the fake tells the install: the team that the drill's Slack identity belongs to. */
 export const FAKE_TEAM = { id: "T0TURNROLL", name: "Turn roll" } as const;
+/** The bot user of the installed app: `oauth.v2.access` and `auth.test` name the same one, as Slack does. */
+export const FAKE_BOT_USER = "U0TURNROLLBOT";
 /** The code that the drill hands to the server's OAuth callback, as Slack would. */
 export const FAKE_INSTALL_CODE = "turn-roll-install-code";
 
@@ -394,9 +396,25 @@ function handle(
 							access_token: token,
 							token_type: "bot",
 							team: FAKE_TEAM,
-							bot_user_id: "U0TURNROLLBOT",
+							bot_user_id: FAKE_BOT_USER,
 						}
 					: { ok: false, error: call.error },
+		};
+	}
+	if (method === "auth.test") {
+		// The server checks the bot token that the install handed out before it adopts the install.
+		call.error = authorized ? null : "invalid_auth";
+		return {
+			call,
+			body: authorized
+				? {
+						ok: true,
+						team_id: FAKE_TEAM.id,
+						team: FAKE_TEAM.name,
+						user_id: FAKE_BOT_USER,
+						bot_id: "B0TURNROLL",
+					}
+				: { ok: false, error: call.error },
 		};
 	}
 	if (method === "chat.postMessage") {
