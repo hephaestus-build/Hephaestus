@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { useSpinDelay } from "spin-delay";
+
+import { usePendingSpinner } from "@/lib/use-pending-spinner";
 
 import { FilterToggle, type FilterOption } from "./FilterToggle";
 
@@ -30,7 +31,7 @@ export function RangeControls<TRange extends string>({
 	updating,
 	children,
 }: RangeControlsProps<TRange>) {
-	const showUpdating = useSpinDelay(updating, { delay: 1000, minDuration: 500 });
+	const showUpdating = usePendingSpinner(updating);
 	return (
 		<div className="flex flex-wrap items-center gap-3">
 			{/* Empty, it gives up its gap, so the toggle starts where the row does. */}

@@ -75,7 +75,7 @@ export const NotConnected: Story = {
 export const Connecting: Story = {
 	args: { state: "disconnected", onConnect: fn(), isConnecting: true },
 	play: async ({ canvas }) => {
-		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Redirecting to Slack…" }));
+		await expect(canvas.getByRole("button", { name: "Redirecting to Slack…" })).toHaveAttribute("aria-disabled", "true");
 	},
 };
 
@@ -144,7 +144,7 @@ export const PermissionCheckRetrying: Story = {
 		scopeCheck: { state: "failed", onRetry: onRetryScopes, isRetrying: true },
 	},
 	play: async ({ canvas }) => {
-		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Checking…" }));
+		await expect(canvas.getByRole("button", { name: "Checking…" })).toHaveAttribute("aria-disabled", "true");
 	},
 };
 
@@ -156,7 +156,7 @@ export const Reconnecting: Story = {
 		isReconnecting: true,
 	},
 	play: async ({ canvas }) => {
-		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Redirecting to Slack…" }));
+		await expect(canvas.getByRole("button", { name: "Redirecting to Slack…" })).toHaveAttribute("aria-disabled", "true");
 		await expectGenuinelyDisabled(canvas.getByRole("button", { name: "Disconnect Slack…" }));
 	},
 };

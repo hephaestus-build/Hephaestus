@@ -1,6 +1,5 @@
 import { ChevronsUpDownIcon } from "lucide-react";
 import { useId } from "react";
-import { useSpinDelay } from "spin-delay";
 
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import {
@@ -25,6 +24,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
+import { usePendingSpinner } from "@/lib/use-pending-spinner";
 
 export type WeeklyDigestSectionState =
 	| { status: "loading" }
@@ -58,10 +58,7 @@ export function hasWeeklyDigest(state: WeeklyDigestSectionState): boolean {
 export function WeeklyDigestSection({ state }: WeeklyDigestSectionProps) {
 	const id = useId();
 	const { contains } = useComboboxFilter({ sensitivity: "base" });
-	const showSpinner = useSpinDelay(state.status === "ready" && state.isPending, {
-		delay: 1000,
-		minDuration: 500,
-	});
+	const showSpinner = usePendingSpinner(state.status === "ready" && state.isPending);
 	const busy = state.status === "ready" && (state.isPending || showSpinner);
 	return (
 		<section className="space-y-4" aria-labelledby={`${id}-heading`}>
