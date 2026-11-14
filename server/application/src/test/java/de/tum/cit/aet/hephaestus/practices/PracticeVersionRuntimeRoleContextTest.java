@@ -15,7 +15,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import jakarta.persistence.EntityManagerFactory;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -55,8 +55,8 @@ class PracticeVersionRuntimeRoleContextTest extends BaseUnitTest {
                     if (role.equals("server")) {
                         var account =
                                 new AccountDirectory.AccountView(7L, Account.Status.ACTIVE, "Author", null, null, true);
-                        when(accounts.find(7L)).thenReturn(Optional.of(account));
-                        when(identities.activeLinksForAccount(7L)).thenReturn(List.of());
+                        when(accounts.findAll(List.of(7L))).thenReturn(Map.of(7L, account));
+                        when(identities.activeLinksForAccounts(List.of(7L))).thenReturn(Map.of());
                         ReflectionTestUtils.setField(version, "createdByAccountId", 7L);
                         var practice = version.getPractice();
                         practice.setId(1L);

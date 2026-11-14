@@ -9,6 +9,7 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import tools.jackson.databind.JsonNode;
 
 @WorkspaceAgnostic("Versions are read through a tenant-validated owning practice")
 public interface PracticeVersionRepository extends JpaRepository<PracticeVersion, Long> {
@@ -32,7 +33,19 @@ public interface PracticeVersionRepository extends JpaRepository<PracticeVersion
     List<PracticeVersion> findByWorkspaceIdAndPracticeIdInOrderByNumberAsc(
             long workspaceId, Collection<Long> practiceIds);
 
-    Optional<PracticeVersion> findFirstByPracticeIdAndNumberLessThanOrderByNumberDesc(Long practiceId, int number);
+    @Query("""
+        SELECT new de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository$PreviousDefinition(
+            current.id, previous.definition, previous.reviewDigest)
+        FROM PracticeVersion current JOIN PracticeVersion previous
+          ON previous.workspaceId = :workspaceId AND previous.practice.id = current.practice.id
+        WHERE current.workspaceId = :workspaceId AND current.id IN :currentVersionIds
+          AND previous.number = (SELECT MAX(older.number) FROM PracticeVersion older
+            WHERE older.workspaceId = :workspaceId AND older.practice.id = current.practice.id
+              AND older.number < current.number)
+        """)
+    List<PreviousDefinition> previousDefinitions(long workspaceId, Collection<Long> currentVersionIds);
+
+    record PreviousDefinition(long currentVersionId, JsonNode definition, String reviewDigest) {}
 
     @Modifying
     @Query(value = "DELETE FROM practice_version WHERE workspace_id = :workspaceId", nativeQuery = true)
