@@ -116,6 +116,12 @@ interface Row { error: string; status: "error" }
 export function Card({ row }: { row: Row }) { return null; }
 export function helper({ isLoading }: { isLoading: boolean }) { return null; }
 `,
+		// A domain row passed as a type argument is not props.
+		[`${COMPONENTS}/List.tsx`]: `
+interface Row { error: string }
+type ListProps<T> = { rows: readonly T[] };
+export function List({ rows }: ListProps<Row>) { return null; }
+`,
 		// A vendored primitive is not ours to cover.
 		[`${COMPONENTS}/ui/Spinner.tsx`]:
 			"export function Spinner({ loading }: { loading: boolean }) { return null; }",

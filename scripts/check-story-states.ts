@@ -35,6 +35,18 @@ const LITERALS: Record<State, readonly string[]> = {
 	error: ["error"],
 	empty: ["empty"],
 };
+/** Utility types whose first argument's members become the props. */
+const PROPS_UTILITIES = new Set(["Partial", "Required", "Readonly", "Pick", "Omit", "NonNullable"]);
+/** One marker object per type node, for the visit inside a state member. */
+const stateVisits = new WeakMap<object, object>();
+function stateVisit(type: object): object {
+	let marker = stateVisits.get(type);
+	if (marker === undefined) {
+		marker = {};
+		stateVisits.set(type, marker);
+	}
+	return marker;
+}
 /** A member that ends in `Error`, such as `serverError`, carries an error state too. */
 const ERROR_MEMBER = /^[a-z]+Error$/u;
 /** Members whose type is a state, so a nested domain object cannot add a signal. */
@@ -151,10 +163,12 @@ class Program {
 		inState = false,
 	): Promise<void> {
 		const current = node(type);
-		if (current === undefined || seen.has(current)) {
+		// A type is read once outside a state member and once inside one: only inside does a literal count.
+		const visit = current === undefined ? undefined : inState ? stateVisit(current) : current;
+		if (current === undefined || seen.has(visit)) {
 			return;
 		}
-		seen.add(current);
+		seen.add(visit);
 		switch (current.type) {
 			case "TSTypeAnnotation":
 				await this.signals(current.typeAnnotation, module, found, seen, inState);
@@ -243,8 +257,14 @@ class Program {
 			}
 			return;
 		}
-		for (const argument of args) {
-			await this.signals(argument, module, found, seen, inState);
+		// A props utility passes its first argument's members through. Other type arguments matter only
+		// inside a state member: `ListProps<Row>` must not read a domain `Row` as props.
+		if (identifier !== undefined && PROPS_UTILITIES.has(identifier)) {
+			await this.signals(args[0], module, found, seen, inState);
+		} else if (inState) {
+			for (const argument of args) {
+				await this.signals(argument, module, found, seen, inState);
+			}
 		}
 		if (identifier === undefined) {
 			return;
@@ -436,12 +456,7 @@ async function componentFiles(root: string): Promise<string[]> {
 		withFileTypes: true,
 	});
 	return entries
-		.filter(
-			(entry) =>
-				entry.isFile() &&
-				/^[A-Z][^.]*\.tsx$/u.test(entry.name) &&
-				!/\.(?:stories|test)\.tsx$/u.test(entry.name),
-		)
+		.filter((entry) => entry.isFile() && /^[A-Z][^.]*\.tsx$/u.test(entry.name))
 		.map((entry) =>
 			path.relative(root, path.join(entry.parentPath, entry.name)).split(path.sep).join("/"),
 		)
