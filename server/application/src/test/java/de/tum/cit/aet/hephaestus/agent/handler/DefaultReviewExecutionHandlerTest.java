@@ -531,6 +531,80 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
         verify(catalog).inject(any(), eq(List.of(available)), eq(ReviewKind.ITEM), eq(Map.of()));
     }
 
+    /**
+     * ADR 0086 § Update 2026-11-14 accepts that `bash` reads every captured file. That stays sound only while each
+     * practice's result records the fingerprint of every captured source, also of sources it does not declare.
+     */
+    @Test
+    void shouldRecordEveryCapturedSourceFingerprintForEachPracticeWhateverItDeclares() {
+        var job = RuntimeReviewTestData.job();
+        var original = RuntimeReviewTestData.assignment(5L, null);
+        var core = new SourceKind("scm.pull-request.core");
+        var tree = new SourceKind("scm.repository.tree");
+        var readsCore = practice(
+                original,
+                PULL_REQUEST,
+                original.practice().practiceId(),
+                original.practiceSlug(),
+                new PracticeReads("3.0.0", List.of(new PracticeReadSource(core, ReadNeed.REQUIRED))));
+        var readsTree = practice(
+                original,
+                PULL_REQUEST,
+                41L,
+                "repository-practice",
+                new PracticeReads("3.0.0", List.of(new PracticeReadSource(tree, ReadNeed.REQUIRED))));
+        when(assignments.load(job)).thenReturn(List.of(readsCore, readsTree));
+        when(assignments.review(job)).thenReturn(RuntimeReviewTestData.review(ReviewKind.ITEM, readsCore));
+        when(source.supports(readsCore.item())).thenReturn(true);
+        var snapshot = mock(ItemSnapshot.class);
+        when(source.pin(readsCore.item(), readsCore.version())).thenReturn(snapshot);
+        when(source.record(eq(snapshot), any()))
+                .thenReturn(mapper.createObjectNode().put("title", "Captured work"));
+        var manifest = new JobFolderIndex(
+                new SourceContractVersion("3.0.0"),
+                "a".repeat(64),
+                readsCore.item().kind().value(),
+                NOW,
+                List.of(
+                        new SourceCapture(
+                                core,
+                                new SourceCaptureState.Available(
+                                        SourceContentState.EMPTY,
+                                        SourceCompleteness.COMPLETE,
+                                        new SourceCaptureFacts(NOW, null, null, null)),
+                                EvidenceSnapshotFixtures.citation(core),
+                                List.of()),
+                        new SourceCapture(
+                                tree,
+                                new SourceCaptureState.Available(
+                                        SourceContentState.EMPTY,
+                                        SourceCompleteness.COMPLETE,
+                                        new SourceCaptureFacts(NOW, null, null, "head")),
+                                EvidenceSnapshotFixtures.citation(tree),
+                                List.of())),
+                List.of(),
+                List.of(),
+                List.of());
+        when(context.prepare(eq(snapshot), any())).thenReturn(new PreparedEvidence(Map.of(), manifest));
+        when(files.prepare(eq(job), any(), any()))
+                .thenReturn(new PreparedJobInputs(Map.of(), List.of(), List.of(), manifest, null));
+
+        try (var prepared = handler.prepareInputs(job)) {
+            assertThat(prepared.folderIndex()).isNotNull();
+        }
+
+        ArgumentCaptor<List<ReviewCaptureDecision>> decisions = ArgumentCaptor.captor();
+        verify(members)
+                .capture(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(job.getAttempt()), decisions.capture());
+        assertThat(decisions.getValue()).hasSize(2).allSatisfy(decision -> {
+            assertThat(decision.status()).isEqualTo(ReviewPracticeStatus.READY);
+            assertThat(decision.facts()
+                            .path(ReviewCaptureDecision.SOURCE_FINGERPRINTS)
+                            .propertyNames())
+                    .containsExactlyInAnyOrder(core.value(), tree.value());
+        });
+    }
+
     @Test
     void optionalCaptureAbsenceDoesNotWithholdAnOtherwiseReadyPractice() {
         var job = prepare(ReadNeed.OPTIONAL, null);

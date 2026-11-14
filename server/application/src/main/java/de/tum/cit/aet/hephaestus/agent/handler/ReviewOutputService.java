@@ -342,10 +342,10 @@ public class ReviewOutputService {
     }
 
     /**
-     * Refuses a result that cites, or says it consulted, a source its practice does not declare (ADR 0069). The
-     * session's opening and its read tools hold only declared sources, so such a result rests on evidence the practice
-     * never asked for, and its freshness would not follow that source. Every session reads the sources of
-     * {@link SandboxLayout#READ_THROUGH_GIT} in its checkout. Capture-only Applies when sources do not grant runtime
+     * Refuses a result that cites, or says it consulted, a source its practice does not declare: such a result rests
+     * on evidence the practice never asked for. The session's opening and its read tools hold only declared sources,
+     * but {@code bash} can read every captured file (ADR 0086 § Update 2026-11-14). Every session reads the sources
+     * of {@link SandboxLayout#READ_THROUGH_GIT} in its checkout. Capture-only Applies when sources do not grant runtime
      * reads. The server creates a proven Does not apply result separately, without a runtime candidate.
      */
     private void requireDeclaredSources(ReviewAssignmentSnapshot assignment, ReviewKind kind, Candidate candidate) {

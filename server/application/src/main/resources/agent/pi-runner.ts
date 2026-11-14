@@ -49,7 +49,6 @@ import {
 import { GatewayUnavailableError } from "./work/practice-scripts/lib/core/gateway-connection.ts";
 
 import {
-	CONTEXT_IS_LOOP_ONLY,
 	type DeclaredSources,
 	declaredSourcesExtension,
 	readableKinds,
@@ -2606,7 +2605,6 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		}
 		diagnose("review.started", {
 			practices: allSlugs.length,
-			context_loop_only: CONTEXT_IS_LOOP_ONLY,
 			brief_chars_max: Math.max(0, ...allSlugs.map((slug) => briefOf(slug).text.length)),
 		});
 

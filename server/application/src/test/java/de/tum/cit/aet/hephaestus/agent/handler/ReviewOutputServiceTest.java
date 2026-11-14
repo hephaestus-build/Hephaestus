@@ -394,6 +394,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     private static final String WORDED = "The result says the repository lacks something beyond its citations";
     private static final String UNSEARCHED = ", but its receipts hold no search of the whole checkout to the end";
 
+    /** ADR 0086 § Update 2026-11-14 accepts that `bash` reads undeclared sources because admission refuses this. */
     @Test
     void shouldWithholdAResultThatConsultedASourceItsPracticeDoesNotDeclare() {
         pr50Capture(SourceCompleteness.COMPLETE);
