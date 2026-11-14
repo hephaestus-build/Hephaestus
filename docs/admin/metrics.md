@@ -225,6 +225,11 @@ A turn has a second attempt only after a lease expiry ([Server runtime](./runtim
 | `resilience4j_circuitbreaker_not_permitted_calls_total` | Counter | `name`, `kind` | Model calls that a provider breaker refused |
 | `agent_run_reaped_total`                   | Counter   | `kind`, `outcome` | Expired run leases taken back, by kind, and whether the run was `requeued`, `continued` on a successor, or ended (`attempts_exhausted`, `deadline`, `not_started`) |
 | `agent_run_reaper_failure_total`           | Counter   | none      | Runs that the reaper failed to take back. It tries each again next pass  |
+| `agent_run_runs`                           | Gauge     | `kind`, `band`, `state`, `hold_reason` | Runs that have not ended. `state` is `queued` or `leased`. `hold_reason` is `none`, `budget` or `sandbox_room`, and `none` for a leased run. Sampled by each server every 30 seconds |
+| `agent_run_due`                            | Gauge     | `kind`, `band` | Queued runs with no hold whose `available_at` has passed |
+| `agent_run_oldest_due_age_seconds`         | Gauge     | `kind`, `band` | Seconds since the oldest due run became due. 0 when none is due |
+| `agent_run_sampler_failure_total`          | Counter   | none      | Samples of these gauges that failed. The gauges keep their last values |
+| `agent_run_claim_wait_seconds`             | Histogram | `kind`, `band` | From a run's `available_at` to its claim, recorded after the claim committed. A requeued run waits from its new `available_at` |
 | `agent_sandbox_reaped_total`             | Counter   | `reason`  | Sandboxes that the reaper took back: `expired`, `start_limit`, `idle`, or `orphan` for a claim that no sandbox row names |
 | `agent_sandbox_dispatch_failure_total`   | Counter   | none      | Dispatch passes that failed to request the sandbox of a due run. It tries again at the next pass |
 | `agent_sandbox_reaper_failure_total`       | Counter   | none      | Sandbox reaper passes or claim deletes that failed. It tries each again next pass |

@@ -59,7 +59,7 @@ const RELEASE = new Map([
   - name: hephaestus
     rules:
       - alert: QueueStalled
-        expr: max(agent_queue_oldest_age_seconds{job="hephaestus"}) > 3600
+        expr: max(agent_run_oldest_due_age_seconds{job="hephaestus"}) > 3600
 `,
 	],
 	[
@@ -208,7 +208,7 @@ for (const [name, head, expected] of [
 			ALERTS,
 			`groups:\n  - name: hephaestus\n    rules:\n      - alert: QueueStalled\n        expr: max(review_queue_oldest_age_seconds) > 3600\n`,
 		),
-		/lost metric agent_queue_oldest_age_seconds/u,
+		/lost metric agent_run_oldest_due_age_seconds/u,
 	],
 	[
 		"a lost definition field",
@@ -384,7 +384,7 @@ unless time() - backup_seconds offset 5m > 2400`),
 void test("alert names and catalog slugs read each kind", () => {
 	assert.deepEqual(
 		[...alertNames(RELEASE.get(ALERTS) ?? "")],
-		["alert QueueStalled", "metric agent_queue_oldest_age_seconds"],
+		["alert QueueStalled", "metric agent_run_oldest_due_age_seconds"],
 	);
 	assert.deepEqual(
 		[...catalogSlugs(RELEASE.get(CATALOG) ?? "")],

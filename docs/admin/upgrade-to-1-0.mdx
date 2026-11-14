@@ -134,6 +134,7 @@ These migration entries also apply to a host that upgrades to 1.0:
 - *Move the GitHub webhook byte bound into the stream map*: remove the whole `webhook` block from every values file. This chart has no `webhook` key and refuses one.
 - *GitHub synchronization is incremental*: remove `HEPHAESTUS_SYNC_INCREMENTAL_ENABLED` from your configuration.
 - *Change the model call queries that read `class` or `queue`*: your own queries and alerts read the `band` label.
+- *Change the queries that read the agent queue and claim meters*: your own queries, alerts and dashboards read the `agent_run_*` meters.
 - *Decide whether GitHub App installations need an instance admin's approval*: by default, an instance admin adopts each new installation.
 - *Use the canonical webhook receiver base*: remove `WEBHOOK_EXTERNAL_URL` and `hephaestus.webhook.external-url`.
 - *Remove existing sandbox claims before starting the new workers*. Delete the remaining sandbox workloads before the new release starts.

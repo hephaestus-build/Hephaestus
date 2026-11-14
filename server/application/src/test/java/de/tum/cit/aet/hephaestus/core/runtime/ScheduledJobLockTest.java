@@ -35,7 +35,7 @@ class ScheduledJobLockTest {
      * nothing to do. LOCAL: the job acts only on this process's memory, gauges or streams.
      */
     private static final Map<String, String> UNLOCKED = Map.ofEntries(
-            Map.entry("AgentQueueHealthSampler#sample", "LOCAL"),
+            Map.entry("AgentRunSampler#sample", "LOCAL"),
             Map.entry("ActionExecutor#runDue", "ROW"),
             Map.entry("ActionBacklogSampler#sample", "LOCAL"),
             Map.entry("ProviderEventConsumer#reap", "ROW"),

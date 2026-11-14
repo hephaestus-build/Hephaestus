@@ -466,41 +466,6 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     List<UUID> deleteUnreferencedTerminalRowsOlderThan(
             @Param("cutoff") Instant cutoff, @Param("batchSize") int batchSize);
 
-    /**
-     * Depth, oldest-eligible-age, held count and running count in a single pass, so the scan cost does
-     * not multiply when the backlog grows. {@code :now} is the sampler's clock; a run's {@code available_at} is
-     * the database's, so a skew of the two moves a job across the edge of {@code depth} for that long.
-     *
-     * <p>{@code depth} counts only jobs a worker could claim right now, which is what "are we keeping
-     * up?" means — a job on a retry backoff is not work the fleet is behind on. {@code held} is counted
-     * separately for the case that distinction hides: a workspace over its LLM cap has its whole backlog
-     * pushed out of {@code depth}, so depth alone reads identically to an idle instance. Held is the
-     * number that separates paused from idle.
-     */
-    @WorkspaceAgnostic("Fleet-wide queue-health snapshot; caller is @WorkspaceAgnostic health sampler")
-    @Query(
-            value = "SELECT COUNT(*) FILTER (WHERE j.status = 'QUEUED' AND r.available_at <= :now) AS depth,"
-                    + " MIN(r.available_at) FILTER (WHERE j.status = 'QUEUED' AND r.available_at <= :now)"
-                    + " AS oldestAvailableAt,"
-                    + " COUNT(*) FILTER (WHERE j.status = 'QUEUED' AND r.hold_reason = 'BUDGET') AS held,"
-                    + " COUNT(*) FILTER (WHERE j.status = 'RUNNING') AS running"
-                    + " FROM review_job j JOIN agent_run r ON r.id = j.run_id WHERE j.status IN ('QUEUED', 'RUNNING')",
-            nativeQuery = true)
-    QueueHealthSnapshot queueHealthSnapshot(@Param("now") Instant now);
-
-    /** {@code oldestAvailableAt} is null when nothing is eligible. */
-    interface QueueHealthSnapshot {
-        long getDepth();
-
-        @Nullable
-        Instant getOldestAvailableAt();
-
-        /** QUEUED jobs parked on a hold an admin can lift, as opposed to a retry backoff. */
-        long getHeld();
-
-        long getRunning();
-    }
-
     String NOT_ADMITTED = "j.admissionDigest IS NULL";
     String EVIDENCE_REFUSAL_TRANSITION =
             "UPDATE ReviewJob j SET j.status = 'FAILED', j.completedAt = :now, j.output = :output "

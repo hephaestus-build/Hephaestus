@@ -34,6 +34,8 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
         String getKind();
 
+        String getBand();
+
         String getConcurrencyKey();
 
         int getAttempt();
@@ -44,6 +46,9 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
         @Nullable
         Instant getDeadline();
+
+        /** Seconds from the run's {@code available_at} to this claim, both on the database clock. */
+        double getWaitedSeconds();
     }
 
     /** Questions precede queued digests; each kind keeps conversation ledger order, and other subjects keep age order. */
@@ -132,9 +137,10 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
             ),
                    started_at = COALESCE(r.started_at, clock_timestamp())
               FROM picked WHERE r.id = picked.id
-            RETURNING r.id AS id, r.workspace_id AS "workspaceId", r.kind AS kind,
+            RETURNING r.id AS id, r.workspace_id AS "workspaceId", r.kind AS kind, r.band AS band,
                       r.concurrency_key AS "concurrencyKey", r.attempt AS attempt, r.lease_epoch AS "leaseEpoch",
-                      r.leased_until AS "leasedUntil", r.deadline AS deadline
+                      r.leased_until AS "leasedUntil", r.deadline AS deadline,
+                      EXTRACT(EPOCH FROM clock_timestamp() - r.available_at)::double precision AS "waitedSeconds"
             """;
 
     @WorkspaceAgnostic("The claim offers the queued runs of every workspace, in fair-share order")
@@ -176,6 +182,48 @@ interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
     @WorkspaceAgnostic("A kind's cap counts its leased runs in every workspace")
     @Query(value = "SELECT count(*) FROM agent_run WHERE kind = :kind AND state = 'LEASED'", nativeQuery = true)
     int countLeased(@Param("kind") String kind);
+
+    /** The runs of one kind, band, state and hold that have not ended, as the sampler reads them. */
+    interface OpenRow {
+        String getKind();
+
+        String getBand();
+
+        String getState();
+
+        @Nullable
+        String getHoldReason();
+
+        long getRuns();
+
+        /** Of these runs, the ones with no hold that {@link AgentRunRepository#CLAIMABLE} offers: a claim could take them now. */
+        long getDue();
+
+        /** Seconds since the oldest due one became due; 0 when none is due. */
+        long getOldestDueSeconds();
+    }
+
+    /**
+     * One pass over the runs that have not ended, for the run gauges ({@link AgentRunSampler}). The counts take every
+     * open run. A run is due when {@link AgentRunRepository#CLAIMABLE} offers it and it has no hold, so a run that no claim may take, such
+     * as one of a suspended workspace, never reads as a stalled queue.
+     */
+    @WorkspaceAgnostic("The runs of the whole instance; the gauges name no workspace")
+    @Query(value = """
+            SELECT o.kind AS "kind", o.band AS "band", o.state AS "state", o.hold_reason AS "holdReason",
+                   count(*) AS "runs",
+                   count(due.id) FILTER (WHERE o.hold_reason IS NULL) AS "due",
+                   COALESCE(floor(EXTRACT(EPOCH FROM clock_timestamp() - min(o.available_at)
+                       FILTER (WHERE due.id IS NOT NULL AND o.hold_reason IS NULL))), 0)::bigint
+                       AS "oldestDueSeconds"
+              FROM agent_run o
+              LEFT JOIN (SELECT r.id AS id
+            """ + CLAIMABLE + """
+                        ) due ON due.id = o.id
+             WHERE o.state <> 'ENDED'
+             GROUP BY o.kind, o.band, o.state, o.hold_reason
+            """, nativeQuery = true)
+    List<OpenRow> open();
 
     @Query(value = """
             UPDATE agent_run r SET leased_until = clock_timestamp() + make_interval(secs =>""" + LEASE_SECONDS + """

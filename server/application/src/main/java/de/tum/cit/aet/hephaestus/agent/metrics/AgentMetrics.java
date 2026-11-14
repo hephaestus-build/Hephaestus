@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.metrics;
 public final class AgentMetrics {
     public static final String AGENT_JOB_BUDGET_HELD = "agent.job.budget.held";
     public static final String AGENT_JOB_BUDGET_REFUSED = "agent.job.budget.refused";
-    public static final String AGENT_JOB_CLAIM_LATENCY = "agent.job.claim.latency";
     public static final String AGENT_JOB_COMPOSITION_STOPPED = "agent.job.composition.stopped";
     public static final String AGENT_JOB_DURATION = "agent.job.duration";
     public static final String AGENT_JOB_INFRA_RETRY_REQUEUED = "agent.job.infra.retry.requeued";
@@ -14,6 +13,17 @@ public final class AgentMetrics {
     public static final String AGENT_JOB_STAGE_DURATION = "agent.job.stage.duration";
     public static final String AGENT_JOB_TOTAL = "agent.job.total";
     public static final String AGENT_RUN_REAPED = "agent.run.reaped";
+    /** Runs that have not ended, by kind, band, state and hold; the sampler's gauge. */
+    public static final String AGENT_RUN_RUNS = "agent.run.runs";
+    /** Queued runs with no hold whose {@code available_at} has passed, by kind and band. */
+    public static final String AGENT_RUN_DUE = "agent.run.due";
+    /** Seconds since the oldest due run of the kind and band became due; 0 when none is due. */
+    public static final String AGENT_RUN_OLDEST_DUE_AGE_SECONDS = "agent.run.oldest_due_age_seconds";
+    /** Sampler passes that failed; the gauges kept their last values. */
+    public static final String AGENT_RUN_SAMPLER_FAILURE = "agent.run.sampler.failure";
+    /** From a run's {@code available_at} to its claim, by kind and band; recorded after the claim committed. */
+    public static final String AGENT_RUN_CLAIM_WAIT = "agent.run.claim.wait";
+
     public static final String EVIDENCE_RECONCILE_LAST_SUCCESS = "evidence.reconcile.last.success";
     public static final String EVIDENCE_RECONCILE_FAILURES = "evidence.reconcile.failures";
     public static final String AGENT_RUN_REAPER_FAILURE = "agent.run.reaper.failure";
@@ -28,11 +38,6 @@ public final class AgentMetrics {
 
     public static final String AGENT_PI_ENVELOPE_MISMATCH = "agent.pi.envelope.mismatch";
     public static final String AGENT_PI_RESULT_PARSE_FAILURE = "agent.pi.result.parse.failure";
-    public static final String AGENT_QUEUE_DEPTH = "agent.queue.depth";
-    public static final String AGENT_QUEUE_HEALTH_SAMPLER_FAILURES = "agent.queue.health.sampler.failures";
-    public static final String AGENT_QUEUE_HELD = "agent.queue.held";
-    public static final String AGENT_QUEUE_OLDEST_AGE_SECONDS = "agent.queue.oldest_age_seconds";
-    public static final String AGENT_QUEUE_RUNNING = "agent.queue.running";
     public static final String AGENT_REVIEW_PRACTICE_COVERAGE_ELIGIBLE = "agent.review.practice.coverage.eligible";
     public static final String AGENT_REVIEW_PRACTICE_COVERAGE_EVALUATED = "agent.review.practice.coverage.evaluated";
     public static final String AGENT_REVIEW_PRACTICE_COVERAGE_RATIO = "agent.review.practice.coverage.ratio";
