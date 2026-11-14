@@ -1,0 +1,152 @@
+[
+	{
+		"id": "docs/decisions/0001-flat-top-level-layout.md: Confirmation names no existing executable check",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0002-java-package-rename-to-aet-cit-tum.md: Confirmation names no existing executable check",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0014-per-row-aes-gcm-aad-binding.md: missing Confirmation section",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0072-few-dependencies-owned-slivers-kept-foundations.md: missing Confirmation section",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0078-lifecycles-are-explicit-and-rigor-follows-the-damage.md: Confirmation names no existing executable check",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0079-one-agent-system.md: missing Confirmation section",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0080-provider-events-go-to-a-postgresql-inbox.md: missing Confirmation section",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0081-one-server-role-and-sandboxes-that-reach-only-the-server.md: Confirmation names no existing executable check",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0082-a-developer-has-one-heph-conversation-and-its-ledger-is-hephs-memory.md: Confirmation names no existing executable check",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0083-each-purpose-uses-one-governed-model-and-every-call-is-counted.md: Confirmation names no existing executable check",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0085-an-observation-has-one-of-four-outcomes-and-standing-reads-the-newest-decision.md: Confirmation names no existing executable check",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0088-a-person-signs-in-through-an-instance-login-provider-and-is-one-account.md: Confirmation names no existing executable check",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0090-a-review-cites-only-captured-bytes-and-admission-verifies-each-citation-once.md: Confirmation names no existing executable check",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0091-the-signed-helm-chart-is-the-only-supported-deployment-and-one-host-runs-it-on-k3s.md: Confirmation names no existing executable check",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0092-ci-builds-each-image-once-a-release-signs-one-lock-and-hosts-pull-it.md: Confirmation names no existing executable check",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0093-members-see-activity-a-workspace-can-publish-its-public-work-and-private-practice-feedback-has-one-reader.md: Confirmation names no existing executable check",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0094-a-provider-mirror-changes-only-on-a-definitive-answer-and-a-tombstone-is-not-an-erasure.md: Confirmation names no existing executable check",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md: Confirmation names no existing executable check",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0096-1-0-is-one-stopped-cutover-from-1-0-0-rc-1-and-keeps-nothing-for-0-x.md: Confirmation names no existing executable check",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0097-product-feedback-becomes-a-github-issue-and-only-the-reporters-tick-and-a-code-gate-make-it-public.md: Confirmation names no existing executable check",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0098-each-email-is-one-outbox-action-and-is-sent-at-most-once.md: Confirmation names no existing executable check",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md: missing check ContextMapCoverageTest",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md: missing check ModuleDeclarationTest",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md: missing check RepositoryOwnershipArchTest",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	},
+	{
+		"id": "docs/decisions/0100-the-server-serves-the-web-app.md: Confirmation names no existing executable check",
+		"owner": "ADR-QUALITY",
+		"reason": "The accepted decision has no resolvable confirmation for this reference.",
+		"removeWhen": "Name an existing executable check in Confirmation."
+	}
+]
