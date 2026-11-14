@@ -700,6 +700,12 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
                                 "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 640 320\"/>", "Two changes"),
                         new PracticeGuide("# Keep changes separate", Map.of())));
         versions.create(new PracticeVersionService.NewPractice(
-                ownerWorkspace, "guided-practice", new ItemKind("scm.pull_request"), definition, null, 0, null));
+                ownerWorkspace.getId(),
+                "guided-practice",
+                new ItemKind("scm.pull_request"),
+                definition,
+                null,
+                0,
+                null));
     }
 }

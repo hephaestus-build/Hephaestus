@@ -510,7 +510,7 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
                 base.lineNotes(),
                 base.guidance());
         Practice practice = runtimePracticeVersions.create(new PracticeVersionService.NewPractice(
-                workspace, SLUG, new ItemKind("scm.pull_request"), definition, null, 0, null));
+                workspace.getId(), SLUG, new ItemKind("scm.pull_request"), definition, null, 0, null));
         practice.setFeedbackMode(FeedbackMode.AUTOMATIC);
         return practiceRepository.saveAndFlush(practice);
     }

@@ -128,7 +128,13 @@ public final class SlackConversationTestSupport {
              "script":null,"scan":null,"lineNotes":false,"guidance":{"whyItMatters":null,"whatGoodLooksLike":null,"goingWell":null,"visual":null,"guide":null}}
             """), PracticeDefinition.class);
         return versions.create(new PracticeVersionService.NewPractice(
-                workspace, slugPrefix + "-" + UUID.randomUUID(), ThreadEvents.THREAD, definition, null, 0, null));
+                workspace.getId(),
+                slugPrefix + "-" + UUID.randomUUID(),
+                ThreadEvents.THREAD,
+                definition,
+                null,
+                0,
+                null));
     }
 
     public static UUID seedResult(

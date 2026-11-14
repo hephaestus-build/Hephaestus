@@ -30,7 +30,7 @@ class PracticeVersionServiceIntegrationTest extends AbstractWorkspaceIntegration
         var owner = persistUser("version-owner");
         var workspace = createWorkspace("version-" + suffix, "Versions", "version-org", AccountType.ORG, owner);
         return versions.create(new PracticeVersionService.NewPractice(
-                workspace,
+                workspace.getId(),
                 "owned-" + suffix,
                 new ItemKind("scm.pull_request"),
                 DefinitionTestFixtures.definition(),

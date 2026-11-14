@@ -64,7 +64,7 @@ class ReviewQueueOrderIntegrationTest extends BaseIntegrationTest {
 
     private Scenario anotherPractice(Scenario scenario, String slug) {
         var practice = versions.create(new PracticeVersionService.NewPractice(
-                scenario.workspace(),
+                scenario.workspace().getId(),
                 slug,
                 scenario.item().getKind(),
                 DefinitionTestFixtures.definition(),

@@ -11,9 +11,13 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.MonitoredRepositoryRef;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewScopeRepositoryDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.WorkspaceReviewScopeDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceCommandsAdapter;
+import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceQueriesAdapter;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryTarget;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryRepository;
@@ -29,8 +33,12 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
     final ReviewScopeRepositoryRepository targets = mock(ReviewScopeRepositoryRepository.class);
     final MonitoredRepositoryQuery indexed = mock(MonitoredRepositoryQuery.class);
     final ProductItemRepository items = mock(ProductItemRepository.class);
-    final PracticeReviewCoverageService service =
-            new PracticeReviewCoverageService(monitors, targets, items, indexed, mock(MembershipReviewSelection.class));
+    final PracticeReviewCoverageService service = new PracticeReviewCoverageService(
+            new WorkspaceQueriesAdapter(mock(WorkspaceRepository.class), monitors, targets),
+            new WorkspaceCommandsAdapter(mock(WorkspaceRepository.class), monitors, targets),
+            items,
+            indexed,
+            mock(MembershipReviewSelection.class));
     Workspace workspace;
 
     @BeforeEach
@@ -61,7 +69,8 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
 
     @Test
     void generatedPathsRejectUnknownRepositoryWithoutChangingMonitors() {
-        assertThatThrownBy(() -> service.patchGeneratedPaths(workspace, Map.of("3", List.of("dist/**"))))
+        assertThatThrownBy(() -> service.patchGeneratedPaths(
+                        WorkspacePortFixtures.reviewWorkspace(workspace), Map.of("3", List.of("dist/**"))))
                 .isInstanceOf(InvalidReviewScopeException.class);
     }
 
@@ -73,7 +82,7 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
         when(indexed.repositories(1)).thenReturn(Map.of(2L, new MonitoredRepositoryRef(2, 8, "owner/repo")));
         monitor.setGeneratedPaths(List.of("dist/**"));
         when(monitors.findByWorkspaceId(1L)).thenReturn(List.of(monitor));
-        service.patchGeneratedPaths(workspace, Map.of("2", List.of()));
+        service.patchGeneratedPaths(WorkspacePortFixtures.reviewWorkspace(workspace), Map.of("2", List.of()));
         assertThat(monitor.getGeneratedPaths()).isEmpty();
     }
 
@@ -85,7 +94,8 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
         monitor.setNameWithOwner("owner/repo");
         when(indexed.repositories(1)).thenReturn(Map.of(2L, new MonitoredRepositoryRef(2, 8, "owner/repo")));
         when(monitors.findByWorkspaceId(1L)).thenReturn(List.of(monitor));
-        service.patchGeneratedPaths(workspace, Map.of("2", List.of("dist/**", "dist/**")));
+        service.patchGeneratedPaths(
+                WorkspacePortFixtures.reviewWorkspace(workspace), Map.of("2", List.of("dist/**", "dist/**")));
         assertThat(monitor.getGeneratedPaths()).containsExactly("dist/**");
     }
 

@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedByKind;
 import de.tum.cit.aet.hephaestus.testconfig.ItemFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeDeliveryStatus;
 import java.time.Clock;
@@ -69,13 +70,25 @@ class ReviewGateTest {
         workspace.getFeatures().setPracticeReviewAutoTriggerEnabled(origin != ReviewOrigin.EVENT);
         workspace.getFeatures().setPracticeReviewManualTriggerEnabled(origin == ReviewOrigin.EVENT);
         var event = new ItemEventName("scm.pull_request.opened");
-        assertThat(gate.evaluate(workspace, snapshot(Map.of()), origin, occasions(event), Set.of(), List.of()))
+        assertThat(gate.evaluate(
+                        WorkspacePortFixtures.reviewWorkspace(workspace),
+                        snapshot(Map.of()),
+                        origin,
+                        occasions(event),
+                        Set.of(),
+                        List.of()))
                 .isInstanceOfSatisfying(
                         GateDecision.Skip.class,
                         skip -> assertThat(skip.eventReason()).isEqualTo(ReviewRequestReason.GATE_WITHHELD));
         workspace.getFeatures().setPracticeReviewAutoTriggerEnabled(origin == ReviewOrigin.EVENT);
         workspace.getFeatures().setPracticeReviewManualTriggerEnabled(origin != ReviewOrigin.EVENT);
-        assertThat(gate.evaluate(workspace, snapshot(Map.of()), origin, occasions(event), Set.of(), List.of()))
+        assertThat(gate.evaluate(
+                        WorkspacePortFixtures.reviewWorkspace(workspace),
+                        snapshot(Map.of()),
+                        origin,
+                        occasions(event),
+                        Set.of(),
+                        List.of()))
                 .isInstanceOf(GateDecision.Run.class);
     }
 
@@ -103,7 +116,7 @@ class ReviewGateTest {
         when(practices.findByWorkspaceIdAndKind(1L, new ItemKind("scm.pull_request")))
                 .thenReturn(List.of(practice(1, unreadable)));
         assertThat(gate.evaluate(
-                        workspace,
+                        WorkspacePortFixtures.reviewWorkspace(workspace),
                         snapshot(Map.of()),
                         ReviewOrigin.EVENT,
                         Set.of(new ItemEventName("scm.pull_request.opened")),
@@ -134,7 +147,7 @@ class ReviewGateTest {
         when(practices.findByWorkspaceIdAndKind(1L, new ItemKind("scm.pull_request")))
                 .thenReturn(List.of(opened, pushed));
         assertThat(gate.evaluate(
-                        workspace,
+                        WorkspacePortFixtures.reviewWorkspace(workspace),
                         snapshot(Map.of()),
                         ReviewOrigin.EVENT,
                         Set.of(new ItemEventName("scm.pull_request.synchronized")),
@@ -144,7 +157,7 @@ class ReviewGateTest {
                         GateDecision.Run.class,
                         run -> assertThat(run.matchedPractices()).containsExactly(pushed));
         assertThat(gate.evaluate(
-                        workspace,
+                        WorkspacePortFixtures.reviewWorkspace(workspace),
                         snapshot(Map.of()),
                         ReviewOrigin.EVENT,
                         Set.of(
@@ -164,7 +177,7 @@ class ReviewGateTest {
         when(practices.findByWorkspaceIdAndKind(1L, new ItemKind("scm.pull_request")))
                 .thenReturn(List.of(p));
         assertThat(gate.evaluate(
-                        workspace,
+                        WorkspacePortFixtures.reviewWorkspace(workspace),
                         snapshot(Map.of()),
                         ReviewOrigin.EVENT,
                         Set.of(new ItemEventName("scm.pull_request.opened")),
@@ -197,7 +210,7 @@ class ReviewGateTest {
             when(practices.findByWorkspaceIdAndKind(1L, new ItemKind("scm.pull_request")))
                     .thenReturn(List.of(practice(1, definition)));
             assertThat(gate.evaluate(
-                            workspace,
+                            WorkspacePortFixtures.reviewWorkspace(workspace),
                             snapshot(Map.of()),
                             ReviewOrigin.EVENT,
                             Set.of(new ItemEventName("scm.pull_request.opened")),
@@ -233,7 +246,12 @@ class ReviewGateTest {
             assertThat(definition.reviewOn().state()).as(entry.getKey()).isEmpty();
             var event = definition.reviewOn().events().getFirst();
             assertThat(gate.evaluate(
-                            workspace, snapshot(kind, Map.of()), origin, occasions(event), Set.of(), List.of()))
+                            WorkspacePortFixtures.reviewWorkspace(workspace),
+                            snapshot(kind, Map.of()),
+                            origin,
+                            occasions(event),
+                            Set.of(),
+                            List.of()))
                     .as(entry.getKey())
                     .isInstanceOfSatisfying(
                             GateDecision.Skip.class,
@@ -259,7 +277,7 @@ class ReviewGateTest {
         when(practices.findByWorkspaceIdAndKind(1L, new ItemKind("scm.pull_request")))
                 .thenReturn(List.of(practice(1, d)));
         assertThat(gate.evaluate(
-                        workspace,
+                        WorkspacePortFixtures.reviewWorkspace(workspace),
                         snapshot(Map.of("state", "closed")),
                         ReviewOrigin.EVENT,
                         Set.of(new ItemEventName("scm.pull_request.opened")),
@@ -267,7 +285,7 @@ class ReviewGateTest {
                         List.of()))
                 .isInstanceOf(GateDecision.Skip.class);
         assertThat(gate.evaluate(
-                        workspace,
+                        WorkspacePortFixtures.reviewWorkspace(workspace),
                         snapshot(Map.of("state", "closed")),
                         ReviewOrigin.REQUEST,
                         Set.of(),
@@ -281,7 +299,13 @@ class ReviewGateTest {
         workspace.getReviewSettings().setDeliveryStatus(PracticeDeliveryStatus.PAUSED);
         when(practices.findByWorkspaceIdAndKind(1L, new ItemKind("scm.pull_request")))
                 .thenReturn(List.of(practice(1, DefinitionTestFixtures.definition())));
-        assertThat(gate.evaluate(workspace, snapshot(Map.of()), ReviewOrigin.REQUEST, Set.of(), Set.of(), List.of()))
+        assertThat(gate.evaluate(
+                        WorkspacePortFixtures.reviewWorkspace(workspace),
+                        snapshot(Map.of()),
+                        ReviewOrigin.REQUEST,
+                        Set.of(),
+                        Set.of(),
+                        List.of()))
                 .isInstanceOf(GateDecision.Run.class);
     }
 
@@ -291,8 +315,13 @@ class ReviewGateTest {
         var second = practice(2, DefinitionTestFixtures.definition());
         when(practices.findByWorkspaceIdAndKind(1L, new ItemKind("scm.pull_request")))
                 .thenReturn(List.of(first, second));
-        var result =
-                gate.evaluate(workspace, snapshot(Map.of()), ReviewOrigin.REQUEST, Set.of(), Set.of(), List.of(2L));
+        var result = gate.evaluate(
+                WorkspacePortFixtures.reviewWorkspace(workspace),
+                snapshot(Map.of()),
+                ReviewOrigin.REQUEST,
+                Set.of(),
+                Set.of(),
+                List.of(2L));
         assertThat(result)
                 .isInstanceOfSatisfying(
                         GateDecision.Run.class,
@@ -304,7 +333,13 @@ class ReviewGateTest {
         var practice = practice(1, DefinitionTestFixtures.definition());
         when(practices.findByWorkspaceIdAndKind(1L, new ItemKind("scm.pull_request")))
                 .thenReturn(List.of(practice));
-        assertThat(gate.evaluate(workspace, snapshot(Map.of()), ReviewOrigin.REQUEST, Set.of(), Set.of(), List.of()))
+        assertThat(gate.evaluate(
+                        WorkspacePortFixtures.reviewWorkspace(workspace),
+                        snapshot(Map.of()),
+                        ReviewOrigin.REQUEST,
+                        Set.of(),
+                        Set.of(),
+                        List.of()))
                 .isInstanceOf(GateDecision.Run.class);
     }
 
@@ -312,7 +347,12 @@ class ReviewGateTest {
     void rejectsForeignWorkspaceItems() {
         workspace.setId(2L);
         assertThatThrownBy(() -> gate.evaluate(
-                        workspace, snapshot(Map.of()), ReviewOrigin.REQUEST, Set.of(), Set.of(), List.of()))
+                        WorkspacePortFixtures.reviewWorkspace(workspace),
+                        snapshot(Map.of()),
+                        ReviewOrigin.REQUEST,
+                        Set.of(),
+                        Set.of(),
+                        List.of()))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -330,7 +370,7 @@ class ReviewGateTest {
                 .thenReturn(List.of(unrunnable, runnable));
 
         assertThat(gate.evaluate(
-                        workspace,
+                        WorkspacePortFixtures.reviewWorkspace(workspace),
                         snapshot(Map.of()),
                         origin,
                         Set.of(new ItemEventName("scm.pull_request.opened")),

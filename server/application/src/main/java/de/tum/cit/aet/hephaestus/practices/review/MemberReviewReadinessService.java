@@ -14,11 +14,11 @@ import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewReadinessBlocker;
 import de.tum.cit.aet.hephaestus.practices.review.feedbackmode.FeedbackModeResolver;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.AiRefusalReason;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiReadiness;
 import de.tum.cit.aet.hephaestus.workspace.spi.MembershipReviewSelection;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries.ReviewWorkspace;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -41,7 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class MemberReviewReadinessService {
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceQueries workspaces;
     private final ReviewGate gate;
     private final PracticeReviewCoverageService coverage;
     private final MembershipReviewSelection selection;
@@ -66,25 +66,25 @@ public class MemberReviewReadinessService {
         return new MemberReviewReadinessDTO(blocker(workspace, accountId, !reviewing.isEmpty()), events, approval);
     }
 
-    private @Nullable ReviewReadinessBlocker blocker(Workspace workspace, long accountId, boolean anyPractice) {
+    private @Nullable ReviewReadinessBlocker blocker(ReviewWorkspace workspace, long accountId, boolean anyPractice) {
         var refusal = gate.refusal(workspace, ReviewOrigin.EVENT);
         boolean onRequestOnly = false;
         if (refusal.isPresent()) {
             var reason = refusal.orElseThrow().eventReason();
             if (reason == ReviewRequestReason.WORKSPACE_INACTIVE) return ReviewReadinessBlocker.WORKSPACE_INACTIVE;
             if (reason != ReviewRequestReason.GATE_WITHHELD
-                    || !Boolean.TRUE.equals(workspace.getFeatures().getPracticeReviewManualTriggerEnabled()))
+                    || !Boolean.TRUE.equals(workspace.features().manualTriggerEnabled()))
                 return ReviewReadinessBlocker.REVIEWS_OFF;
             onRequestOnly = true;
         }
         // A requested review passes every rule below, so the automatic start is the last reason to name.
-        var aiRefusal = ai.practiceReviewRefusal(workspace.getId(), accountId).orElse(null);
+        var aiRefusal = ai.practiceReviewRefusal(workspace.id(), accountId).orElse(null);
         if (aiRefusal == AiRefusalReason.PERSON_ERASED) return ReviewReadinessBlocker.PERSON_ERASED;
         if (aiRefusal == AiRefusalReason.NO_AI) return ReviewReadinessBlocker.NO_AI;
         // Repository coverage is judged per piece of work: work without a repository, such as a Slack
         // thread, stays reviewable under any repository selection.
         if (!coverage.scope(workspace).admitsPerson(accountId)) return ReviewReadinessBlocker.OUTSIDE_REVIEW_SCOPE;
-        if (!selection.eligibleAccountIds(workspace.getId(), List.of(accountId)).contains(accountId))
+        if (!selection.eligibleAccountIds(workspace.id(), List.of(accountId)).contains(accountId))
             return ReviewReadinessBlocker.NOT_ELIGIBLE;
         if (aiRefusal == AiRefusalReason.CHOICE_REQUIRED) return ReviewReadinessBlocker.CHOICE_REQUIRED;
         if (aiRefusal == AiRefusalReason.UNAVAILABLE) return ReviewReadinessBlocker.NO_MODEL;

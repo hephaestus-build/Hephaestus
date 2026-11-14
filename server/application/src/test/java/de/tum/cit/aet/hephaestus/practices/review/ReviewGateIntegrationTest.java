@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.ItemFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.util.List;
 import java.util.Map;
@@ -75,20 +76,43 @@ class ReviewGateIntegrationTest extends BaseIntegrationTest {
     void storedOffModeStillAllowsAResultReview() {
         scenario.practice().setFeedbackMode(FeedbackMode.OFF);
         practices.saveAndFlush(scenario.practice());
-        assertThat(gate.evaluate(scenario.workspace(), snapshot(), ReviewOrigin.REQUEST, Set.of(), Set.of(), List.of()))
+        assertThat(gate.evaluate(
+                        WorkspacePortFixtures.queries(workspaces)
+                                .findById(scenario.workspace().getId())
+                                .orElseThrow(),
+                        snapshot(),
+                        ReviewOrigin.REQUEST,
+                        Set.of(),
+                        Set.of(),
+                        List.of()))
                 .isInstanceOf(GateDecision.Run.class);
     }
 
     @Test
     void shouldSelectStoredPracticesBeforeRecipientSpecificModelBinding() {
-        assertThat(gate.evaluate(scenario.workspace(), snapshot(), ReviewOrigin.REQUEST, Set.of(), Set.of(), List.of()))
+        assertThat(gate.evaluate(
+                        WorkspacePortFixtures.queries(workspaces)
+                                .findById(scenario.workspace().getId())
+                                .orElseThrow(),
+                        snapshot(),
+                        ReviewOrigin.REQUEST,
+                        Set.of(),
+                        Set.of(),
+                        List.of()))
                 .isInstanceOf(GateDecision.Run.class);
     }
 
     @Test
     void anExplicitReviewDoesNotInventAnEvent() {
         assertThat(gate.evaluate(
-                        scenario.workspace(), snapshot(), ReviewOrigin.BACKFILL, Set.of(), Set.of(), List.of()))
+                        WorkspacePortFixtures.queries(workspaces)
+                                .findById(scenario.workspace().getId())
+                                .orElseThrow(),
+                        snapshot(),
+                        ReviewOrigin.BACKFILL,
+                        Set.of(),
+                        Set.of(),
+                        List.of()))
                 .isInstanceOfSatisfying(
                         GateDecision.Run.class, r -> assertThat(r.origin()).isEqualTo(ReviewOrigin.BACKFILL));
     }

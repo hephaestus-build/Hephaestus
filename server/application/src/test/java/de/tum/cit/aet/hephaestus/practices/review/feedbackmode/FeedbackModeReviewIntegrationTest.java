@@ -91,7 +91,7 @@ class FeedbackModeReviewIntegrationTest extends AbstractWorkspaceIntegrationTest
         var owner = persistUser("mode-owner");
         var workspace = createWorkspace("mode-off", "Modes", "mode-org", AccountType.ORG, owner);
         var practice = versions.create(new PracticeVersionService.NewPractice(
-                workspace,
+                workspace.getId(),
                 "off-review",
                 new ItemKind("scm.pull_request"),
                 DefinitionTestFixtures.definition(),
@@ -114,7 +114,7 @@ class FeedbackModeReviewIntegrationTest extends AbstractWorkspaceIntegrationTest
         var ctx = WorkspaceContext.fromWorkspace(workspace, Set.of(), null);
         var group = groups.createGroup(ctx, "mode-group", new GroupAttributes("Modes", null, null, null, null), true);
         var practice = versions.create(new PracticeVersionService.NewPractice(
-                workspace,
+                workspace.getId(),
                 "inherited-review",
                 new ItemKind("scm.pull_request"),
                 DefinitionTestFixtures.definition(),

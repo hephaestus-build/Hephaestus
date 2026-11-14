@@ -15,9 +15,8 @@ import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvide
 import de.tum.cit.aet.hephaestus.practices.review.feedbackmode.FeedbackModeResolver;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedByKind;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.PositiveOrZero;
 import java.util.ArrayList;
@@ -40,7 +39,7 @@ import tools.jackson.databind.json.JsonMapper;
 public class PracticeService {
     private final PracticeRepository practices;
     private final PracticeGroupRepository groups;
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceQueries workspaces;
     private final PracticeVersionService versions;
     private final WorkspaceReviewDefaultsProvider defaults;
     private final ConfigAuditPort audit;
@@ -119,7 +118,7 @@ public class PracticeService {
             @Nullable FeedbackMode mode,
             @Nullable Long creator,
             @Nullable CatalogPracticeDocument catalogDocument) {
-        Workspace workspace = lock(ctx);
+        lock(ctx);
         if (practices.existsByWorkspaceIdAndSlug(ctx.id(), slug))
             throw new PracticeSlugConflictException("This practice slug already exists.");
         if (!slug.matches("[a-z0-9]+(?:-[a-z0-9]+)*") || slug.length() > 64)
@@ -129,7 +128,7 @@ public class PracticeService {
         int order = position == null ? practices.findMaxPosition(ctx.id(), groupId) + 1 : position;
         if (order < 0) throw new IllegalArgumentException("Use a nonnegative position.");
         Practice practice = versions.create(
-                new PracticeVersionService.NewPractice(workspace, slug, kind, definition, groupId, order, creator));
+                new PracticeVersionService.NewPractice(ctx.id(), slug, kind, definition, groupId, order, creator));
         practice.setFeedbackMode(mode);
         if (catalogDocument != null) {
             practice.setCatalogSlug(slug);
@@ -238,10 +237,9 @@ public class PracticeService {
                         .orElseThrow(() -> new EntityNotFoundException("Practice group", slug));
     }
 
-    private Workspace lock(WorkspaceContext ctx) {
-        return workspaces
-                .findByIdForUpdate(ctx.id())
-                .orElseThrow(() -> new EntityNotFoundException("Workspace", ctx.slug()));
+    private void lock(WorkspaceContext ctx) {
+        if (workspaces.findByIdForUpdate(ctx.id()).isEmpty())
+            throw new EntityNotFoundException("Workspace", ctx.slug());
     }
 
     private void record(WorkspaceContext ctx, Practice practice, PracticeDefinitionSnapshot before) {

@@ -30,10 +30,9 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewFreshness;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.MembershipReviewSelection;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceCommands;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.persistence.EntityManagerFactory;
@@ -60,9 +59,8 @@ class ReviewRuntimeRoleContextTest extends BaseUnitTest {
                     .withBean(Clock.class, Clock::systemUTC)
                     .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
                     .withBean(JsonMapper.class, () -> JsonMapper.builder().build()),
-            WorkspaceRepository.class,
-            RepositoryToMonitorRepository.class,
-            ReviewScopeRepositoryRepository.class,
+            WorkspaceQueries.class,
+            WorkspaceCommands.class,
             MonitoredRepositoryQuery.class,
             MembershipReviewSelection.class,
             HistoryCustodyQuery.class,

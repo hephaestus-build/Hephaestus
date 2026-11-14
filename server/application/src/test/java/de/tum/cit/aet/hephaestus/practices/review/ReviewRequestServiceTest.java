@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.ItemFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
+import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceMembershipsAdapter;
 import de.tum.cit.aet.hephaestus.workspace.authorization.WorkspaceAccessService;
 import java.util.List;
 import java.util.Map;
@@ -45,8 +46,8 @@ class ReviewRequestServiceTest extends BaseUnitTest {
     final ReviewRequestPolicy policy = mock(ReviewRequestPolicy.class);
     final MembershipRepository memberships = mock(MembershipRepository.class);
     final WorkspaceAdminAssurance assurance = mock(WorkspaceAdminAssurance.class);
-    final ReviewRequestService service =
-            new ReviewRequestService(items, identities, access, reviews, policy, memberships, assurance);
+    final ReviewRequestService service = new ReviewRequestService(
+            items, identities, access, reviews, policy, new WorkspaceMembershipsAdapter(memberships), assurance);
 
     @Test
     void authorAndAssigneeCanRequestTheirOwnItem() {

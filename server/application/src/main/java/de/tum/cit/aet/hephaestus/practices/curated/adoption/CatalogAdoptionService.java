@@ -9,8 +9,8 @@ import de.tum.cit.aet.hephaestus.practices.PracticeService;
 import de.tum.cit.aet.hephaestus.practices.PracticeSlugConflictException;
 import de.tum.cit.aet.hephaestus.practices.catalog.CatalogLock;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -25,7 +25,7 @@ public class CatalogAdoptionService {
 
     private final CatalogAdoptionPlanAssembler plans;
     private final CatalogLock catalogLock;
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceQueries workspaceRepository;
     private final PracticeGroupService groupService;
     private final PracticeService practiceService;
 

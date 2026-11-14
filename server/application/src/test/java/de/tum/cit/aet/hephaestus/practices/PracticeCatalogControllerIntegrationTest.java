@@ -212,7 +212,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
         var owner = persistUser("admin");
         var workspace = createWorkspace("wire-practice", "Wire", "wire-org", AccountType.ORG, owner);
         var practice = versions.create(new PracticeVersionService.NewPractice(
-                workspace,
+                workspace.getId(),
                 "wire-definition",
                 new ItemKind("scm.pull_request"),
                 DefinitionTestFixtures.definition(),
@@ -238,7 +238,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
         var owner = persistUser("admin");
         var workspace = createWorkspace("wire-mode", "Modes", "wire-mode-org", AccountType.ORG, owner);
         var practice = versions.create(new PracticeVersionService.NewPractice(
-                workspace,
+                workspace.getId(),
                 "mode-definition",
                 new ItemKind("scm.pull_request"),
                 DefinitionTestFixtures.definition(),
@@ -296,7 +296,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
         var owner = persistUser("admin");
         var workspace = createWorkspace("wire-stale", "Stale", "stale-org", AccountType.ORG, owner);
         var practice = versions.create(new PracticeVersionService.NewPractice(
-                workspace,
+                workspace.getId(),
                 "stale-definition",
                 new ItemKind("scm.pull_request"),
                 DefinitionTestFixtures.definition(),
@@ -328,7 +328,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
         var local = createWorkspace("wire-local", "Local", "local-org", AccountType.ORG, owner);
         var foreign = createWorkspace("wire-foreign", "Foreign", "foreign-org", AccountType.ORG, owner);
         versions.create(new PracticeVersionService.NewPractice(
-                foreign,
+                foreign.getId(),
                 "foreign-practice",
                 new ItemKind("scm.pull_request"),
                 DefinitionTestFixtures.definition(),
@@ -357,7 +357,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
         var owner = persistUser("admin");
         var workspace = createWorkspace("wire-invalid", "Invalid", "invalid-org", AccountType.ORG, owner);
         var practice = versions.create(new PracticeVersionService.NewPractice(
-                workspace,
+                workspace.getId(),
                 "invalid-definition",
                 new ItemKind("scm.pull_request"),
                 DefinitionTestFixtures.definition(),
@@ -385,7 +385,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
         var owner = persistUser("admin");
         var workspace = createWorkspace("wire-guidance", "Guidance", "guidance-org", AccountType.ORG, owner);
         var practice = versions.create(new PracticeVersionService.NewPractice(
-                workspace,
+                workspace.getId(),
                 "stored-guidance",
                 new ItemKind("scm.pull_request"),
                 DefinitionTestFixtures.definition(),

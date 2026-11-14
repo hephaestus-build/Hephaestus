@@ -104,6 +104,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.OfflineNetwork;
 import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
@@ -1328,12 +1329,18 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         long repositoryItemId = itemWriter
                 .upsert(new ItemRegistration(workspaceId, ScmItemEvents.REPOSITORY, project.getId(), null, null))
                 .itemId();
-        assertThat(practiceReviewCoverageService.scope(reviewed).repositories())
+        assertThat(practiceReviewCoverageService
+                        .scope(WorkspacePortFixtures.reviewWorkspace(reviewed))
+                        .repositories())
                 .extracting(ReviewRepositoryTarget::repositoryItemId)
                 .containsExactly(repositoryItemId);
-        assertThat(practiceReviewCoverageService.admission(reviewed).admits(repositoryItemId, "main", null, true))
+        assertThat(practiceReviewCoverageService
+                        .admission(WorkspacePortFixtures.reviewWorkspace(reviewed))
+                        .admits(repositoryItemId, "main", null, true))
                 .isTrue();
-        assertThat(practiceReviewCoverageService.admission(reviewed).admits(Long.MAX_VALUE, "main", null, true))
+        assertThat(practiceReviewCoverageService
+                        .admission(WorkspacePortFixtures.reviewWorkspace(reviewed))
+                        .admits(Long.MAX_VALUE, "main", null, true))
                 .isFalse();
 
         ObjectNode rename = (ObjectNode) projectCreate(renamed, projectId);

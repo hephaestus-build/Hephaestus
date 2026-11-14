@@ -35,7 +35,7 @@ class PracticeContractUpgradeIntegrationTest extends AbstractWorkspaceIntegratio
         var workspace = createWorkspace("version-contract", "Versions", "version-org", AccountType.ORG, owner);
         var authored = DefinitionTestFixtures.definition();
         var practice = versions.create(new PracticeVersionService.NewPractice(
-                workspace, "owned-contract", new ItemKind("scm.pull_request"), authored, null, 0, null));
+                workspace.getId(), "owned-contract", new ItemKind("scm.pull_request"), authored, null, 0, null));
         var recorded = (ObjectNode) mapper.valueToTree(authored);
         ((ObjectNode) recorded.path("reads")).put("contract", "1.3.0");
         var legacy = history.saveAndFlush(new PracticeVersion(practice, 2, recorded, null));

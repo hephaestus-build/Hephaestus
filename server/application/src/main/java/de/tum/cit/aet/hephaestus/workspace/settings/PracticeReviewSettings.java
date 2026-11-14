@@ -54,6 +54,35 @@ public class PracticeReviewSettings {
     @Nullable
     private String defaultFeedbackMode;
 
+    public PracticeReviewPolicy snapshot() {
+        return new PracticeReviewPolicy(
+                deliverToMerged,
+                cooldownMinutes,
+                reviewScopeRepositories,
+                reviewScopePeople,
+                deliveryStatus,
+                rolloutRevision,
+                configVersion,
+                defaultFeedbackMode);
+    }
+
+    public static PracticeReviewSettings detached(PracticeReviewPolicy policy) {
+        var settings = new PracticeReviewSettings();
+        settings.replaceOverrides(policy);
+        settings.rolloutRevision = policy.rolloutRevision();
+        settings.configVersion = policy.configVersion();
+        return settings;
+    }
+
+    public void replaceOverrides(PracticeReviewPolicy policy) {
+        deliverToMerged = policy.deliverToMerged();
+        cooldownMinutes = policy.cooldownMinutes();
+        reviewScopeRepositories = policy.reviewScopeRepositories();
+        reviewScopePeople = policy.reviewScopePeople();
+        deliveryStatus = policy.deliveryStatus();
+        defaultFeedbackMode = policy.defaultFeedbackMode();
+    }
+
     public boolean resolveDeliverToMerged(boolean fallback) {
         return deliverToMerged != null ? deliverToMerged : fallback;
     }

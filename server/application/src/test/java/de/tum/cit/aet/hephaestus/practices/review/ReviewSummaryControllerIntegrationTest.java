@@ -192,7 +192,7 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
 
     private Practice practice() {
         return versions.create(new PracticeVersionService.NewPractice(
-                scenario.workspace(),
+                scenario.workspace().getId(),
                 "pinned-alongside-" + UUID.randomUUID().toString().substring(0, 8),
                 scenario.item().getKind(),
                 DefinitionTestFixtures.definition(),

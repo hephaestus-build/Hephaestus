@@ -1137,7 +1137,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
     private ReviewIntegrationData.Scenario parentScenario(Fixture fixture, ItemRef item) {
         var account = resultData.member(item.workspaceId());
         var practice = practiceVersions.create(new PracticeVersionService.NewPractice(
-                fixture.workspace(),
+                fixture.workspace().getId(),
                 "progress-" + UUID.randomUUID(),
                 ScmItemEvents.ISSUE,
                 DefinitionTestFixtures.definition(

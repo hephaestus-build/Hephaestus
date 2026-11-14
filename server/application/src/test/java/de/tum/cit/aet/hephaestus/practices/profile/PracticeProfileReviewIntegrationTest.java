@@ -186,7 +186,7 @@ class PracticeProfileReviewIntegrationTest extends BaseIntegrationTest {
             definition = DefinitionTestFixtures.withReviewOn(definition, new ReviewOn(List.of(), Map.of()));
         }
         var practice = versions.create(new PracticeVersionService.NewPractice(
-                scenario.workspace(),
+                scenario.workspace().getId(),
                 "history-" + UUID.randomUUID(),
                 item.getKind(),
                 definition,

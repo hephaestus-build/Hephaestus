@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeVersionDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.util.Arrays;
@@ -53,7 +52,7 @@ public class PracticeVersionService {
 
     @Transactional
     public Practice create(NewPractice request) {
-        var workspace = request.workspace();
+        var workspace = request.workspaceId();
         var slug = request.slug();
         var kind = request.kind();
         var definition = request.definition();
@@ -75,7 +74,7 @@ public class PracticeVersionService {
                     VALUES (:id, :workspace, :slug, :kind, :group, :position, :version)
                     """)
                 .setParameter("id", practiceId)
-                .setParameter("workspace", workspace.getId())
+                .setParameter("workspace", workspace)
                 .setParameter("slug", slug)
                 .setParameter("kind", kind.value())
                 .setParameter("group", groupId)
@@ -88,16 +87,16 @@ public class PracticeVersionService {
                     VALUES (:id, :workspace, :practice, 1, CAST(:definition AS jsonb), :creator)
                     """)
                 .setParameter("id", versionId)
-                .setParameter("workspace", workspace.getId())
+                .setParameter("workspace", workspace)
                 .setParameter("practice", practiceId)
                 .setParameter("definition", mapper.writeValueAsString(definition))
                 .setParameter("creator", createdByAccountId)
                 .executeUpdate();
-        return practices.findByWorkspaceIdAndSlug(workspace.getId(), slug).orElseThrow();
+        return practices.findByWorkspaceIdAndSlug(workspace, slug).orElseThrow();
     }
 
     public record NewPractice(
-            Workspace workspace,
+            long workspaceId,
             String slug,
             ItemKind kind,
             PracticeDefinition definition,

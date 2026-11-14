@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.lenient;
@@ -24,6 +25,7 @@ import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewReadinessBlocker;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedByKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeMode;
@@ -57,7 +59,7 @@ class MemberReviewReadinessServiceTest extends BaseUnitTest {
     private final PracticeItemOptions items = new PracticeItemOptions(new ItemDescriptorRegistry(List.of(
             new PullRequestItemDescriptor(), new PullRequestReviewItemDescriptor(), new IssueItemDescriptor())));
     private final MemberReviewReadinessService service = new MemberReviewReadinessService(
-            workspaces,
+            WorkspacePortFixtures.queries(workspaces),
             new ReviewGate(
                     practices,
                     items,
@@ -81,7 +83,7 @@ class MemberReviewReadinessServiceTest extends BaseUnitTest {
         workspace.getFeatures().setPracticeReviewManualTriggerEnabled(true);
         lenient().when(workspaces.findById(WORKSPACE)).thenReturn(Optional.of(workspace));
         lenient().when(practices.findByWorkspaceId(WORKSPACE)).thenReturn(stored);
-        lenient().when(coverage.scope(workspace)).thenReturn(WorkspaceReviewScope.ALL);
+        lenient().when(coverage.scope(any())).thenReturn(WorkspaceReviewScope.ALL);
         lenient().when(selection.eligibleAccountIds(anyLong(), anyCollection())).thenReturn(Set.of(ACCOUNT));
         lenient().when(ai.practiceReviewRefusal(WORKSPACE, ACCOUNT)).thenReturn(Optional.empty());
         lenient().when(defaults.rawDefaultFeedbackMode(WORKSPACE)).thenReturn(FeedbackMode.AUTOMATIC);
@@ -144,7 +146,7 @@ class MemberReviewReadinessServiceTest extends BaseUnitTest {
     void shouldLeaveRepositoryCoverageToThePieceOfWorkWhenTheRolloutSelectsNoRepository() {
         // Work without a repository, such as a Slack thread or an Outline document, stays reviewable.
         lenient()
-                .when(coverage.scope(workspace))
+                .when(coverage.scope(any()))
                 .thenReturn(
                         new WorkspaceReviewScope(ReviewScopeMode.SELECTED, ReviewScopeMode.ALL, List.of(), List.of()));
 
@@ -259,7 +261,7 @@ class MemberReviewReadinessServiceTest extends BaseUnitTest {
     /** The rollout leaves the member out, eligibility drops them, and the AI rule refuses them. */
     private void refuseEveryMemberRule(AiRefusalReason reason) {
         lenient()
-                .when(coverage.scope(workspace))
+                .when(coverage.scope(any()))
                 .thenReturn(
                         new WorkspaceReviewScope(ReviewScopeMode.ALL, ReviewScopeMode.SELECTED, List.of(), List.of()));
         lenient().when(selection.eligibleAccountIds(anyLong(), anyCollection())).thenReturn(Set.of());

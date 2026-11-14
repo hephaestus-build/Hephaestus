@@ -71,7 +71,7 @@ public class PracticeModelTestFixtures {
                         new ReviewOn(List.of(), Map.of())),
                 false);
         var practice = versions.create(
-                new PracticeVersionService.NewPractice(workspace, slug, itemKind, definition, null, 0, null));
+                new PracticeVersionService.NewPractice(workspace.getId(), slug, itemKind, definition, null, 0, null));
         var item = new Item();
         item.setWorkspaceId(workspace.getId());
         item.setKind(itemKind);

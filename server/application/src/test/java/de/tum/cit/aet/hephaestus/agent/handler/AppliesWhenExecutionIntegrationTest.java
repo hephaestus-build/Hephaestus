@@ -847,7 +847,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
         var scenario = pending.scenario();
         var d = DefinitionTestFixtures.definition();
         var unsupported = practiceVersions.create(new PracticeVersionService.NewPractice(
-                scenario.workspace(),
+                scenario.workspace().getId(),
                 "retry-unsupported-" + UUID.randomUUID().toString().substring(0, 8),
                 scenario.item().getKind(),
                 d,
@@ -928,7 +928,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
         var pending = pending();
         var scenario = pending.scenario();
         var ended = practiceVersions.create(new PracticeVersionService.NewPractice(
-                scenario.workspace(),
+                scenario.workspace().getId(),
                 "retry-ended-" + UUID.randomUUID().toString().substring(0, 8),
                 scenario.item().getKind(),
                 DefinitionTestFixtures.definition(),

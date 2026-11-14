@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -12,12 +12,14 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class WorkspaceReviewDefaultsProvider {
 
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceQueries workspaceRepository;
 
     @Transactional(readOnly = true)
     public WorkspaceReviewDefaults forWorkspace(Long workspaceId) {
-        return WorkspaceReviewDefaults.of(
-                workspaceRepository.findById(workspaceId).orElse(null));
+        return workspaceRepository
+                .findById(workspaceId)
+                .map(workspace -> WorkspaceReviewDefaults.of(workspace.reviewSettings()))
+                .orElse(WorkspaceReviewDefaults.UNSET);
     }
 
     /**
@@ -28,7 +30,7 @@ public class WorkspaceReviewDefaultsProvider {
     public @Nullable FeedbackMode rawDefaultFeedbackMode(Long workspaceId) {
         return workspaceRepository
                 .findById(workspaceId)
-                .map(workspace -> workspace.getReviewSettings().getDefaultFeedbackMode())
+                .map(workspace -> workspace.reviewSettings().defaultFeedbackMode())
                 .map(FeedbackMode::valueOf)
                 .orElse(null);
     }

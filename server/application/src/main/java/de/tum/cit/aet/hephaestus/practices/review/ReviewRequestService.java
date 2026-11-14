@@ -16,8 +16,8 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequest;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequestStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
-import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.authorization.WorkspaceAccessService;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
@@ -35,7 +35,7 @@ public class ReviewRequestService {
     private final WorkspaceAccessService access;
     private final ReviewService reviews;
     private final ReviewRequestPolicy policy;
-    private final MembershipRepository memberships;
+    private final WorkspaceMemberships memberships;
     private final WorkspaceAdminAssurance adminAssurance;
 
     public boolean mayRequest(long workspaceId, ItemSnapshot snapshot, long accountId) {
@@ -86,9 +86,7 @@ public class ReviewRequestService {
                 .resolveActiveAccountId(commenter.providerId(), commenter.subject(), commenter.teamId())
                 .orElseThrow(() -> new AccessForbiddenException("The commenter has no linked account."));
         var role = memberships
-                .findByWorkspace_IdAndId_AccountId(workspaceId, accountId)
-                .filter(member -> member.getLeftAt() == null)
-                .map(Membership::getRole)
+                .activeRole(workspaceId, accountId)
                 .orElseThrow(() -> new AccessForbiddenException("The commenter is not a member of this workspace."));
         return request(
                 workspaceId,

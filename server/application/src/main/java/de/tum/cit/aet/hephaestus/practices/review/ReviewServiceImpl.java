@@ -47,8 +47,8 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewStart;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedByKind;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries.ReviewWorkspace;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -93,7 +93,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final ReviewItemRepository memberships;
     private final PracticeRepository practices;
     private final ReviewSnapshotQueryService snapshots;
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceQueries workspaces;
     private final ProductItemQuery items;
     private final PracticeReviewCoverageService coverage;
     private final ReviewGate gate;
@@ -129,7 +129,7 @@ public class ReviewServiceImpl implements ReviewService {
             var prior = reviews.findByWorkspaceIdAndEventId(request.workspaceId(), request.eventId());
             if (prior.isPresent()) return prior.orElseThrow().getId();
         }
-        if (workspace.getStatus() != Workspace.WorkspaceStatus.ACTIVE)
+        if (!workspace.active())
             throw new ReviewRequestRejected(
                     ReviewRequestRejected.Reason.WORKSPACE_INACTIVE, "The workspace is inactive.");
         gate.refusal(workspace, request.origin()).ifPresent(skip -> {
@@ -277,7 +277,7 @@ public class ReviewServiceImpl implements ReviewService {
                 .budgetUsd(request.budgetUsd())
                 .requestKey(request.requestKey())
                 .requestDigest(request.requestDigest())
-                .rolloutRevision(workspace.getReviewSettings().getRolloutRevision())
+                .rolloutRevision(workspace.reviewSettings().rolloutRevision())
                 .orderedAt(ordered)
                 .createdAt(now)
                 .checks(checks)
@@ -481,7 +481,7 @@ public class ReviewServiceImpl implements ReviewService {
             @Nullable Long repository,
             Map<AboutRole, List<Long>> accounts) {}
 
-    private ItemCoverage itemCoverage(Workspace workspace, ItemSnapshot pinned) {
+    private ItemCoverage itemCoverage(ReviewWorkspace workspace, ItemSnapshot pinned) {
         var admission = coverage.admission(workspace);
         var accounts = new EnumMap<AboutRole, List<Long>>(AboutRole.class);
         for (var role : AboutRole.values())
@@ -500,7 +500,7 @@ public class ReviewServiceImpl implements ReviewService {
                             .toList());
         return new ItemCoverage(
                 admission,
-                coverage.repositoryItemId(workspace.getId(), pinned.item().itemId()),
+                coverage.repositoryItemId(workspace.id(), pinned.item().itemId()),
                 accounts);
     }
 

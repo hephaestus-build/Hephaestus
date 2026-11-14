@@ -14,10 +14,9 @@ import de.tum.cit.aet.hephaestus.practices.UnofferedItemCapabilities;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedByKind;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries.ReviewWorkspace;
 import java.util.Collection;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -40,19 +39,19 @@ public class ReviewGate {
      */
     @Transactional(readOnly = true)
     public GateDecision evaluate(
-            Workspace workspace,
+            ReviewWorkspace workspace,
             ItemSnapshot item,
             ReviewOrigin origin,
             Set<ItemEventName> occasions,
             Set<Long> carried,
             Collection<Long> selected) {
-        if (!Objects.equals(workspace.getId(), item.item().workspaceId()))
+        if (workspace.id() != item.item().workspaceId())
             throw new IllegalArgumentException("The item belongs to another workspace.");
         var refusal = refusal(workspace, origin);
         if (refusal.isPresent()) return refusal.orElseThrow();
         var descriptor = items.require(item.item().kind());
         var matched = practices
-                .findByWorkspaceIdAndKind(workspace.getId(), item.item().kind())
+                .findByWorkspaceIdAndKind(workspace.id(), item.item().kind())
                 .stream()
                 .filter(p -> selected.isEmpty() || selected.contains(p.getId()))
                 .filter(p -> runnable(p, descriptor, item.state(), origin, occasions, carried.contains(p.getId())))
@@ -60,20 +59,20 @@ public class ReviewGate {
         if (matched.isEmpty())
             return new GateDecision.Skip("No practice can review this item.", ReviewRequestReason.NO_ACTIVE_PRACTICE);
         return new GateDecision.Run(
-                workspace, matched, workspace.getReviewSettings().getRolloutRevision(), origin);
+                workspace, matched, workspace.reviewSettings().rolloutRevision(), origin);
     }
 
-    Optional<GateDecision.Skip> refusal(Workspace workspace, ReviewOrigin origin) {
-        if (workspace.getStatus() != Workspace.WorkspaceStatus.ACTIVE)
+    Optional<GateDecision.Skip> refusal(ReviewWorkspace workspace, ReviewOrigin origin) {
+        if (!workspace.active())
             return Optional.of(
                     new GateDecision.Skip("The workspace is inactive.", ReviewRequestReason.WORKSPACE_INACTIVE));
-        if (!Boolean.TRUE.equals(workspace.getFeatures().getPracticesEnabled()))
+        if (!Boolean.TRUE.equals(workspace.features().practicesEnabled()))
             return Optional.of(
                     new GateDecision.Skip("Practice reviews are disabled.", ReviewRequestReason.PRACTICES_DISABLED));
         boolean enabled = Boolean.TRUE.equals(
                 origin == ReviewOrigin.EVENT
-                        ? workspace.getFeatures().getPracticeReviewAutoTriggerEnabled()
-                        : workspace.getFeatures().getPracticeReviewManualTriggerEnabled());
+                        ? workspace.features().autoTriggerEnabled()
+                        : workspace.features().manualTriggerEnabled());
         if (!enabled)
             return Optional.of(new GateDecision.Skip(
                     origin == ReviewOrigin.EVENT

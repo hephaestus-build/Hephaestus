@@ -60,6 +60,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.workspace.GitLabRepositorySelec
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
@@ -458,7 +459,9 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
         assertThat(eligibleAccounts())
                 .as("the owner's GitHub profile authors no GitLab work")
                 .containsExactlyInAnyOrder(accountId(userId(STUDENT)), accountId(owner.getId()));
-        assertThat(coverage.summary(workspace, 0).eligiblePeople()).isEqualTo(2);
+        assertThat(coverage.summary(WorkspacePortFixtures.reviewWorkspace(workspace), 0)
+                        .eligiblePeople())
+                .isEqualTo(2);
     }
 
     @Test
@@ -480,32 +483,32 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
         monitor.setNativeId(7002L);
         monitor.setWorkspace(workspace);
         monitors.save(monitor);
-        coverage.replace(
-                workspace,
+        var reviewWorkspace = coverage.replace(
+                WorkspacePortFixtures.reviewWorkspace(workspace),
                 new WorkspaceReviewScope(
                         ReviewScopeMode.SELECTED,
                         ReviewScopeMode.ALL,
                         List.of(new ReviewRepositoryTarget(repositoryItemId, List.of("main"))),
                         List.of()));
-        workspace = workspaces.save(workspace);
         User student = users.save(TestUserFactory.createUser(STUDENT, "student", gitLab));
         ensureAccount(student);
         PullRequest ready = mergeRequest(student, "main");
 
-        assertThat(coverage.admission(workspace)
+        assertThat(coverage.admission(reviewWorkspace)
                         .admits(repositoryItemId, ready.getBaseRefName(), accountId(student.getId()), true))
                 .isFalse();
 
         answer("GetGroupMembers " + COURSE, page(false, member(STUDENT, "student", 30)));
         memberSync.syncGroupMemberships(workspace.getId(), COURSE, course);
 
-        assertThat(coverage.admission(workspace)
+        assertThat(coverage.admission(reviewWorkspace)
                         .admits(repositoryItemId, ready.getBaseRefName(), accountId(student.getId()), true))
                 .isTrue();
-        assertThat(coverage.admission(workspace).admits(repositoryItemId, "develop", accountId(student.getId()), true))
+        assertThat(coverage.admission(reviewWorkspace)
+                        .admits(repositoryItemId, "develop", accountId(student.getId()), true))
                 .as("the base branch still has to be selected")
                 .isFalse();
-        assertThat(coverage.admission(workspace).admits(repositoryItemId, "main", Long.MAX_VALUE, true))
+        assertThat(coverage.admission(reviewWorkspace).admits(repositoryItemId, "main", Long.MAX_VALUE, true))
                 .isFalse();
     }
 

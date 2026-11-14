@@ -112,7 +112,7 @@ public class ReviewIntegrationData {
         item.setCreatedAt(Instant.now().minusSeconds(3600));
         items.saveAndFlush(item);
         var practice = versions.create(new PracticeVersionService.NewPractice(
-                workspace,
+                workspace.getId(),
                 "s5-practice-" + UUID.randomUUID().toString().substring(0, 8),
                 item.getKind(),
                 definition,
@@ -363,7 +363,7 @@ public class ReviewIntegrationData {
                 .update();
         for (int i = 1; i < practices; i++) {
             var practice = versions.create(new PracticeVersionService.NewPractice(
-                    s.workspace(),
+                    s.workspace().getId(),
                     "s5-practice-" + UUID.randomUUID().toString().substring(0, 8),
                     s.item().getKind(),
                     DefinitionTestFixtures.definition(),
@@ -427,7 +427,7 @@ public class ReviewIntegrationData {
     @Transactional
     public void withheldAtCreation(Scenario s, Review review) {
         var practice = versions.create(new PracticeVersionService.NewPractice(
-                s.workspace(),
+                s.workspace().getId(),
                 "s5-practice-" + UUID.randomUUID().toString().substring(0, 8),
                 s.item().getKind(),
                 DefinitionTestFixtures.definition(),

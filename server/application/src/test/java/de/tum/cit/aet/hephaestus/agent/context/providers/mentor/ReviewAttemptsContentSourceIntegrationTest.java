@@ -294,7 +294,7 @@ class ReviewAttemptsContentSourceIntegrationTest extends BaseIntegrationTest {
     /** Another practice of the workspace, so that one review can hold one member per practice. */
     private Practice practice() {
         return versions.create(new PracticeVersionService.NewPractice(
-                scenario.workspace(),
+                scenario.workspace().getId(),
                 "retained-" + UUID.randomUUID().toString().substring(0, 8),
                 scenario.item().getKind(),
                 DefinitionTestFixtures.definition(),

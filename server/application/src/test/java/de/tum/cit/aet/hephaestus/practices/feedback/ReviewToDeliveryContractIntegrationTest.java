@@ -452,7 +452,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             var scenario = review.pending().scenario();
             var sibling = versions.create(new PracticeVersionService.NewPractice(
-                    scenario.workspace(),
+                    scenario.workspace().getId(),
                     "absent-sibling",
                     scenario.item().getKind(),
                     DefinitionTestFixtures.definition(),
@@ -502,7 +502,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             var scenario = review.pending().scenario();
             var sibling = versions.create(new PracticeVersionService.NewPractice(
-                    scenario.workspace(),
+                    scenario.workspace().getId(),
                     "judged-sibling",
                     scenario.item().getKind(),
                     DefinitionTestFixtures.definition(),
@@ -565,7 +565,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             var scenario = review.pending().scenario();
             var sibling = versions.create(new PracticeVersionService.NewPractice(
-                    scenario.workspace(),
+                    scenario.workspace().getId(),
                     "retained-sibling",
                     scenario.item().getKind(),
                     DefinitionTestFixtures.definition(),
@@ -1348,7 +1348,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC, definition)) {
             var scenario = review.pending().scenario();
             var sibling = versions.create(new PracticeVersionService.NewPractice(
-                    scenario.workspace(),
+                    scenario.workspace().getId(),
                     "declared-sibling",
                     scenario.item().getKind(),
                     d,

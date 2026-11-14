@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeItemOptions;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Clock;
@@ -38,7 +39,7 @@ class ReviewRequestPolicyTest {
             new JsonMapper(),
             mock(ClasspathSourceCatalogRegistry.class));
     private final ReviewRequestPolicy policy = new ReviewRequestPolicy(
-            workspaces,
+            WorkspacePortFixtures.queries(workspaces),
             reviews,
             properties,
             coverage,

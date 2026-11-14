@@ -146,7 +146,7 @@ public class ReviewAdmissionData {
     public void withheld(Pending pending, String reason) {
         var scenario = pending.scenario();
         var practice = versions.create(new PracticeVersionService.NewPractice(
-                scenario.workspace(),
+                scenario.workspace().getId(),
                 "s5-withheld-" + UUID.randomUUID().toString().substring(0, 8),
                 scenario.item().getKind(),
                 DefinitionTestFixtures.definition(),

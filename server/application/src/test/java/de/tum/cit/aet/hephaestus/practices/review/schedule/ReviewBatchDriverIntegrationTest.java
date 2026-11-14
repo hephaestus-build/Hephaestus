@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchPauseReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBatchStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBudget;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.WorkspacePortFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -87,7 +88,16 @@ class ReviewBatchDriverIntegrationTest extends BaseIntegrationTest {
                 .thenReturn(new ReviewBatchSubmitter.SubmissionOutcome.Submitted());
 
         var driver = new ReviewBatchDriver(
-                batches, scope, submitter, workspaces, budget, readiness, properties, clock, reviews, spend);
+                batches,
+                scope,
+                submitter,
+                WorkspacePortFixtures.queries(workspaces),
+                budget,
+                readiness,
+                properties,
+                clock,
+                reviews,
+                spend);
         driver.tick();
 
         var continued = batches.findById(batch.getId()).orElseThrow();
