@@ -35,10 +35,11 @@ import java.sql.SQLException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -249,17 +250,16 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
      * deletes the repairs that the workspace's links name and the backup did not hold.
      */
     private record Backup(
-            JdbcTemplate jdbc, long workspaceId, Map<String, List<Map<String, Object>>> rows, Set<String> generated) {
+            JdbcTemplate jdbc, long workspaceId, Map<String, List<Map<String, @Nullable Object>>> rows, Set<String> generated) {
 
         static Backup of(JdbcTemplate jdbc, long workspaceId) {
             var generated = jdbc.queryForList("""
                     SELECT table_name || '.' || column_name FROM information_schema.columns
                      WHERE table_schema = current_schema() AND is_generated = 'ALWAYS'
-                    """, String.class)
-                    .stream()
+                    """, String.class).stream()
                     .map(Objects::requireNonNull)
                     .collect(Collectors.toUnmodifiableSet());
-            var rows = new LinkedHashMap<String, List<Map<String, Object>>>();
+            var rows = new LinkedHashMap<String, List<Map<String, @Nullable Object>>>();
             rows.put("workspace", jdbc.queryForList("SELECT * FROM workspace WHERE id = ?", workspaceId));
             for (String table : workspaceTables(jdbc)) {
                 rows.put(table, jdbc.queryForList("SELECT * FROM " + table + " WHERE workspace_id = ?", workspaceId));
@@ -274,14 +274,13 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
                      WHERE c.table_schema = current_schema() AND c.column_name = 'workspace_id'
                        AND t.table_type = 'BASE TABLE'
                      ORDER BY c.table_name
-                    """, String.class)
-                    .stream()
+                    """, String.class).stream()
                     .map(Objects::requireNonNull)
                     .toList();
         }
 
         /** The same backup, with the rows of one table as a later backup holds them. */
-        Backup with(String table, List<Map<String, Object>> tableRows) {
+        Backup with(String table, List<Map<String, @Nullable Object>> tableRows) {
             var changed = new LinkedHashMap<>(rows);
             changed.put(table, tableRows);
             return new Backup(jdbc, workspaceId, changed, generated);
@@ -320,7 +319,7 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         }
 
         /** A generated column is computed again from the restored row, as a restore does. */
-        private static void insert(JdbcTemplate restore, String table, Map<String, Object> row, Set<String> generated) {
+        private static void insert(JdbcTemplate restore, String table, Map<String, @Nullable Object> row, Set<String> generated) {
             var stored = row.entrySet().stream()
                     .filter(column -> !generated.contains(table + "." + column.getKey()))
                     .toList();
