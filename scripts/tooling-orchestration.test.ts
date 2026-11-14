@@ -46,7 +46,7 @@ await test("duplicate configured ports fail the preflight", async () => {
 		process.execPath,
 		[path.join(import.meta.dirname, "check-ports.ts"), "--quiet"],
 		{
-			env: { ...process.env, POSTGRES_PORT: "65431", SERVER_PORT: "65431", WEBAPP_PORT: "65431" },
+			env: { ...process.env, POSTGRES_PORT: "55431", SERVER_PORT: "55431", WEBAPP_PORT: "55431" },
 			stdio: "ignore",
 		},
 	);
