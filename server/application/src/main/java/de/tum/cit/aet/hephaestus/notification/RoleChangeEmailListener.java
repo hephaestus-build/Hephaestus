@@ -139,7 +139,8 @@ public class RoleChangeEmailListener implements EmailNotice<RoleChangeEmailReque
                                 : "If you did not expect this change, contact an owner of the workspace.");
         // A person who left the workspace can no longer open it, so their link goes to the instance.
         boolean linksWorkspace = workspace.isPresent()
-                && (reviews || memberships.isActiveVisibleMember(Objects.requireNonNull(workspaceId), event.accountId()));
+                && (reviews
+                        || memberships.isActiveVisibleMember(Objects.requireNonNull(workspaceId), event.accountId()));
         model.put(
                 "reviewLabel",
                 reviews
