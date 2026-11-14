@@ -224,7 +224,7 @@
 			"enabled": false
 		},
 		{
-			"description": "Lock file maintenance spans every package file, so the practice-runtime approval would hold it. It refreshes only transitive versions, so it runs on the weekly schedule. Last, so no earlier approval rule overrides it",
+			"description": "Lock file maintenance spans every package file, so the practice-runtime approval would hold it. It refreshes locked versions within the declared ranges, so it runs on the weekly schedule. Last, so no earlier approval rule overrides it",
 			"matchUpdateTypes": ["lockFileMaintenance"],
 			"dependencyDashboardApproval": false
 		}
