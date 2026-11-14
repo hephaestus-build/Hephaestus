@@ -17,10 +17,12 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProviderAccounts;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRoots;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,7 +38,13 @@ class GitLabWorkspaceLinkServiceTest extends BaseUnitTest {
     private static final long SECOND = 2L;
 
     @Mock
-    private WorkspaceRepository workspaceRepository;
+    private WorkspaceRoots workspaces;
+
+    @Mock
+    private WorkspaceLookup workspaceLookup;
+
+    @Mock
+    private WorkspaceProviderAccounts providerAccounts;
 
     @Mock
     private OrganizationRepository organizationRepository;
@@ -48,7 +56,7 @@ class GitLabWorkspaceLinkServiceTest extends BaseUnitTest {
     private SourceProviderNamespaces providerNamespaces;
 
     @Mock
-    private RepositoryToMonitorRepository monitorRepository;
+    private WorkspaceRepositoryMonitors monitors;
 
     private GitLabWorkspaceLinkService service;
     private Organization group;
@@ -57,7 +65,13 @@ class GitLabWorkspaceLinkServiceTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         service = new GitLabWorkspaceLinkService(
-                workspaceRepository, organizationRepository, actorSelector, providerNamespaces, monitorRepository);
+                workspaces,
+                workspaceLookup,
+                providerAccounts,
+                organizationRepository,
+                actorSelector,
+                providerNamespaces,
+                monitors);
         IdentityProvider gitLab = TestEntities.gitProvider(PROVIDER_ID, IdentityProviderType.GITLAB);
         group = new Organization();
         group.setId(5L);
@@ -71,9 +85,9 @@ class GitLabWorkspaceLinkServiceTest extends BaseUnitTest {
         Workspace owner = workspace(OWNER);
         owner.setOrganizationId(group.getId());
         Workspace second = workspace(SECOND);
-        lenient().when(workspaceRepository.findById(OWNER)).thenReturn(Optional.of(owner));
-        lenient().when(workspaceRepository.findById(SECOND)).thenReturn(Optional.of(second));
-        lenient().when(workspaceRepository.existsByOrganizationId(5L)).thenReturn(true);
+        lenient().when(workspaceLookup.find(OWNER)).thenReturn(Optional.of(owner));
+        lenient().when(workspaceLookup.find(SECOND)).thenReturn(Optional.of(second));
+        lenient().when(providerAccounts.organizationBound(5L)).thenReturn(true);
         lenient().when(actorSelector.connectedProviderId(OWNER)).thenReturn(Optional.of(PROVIDER_ID));
         lenient().when(actorSelector.connectedProviderId(SECOND)).thenReturn(Optional.of(PROVIDER_ID));
         lenient()
@@ -85,8 +99,8 @@ class GitLabWorkspaceLinkServiceTest extends BaseUnitTest {
     @Test
     void shouldLetOnlyTheGroupsOwnerRewriteAProjectBothMonitor() {
         when(organizationRepository.findById(5L)).thenReturn(Optional.of(group));
-        when(monitorRepository.findByWorkspaceIdAndNativeId(OWNER, 700L)).thenReturn(List.of(monitor(700L)));
-        when(monitorRepository.findByWorkspaceIdAndNativeId(SECOND, 700L)).thenReturn(List.of(monitor(700L)));
+        when(monitors.monitorsOf(OWNER, 700L)).thenReturn(List.of(monitor(700L)));
+        when(monitors.monitorsOf(SECOND, 700L)).thenReturn(List.of(monitor(700L)));
 
         assertThat(service.mayWriteRepository(OWNER, project)).isTrue();
         assertThat(service.mayWriteRepository(SECOND, project))
@@ -96,7 +110,7 @@ class GitLabWorkspaceLinkServiceTest extends BaseUnitTest {
 
     @Test
     void shouldRefuseARepositoryWithoutAMonitorForItsProviderId() {
-        when(monitorRepository.findByWorkspaceIdAndNativeId(OWNER, 700L)).thenReturn(List.of());
+        when(monitors.monitorsOf(OWNER, 700L)).thenReturn(List.of());
 
         assertThat(service.mayWriteRepository(OWNER, project)).isFalse();
     }

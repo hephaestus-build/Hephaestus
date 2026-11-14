@@ -5,10 +5,12 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.SourceProviderNames
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProviderAccounts;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRoots;
 import java.util.Objects;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -21,23 +23,30 @@ public class GitLabWorkspaceLinkService {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabWorkspaceLinkService.class);
 
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceRoots workspaces;
+
+    private final WorkspaceLookup workspaceLookup;
+    private final WorkspaceProviderAccounts providerAccounts;
     private final OrganizationRepository organizationRepository;
     private final WorkspaceActorSelector actorSelector;
     private final SourceProviderNamespaces providerNamespaces;
-    private final RepositoryToMonitorRepository monitorRepository;
+    private final WorkspaceRepositoryMonitors monitors;
 
     public GitLabWorkspaceLinkService(
-            WorkspaceRepository workspaceRepository,
+            WorkspaceRoots workspaces,
+            WorkspaceLookup workspaceLookup,
+            WorkspaceProviderAccounts providerAccounts,
             OrganizationRepository organizationRepository,
             WorkspaceActorSelector actorSelector,
             SourceProviderNamespaces providerNamespaces,
-            RepositoryToMonitorRepository monitorRepository) {
-        this.workspaceRepository = workspaceRepository;
+            WorkspaceRepositoryMonitors monitors) {
+        this.workspaces = workspaces;
+        this.workspaceLookup = workspaceLookup;
+        this.providerAccounts = providerAccounts;
         this.organizationRepository = organizationRepository;
         this.actorSelector = actorSelector;
         this.providerNamespaces = providerNamespaces;
-        this.monitorRepository = monitorRepository;
+        this.monitors = monitors;
     }
 
     /**
@@ -52,8 +61,8 @@ public class GitLabWorkspaceLinkService {
         if (path == null || providerId == null || !monitors(scopeId, repository)) {
             return false;
         }
-        return workspaceRepository
-                .findById(scopeId)
+        return workspaceLookup
+                .find(scopeId)
                 .map(workspace -> {
                     Organization linked = workspace.getOrganizationId() == null
                             ? null
@@ -73,9 +82,7 @@ public class GitLabWorkspaceLinkService {
 
     /** A monitor identifies the project by its provider ID. */
     private boolean monitors(long scopeId, Repository repository) {
-        return !monitorRepository
-                .findByWorkspaceIdAndNativeId(scopeId, repository.getNativeId())
-                .isEmpty();
+        return !monitors.monitorsOf(scopeId, repository.getNativeId()).isEmpty();
     }
 
     /**
@@ -93,8 +100,8 @@ public class GitLabWorkspaceLinkService {
                 .filter(providerId -> organizationRepository
                         .findByLoginIgnoreCaseAndProviderId(groupPath, providerId)
                         .map(organization -> ownsGroup(scopeId, organization))
-                        .orElseGet(() -> workspaceRepository
-                                .findById(scopeId)
+                        .orElseGet(() -> workspaceLookup
+                                .find(scopeId)
                                 .filter(workspace -> workspace.getOrganizationId() == null)
                                 .map(workspace -> groupPath.equalsIgnoreCase(workspace.getAccountLogin()))
                                 .orElse(false)))
@@ -116,8 +123,8 @@ public class GitLabWorkspaceLinkService {
         if (providerId == null || !Optional.of(providerId).equals(actorSelector.connectedProviderId(scopeId))) {
             return false;
         }
-        return workspaceRepository
-                .findById(scopeId)
+        return workspaceLookup
+                .find(scopeId)
                 .map(workspace -> {
                     Organization linked = workspace.getOrganizationId() == null
                             ? null
@@ -128,7 +135,7 @@ public class GitLabWorkspaceLinkService {
                         return Objects.equals(linked.getId(), organization.getId());
                     }
                     return organization.getLogin().equalsIgnoreCase(workspace.getAccountLogin())
-                            && !workspaceRepository.existsByOrganizationId(organization.getId());
+                            && !providerAccounts.organizationBound(organization.getId());
                 })
                 .orElse(false);
     }
@@ -147,20 +154,19 @@ public class GitLabWorkspaceLinkService {
                 .flatMap(providerId -> organizationRepository.findByLoginIgnoreCaseAndProviderId(
                         workspace.getAccountLogin(), providerId))
                 .ifPresent(org -> {
-                    if (workspaceRepository.existsByOrganizationId(org.getId())
-                            && !workspaceRepository.existsByIdAndOrganizationId(workspace.getId(), org.getId())) {
+                    if (providerAccounts.organizationBound(org.getId())
+                            && !providerAccounts.bindsOrganization(workspace.getId(), org.getId())) {
                         log.warn(
                                 "Organization already linked to another workspace: orgId={}, workspaceId={}",
                                 org.getId(),
                                 workspace.getId());
                         return;
                     }
-                    workspaceRepository
-                            .findById(workspace.getId())
+                    workspaceLookup
+                            .find(workspace.getId())
                             .filter(current -> current.getOrganizationId() == null)
                             .ifPresent(current -> {
-                                current.setOrganizationId(org.getId());
-                                workspaceRepository.save(current);
+                                workspaces.linkOrganization(current.getId(), org.getId());
                                 workspace.setOrganizationId(org.getId());
                                 log.info(
                                         "Linked organization to workspace: orgId={}, workspaceId={}",
