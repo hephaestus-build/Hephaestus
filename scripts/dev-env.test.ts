@@ -223,6 +223,9 @@ await describe("the Compose project of a checkout", async () => {
 	});
 });
 
+const asFile = (ports: Record<string, number>) =>
+	Object.fromEntries(Object.entries(ports).map(([name, port]) => [name, String(port)]));
+
 await describe("the host ports of a worktree", async () => {
 	const defaults = {
 		POSTGRES_PORT: 5432,
@@ -235,8 +238,6 @@ await describe("the host ports of a worktree", async () => {
 	};
 	const shifted = (sets: number) =>
 		Object.fromEntries(Object.entries(defaults).map(([name, port]) => [name, port + 10 * sets]));
-	const asFile = (ports: Record<string, number>) =>
-		Object.fromEntries(Object.entries(ports).map(([name, port]) => [name, String(port)]));
 
 	await test("the first worktree gets the defaults, written so that other worktrees see them", async () => {
 		await checkout(async ({ envFile }) => {
@@ -244,7 +245,8 @@ await describe("the host ports of a worktree", async () => {
 				await ensurePorts({ envFile, others: [], created: true, environment: {} }),
 				defaults,
 			);
-			assert.equal((await readEnvFile(envFile)).WEBAPP_PORT, "4200");
+			const values = await readEnvFile(envFile);
+			assert.equal(values.WEBAPP_PORT, "4200");
 		});
 	});
 
@@ -350,7 +352,7 @@ await describe("the host ports of a worktree", async () => {
 		await checkout(async ({ envFile }) => {
 			await writeFile(envFile, "SERVER_PORT=18080\n");
 			const written = await ensurePorts({ envFile, others: [], created: false, environment: {} });
-			assert.equal(written.MANAGEMENT_PORT, 19090);
+			assert.equal(written.MANAGEMENT_PORT, 19_090);
 			assert.equal(written.SERVER_PORT, undefined);
 		});
 	});
