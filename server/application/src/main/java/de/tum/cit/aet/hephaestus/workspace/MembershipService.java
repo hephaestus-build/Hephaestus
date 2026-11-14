@@ -91,7 +91,7 @@ public class MembershipService {
             if (existing.isEmpty()) {
                 var member = createMembership(workspace, entry.getKey(), entry.getValue());
                 recordProviderGrant(member, initialImport);
-            } else if (!endedByPerson(existing.get())) {
+            } else if (!existing.get().endedByPerson()) {
                 var member = existing.get();
                 var before = snapshot(member);
                 boolean rejoining = member.getLeftAt() != null;
@@ -105,7 +105,8 @@ public class MembershipService {
             if (member.getRole() != Membership.WorkspaceRole.OWNER
                     && !desired.containsKey(member.getAccountId())
                     && member.getLeftAt() == null) {
-                departByProvider(member);
+                member.departByProvider(clock.instant());
+                recordProviderDeparture(member);
             }
         }
         current.setMembersSyncedAt(clock.instant());
@@ -117,9 +118,12 @@ public class MembershipService {
         long accountId = accountIdForUser(scmUserId);
         var existing = memberships.findByWorkspace_IdAndId_AccountId(workspace.getId(), accountId);
         if (existing.isPresent() && existing.get().getRole() == Membership.WorkspaceRole.OWNER) return;
-        if (existing.filter(MembershipService::endedByPerson).isPresent()) return;
+        if (existing.filter(Membership::endedByPerson).isPresent()) return;
         if (role == null) {
-            existing.filter(member -> member.getLeftAt() == null).ifPresent(this::departByProvider);
+            existing.filter(member -> member.getLeftAt() == null).ifPresent(member -> {
+                member.departByProvider(clock.instant());
+                recordProviderDeparture(member);
+            });
         } else if (existing.isPresent()) {
             var member = existing.get();
             var before = snapshot(member);
@@ -129,24 +133,6 @@ public class MembershipService {
             if (rejoining) recordProviderGrant(member, false);
             else recordProviderRoleChange(member, before, false);
         } else recordProviderGrant(createMembership(workspace, accountId, role), false);
-    }
-
-    /**
-     * The member ended this membership themselves, or it was an owner's. Provider sync does not bring it back. A
-     * workspace admin can, by giving the person a role again.
-     */
-    private static boolean endedByPerson(Membership member) {
-        return member.getLeftAt() != null && member.getRoleSource() == Membership.RoleSource.PERSON;
-    }
-
-    /**
-     * The provider no longer lists the member. The role source returns to the provider, so the person rejoins when
-     * the provider lists them again: a role set in Hephaestus does not outlive the membership.
-     */
-    private void departByProvider(Membership member) {
-        member.setLeftAt(clock.instant());
-        member.setRoleSource(Membership.RoleSource.PROVIDER);
-        recordProviderDeparture(member);
     }
 
     /**
