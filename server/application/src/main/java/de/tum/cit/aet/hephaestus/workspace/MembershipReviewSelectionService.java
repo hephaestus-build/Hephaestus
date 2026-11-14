@@ -52,7 +52,9 @@ public class MembershipReviewSelectionService implements MembershipReviewSelecti
         var people = workspaces
                 .findReviewScopePeople(workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
-        var selected = people == ReviewScopeMode.ALL ? Set.<Long>of() : Set.copyOf(memberships.findSelectedAccountIds(workspaceId));
+        var selected = people == ReviewScopeMode.ALL
+                ? Set.<Long>of()
+                : Set.copyOf(memberships.findSelectedAccountIds(workspaceId));
         return eligibleAccountIds(workspaceId, accountIds).stream()
                 .filter(id -> WorkspaceReviewScope.admitsPerson(people, selected.contains(id)))
                 .collect(Collectors.toUnmodifiableSet());

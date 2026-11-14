@@ -24,10 +24,13 @@ class WorkspaceReviewScopeTest extends BaseUnitTest {
 
     @Test
     void allPeopleAdmitEveryEligibleMemberWhateverTheirSelectionFlag() {
-        assertThat(WorkspaceReviewScope.admitsPerson(ReviewScopeMode.ALL, false)).isTrue();
+        assertThat(WorkspaceReviewScope.admitsPerson(ReviewScopeMode.ALL, false))
+                .isTrue();
         assertThat(WorkspaceReviewScope.admitsPerson(ReviewScopeMode.ALL, true)).isTrue();
-        assertThat(WorkspaceReviewScope.admitsPerson(ReviewScopeMode.SELECTED, true)).isTrue();
-        assertThat(WorkspaceReviewScope.admitsPerson(ReviewScopeMode.SELECTED, false)).isFalse();
+        assertThat(WorkspaceReviewScope.admitsPerson(ReviewScopeMode.SELECTED, true))
+                .isTrue();
+        assertThat(WorkspaceReviewScope.admitsPerson(ReviewScopeMode.SELECTED, false))
+                .isFalse();
     }
 
     @Test

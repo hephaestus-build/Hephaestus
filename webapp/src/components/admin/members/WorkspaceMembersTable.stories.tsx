@@ -52,9 +52,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		await expect(
-			canvas.getByRole("textbox", { name: "Search members" }),
-		).toBeVisible();
+		await expect(canvas.getByRole("textbox", { name: "Search members" })).toBeVisible();
 		// The sort lives in the URL, so a column is always sorted — and which one has to be legible
 		// to a screen reader, not only to whoever can see the arrow.
 		await expect(canvas.getByRole("columnheader", { name: "Name" })).toHaveAttribute(
@@ -129,7 +127,10 @@ export const InReviewScope: Story = {
 export const OutOfReviewScope: Story = {
 	args: {
 		members: workspaceMemberRows([
-			membership(unclaimedMember.account, { eligibleForPracticeReview: true, inReviewScope: false }),
+			membership(unclaimedMember.account, {
+				eligibleForPracticeReview: true,
+				inReviewScope: false,
+			}),
 		]),
 		rowCount: 1,
 	},
