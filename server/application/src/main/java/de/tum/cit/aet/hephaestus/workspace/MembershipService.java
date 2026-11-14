@@ -97,8 +97,8 @@ public class MembershipService {
                 boolean rejoining = member.getLeftAt() != null;
                 applyProviderRole(member, entry.getValue(), rejoining);
                 member.setLeftAt(null);
-                if (rejoining) recordProviderGrant(member, false);
-                else recordProviderRoleChange(member, before);
+                if (rejoining) recordProviderGrant(member, initialImport);
+                else recordProviderRoleChange(member, before, initialImport);
             }
         }
         for (var member : memberships.findByWorkspace_Id(workspace.getId())) {
@@ -130,7 +130,7 @@ public class MembershipService {
             applyProviderRole(member, role, rejoining);
             member.setLeftAt(null);
             if (rejoining) recordProviderGrant(member, false);
-            else recordProviderRoleChange(member, before);
+            else recordProviderRoleChange(member, before, false);
         } else recordProviderGrant(createMembership(workspace, accountId, role), false);
     }
 
@@ -167,19 +167,24 @@ public class MembershipService {
                 null);
     }
 
-    private void recordProviderRoleChange(Membership member, WorkspaceAuditSnapshots.RoleSnapshot before) {
+    private void recordProviderRoleChange(
+            Membership member, WorkspaceAuditSnapshots.RoleSnapshot before, boolean initialImport) {
         var after = snapshot(member);
-        if (!before.equals(after))
-            audit.roleChanged(
-                    ConfigAuditEntry.updated(
-                            ConfigAuditEntityType.WORKSPACE_ROLE,
-                            Objects.requireNonNull(member.getAccountId()),
-                            member.getWorkspace().getId(),
-                            before,
-                            after),
-                    member,
-                    before.role() == null ? null : Membership.WorkspaceRole.valueOf(before.role()),
-                    null);
+        if (!before.equals(after)) {
+            var entry = ConfigAuditEntry.updated(
+                    ConfigAuditEntityType.WORKSPACE_ROLE,
+                    Objects.requireNonNull(member.getAccountId()),
+                    member.getWorkspace().getId(),
+                    before,
+                    after);
+            if (initialImport) audit.record(entry);
+            else
+                audit.roleChanged(
+                        entry,
+                        member,
+                        before.role() == null ? null : Membership.WorkspaceRole.valueOf(before.role()),
+                        null);
+        }
     }
 
     public Membership createMembership(Workspace workspace, Long accountId, Membership.WorkspaceRole role) {

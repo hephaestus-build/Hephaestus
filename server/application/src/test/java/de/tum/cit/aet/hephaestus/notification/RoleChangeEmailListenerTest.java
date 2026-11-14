@@ -54,6 +54,8 @@ class RoleChangeEmailListenerTest extends BaseUnitTest {
         when(memberships.workspace(WORKSPACE))
                 .thenReturn(Optional.of(new AccountMembershipQuery.WorkspaceView("delivery-team", "Delivery team")));
         when(memberships.ownerAccountIds(WORKSPACE)).thenReturn(List.of(OWNER));
+        when(memberships.isAdministrator(WORKSPACE, OWNER)).thenReturn(true);
+        when(memberships.isActiveVisibleMember(WORKSPACE, OWNER)).thenReturn(true);
         when(contacts.activeVerifiedPrimaryEmail(AFFECTED)).thenReturn(Optional.of("ada@example.org"));
         when(contacts.activeVerifiedPrimaryEmail(OWNER)).thenReturn(Optional.of("owner@example.org"));
         when(accounts.timeZone(OWNER)).thenReturn(Optional.of(ZoneId.of("Europe/Berlin")));
@@ -75,6 +77,8 @@ class RoleChangeEmailListenerTest extends BaseUnitTest {
 
     @Test
     void shouldTellTheAffectedPersonInTheSecondPerson() {
+        when(memberships.isAdministrator(WORKSPACE, AFFECTED)).thenReturn(true);
+        when(memberships.isActiveVisibleMember(WORKSPACE, AFFECTED)).thenReturn(true);
         var sent = send(workspaceChange(null, RoleChangedEvent.Role.ADMIN), AFFECTED);
 
         assertThat(sent.message().text())
@@ -96,12 +100,43 @@ class RoleChangeEmailListenerTest extends BaseUnitTest {
 
     @Test
     void shouldLinkADemotedMemberToTheWorkspaceRatherThanItsAuditLog() {
+        when(memberships.isActiveVisibleMember(WORKSPACE, AFFECTED)).thenReturn(true);
         var sent = send(workspaceChange(RoleChangedEvent.Role.ADMIN, RoleChangedEvent.Role.MEMBER), AFFECTED);
 
         assertThat(sent.message().text())
                 .contains("Your role in the workspace “Delivery team” changed from admin to member.")
                 .contains("Open the workspace: " + EmailTestSupport.WEBAPP_URL + "/w/delivery-team\n")
                 .doesNotContain("/admin/audit");
+    }
+
+    @Test
+    void shouldNotLinkAnEarlierGrantToAWorkspaceTheAffectedPersonHasSinceLeft() {
+        var sent = send(workspaceChange(RoleChangedEvent.Role.MEMBER, RoleChangedEvent.Role.ADMIN), AFFECTED);
+
+        assertThat(sent.message().text())
+                .contains("changed from member to admin.")
+                .contains("Open Hephaestus: " + EmailTestSupport.WEBAPP_URL)
+                .doesNotContain("/w/delivery-team");
+    }
+
+    @Test
+    void shouldLinkAnEarlierGrantToTheWorkspaceWhenTheAffectedPersonIsNowAMember() {
+        when(memberships.isActiveVisibleMember(WORKSPACE, AFFECTED)).thenReturn(true);
+        var sent = send(workspaceChange(RoleChangedEvent.Role.MEMBER, RoleChangedEvent.Role.ADMIN), AFFECTED);
+
+        assertThat(sent.message().text())
+                .contains("changed from member to admin.")
+                .contains("Open the workspace: " + EmailTestSupport.WEBAPP_URL + "/w/delivery-team\n")
+                .doesNotContain("/admin/audit");
+    }
+
+    @Test
+    void shouldLinkAnEarlierRemovalToTheAuditLogWhenTheAffectedPersonAdministersTheWorkspaceAgain() {
+        when(memberships.isAdministrator(WORKSPACE, AFFECTED)).thenReturn(true);
+        when(memberships.isActiveVisibleMember(WORKSPACE, AFFECTED)).thenReturn(true);
+        var sent = send(workspaceChange(RoleChangedEvent.Role.ADMIN, null), AFFECTED);
+
+        assertThat(sent.message().text()).contains("You were removed").contains("/w/delivery-team/admin/audit");
     }
 
     @Test

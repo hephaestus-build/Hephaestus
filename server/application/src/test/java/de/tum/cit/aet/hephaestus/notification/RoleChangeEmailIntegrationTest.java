@@ -29,6 +29,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -198,11 +199,18 @@ class RoleChangeEmailIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void shouldQueueOneEmailWhenAResetRoleChangesAtTheNextSyncButNoneForTheResetItself() {
         User owner = persistUser("reset-notice-owner");
         Workspace workspace = createWorkspace("reset-notice", "Reset notice", "reset-notice", AccountType.ORG, owner);
-        ensureMembership(workspace, persistUser("mentor"), WorkspaceRole.ADMIN);
+        User mentor = persistUser("mentor");
+        ensureMembership(workspace, mentor, WorkspaceRole.ADMIN);
         User target = persistUser("reset-notice-target");
         workspaceMembershipService.createMembership(workspace, accountId(target), WorkspaceRole.MEMBER);
         verified(accountId(owner));
         verified(accountId(target));
+
+        workspaceMembershipService.syncWorkspaceMembers(
+                workspace,
+                Map.of(
+                        Objects.requireNonNull(target.getId()), WorkspaceRole.MEMBER,
+                        Objects.requireNonNull(mentor.getId()), WorkspaceRole.ADMIN));
 
         assign(workspace, target, WorkspaceRole.ADMIN);
         assertThat(recipients(accountId(target))).containsExactlyInAnyOrder(accountId(target), accountId(owner));
@@ -231,11 +239,11 @@ class RoleChangeEmailIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void shouldQueueAnEmailWhenTheProviderSyncChangesARoleButNotWhenItAddsAMember() {
+    void shouldKeepTheInitialRosterSilentAndNotifyLaterGrantsAndDepartures() {
         User owner = persistUser("sync-notice-owner");
         Workspace workspace = createWorkspace("sync-notice", "Sync notice", "sync-notice", AccountType.ORG, owner);
         User member = persistUser("sync-notice-member");
-        workspaceMembershipService.createMembership(workspace, accountId(member), WorkspaceRole.MEMBER);
+        workspaceMembershipService.ensureMemberships(workspace, Set.of(Objects.requireNonNull(member.getId())));
         User newcomer = persistUser("sync-notice-newcomer");
         verified(accountId(owner));
         verified(accountId(member));
@@ -247,7 +255,15 @@ class RoleChangeEmailIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         Objects.requireNonNull(member.getId()), WorkspaceRole.ADMIN,
                         Objects.requireNonNull(newcomer.getId()), WorkspaceRole.ADMIN));
 
-        assertThat(recipients(accountId(member))).containsExactlyInAnyOrder(accountId(member), accountId(owner));
+        assertThat(recipients(accountId(member)))
+                .as("the first roster is silent even when a team sync already inserted the member")
+                .isEmpty();
+        assertThat(jdbc.queryForObject("""
+                        SELECT count(*) FROM config_audit_event
+                        WHERE workspace_id=? AND entity_type='WORKSPACE_ROLE' AND entity_id=?
+                          AND action='UPDATED' AND changed_keys @> ARRAY['role']
+                        """, Integer.class, workspace.getId(), Long.toString(accountId(member))))
+                .isEqualTo(1);
         assertThat(recipients(accountId(newcomer)))
                 .as("the connection's initial roster import stays silent for a newly discovered member")
                 .isEmpty();
@@ -267,20 +283,14 @@ class RoleChangeEmailIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
         assertThat(recipients(accountId(member)))
                 .as("an admin who left the provider leaves the workspace")
-                .containsExactlyInAnyOrder(accountId(member), accountId(owner), accountId(member), accountId(owner));
+                .containsExactlyInAnyOrder(accountId(member), accountId(owner));
 
         workspaceMembershipService.applyProviderGrant(
                 workspace, Objects.requireNonNull(member.getId()), WorkspaceRole.ADMIN);
 
         assertThat(recipients(accountId(member)))
                 .as("a returning admin is granted the role again")
-                .containsExactlyInAnyOrder(
-                        accountId(member),
-                        accountId(owner),
-                        accountId(member),
-                        accountId(owner),
-                        accountId(member),
-                        accountId(owner));
+                .containsExactlyInAnyOrder(accountId(member), accountId(owner), accountId(member), accountId(owner));
     }
 
     @Test

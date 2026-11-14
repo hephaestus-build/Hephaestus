@@ -124,7 +124,9 @@ public class RoleChangeEmailListener implements EmailNotice<RoleChangeEmailReque
                                         : "The sync with GitHub or GitLab");
         String when =
                 WHEN.withZone(accounts.timeZone(event.accountId()).orElse(UTC)).format(change.occurredAt());
-        boolean reviews = !self || stillAdministers(change);
+        boolean reviews = workspaceId == null
+                ? contacts.activeVerifiedAdministratorEmail(event.accountId()).isPresent()
+                : memberships.isAdministrator(workspaceId, event.accountId());
         var model = new HashMap<String, Object>();
         model.put("summary", summary(who, self, where, change));
         model.put("attribution", byWhom + " made this change on " + when + ".");
@@ -136,7 +138,8 @@ public class RoleChangeEmailListener implements EmailNotice<RoleChangeEmailReque
                                 ? "If you did not expect this change, contact another instance admin."
                                 : "If you did not expect this change, contact an owner of the workspace.");
         // A person who left the workspace can no longer open it, so their link goes to the instance.
-        boolean linksWorkspace = workspace.isPresent() && (reviews || change.role() != null);
+        boolean linksWorkspace = workspace.isPresent()
+                && (reviews || memberships.isActiveVisibleMember(Objects.requireNonNull(workspaceId), event.accountId()));
         model.put(
                 "reviewLabel",
                 reviews
@@ -164,10 +167,6 @@ public class RoleChangeEmailListener implements EmailNotice<RoleChangeEmailReque
 
     private Optional<AccountDirectory.AccountView> active(long accountId) {
         return accounts.find(accountId).filter(view -> !view.erased());
-    }
-
-    private static boolean stillAdministers(RoleChangedEvent change) {
-        return change.role() == RoleChangedEvent.Role.ADMIN || change.role() == RoleChangedEvent.Role.OWNER;
     }
 
     /** What happened, in the past tense: delivery can lag the change, and the role may have changed again since. */
