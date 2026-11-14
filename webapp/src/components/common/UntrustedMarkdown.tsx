@@ -1,3 +1,4 @@
+import { CatchBoundary } from "@tanstack/react-router";
 import { lazy, type ReactNode, Suspense } from "react";
 import { useSpinDelay } from "spin-delay";
 
@@ -87,8 +88,25 @@ export function UntrustedMarkdownLoading() {
  */
 export function UntrustedMarkdown(props: UntrustedMarkdownProps) {
 	return (
-		<Suspense fallback={<UntrustedMarkdownLoading />}>
+		<LazyMarkdown source={props.children}>
 			<UntrustedMarkdownRenderer {...props} />
-		</Suspense>
+		</LazyMarkdown>
+	);
+}
+
+/**
+ * Where a lazily loaded Markdown renderer mounts. While it loads, the delayed skeleton shows. If it
+ * cannot load, for example because a deploy removed the chunk this tab asks for, the source shows as
+ * plain text, so the words stay readable and nothing else on the page breaks. React keeps a failed
+ * lazy load, so a retry could not help; the root's error handlers report the failure.
+ */
+export function LazyMarkdown({ source, children }: { source: string; children: ReactNode }) {
+	return (
+		<CatchBoundary
+			getResetKey={() => source}
+			errorComponent={() => <p className="break-words whitespace-pre-wrap">{source}</p>}
+		>
+			<Suspense fallback={<UntrustedMarkdownLoading />}>{children}</Suspense>
+		</CatchBoundary>
 	);
 }

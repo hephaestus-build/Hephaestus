@@ -1,10 +1,7 @@
-import { lazy, Suspense } from "react";
+import { lazy } from "react";
 
 import type { ReviewFeedback } from "@/api/types.gen";
-import {
-	UNTRUSTED_MARKDOWN_PROSE,
-	UntrustedMarkdownLoading,
-} from "@/components/common/UntrustedMarkdown";
+import { UNTRUSTED_MARKDOWN_PROSE, LazyMarkdown } from "@/components/common/UntrustedMarkdown";
 import { ADMIN_WITHHELD_TEXT } from "@/components/practice-vocabulary/feedback-destination-defs";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
@@ -74,9 +71,9 @@ export function FeedbackBody({ feedback, className }: FeedbackBodyProps) {
 				</CardHeader>
 				<CardContent className="pb-4">
 					<TabsContent value="rendered" className={UNTRUSTED_MARKDOWN_PROSE}>
-						<Suspense fallback={<UntrustedMarkdownLoading />}>
+						<LazyMarkdown source={body}>
 							<FeedbackMarkdown body={body} />
-						</Suspense>
+						</LazyMarkdown>
 					</TabsContent>
 					<TabsContent value="source">
 						<CodeBlock size="sm">
