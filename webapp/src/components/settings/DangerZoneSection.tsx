@@ -138,8 +138,8 @@ function DeleteAccountRow({
 				<p className="text-sm leading-relaxed text-muted-foreground">
 					Permanently delete your account and erase your personal data (GDPR Art. 17). Hephaestus
 					signs you out on all devices and deletes the account at once. Nobody can recover it. If
-					Hephaestus posted feedback for you on GitHub, GitLab, or Slack, erasure finishes after
-					your instance operator removes those comments.
+					Hephaestus posted feedback for you on GitHub or GitLab, erasure finishes after your
+					instance operator removes those comments.
 				</p>
 			</div>
 			<AlertDialog

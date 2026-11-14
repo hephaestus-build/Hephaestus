@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.practices.dto;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
 import de.tum.cit.aet.hephaestus.practices.spi.ApplicabilityClauseKind;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import java.util.List;
 
 @JsonInclude(JsonInclude.Include.ALWAYS)
@@ -16,7 +18,14 @@ public record PracticeItemTypeOptionDTO(
         boolean scanSupported,
         List<String> scanItemKinds,
         List<ApplicabilityClauseKind> applicabilityClauses,
-        List<ReadSourceOptionDTO> applicabilitySources) {
+        List<ReadSourceOptionDTO> applicabilitySources,
+
+        @Schema(
+                requiredMode = RequiredMode.REQUIRED,
+                description = "Whether feedback can appear on the reviewed work itself, for a practice about the"
+                        + " author of the work. Otherwise its feedback goes only to the developer's practice page and"
+                        + " conversation.")
+        boolean feedbackOnWork) {
     public PracticeItemTypeOptionDTO {
         events = List.copyOf(events);
         aboutRoles = List.copyOf(aboutRoles);

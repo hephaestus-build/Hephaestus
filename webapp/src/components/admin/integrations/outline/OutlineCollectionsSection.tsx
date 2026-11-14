@@ -207,7 +207,9 @@ export function OutlineCollectionsSection({
 					<IntegrationCardHeading>Mirrored collections</IntegrationCardHeading>
 					<CardDescription>
 						Documents in mirrored collections are kept in sync and reach practice reviews as
-						context. Pausing a collection <strong>freezes syncing but keeps its documents</strong>
+						context. Hephaestus posts no feedback in Outline: feedback about a document goes to its
+						author’s Practice profile and conversation with Hephaestus. Pausing a collection{" "}
+						<strong>freezes syncing but keeps its documents</strong>
 						{". "}Removing it <strong>erases every mirrored document</strong> from Hephaestus.
 					</CardDescription>
 					<CardAction>

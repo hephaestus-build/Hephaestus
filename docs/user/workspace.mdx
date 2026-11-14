@@ -253,6 +253,36 @@ If the workspace does not need the repository, remove it as [Repositories](#repo
 - [Set up AI models and Member onboarding](/admin/ai-providers) for a workspace.
 - [Publish a public activity page](/admin/public-activity#workspace-administrators).
 
+## Delete a workspace
+
+:::caution[You cannot undo this]
+
+Deleting a workspace permanently erases its memberships, settings, synced content, practice feedback, and conversations.
+Hephaestus cannot restore it.
+
+:::
+
+Only an owner can delete a workspace, and you must have signed in recently.
+A suspended workspace can be deleted too.
+
+1. Under **Administration**, open **Workspace settings**.
+2. Under **Danger zone**, select **Delete workspace**.
+3. Read what the dialog says that deletion erases and what survives.
+4. Enter the short name of the workspace, and select **Delete workspace** again.
+   If you have not signed in recently, Hephaestus then asks you to sign in again.
+   If a sync or a review still runs, Hephaestus refuses the deletion. Wait for it to end, and try again.
+
+These survive the deletion:
+
+- Comments and messages that Hephaestus posted on GitHub, GitLab, or Slack.
+- Access tokens at GitHub, GitLab, and Outline. Revoke them there if you no longer need them.
+- The Slack app installation.
+- Security, audit, and accounting records.
+- The short name. No new workspace can use it.
+
+For a GitHub App workspace, the app stays installed on GitHub.
+Uninstall it in the GitHub settings of the organization or account if you no longer need it.
+
 ## Troubleshooting
 
 ### A member cannot see the workspace
