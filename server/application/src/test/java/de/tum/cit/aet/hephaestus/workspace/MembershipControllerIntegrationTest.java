@@ -838,4 +838,166 @@ class MembershipControllerIntegrationTest extends AbstractWorkspaceIntegrationTe
                 .isNotFound()
                 .expectBody(Void.class);
     }
+
+    @Test
+    @WithMentorUser
+    void shouldStayLeftThroughProviderSyncUntilAWorkspaceAdminGivesARoleAgain() {
+        User owner = persistUser("leave-owner");
+        Workspace workspace = createWorkspace("leave-space", "Leave", "leave", AccountType.ORG, owner);
+        User mentor = persistUser("mentor");
+        workspaceMembershipService.applyProviderGrant(workspace, mentor.getId(), WorkspaceRole.MEMBER);
+        long accountId = accountId(mentor);
+
+        webTestClient
+                .delete()
+                .uri("/workspaces/{slug}/members/me", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .expectBody(Void.class);
+
+        Membership left = workspaceMembershipService.getMembership(workspace.getId(), accountId);
+        assertThat(left.getLeftAt()).isNotNull();
+        assertThat(left.getRoleSource()).isEqualTo(Membership.RoleSource.PERSON);
+
+        // The provider still lists the person, but they chose to leave.
+        workspaceMembershipService.applyProviderGrant(workspace, mentor.getId(), WorkspaceRole.MEMBER);
+        workspaceMembershipService.syncWorkspaceMembers(workspace, Map.of(mentor.getId(), WorkspaceRole.MEMBER));
+        assertThat(workspaceMembershipService
+                        .getMembership(workspace.getId(), accountId)
+                        .getLeftAt())
+                .isNotNull();
+        webTestClient
+                .get()
+                .uri("/workspaces/{slug}/members/me", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody(Void.class);
+
+        // An owner gives the person a role again, which brings them back.
+        TestUserFactory.ensureAccountForUser(accounts, identities, owner);
+        webTestClient
+                .post()
+                .uri("/workspaces/{slug}/members/assign", workspace.getWorkspaceSlug())
+                .headers(headers -> headers.setBearerAuth("mock-jwt-user-sub-" + accountId(owner)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new AssignRoleRequestDTO(Long.toString(accountId), WorkspaceRole.MEMBER))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+        assertThat(workspaceMembershipService
+                        .getMembership(workspace.getId(), accountId)
+                        .getLeftAt())
+                .isNull();
+    }
+
+    @Test
+    @WithMentorUser
+    void shouldRefuseToLetTheLastOwnerLeave() {
+        User owner = persistUser("mentor");
+        Workspace workspace = createWorkspace("leave-last-owner", "Course", "owner", AccountType.ORG, owner);
+
+        webTestClient
+                .delete()
+                .uri("/workspaces/{slug}/members/me", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isEqualTo(409)
+                .expectBody()
+                .jsonPath("$.type")
+                .isEqualTo("https://docs.hephaestus.build/contributor/api-error-handling#workspace-owner-required")
+                .jsonPath("$.detail")
+                .isEqualTo("Course needs an owner. Make another member an owner first, or delete the workspace.");
+
+        Membership kept = workspaceMembershipService.getMembership(workspace.getId(), accountId(owner));
+        assertThat(kept.getLeftAt()).isNull();
+        assertThat(kept.getRole()).isEqualTo(WorkspaceRole.OWNER);
+    }
+
+    @Test
+    @WithMentorUser
+    void shouldLetAnOwnerLeaveWhileAnotherOwnerStays() {
+        User owner = persistUser("mentor");
+        Workspace workspace = createWorkspace("leave-co-owner", "Co-owners", "owner", AccountType.ORG, owner);
+        User other = persistUser("leave-other-owner");
+        ensureMembership(workspace, other, WorkspaceRole.OWNER);
+
+        webTestClient
+                .delete()
+                .uri("/workspaces/{slug}/members/me", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .expectBody(Void.class);
+
+        assertThat(workspaceMembershipService
+                        .getMembership(workspace.getId(), accountId(owner))
+                        .getLeftAt())
+                .isNotNull();
+        assertThat(workspaceMembershipRepository.countByWorkspace_IdAndRole(workspace.getId(), WorkspaceRole.OWNER))
+                .isEqualTo(1);
+    }
+
+    @Test
+    @WithMentorUser
+    void shouldBringBackAMemberWhoseRoleAPersonSetWhenTheProviderListsThemAgain() {
+        User owner = persistUser("return-owner");
+        Workspace workspace = createWorkspace("provider-return", "Return", "return", AccountType.ORG, owner);
+        ensureMembership(workspace, persistUser("mentor"), WorkspaceRole.ADMIN);
+        User member = persistUser("return-member");
+        workspaceMembershipService.applyProviderGrant(workspace, member.getId(), WorkspaceRole.MEMBER);
+        long accountId = accountId(member);
+        webTestClient
+                .post()
+                .uri("/workspaces/{slug}/members/assign", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new AssignRoleRequestDTO(Long.toString(accountId), WorkspaceRole.ADMIN))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+
+        // The provider drops the person and lists them again: they did not choose to leave.
+        workspaceMembershipService.applyProviderGrant(workspace, member.getId(), null);
+        assertThat(roleSource(workspace, accountId)).isEqualTo(Membership.RoleSource.PROVIDER);
+        workspaceMembershipService.applyProviderGrant(workspace, member.getId(), WorkspaceRole.MEMBER);
+
+        Membership back = workspaceMembershipService.getMembership(workspace.getId(), accountId);
+        assertThat(back.getLeftAt()).isNull();
+        assertThat(back.getRole()).isEqualTo(WorkspaceRole.MEMBER);
+    }
+
+    @Test
+    @WithMentorUser
+    void shouldLetProviderSyncAddBackAMemberWhomAnAdminRemoved() {
+        User owner = persistUser("removal-owner");
+        Workspace workspace = createWorkspace("removal-sticks", "Removal", "removal", AccountType.ORG, owner);
+        ensureMembership(workspace, persistUser("mentor"), WorkspaceRole.ADMIN);
+        User member = persistUser("removal-member");
+        workspaceMembershipService.applyProviderGrant(workspace, member.getId(), WorkspaceRole.MEMBER);
+        long accountId = accountId(member);
+
+        webTestClient
+                .delete()
+                .uri("/workspaces/{slug}/members/{accountId}", workspace.getWorkspaceSlug(), accountId)
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isNoContent()
+                .expectBody(Void.class);
+        // Unlike leaving, a removal does not keep out a person whom the provider still lists.
+        workspaceMembershipService.syncWorkspaceMembers(workspace, Map.of(member.getId(), WorkspaceRole.MEMBER));
+
+        assertThat(workspaceMembershipService
+                        .getMembership(workspace.getId(), accountId)
+                        .getLeftAt())
+                .isNull();
+    }
 }

@@ -13599,6 +13599,36 @@ export type AssignMemberRoleResponses = {
 
 export type AssignMemberRoleResponse = AssignMemberRoleResponses[keyof AssignMemberRoleResponses];
 
+export type LeaveWorkspaceData = {
+	body?: never;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/members/me";
+};
+
+export type LeaveWorkspaceErrors = {
+	/**
+	 * You are the workspace's last owner
+	 */
+	409: ProblemDetail;
+};
+
+export type LeaveWorkspaceError = LeaveWorkspaceErrors[keyof LeaveWorkspaceErrors];
+
+export type LeaveWorkspaceResponses = {
+	/**
+	 * You left the workspace
+	 */
+	204: void;
+};
+
+export type LeaveWorkspaceResponse = LeaveWorkspaceResponses[keyof LeaveWorkspaceResponses];
+
 export type GetOwnMembershipData = {
 	body?: never;
 	path: {

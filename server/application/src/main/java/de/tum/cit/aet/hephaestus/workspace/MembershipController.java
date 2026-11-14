@@ -72,6 +72,25 @@ public class MembershipController {
         return ResponseEntity.ok(toDTO(context.id(), membership, effectiveRole));
     }
 
+    @DeleteMapping("/me")
+    @Operation(
+            operationId = "leaveWorkspace",
+            summary = "Leave the workspace",
+            description =
+                    "Ends your own membership. Sync with GitHub or GitLab does not bring it back; a workspace admin"
+                            + " can, by giving you a role again. The last owner cannot leave.")
+    @ApiResponse(responseCode = "204", description = "You left the workspace")
+    @ApiResponse(
+            responseCode = "409",
+            description = "You are the workspace's last owner",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+    @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "WORKSPACE_ROLE")
+    @RecentSignInExempt(reason = "lowers only the caller's own role; a workspace admin can give it back")
+    public ResponseEntity<Void> leaveWorkspace(WorkspaceContext context) {
+        workspaceMembershipService.leave(context.id(), CurrentAccount.requireId());
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping
     @Operation(operationId = "listMemberships", summary = "List workspace memberships")
     public ResponseEntity<OffsetPageDTO<WorkspaceMembershipDTO>> listMembers(

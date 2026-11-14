@@ -113,6 +113,23 @@ public class Membership {
     }
 
     /**
+     * The member ended this membership themselves, or it was an owner's. Provider sync does not bring it back. A
+     * workspace admin can, by giving the person a role again.
+     */
+    public boolean endedByPerson() {
+        return leftAt != null && roleSource == RoleSource.PERSON;
+    }
+
+    /**
+     * The provider no longer lists the member. The role source returns to the provider, so the person rejoins when
+     * the provider lists them again: a role set in Hephaestus does not outlive the membership.
+     */
+    public void departByProvider(Instant at) {
+        this.leftAt = at;
+        this.roleSource = RoleSource.PROVIDER;
+    }
+
+    /**
      * Who decided a member's role. Provider sync sets a PROVIDER role from the organization or group roster and
      * leaves a PERSON role alone. An owner role is always a person's decision.
      */

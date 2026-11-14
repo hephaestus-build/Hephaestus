@@ -91,7 +91,7 @@ public class MembershipService {
             if (existing.isEmpty()) {
                 var member = createMembership(workspace, entry.getKey(), entry.getValue());
                 recordProviderGrant(member, initialImport);
-            } else {
+            } else if (!existing.get().endedByPerson()) {
                 var member = existing.get();
                 var before = snapshot(member);
                 boolean rejoining = member.getLeftAt() != null;
@@ -105,7 +105,7 @@ public class MembershipService {
             if (member.getRole() != Membership.WorkspaceRole.OWNER
                     && !desired.containsKey(member.getAccountId())
                     && member.getLeftAt() == null) {
-                member.setLeftAt(clock.instant());
+                member.departByProvider(clock.instant());
                 recordProviderDeparture(member);
             }
         }
@@ -118,9 +118,10 @@ public class MembershipService {
         long accountId = accountIdForUser(scmUserId);
         var existing = memberships.findByWorkspace_IdAndId_AccountId(workspace.getId(), accountId);
         if (existing.isPresent() && existing.get().getRole() == Membership.WorkspaceRole.OWNER) return;
+        if (existing.filter(Membership::endedByPerson).isPresent()) return;
         if (role == null) {
             existing.filter(member -> member.getLeftAt() == null).ifPresent(member -> {
-                member.setLeftAt(clock.instant());
+                member.departByProvider(clock.instant());
                 recordProviderDeparture(member);
             });
         } else if (existing.isPresent()) {
@@ -263,12 +264,35 @@ public class MembershipService {
         authorizeRoleChange(workspace, accountId, member, null);
         if (member.getLeftAt() != null) return;
         member.setLeftAt(clock.instant());
+        // A removal is undone by the provider: the next sync adds back a person it still lists. An owner's role is
+        // always a person's, so a removed owner stays out.
+        if (member.getRole() != Membership.WorkspaceRole.OWNER) member.setRoleSource(Membership.RoleSource.PROVIDER);
         audit.roleChanged(
                 ConfigAuditEntry.deleted(
                         ConfigAuditEntityType.WORKSPACE_ROLE, accountId, workspaceId, snapshot(member)),
                 member,
                 member.getRole(),
                 CurrentAccount.idOrNull());
+    }
+
+    /**
+     * The member ends their own membership. Provider sync does not bring it back; a workspace admin can. The last
+     * owner cannot leave, because a workspace without an owner has nobody who can delete it or name a new owner.
+     * Leaving lowers the member's own role, so it needs no recent sign-in.
+     */
+    public void leave(Long workspaceId, Long accountId) {
+        var workspace = lockForMembershipChange(workspaceId);
+        var member = requireMembership(workspaceId, accountId);
+        if (member.getLeftAt() != null) return;
+        requireNotLastOwner(workspace, member);
+        member.setLeftAt(clock.instant());
+        member.setRoleSource(Membership.RoleSource.PERSON);
+        audit.roleChanged(
+                ConfigAuditEntry.deleted(
+                        ConfigAuditEntityType.WORKSPACE_ROLE, accountId, workspaceId, snapshot(member)),
+                member,
+                member.getRole(),
+                accountId);
     }
 
     public Membership updateMemberVisibility(Long workspaceId, Long accountId, boolean hidden) {
@@ -387,7 +411,7 @@ public class MembershipService {
         if (member.getLeftAt() == null
                 && member.getRole() == Membership.WorkspaceRole.OWNER
                 && memberships.countByWorkspace_IdAndRole(workspace.getId(), Membership.WorkspaceRole.OWNER) <= 1)
-            throw new LastOwnerRemovalException(workspace.getWorkspaceSlug());
+            throw new LastOwnerRemovalException(workspace.getDisplayName());
     }
 
     private static WorkspaceAuditSnapshots.RoleSnapshot snapshot(Membership member) {

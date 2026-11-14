@@ -6254,6 +6254,33 @@ paths:
       tags:
       - membership
   /workspaces/{workspaceSlug}/members/me:
+    delete:
+      description: "Ends your own membership. Sync with GitHub or GitLab does not\
+        \ bring it back; a workspace admin can, by giving you a role again. The last\
+        \ owner cannot leave."
+      operationId: leaveWorkspace
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      responses:
+        "204":
+          description: You left the workspace
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: You are the workspace's last owner
+      summary: Leave the workspace
+      tags:
+      - membership
     get:
       operationId: getOwnMembership
       parameters:

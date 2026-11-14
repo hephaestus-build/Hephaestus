@@ -441,6 +441,9 @@ import type {
 	InitiateResponses,
 	KeepMyProductFeedbackPrivateData,
 	KeepMyProductFeedbackPrivateResponses,
+	LeaveWorkspaceData,
+	LeaveWorkspaceErrors,
+	LeaveWorkspaceResponses,
 	ListAdoptablePracticesData,
 	ListAdoptablePracticesErrors,
 	ListAdoptablePracticesResponses,
@@ -3753,6 +3756,20 @@ export const assignMemberRole = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+/**
+ * Leave the workspace
+ *
+ * Ends your own membership. Sync with GitHub or GitLab does not bring it back; a workspace admin can, by giving you a role again. The last owner cannot leave.
+ */
+export const leaveWorkspace = <ThrowOnError extends boolean = false>(
+	options: Options<LeaveWorkspaceData, ThrowOnError>,
+): RequestResult<LeaveWorkspaceResponses, LeaveWorkspaceErrors, ThrowOnError> =>
+	(options.client ?? client).delete<LeaveWorkspaceResponses, LeaveWorkspaceErrors, ThrowOnError>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/members/me",
+		...options,
 	});
 
 /**

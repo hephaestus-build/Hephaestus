@@ -52,6 +52,11 @@ const meta = {
 				onRevokeOthers: fn(),
 			},
 		},
+		leaveWorkspaceProps: {
+			workspaces: [{ slug: "hephaestustest", name: "Hephaestus Test" }],
+			onLeave: fn(async () => undefined),
+			onDismissError: fn(),
+		},
 	},
 	parameters: {
 		layout: "fullscreen",
@@ -162,6 +167,7 @@ export const Default: Story = {
 			"Connected accounts",
 			"Preferences",
 			"Research participation",
+			"Workspaces",
 			"Danger zone",
 		]);
 		for (const link of links) {

@@ -14,6 +14,7 @@ import {
 	hasEmailPreferences,
 	type EmailPreferencesSectionProps,
 } from "./EmailPreferencesSection";
+import { LeaveWorkspaceSection, type LeaveWorkspaceSectionProps } from "./LeaveWorkspaceSection";
 import { LinkedAccountsSection, type LinkedAccountsSectionProps } from "./LinkedAccountsSection";
 import {
 	PracticeFeedbackSection,
@@ -55,6 +56,7 @@ export interface SettingsPageProps {
 	slackPreferencesProps: SlackPreferencesSectionProps;
 	showSlackPreferencesSection?: boolean;
 	sessionsProps: SessionsSectionProps;
+	leaveWorkspaceProps: LeaveWorkspaceSectionProps;
 	dangerZoneProps: DangerZoneSectionProps;
 	isLoading?: boolean;
 	settingsError?: boolean;
@@ -75,6 +77,7 @@ export function SettingsPage({
 	slackPreferencesProps,
 	showSlackPreferencesSection = true,
 	sessionsProps,
+	leaveWorkspaceProps,
 	dangerZoneProps,
 	isLoading = false,
 	settingsError = false,
@@ -103,6 +106,7 @@ export function SettingsPage({
 		...(passkeys === undefined ? [] : [{ id: "passkeys", label: "Passkeys" }]),
 		{ id: "preferences", label: "Preferences" },
 		...(showResearchSection ? [{ id: "research", label: "Research participation" }] : []),
+		{ id: "workspaces", label: "Workspaces" },
 		{ id: "danger-zone", label: "Danger zone" },
 	];
 
@@ -211,6 +215,11 @@ export function SettingsPage({
 						</div>
 					</>
 				)}
+
+				<Separator />
+				<div id="workspaces" className="scroll-mt-20">
+					<LeaveWorkspaceSection {...leaveWorkspaceProps} />
+				</div>
 
 				<Separator />
 				<div id="danger-zone" className="scroll-mt-20">

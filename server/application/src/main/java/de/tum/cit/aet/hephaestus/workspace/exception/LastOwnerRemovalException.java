@@ -7,9 +7,11 @@ public class LastOwnerRemovalException extends RuntimeException {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    public LastOwnerRemovalException(String workspaceSlug) {
-        super(String.format(
-                "You cannot remove the last OWNER role from workspace '%s'. " + "Assign another user as OWNER first.",
-                workspaceSlug));
+    /**
+     * A change would leave the workspace without an owner: removing, demoting or the leave of its last owner. Every
+     * path says the same, under the problem type {@code workspace-owner-required}.
+     */
+    public LastOwnerRemovalException(String workspaceName) {
+        super(workspaceName + " needs an owner. Make another member an owner first, or delete the workspace.");
     }
 }

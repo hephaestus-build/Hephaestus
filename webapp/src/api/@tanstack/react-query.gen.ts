@@ -569,6 +569,7 @@ export {
 export { gitLabPreflightMutation } from "./react-query/gitLabPreflight.gen.js";
 export { initiateMutation } from "./react-query/initiate.gen.js";
 export { keepMyProductFeedbackPrivateMutation } from "./react-query/keepMyProductFeedbackPrivate.gen.js";
+export { leaveWorkspaceMutation } from "./react-query/leaveWorkspace.gen.js";
 export { listOptions, listQueryKey } from "./react-query/list.gen.js";
 export {
 	listAdoptablePracticesOptions,

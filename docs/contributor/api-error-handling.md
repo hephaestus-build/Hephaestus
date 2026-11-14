@@ -177,3 +177,7 @@ Outline does not know the collection.
 ### workspace-budget-exceeded
 
 The sandbox workspace is larger than its byte budget. `workspaceBytes` and `workspaceByteBudget` give the sizes.
+
+### workspace-owner-required
+
+The change would leave the workspace without an owner: a removal, a demotion, or the leave of its last owner.
