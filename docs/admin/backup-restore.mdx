@@ -211,6 +211,7 @@ Rehearse a restore on a copy of the instance before you need one.
 Keep the normal server Deployment stopped while PostgreSQL is restored.
 Keep public access and provider egress closed.
 Before replay or normal processing, the server must pass the `erasure-recovery` startup profile.
+
 The profile turns background work off: no scheduled task, claimer or inbox consumer runs while it is active.
 Startup stops if anything turns background work on again beside it.
 The profile then reapplies every erasure after the recovery point, in this order: disconnects, workspace purges, then people.
@@ -282,6 +283,7 @@ A disconnect erases the connection's local data, releases its credential and rec
 That removal is tried at once and fails while provider egress is closed. The server retries it after egress opens again, and the erasure does not wait for it.
 A purge deletes the workspace's data, as the original purge did. It does not wait for work that the restore brought back, because no background work runs.
 A connection or workspace that the restored database does not have, or that is erased already, needs nothing more.
+
 The administrator must be active and have instance-admin rights in the restored database. Only `people` needs the administrator.
 Another administrator must authorize that administrator's own erasure.
 Set `externalCopiesRemoved` to `true` only after checking the provider locators and confirming removal as the [un-deliver procedure](./production-operations-runbook#un-deliver-external-feedback-then-purge) requires.

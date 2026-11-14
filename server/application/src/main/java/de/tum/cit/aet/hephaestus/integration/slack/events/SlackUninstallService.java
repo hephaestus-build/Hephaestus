@@ -13,12 +13,12 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspacePurgeAdapter;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
+import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import java.util.Objects;
 
 /**
  * Handles Slack app removal: mark the connection uninstalled and purge Slack raw + derived data.

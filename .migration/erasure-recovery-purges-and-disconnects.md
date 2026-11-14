@@ -1,4 +1,4 @@
-#### Write erasure recovery manifests as version 2
+#### 🔴 Write erasure recovery manifests as version 2
 
 Erasure recovery now reapplies workspace purges and disconnects, not only person erasures.
 A recovery manifest uses version 2 and lists `disconnects` and `workspacePurges` beside `people`. A version 1 manifest stops startup.
