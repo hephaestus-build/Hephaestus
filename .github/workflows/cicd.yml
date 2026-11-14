@@ -396,7 +396,7 @@ jobs:
               # k3s-platform.test.ts renders the chart with these values and reads these files, and
               # gate:config-format checks them.
               - 'deploy/platform/**'
-              # gate:shell checks every tracked shell script and the Git hooks.
+              # gate:shell checks every tracked .sh script and the Git hooks.
               - '**/*.sh'
               - '.vite-hooks/**'
               # format:load:check and test:load:syntax run on this leg.
