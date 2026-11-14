@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/item";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { isComposing } from "@/lib/keyboard-shortcuts";
 import type { MorePages } from "@/runtime/tanstack-query/infinite-list";
 
 type ScopeOptionState<TOption> =
@@ -724,12 +725,9 @@ function BaseBranchEditor({
 					aria-describedby={duplicate ? `${descriptionId} ${errorId}` : descriptionId}
 					onChange={(event) => setDraft(event.target.value)}
 					onKeyDown={(event) => {
-						if (event.key === "Enter") {
+						if (event.key === "Enter" && !isComposing(event.nativeEvent)) {
 							event.preventDefault();
-							// Enter also confirms an input method's conversion, which is not a request to add.
-							if (!event.nativeEvent.isComposing) {
-								add();
-							}
+							add();
 						}
 					}}
 				/>

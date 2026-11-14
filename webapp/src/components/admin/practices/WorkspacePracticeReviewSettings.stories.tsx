@@ -197,6 +197,8 @@ export const EnterWhileComposingDoesNotAddABranch: Story = {
 		});
 		await userEvent.type(field, "release");
 		fireEvent.keyDown(field, { key: "Enter", isComposing: true });
+		// Safari sends the confirming Enter after the composition, with only key code 229 to tell.
+		fireEvent.keyDown(field, { key: "Enter", keyCode: 229 });
 		await expect(field).toHaveValue("release");
 		await expect(canvas.queryByTitle("release")).toBeNull();
 		fireEvent.keyDown(field, { key: "Enter" });

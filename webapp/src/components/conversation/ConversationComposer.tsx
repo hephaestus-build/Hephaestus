@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/input-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { readDraft, writeDraft } from "@/lib/composer-drafts";
+import { isComposing } from "@/lib/keyboard-shortcuts";
 import { rendersContent } from "@/lib/react-node";
 import { hasText } from "@/lib/text";
 
@@ -101,7 +102,7 @@ export function ConversationComposer({
 					enterKeyHint={touch ? "enter" : "send"}
 					onKeyDown={(event) => {
 						const sends = touch ? event.metaKey || event.ctrlKey : !event.shiftKey;
-						if (event.key === "Enter" && sends && !event.nativeEvent.isComposing) {
+						if (event.key === "Enter" && sends && !isComposing(event.nativeEvent)) {
 							event.preventDefault();
 							event.currentTarget.form?.requestSubmit();
 						}

@@ -66,9 +66,14 @@ export const EnterWhileComposingDoesNotCheck: Story = {
 	play: async ({ args, canvas }) => {
 		const token = canvas.getByLabelText("Access token");
 		fireEvent.keyDown(token, { key: "Enter", isComposing: true });
+		// Safari sends the confirming Enter after the composition, with only key code 229 to tell.
+		fireEvent.keyDown(token, { key: "Enter", keyCode: 229 });
 		await expect(args.onValidate).not.toHaveBeenCalled();
 		fireEvent.keyDown(token, { key: "Enter" });
-		await expect(args.onValidate).toHaveBeenCalledOnce();
+		await expect(args.onValidate).toHaveBeenCalledExactlyOnceWith({
+			personalAccessToken: "glpat-abc123def456",
+			serverUrl,
+		});
 	},
 };
 

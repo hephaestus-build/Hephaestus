@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isFeedbackShortcut } from "./keyboard-shortcuts";
+import { isComposing, isFeedbackShortcut } from "./keyboard-shortcuts";
 
 const COMMAND_AND_SHIFT: KeyboardEventInit = { ctrlKey: true, shiftKey: true };
 
@@ -27,5 +27,19 @@ describe("isFeedbackShortcut", () => {
 	it("needs both modifiers", () => {
 		expect(isFeedbackShortcut(press("F", "KeyF", { shiftKey: true }))).toBe(false);
 		expect(isFeedbackShortcut(press("f", "KeyF", { ctrlKey: true }))).toBe(false);
+	});
+});
+
+describe("isComposing", () => {
+	it("treats the Enter that confirms a conversion as part of the composition", () => {
+		expect(isComposing(new KeyboardEvent("keydown", { key: "Enter", isComposing: true }))).toBe(
+			true,
+		);
+		// Safari sends it after compositionend, with only the composition key code.
+		expect(isComposing(new KeyboardEvent("keydown", { key: "Enter", keyCode: 229 }))).toBe(true);
+	});
+
+	it("lets a plain Enter through", () => {
+		expect(isComposing(new KeyboardEvent("keydown", { key: "Enter", keyCode: 13 }))).toBe(false);
 	});
 });

@@ -12,6 +12,7 @@ import {
 	InputGroupButton,
 	InputGroupInput,
 } from "@/components/ui/input-group";
+import { isComposing } from "@/lib/keyboard-shortcuts";
 import { firstNonBlank, hasText } from "@/lib/text";
 
 import { connectionSchema } from "./schemas";
@@ -84,12 +85,9 @@ export function ConnectGitLabStep({
 						aria-invalid={hasText(tokenError)}
 						aria-describedby={hasText(tokenError) ? "gitlab-pat-error" : "gitlab-pat-description"}
 						onKeyDown={(e) => {
-							if (e.key === "Enter") {
+							if (e.key === "Enter" && !isComposing(e.nativeEvent)) {
 								e.preventDefault();
-								// Enter also confirms an input method's conversion, which is not a request to check.
-								if (!e.nativeEvent.isComposing) {
-									handleValidate();
-								}
+								handleValidate();
 							}
 						}}
 					/>
