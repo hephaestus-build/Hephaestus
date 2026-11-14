@@ -51,7 +51,7 @@ function LoginRoute() {
 			error={error}
 			notice={accountDeleted ? "account-deleted" : undefined}
 			onSignIn={(registrationId) => login(registrationId, returnTo)}
-			onDevSignIn={(username) => devLogin(username, returnTo)}
+			onDevSignIn={async (username) => devLogin(username, returnTo)}
 		/>
 	);
 }
