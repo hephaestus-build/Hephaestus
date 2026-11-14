@@ -1,17 +1,23 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.workspace.spi.RepositoryMonitorCommands;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceCommands;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRoots;
 import java.math.BigDecimal;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -25,6 +31,18 @@ class WorkspacePortsIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     WorkspaceCommands commands;
+
+    @Autowired
+    WorkspaceRoots roots;
+
+    @Autowired
+    WorkspaceRepositoryMonitors monitors;
+
+    @Autowired
+    RepositoryMonitorCommands monitorCommands;
+
+    @Autowired
+    RepositoryToMonitorRepository monitorRows;
 
     @Autowired
     JdbcClient jdbc;
@@ -154,6 +172,57 @@ class WorkspacePortsIntegrationTest extends BaseIntegrationTest {
                     assertThat(member.getLeftAt()).isNull();
                     assertThat(member.getRole()).isEqualTo(Membership.WorkspaceRole.OWNER);
                 });
+    }
+
+    @Test
+    void shouldChangeTheTenantRootOnlyInsideTheCallersTransaction() {
+        var own = data.scenario().workspace().getId();
+        var other = data.scenario().workspace().getId();
+        assertThatThrownBy(() -> roots.suspend(own)).isInstanceOf(IllegalTransactionStateException.class);
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            assertThat(roots.suspend(own)).isTrue();
+            assertThat(roots.suspend(own)).isFalse();
+            roots.renameAccount(own, "renamed-account");
+            roots.selectRepositories(own, RepositorySelection.ALL);
+        });
+        assertThat(column(own, "status")).isEqualTo("SUSPENDED");
+        assertThat(column(own, "account_login")).isEqualTo("renamed-account");
+        assertThat(column(own, "repository_selection")).isEqualTo("ALL");
+        assertThat(column(other, "status")).isEqualTo("ACTIVE");
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            assertThat(roots.resume(own)).isTrue();
+            status.setRollbackOnly();
+        });
+        assertThat(column(own, "status")).isEqualTo("SUSPENDED");
+    }
+
+    @Test
+    void shouldRenameOnlyAMonitorOfTheNamedWorkspace() {
+        var own = data.scenario().workspace();
+        var other = data.scenario().workspace().getId();
+        var monitor = new RepositoryToMonitor();
+        monitor.setNameWithOwner("acme/" + own.getId());
+        monitor.setNativeId(own.getId() + 900_000L);
+        monitor.setWorkspace(own);
+        long monitorId = monitorRows.save(monitor).getId();
+        var transaction = new TransactionTemplate(transactions);
+
+        assertThatThrownBy(() -> transaction.executeWithoutResult(
+                        status -> monitorCommands.rename(other, monitorId, "acme/stolen")))
+                .isInstanceOf(NoSuchElementException.class);
+        transaction.executeWithoutResult(status -> monitorCommands.rename(own.getId(), monitorId, "acme/renamed"));
+
+        assertThat(monitors.monitors(own.getId()))
+                .extracting(RepositoryToMonitor::getNameWithOwner)
+                .containsExactly("acme/renamed");
+        assertThat(monitors.monitors(other)).isEmpty();
+    }
+
+    private String column(long workspaceId, String column) {
+        return jdbc.sql("SELECT " + column + " FROM workspace WHERE id = :workspace")
+                .param("workspace", workspaceId)
+                .query(String.class)
+                .single();
     }
 
     private long version(long workspaceId) {

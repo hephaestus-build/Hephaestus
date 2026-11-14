@@ -6,10 +6,10 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppUserAuthorizationClient;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubUserAuthorizationException;
-import de.tum.cit.aet.hephaestus.workspace.MembershipRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.util.Objects;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -37,8 +37,8 @@ public class GitHubInstallationClaimService {
     private final GitProviderRegistry providers;
     private final GitHubInstallationReader github;
     private final GitHubInstallationRequests gate;
-    private final WorkspaceRepository workspaces;
-    private final MembershipRepository memberships;
+    private final WorkspaceSummaryQuery workspaces;
+    private final WorkspaceMemberships memberships;
     private final WorkspaceScopeFilter scopeFilter;
     private final TransactionTemplate transactions;
 
@@ -48,8 +48,8 @@ public class GitHubInstallationClaimService {
             GitProviderRegistry providers,
             GitHubInstallationReader github,
             GitHubInstallationRequests gate,
-            WorkspaceRepository workspaces,
-            MembershipRepository memberships,
+            WorkspaceSummaryQuery workspaces,
+            WorkspaceMemberships memberships,
             WorkspaceScopeFilter scopeFilter,
             PlatformTransactionManager transactionManager) {
         this.userAuthorization = userAuthorization;
@@ -101,17 +101,17 @@ public class GitHubInstallationClaimService {
 
         GitHubInstallationReader.Installation live = github.read(installationId);
         return Objects.requireNonNull(transactions.execute(status -> {
-            Optional<Workspace> workspace = workspaces
-                    .findByInstallationId(installationId)
-                    .filter(w -> w.getStatus() != Workspace.WorkspaceStatus.PURGED);
+            Optional<WorkspaceSummaryQuery.WorkspaceState> workspace = workspaces
+                    .findStateByInstallationId(installationId)
+                    .filter(w -> !Workspace.WorkspaceStatus.PURGED.name().equals(w.status()));
             if (workspace.isPresent()) {
                 // Access to the installation is not membership: only a member or an instance admin learns where it is.
-                Workspace ready = workspace.get();
+                var ready = workspace.get();
                 boolean member =
-                        memberships.existsByWorkspace_IdAndId_AccountIdAndLeftAtIsNull(ready.getId(), callerAccountId);
+                        memberships.activeRole(ready.id(), callerAccountId).isPresent();
                 return new GitHubInstallationClaimDTO(
                         GitHubInstallationClaimDTO.Outcome.READY,
-                        member || SecurityUtils.isSuperAdmin() ? ready.getWorkspaceSlug() : null);
+                        member || SecurityUtils.isSuperAdmin() ? ready.slug() : null);
             }
             var decided = gate.status(installationId);
             if (decided.filter(s -> s == GitHubInstallationRequestStatus.ADOPTED)

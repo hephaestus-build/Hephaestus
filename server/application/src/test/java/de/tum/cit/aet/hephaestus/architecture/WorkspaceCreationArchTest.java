@@ -4,10 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
-import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceService;
+import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceRootsAdapter;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -24,8 +24,9 @@ class WorkspaceCreationArchTest extends HephaestusArchitectureTest {
 
     @Test
     void shouldCreateEveryWorkspaceThroughTheFactory() {
-        // The two entry points: a person or an admin creates a workspace, and a GitHub App installation creates one.
-        assertThat(List.of(WorkspaceService.class, GitHubLifecycleListener.class))
+        // The two entry points: a person or an admin creates a workspace, and a source provider's installation creates
+        // one.
+        assertThat(List.of(WorkspaceService.class, WorkspaceRootsAdapter.class))
                 .allSatisfy(entry -> assertThat(classes.get(entry).getMethodCallsFromSelf())
                         .as("%s calls Workspace.create", entry.getSimpleName())
                         .anyMatch(call -> call.getTargetOwner().isEquivalentTo(Workspace.class)
