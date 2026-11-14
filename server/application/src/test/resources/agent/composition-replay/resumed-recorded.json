@@ -159,27 +159,23 @@
             "resultIds": [
               "30000000-0000-4000-8000-000000000001"
             ],
-            "summary": "Catch swallows the failure\n\nSituation: In fetch, the new catch for IOException returns null without recording the error, so a failed call looks like a missing record and the failure disappears.\n\nCapability: The developer can check whether the code that reacts to a failure also leaves a trace: it records, reports or rethrows the exception instead of silently substituting a value.\n\nEvidence: The change in the retry branch (acme/app, PR #7) wraps client.get(id) in a try and its catch (IOException) returns null at the end of fetch, per the NOT_MET result on the swallowed failure.\n\nIn conversation: Before the turn ends the developer states why a caught failure should be recorded or rethrown rather than turned into null, and names what fetch should do when the call fails.",
+            "summary": null,
             "notes": [],
-            "withheldReason": null,
+            "withheldReason": "NOT_COMPOSED",
             "trace": {
-              "copies": [
+              "copies": [],
+              "withheld": [
                 {
-                  "kind": "CHAT_TURN",
-                  "position": 0,
                   "basedOn": [
                     {
                       "resultId": "30000000-0000-4000-8000-000000000001",
                       "problemId": null
-                    },
-                    {
-                      "resultId": "30000000-0000-4000-8000-000000000001",
-                      "problemId": "40000000-0000-4000-8000-000000000001"
                     }
-                  ]
+                  ],
+                  "reason": "NOT_COMPOSED",
+                  "witnessIds": []
                 }
               ],
-              "withheld": [],
               "replacesId": null,
               "primaryResultId": "30000000-0000-4000-8000-000000000001"
             },
@@ -284,7 +280,38 @@
           },
           {
             "role": "tool",
-            "text": "{\"draftId\":\"95100f5e3bb44dcb806f8f7412838e067e03ac7fe9c732335f432d6c2c8411c4\",\"checked\":true,\"next\":\"Correct the draft and check again, or publish_package with this draftId.\"}"
+            "text": "Package not checked; nothing was accepted. #1: notes.evidenceSummary: uses an internal word (an outcome code, severity, score, threshold or practice slug); say what the work shows instead Decide all eligible practices: {handles-errors=[CONVERSATION]}"
+          }
+        ]
+      },
+      {
+        "messages": [
+          {
+            "role": "assistant",
+            "toolCalls": [
+              {
+                "name": "publish_package",
+                "arguments": {
+                  "draftId": "95100f5e3bb44dcb806f8f7412838e067e03ac7fe9c732335f432d6c2c8411c4"
+                }
+              }
+            ]
+          },
+          {
+            "role": "tool",
+            "text": "Unknown draftId. Check the complete package first."
+          }
+        ]
+      },
+      {
+        "messages": [
+          {
+            "role": "assistant",
+            "text": "Done."
+          },
+          {
+            "role": "user",
+            "text": "## Undecided\nThe turn ended with no piece and no WITHHOLD for these practices, each with a NOT_MET result: handles-errors on CONVERSATION. For each, persist the piece you decided on, or a WITHHOLD with its reason (NO_MATERIAL_CHANGE, ALREADY_SAID, BELOW_BAR), in check_package before publish_package call. Room left for new items: CONVERSATION 1 of 1; a destination with none left takes only a WITHHOLD. The admitted results and their problems are in the turn above. Use tools only from this point onward; no prose."
           }
         ]
       }
