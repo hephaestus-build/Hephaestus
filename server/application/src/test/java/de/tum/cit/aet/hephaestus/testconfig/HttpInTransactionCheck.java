@@ -17,14 +17,16 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 /**
  * Fails the integration test during which an outbound HTTP request started while a database transaction was open.
  * Such a request holds a pooled connection and the transaction's locks for as long as the other service takes to
- * answer ({@code docs/contributor/transactions.md}). Production counts the same requests in
+ * answer ({@code docs/contributor/transactions.mdx}). Production counts the same requests in
  * {@code HttpRequestsInTransactions}; this check turns each one into a failure that names its caller.
  *
  * <p>It sees every client that Spring's injected builders build ({@code HttpClientConstructionArchTest}), on the thread
  * that starts the request. A transaction that the test itself opens with {@code @Transactional} is not the application's,
  * so a request inside it is not counted. The code it calls may still do the same in production; other tests cover it.
  * In tests, an {@code @Async} body runs on the caller's thread, inside the caller's transaction, where production runs it
- * on an executor thread without one: such a failure names a test artifact, and the caller decides.
+ * on an executor thread without one: such a failure names a test artifact, and the caller decides. A request that a
+ * scheduled job starts in a transaction fails whichever test is running then; the failure names that job's thread, and
+ * the defect is the job's.
  */
 @TestComponent
 public class HttpInTransactionCheck implements ObservationHandler<RequestReplySenderContext<?, ?>> {
@@ -39,10 +41,11 @@ public class HttpInTransactionCheck implements ObservationHandler<RequestReplySe
     @Override
     public void onStart(RequestReplySenderContext<?, ?> context) {
         if (!TransactionSynchronizationManager.isActualTransactionActive() || TestTransaction.isActive()) return;
-        VIOLATIONS.add("%s in transaction %s, called from:%n%s"
+        VIOLATIONS.add("%s in transaction %s on thread %s, called from:%n%s"
                 .formatted(
                         context.getName(),
                         TransactionSynchronizationManager.getCurrentTransactionName(),
+                        Thread.currentThread().getName(),
                         applicationFrames()));
     }
 

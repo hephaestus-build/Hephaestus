@@ -105,6 +105,8 @@ The listener needs its own boundary because of this behavior. After commit, "the
 Prefer `NOT_SUPPORTED`.
 It suspends the finished transaction.
 Then each call that the listener makes starts its own transaction, and a network call runs outside a transaction.
+A listener that calls a provider through an outbound egress gateway declares `propagation = NOT_SUPPORTED`.
+`SpringCorrectnessArchitectureTest` checks direct calls; a call through another bean is not seen.
 
 Why the registry: Spring Modulith writes an entry for each listener "into an event publication log as part of the original business transaction". Without it, "if the listener fails for whatever reason, the event publication is lost, unless each listener actually implements its own safety net" ([Working with application events](https://docs.spring.io/spring-modulith/reference/events.html)).
 This is the [transactional outbox](https://microservices.io/patterns/data/transactional-outbox.html): "first store the message in the database as part of the transaction that updates the business entities".

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.database;
 
+import de.tum.cit.aet.hephaestus.testconfig.HttpInTransactionCheck;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
@@ -61,6 +62,8 @@ class HttpRequestsInTransactionsIntegrationTest extends BaseIntegrationTest {
 
         assertThat(count(blocking)).isEqualTo(1);
         assertThat(count(reactive)).isEqualTo(1);
+        // These requests start in a transaction on purpose, so the check that fails such a test does not apply.
+        HttpInTransactionCheck.reset();
     }
 
     @Test
