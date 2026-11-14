@@ -41,8 +41,8 @@ import {
 	type LlmModelFieldsValue,
 	modelFieldsValueOf,
 	validateModelFields,
-} from "../llm/LlmModelFields";
-import type { PriceModeValue } from "../llm/PriceModeEditor";
+} from "@/components/admin/llm/LlmModelFields";
+import type { PriceModeValue } from "@/components/admin/llm/PriceModeEditor";
 import { type ModelAccessScope, ModelAccessScopeChoice } from "./ModelAccessScopeChoice";
 import { type WorkspaceOption, workspaceFacetOptions } from "./workspace-options";
 
