@@ -73,8 +73,8 @@ Colocation does not change the rule.
 
 ## Which admin console a component belongs to
 
-`src/components/admin/**` holds two consoles, and most directories serve both, such as `usage` and `practices`.
-In such a directory, the **component name** carries the scope:
+`src/components/admin/**` holds two consoles. Six directories hold components that both render: `audit`, `integrations`, `llm`, `practices`, `practice-editor`, `usage`.
+In those, the **component name** carries the scope:
 
 - `Admin*` or `Instance*` — instance-wide. Configures the deployment for every workspace.
 - `Workspace*` — scoped to one workspace.
@@ -83,8 +83,8 @@ In such a directory, the **component name** carries the scope:
   A scope-specific field, permission check or copy string in either one silently breaks the other console.
   Nothing in the file says it has two callers.
 
-A directory that one console imports, such as `admin/instance-llm/`, carries the scope, so its components stay unprefixed.
-A shared component never lives in one: the shared LLM fields are in `admin/llm/`.
+In every other directory, the components serve one console, so they stay unprefixed; a helper module may serve both.
+A shared component never lives there.
 
 Name a new component for its scope.
 Before you edit an unprefixed component, check its caller list.

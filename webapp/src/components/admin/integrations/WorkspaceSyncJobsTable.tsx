@@ -103,9 +103,8 @@ function hasProgressDetail(progress: SyncJobProgress): boolean {
  * Deliberately absent: "Triggered by". `triggeredByUserId` ships on every manual job, but it is an
  * account id and this client has no endpoint that resolves one to a person — there is no account
  * lookup in the generated API at all. Rendering "Triggered by 42" would answer the accountability
- * question with a number the admin still has to go look up by hand, so the field stays unrendered
- * while the server neither resolves it to a name nor exposes a lookup. The Type column already says
- * *how* the job started; only *who* is missing.
+ * question with a number the admin still has to go look up by hand, so the field stays unrendered.
+ * The Type column already says *how* the job started; only *who* is missing.
  */
 function JobProgressPanel({ progress }: { progress: SyncJobProgress }) {
 	const { phase, currentStep, currentRepository, unitsCompleted, unitsTotal } = progress;
