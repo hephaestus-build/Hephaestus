@@ -9,7 +9,7 @@ const REPO_URL = "https://github.com/hephaestus-build/Hephaestus";
 const envBaseUrl = process.env.DOCUSAURUS_BASE_URL;
 
 /*
- * Production (docs.hephaestus.build) and PR previews on Surge.sh both serve from the domain root.
+ * Production (docs.hephaestus.build) serves from the domain root.
  * DOCUSAURUS_BASE_URL stays overridable for builds hosted under a path prefix; unset and empty both
  * mean the root, because an empty base URL would resolve every asset against the current page.
  */

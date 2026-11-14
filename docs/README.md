@@ -93,5 +93,5 @@ workflow runs the same package script.
 
 ## Deployment
 
-`cd-docs.yml` deploys both [versions](#versions) to GitHub Pages, and a pull request to a Surge.sh preview with
-a URL comment. `cd-docs-teardown.yml` removes the preview when the pull request closes.
+`cd-docs.yml` deploys both [versions](#versions) to GitHub Pages.
+A pull request gets no hosted docs preview. The tooling leg of CI builds the docs, and `vp run docs:dev` serves them locally.

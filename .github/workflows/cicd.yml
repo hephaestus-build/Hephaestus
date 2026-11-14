@@ -938,7 +938,6 @@ jobs:
       )
     secrets:
       CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
-      SURGE_TOKEN: ${{ secrets.SURGE_TOKEN }}
     permissions:
       actions: write
       checks: write

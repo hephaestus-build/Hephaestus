@@ -21,7 +21,6 @@ async function fixture(t: TestContext, comments = [comment(1)]) {
 	const commentsFile = path.resolve(directory, "comments.json");
 	const requests: { operation: string; params: Record<string, unknown> }[] = [];
 	let nextId = 100;
-	let state = "open";
 	let failAt = Number.POSITIVE_INFINITY;
 	const github = {
 		paginate: async <T>(
@@ -32,7 +31,6 @@ async function fixture(t: TestContext, comments = [comment(1)]) {
 			return response.data;
 		},
 		rest: {
-			pulls: { get: async () => ({ data: { state } }) },
 			issues: {
 				listComments: async () => ({ data: comments }),
 				createComment: async (params: Record<string, unknown>) => {
@@ -69,21 +67,12 @@ async function fixture(t: TestContext, comments = [comment(1)]) {
 		},
 	};
 	const context = { repo: { owner: "example", repo: "project" }, issue: { number: 7 } };
-	const publish = async (teardown = false) =>
-		publishPreviewComments({
-			github,
-			context,
-			kind: "storybook",
-			...(!teardown && { path: commentsFile }),
-		});
+	const publish = async () => publishPreviewComments({ github, context, path: commentsFile });
 	return {
 		comments,
 		requests,
 		publish,
 		write: async (value: unknown) => writeFile(commentsFile, JSON.stringify(value)),
-		close: () => {
-			state = "closed";
-		},
 		fail: (after = 1) => {
 			failAt = requests.length + after;
 		},
@@ -124,18 +113,6 @@ void test("shrinking replaces the existing sticky comment and removes only owned
 		f.requests.map((request) => request.operation),
 		["update", "delete", "delete", "delete"],
 	);
-});
-
-void test("teardown removes continuation comments, including a delayed build after closure", async (t) => {
-	for (const delayedBuild of [false, true]) {
-		const f = await fixture(t, [comment(1), comment(2, 2)]);
-		await f.write(["Live preview", "More live links"]);
-		f.close();
-		await f.publish(!delayedBuild);
-		assert.equal(f.comments.length, 1);
-		assert.match(f.comments[0]?.body ?? "", /Preview has been removed/u);
-		assert.doesNotMatch(f.comments[0]?.body ?? "", /Live preview|live links/u);
-	}
 });
 
 void test("validates the entire artifact before changing any comments", async (t) => {

@@ -5,7 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { isSeq, parseAllDocuments, parseDocument } from "yaml";
+import { isSeq, parseAllDocuments } from "yaml";
 
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 
@@ -55,21 +55,6 @@ await test("default GitHub workspace follows Hephaestus without moving Artemis",
 	const repositories = config.getIn([...workspacePath, "repositories-to-monitor"], true);
 	assert.ok(isSeq(repositories));
 	assert.deepEqual(repositories.toJSON(), ["hephaestus-build/Hephaestus", "ls1intum/Artemis"]);
-});
-
-await test("preview publishing and teardown target the same hostname", () => {
-	const teardown = parseDocument(source(".github/workflows/cd-docs-teardown.yml"));
-	assert.deepEqual(teardown.errors, []);
-	for (const [kind, file, job, teardownVariable] of [
-		["docs", "cd-docs.yml", "preview", "PREVIEW_URL"],
-		["storybook", "ci-quality-gates.yml", "webapp-stories", "STORYBOOK_PREVIEW_URL"],
-	] as const) {
-		const publish = parseDocument(source(`.github/workflows/${file}`));
-		assert.deepEqual(publish.errors, []);
-		const hostname = `hephaestus-build-${kind}-pr-\${{ github.event.number }}.surge.sh`;
-		assert.equal(publish.getIn(["jobs", job, "env", "PREVIEW_URL"]), hostname);
-		assert.equal(teardown.getIn(["jobs", "teardown", "env", teardownVariable]), hostname);
-	}
 });
 
 await test("no shipped surface drifts back to ls1intum/Hephaestus", () => {
