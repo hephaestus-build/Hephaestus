@@ -1,20 +1,19 @@
 ---
-title: Write a practice script
-description: Write and test a practice script that returns one candidate for admission.
-page_type: how-to
+title: Practice script API
+description: The shape of a practice script, its context, the modules that it can import, the result that it returns, and its limits.
+page_type: reference
 ---
 
-A practice script returns one evidence-bounded candidate for one assigned item.
-It can decide from captured records or ask the review model to decide.
-Every candidate passes the same server admission.
+A practice script returns one result for one practice and one piece of work.
+It can decide from the captured records, or prepare evidence and let the review model decide.
+Every result passes the same checks on the server.
+This page lists the API that a script can use.
+An admin enters a script in the **Script** field of the practice editor, as [Practices](/user/practices#practice-script) describes.
 
-## Start with the built-in behavior
+## Script shape
 
-1. Open the practice editor.
-2. Open Script.
-3. Enter a default export with meta and run(ctx).
-4. Return the candidate from ctx.review().
-5. Save the practice.
+A script has a default export from `definePracticeScript`, with an empty `meta` and a `run(ctx)` function.
+This script does what the built-in script does:
 
 ```ts
 import { definePracticeScript } from "@hephaestus/practice-scripts";
@@ -27,31 +26,32 @@ export default definePracticeScript({
 });
 ```
 
-A script can import only the [script API](#the-script-api).
-For provider evidence, use its validated SCM, chat or docs kit.
-A null Script runs the built-in script. An invalid custom script stops without fallback.
+An empty **Script** field runs the built-in script.
+An invalid custom script stops with a recorded reason. It never falls back to the built-in script.
+A stored script with any field in `meta` is invalid.
 
 ## The context
 
-The host supplies the practice version, criteria, assigned scope, origin and About.
-The core item record is unknown until a domain kit validates it.
-Bigint IDs are decimal strings, not JavaScript numbers.
-A script cannot choose another workspace, developer or recipient.
+The host supplies the practice version, its criteria, the assigned scope, the origin, and About.
+The core record of the work is unknown until a domain kit validates it.
+Big integer IDs are decimal strings, not JavaScript numbers.
+A script cannot choose another workspace, developer, or recipient.
 
-The callable ctx.review also carries the frozen review's metadata.
-Pass leads, facts, directions, prepared context or limitations to its call.
-Only the final return from run reaches admission.
-A review call by itself creates no persisted result.
+`ctx.review` opens the model review. Pass it leads, facts, directions, prepared context, or limitations.
+The script ends at `ctx.review`: code after it does not run.
+Only the value that `run` returns reaches the server.
 
-For an ITEM review, scope names that item and version.
-For a SCAN, scope names one file at the frozen default-branch commit.
-The product scan concerns its repository. About is null.
-The previous result is metadata for the same assigned claim, not authority to repeat old proof.
+For a review of a piece of work, the scope names that work and its version.
+For a scan, the scope names one file at the scanned commit of the default branch, and About is null.
+The previous result is metadata for the same claim. It is not proof for a new result.
 
-## Use a domain kit
+## Domain kits
 
-A domain kit validates the item record before it exposes source-specific helpers.
-This SCM example preserves the normal review and adds a typed fact:
+A domain kit validates the record of the work before it gives source-specific helpers.
+The kit states the kinds of work that the script reads. Another kind stops the script.
+Do not cast the unknown core record into a provider payload.
+
+This SCM example keeps the normal review and adds a typed fact:
 
 ```ts
 import { definePracticeScript } from "@hephaestus/practice-scripts";
@@ -66,11 +66,7 @@ export default definePracticeScript({
 });
 ```
 
-The kit states the kinds of work that your script reads, and another kind stops the script.
-It does not change the selected workspace, item or developer.
-Do not cast the unknown core item into a provider payload.
-
-To find places in changed code, give each language its rules:
+`work.sites` finds places in changed code, with rules for each language:
 
 ```ts
 const found = await work.sites({
@@ -80,13 +76,15 @@ const directions = found.leads.length > 0 ? ["Read whether each one can fail."] 
 return ctx.review({ leads: [...found.leads], directions });
 ```
 
-A site is on an added line of the change, or anywhere in a scan's file.
+A site is on an added line of the change, or anywhere in the file of a scan.
 Comments and strings do not match, unless you set `comments: true`.
-Which lines match can improve between releases. Each lead is a place for the review to read, never a verdict.
+Which lines match is not part of the [compatibility policy](./compatibility-policy).
+Each lead is a place for the review to read, never a verdict.
 
 ## The script API
 
-These names are the whole API. They hold for a major version of Hephaestus. A script can import nothing else, also not a Node module or a package.
+These names are the whole API. They hold for a major version of Hephaestus, as the [compatibility policy](./compatibility-policy) states.
+A script can import nothing else, also no Node module and no package.
 
 | Import | Names |
 | --- | --- |
@@ -95,90 +93,58 @@ These names are the whole API. They hold for a major version of Hephaestus. A sc
 | `@hephaestus/practice-scripts/chat` | `chat` |
 | `@hephaestus/practice-scripts/docs` | `docs` |
 
-The `work` object from `scm` has `kind`, `item`, `head`, `change`, `changedFiles`, `sources`, `sites`, `commits`, `linkedIssues`, `inlineComments`, `conversationComments`, `reviewRecord` and `checks`.
+The `work` object from `scm` has `kind`, `item`, `head`, `change`, `changedFiles`, `sources`, `sites`, `commits`, `linkedIssues`, `inlineComments`, `conversationComments`, `reviewRecord`, and `checks`.
 A read that returns null means that the source was not captured. It never means empty.
 A malformed record stops the script.
 
-A direction or a fact that is too long is folded to one line and cut. An empty fact is dropped.
-More than 10 directions or 200 leads is an error of the script.
+## Results
 
-## Return a result
+A result is **Met**, **Not met**, **Does not apply**, or **Could not determine**.
+The [outcome contract](/contributor/practice-feedback-language#observation-outcomes) gives their meanings and requirements.
 
-Use Met, Not met, Does not apply or Could not determine.
-The [outcome contract](/contributor/practice-feedback-language#observation-outcomes) owns their meanings and requirements.
-Each problem has its own severity, citations and claim basis.
-Do not return result-level severity.
-Not met can retain open questions beside established problems.
-Operational read or model failure does not become an open question.
-
-Return the result of `ctx.review`, or a result that your code decided, without `coverage`.
-The script ends at `ctx.review`: code after it does not run.
-Hephaestus measures coverage from the reads of the script, as the [pipeline](/contributor/practice-review-pipeline#admit-results) states.
-
-A scan Met needs a trusted complete read of the assigned file.
-A listing, search match or claimed count alone does not prove that read.
-Citations must quote authorized captured text.
-The host verifies location, version and domain basis before the result can support feedback.
+- Each problem has its own severity, citations, and claim basis. A result has no severity of its own.
+- **Not met** can keep open questions beside the problems that it establishes.
+- A failed read or a failed model call never becomes an open question.
+- Return the result of `ctx.review`, or a result that your code decided, without `coverage`. Hephaestus measures coverage from the reads of the script.
+- A **Met** in a scan needs a complete read of the assigned file. A listing, a search match, or a count alone does not prove that read.
+- Citations quote captured text that the reader may see. The host verifies the location, the version, and the basis before the result can support feedback.
+- A partial read or a cut search can support **Not met**, but not **Met** or **Does not apply**.
 
 A result that your code decided must rest on evidence that your code read.
-The host refuses it with the reason **Decided without its evidence** in these cases, even if your code caught the error:
+The host refuses it with **Decided without its evidence** if a read failed, a record was missing, or a kit could not trust a record.
+This applies even if your code caught the error.
+You can still call `ctx.review` after such a failure. The coverage of its result then names what the script could not read.
 
-- A read failed.
-- A record was not captured.
-- A kit could not trust a record.
+## Review model
 
-A failure to read is never a statement about the work.
-You can still call `ctx.review` after such a failure. The result's coverage then names what your script could not read.
-A partial read or a cut search can support Not met, but not Met or Does not apply.
-
-## Use the review model
-
-Keep `meta` empty. A stored script with any metadata field is invalid.
-Prepare evidence and call `ctx.review` to open the review.
-The script context exposes no model slots or direct model helpers.
-
-The review follows the developer's account-wide AI choice and its stricter model tier.
-Configure the review model and budget in the workspace.
-The [model guide](./ai-providers.mdx#ai-usage) owns model usage and prices.
-
-## Test a script locally
-
-Use a checkout with the repository's pinned Node and Vite+ versions.
-Keep the tutorial file in an ignored scratch directory.
-Use the toolkit's fixture style to supply strict version 3 inputs.
-Mock models and captured evidence rather than reaching live providers.
-
-```bash
-vp run test:agents
-```
-
-Run the focused toolkit test file while you develop the script.
-Then run the agent suite before deploying it.
-Include both ITEM and SCAN cases when the practice supports scans.
-Test a refused read and an unavailable required model as operational failures.
-Never assert that a missing required source produces Could not determine.
-
-## Check that it worked
-
-1. Request a review of eligible work, as [First successful review](./practice-review#first-successful-review) describes.
-2. Open the review, then open **Practice scripts**.
-   It shows the status of the script, its model calls, its coverage and the first safe error line.
-
-Withheld means the script or candidate was refused with a recorded reason.
-Not reached means execution did not reach that practice before the review stopped.
-Result admission and feedback delivery remain separate facts.
-Execution details can expire while durable review history remains available.
-
-## Upgrade a script from an earlier release
-
-If the default export has the wrong shape, execution stops with “The script's default export is not a practice script. Write it with definePracticeScript.”
-A script that imports anything else stops and names the import. Its practice is withheld with **Not a runnable script**.
-Use the [operator migration entry](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) and the [runner contract](/contributor/practice-script-runner) to upgrade custom scripts.
+The script context has no model slots and no model helpers.
+`ctx.review` uses the review model that the workspace assigns.
+The review follows the developer's AI choice.
+The workspace sets the model and its budget, as [AI models and spending](/user/ai-models) describes.
 
 ## Limits
 
-Each script uses the attempt's deadline. No separate time is reserved before review.
-The host owns provider calls and their budget reservations.
-Failed or unreported calls retain their reservation.
-The [cost guide](./ai-providers.mdx#ai-usage) owns model usage and prices.
-The [runner contract](/contributor/practice-script-runner) owns proof size and citation limits.
+| Limit | Value |
+| --- | --- |
+| Directions | 10 at most. More is an error of the script. |
+| Leads | 200 at most. More is an error of the script. |
+| A direction or a fact that is too long | Folded to one line and cut |
+| An empty fact | Dropped |
+| Time | The deadline of the review attempt. No separate time is reserved before the review. |
+
+The host makes the provider calls and holds their budget reservations.
+A failed or unreported call keeps its reservation.
+The [runner contract](/contributor/practice-script-runner#review-limits) gives the size limits of the result and its citations.
+
+## Stop reasons
+
+| What the review shows | Cause |
+| --- | --- |
+| “The script's default export is not a practice script. Write it with definePracticeScript.” | The default export has the wrong shape. |
+| **Not a runnable script** | The script imports a name outside [the script API](#the-script-api). The message names the import. |
+| **Decided without its evidence** | The script decided a result after a read that failed, as [Results](#results) describes. |
+
+To see what a script did, open the review in **Practice reviews**, then open **Practice scripts**.
+[The trace line](./practice-review-operations#the-trace-line) explains what it shows.
+
+[Practice script runner](/contributor/practice-script-runner#test-a-script-locally) describes how to test a script in a checkout of Hephaestus.

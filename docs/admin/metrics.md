@@ -440,7 +440,7 @@ sort_desc(sum by (boundary) (increase(database_transaction_http_requests_total[1
 ## Provider removal repair metrics
 
 Removal records and credential expiry are independent.
-The [integration guide](./integrations.mdx#confirm-a-provider-removal) owns the repair procedure.
+[Provider removals](/admin/instance-admin#provider-removals) gives the repair procedure.
 
 | Prometheus name | Type | Labels | Meaning |
 | --- | --- | --- | --- |

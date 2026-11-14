@@ -73,19 +73,19 @@ It does not keep that container between reviews.
 
 A person can be both.
 [Instance administration](./instance-admin) covers the operator console.
-[Integrations](./integrations) covers workspace connections.
+[Integrations](/user/integrations) covers workspace connections.
 
 ## Set it up in this order
 
 1. Install Hephaestus on the [path that fits your platform](#choose-an-install-path).
    Then follow [First steps](./first-steps) for the login provider, the first admin, and the first review.
-2. [Connect a source](./integrations): a GitHub App or GitLab connection that supplies repository activity.
-   [Integration settings](./production-setup) covers Slack and Outline.
+2. Connect a source of repository activity: [GitHub](./github-integration) or [GitLab](./connect-gitlab).
+   [Connect Slack](./connect-slack), [Connect Outline](./connect-outline) and [Set up email](./set-up-email) cover the other integrations.
 3. [Connect an AI provider](./ai-providers) with a supported API.
 4. [Set a cap on AI spend](./instance-admin#usage) for each workspace.
 5. [Choose practices](./practice-catalog) for the instance to include and the workspace to adopt.
-   [Practice review](./practice-review) explains how a review runs.
-   [Scan a repository](./practice-scans) reviews a default branch and exports SARIF.
+   [Practice reviews and feedback mode](/user/practice-reviews) explains how a review runs.
+   [Scans](/user/scans) explains default-branch review and SARIF export.
 6. [Publish the legal pages](./legal-pages) with imprint and privacy information for your deployment.
    The [data-protection documentation](./dsms) has the GDPR records.
 

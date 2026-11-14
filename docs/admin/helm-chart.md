@@ -196,7 +196,7 @@ The `app.kubernetes.io/instance` label always holds the full release name.
 Its default is `true`, and the chart never changes it from the environment name.
 To turn it off, for example on a staging instance, set it to `false` yourself.
 
-These values set server settings ([Integration settings](./production-setup)):
+These values set server settings ([Configuration reference](./configuration-reference)):
 
 | Value | Setting | Default |
 | --- | --- | --- |
@@ -237,7 +237,7 @@ config:
 
 Each integration takes its settings from your values file and its secrets from the [Secret](./kubernetes#create-the-secret).
 `values.schema.json` describes each value.
-[Integration settings](./production-setup) explains each setting.
+[Connect GitLab](./connect-gitlab), [Connect Slack](./connect-slack), [Connect Outline](./connect-outline) and [Set up email](./set-up-email) explain each setting.
 
 | Integration | Values | Secret keys |
 | --- | --- | --- |

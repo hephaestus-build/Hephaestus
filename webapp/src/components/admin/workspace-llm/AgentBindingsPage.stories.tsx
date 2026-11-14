@@ -129,7 +129,7 @@ export const Default: Story = {
 			}),
 		).toHaveAttribute(
 			"href",
-			expect.stringMatching(/\/admin\/ai-providers#data-handling-and-members-ai-choices$/u),
+			expect.stringMatching(/\/user\/ai-models#data-handling-and-ai-choices$/u),
 		);
 	},
 };

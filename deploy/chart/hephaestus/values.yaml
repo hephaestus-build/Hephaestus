@@ -319,7 +319,7 @@ sandbox:
         requests: { cpu: 100m, memory: 384Mi, ephemeral-storage: 256Mi }
         limits: { cpu: "2", memory: 1Gi, ephemeral-storage: 2Gi }
 
-# Application settings. Each key maps to one setting of docs/admin/production-setup.mdx.
+# Application settings. docs/admin/configuration-reference.mdx maps each key to its setting.
 config:
   releaseCheckEnabled: true
   # Corrects commit links from GitHub's or GitLab's own answer. docs/admin/production-operations-runbook.mdx has the steps.
@@ -328,7 +328,7 @@ config:
   # Age at which what Hephaestus says about a person is erased: conversation entries, feedback and practice
   # results. docs/admin/data-retention.mdx.
   feedbackRetention: P400D
-  # A second currency beside USD for AI spend: empty, or EUR. docs/admin/production-setup.mdx.
+  # A second currency beside USD for AI spend: empty, or EUR. docs/admin/ai-providers.mdx.
   llmDisplayCurrency: ""
   # Model endpoints on a private network: host names, IP addresses or CIDR ranges that provider base
   # URLs may resolve to. Empty allows public HTTPS hosts only. docs/admin/ai-providers.mdx.
@@ -341,7 +341,7 @@ config:
     existingSecret: ""
     key: ca.crt
   # A Git provider on a private network: host names, IP addresses or CIDR ranges that its server URL
-  # may use. Empty allows public hosts only. docs/admin/integrations.mdx.
+  # may use. Empty allows public hosts only. docs/admin/private-network.md.
   scmPrivateHosts: []
   # The organization that runs research on this instance, as the privacy notice names it.
   researchOrganization: ""

@@ -26,8 +26,8 @@ export const DOC_TARGETS = {
 	// Setup steps that the reader finishes outside Hephaestus.
 	installationGuide: { path: "admin/kubernetes" },
 	githubAppSetup: { path: "admin/github-integration", anchor: "github-app-mode" },
-	outlineIntegration: { path: "admin/production-setup", anchor: "outline-integration" },
-	slackPermissions: { path: "admin/integrations", anchor: "slack" },
+	outlineIntegration: { path: "admin/connect-outline" },
+	slackPermissions: { path: "admin/connect-slack", anchor: "create-the-slack-app" },
 	unreadableCredential: {
 		path: "admin/credential-key-rotation",
 		anchor: "a-credential-the-running-key-cannot-read",
@@ -36,9 +36,9 @@ export const DOC_TARGETS = {
 	// Sections of the two admin consoles.
 	practiceScriptGuide: { path: "admin/practice-scripts" },
 	upgradeGuide: { path: "admin/upgrade" },
-	membersAiChoices: { path: "admin/ai-providers", anchor: "data-handling-and-members-ai-choices" },
+	membersAiChoices: { path: "user/ai-models", anchor: "data-handling-and-ai-choices" },
 	modelSetup: { path: "admin/ai-providers", anchor: "1-the-staged-flow-and-why-it-is-staged" },
-	practiceGuideWriting: { path: "admin/writing-practices", anchor: "add-a-visual-and-a-guide" },
+	practiceGuideWriting: { path: "user/practices", anchor: "add-a-guide" },
 
 	// Errors whose fix the docs give.
 	practiceScriptTraceLine: { path: "admin/practice-review-operations", anchor: "the-trace-line" },

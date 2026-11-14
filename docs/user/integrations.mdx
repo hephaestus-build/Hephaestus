@@ -1,0 +1,128 @@
+---
+title: Connect Slack and Outline to a workspace
+sidebar_label: Slack and Outline
+description: Connect Slack and Outline to your workspace, choose the channels and collections that Hephaestus reads, and disconnect them.
+page_type: feature
+---
+
+Connect Slack so that members can talk with Hephaestus in direct messages, and choose the channels that Hephaestus reads.
+Connect Outline so that practice reviews can use your design documents and decision records.
+Workspace admins and owners do these tasks under **Administration → Integrations**.
+
+## Slack and Outline in a workspace
+
+Your instance operator turns on Slack and Outline for the whole instance.
+If **Integrations** does not list **Slack** or **Outline**, ask your instance operator to turn it on.
+
+A Slack connection lets each member send Hephaestus direct messages.
+To do so, a member also connects their own Slack account in [User settings](./user-settings#connected-accounts).
+Hephaestus stores no channel message until you activate the channel.
+Each member decides if Hephaestus uses their messages in monitored channels, as [User settings → Slack](./user-settings#slack) describes.
+The workspace connection does not change the AI choice of a member.
+
+An Outline connection mirrors the collections that you choose.
+Hephaestus reads them and never writes to Outline.
+Members can connect their Outline account in [User settings](./user-settings#connected-accounts), so that Hephaestus knows which documents they wrote.
+
+## Connect Slack
+
+1. Under **Administration → Integrations**, open **Slack**.
+2. Select **Connect Slack workspace**.
+3. In Slack, allow the Hephaestus app.
+
+Slack returns you to Hephaestus, and the page shows **Connected**.
+Finish the connection in the same browser where you started it.
+
+## Monitor a Slack channel
+
+1. On the **Slack** page, select **Add channel**.
+2. Choose a channel from the list, or paste a channel link or ID.
+3. Select **Add channel**.
+   The channel shows **Not started**.
+4. Open the actions menu of the channel, and select **Activate monitoring…**.
+5. Read the dialog, then select **Activate monitoring**.
+
+Hephaestus posts a visible announcement in the channel and starts to read new messages.
+It never reads older messages.
+The channel then shows **Monitoring**.
+
+In the actions menu of a channel, **Pause** stops reading and **Resume** starts again.
+**Remove and erase…** removes the channel and erases the messages that Hephaestus stored from it.
+
+## Reconnect Slack
+
+Reconnect Slack to replace its token, or to grant the permissions that the **Slack** page names as missing.
+Reconnecting keeps the channels, their consent, the stored messages, and their retention.
+
+1. On the **Slack** page, select **Reconnect Slack**.
+2. In Slack, choose the same Slack workspace.
+
+The page shows **Connected** when the token holds every permission.
+If it shows **Permissions missing**, it names each missing permission.
+Ask your instance operator to update the Slack app, then select **Reconnect Slack** again.
+
+## Connect Outline
+
+1. In Outline, create an API key for a dedicated bot user under **Settings → API Keys**.
+2. In Hephaestus, under **Administration → Integrations**, open **Outline**.
+3. Enter the address of your Outline in **Server URL**.
+4. Enter the key in **API token**.
+5. Select **Connect Outline**.
+6. Select **Add collection**.
+7. Select the collections to mirror, then select the **Add** button.
+
+The documents of each collection appear after its first sync.
+In the actions menu of a collection, **Pause** and **Resume** stop and start its sync.
+**Remove and erase…** removes the collection and erases its mirrored documents.
+
+Your instance operator approves each Outline address.
+If Hephaestus does not accept your address, ask your instance operator to approve it.
+
+The **Outline** page shows when the key expires, but it has no field for a new key.
+To replace the key and keep the mirror, follow [Replace the API key of a workspace](/admin/connect-outline#replace-the-api-key-of-a-workspace).
+
+## Disconnect an integration
+
+Disconnecting erases the data that Hephaestus stored for the integration in this workspace.
+Reconnecting does not restore it, and starts a new first sync.
+
+| Integration | Hephaestus erases | Hephaestus removes at the provider |
+| --- | --- | --- |
+| GitHub | The repository mirror and the work synced from it | The GitHub App installation. For a token-managed workspace, revoke the token in GitHub yourself. |
+| GitLab | The repository mirror and the work synced from it | The group webhook. Revoke the access token in GitLab yourself. |
+| Slack | Stored messages, threads, channels and their consent records. Every question from Slack and its answer. | The bot token, if no other Hephaestus workspace uses the same Slack workspace |
+| Outline | Mirrored documents, collections and document events | The webhook subscription. Revoke the API key in Outline yourself. |
+
+Hephaestus also erases the practice results and the feedback that came from this data.
+Repositories, messages, and documents at the provider stay.
+
+To disconnect Slack or Outline:
+
+1. Under **Administration → Integrations**, open **Slack** or **Outline**.
+2. Select **Disconnect Slack…** or **Disconnect Outline…**.
+3. Read the dialog, then select **Disconnect Slack** or **Disconnect Outline**.
+
+To replace only the Slack token, use [Reconnect Slack](#reconnect-slack) instead.
+If your instance operator turned the integration off, you cannot disconnect it until it is on again.
+
+**Administration → Integrations** has no disconnect for GitHub or GitLab.
+If you uninstall the Hephaestus GitHub App on GitHub, Hephaestus deletes the whole workspace.
+
+## Provider removals {/*#confirm-a-provider-removal*/}
+
+When a connection ends, Hephaestus removes what it created at the provider.
+If Hephaestus cannot be sure that a removal finished, it blocks the old resource, so that a new connection cannot use it.
+Each integration page lists these blocks under **Provider removals**.
+Only an instance admin can release a block, as [Provider removals](/admin/instance-admin#provider-removals) describes.
+Releasing a block does not restore erased work.
+
+## Troubleshooting
+
+### Slack or Outline is missing under Integrations
+
+Your instance operator has not turned it on.
+Ask them to follow [Connect Slack](/admin/connect-slack) or [Connect Outline](/admin/connect-outline).
+
+### A channel or a collection shows a sync error
+
+Read [A connection shows a sync error](./workspace#a-connection-shows-a-sync-error).

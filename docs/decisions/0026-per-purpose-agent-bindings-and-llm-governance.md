@@ -262,7 +262,7 @@ For each purse, the overshoot is at most the calls in flight at the crossing, ea
 Calls in flight are bounded by the call limit of the pools that the workspace uses.
 `LlmProxyIntegrationTest` pins it with attempts that spend at once.
 
-Excluded from the bound, and stated in `docs/admin/production-setup.mdx`:
+Excluded from the bound, and stated in `docs/admin/ai-providers.mdx`:
 
 - A call whose usage Hephaestus never recorded: it was cancelled, it stalled or failed in mid-stream, or its provider reported no usage or an unreadable one. Tokens and charges are never estimated, so the cap does not count such a call. Its counters show it.
 - Running spend on a model without a price. It counts as zero until the run ends, and the ledger then makes the month unverifiable.

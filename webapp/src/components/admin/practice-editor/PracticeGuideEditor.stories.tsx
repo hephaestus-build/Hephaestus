@@ -58,10 +58,7 @@ export const Empty: Story = {
 		// The rules for figures and the guide templates live in the admin guide.
 		await expect(
 			canvas.getByRole("link", { name: "Write a guide and its figures (opens in a new tab)" }),
-		).toHaveAttribute(
-			"href",
-			expect.stringMatching(/\/admin\/writing-practices#add-a-visual-and-a-guide$/u),
-		);
+		).toHaveAttribute("href", expect.stringMatching(/\/user\/practices#add-a-guide$/u));
 	},
 };
 
