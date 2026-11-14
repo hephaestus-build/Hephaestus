@@ -95,8 +95,6 @@ public class JobEvidenceFiles implements SandboxResultListener {
     /** Invalid UTF-8 cannot match a quote: this lone surrogate is rejected by quoteDigest. */
     private static final String UNDECODABLE = "\uDC00";
 
-    static final Duration RETENTION_GRACE = Duration.ofHours(1);
-
     /** The most bytes of a checkout that a search proof reads: {@code PROOF_BYTES} in {@code pi-verified-search.ts}. */
     static final long SEARCH_PROOF_BYTES = 512L * 1024 * 1024;
 
@@ -836,11 +834,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
         EvidenceFolderLease.removeAsOwner(layout.root(), owner.getWorkspaceId(), owner.getId(), () -> {
             if (!Files.exists(root)) return;
             var job = recordedJob(root);
-            if (job.isPresent() && admitted(job.get()) && matches(root, job.get())) {
-                deleteAttempt(root);
-            } else {
-                markEnded(root);
-            }
+            if (job.isEmpty() || !readsFolder(root, job.get())) deleteAttempt(root);
         });
     }
 
@@ -1163,20 +1157,18 @@ public class JobEvidenceFiles implements SandboxResultListener {
     }
 
     public void cleanAfterRestart() {
-        cleanAttempts(true);
+        cleanEndedAttempts();
     }
 
     /**
-     * Removes the folders of ended attempts and of deleted jobs.
+     * Removes every attempt folder that no attempt reads: the folders of ended, admitted and superseded attempts, and
+     * of deleted jobs. Only the running attempt of its job reads its folder; a retry or a composition takes a new one.
      *
-     * @return the folders of deleted jobs that stay because they could not be removed now, and the folders whose
-     *     removal failed, including expired transcripts: the reconcile counts them, and a later pass retries them
+     * @return the folders that remain although no attempt reads them, because their lease is held or their removal
+     *     failed, and the expired transcripts that could not be removed: the reconcile counts them, and a later pass
+     *     retries them
      */
     public int cleanEndedAttempts() {
-        return cleanAttempts(false);
-    }
-
-    private int cleanAttempts(boolean restarting) {
         int remaining = layout.spool().reconcile();
         if (!Files.isDirectory(layout.jobsRoot())) return remaining;
         try (var paths = Files.walk(layout.jobsRoot(), 3)) {
@@ -1190,6 +1182,7 @@ public class JobEvidenceFiles implements SandboxResultListener {
                         } else if (name.startsWith(".") && name.contains(".preparing-")) {
                             roots.add(path.resolveSibling(name.substring(1, name.indexOf(".preparing-"))));
                         } else if (name.endsWith(".ended")) {
+                            // A marker that an earlier release left beside its folder.
                             roots.add(path.resolveSibling(name.substring(0, name.lastIndexOf('.'))));
                         } else if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
                             roots.add(path);
@@ -1202,43 +1195,29 @@ public class JobEvidenceFiles implements SandboxResultListener {
                 Optional<EvidenceFolderLease> acquired;
                 try {
                     acquired = leaseJob(root);
-                    // A running attempt holds its folder; a deleted job's folder that someone still holds remains.
-                    if (acquired.isEmpty() && recordedJob(root).isEmpty()) remaining++;
+                    // Only a running attempt holds its own folder for long. Any other held folder stays and counts.
+                    if (acquired.isEmpty()) {
+                        var holder = recordedJob(root);
+                        if (holder.isEmpty() || !readsFolder(root, holder.get())) remaining++;
+                        continue;
+                    }
                 } catch (RuntimeException exception) {
                     log.warn("Could not clean attempt folder {}", root, exception);
                     remaining++;
                     continue;
                 }
-                if (acquired.isEmpty()) continue;
                 var lease = acquired.get();
                 try (lease) {
                     // The holder before this one may have removed it; only a removal of our own is reported.
                     if (!present(root)) continue;
                     var job = recordedJob(root);
-                    // Retention or a purge removed the job: nothing can need the folder, and a purge's bound holds.
-                    if (job.isEmpty()) {
-                        deleteAttempt(root);
-                        continue;
-                    }
-                    if (matches(root, job.get())) {
-                        if (admitted(job.get())) {
-                            deleteAttempt(root);
-                            continue;
-                        }
-                        if (job.get().getStatus() == ReviewJobStatus.RUNNING) continue;
-                    }
-                    if (restarting) {
-                        deleteAttempt(root);
-                        discardRetiredInventory(root, job);
-                        continue;
-                    }
-                    Path ended = markEnded(root);
-                    if (!Files.getLastModifiedTime(ended)
-                            .toInstant()
-                            .plus(RETENTION_GRACE)
-                            .isAfter(clock.instant())) {
-                        deleteAttempt(root);
-                        discardRetiredInventory(root, job);
+                    if (job.isPresent() && readsFolder(root, job.get())) continue;
+                    deleteAttempt(root);
+                    // An ended job's file and text inventory goes with its folder; a running one still reads it.
+                    if (job.isPresent() && job.get().getStatus() != ReviewJobStatus.RUNNING) {
+                        ReviewJob ended = job.get();
+                        jobs.expireCaptureInventory(
+                                ended.getId(), ended.getWorkspaceId(), ended.getAttempt(), ended.getRunId());
                     }
                 } catch (RuntimeException | IOException exception) {
                     log.warn("Could not clean attempt folder {}", root, exception);
@@ -1250,6 +1229,11 @@ public class JobEvidenceFiles implements SandboxResultListener {
             throw new UncheckedIOException(exception);
         }
         return remaining;
+    }
+
+    /** Whether the folder is the one that the job's running attempt reads: not yet admitted, and still its own. */
+    private boolean readsFolder(Path root, ReviewJob job) {
+        return matches(root, job) && job.getStatus() == ReviewJobStatus.RUNNING && !admitted(job);
     }
 
     /**
@@ -1322,12 +1306,6 @@ public class JobEvidenceFiles implements SandboxResultListener {
         }
     }
 
-    private void discardRetiredInventory(Path root, Optional<ReviewJob> recorded) {
-        if (recorded.isEmpty() || !matches(root, recorded.get())) return;
-        ReviewJob job = recorded.get();
-        jobs.expireCaptureInventory(job.getId(), job.getWorkspaceId(), job.getAttempt(), job.getRunId());
-    }
-
     private Optional<ReviewJob> recordedJob(Path root) {
         Path jobDirectory = Objects.requireNonNull(root.getParent());
         Path workspaceDirectory = Objects.requireNonNull(jobDirectory.getParent());
@@ -1344,17 +1322,6 @@ public class JobEvidenceFiles implements SandboxResultListener {
 
     private static boolean admitted(ReviewJob job) {
         return ResultAdmissionService.isAdmitted(job);
-    }
-
-    private Path markEnded(Path root) throws IOException {
-        Path ended = root.resolveSibling(root.getFileName() + ".ended");
-        try {
-            Files.createFile(ended);
-            Files.setLastModifiedTime(ended, FileTime.from(clock.instant()));
-        } catch (FileAlreadyExistsException alreadyEnded) {
-            // The marker's timestamp is when the attempt first ended; the retention grace counts from it.
-        }
-        return ended;
     }
 
     private static void deleteAttempt(Path root) throws IOException {

@@ -569,6 +569,8 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("runId") UUID runId,
             @Param("diagnosis") String diagnosis);
 
+    /** The evidence sweep calls it on its own, with no transaction of its own around it. */
+    @Transactional
     @Modifying(flushAutomatically = true)
     @Query(
             value = "UPDATE review_job SET capture = capture #- '{manifest,files}' #- '{manifest,citableTexts}' WHERE"
