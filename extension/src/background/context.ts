@@ -107,10 +107,11 @@ export class WorkspaceDirectory {
 
 	static async #load(api: ContextApi): Promise<WorkspaceSite[]> {
 		const workspaces = await api.workspaces();
-		// The list also names a suspended workspace to its admins; it answers no lookup.
+		// The list also names a suspended workspace to its admins; it answers no lookup. An older server
+		// lists no suspended workspace and sends its status as free text, so only SUSPENDED is left out.
 		const scm = workspaces.filter(
 			(workspace): workspace is WorkspaceListItem & { providerType: "GITHUB" | "GITLAB" } =>
-				workspace.status === "ACTIVE" &&
+				workspace.status !== "SUSPENDED" &&
 				(workspace.providerType === "GITHUB" || workspace.providerType === "GITLAB"),
 		);
 		const details = await Promise.all(
