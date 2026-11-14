@@ -100,14 +100,15 @@ export const FailedForGood: Story = {
 	},
 };
 
-/** The page's code belongs to a newer build than this tab runs, so only a reload loads it. */
+// The props are a union, so `args.onReload` does not narrow; the story keeps its own spy.
 const onReload = fn();
 
+/** The page's code did not load, most often because a newer build replaced it, so a reload can load it. */
 export const Outdated: Story = {
 	args: { cause: "outdated", onReload },
 	play: async ({ canvas, userEvent }) => {
 		await expect(
-			canvas.getByRole("heading", { level: 1, name: "Hephaestus was updated" }),
+			canvas.getByRole("heading", { level: 1, name: "This page needs a reload" }),
 		).toBeVisible();
 		await expect(canvas.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
 		await userEvent.click(canvas.getByRole("button", { name: "Reload" }));

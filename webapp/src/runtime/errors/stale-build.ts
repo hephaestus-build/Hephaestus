@@ -13,8 +13,7 @@ const STALE_BUILD_MESSAGES = [
 
 /** Whether an error says that this tab's build is older than the server's: a reload fixes it. */
 export function isStaleBuildError(error: unknown): boolean {
-	const message: unknown = error instanceof Error ? error.message : undefined;
 	return (
-		typeof message === "string" && STALE_BUILD_MESSAGES.some((start) => message.startsWith(start))
+		error instanceof Error && STALE_BUILD_MESSAGES.some((start) => error.message.startsWith(start))
 	);
 }

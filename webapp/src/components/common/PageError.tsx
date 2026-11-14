@@ -11,7 +11,7 @@ export type PageErrorProps =
 	| { cause: "not-found" }
 	| { cause: "no-access" }
 	| { cause: "failed"; onRetry?: () => void; reference?: string }
-	/** The page's code belongs to a newer build than this tab runs; only a reload loads it. */
+	/** The page's code did not load, most often because a newer build replaced it; a reload can load it. */
 	| { cause: "outdated"; onReload: () => void };
 
 const NOT_FOUND = PROBLEM_COPY["not-found"];
@@ -37,8 +37,9 @@ function copyOf(props: PageErrorProps) {
 		case "outdated": {
 			return {
 				icon: <RefreshCwIcon />,
-				title: "Hephaestus was updated",
-				description: "Reload to load the new version. Anything you typed on this page is lost.",
+				title: "This page needs a reload",
+				description:
+					"Hephaestus may have been updated since you opened it. Reload to load the current version.",
 			};
 		}
 		case "failed": {

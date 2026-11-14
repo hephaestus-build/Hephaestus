@@ -3,7 +3,6 @@ import {
 	createRootRoute,
 	createRoute,
 	createRouter,
-	lazyRouteComponent,
 	RouterProvider,
 } from "@tanstack/react-router";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -14,11 +13,8 @@ import { afterEach, expect, it, vi } from "vitest";
 import { ROUTER_SEARCH } from "@/lib/router-search";
 import { RouteError } from "./RouteError";
 
-const realLocation = window.location;
-
 afterEach(() => {
-	sessionStorage.clear();
-	Object.defineProperty(window, "location", { configurable: true, value: realLocation });
+	vi.unstubAllGlobals();
 });
 
 it("runs a failed route again on retry and shows the page once it renders", async () => {
@@ -136,22 +132,22 @@ it("names no reference for a failure without one, or with a value that is not a 
 	expect(screen.queryByRole("button", { name: "Copy reference" })).toBeNull();
 });
 
-it("offers a reload, not a blank page, when a route's code is gone after a deploy and the reload already ran", async () => {
+it("offers a reload when a route's code cannot load", async () => {
 	const missing = new TypeError(
 		"Failed to fetch dynamically imported module: https://hephaestus.example/assets/members-1a2b3c.js",
 	);
-	// TanStack Router reloads once per tab for each missing module; this tab already did.
-	sessionStorage.setItem(`tanstack_router_reload:${missing.message}`, "1");
 	const reload = vi.fn();
 	// jsdom cannot reload, so the page's location is replaced by one that records the reload.
-	Object.defineProperty(window, "location", { configurable: true, value: { reload } });
+	vi.stubGlobal("location", { reload });
 	const rootRoute = createRootRoute();
 	const route = createRoute({
 		getParentRoute: () => rootRoute,
 		path: "/",
-		component: lazyRouteComponent(async () => {
+		// A loader that throws reaches the same error component as a route chunk that fails, without
+		// TanStack Router's own automatic reload.
+		loader: () => {
 			throw missing;
-		}),
+		},
 	});
 	const router = createRouter({
 		...ROUTER_SEARCH,
@@ -161,8 +157,7 @@ it("offers a reload, not a blank page, when a route's code is gone after a deplo
 	});
 	render(<RouterProvider router={router} />, { onCaughtError: vi.fn() });
 
-	const alert = await screen.findByRole("alert");
-	expect(alert.textContent).toContain("Hephaestus was updated");
+	await screen.findByRole("heading", { name: "This page needs a reload" });
 	expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
 	expect(document.body.textContent).not.toContain("members-1a2b3c");
 

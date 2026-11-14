@@ -15,8 +15,8 @@ export function RouteError({ error }: Pick<ErrorComponentProps, "error">) {
 	const status = problemStatusOf(error);
 	let state: PageErrorProps;
 	if (isStaleBuildError(error)) {
-		// The once-per-tab reload (`preload-error.ts`, TanStack Router's lazy route) has already run, or the
-		// page may hold input: the reader decides when to reload.
+		// The automatic reloads (`preload-error.ts`, TanStack Router's lazy route) did not help or did not
+		// run, so the reader reloads.
 		state = {
 			cause: "outdated",
 			onReload: () => {
