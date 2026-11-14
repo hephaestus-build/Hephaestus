@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -2493,15 +2494,58 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     }
 
     /**
-     * A member's request pins the work with no lock. A push that lands before the request takes the workspace lock
-     * starts its own review of the newer version, so the request finds its version replaced and records nothing.
+     * A request pins the work with no lock. A push that lands before the request takes the workspace lock starts its own
+     * review of the newer version. A member's request then meets its policy (a review of the item already measures); a
+     * batch request finds its version replaced. Either records nothing.
      */
     @Test
-    void shouldRefuseAMembersRequestWhoseVersionAPushReplacedWhileItReadTheWork() throws Exception {
-        var prepared = prepare(
+    void shouldRefuseAMembersRequestWhoseItemAPushStartedReviewingWhileItReadTheWork() throws Exception {
+        var prepared = preparedForReplacedVersion();
+        long requester = memberAccount(prepared.item().workspaceId());
+
+        assertThat(requestWhileAPushLands(
+                        prepared, request(prepared).origin(ReviewOrigin.REQUEST).requestedById(requester)))
+                .isInstanceOfSatisfying(
+                        ReviewRequestRefused.class,
+                        refusal -> assertThat(refusal.reason()).isEqualTo(ReviewRequestReason.CONCURRENT_DUPLICATE));
+        assertThat(measuringReviews(prepared))
+                .singleElement()
+                .satisfies(review -> assertThat(review.getOrigin()).isEqualTo(ReviewOrigin.EVENT));
+    }
+
+    @Test
+    void shouldRefuseABatchRequestWhoseVersionAPushReplacedWhileItReadTheWork() throws Exception {
+        var prepared = preparedForReplacedVersion();
+
+        assertThat(requestWhileAPushLands(
+                        prepared,
+                        request(prepared).origin(ReviewOrigin.BACKFILL).batchId(UUID.randomUUID())))
+                .isInstanceOfSatisfying(
+                        ReviewRequestRejected.class,
+                        refusal ->
+                                assertThat(refusal.reason()).isEqualTo(ReviewRequestRejected.Reason.VERSION_CHANGED));
+        assertThat(measuringReviews(prepared))
+                .singleElement()
+                .satisfies(review -> assertThat(review.getOrigin()).isEqualTo(ReviewOrigin.EVENT));
+    }
+
+    private Prepared preparedForReplacedVersion() {
+        return prepare(
                 IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
-        long workspace = prepared.item().workspaceId();
-        long requester = memberAccount(workspace);
+    }
+
+    private static ReviewRequest.ReviewRequestBuilder request(Prepared prepared) {
+        return ReviewRequest.builder()
+                .workspaceId(prepared.item().workspaceId())
+                .itemId(prepared.item().itemId())
+                .kind(ReviewKind.ITEM)
+                .version(prepared.version())
+                .practiceIds(List.of());
+    }
+
+    /** Holds the request right after its pin, lands a push and its event review, then lets the request continue. */
+    private Throwable requestWhileAPushLands(Prepared prepared, ReviewRequest.ReviewRequestBuilder request)
+            throws Exception {
         var pinned = new CountDownLatch(1);
         var release = new CountDownLatch(1);
         doAnswer(call -> {
@@ -2515,32 +2559,16 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         var executor =
                 Executors.newSingleThreadExecutor(Thread.ofPlatform().daemon().factory());
         try {
-            Future<UUID> manual = executor.submit(() -> service.request(ReviewRequest.builder()
-                    .workspaceId(workspace)
-                    .itemId(prepared.item().itemId())
-                    .kind(ReviewKind.ITEM)
-                    .version(prepared.version())
-                    .origin(ReviewOrigin.REQUEST)
-                    .requestedById(requester)
-                    .practiceIds(List.of())
-                    .build()));
+            Future<UUID> requested = executor.submit(() -> service.request(request.build()));
             awaitLatch(pinned);
             deliver(
                     prepared,
                     "synchronize",
                     pullRequestPayload(prepared, "d".repeat(40), Instant.now().plusSeconds(60)));
             release.countDown();
-
-            assertThatThrownBy(() -> manual.get(20, TimeUnit.SECONDS))
-                    .isInstanceOf(ExecutionException.class)
-                    .cause()
-                    .isInstanceOfSatisfying(
-                            ReviewRequestRejected.class,
-                            refusal -> assertThat(refusal.reason())
-                                    .isEqualTo(ReviewRequestRejected.Reason.VERSION_CHANGED));
-            assertThat(measuringReviews(prepared))
-                    .singleElement()
-                    .satisfies(review -> assertThat(review.getOrigin()).isEqualTo(ReviewOrigin.EVENT));
+            var failure = catchThrowable(() -> requested.get(20, TimeUnit.SECONDS));
+            assertThat(failure).isInstanceOf(ExecutionException.class);
+            return Objects.requireNonNull(failure.getCause());
         } finally {
             release.countDown();
             executor.shutdownNow();
