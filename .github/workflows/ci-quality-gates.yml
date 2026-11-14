@@ -224,6 +224,7 @@ jobs:
           # Source lookup is needed only for failure annotations, not successful summaries.
           max-annotations: ${{ job.status == 'failure' && 50 || 0 }}
           fail-on-error: false
+          fail-on-empty: ${{ job.status == 'success' }}
 
       - name: Retain application test reports
         if: (env.QUALITY_LEG == 'webapp' || env.QUALITY_LEG == 'extension') && !cancelled()
@@ -515,7 +516,7 @@ jobs:
               context: 'Preview / Storybook'
             });
       - name: Upload Storybook test results
-        if: always()
+        if: ${{ !cancelled() }}
         uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
         with:
           name: "Test Results - Webapp stories"
@@ -526,8 +527,9 @@ jobs:
           # Source lookup is needed only for failure annotations, not successful summaries.
           max-annotations: ${{ (job.status == 'failure' || steps.tests.outcome == 'failure') && 50 || 0 }}
           fail-on-error: false
+          fail-on-empty: ${{ job.status == 'success' }}
       - name: Upload Chromatic test results
-        if: always() && startsWith(steps.chromatic.outputs.storybookUrl, 'http')
+        if: ${{ !cancelled() && startsWith(steps.chromatic.outputs.storybookUrl, 'http') }}
         uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
         with:
           name: "Test Results - Chromatic"

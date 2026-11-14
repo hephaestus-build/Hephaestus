@@ -1297,11 +1297,10 @@ void describe("CI contract", () => {
 				`${name} skips drafts`,
 			);
 		}
-		// Marking a draft ready starts the run it skipped; the gate reports on every run.
+		// Marking a draft ready starts the run it skipped.
 		const types = orchestrator.getIn(["on", "pull_request", "types"]);
 		assert.ok(isSeq(types));
 		assert.deepEqual(types.toJSON(), ["opened", "synchronize", "reopened", "ready_for_review"]);
-		assert.equal(orchestrator.getIn(["jobs", "all-ci-passed", "if"]), "always()");
 		const optIn = namedStep(orchestrator, ["jobs", "detect-changes"], "Read the opt-in labels");
 		assert.equal(optIn.get("continue-on-error"), true);
 		assert.match(
@@ -1960,6 +1959,68 @@ void describe("CI contract", () => {
 								);
 							}
 						}
+					}
+				},
+			});
+		}
+		assert.equal(reporters.size, 6);
+	});
+
+	void test("test reporters stop on cancellation and tolerate absent diagnostic files", async () => {
+		const reporters = new Set<string>();
+		for (const [file, source] of await workflowSources()) {
+			visit(parseDocument(source), {
+				Map(_key, declaration) {
+					if (!String(declaration.get("uses")).startsWith("dorny/test-reporter@")) {
+						return;
+					}
+					const inputs = stepInputs(declaration);
+					const name = asString(inputs.get("name"), "report name");
+					reporters.add(`${file}: ${name}`);
+					for (const status of ["success", "failure", "cancelled"]) {
+						assert.equal(
+							expandExpressions(inputs.get("fail-on-empty"), { job: { status } }),
+							String(name !== "Test Results - Chromatic" && status === "success"),
+							`${file}: ${name}, ${status}: passing jobs still need reports`,
+						);
+					}
+					assert.equal(inputs.get("fail-on-error"), false, `${file}: ${name}`);
+					const expression = asString(declaration.get("if"), "report condition").replaceAll(
+						/^\$\{\{\s*|\s*\}\}$/gu,
+						"",
+					);
+					for (const cancelled of [false, true]) {
+						const functions = [
+							{ name: "always", minArgs: 0, maxArgs: 0, call: () => new data.BooleanData(true) },
+							{
+								name: "cancelled",
+								minArgs: 0,
+								maxArgs: 0,
+								call: () => new data.BooleanData(cancelled),
+							},
+						];
+						const parsed = new Parser(
+							new Lexer(expression).lex().tokens,
+							["env", "steps"],
+							functions,
+						).parse();
+						const context: unknown = JSON.parse(
+							JSON.stringify({
+								env: { QUALITY_LEG: "webapp" },
+								steps: {
+									chromatic: { outputs: { storybookUrl: "https://example.test/storybook" } },
+								},
+							}),
+							data.reviver,
+						);
+						assert.ok(context instanceof data.Dictionary);
+						assert.equal(
+							new Evaluator(parsed, context, new Map(functions.map((entry) => [entry.name, entry])))
+								.evaluate()
+								.coerceString(),
+							String(!cancelled),
+							`${file}: ${name}, cancelled=${String(cancelled)}`,
+						);
 					}
 				},
 			});
@@ -6833,13 +6894,91 @@ void test("manifest publication waits for both platform verdicts and still signs
 	}
 });
 
+void test("a superseded PR cancels its native gate while live failures still get a verdict", async () => {
+	const fixture = asRecord(
+		JSON.parse(await readFile("scripts/fixtures/ci-superseded-pr.json", "utf8")),
+		"superseded PR",
+	);
+	assert.equal(fixture.conclusion, "cancelled");
+	const observed = asRecord(fixture.needs, "recorded prerequisite results");
+	const recordedNeeds = Object.fromEntries(
+		Object.entries(observed).map(([name, value]) => [
+			name,
+			{ result: asString(asRecord(value, name).result, `${name} result`) },
+		]),
+	);
+	const recordedJobs = asArray(fixture.jobs, "recorded jobs").map((entry) =>
+		asRecord(entry, "recorded job"),
+	);
+	assert.equal(
+		recordedJobs.find((entry) => entry.name === "CI Status Gate")?.conclusion,
+		"failure",
+	);
+	assert.equal(
+		recordedJobs.filter((entry) =>
+			asArray(entry.steps, "recorded steps").some((entryStep) => {
+				const result = asRecord(entryStep, "recorded step");
+				return result.name === "Upload test results" && result.conclusion === "failure";
+			}),
+		).length,
+		2,
+	);
+	const witness = asRecord(fixture.cancellation_witness, "hosted cancellation witness");
+	assert.equal(witness.name, "Report unsuccessful merge group");
+	assert.equal(witness.conclusion, "cancelled");
+	const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	assert.equal(
+		jobRuns(
+			workflow,
+			"report-unsuccessful-merge-group",
+			"pull_request",
+			{
+				"all-ci-passed": { result: "failure", outputs: { verdict: "cancelled" } },
+			},
+			true,
+		),
+		false,
+	);
+	assert.equal(
+		jobRuns(
+			workflow,
+			"all-ci-passed",
+			asString(fixture.event, "recorded event"),
+			recordedNeeds,
+			true,
+		),
+		false,
+	);
+	const green = Object.fromEntries(
+		needsOf(workflow, "all-ci-passed").map((name) => [name, { result: "success" }]),
+	);
+	for (const event of ["pull_request", "merge_group", "push", "workflow_dispatch"]) {
+		for (const result of ["success", "failure", "cancelled", "skipped"]) {
+			const needs = { ...green, Test: { result } };
+			assert.equal(
+				jobRuns(workflow, "all-ci-passed", event, needs, false),
+				true,
+				`${event}, ${result}: live run must evaluate`,
+			);
+			assert.equal(
+				jobRuns(workflow, "all-ci-passed", event, needs, true),
+				event === "merge_group",
+				`${event}, ${result}: only merge groups evaluate after cancellation`,
+			);
+		}
+	}
+});
+
 void test(
 	"a cancelled caller cannot hide a native failed leaf or reuse an earlier attempt's verdict",
 	runnerStepsOnly,
 	async () => {
 		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		const gate = ["jobs", "all-ci-passed"];
-		assert.equal(workflow.getIn([...gate, "if"]), "always()");
+		assert.equal(
+			workflow.getIn([...gate, "if"]),
+			`\${{ !cancelled() || github.event_name == 'merge_group' }}`,
+		);
 		assert.equal(workflow.getIn([...gate, "permissions", "actions"]), "read");
 		const needs = {
 			Build: { result: "cancelled" },
@@ -6968,11 +7107,6 @@ void test("the CI outline has static names and one reusable level, including ski
 	const root = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 	const jobs = asRecord(asRecord(root.toJSON(), "CI/CD").jobs, "jobs");
 	assert.equal(asRecord(jobs["all-ci-passed"], "gate").name, "CI Status Gate");
-	assert.equal(
-		asRecord(jobs["all-ci-passed"], "gate").if,
-		"always()",
-		"the native superseded-run policy stays unchanged",
-	);
 	assert.equal(jobs["start-ci"], undefined, "the status-only admission design was rejected");
 	const gateScript = runScript(root, ["jobs", "all-ci-passed"], "Evaluate CI results");
 	const labels = /jq -r '(?<labels>\{[\s\S]*?\}) as \$names/u.exec(gateScript)?.groups?.labels;
