@@ -70,7 +70,6 @@ jobs:
       queue-upgrade: ${{ (github.event_name == 'merge_group' && steps.filter.outputs.database-upgrade == 'true') }}
       kubernetes: ${{ steps.filter.outputs.kubernetes }}
       kubernetes-recovery: ${{ github.event_name == 'pull_request' && steps.filter.outputs.kubernetes-recovery == 'true' }}
-      docs: ${{ steps.filter.outputs.docs }}
       ci-config: ${{ steps.filter.outputs.ci-config }}
       quality-config: ${{ steps.filter.outputs.quality-config }}
       build-config: ${{ steps.filter.outputs.build-config }}
@@ -605,8 +604,6 @@ jobs:
               - 'scripts/kubernetes-cluster.ts'
               - '.github/workflows/ci-kubernetes.yml'
               - '.github/workflows/kubernetes-nightly.yml'
-            docs:
-              - 'docs/**'
             migrations:
               - 'server/application/src/main/resources/db/**'
             # Release notes and generated schema docs accompany a migration without changing Java behavior.

@@ -517,3 +517,30 @@ void test("the tools vite-plus bundles move only with vite-plus", () => {
 	assert.ok(bump, "the vite-plus bump must say what to run");
 	assert.match(String(bump.prBodyNotes), /sync:toolchain-pins/u);
 });
+
+void test("catalog packages keep their batch, the React hold and one TypeScript update", () => {
+	assert.ok(Array.isArray(config.packageRules));
+	const rules = config.packageRules.filter(isRecord);
+	const matching = (predicate: (rule: Record<string, unknown>) => boolean) =>
+		rules.findLast(predicate);
+	const catalog = matching(
+		(rule) =>
+			Array.isArray(rule.matchDepTypes) && rule.matchDepTypes.includes("pnpm.catalog.default"),
+	);
+	assert.equal(catalog?.groupName, "webapp and extension dependencies");
+	const react = matching(
+		(rule) => Array.isArray(rule.matchPackageNames) && rule.matchPackageNames.includes("react"),
+	);
+	assert.equal(react?.allowedVersions, "<19.3");
+	const typescript = matching(
+		(rule) =>
+			Array.isArray(rule.matchPackageNames) &&
+			rule.matchPackageNames.includes("typescript") &&
+			Array.isArray(rule.matchFileNames) &&
+			rule.matchFileNames.includes("pnpm-workspace.yaml"),
+	);
+	assert.deepEqual(typescript?.matchFileNames, [
+		"pnpm-workspace.yaml",
+		"docker/agents/pi/package.json",
+	]);
+});

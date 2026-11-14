@@ -39,7 +39,8 @@ allowBuilds:
   msw: false
   protobufjs: false
 
-# The tools vite-plus bundles, at the versions it bundles; `vp run sync:toolchain-pins` writes them.
+# The first entries restate the tools vite-plus bundles, at the versions it bundles;
+# `vp run sync:toolchain-pins` writes them.
 catalog:
   oxfmt: 0.74.0
   oxlint: 1.89.0
@@ -50,6 +51,14 @@ catalog:
   "@vitest/browser-playwright": 5.0.5
   "@vitest/coverage-v8": 5.0.5
   vite: npm:@voidzero-dev/vite-plus-core@1.4.0
+  # Shared by several workspace packages at one version. `scripts/api-generator` keeps its own
+  # TypeScript 6 pin (docs/contributor/local-development.mdx § OpenAPI client).
+  typescript: 7.0.2
+  zod: 4.6.7
+  react: 19.2.8
+  react-dom: 19.2.8
+  "@types/react": 19.2.18
+  "@types/react-dom": 19.2.7
 
 # The plugin imports these without declaring them; under `nodeLinker: isolated` it cannot reach them.
 # As peers they resolve to the versions `docs/package.json` pins beside the rest of Docusaurus.

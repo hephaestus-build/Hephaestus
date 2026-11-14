@@ -167,6 +167,12 @@ catalogs:
     '@oxlint/plugins':
       specifier: 1.89.0
       version: 1.89.0
+    '@types/react':
+      specifier: 19.2.18
+      version: 19.2.18
+    '@types/react-dom':
+      specifier: 19.2.7
+      version: 19.2.7
     '@vitest/browser-playwright':
       specifier: 5.0.5
       version: 5.0.5
@@ -182,9 +188,21 @@ catalogs:
     oxlint-tsgolint:
       specifier: 7.0.2004
       version: 7.0.2004
+    react:
+      specifier: 19.2.8
+      version: 19.2.8
+    react-dom:
+      specifier: 19.2.8
+      version: 19.2.8
+    typescript:
+      specifier: 7.0.2
+      version: 7.0.2
     vite:
       specifier: npm:@voidzero-dev/vite-plus-core@1.4.0
       version: 1.4.0
+    zod:
+      specifier: 4.6.7
+      version: 4.6.7
 
 overrides:
   follow-redirects@>=1.16.0 <1.16.2: 1.16.2
@@ -338,7 +356,7 @@ importers:
         specifier: 0.56.0
         version: 0.56.0
       typescript:
-        specifier: 7.0.2
+        specifier: 'catalog:'
         version: 7.0.2
       vite-plus:
         specifier: 1.4.0
@@ -350,7 +368,7 @@ importers:
         specifier: 2.9.1
         version: 2.9.1
       zod:
-        specifier: 4.6.7
+        specifier: 'catalog:'
         version: 4.6.7
 
   docs:
@@ -407,10 +425,10 @@ importers:
         specifier: 2.4.1
         version: 2.4.1(react@19.2.8)
       react:
-        specifier: 19.2.8
+        specifier: 'catalog:'
         version: 19.2.8
       react-dom:
-        specifier: 19.2.8
+        specifier: 'catalog:'
         version: 19.2.8(react@19.2.8)
     devDependencies:
       '@docusaurus/module-type-aliases':
@@ -423,13 +441,13 @@ importers:
         specifier: 3.10.2
         version: 3.10.2(@swc/core@1.16.20(@swc/helpers@0.5.24))(@swc/html@1.16.20)(clean-css@5.3.3)(cssnano@6.1.2(postcss@8.5.32))(csso@5.0.5)(esbuild@0.28.2)(html-minifier-terser@7.2.0)(lightningcss@1.33.0)(postcss@8.5.32)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@8.1.1)(svgo@3.3.5)
       '@types/react':
-        specifier: 19.2.18
+        specifier: 'catalog:'
         version: 19.2.18
       markdownlint-cli2:
         specifier: 0.24.0
         version: 0.24.0(supports-color@8.1.1)
       typescript:
-        specifier: 7.0.2
+        specifier: 'catalog:'
         version: 7.0.2
 
   extension:
@@ -447,14 +465,14 @@ importers:
         specifier: 1.41.0
         version: 1.41.0(react@19.2.8)
       react:
-        specifier: 19.2.8
+        specifier: 'catalog:'
         version: 19.2.8
       react-dom:
-        specifier: 19.2.8
+        specifier: 'catalog:'
         version: 19.2.8(react@19.2.8)
       zod:
-        specifier: 4.6.6
-        version: 4.6.6
+        specifier: 'catalog:'
+        version: 4.6.7
     devDependencies:
       '@playwright/test':
         specifier: 1.64.1
@@ -481,10 +499,10 @@ importers:
         specifier: 24.19.2
         version: 24.19.2
       '@types/react':
-        specifier: 19.2.18
+        specifier: 'catalog:'
         version: 19.2.18
       '@types/react-dom':
-        specifier: 19.2.7
+        specifier: 'catalog:'
         version: 19.2.7(@types/react@19.2.18)
       '@vitejs/plugin-react':
         specifier: 6.1.2
@@ -520,7 +538,7 @@ importers:
         specifier: 4.3.3
         version: 4.3.3
       typescript:
-        specifier: 7.0.2
+        specifier: 'catalog:'
         version: 7.0.2
       vite:
         specifier: 'catalog:'
@@ -610,13 +628,13 @@ importers:
         specifier: 13.5.1
         version: 13.5.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react:
-        specifier: 19.2.8
+        specifier: 'catalog:'
         version: 19.2.8
       react-day-picker:
         specifier: 10.0.2
         version: 10.0.2(@types/react@19.2.18)(react@19.2.8)
       react-dom:
-        specifier: 19.2.8
+        specifier: 'catalog:'
         version: 19.2.8(react@19.2.8)
       recharts:
         specifier: 3.8.0
@@ -640,8 +658,8 @@ importers:
         specifier: 6.2.3
         version: 6.2.3
       zod:
-        specifier: 4.6.6
-        version: 4.6.6
+        specifier: 'catalog:'
+        version: 4.6.7
     devDependencies:
       '@axe-core/playwright':
         specifier: 4.14.0
@@ -707,10 +725,10 @@ importers:
         specifier: 24.19.2
         version: 24.19.2
       '@types/react':
-        specifier: 19.2.18
+        specifier: 'catalog:'
         version: 19.2.18
       '@types/react-dom':
-        specifier: 19.2.7
+        specifier: 'catalog:'
         version: 19.2.7(@types/react@19.2.18)
       '@vitejs/plugin-react':
         specifier: 6.1.2
@@ -767,7 +785,7 @@ importers:
         specifier: 1.4.0
         version: 1.4.0
       typescript:
-        specifier: 7.0.2
+        specifier: 'catalog:'
         version: 7.0.2
       vite:
         specifier: 'catalog:'
@@ -11662,9 +11680,6 @@ packages:
     resolution: {integrity: sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA==}
     peerDependencies:
       zod: ^3.25.28 || ^4
-
-  zod@4.6.6:
-    resolution: {integrity: sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA==}
 
   zod@4.6.7:
     resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
@@ -24308,8 +24323,6 @@ snapshots:
     dependencies:
       zod: 4.6.7
     optional: true
-
-  zod@4.6.6: {}
 
   zod@4.6.7: {}
 

@@ -30,16 +30,16 @@
 		"@mdx-js/react": "3.1.1",
 		"@signalwire/docusaurus-plugin-llms-txt": "1.2.2",
 		"prism-react-renderer": "2.4.1",
-		"react": "19.2.8",
-		"react-dom": "19.2.8"
+		"react": "catalog:",
+		"react-dom": "catalog:"
 	},
 	"devDependencies": {
 		"@docusaurus/module-type-aliases": "3.10.2",
 		"@docusaurus/theme-common": "3.10.2",
 		"@docusaurus/types": "3.10.2",
-		"@types/react": "19.2.18",
+		"@types/react": "catalog:",
 		"markdownlint-cli2": "0.24.0",
-		"typescript": "7.0.2"
+		"typescript": "catalog:"
 	},
 	"browserslist": {
 		"production": [
