@@ -18,7 +18,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.CheckoutUnverifiedExceptio
 import jakarta.validation.Valid;
 import java.io.UncheckedIOException;
 import java.util.function.Supplier;
-import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -75,10 +74,6 @@ public class ResultAdmissionController {
             // Infrastructure, never a judgement of the results: the sandbox calls again.
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE, "The evidence folder is not ready on this server", busy);
-        } catch (PessimisticLockingFailureException lockBusy) {
-            // Another write held the review or its job past the lock bound: the sandbox calls again. A 409 here would
-            // read as a refusal of the results.
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "The review is busy", lockBusy);
         } catch (UncheckedIOException unavailable) {
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE, "The evidence folder is unavailable", unavailable);

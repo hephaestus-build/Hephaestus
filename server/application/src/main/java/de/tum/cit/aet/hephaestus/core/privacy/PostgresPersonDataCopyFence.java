@@ -46,7 +46,7 @@ public class PostgresPersonDataCopyFence implements PersonDataCopyFence {
     public void holdForCapture() {
         if (!"read committed".equals(jdbc.queryForObject("SHOW transaction_isolation", String.class)))
             throw new IllegalStateException("Copy admission requires a READ_COMMITTED transaction");
-        jdbc.query("SELECT pg_advisory_xact_lock_shared(2165,1)", rs -> {});
+        waitUnbounded("SELECT pg_advisory_xact_lock_shared(2165,1)");
     }
 
     @Override
@@ -63,9 +63,17 @@ public class PostgresPersonDataCopyFence implements PersonDataCopyFence {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void holdForErasure() {
-        // An erasure waits until every running copy releases its lease, however long that takes: not the pool's bound.
+        waitUnbounded("SELECT pg_advisory_xact_lock(2165,1)");
+    }
+
+    /**
+     * Copies and erasures wait for each other however long the other side runs, not for the pool's lock bound. Only
+     * this wait: {@code DEFAULT} is the session's value, so the rest of the transaction keeps the bound.
+     */
+    private void waitUnbounded(String lock) {
         jdbc.execute("SET LOCAL lock_timeout = 0");
-        jdbc.query("SELECT pg_advisory_xact_lock(2165,1)", rs -> {});
+        jdbc.query(lock, rs -> {});
+        jdbc.execute("SET LOCAL lock_timeout TO DEFAULT");
     }
 
     @Override
@@ -88,12 +96,19 @@ public class PostgresPersonDataCopyFence implements PersonDataCopyFence {
         }
         try {
             connection.setAutoCommit(true);
-            // The lease waits for the other side to finish, not for the pool's lock bound; close() restores the bound.
+            // The lease, and its receipt writes, wait for the other side to finish, not for the pool's lock bound;
+            // close() restores the bound.
             try (var unbounded = connection.createStatement()) {
                 unbounded.execute("SET lock_timeout = 0");
             }
             execute(connection, shared ? "pg_advisory_lock_shared" : "pg_advisory_lock");
         } catch (SQLException exception) {
+            // The session may have no lock bound now: never return it to the pool.
+            try {
+                connection.abort(Runnable::run);
+            } catch (SQLException abortFailure) {
+                exception.addSuppressed(abortFailure);
+            }
             try {
                 connection.close();
             } catch (SQLException closeFailure) {

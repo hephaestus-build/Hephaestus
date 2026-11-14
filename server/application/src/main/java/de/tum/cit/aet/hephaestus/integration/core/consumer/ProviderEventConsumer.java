@@ -305,14 +305,17 @@ public class ProviderEventConsumer {
             failures.retry(claimed, false);
             return;
         }
-        if (IntegrationPoisonHandler.isLockTimeout(thrown)) {
-            // Another write held a row or advisory lock past the session's lock_timeout: contention, not a handler
-            // fault.
-            log.atDebug()
+        if (IntegrationPoisonHandler.isLockContention(thrown)) {
+            // Contention, not a handler fault, so it spends no poison budget. A lock cycle that PostgreSQL cannot see,
+            // such as one thread that waits on its own other connection, recurs on every attempt: it warns once the
+            // event has been claimed as often as a failing handler may fail.
+            boolean recurring = claimed.attempt() >= properties.poison().maxAttempts();
+            (recurring ? log.atWarn() : log.atDebug())
                     .addKeyValue("event.name", "integration.message.retry")
-                    .addKeyValue("reason", "lock_timeout")
+                    .addKeyValue("reason", "lock_contention")
                     .addKeyValue("integration.event.id", claimed.id())
                     .addKeyValue("integration.scope.id", claimed.workspaceId())
+                    .addKeyValue("integration.delivery", claimed.attempt())
                     .log("Provider event waits for a lock");
             meters.handled(event, IntegrationMessageMeters.Outcome.RETRIED, System.nanoTime() - start);
             failures.retry(claimed, false);

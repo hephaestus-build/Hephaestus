@@ -102,12 +102,16 @@ public class IntegrationPoisonHandler {
         }
     }
 
-    /** Whether the handler waited longer than the session's {@code lock_timeout} for a lock that another write held. */
-    static boolean isLockTimeout(Throwable failure) {
+    /**
+     * Whether the handler lost a lock to another write: it waited past the session's {@code lock_timeout}, lost a
+     * deadlock, or found a {@code NOWAIT} row taken.
+     */
+    static boolean isLockContention(Throwable failure) {
         Throwable cause = failure;
         for (int depth = 0; depth < 16 && cause != null; depth++) {
             if (cause instanceof PessimisticLockingFailureException) return true;
-            if (cause instanceof SQLException sql && "55P03".equals(sql.getSQLState())) return true;
+            if (cause instanceof SQLException sql
+                    && ("55P03".equals(sql.getSQLState()) || "40P01".equals(sql.getSQLState()))) return true;
             cause = cause.getCause();
         }
         return false;

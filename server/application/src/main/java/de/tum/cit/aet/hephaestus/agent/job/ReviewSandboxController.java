@@ -83,12 +83,14 @@ public class ReviewSandboxController {
         var session = reviews.session(run);
         try {
             var upload = session.upload(request.getInputStream(), contentDigest);
-            response.setHeader("ETag", upload.etag());
             if (!upload.admitted()) {
+                response.setHeader("ETag", upload.etag());
                 response.setStatus(HttpStatus.CONFLICT.value());
                 return;
             }
             reviews.measured(run, new SandboxResult(exitCode, session.result(), "", timedOut, Duration.ZERO));
+            // Only now: the runner reads a 409 with this ETag as confirmed, and an error answer keeps the headers.
+            response.setHeader("ETag", upload.etag());
             response.setStatus(HttpStatus.NO_CONTENT.value());
         } catch (IOException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid result archive", exception);
