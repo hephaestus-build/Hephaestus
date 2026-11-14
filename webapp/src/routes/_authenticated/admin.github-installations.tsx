@@ -66,7 +66,11 @@ function AdminGitHubInstallationsPage() {
 	const adoptMutation = useMutation({
 		...filedUnder(DECISION_MUTATION_KEY, adoptGitHubInstallationMutation()),
 		onSuccess: (installation) => {
-			toast.success(`Adopted the installation on ${installation.accountLogin}`);
+			toast.success(
+				installation.accountLogin === undefined
+					? "Adopted the installation."
+					: `Adopted the installation on ${installation.accountLogin}`,
+			);
 		},
 		onError: (error) => reportError(error, "We could not adopt the installation. Try again."),
 		onSettled: settle,
@@ -74,7 +78,11 @@ function AdminGitHubInstallationsPage() {
 	const declineMutation = useMutation({
 		...filedUnder(DECISION_MUTATION_KEY, declineGitHubInstallationMutation()),
 		onSuccess: (installation) => {
-			toast.success(`Declined the installation on ${installation.accountLogin}`);
+			toast.success(
+				installation.accountLogin === undefined
+					? "Declined the installation."
+					: `Declined the installation on ${installation.accountLogin}`,
+			);
 		},
 		onError: (error) => reportError(error, "We could not decline the installation. Try again."),
 		onSettled: settle,

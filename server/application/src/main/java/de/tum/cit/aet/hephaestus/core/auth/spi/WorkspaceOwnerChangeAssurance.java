@@ -5,6 +5,9 @@ package de.tum.cit.aet.hephaestus.core.auth.spi;
  * an owner. Only the workspace knows the member's current role, so it asks at the point of decision, under its lock.
  */
 public interface WorkspaceOwnerChangeAssurance {
-    /** Returns when the caller signed in recently; otherwise records the refusal and throws the step-up problem. */
-    void requireRecentSignIn();
+    /**
+     * Returns when the caller signed in recently; otherwise records the refusal, naming {@code workspaceId}, and
+     * throws the step-up problem.
+     */
+    void requireRecentSignIn(long workspaceId);
 }

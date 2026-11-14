@@ -1378,6 +1378,12 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                                 + " WHERE installation_id = 991003",
                         Boolean.class))
                 .isTrue();
+        assertThat(jdbc.queryForObject(
+                        "SELECT account_login IS NULL AND account_id IS NULL AND status = 'ADOPTED'"
+                                + " FROM github_installation_request WHERE installation_id = 991002",
+                        Boolean.class))
+                .as("the target's adopted installation keeps only what stops a replay")
+                .isTrue();
         assertThat(jdbc.queryForObject("""
                 SELECT display_name='deleted-account' AND primary_email IS NULL AND primary_email_verified_at IS NULL
                   AND time_zone IS NULL AND ai_choice IS NULL AND ai_choice_at IS NULL

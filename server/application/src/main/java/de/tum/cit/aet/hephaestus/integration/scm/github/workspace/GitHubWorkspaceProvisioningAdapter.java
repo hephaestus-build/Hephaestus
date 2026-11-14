@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 @Component
 @ConditionalOnServerRole
@@ -120,7 +121,13 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
         }
     }
 
+    /**
+     * One transaction holds the installation record's lock through the purge, so an adoption either commits its
+     * workspace before the purge looks for it or finds no record afterwards. The inbox handler's write transaction
+     * already holds it; a direct caller gets its own.
+     */
     @Override
+    @Transactional
     public void onInstallationDeleted(@Nullable Long installationId) {
         if (installationId == null) {
             log.warn("Skipped installation deletion: reason=nullInstallationId");
@@ -136,6 +143,10 @@ public class GitHubWorkspaceProvisioningAdapter implements ProvisioningListener 
         // Slack/Outline content, org-tier teams and organization memberships, derived
         // practice/activity
         // rows, and the Connection's stored credentials.
+        // Lock the record first: an adoption that is creating this installation's workspace commits before the purge
+        // looks for it, and one that has not started finds no record afterwards. A workspace deletion takes these two
+        // locks in the other order; PostgreSQL then aborts one of the two, and both the inbox and the owner retry.
+        installationRequests.lockForUninstall(installationId);
         githubLifecycleListener.purgeWorkspaceForInstallation(installationId);
         installationRequests.forgetUnadopted(installationId);
 

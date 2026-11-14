@@ -8,7 +8,13 @@ import org.jspecify.annotations.Nullable;
 @Schema(description = "A GitHub App installation and an instance admin's decision on it")
 public record GitHubInstallationRequestDTO(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) long installationId,
-        @NonNull String accountLogin,
+
+        @Schema(
+                description =
+                        "Absent for a personal account whose adopted workspace was deleted, or whose person was erased")
+        @Nullable
+        String accountLogin,
+
         @NonNull GitHubInstallationAccountKind accountKind,
         @NonNull GitHubInstallationRequestStatus status,
         @NonNull Instant receivedAt,

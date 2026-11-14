@@ -4203,11 +4203,11 @@ export const GitHubInstallationClaimSchema = {
 	properties: {
 		outcome: {
 			type: "string",
-			enum: ["READY", "AWAITING_APPROVAL", "SETTING_UP"],
+			enum: ["READY", "AWAITING_APPROVAL", "DECLINED", "SETTING_UP"],
 		},
 		workspaceSlug: {
 			type: "string",
-			description: "The installation's workspace, when it has one",
+			description: "The installation's workspace, given only to its members and to instance admins",
 		},
 	},
 	required: ["outcome"],
@@ -4237,6 +4237,8 @@ export const GitHubInstallationRequestSchema = {
 		},
 		accountLogin: {
 			type: "string",
+			description:
+				"Absent for a personal account whose adopted workspace was deleted, or whose person was erased",
 		},
 		decidedAt: {
 			type: "string",
@@ -4259,7 +4261,7 @@ export const GitHubInstallationRequestSchema = {
 			description: "The workspace that the adoption created; absent once that workspace is deleted",
 		},
 	},
-	required: ["accountKind", "accountLogin", "installationId", "receivedAt", "status"],
+	required: ["accountKind", "installationId", "receivedAt", "status"],
 } as const;
 
 export const GitHubProviderSchema = {

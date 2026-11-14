@@ -143,6 +143,7 @@ These migration entries also apply to a host that upgrades to 1.0:
 - *Stop every role before moving conversation turns to sandboxes*. Stop the old loop before migration, remove the old workloads, and run the template isolation gate.
 - *Log records name their trace in `trace.id` and `span.id`*: update your log queries, saved searches and collector rules that read `context.traceId` or `context.spanId`.
 - *Log context uses consistent field names*: update your log queries that read `context.installation_id` or `context.proxy.apiProtocol`.
+- *Stop every role before clearing personal logins from GitHub App installation records*. The previous server cannot read an installation record without a login.
 
 ## Cut over to 1.0.0
 

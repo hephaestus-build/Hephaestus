@@ -51,6 +51,14 @@ const ACCOUNT_KIND_LABELS: Record<GitHubInstallationRequest["accountKind"], stri
 	ORGANIZATION: "Organization",
 };
 
+/**
+ * A personal account's login is removed when its adopted workspace is deleted or the person is erased. The record
+ * stays, so the row still says what it was.
+ */
+function accountOf(installation: GitHubInstallationRequest): string {
+	return installation.accountLogin ?? "Removed personal account";
+}
+
 function formatDay(value: Date | undefined): string {
 	const date = asDate(value);
 	return date ? formatDate(date) : "–";
@@ -88,7 +96,7 @@ function InstallationActions({
 	onAdopt,
 	onDecline,
 }: InstallationActionsProps) {
-	const login = installation.accountLogin;
+	const login = accountOf(installation);
 	if (installation.status === "ADOPTED") {
 		const slug = installation.workspaceSlug;
 		return slug === undefined ? (
@@ -179,7 +187,7 @@ export function AdminGitHubInstallationsTable({
 				<TableBody>
 					{installations.map((installation) => (
 						<TableRow key={installation.installationId}>
-							<TableCell className="font-medium">{installation.accountLogin}</TableCell>
+							<TableCell className="font-medium">{accountOf(installation)}</TableCell>
 							<TableCell className="text-muted-foreground">
 								{ACCOUNT_KIND_LABELS[installation.accountKind]}
 							</TableCell>

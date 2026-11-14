@@ -264,6 +264,9 @@ class GitHubInstallationAdoptionIntegrationTest extends AbstractWorkspaceIntegra
 
         lifecycle.purgeWorkspace(adopted.getWorkspaceSlug());
         assertThat(request().getWorkspaceId()).isNull();
+        // The record still stops a replay, and a personal account's login and id leave with the workspace.
+        assertThat(request().getAccountLogin()).isNull();
+        assertThat(request().getAccountId()).isNull();
 
         installationCreated(ProvisioningListener.AccountType.USER);
 
@@ -272,6 +275,77 @@ class GitHubInstallationAdoptionIntegrationTest extends AbstractWorkspaceIntegra
                         .filter(w -> w.getStatus() != Workspace.WorkspaceStatus.PURGED))
                 .isEmpty();
         assertThat(request().getStatus()).isEqualTo(GitHubInstallationRequestStatus.ADOPTED);
+    }
+
+    @Test
+    void shouldFindNoInstallationToAdoptAfterItsUninstall() {
+        installationCreated(ProvisioningListener.AccountType.ORGANIZATION);
+        Account admin = persistInstanceAdmin("Late admin");
+        givenGitHubConfirms("Organization");
+
+        installationDeleted();
+        adopt(admin, HttpStatus.NOT_FOUND);
+
+        assertThat(requests.findById(installationId)).isEmpty();
+        assertThat(workspaces.findByInstallationId(installationId)).isEmpty();
+    }
+
+    @Test
+    void shouldPurgeTheAdoptedWorkspaceWhenItsInstallationIsUninstalled() {
+        installationCreated(ProvisioningListener.AccountType.ORGANIZATION);
+        Account admin = persistInstanceAdmin("Adopting admin");
+        givenGitHubConfirms("Organization");
+        adopt(admin, HttpStatus.OK);
+        Workspace adopted = workspaces.findByInstallationId(installationId).orElseThrow();
+
+        installationDeleted();
+
+        assertThat(workspaces.findById(adopted.getId()))
+                .map(Workspace::getStatus)
+                .contains(Workspace.WorkspaceStatus.PURGED);
+        assertThat(request().getStatus()).isEqualTo(GitHubInstallationRequestStatus.ADOPTED);
+    }
+
+    @Test
+    void shouldTellTheInstallerOfADeclinedInstallationThatItWasDeclined() {
+        installationCreated(ProvisioningListener.AccountType.USER);
+        Account admin = persistInstanceAdmin("Deciding admin");
+        client.post()
+                .uri("/admin/github-installations/{id}/decline", installationId)
+                .headers(headers -> headers.setBearerAuth("mock-jwt-admin-" + admin.getId()))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+        Account installer = linkedToGitHub("Installer", 4242L);
+        givenGitHubConfirms("User");
+        givenTheCodeProves(4242L, true);
+
+        assertThat(claim(installer, HttpStatus.OK).outcome()).isEqualTo(GitHubInstallationClaimDTO.Outcome.DECLINED);
+        assertThat(request().getStatus()).isEqualTo(GitHubInstallationRequestStatus.DECLINED);
+    }
+
+    @Test
+    void shouldNameTheWorkspaceOnlyToItsMembers() {
+        installationCreated(ProvisioningListener.AccountType.ORGANIZATION);
+        Account admin = persistInstanceAdmin("Adopting admin");
+        givenGitHubConfirms("Organization");
+        adopt(admin, HttpStatus.OK);
+        Workspace adopted = workspaces.findByInstallationId(installationId).orElseThrow();
+        Account outsider = linkedToGitHub("Organization member", 4242L);
+        givenTheCodeProves(4242L, true);
+
+        GitHubInstallationClaimDTO notMember = claim(outsider, HttpStatus.OK);
+        assertThat(notMember.outcome()).isEqualTo(GitHubInstallationClaimDTO.Outcome.READY);
+        assertThat(notMember.workspaceSlug()).isNull();
+
+        Membership membership = new Membership();
+        membership.setWorkspace(adopted);
+        membership.setId(new Membership.Id(adopted.getId(), id(outsider)));
+        membership.setRole(Membership.WorkspaceRole.MEMBER);
+        workspaceMembershipRepository.save(membership);
+
+        assertThat(claim(outsider, HttpStatus.OK).workspaceSlug()).isEqualTo(adopted.getWorkspaceSlug());
     }
 
     @Test
@@ -393,6 +467,10 @@ class GitHubInstallationAdoptionIntegrationTest extends AbstractWorkspaceIntegra
     private void installationCreated(ProvisioningListener.AccountType type) {
         transactions.executeWithoutResult(status -> provisioning.onInstallationCreated(
                 new ProvisioningListener.InstallationData(installationId, accountId, login, type, null, List.of())));
+    }
+
+    private void installationDeleted() {
+        transactions.executeWithoutResult(status -> provisioning.onInstallationDeleted(installationId));
     }
 
     private GitHubInstallationRequest request() {

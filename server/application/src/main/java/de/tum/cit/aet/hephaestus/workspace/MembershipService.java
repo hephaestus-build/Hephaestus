@@ -341,7 +341,7 @@ public class MembershipService {
         boolean takesOwner = current == Membership.WorkspaceRole.OWNER && target != Membership.WorkspaceRole.OWNER;
         boolean lowersOwnRole = takesOwner && Long.valueOf(accountId).equals(CurrentAccount.idOrNull());
         if (grantsOwner || (takesOwner && !lowersOwnRole)) {
-            ownerChangeAssurance.getObject().requireRecentSignIn();
+            ownerChangeAssurance.getObject().requireRecentSignIn(workspace.getId());
         }
     }
 
