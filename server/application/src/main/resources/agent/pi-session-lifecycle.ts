@@ -1,5 +1,7 @@
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 
+import { diagnose, errorKind } from "./pi-diagnostics.ts";
+
 /** The custom entry type that binds a native session file to the review it belongs to. */
 export const REVIEW_SESSION_ENTRY = "hephaestus.review-session";
 
@@ -42,4 +44,17 @@ export function scheduleDeadline(timeoutMs: number, onTimeout: () => void) {
 /** A session that would not stop, so no later session may start. Its class is its diagnostic name. */
 export class SessionUnsettledError extends Error {
 	override name = "SessionUnsettledError";
+}
+
+// Pi rejects prompts while the previous run is active.
+export async function abortSession(session: AgentSession): Promise<void> {
+	session.clearQueue();
+	// A compaction in flight is a model call of its own that `abort()` leaves running, and the
+	// session is not idle until it ends; the next turn compacts again if it must, inside its own share.
+	session.abortCompaction();
+	try {
+		await session.abort();
+	} catch (error) {
+		diagnose("session.abort_failed", { error: errorKind(error) });
+	}
 }
