@@ -7,6 +7,10 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,6 +31,26 @@ public class ItemIndexService {
     public Optional<ItemRef> findSource(long workspaceId, String kind, long sourceId) {
         return repository.findSource(workspaceId, kind, sourceId).map(ItemIndexService::ref);
     }
+
+    /** The workspace's items among {@code itemIds}, keyed by id; an unknown id is absent. */
+    @Transactional(readOnly = true)
+    public Map<Long, ItemRef> findAll(long workspaceId, Collection<Long> itemIds) {
+        var found = new HashMap<Long, ItemRef>();
+        repository
+                .findByWorkspaceIdAndIdIn(workspaceId, List.copyOf(itemIds))
+                .forEach(item -> found.put(item.getId(), ref(item)));
+        return Map.copyOf(found);
+    }
+
+    /** The workspace's item, removed or not. */
+    @Transactional(readOnly = true)
+    public Optional<IndexedItem> find(long workspaceId, long itemId) {
+        return repository
+                .findByIdAndWorkspaceId(itemId, workspaceId)
+                .map(item -> new IndexedItem(ref(item), item.getRemovedAt() != null));
+    }
+
+    public record IndexedItem(ItemRef ref, boolean removed) {}
 
     public ItemRef upsert(ItemRegistration registration) {
         Long parentId = registration.parentId();
