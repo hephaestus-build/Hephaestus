@@ -6756,11 +6756,13 @@ void test("each cancel worker calls the one cancel workflow, which runs only gra
 		const workflow = asRecord(parseDocument(source).toJSON(), file);
 		for (const [key, definition] of Object.entries(asRecord(workflow.jobs, "jobs"))) {
 			const worker = asRecord(definition, key);
-			if (!key.startsWith("fail-fast-")) {
+			if (!key.startsWith("fail-fast-") && worker.uses !== `./${CANCEL_WORKFLOW}`) {
 				continue;
 			}
 			count += 1;
 			assert.ok(isCancelWorker(worker), `${file}#${key}`);
+			// Each caller needs only its own leg, so the cancel starts when that leg fails.
+			assert.deepEqual(worker.needs, [key.replace(/^fail-fast-/u, "")], `${file}#${key}`);
 			assert.deepEqual(worker.permissions, { actions: "write" }, `${file}#${key}`);
 			assert.equal("with" in worker || "secrets" in worker, false, `${file}#${key}`);
 		}
@@ -6776,6 +6778,12 @@ void test("each cancel worker calls the one cancel workflow, which runs only gra
 	assert.equal(jobs.length, 1);
 	const job = asRecord(jobs[0], "cancel job");
 	assert.equal(job["runs-on"], "ubuntu-slim");
+	assert.equal(
+		job.if,
+		`\${{ always() }}`,
+		"the caller decided; an implicit success() must not skip",
+	);
+	assert.equal(job.needs, undefined);
 	assert.deepEqual(job.permissions, { actions: "write" });
 	const steps = asArray(job.steps, "cancel steps");
 	assert.equal(steps.length, 1);
