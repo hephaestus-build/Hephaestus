@@ -82,7 +82,7 @@ public class ProfileChangeQuery {
     private List<ProfileChangeDTO> readChanges(
             long workspaceId, long accountId, OverviewWindow window, PracticeStandingService.History history) {
         var projected = history.from(window.since()).permittedViews().stream()
-                .filter(v -> window.contains(v.result().getRecordedAt()))
+                .filter(v -> window.contains(v.result().recordedAt()))
                 .toList();
         var snapshots = practiceStandingService.getStandingSnapshots(
                 workspaceId, List.of(window.since(), window.until()), history);
@@ -100,10 +100,10 @@ public class ProfileChangeQuery {
                         ProfileOverviewRepository.FirstOpportunity::getRecordedAt));
         var feedback = feedbackFacts.find(workspaceId, accountId, window.until(), window);
         var cited = new LinkedHashSet<Long>();
-        projected.forEach(v -> cited.add(v.result().getItemId()));
+        projected.forEach(v -> cited.add(v.result().itemId()));
         feedback.evidenceByFeedback()
                 .values()
-                .forEach(v -> v.forEach(r -> cited.add(r.result().getItemId())));
+                .forEach(v -> v.forEach(r -> cited.add(r.result().itemId())));
         Stream.concat(
                         feedback.resolutionByFeedback().values().stream(),
                         feedback.resolutionBeforeByFeedback().values().stream())

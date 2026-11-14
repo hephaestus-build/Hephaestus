@@ -52,7 +52,8 @@ public class PracticePageFeedbackBasis {
         var rows = results.findByWorkspaceIdAndIdIn(
                 workspaceId,
                 edges.stream().map(FeedbackBasis::getResultId).distinct().toList());
-        var permitted = visibility.permitsShown(workspaceId, rows, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        var permitted = visibility.permitsShown(
+                workspaceId, rows.stream().map(Result::facts).toList(), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
         Map<UUID, Result> byId = rows.stream().collect(Collectors.toMap(Result::getId, Function.identity()));
         Map<UUID, List<FeedbackBasis>> byFeedback =
                 edges.stream().collect(Collectors.groupingBy(FeedbackBasis::getFeedbackId));
@@ -152,7 +153,8 @@ public class PracticePageFeedbackBasis {
         }
         var developers = withEvidence.stream().map(Feedback::getDeveloperId).collect(Collectors.toSet());
         var later = basis.findLaterResults(workspaceId, developers, oldest.get(), now);
-        var allowed = visibility.permitsAll(workspaceId, later, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        var allowed = visibility.permitsAll(
+                workspaceId, later.stream().map(Result::facts).toList(), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
         var practiceIds = withEvidence.stream()
                 .map(piece -> Objects.requireNonNull(evidence.get(piece.getId())))
                 .filter(support -> !support.isEmpty())
@@ -162,6 +164,7 @@ public class PracticePageFeedbackBasis {
                 workspaceId,
                 later.stream()
                         .filter(row -> allowed.contains(row.getId()) && practiceIds.contains(row.getPracticeId()))
+                        .map(Result::facts)
                         .toList());
         Map<UUID, WorkResolution> resolved = new LinkedHashMap<>();
         for (Feedback piece : withEvidence) {
@@ -171,8 +174,8 @@ public class PracticePageFeedbackBasis {
             }
             long practiceId = support.getFirst().getPracticeId();
             var current = opportunities.stream()
-                    .filter(view -> view.result().getPracticeId() == practiceId)
-                    .filter(view -> Objects.equals(view.result().getDeveloperId(), piece.getDeveloperId()))
+                    .filter(view -> view.result().practiceId() == practiceId)
+                    .filter(view -> Objects.equals(view.result().developerId(), piece.getDeveloperId()))
                     .toList();
             resolved.put(
                     piece.getId(),

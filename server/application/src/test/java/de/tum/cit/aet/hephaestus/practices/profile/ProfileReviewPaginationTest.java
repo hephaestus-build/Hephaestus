@@ -13,7 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
-import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.result.ResultPresentation;
 import de.tum.cit.aet.hephaestus.practices.result.ResultQueries;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
@@ -104,10 +104,10 @@ class ProfileReviewPaginationTest extends BaseUnitTest {
         ArgumentCaptor<Collection<UUID>> counted = ArgumentCaptor.captor();
         verify(results).placesOnWork(eq(1L), eq(7L), counted.capture());
         assertThat(counted.getValue()).containsExactlyInAnyOrderElementsOf(shownReviews);
-        ArgumentCaptor<Collection<Result>> checked = ArgumentCaptor.captor();
+        ArgumentCaptor<Collection<ResultFacts>> checked = ArgumentCaptor.captor();
         verify(authorization).permitsAll(eq(1L), checked.capture(), any());
         assertThat(checked.getValue())
-                .extracting(Result::getReviewId)
+                .extracting(ResultFacts::reviewId)
                 .containsExactlyInAnyOrderElementsOf(shownReviews);
     }
 
@@ -140,7 +140,7 @@ class ProfileReviewPaginationTest extends BaseUnitTest {
                 .toList();
         var visible = IntStream.range(0, count)
                 .filter(i -> !hidden.contains(i))
-                .mapToObj(i -> data.get(i).result().getId())
+                .mapToObj(i -> data.get(i).result().id())
                 .collect(Collectors.toSet());
         when(developer.currentDeveloperId()).thenReturn(Optional.of(7L));
         when(results.forDevelopersSince(eq(1L), eq(List.of(7L)), eq(since), eq(false)))
@@ -151,9 +151,9 @@ class ProfileReviewPaginationTest extends BaseUnitTest {
         });
         when(authorization.permitsAll(eq(1L), anyCollection(), any())).thenReturn(visible);
         when(views.views(eq(1L), anyCollection())).thenAnswer(i -> {
-            Collection<Result> rows = i.getArgument(1);
-            var ids = rows.stream().map(r -> r.getId()).toList();
-            return data.stream().filter(v -> ids.contains(v.result().getId())).toList();
+            Collection<ResultFacts> rows = i.getArgument(1);
+            var ids = rows.stream().map(ResultFacts::id).toList();
+            return data.stream().filter(v -> ids.contains(v.result().id())).toList();
         });
         when(presentation.lists(eq(1L), anyCollection(), any())).thenAnswer(i -> {
             Collection<ResultView> selected = i.getArgument(1);
@@ -161,16 +161,16 @@ class ProfileReviewPaginationTest extends BaseUnitTest {
                     .map(v -> {
                         var r = v.result();
                         return new ResultListDTO(
-                                r.getId(),
-                                r.getReviewId(),
+                                r.id(),
+                                r.reviewId(),
                                 v.item(),
                                 v.practice().getSlug(),
                                 "Practice",
-                                r.getOutcome(),
+                                r.outcome(),
                                 null,
                                 null,
                                 ReviewOrigin.EVENT,
-                                r.getRecordedAt(),
+                                r.recordedAt(),
                                 Currentness.CURRENT,
                                 null,
                                 null,

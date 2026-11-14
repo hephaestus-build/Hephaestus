@@ -503,7 +503,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 .isNull();
         assertThat(resultRows.forDevelopersSince(
                         item.workspaceId(), List.of(scenario.account().getId()), Instant.EPOCH, true))
-                .extracting(row -> row.getId())
+                .extracting(row -> row.id())
                 .doesNotContain(historical.getId());
     }
 
@@ -824,7 +824,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
             assertThat(historical.getEndReason()).isEqualTo(ResultEndReason.WORK_CHANGED);
             assertThat(resultRows.forDevelopersSince(
                             item.workspaceId(), List.of(scenario.account().getId()), Instant.EPOCH, true))
-                    .extracting(row -> row.getId())
+                    .extracting(row -> row.id())
                     .doesNotContain(historical.getId());
         } finally {
             release.countDown();
@@ -967,7 +967,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         assertThat(result.getEndReason()).isEqualTo(ResultEndReason.WORK_CHANGED);
         assertThat(resultRows.forDevelopersSince(
                         item.workspaceId(), List.of(scenario.account().getId()), Instant.EPOCH, true))
-                .extracting(row -> row.getId())
+                .extracting(row -> row.id())
                 .doesNotContain(result.getId());
     }
 
@@ -3539,7 +3539,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 .isNull();
         assertThat(resultRows.forDevelopersSince(
                         item.workspaceId(), List.of(scenario.account().getId()), Instant.EPOCH, true))
-                .extracting(row -> row.getId())
+                .extracting(row -> row.id())
                 .doesNotContain(current.getId());
         var occasions = jdbc.queryForList(
                 "SELECT id FROM item_event WHERE workspace_id=? AND item_id=?",
@@ -3585,7 +3585,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         assertThat(retired.getEndReason()).isEqualTo(ResultEndReason.WORK_CHANGED);
         assertThat(resultRows.forDevelopersSince(
                         item.workspaceId(), List.of(scenario.account().getId()), Instant.EPOCH, true))
-                .extracting(row -> row.getId())
+                .extracting(row -> row.id())
                 .doesNotContain(current.getId());
         assertThat(applicationEvents.stream(ItemSourceObserved.class)
                         .filter(event -> event.workspaceId() == item.workspaceId() && event.itemId() == item.itemId()))

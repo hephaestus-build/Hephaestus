@@ -5,7 +5,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
-import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewPracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
@@ -40,11 +40,11 @@ public class ResultViewQuery {
 
     public Optional<ResultView> latestForDeveloper(long workspaceId, long developerId) {
         return results.findFirstByWorkspaceIdAndDeveloperIdOrderByRecordedAtDescIdDesc(workspaceId, developerId)
-                .map(result -> views(workspaceId, List.of(result)).getFirst());
+                .map(result -> views(workspaceId, List.of(result.facts())).getFirst());
     }
 
     /** Views with the feedback mode that each observation was sealed in, for standing and every developer read. */
-    public List<ResultView> views(long workspaceId, Collection<Result> results) {
+    public List<ResultView> views(long workspaceId, Collection<ResultFacts> results) {
         return views(workspaceId, results, true);
     }
 
@@ -52,21 +52,21 @@ public class ResultViewQuery {
      * Views for an operator's read of review results, lineage and scan reports. It shows every observation and
      * never asks whether one counts, so it skips the feedback-mode read: each view's mode is null.
      */
-    public List<ResultView> operatorViews(long workspaceId, Collection<Result> results) {
+    public List<ResultView> operatorViews(long workspaceId, Collection<ResultFacts> results) {
         return views(workspaceId, results, false);
     }
 
-    private List<ResultView> views(long workspaceId, Collection<Result> results, boolean sealedFeedbackModes) {
+    private List<ResultView> views(long workspaceId, Collection<ResultFacts> results, boolean sealedFeedbackModes) {
         if (results.isEmpty()) {
             return List.of();
         }
-        if (results.stream().anyMatch(result -> result.getWorkspaceId() != workspaceId)) {
+        if (results.stream().anyMatch(result -> result.workspaceId() != workspaceId)) {
             throw new IllegalArgumentException("Results do not belong to the workspace");
         }
         Map<Long, Practice> practiceById = practices
                 .findByWorkspaceIdAndIdIn(
                         workspaceId,
-                        results.stream().map(Result::getPracticeId).distinct().toList())
+                        results.stream().map(ResultFacts::practiceId).distinct().toList())
                 .stream()
                 .collect(Collectors.toMap(practice -> Objects.requireNonNull(practice.getId()), Function.identity()));
         // A practice arrives with its current version; only a result pinned to an older one needs a read.
@@ -76,7 +76,7 @@ public class ResultViewQuery {
             versionById.put(Objects.requireNonNull(current.getId()), current);
         });
         var pinnedElsewhere = results.stream()
-                .map(Result::getPracticeVersionId)
+                .map(ResultFacts::practiceVersionId)
                 .filter(Objects::nonNull)
                 .filter(id -> !versionById.containsKey(id))
                 .distinct()
@@ -86,12 +86,13 @@ public class ResultViewQuery {
                     .forEach(version -> versionById.put(Objects.requireNonNull(version.getId()), version));
         var reviewById = reviews
                 .findAllById(
-                        results.stream().map(Result::getReviewId).distinct().toList())
+                        results.stream().map(ResultFacts::reviewId).distinct().toList())
                 .stream()
                 .filter(review -> review.getWorkspaceId() == workspaceId)
                 .collect(Collectors.toMap(Review::getId, Function.identity()));
         var itemById = references.referenced(
-                workspaceId, results.stream().map(Result::getItemId).distinct().toList());
+                workspaceId,
+                results.stream().map(ResultFacts::itemId).distinct().toList());
         var activeItems = itemById.entrySet().stream()
                 .filter(entry -> entry.getValue().active())
                 .collect(Collectors.toMap(
@@ -106,12 +107,12 @@ public class ResultViewQuery {
         return results.stream()
                 .map(result -> new ResultView(
                         result,
-                        Objects.requireNonNull(practiceById.get(result.getPracticeId())),
-                        versionById.get(result.getPracticeVersionId()),
-                        Objects.requireNonNull(reviewById.get(result.getReviewId())),
-                        Objects.requireNonNull(itemById.get(result.getItemId())).reference(),
-                        Objects.requireNonNull(sourceStates.get(result.getId())),
-                        sealedModes.get(new ReviewPractice.Id(result.getReviewId(), result.getPracticeId()))))
+                        Objects.requireNonNull(practiceById.get(result.practiceId())),
+                        versionById.get(result.practiceVersionId()),
+                        Objects.requireNonNull(reviewById.get(result.reviewId())),
+                        Objects.requireNonNull(itemById.get(result.itemId())).reference(),
+                        Objects.requireNonNull(sourceStates.get(result.id())),
+                        sealedModes.get(new ReviewPractice.Id(result.reviewId(), result.practiceId()))))
                 .toList();
     }
 }

@@ -1,6 +1,9 @@
 package de.tum.cit.aet.hephaestus.practices.result;
 
-import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.resultBuilder;
+import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.ended;
+import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.migrated;
+import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.onItem;
+import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.withoutPracticeVersion;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
@@ -13,7 +16,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
-import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.result.dto.PracticeStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.result.dto.PracticeStandingResultDTO;
 import de.tum.cit.aet.hephaestus.practices.result.trend.PracticeTrendService;
@@ -79,33 +82,33 @@ class PracticeStandingServiceTest {
         when(results.forDevelopersSince(eq(1L), anyCollection(), any(Instant.class), anyBoolean()))
                 .thenAnswer(i -> data.stream().map(ResultView::result).toList());
         when(views.views(eq(1L), anyCollection())).thenAnswer(i -> {
-            Collection<Result> rows = i.getArgument(1);
-            var ids = rows.stream().map(Result::getId).toList();
-            return data.stream().filter(v -> ids.contains(v.result().getId())).toList();
+            Collection<ResultFacts> rows = i.getArgument(1);
+            var ids = rows.stream().map(ResultFacts::id).toList();
+            return data.stream().filter(v -> ids.contains(v.result().id())).toList();
         });
         Mockito.lenient()
                 .when(visibility.permitsHistory(eq(1L), anyCollection(), any()))
                 .thenAnswer(i -> {
-                    Collection<Result> rows = i.getArgument(1);
-                    return rows.stream().map(Result::getId).collect(Collectors.toSet());
+                    Collection<ResultFacts> rows = i.getArgument(1);
+                    return rows.stream().map(ResultFacts::id).collect(Collectors.toSet());
                 });
         Mockito.lenient()
                 .when(visibility.permitsAt(eq(1L), anyCollection(), any(), any()))
                 .thenAnswer(i -> {
-                    Collection<Result> rows = i.getArgument(1);
-                    return rows.stream().map(Result::getId).collect(Collectors.toSet());
+                    Collection<ResultFacts> rows = i.getArgument(1);
+                    return rows.stream().map(ResultFacts::id).collect(Collectors.toSet());
                 });
         Mockito.lenient()
                 .when(visibility.permitsStandingAt(eq(1L), anyCollection(), any()))
                 .thenAnswer(i -> {
-                    Collection<Result> rows = i.getArgument(1);
-                    return rows.stream().map(Result::getId).collect(Collectors.toSet());
+                    Collection<ResultFacts> rows = i.getArgument(1);
+                    return rows.stream().map(ResultFacts::id).collect(Collectors.toSet());
                 });
         Mockito.lenient()
                 .when(visibility.permitsAll(eq(1L), anyCollection(), any()))
                 .thenAnswer(i -> {
-                    Collection<Result> rows = i.getArgument(1);
-                    return rows.stream().map(Result::getId).collect(Collectors.toSet());
+                    Collection<ResultFacts> rows = i.getArgument(1);
+                    return rows.stream().map(ResultFacts::id).collect(Collectors.toSet());
                 });
     }
 
@@ -166,16 +169,14 @@ class PracticeStandingServiceTest {
     void anEndedClaimDoesNotBecomeCurrentAgain() {
         add(1, ResultOutcome.NOT_MET);
         var prior = data.getFirst();
-        prior.result().end(ResultEndReason.REPLACED, now.minusSeconds(1));
+        end(prior, ResultEndReason.REPLACED, now.minusSeconds(1));
         add(2, ResultOutcome.MET);
         var latest = data.getLast();
-        latest.review().setItemId(prior.result().getItemId());
+        latest.review().setItemId(prior.result().itemId());
         data.set(
                 data.size() - 1,
                 new ResultView(
-                        resultBuilder(latest.result())
-                                .itemId(prior.result().getItemId())
-                                .build(),
+                        onItem(latest.result(), prior.result().itemId()),
                         latest.practice(),
                         latest.version(),
                         latest.review(),
@@ -204,7 +205,7 @@ class PracticeStandingServiceTest {
     @Test
     void theWindowDoesNotCountEvidenceRecordedAfterItsEdge() {
         add(1, ResultOutcome.MET);
-        var edge = data.getFirst().result().getRecordedAt();
+        var edge = data.getFirst().result().recordedAt();
         add(2, ResultOutcome.NOT_MET);
         var snapshots = service.getStandingSnapshots(1L, 7L, List.of(edge, now));
         assertThat(snapshots.getFirst().dtos().getFirst().standing()).isEqualTo(PracticeStanding.STRENGTH);
@@ -221,13 +222,20 @@ class PracticeStandingServiceTest {
         var standing = only(service.getStandingSnapshots(1L, 7L, List.of(now)).getFirst());
         assertThat(standing.dto().standing()).isEqualTo(before);
         assertThat(standing.dto().basis()).isEqualTo(StandingBasis.CURRENT_REVIEWS);
-        assertThat(standing.liveRuns()).extracting(ResultView::result).containsExactly(live.result());
+        assertThat(standing.liveRuns())
+                .extracting(view -> view.result().id())
+                .containsExactly(live.result().id());
         // The quote follows the current claim: the clean re-review, not the replaced problem.
         assertThat(standing.dto().toWorkOn()).isEmpty();
         assertThat(standing.dto().strengths())
                 .extracting(PracticeStandingResultDTO::resultId)
-                .containsExactly(requested.result().getId());
-        assertThat(live.result().getEndReason()).isEqualTo(ResultEndReason.REPLACED);
+                .containsExactly(requested.result().id());
+        // Records are values: the replaced claim is the list's current entry, not the copy held in `live`.
+        assertThat(data)
+                .filteredOn(view -> view.result().id().equals(live.result().id()))
+                .singleElement()
+                .extracting(view -> view.result().endReason())
+                .isEqualTo(ResultEndReason.REPLACED);
     }
 
     @Test
@@ -240,7 +248,9 @@ class PracticeStandingServiceTest {
 
         var standing = only(service.getStandingSnapshots(1L, 7L, List.of(now)).getFirst());
         assertThat(standing.dto().standing()).isEqualTo(before);
-        assertThat(standing.liveRuns()).extracting(ResultView::result).containsExactly(live.result());
+        assertThat(standing.liveRuns())
+                .extracting(view -> view.result().id())
+                .containsExactly(live.result().id());
         assertThat(standing.dto().strengths()).isEmpty();
     }
 
@@ -274,7 +284,9 @@ class PracticeStandingServiceTest {
         replace(live, 5, ResultOutcome.MET, ReviewOrigin.REQUEST, ResultEndReason.WORK_CHANGED);
 
         var standing = only(service.getStandingSnapshots(1L, 7L, List.of(now)).getFirst());
-        assertThat(standing.liveRuns()).extracting(ResultView::result).containsExactly(live.result());
+        assertThat(standing.liveRuns())
+                .extracting(view -> view.result().id())
+                .containsExactly(live.result().id());
         assertThat(standing.dto().toWorkOn()).isEmpty();
     }
 
@@ -283,12 +295,14 @@ class PracticeStandingServiceTest {
         add(1, ResultOutcome.NOT_MET);
         var live = data.getFirst();
         var before = card().standing();
-        live.result().end(ResultEndReason.WORK_CHANGED, now.minusSeconds(1));
+        end(live, ResultEndReason.WORK_CHANGED, now.minusSeconds(1));
 
         var standing = only(service.getStandingSnapshots(1L, 7L, List.of(now)).getFirst());
         assertThat(standing.dto().standing()).isEqualTo(before);
         assertThat(standing.dto().basis()).isEqualTo(StandingBasis.CURRENT_REVIEWS);
-        assertThat(standing.liveRuns()).extracting(ResultView::result).containsExactly(live.result());
+        assertThat(standing.liveRuns())
+                .extracting(view -> view.result().id())
+                .containsExactly(live.result().id());
         // The ended result counts, but it is no current proof to quote.
         assertThat(standing.dto().toWorkOn()).isEmpty();
     }
@@ -299,7 +313,9 @@ class PracticeStandingServiceTest {
         var newer = replace(data.getFirst(), 5, ResultOutcome.MET, ReviewOrigin.EVENT, ResultEndReason.WORK_CHANGED);
 
         var standing = only(service.getStandingSnapshots(1L, 7L, List.of(now)).getFirst());
-        assertThat(standing.liveRuns()).extracting(ResultView::result).containsExactly(newer.result());
+        assertThat(standing.liveRuns())
+                .extracting(view -> view.result().id())
+                .containsExactly(newer.result().id());
     }
 
     @ParameterizedTest
@@ -308,7 +324,7 @@ class PracticeStandingServiceTest {
             names = {"REPAIRED", "REMOVED"})
     void shouldEndTheLiveRunAtARepairOrRemoval(ResultEndReason reason) {
         add(1, ResultOutcome.NOT_MET);
-        data.getFirst().result().end(reason, now.minusSeconds(1));
+        end(data.getFirst(), reason, now.minusSeconds(1));
 
         var standing = only(service.getStandingSnapshots(1L, 7L, List.of(now)).getFirst());
         assertThat(standing.dto().standing()).isEqualTo(PracticeStanding.NOT_OBSERVED);
@@ -320,17 +336,18 @@ class PracticeStandingServiceTest {
         add(1, ResultOutcome.NOT_MET);
         var live = data.getFirst();
         var outranked = ReviewTestData.view(
-                live.result().getItemId(),
+                live.result().itemId(),
                 UUID.randomUUID(),
                 now.minus(Duration.ofDays(7)),
                 new ItemKind("scm.pull_request"),
                 ResultOutcome.MET);
-        outranked.result().end(ResultEndReason.OUTRANKED, outranked.result().getRecordedAt());
-        data.add(outranked);
+        data.add(ended(outranked, ResultEndReason.OUTRANKED, outranked.result().recordedAt()));
         replace(live, 5, ResultOutcome.MET, ReviewOrigin.REQUEST, ResultEndReason.WORK_CHANGED);
 
         var standing = only(service.getStandingSnapshots(1L, 7L, List.of(now)).getFirst());
-        assertThat(standing.liveRuns()).extracting(ResultView::result).containsExactly(live.result());
+        assertThat(standing.liveRuns())
+                .extracting(view -> view.result().id())
+                .containsExactly(live.result().id());
     }
 
     @Test
@@ -350,7 +367,9 @@ class PracticeStandingServiceTest {
         var newer = replace(requested, 6, ResultOutcome.MET, ReviewOrigin.EVENT, ResultEndReason.REPLACED);
 
         var standing = only(service.getStandingSnapshots(1L, 7L, List.of(now)).getFirst());
-        assertThat(standing.liveRuns()).extracting(ResultView::result).containsExactly(newer.result());
+        assertThat(standing.liveRuns())
+                .extracting(view -> view.result().id())
+                .containsExactly(newer.result().id());
     }
 
     @Test
@@ -358,16 +377,17 @@ class PracticeStandingServiceTest {
         add(2, ResultOutcome.NOT_MET);
         var live = data.getFirst();
         var late = ReviewTestData.view(
-                live.result().getItemId(),
+                live.result().itemId(),
                 UUID.randomUUID(),
                 now.minus(Duration.ofDays(9)),
                 new ItemKind("scm.pull_request"),
                 ResultOutcome.MET);
-        late.result().end(ResultEndReason.OUTRANKED, late.result().getRecordedAt());
-        data.add(late);
+        data.add(ended(late, ResultEndReason.OUTRANKED, late.result().recordedAt()));
 
         var standing = only(service.getStandingSnapshots(1L, 7L, List.of(now)).getFirst());
-        assertThat(standing.liveRuns()).extracting(ResultView::result).containsExactly(live.result());
+        assertThat(standing.liveRuns())
+                .extracting(view -> view.result().id())
+                .containsExactly(live.result().id());
     }
 
     @Test
@@ -395,10 +415,7 @@ class PracticeStandingServiceTest {
         data.set(
                 1,
                 new ResultView(
-                        resultBuilder(view.result())
-                                .evidenceVersion((short) 0)
-                                .practiceVersionId(null)
-                                .build(),
+                        withoutPracticeVersion(migrated(view.result())),
                         view.practice(),
                         null,
                         view.review(),
@@ -469,7 +486,7 @@ class PracticeStandingServiceTest {
     @Test
     void shouldReadNoStandingWhenTheStandingFencesRefuseARowThatAWorkChangeEnded() {
         add(1, ResultOutcome.NOT_MET);
-        data.getFirst().result().end(ResultEndReason.WORK_CHANGED, now.minusSeconds(1));
+        end(data.getFirst(), ResultEndReason.WORK_CHANGED, now.minusSeconds(1));
         assertThat(card().standing()).isEqualTo(PracticeStanding.MIXED);
         when(visibility.permitsStandingAt(eq(1L), anyCollection(), any())).thenReturn(Set.of());
 
@@ -512,18 +529,23 @@ class PracticeStandingServiceTest {
         return snapshot.practices().values().iterator().next();
     }
 
+    /** Ends the result of {@code view}, which the history holds, as ResultClaimWriter does. */
+    private void end(ResultView view, ResultEndReason reason, Instant at) {
+        data.set(data.indexOf(view), ended(view, reason, at));
+    }
+
     // Writes what ResultClaimWriter writes when a later review claims the same work: the prior claim ends at the
     // later recording.
     private ResultView replace(
             ResultView prior, long day, ResultOutcome outcome, ReviewOrigin origin, ResultEndReason reason) {
         var next = ReviewTestData.view(
-                prior.result().getItemId(),
+                prior.result().itemId(),
                 UUID.randomUUID(),
                 now.minus(Duration.ofDays(10 - day)),
                 new ItemKind("scm.pull_request"),
                 outcome);
         next.review().setOrigin(origin);
-        prior.result().end(reason, next.result().getRecordedAt());
+        end(prior, reason, next.result().recordedAt());
         data.add(next);
         return next;
     }
@@ -545,7 +567,7 @@ class PracticeStandingServiceTest {
         data.set(
                 index,
                 new ResultView(
-                        resultBuilder(view.result()).evidenceVersion((short) 0).build(),
+                        migrated(view.result()),
                         view.practice(),
                         view.version(),
                         view.review(),

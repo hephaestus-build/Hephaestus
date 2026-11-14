@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.dto.OwnFeedbackRefDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.ReviewBoundFeedbackDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Problem;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.model.ResultMark;
 import de.tum.cit.aet.hephaestus.practices.result.dto.EvidenceCitationDTO;
 import de.tum.cit.aet.hephaestus.practices.result.dto.ProblemDTO;
@@ -99,7 +100,7 @@ public class ResultPresentation {
 
     public List<ResultListDTO> lists(long workspaceId, Collection<ResultView> views, Set<UUID> permitted) {
         if (views.isEmpty()) return List.of();
-        var ids = views.stream().map(v -> v.result().getId()).toList();
+        var ids = views.stream().map(v -> v.result().id()).toList();
         var marked = marks.findByWorkspaceIdAndResultIdInAndRemovedAtIsNull(workspaceId, ids).stream()
                 .collect(Collectors.groupingBy(ResultMark::getResultId));
         var children = problems.findByWorkspaceIdAndResultIdInOrderByResultIdAscPositionAsc(workspaceId, ids).stream()
@@ -107,9 +108,9 @@ public class ResultPresentation {
         return views.stream()
                 .map(v -> list(
                         v,
-                        permitted.contains(v.result().getId()),
-                        marked.getOrDefault(v.result().getId(), List.of()),
-                        children.getOrDefault(v.result().getId(), List.of())))
+                        permitted.contains(v.result().id()),
+                        marked.getOrDefault(v.result().id(), List.of()),
+                        children.getOrDefault(v.result().id(), List.of())))
                 .toList();
     }
 
@@ -117,16 +118,16 @@ public class ResultPresentation {
         var r = v.result();
         var freshness = freshness(v);
         return new ResultListDTO(
-                r.getId(),
-                r.getReviewId(),
+                r.id(),
+                r.reviewId(),
                 v.item(),
                 v.practice().getSlug(),
                 name(v),
-                r.getOutcome(),
-                r.getSeverity(),
-                permitted ? r.getSummary() : null,
+                r.outcome(),
+                r.severity(),
+                permitted ? r.summary() : null,
                 v.review().getOrigin(),
-                r.getRecordedAt(),
+                r.recordedAt(),
                 freshness.currentness(),
                 freshness.unverifiableReason(),
                 freshness.capturedAt(),
@@ -147,8 +148,9 @@ public class ResultPresentation {
                 .orElse(null);
     }
 
-    public ResultDetailDTO detail(ResultView v, boolean permitted) {
-        var r = v.result();
+    /** The detail of {@code r}, which {@code v} views: the detail shows the full record that a view does not carry. */
+    public ResultDetailDTO detail(Result r, ResultView v, boolean permitted) {
+        if (!r.getId().equals(v.result().id())) throw new IllegalArgumentException("The view shows another result");
         var freshness = freshness(v);
         return new ResultDetailDTO(
                 r.getId(),
@@ -178,7 +180,7 @@ public class ResultPresentation {
                 coverage(r, permitted),
                 r.getEndedAt(),
                 r.getEndReason(),
-                ownFeedback(r.getWorkspaceId(), List.of(r)).getOrDefault(r.getId(), List.of()));
+                ownFeedback(r.getWorkspaceId(), List.of(r.facts())).getOrDefault(r.getId(), List.of()));
     }
 
     public @Nullable ResultEvidenceDTO evidence(Result r, boolean permitted) {
@@ -234,13 +236,13 @@ public class ResultPresentation {
      * is left out, as the profile overview and the response guard read it: it accepts no response. A
      * restore returns it with its earlier response.
      */
-    public Map<UUID, List<OwnFeedbackRefDTO>> ownFeedback(long workspaceId, Collection<Result> results) {
+    public Map<UUID, List<OwnFeedbackRefDTO>> ownFeedback(long workspaceId, Collection<ResultFacts> results) {
         Map<UUID, List<OwnFeedbackRefDTO>> byResult = new HashMap<>();
         results.stream()
-                .filter(result -> result.getWorkspaceId() == workspaceId && result.getDeveloperId() != null)
+                .filter(result -> result.workspaceId() == workspaceId && result.developerId() != null)
                 .collect(Collectors.groupingBy(
-                        result -> Objects.requireNonNull(result.getDeveloperId()),
-                        Collectors.mapping(Result::getId, Collectors.toSet())))
+                        result -> Objects.requireNonNull(result.developerId()),
+                        Collectors.mapping(ResultFacts::id, Collectors.toSet())))
                 .forEach((developer, ids) -> {
                     var rows = communication.ownFeedback(workspaceId, developer, ids).stream()
                             .filter(row -> FeedbackState.VISIBLE_TO_DEVELOPER.contains(row.getState()))

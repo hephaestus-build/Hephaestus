@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.PracticeItemOptions;
+import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ResultPresentation;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
@@ -43,7 +44,8 @@ public class OwnItemTraceQueryService {
         var found = results.findByWorkspaceIdAndReviewIdOrderByRecordedAtAscIdAsc(ws, reviewId).stream()
                 .filter(r -> Objects.equals(r.getDeveloperId(), account) && r.getItemId() == itemId)
                 .toList();
-        var permitted = authorization.permitsAll(ws, found, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        var permitted = authorization.permitsAll(
+                ws, found.stream().map(Result::facts).toList(), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
         var visible = found.stream().filter(r -> permitted.contains(r.getId())).toList();
         boolean requested = review.getKind() == ReviewKind.ITEM
                 && review.getOrigin() == ReviewOrigin.REQUEST
@@ -59,7 +61,8 @@ public class OwnItemTraceQueryService {
                                 .map(e -> new OwnItemEventDTO(
                                         e.name(), displayName(item.kind(), e.name()), e.occurredAt()))
                                 .toList(),
-                presentation.lists(ws, views.views(ws, visible), permitted));
+                presentation.lists(
+                        ws, views.views(ws, visible.stream().map(Result::facts).toList()), permitted));
     }
 
     private String displayName(String kind, String eventName) {

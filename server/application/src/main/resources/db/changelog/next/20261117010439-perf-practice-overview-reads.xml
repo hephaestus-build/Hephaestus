@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1794681479825-1" author="hephaestus">
+    <comment>Each result records the source kinds that it rests on, cited or consulted, so a history read checks its sources without loading its evidence. The kinds are written once: at insert, or by the schema owner when the upgrade records them for an earlier row. A recorded value never changes. One change set keeps the guard from running before its column exists.</comment>
+    <addColumn tableName="result">
+      <column name="source_kinds" type="text[]"/>
+    </addColumn>
+    <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.guard_result_facts() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF (to_jsonb(NEW)-'ended_at'-'end_reason'-'severity'-'developer_id'-'source_kinds') IS DISTINCT FROM
+    (to_jsonb(OLD)-'ended_at'-'end_reason'-'severity'-'developer_id'-'source_kinds') THEN
+  RAISE EXCEPTION 'result facts are immutable' USING ERRCODE='55000'; END IF;
+ IF NEW.source_kinds IS DISTINCT FROM OLD.source_kinds AND (OLD.source_kinds IS NOT NULL
+    OR NOT pg_has_role(current_user, (SELECT relowner FROM pg_class WHERE oid=TG_RELID), 'MEMBER')) THEN
+  RAISE EXCEPTION 'result source kinds are recorded once, at insert or by the upgrade' USING ERRCODE='55000'; END IF;
+ IF NEW.developer_id IS DISTINCT FROM OLD.developer_id AND NOT EXISTS(
+   SELECT 1 FROM account old_account,account target WHERE old_account.id=OLD.developer_id
+    AND old_account.status='UNCLAIMED' AND target.id=NEW.developer_id AND target.status IN ('ACTIVE','BLOCKED')) THEN
+  RAISE EXCEPTION 'result developer can move only from an unclaimed account to its claimed owner' USING ERRCODE='55000'; END IF;
+ RETURN NEW;
+END $$;
+    ]]></sql>
+    <rollback>
+      <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.guard_result_facts() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF (to_jsonb(NEW)-'ended_at'-'end_reason'-'severity'-'developer_id') IS DISTINCT FROM
+    (to_jsonb(OLD)-'ended_at'-'end_reason'-'severity'-'developer_id') THEN
+  RAISE EXCEPTION 'result facts are immutable' USING ERRCODE='55000'; END IF;
+ IF NEW.developer_id IS DISTINCT FROM OLD.developer_id AND NOT EXISTS(
+   SELECT 1 FROM account old_account,account target WHERE old_account.id=OLD.developer_id
+    AND old_account.status='UNCLAIMED' AND target.id=NEW.developer_id AND target.status IN ('ACTIVE','BLOCKED')) THEN
+  RAISE EXCEPTION 'result developer can move only from an unclaimed account to its claimed owner' USING ERRCODE='55000'; END IF;
+ RETURN NEW;
+END $$;
+    ]]></sql>
+      <dropColumn tableName="result" columnName="source_kinds"/>
+    </rollback>
+  </changeSet>
+  <changeSet id="1794681479825-2" author="hephaestus" runInTransaction="false">
+    <comment>The upgrade records the source kinds of the results that earlier releases wrote, with the extraction that new results use. It runs outside one transaction and commits as it writes, so it holds no lock on the whole table while older servers still run. A row that it has not reached yet reads its kinds from its evidence.</comment>
+    <customChange class="de.tum.cit.aet.hephaestus.practices.model.ResultSourceKindsChange"/>
+    <rollback>
+      <stop>The recorded source kinds cannot be told apart from the kinds that new results recorded at insert. Restore the database backup from before this upgrade.</stop>
+    </rollback>
+  </changeSet>
+</databaseChangeLog>

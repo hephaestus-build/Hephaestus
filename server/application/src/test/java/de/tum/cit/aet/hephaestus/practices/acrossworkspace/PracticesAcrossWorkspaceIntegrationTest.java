@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
-import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.result.ResultSourceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData.Scenario;
@@ -52,10 +52,10 @@ class PracticesAcrossWorkspaceIntegrationTest extends BaseIntegrationTest {
                 .thenAnswer(i -> sameWorkspace(i.getArgument(0), i.getArgument(1)));
     }
 
-    static Set<UUID> sameWorkspace(long workspaceId, Collection<Result> rows) {
+    static Set<UUID> sameWorkspace(long workspaceId, Collection<ResultFacts> rows) {
         return rows.stream()
-                .filter(r -> r.getWorkspaceId() == workspaceId)
-                .map(Result::getId)
+                .filter(r -> r.workspaceId() == workspaceId)
+                .map(ResultFacts::id)
                 .collect(Collectors.toSet());
     }
 

@@ -85,6 +85,6 @@ public final class ReviewTestData {
                 null,
                 null,
                 null);
-        return new ResultView(result, practice, version, review, item, Freshness.current(null), null);
+        return new ResultView(result.facts(), practice, version, review, item, Freshness.current(null), null);
     }
 }

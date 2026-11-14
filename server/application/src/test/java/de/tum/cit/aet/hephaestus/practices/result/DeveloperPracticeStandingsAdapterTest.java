@@ -12,7 +12,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
-import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.result.trend.PracticeTrendService;
 import de.tum.cit.aet.hephaestus.practices.result.trend.TrendProperties;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewTestData;
@@ -69,9 +69,9 @@ class DeveloperPracticeStandingsAdapterTest {
         when(results.forDevelopersSince(eq(1L), anyCollection(), any(Instant.class), anyBoolean()))
                 .thenAnswer(i -> data.stream().map(ResultView::result).toList());
         when(views.views(eq(1L), anyCollection())).thenAnswer(i -> {
-            Collection<Result> rows = i.getArgument(1);
-            var ids = rows.stream().map(Result::getId).toList();
-            return data.stream().filter(v -> ids.contains(v.result().getId())).toList();
+            Collection<ResultFacts> rows = i.getArgument(1);
+            var ids = rows.stream().map(ResultFacts::id).toList();
+            return data.stream().filter(v -> ids.contains(v.result().id())).toList();
         });
         lenient()
                 .when(visibility.permitsHistory(eq(1L), anyCollection(), any()))
@@ -154,7 +154,7 @@ class DeveloperPracticeStandingsAdapterTest {
                 view.sealedFeedbackMode());
     }
 
-    private static Object ids(Collection<Result> rows) {
-        return rows.stream().map(Result::getId).collect(Collectors.toSet());
+    private static Object ids(Collection<ResultFacts> rows) {
+        return rows.stream().map(ResultFacts::id).collect(Collectors.toSet());
     }
 }

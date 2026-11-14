@@ -962,7 +962,7 @@ class ReviewEndToEndIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         reviewId,
                         practice.getId()),
                 List.copyOf(freshness
-                        .statesFor(
+                        .currentness(
                                 workspace.getId(),
                                 jdbc.query(
                                         "SELECT id FROM result WHERE review_id = ? AND practice_id = ? AND ended_at IS NULL",

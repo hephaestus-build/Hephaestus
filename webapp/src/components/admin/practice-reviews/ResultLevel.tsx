@@ -234,7 +234,9 @@ export function ResultLevel({
 							)}
 							{/* A not met result's passages are its problems'. Its own section stands only when it
 						    cites something of its own, or when nothing else on the sheet would say that
-						    nothing was quoted. Hidden evidence is neither: the server sends none of it. */}
+						    nothing was quoted. Hidden evidence is neither: the server sends none of it. A
+						    Does not apply proven by its Applies when check quotes nothing: its explanation is
+						    its reason, so no section says that nothing was quoted. */}
 							{record.evidenceHidden ? (
 								<Section level={4} size="sm" title="Evidence">
 									<p className="text-sm text-muted-foreground">
@@ -242,7 +244,8 @@ export function ResultLevel({
 									</p>
 								</Section>
 							) : (
-								(citations.length > 0 || problems.length === 0) && (
+								(citations.length > 0 ||
+									(problems.length === 0 && !record.evidence?.inapplicability)) && (
 									<Section level={4} size="sm" title="Evidence">
 										<ResultEvidence citations={citations} headingLevel={5} />
 									</Section>

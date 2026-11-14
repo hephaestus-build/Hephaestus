@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewPracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
@@ -33,7 +34,7 @@ import tools.jackson.databind.JsonNode;
 @Service
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-public class ResultFreshness {
+public class ResultFreshness implements FreshnessRead {
     private final ReviewPracticeRepository practices;
     private final ProductItemQuery items;
 
@@ -45,8 +46,9 @@ public class ResultFreshness {
      * The freshness of these results, with the reason that an unverifiable one cannot be checked and when each capture
      * read the work, for a caller that has already read their active items.
      */
-    public Map<UUID, Freshness> freshness(long workspaceId, Collection<Result> rows, Map<Long, ItemRef> activeItems) {
-        return freshnessFor(workspaceId, claims(rows), activeItems);
+    public Map<UUID, Freshness> freshness(
+            long workspaceId, Collection<ResultFacts> rows, Map<Long, ItemRef> activeItems) {
+        return freshnessFor(workspaceId, rows.stream().map(Claim::of).toList(), activeItems);
     }
 
     private static List<Claim> claims(Collection<Result> rows) {
@@ -68,9 +70,20 @@ public class ResultFreshness {
             UUID reviewId,
             long practiceId,
             long itemId,
-            @Nullable Instant endedAt) {}
+            @Nullable Instant endedAt) {
+        static Claim of(ResultFacts result) {
+            return new Claim(
+                    result.id(),
+                    result.workspaceId(),
+                    result.reviewId(),
+                    result.practiceId(),
+                    result.itemId(),
+                    result.endedAt());
+        }
+    }
 
-    public Map<UUID, Currentness> statesFor(long workspaceId, Collection<Claim> rows) {
+    @Override
+    public Map<UUID, Currentness> currentness(long workspaceId, Collection<Claim> rows) {
         return currentness(freshnessFor(workspaceId, rows));
     }
 

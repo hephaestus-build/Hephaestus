@@ -27,20 +27,8 @@ public final class ResultCitations {
     }
 
     public static List<JsonNode> all(Result result, List<Problem> problems) {
-        var citations = new ArrayList<>(all(result.getEvidence(), result.getExample()));
+        var citations = new ArrayList<>(result.citations());
         problems.forEach(problem -> problem.getCitations().forEach(citations::add));
         return List.copyOf(citations);
-    }
-
-    private static List<JsonNode> all(@Nullable JsonNode evidence, @Nullable JsonNode example) {
-        List<JsonNode> all = new ArrayList<>();
-        if (evidence != null) {
-            evidence.path("citations").forEach(all::add);
-            for (JsonNode question : evidence.path("openQuestions")) {
-                if (question.path("citation").isObject()) all.add(question.path("citation"));
-            }
-        }
-        if (example != null && example.path("citation").isObject()) all.add(example.path("citation"));
-        return List.copyOf(all);
     }
 }

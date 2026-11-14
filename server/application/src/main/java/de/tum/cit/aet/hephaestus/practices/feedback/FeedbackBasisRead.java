@@ -53,7 +53,8 @@ public class FeedbackBasisRead {
                 .distinct()
                 .toList();
         var support = ids.isEmpty() ? List.<Result>of() : results.findByWorkspaceIdAndIdIn(workspaceId, ids);
-        var permitted = evidence.permitsHistory(workspaceId, support, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        var permitted = evidence.permitsHistory(
+                workspaceId, support.stream().map(Result::facts).toList(), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
         var byResult = support.stream().collect(Collectors.toMap(Result::getId, Function.identity()));
         var byFeedback = edges.stream().collect(Collectors.groupingBy(FeedbackBasisRepository.ReadRow::feedbackId));
         Map<UUID, Snapshot> snapshots = new LinkedHashMap<>();
@@ -83,8 +84,12 @@ public class FeedbackBasisRead {
     }
 
     public List<FeedbackBasisDTO> bound(long workspaceId, Snapshot snapshot) {
-        var resultViews = views.views(workspaceId, snapshot.results()).stream()
-                .collect(Collectors.toMap(view -> view.result().getId(), view -> view));
+        var resultViews = views
+                .views(
+                        workspaceId,
+                        snapshot.results().stream().map(Result::facts).toList())
+                .stream()
+                .collect(Collectors.toMap(view -> view.result().id(), view -> view));
         return snapshot.edges().stream()
                 .map(edge -> new FeedbackBasisDTO(
                         edge.resultId(),

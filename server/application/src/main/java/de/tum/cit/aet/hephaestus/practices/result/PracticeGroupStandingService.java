@@ -205,7 +205,7 @@ public class PracticeGroupStandingService {
         for (String groupSlug : groupSlugs) {
             List<ResultView> evidence = evidenceByGroup.getOrDefault(groupSlug, List.of());
             Instant oldest = evidence.stream()
-                    .map(view -> view.result().getRecordedAt())
+                    .map(view -> view.result().recordedAt())
                     .min(Instant::compareTo)
                     .orElse(null);
             PracticeTrend direction = practiceTrendService.calculateGroup(
@@ -234,7 +234,7 @@ public class PracticeGroupStandingService {
         for (ResultView view : evidence) {
             artifactsByType
                     .computeIfAbsent(new ItemKind(view.item().kind()), ignored -> new HashSet<>())
-                    .add(view.result().getItemId());
+                    .add(view.result().itemId());
         }
         return artifactsByType.entrySet().stream()
                 .map(entry -> new FeedbackSourceCountDTO(

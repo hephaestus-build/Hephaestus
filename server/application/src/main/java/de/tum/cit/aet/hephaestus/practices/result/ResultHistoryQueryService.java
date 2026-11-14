@@ -199,7 +199,8 @@ public class ResultHistoryQueryService implements ResultHistoryQuery {
                             && itemsById.containsKey(r.getItemId())
                             && reviewsById.containsKey(r.getReviewId()))
                     .toList();
-            checks = authorization.checkAll(workspaceId, shown, purpose);
+            checks = authorization.checkAll(
+                    workspaceId, shown.stream().map(Result::facts).toList(), purpose);
             var ids = shown.stream().map(Result::getId).toList();
             if (!ids.isEmpty())
                 for (var mark : marks.findByWorkspaceIdAndResultIdInOrderByCreatedAtDescIdDesc(workspaceId, ids)) {
@@ -318,7 +319,8 @@ public class ResultHistoryQueryService implements ResultHistoryQuery {
         }
 
         private Map<UUID, Instant> captureTimes() {
-            var producers = authorization.producingJobs(workspaceId, rows);
+            var producers = authorization.producingJobs(
+                    workspaceId, rows.stream().map(Result::facts).toList());
             Map<UUID, HistoryCustodyQuery.Receipt> receipts = new HashMap<>();
             for (var row : rows) {
                 var check = checks.get(row.getId());

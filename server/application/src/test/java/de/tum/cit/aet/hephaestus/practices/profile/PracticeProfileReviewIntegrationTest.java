@@ -13,7 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRegistration;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.ReviewOn;
-import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData.Scenario;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
@@ -62,10 +62,10 @@ class PracticeProfileReviewIntegrationTest extends BaseIntegrationTest {
                         ArgumentMatchers.anyLong(), ArgumentMatchers.anyCollection(), ArgumentMatchers.any()))
                 .thenAnswer(i -> {
                     long ws = i.getArgument(0);
-                    Collection<Result> rows = i.getArgument(1);
+                    Collection<ResultFacts> rows = i.getArgument(1);
                     return rows.stream()
-                            .filter(r -> r.getWorkspaceId() == ws)
-                            .map(Result::getId)
+                            .filter(r -> r.workspaceId() == ws)
+                            .map(ResultFacts::id)
                             .collect(Collectors.toSet());
                 });
     }

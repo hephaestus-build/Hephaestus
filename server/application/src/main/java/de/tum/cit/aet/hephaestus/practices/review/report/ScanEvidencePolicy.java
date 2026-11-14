@@ -43,6 +43,7 @@ public class ScanEvidencePolicy {
     }
 
     public Set<UUID> permitted(long workspaceId, Collection<Result> rows) {
-        return authorization.permitsAll(workspaceId, rows, SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);
+        return authorization.permitsAll(
+                workspaceId, rows.stream().map(Result::facts).toList(), SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);
     }
 }

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.trace;
 
+import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.facts;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -75,7 +76,7 @@ class OwnItemTraceQueryServiceTest extends BaseUnitTest {
         var own = result(DEVELOPER, ITEM);
         var permitted = Set.of(own.getId());
         var review = givenReview(kind, ReviewOrigin.EVENT, DEVELOPER, List.of(own));
-        when(authorization.permitsAll(WORKSPACE, List.of(own), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+        when(authorization.permitsAll(WORKSPACE, facts(List.of(own)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .thenReturn(permitted);
         givenProjection(review, List.of(own), permitted);
         when(query.events(WORKSPACE, ITEM, PageRequest.ofSize(100)))
@@ -99,15 +100,15 @@ class OwnItemTraceQueryServiceTest extends BaseUnitTest {
                 DEVELOPER,
                 List.of(own, result(DEVELOPER + 1, ITEM), result(DEVELOPER, ITEM + 1)));
         var permitted = Set.of(own.getId());
-        when(authorization.permitsAll(WORKSPACE, List.of(own), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+        when(authorization.permitsAll(WORKSPACE, facts(List.of(own)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .thenReturn(permitted);
-        when(views.views(WORKSPACE, List.of(own))).thenReturn(List.of());
+        when(views.views(WORKSPACE, facts(List.of(own)))).thenReturn(List.of());
         when(presentation.lists(WORKSPACE, List.of(), permitted)).thenReturn(List.of());
         when(query.events(WORKSPACE, ITEM, PageRequest.ofSize(100))).thenReturn(new PageImpl<>(List.of()));
 
         assertThat(service.own(WORKSPACE, ITEM, reviewId).events()).isEmpty();
 
-        verify(authorization).permitsAll(WORKSPACE, List.of(own), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        verify(authorization).permitsAll(WORKSPACE, facts(List.of(own)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
         verify(query).requireItem(WORKSPACE, ITEM);
         verify(reviews).require(WORKSPACE, reviewId);
     }
@@ -116,7 +117,7 @@ class OwnItemTraceQueryServiceTest extends BaseUnitTest {
     void shouldRefuseAnEventReviewWhenItsOwnEvidenceIsNotPermitted() {
         var own = result(DEVELOPER, ITEM);
         givenReview("scm.pull_request", ReviewOrigin.EVENT, DEVELOPER, List.of(own));
-        when(authorization.permitsAll(WORKSPACE, List.of(own), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+        when(authorization.permitsAll(WORKSPACE, facts(List.of(own)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .thenReturn(Set.of());
 
         assertThatThrownBy(() -> service.own(WORKSPACE, ITEM, reviewId)).isInstanceOf(EntityNotFoundException.class);
@@ -178,7 +179,7 @@ class OwnItemTraceQueryServiceTest extends BaseUnitTest {
 
     private void givenProjection(ReviewRefDTO review, List<Result> visible, Set<UUID> permitted) {
         when(reviews.ref(any(Review.class))).thenReturn(review);
-        when(views.views(WORKSPACE, visible)).thenReturn(List.of());
+        when(views.views(WORKSPACE, facts(visible))).thenReturn(List.of());
         when(presentation.lists(WORKSPACE, List.of(), permitted)).thenReturn(List.of());
     }
 

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 
+import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.facts;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
@@ -1004,7 +1005,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         var reopened = resultData.result(scenario, ResultOutcome.MET, at, at, reopenedVersion.value());
         assertThat(results.forDevelopersSince(
                         item.workspaceId(), List.of(scenario.account().getId()), Instant.EPOCH, true))
-                .extracting(row -> row.getId())
+                .extracting(row -> row.id())
                 .containsExactly(reopened.getId());
 
         changeChildState(child.getId(), Issue.State.CLOSED, progressContext(fixture, type), type);
@@ -1128,10 +1129,10 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         assertThat(sourceAccess.permits(
                         item, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY, SourceReadAudience.HUMAN_RECORDED_STANDING))
                 .isTrue();
-        assertThat(visibility.permitsStandingAt(workspaceId, List.of(row), Instant.now()))
+        assertThat(visibility.permitsStandingAt(workspaceId, facts(List.of(row)), Instant.now()))
                 .containsExactly(row.getId());
         assertThat(visibility.permitsAt(
-                        workspaceId, List.of(row), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY, Instant.now()))
+                        workspaceId, facts(List.of(row)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY, Instant.now()))
                 .isEmpty();
 
         // The work is gone from the source: the human standing loses it too.
@@ -1139,7 +1140,7 @@ class ScmItemSourceIntegrationTest extends BaseIntegrationTest {
         assertThat(sourceAccess.permits(
                         item, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY, SourceReadAudience.HUMAN_RECORDED_STANDING))
                 .isFalse();
-        assertThat(visibility.permitsStandingAt(workspaceId, List.of(row), Instant.now()))
+        assertThat(visibility.permitsStandingAt(workspaceId, facts(List.of(row)), Instant.now()))
                 .isEmpty();
     }
 

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.result.ProblemRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultMarkService;
 import de.tum.cit.aet.hephaestus.practices.result.ResultQueryFilter;
@@ -148,8 +149,8 @@ class ReviewResultListVisibilityIntegrationTest extends BaseIntegrationTest {
         }
         when(evidenceAuthorization.permitsAll(eq(ws), anyCollection(), eq(SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW)))
                 .thenAnswer(invocation -> {
-                    Collection<Result> rows = invocation.getArgument(1);
-                    return rows.stream().map(Result::getId).collect(Collectors.toSet());
+                    Collection<ResultFacts> rows = invocation.getArgument(1);
+                    return rows.stream().map(ResultFacts::id).collect(Collectors.toSet());
                 });
         var small =
                 reads.measure(() -> results.list(ws, ResultQueryFilter.ALL, ResultSort.NEWEST, PageRequest.of(0, 32)));

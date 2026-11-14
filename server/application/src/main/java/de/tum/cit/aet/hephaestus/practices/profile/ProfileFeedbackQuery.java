@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.page.PracticePageFeedbackBasis;
+import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ResultView;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
 import de.tum.cit.aet.hephaestus.practices.result.trend.WorkResolution;
@@ -61,8 +62,13 @@ public class ProfileFeedbackQuery {
         var raw = feedbackEvidence.visibleEvidence(ws, ids);
         var changed = feedbackEvidence.practiceChangedAt(raw);
         var viewById = new HashMap<UUID, ResultView>();
-        views.views(ws, raw.values().stream().flatMap(List::stream).toList())
-                .forEach(view -> viewById.putIfAbsent(view.result().getId(), view));
+        views.views(
+                        ws,
+                        raw.values().stream()
+                                .flatMap(List::stream)
+                                .map(Result::facts)
+                                .toList())
+                .forEach(view -> viewById.putIfAbsent(view.result().id(), view));
         var projected = new LinkedHashMap<UUID, List<ResultView>>();
         raw.forEach((id, r) -> projected.put(
                 id,

@@ -56,7 +56,7 @@ public class ReuseCandidateQuery {
             return Optional.empty();
         if (freshness.states(workspaceId, List.of(result)).get(result.getId()) != Currentness.CURRENT)
             return Optional.empty();
-        var captured = sourceAuthorization.custody(result);
+        var captured = sourceAuthorization.custody(result.facts());
         if (!captured.complete()) return Optional.empty();
         return Optional.of(new ReusableResult(result, captured));
     }

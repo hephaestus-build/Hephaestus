@@ -56,6 +56,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopy;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopyRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData.Scenario;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationClaims;
@@ -248,7 +249,11 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
         when(evidenceAuthorization.permitsAll(anyLong(), anyCollection(), any()))
                 .thenAnswer(invocation -> sameWorkspace(invocation.getArgument(0), invocation.getArgument(1)));
         when(evidenceAuthorization.permitsForNewDelivery(anyLong(), anyCollection(), any()))
-                .thenAnswer(invocation -> sameWorkspace(invocation.getArgument(0), invocation.getArgument(1)));
+                .thenAnswer(invocation -> sameWorkspace(
+                        invocation.getArgument(0),
+                        invocation.<Collection<Result>>getArgument(1).stream()
+                                .map(Result::facts)
+                                .toList()));
         when(sourceFingerprints.supports(any())).thenReturn(true);
         when(sourceFingerprints.fingerprints(any(), any(), any(), any()))
                 .thenReturn(Map.of(new SourceKind("scm.pull-request.diff"), "a".repeat(64)));
@@ -626,10 +631,10 @@ class WeeklyDigestIntegrationTest extends BaseIntegrationTest {
                         .isEqualTo(feedback.id().toString()));
     }
 
-    private static Set<UUID> sameWorkspace(long workspaceId, Collection<Result> results) {
+    private static Set<UUID> sameWorkspace(long workspaceId, Collection<ResultFacts> results) {
         return results.stream()
-                .filter(result -> result.getWorkspaceId() == workspaceId)
-                .map(Result::getId)
+                .filter(result -> result.workspaceId() == workspaceId)
+                .map(ResultFacts::id)
                 .collect(Collectors.toSet());
     }
 

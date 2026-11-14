@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.practices.result;
 
+import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.facts;
 import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.resultBuilder;
+import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.withoutSourceKinds;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -44,9 +46,12 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -102,20 +107,20 @@ class ResultSourceAuthorizationTest extends BaseUnitTest {
 
     @Test
     void developerlessProofUsesItsCapturedCustodyAndCurrentSourceAuthority() {
-        assertThat(authorization.authorized(result, receipt(List.of()), purpose))
+        assertThat(authorization.authorized(result.facts(), receipt(List.of()), purpose))
                 .isTrue();
         when(source.permits(item, purpose)).thenReturn(false);
-        assertThat(authorization.authorized(result, receipt(List.of()), purpose))
+        assertThat(authorization.authorized(result.facts(), receipt(List.of()), purpose))
                 .isFalse();
     }
 
     @Test
     void unknownCustodyAndSuppressedProducerAreUnavailable() {
         assertThat(authorization.authorized(
-                        result, new HistoryCustody(false, false, List.of(), List.of(), List.of()), purpose))
+                        result.facts(), new HistoryCustody(false, false, List.of(), List.of(), List.of()), purpose))
                 .isFalse();
         when(suppression.isReviewJobSuppressed(job)).thenReturn(true);
-        assertThat(authorization.authorized(result, receipt(List.of()), purpose))
+        assertThat(authorization.authorized(result.facts(), receipt(List.of()), purpose))
                 .isFalse();
     }
 
@@ -128,15 +133,15 @@ class ResultSourceAuthorizationTest extends BaseUnitTest {
         when(accounts.find(7))
                 .thenReturn(Optional.of(new AccountDirectory.AccountView(
                         7, Account.Status.UNCLAIMED, "Person", AiChoice.CLOUD, null, true)));
-        assertThat(authorization.authorized(result, receipt(List.of(copy)), purpose))
+        assertThat(authorization.authorized(result.facts(), receipt(List.of(copy)), purpose))
                 .isTrue();
         when(accounts.find(7))
                 .thenReturn(Optional.of(new AccountDirectory.AccountView(
                         7, Account.Status.UNCLAIMED, "Person", AiChoice.NO_AI, null, true)));
-        assertThat(authorization.authorized(result, receipt(List.of(copy)), purpose))
+        assertThat(authorization.authorized(result.facts(), receipt(List.of(copy)), purpose))
                 .isFalse();
         when(suppression.isSuppressed(8, "native-7", null)).thenReturn(true);
-        assertThat(authorization.authorized(result, receipt(List.of(copy)), purpose))
+        assertThat(authorization.authorized(result.facts(), receipt(List.of(copy)), purpose))
                 .isFalse();
     }
 
@@ -148,10 +153,10 @@ class ResultSourceAuthorizationTest extends BaseUnitTest {
                 .thenReturn(List.of(new PersonIdentityResolver.Provider(8, "GITHUB", "https://github.com")));
         when(people.accountFor(new PersonIdentity(8, "274126659", null))).thenReturn(Optional.empty());
         when(people.accountFor(new PersonIdentity(8, "235263273", null))).thenReturn(Optional.empty());
-        assertThat(authorization.authorized(result, receipt(List.of(person, bot)), purpose))
+        assertThat(authorization.authorized(result.facts(), receipt(List.of(person, bot)), purpose))
                 .isTrue();
         when(suppression.isSuppressed(8, "235263273", null)).thenReturn(true);
-        assertThat(authorization.authorized(result, receipt(List.of(person, bot)), purpose))
+        assertThat(authorization.authorized(result.facts(), receipt(List.of(person, bot)), purpose))
                 .isFalse();
     }
 
@@ -161,20 +166,20 @@ class ResultSourceAuthorizationTest extends BaseUnitTest {
         when(people.providers())
                 .thenReturn(List.of(new PersonIdentityResolver.Provider(8, "GITHUB", "https://github.com")));
         when(people.accountFor(new PersonIdentity(8, "native-7", null))).thenReturn(Optional.of(7L));
-        assertThat(authorization.authorized(result, receipt(List.of(copy)), purpose))
+        assertThat(authorization.authorized(result.facts(), receipt(List.of(copy)), purpose))
                 .isFalse();
         when(accounts.find(7))
                 .thenReturn(Optional.of(new AccountDirectory.AccountView(
                         7, Account.Status.DELETING, "Person", AiChoice.CLOUD, null, true)));
-        assertThat(authorization.authorized(result, receipt(List.of(copy)), purpose))
+        assertThat(authorization.authorized(result.facts(), receipt(List.of(copy)), purpose))
                 .isFalse();
         when(accounts.find(7))
                 .thenReturn(Optional.of(new AccountDirectory.AccountView(
                         7, Account.Status.ACTIVE, "Person", AiChoice.CLOUD, null, true)));
-        assertThat(authorization.authorized(result, receipt(List.of(copy)), purpose))
+        assertThat(authorization.authorized(result.facts(), receipt(List.of(copy)), purpose))
                 .isTrue();
         when(suppression.isAccountSuppressed(7)).thenReturn(true);
-        assertThat(authorization.authorized(result, receipt(List.of(copy)), purpose))
+        assertThat(authorization.authorized(result.facts(), receipt(List.of(copy)), purpose))
                 .isFalse();
     }
 
@@ -185,10 +190,10 @@ class ResultSourceAuthorizationTest extends BaseUnitTest {
                 .thenReturn(List.of(new PersonIdentityResolver.Provider(8, "GITHUB", "https://github.com")));
         when(people.accountFor(new PersonIdentity(8, "native-7", null)))
                 .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT));
-        assertThat(authorization.authorized(result, receipt(List.of(copy)), purpose))
+        assertThat(authorization.authorized(result.facts(), receipt(List.of(copy)), purpose))
                 .isFalse();
         var foreign = new PersonCopyIdentity("GITHUB", "https://github.example", "native-7", null);
-        assertThat(authorization.authorized(result, receipt(List.of(foreign)), purpose))
+        assertThat(authorization.authorized(result.facts(), receipt(List.of(foreign)), purpose))
                 .isFalse();
     }
 
@@ -199,9 +204,58 @@ class ResultSourceAuthorizationTest extends BaseUnitTest {
         var proof = resultBuilder(result).evidence(evidence).build();
         var kind = new SourceKind("scm.pull-request.diff");
         when(catalog.isSourceUsePermitted(kind, purpose)).thenReturn(false);
-        assertThat(authorization.authorized(proof, receipt(List.of()), purpose)).isFalse();
+        assertThat(authorization.authorized(proof.facts(), receipt(List.of()), purpose))
+                .isFalse();
         when(catalog.isSourceUsePermitted(kind, purpose)).thenReturn(true);
-        assertThat(authorization.authorized(proof, receipt(List.of()), purpose)).isTrue();
+        assertThat(authorization.authorized(proof.facts(), receipt(List.of()), purpose))
+                .isTrue();
+    }
+
+    /**
+     * The evidence a history row carries, whether a decision on it asks the source check, and what it decides when the
+     * check is not asked. An unnamed source withholds the result before any source is asked.
+     */
+    record ProofCase(String name, String evidence, boolean asksSources, boolean unaskedDecision) {
+        @Override
+        public String toString() {
+            return name;
+        }
+    }
+
+    static Stream<ProofCase> proofCases() {
+        return Stream.of(
+                new ProofCase("cited", "{\"citations\":[{\"sourceKind\":\"scm.pull-request.diff\"}]}", true, false),
+                new ProofCase(
+                        "path check",
+                        "{\"citations\":[],\"inapplicability\":{\"consulted\":[\"scm.pull-request.diff\"]}}",
+                        true,
+                        false),
+                new ProofCase("unnamed citation", "{\"citations\":[{\"sourceKind\":7}]}", false, false),
+                new ProofCase("no source", "{}", false, true));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("proofCases")
+    void shouldDecideFromTheSourceKindsAndWithholdARowWithoutThem(ProofCase proof) {
+        var full =
+                resultBuilder(result).evidence(json.readTree(proof.evidence())).build();
+        var facts = full.facts();
+
+        // A history row that recorded no source kinds is withheld before any source is asked.
+        assertThat(authorization.authorized(withoutSourceKinds(facts), receipt(List.of()), purpose))
+                .isFalse();
+        if (!proof.asksSources()) {
+            assertThat(authorization.authorized(facts, receipt(List.of()), purpose))
+                    .isEqualTo(proof.unaskedDecision());
+            verify(catalog, never()).isSourceUsePermitted(any(), any());
+            return;
+        }
+        var kind = new SourceKind("scm.pull-request.diff");
+        for (boolean permitted : List.of(false, true)) {
+            when(catalog.isSourceUsePermitted(kind, purpose)).thenReturn(permitted);
+            assertThat(authorization.authorized(facts, receipt(List.of()), purpose))
+                    .isEqualTo(permitted);
+        }
     }
 
     @Test
@@ -219,7 +273,8 @@ class ResultSourceAuthorizationTest extends BaseUnitTest {
         when(source.permits(item, SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW)).thenReturn(true);
         assertThat(authorization.permitsHistory(1, history.getId(), SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW))
                 .isTrue();
-        assertThat(authorization.authorized(history, receipt(List.of()), SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW))
+        assertThat(authorization.authorized(
+                        history.facts(), receipt(List.of()), SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW))
                 .isFalse();
         when(assignments.findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(1, job, history.getPracticeId(), 2))
                 .thenReturn(Optional.of(ReviewItem.builder()
@@ -381,7 +436,7 @@ class ResultSourceAuthorizationTest extends BaseUnitTest {
         when(results.findByIdAndWorkspaceId(current.getId(), 1)).thenReturn(Optional.of(current));
         when(results.findByIdAndWorkspaceId(history.getId(), 1)).thenReturn(Optional.of(history));
 
-        assertThat(authorization.permitsHumanStanding(1, List.of(current, history)))
+        assertThat(authorization.permitsHumanStanding(1, List.of(current.facts(), history.facts())))
                 .containsExactlyInAnyOrder(current.getId(), history.getId());
         // Every AI, history and delivery reader keeps the AI choice.
         assertThat(authorization.permits(1, current.getId(), standingPurpose)).isFalse();
@@ -389,16 +444,18 @@ class ResultSourceAuthorizationTest extends BaseUnitTest {
                 .isFalse();
         assertThat(authorization.permitsHumanStanding(
                         2,
-                        List.of(current, resultBuilder(current).workspaceId(2).build())))
+                        List.of(
+                                current.facts(),
+                                resultBuilder(current).workspaceId(2).build().facts())))
                 .isEmpty();
 
         when(suppression.isAccountSuppressed(7)).thenReturn(true);
-        assertThat(authorization.permitsHumanStanding(1, List.of(current, history)))
+        assertThat(authorization.permitsHumanStanding(1, List.of(current.facts(), history.facts())))
                 .isEmpty();
         when(suppression.isAccountSuppressed(7)).thenReturn(false);
         when(source.permits(item, standingPurpose, SourceReadAudience.HUMAN_RECORDED_STANDING))
                 .thenReturn(false);
-        assertThat(authorization.permitsHumanStanding(1, List.of(current, history)))
+        assertThat(authorization.permitsHumanStanding(1, List.of(current.facts(), history.facts())))
                 .isEmpty();
     }
 
@@ -419,7 +476,8 @@ class ResultSourceAuthorizationTest extends BaseUnitTest {
         when(source.permits(item, purpose, SourceReadAudience.HUMAN_RECORDED_STANDING))
                 .thenReturn(true);
 
-        assertThat(authorization.permitsHumanStanding(1, List.of(history))).containsExactly(history.getId());
+        assertThat(authorization.permitsHumanStanding(1, List.of(history.facts())))
+                .containsExactly(history.getId());
         assertThat(authorization.permitsHistory(1, history.getId(), purpose)).isFalse();
         verify(source, never()).permits(item, purpose, SourceReadAudience.PROCESSING);
     }
@@ -473,7 +531,8 @@ class ResultSourceAuthorizationTest extends BaseUnitTest {
                                 .build(),
                         assignment(jobless, jobless.getPracticeId(), jobless.getId(), null)));
 
-        assertThat(authorization.producingJobs(1, List.of(produced, copied, legacy, jobless, foreign)))
+        assertThat(authorization.producingJobs(
+                        1, List.of(produced.facts(), copied.facts(), legacy.facts(), jobless.facts(), foreign.facts())))
                 .isEqualTo(Map.of(produced.getId(), job));
         verify(assignments).findByWorkspaceIdAndReviewIdIn(eq(1L), any());
         verifyNoInteractions(custody);
@@ -501,8 +560,8 @@ class ResultSourceAuthorizationTest extends BaseUnitTest {
         var batch = new Batch();
         var rows = batch.rows();
 
-        var admitted = authorization.permitsAll(1, rows, purpose);
-        var checks = authorization.checkAll(1, rows, purpose);
+        var admitted = authorization.permitsAll(1, facts(rows), purpose);
+        var checks = authorization.checkAll(1, facts(rows), purpose);
         // The reads of many rows read the items and the capture jobs at once, not one by one.
         verify(items, never()).find(eq(1L), anyLong());
         verify(suppression, never()).isReviewJobSuppressed(any());
@@ -522,7 +581,7 @@ class ResultSourceAuthorizationTest extends BaseUnitTest {
                 .filter(row -> row.getWorkspaceId() == 1)
                 .forEach(row -> assertThat(
                                 Objects.requireNonNull(checks.get(row.getId())).custody())
-                        .isEqualTo(authorization.custody(row)));
+                        .isEqualTo(authorization.custody(row.facts())));
     }
 
     /** A read of another workspace inside a read of this one shares none of its lookups. */
@@ -531,8 +590,9 @@ class ResultSourceAuthorizationTest extends BaseUnitTest {
         var batch = new Batch();
 
         var foreign = authorization.asOneRead(1, () -> {
-            assertThat(authorization.permitsAll(1, batch.rows(), purpose)).contains(batch.permitted.getId());
-            return authorization.permitsAll(2, List.of(batch.foreign), purpose);
+            assertThat(authorization.permitsAll(1, facts(batch.rows()), purpose))
+                    .contains(batch.permitted.getId());
+            return authorization.permitsAll(2, List.of(batch.foreign.facts()), purpose);
         });
 
         // Its work item is the same id, which is permitted in workspace 1, and workspace 2 does not hold it.

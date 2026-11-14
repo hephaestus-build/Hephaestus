@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.result;
 
+import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.facts;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -154,6 +155,29 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldReadAMigratedRowInAHistoryAsItsFullRecordReadsIt() {
+        var result = data.result(scenario, ResultOutcome.NOT_MET, Instant.now());
+        var retained = json.createObjectNode();
+        retained.set("citations", Objects.requireNonNull(result.getEvidence()).path("citations"));
+        migrated(result, retained.toString());
+        var full = results.findById(Objects.requireNonNull(result.getId()))
+                .orElseThrow()
+                .facts();
+
+        var history = results.forDevelopersSince(
+                scenario.workspace().getId(),
+                List.of(Objects.requireNonNull(result.getDeveloperId())),
+                Instant.EPOCH,
+                false);
+
+        assertThat(full.migratedHistory()).isTrue();
+        assertThat(history)
+                .filteredOn(row -> row.id().equals(result.getId()))
+                .singleElement()
+                .isEqualTo(full);
+    }
+
+    @Test
     void shouldReadMigratedTextAndQuotesAsUnverifiedHistoryWithoutCustodyReceipts() {
         var result = data.result(scenario, ResultOutcome.NOT_MET, Instant.now());
         var retained = json.createObjectNode();
@@ -297,7 +321,7 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
         assertThat(authorization.permits(
                         scenario.workspace().getId(), result.getId(), SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
                 .isFalse();
-        assertThat(authorization.permitsHumanStanding(scenario.workspace().getId(), List.of(stored(result))))
+        assertThat(authorization.permitsHumanStanding(scenario.workspace().getId(), facts(List.of(stored(result)))))
                 .isEmpty();
         get("/practices/reviews/results/" + result.getId())
                 .expectStatus()
@@ -353,9 +377,9 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
                 scenario.account().getId());
         var row = stored(result);
 
-        assertThat(authorization.permitsHumanStanding(workspaceId, List.of(row)))
+        assertThat(authorization.permitsHumanStanding(workspaceId, facts(List.of(row))))
                 .containsExactly(row.getId());
-        assertThat(visibility.permitsStandingAt(workspaceId, List.of(row), Instant.now()))
+        assertThat(visibility.permitsStandingAt(workspaceId, facts(List.of(row)), Instant.now()))
                 .containsExactly(row.getId());
         // History, delivery, review and conversation keep the AI choice.
         for (var purpose : SourceUsePurpose.values()) {
@@ -364,19 +388,19 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
             assertThat(authorization.permits(workspaceId, row.getId(), purpose)).isFalse();
         }
         assertThat(visibility.permitsAt(
-                        workspaceId, List.of(row), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY, Instant.now()))
+                        workspaceId, facts(List.of(row)), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY, Instant.now()))
                 .isEmpty();
-        assertThat(authorization.permitsHumanStanding(workspaceId + 1, List.of(row)))
+        assertThat(authorization.permitsHumanStanding(workspaceId + 1, facts(List.of(row))))
                 .isEmpty();
 
         when(source.permits(any(), any(), any())).thenReturn(false);
-        assertThat(authorization.permitsHumanStanding(workspaceId, List.of(row)))
+        assertThat(authorization.permitsHumanStanding(workspaceId, facts(List.of(row))))
                 .isEmpty();
         when(source.permits(any(), any(), any())).thenReturn(true);
         jdbc.update(
                 "UPDATE account SET status='DELETING' WHERE id=?",
                 scenario.account().getId());
-        assertThat(authorization.permitsHumanStanding(workspaceId, List.of(row)))
+        assertThat(authorization.permitsHumanStanding(workspaceId, facts(List.of(row))))
                 .isEmpty();
     }
 
@@ -389,7 +413,7 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
                 "UPDATE result SET practice_version_id=NULL WHERE workspace_id=? AND id=?",
                 workspaceId,
                 result.getId());
-        assertThat(visibility.permitsStandingAt(workspaceId, List.of(stored(result)), Instant.now()))
+        assertThat(visibility.permitsStandingAt(workspaceId, facts(List.of(stored(result))), Instant.now()))
                 .containsExactly(result.getId());
 
         var foreign = Objects.requireNonNull(
@@ -399,7 +423,7 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
                 foreign,
                 workspaceId,
                 result.getId());
-        assertThat(visibility.permitsStandingAt(workspaceId, List.of(stored(result)), Instant.now()))
+        assertThat(visibility.permitsStandingAt(workspaceId, facts(List.of(stored(result))), Instant.now()))
                 .isEmpty();
 
         historical(
@@ -407,7 +431,7 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
                 Objects.requireNonNull(scenario.practice().getCurrentVersion().getId()),
                 workspaceId,
                 result.getId());
-        assertThat(visibility.permitsStandingAt(workspaceId, List.of(stored(result)), Instant.now()))
+        assertThat(visibility.permitsStandingAt(workspaceId, facts(List.of(stored(result))), Instant.now()))
                 .containsExactly(result.getId());
         jdbc.update(
                 "INSERT INTO result_mark(id,workspace_id,result_id,kind,reason,created_at)"
@@ -415,7 +439,7 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
                 UUID.randomUUID(),
                 workspaceId,
                 result.getId());
-        assertThat(visibility.permitsStandingAt(workspaceId, List.of(stored(result)), Instant.now()))
+        assertThat(visibility.permitsStandingAt(workspaceId, facts(List.of(stored(result))), Instant.now()))
                 .isEmpty();
     }
 
@@ -427,19 +451,19 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
         // The migrated rows count as earlier reviews; the newest keeps current proof without a capture receipt.
         assertThat(expected).hasSize(5);
 
-        var all = statements(() -> authorization.permitsHumanStanding(workspaceId, rows));
+        var all = statements(() -> authorization.permitsHumanStanding(workspaceId, facts(rows)));
         var two = statements(
-                () -> authorization.permitsHumanStanding(workspaceId, List.of(rows.getFirst(), rows.getLast())));
+                () -> authorization.permitsHumanStanding(workspaceId, facts(List.of(rows.getFirst(), rows.getLast()))));
         assertThat(all.permitted()).isEqualTo(expected);
         // Read row by row, the four extra results would add two assignment queries each.
         assertThat(all.statements()).isEqualTo(two.statements());
 
-        var foreign = statements(() -> authorization.permitsHumanStanding(workspaceId + 1, rows));
+        var foreign = statements(() -> authorization.permitsHumanStanding(workspaceId + 1, facts(rows)));
         assertThat(foreign.permitted()).isEmpty();
         assertThat(foreign.statements()).isZero();
 
         when(source.permits(any(), any(), any())).thenReturn(false);
-        assertThat(authorization.permitsHumanStanding(workspaceId, rows)).isEmpty();
+        assertThat(authorization.permitsHumanStanding(workspaceId, facts(rows))).isEmpty();
         assertThat(singleReads(workspaceId, rows)).isEmpty();
     }
 
@@ -467,8 +491,9 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
                     .filter(row -> authorization.permitsHistory(workspaceId, row.getId(), purpose))
                     .map(Result::getId)
                     .collect(Collectors.toSet());
-            assertThat(authorization.permitsAll(workspaceId, batch, purpose)).isEqualTo(current);
-            assertThat(authorization.permitsAllHistory(workspaceId, batch, purpose))
+            assertThat(authorization.permitsAll(workspaceId, facts(batch), purpose))
+                    .isEqualTo(current);
+            assertThat(authorization.permitsAllHistory(workspaceId, facts(batch), purpose))
                     .isEqualTo(history);
             anyAdmitted |= !current.isEmpty() && !history.isEmpty();
         }
@@ -480,12 +505,12 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
         long workspaceId = scenario.workspace().getId();
         var rows = chain(3);
         var first = authorization.asOneRead(workspaceId, () -> {
-            var permitted = authorization.permitsHumanStanding(workspaceId, rows);
+            var permitted = authorization.permitsHumanStanding(workspaceId, facts(rows));
             // A read of another workspace inside it neither joins nor ends it.
             assertThat(authorization.asOneRead(
-                            workspaceId + 1, () -> authorization.permitsHumanStanding(workspaceId + 1, rows)))
+                            workspaceId + 1, () -> authorization.permitsHumanStanding(workspaceId + 1, facts(rows))))
                     .isEmpty();
-            var again = statements(() -> authorization.permitsHumanStanding(workspaceId, rows));
+            var again = statements(() -> authorization.permitsHumanStanding(workspaceId, facts(rows)));
             assertThat(again.permitted()).isEqualTo(permitted);
             assertThat(again.statements()).isZero();
             return permitted;
@@ -493,12 +518,12 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
         assertThat(first).isNotEmpty();
 
         assertThatThrownBy(() -> authorization.asOneRead(workspaceId, () -> {
-                    authorization.permitsHumanStanding(workspaceId, rows);
+                    authorization.permitsHumanStanding(workspaceId, facts(rows));
                     throw new IllegalStateException("The read failed.");
                 }))
                 .isInstanceOf(IllegalStateException.class);
         when(source.permits(any(), any(), any())).thenReturn(false);
-        assertThat(authorization.permitsHumanStanding(workspaceId, rows)).isEmpty();
+        assertThat(authorization.permitsHumanStanding(workspaceId, facts(rows))).isEmpty();
     }
 
     @Test
@@ -514,7 +539,7 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
                 workspaceId,
                 older.getId());
         var both = List.of(stored(older), stored(newer));
-        assertThat(authorization.permitsHumanStanding(workspaceId, both))
+        assertThat(authorization.permitsHumanStanding(workspaceId, facts(both)))
                 .containsExactlyInAnyOrder(older.getId(), newer.getId());
 
         // Another review's assignment reuses the older result with a different receipt, and stops producing the newer.
@@ -525,7 +550,8 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
                 workspaceId,
                 newer.getId());
         var conflicted = List.of(stored(older), stored(newer));
-        assertThat(authorization.permitsHumanStanding(workspaceId, conflicted)).containsExactly(newer.getId());
+        assertThat(authorization.permitsHumanStanding(workspaceId, facts(conflicted)))
+                .containsExactly(newer.getId());
         assertThat(singleReads(workspaceId, conflicted)).containsExactly(newer.getId());
     }
 
@@ -536,7 +562,7 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
         identity(scenario.account());
         assertThat(visibility.permitsHistory(
                         scenario.workspace().getId(),
-                        List.of(stored(result)),
+                        facts(List.of(stored(result))),
                         SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .containsExactly(result.getId());
         // Several feedback entries can quote the same result; authorization must read that support once.
@@ -778,7 +804,7 @@ class MigratedHistoryReadIntegrationTest extends BaseIntegrationTest {
     private Set<UUID> singleReads(long workspaceId, List<Result> rows) {
         return rows.stream()
                 .filter(row -> authorization
-                        .permitsHumanStanding(workspaceId, List.of(row))
+                        .permitsHumanStanding(workspaceId, facts(List.of(row)))
                         .contains(row.getId()))
                 .map(Result::getId)
                 .collect(Collectors.toSet());

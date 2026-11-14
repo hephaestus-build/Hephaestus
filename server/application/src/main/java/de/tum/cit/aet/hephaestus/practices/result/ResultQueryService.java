@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.result;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
+import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.dto.ResultDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.result.dto.ResultListDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
@@ -45,9 +46,9 @@ public class ResultQueryService {
                 null,
                 null);
         var rows = results.list(workspaceId, filter, query.sort(), query.displayableOnly(), page);
-        var permitted =
-                authorization.permitsAll(workspaceId, rows.getContent(), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
-        var projected = presentation.lists(workspaceId, views.views(workspaceId, rows.getContent()), permitted);
+        var facts = rows.getContent().stream().map(Result::facts).toList();
+        var permitted = authorization.permitsAll(workspaceId, facts, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        var projected = presentation.lists(workspaceId, views.views(workspaceId, facts), permitted);
         return new PageImpl<>(projected, page, rows.getTotalElements());
     }
 
@@ -56,7 +57,8 @@ public class ResultQueryService {
         var r = results.findByIdAndDeveloperIdAndWorkspaceId(id, developer, ws)
                 .orElseThrow(() -> new EntityNotFoundException("Result", id.toString()));
         return presentation.detail(
-                views.views(ws, List.of(r)).getFirst(),
+                r,
+                views.views(ws, List.of(r.facts())).getFirst(),
                 authorization.permits(ws, r, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY));
     }
 }

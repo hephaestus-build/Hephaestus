@@ -7,7 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
-import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.model.ResultFacts;
 import de.tum.cit.aet.hephaestus.practices.result.dto.PracticeStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.result.dto.PracticeStandingResultDTO;
 import de.tum.cit.aet.hephaestus.practices.result.dto.TrendSupportDTO;
@@ -135,7 +135,7 @@ public class PracticeStandingService {
         /** The views the read's purpose permits, in the history's order. */
         public List<ResultView> permittedViews() {
             return views.stream()
-                    .filter(view -> permitted.contains(view.result().getId()))
+                    .filter(view -> permitted.contains(view.result().id()))
                     .toList();
         }
 
@@ -154,7 +154,7 @@ public class PracticeStandingService {
     }
 
     private History history(Long workspaceId, Long developerId, Instant since, SourceUsePurpose purpose) {
-        List<Result> rows = results.forDevelopersSince(workspaceId, List.of(developerId), since, false);
+        List<ResultFacts> rows = results.forDevelopersSince(workspaceId, List.of(developerId), since, false);
         return new History(
                 since,
                 resultViewQuery.views(workspaceId, rows),
@@ -188,14 +188,14 @@ public class PracticeStandingService {
         Instant since = practiceTrendService.horizon();
         Instant until = Collections.max(edges);
         List<ResultView> window = history.from(since).views.stream()
-                .filter(view -> !view.result().getRecordedAt().isBefore(since)
-                        && !view.result().getRecordedAt().isAfter(until))
+                .filter(view -> !view.result().recordedAt().isBefore(since)
+                        && !view.result().recordedAt().isAfter(until))
                 .toList();
         Set<UUID> visible = history.permitted;
         Map<UUID, String> deliveredGuidance = deliveredGuidanceByResult(
                 workspaceId,
                 window.stream()
-                        .map(view -> view.result().getId())
+                        .map(view -> view.result().id())
                         .filter(visible::contains)
                         .collect(Collectors.toSet()));
         Eligibility eligibility = eligibility(workspaceId);
@@ -265,11 +265,11 @@ public class PracticeStandingService {
         return resultViewQuery
                 .views(workspaceId, results.forDevelopersSince(workspaceId, developerIds, since, false))
                 .stream()
-                .filter(view -> !view.result().getRecordedAt().isAfter(until))
+                .filter(view -> !view.result().recordedAt().isAfter(until))
                 .toList();
     }
 
-    private static List<Result> rowsOf(Collection<ResultView> views) {
+    private static List<ResultFacts> rowsOf(Collection<ResultView> views) {
         return views.stream().map(ResultView::result).distinct().toList();
     }
 
@@ -289,10 +289,10 @@ public class PracticeStandingService {
         StandingRows of(Long developerId) {
             return new StandingRows(
                     current.stream()
-                            .filter(view -> developerId.equals(view.result().getDeveloperId()))
+                            .filter(view -> developerId.equals(view.result().developerId()))
                             .toList(),
                     live.stream()
-                            .filter(view -> developerId.equals(view.result().getDeveloperId()))
+                            .filter(view -> developerId.equals(view.result().developerId()))
                             .toList());
         }
     }
@@ -308,7 +308,7 @@ public class PracticeStandingService {
         Set<UUID> quotable = visibilityPolicy.permitsAt(workspaceId, rowsOf(window), purpose(audience), edge);
         var currentSources = window.stream()
                 .filter(view -> view.sourceFreshness().currentness() == Currentness.CURRENT)
-                .map(view -> view.result().getId())
+                .map(view -> view.result().id())
                 .collect(Collectors.toSet());
         quotable = quotable.stream().filter(currentSources::contains).collect(Collectors.toSet());
         return new StandingAccess(
@@ -328,9 +328,9 @@ public class PracticeStandingService {
                 edge);
     }
 
-    private static boolean holdsClaimAt(Result result, Instant edge) {
-        return !result.getRecordedAt().isAfter(edge)
-                && (result.getEndedAt() == null || result.getEndedAt().isAfter(edge));
+    private static boolean holdsClaimAt(ResultFacts result, Instant edge) {
+        return !result.recordedAt().isAfter(edge)
+                && (result.endedAt() == null || result.endedAt().isAfter(edge));
     }
 
     /**
@@ -349,7 +349,7 @@ public class PracticeStandingService {
     private static List<ResultView> liveRunsAt(List<ResultView> window, Instant edge) {
         Map<ClaimKey, List<ResultView>> claims = new LinkedHashMap<>();
         window.stream()
-                .filter(view -> !view.result().getRecordedAt().isAfter(edge))
+                .filter(view -> !view.result().recordedAt().isAfter(edge))
                 .forEach(view -> claims.computeIfAbsent(ClaimKey.of(view.result()), key -> new ArrayList<>())
                         .add(view));
         List<ResultView> live = new ArrayList<>();
@@ -359,8 +359,8 @@ public class PracticeStandingService {
 
     private record ClaimKey(
             long practiceId, long itemId, @Nullable Long developerId) {
-        static ClaimKey of(Result result) {
-            return new ClaimKey(result.getPracticeId(), result.getItemId(), result.getDeveloperId());
+        static ClaimKey of(ResultFacts result) {
+            return new ClaimKey(result.practiceId(), result.itemId(), result.developerId());
         }
     }
 
@@ -398,27 +398,26 @@ public class PracticeStandingService {
          */
         private static Optional<ResultView> newestEndedByWorkChange(Stream<ResultView> newestFirst) {
             return newestFirst
-                    .filter(view -> view.result().getEndReason() != ResultEndReason.OUTRANKED)
+                    .filter(view -> view.result().endReason() != ResultEndReason.OUTRANKED)
                     .findFirst()
-                    .filter(view -> view.result().getEndReason() == ResultEndReason.WORK_CHANGED);
+                    .filter(view -> view.result().endReason() == ResultEndReason.WORK_CHANGED);
         }
     }
 
     // ResultClaimWriter ends the claim it replaces at the replacing result's recording, or at the replaced
     // result's own recording when that is later. That end time links a claim to the claim it replaced.
-    private static boolean replacedBy(Result prior, Result successor) {
-        Instant replacedAt = successor.getRecordedAt().isBefore(prior.getRecordedAt())
-                ? prior.getRecordedAt()
-                : successor.getRecordedAt();
-        return prior.getEndReason() == ResultEndReason.REPLACED
-                && replacedAt.equals(prior.getEndedAt())
-                && Objects.equals(prior.getItemVersion(), successor.getItemVersion());
+    private static boolean replacedBy(ResultFacts prior, ResultFacts successor) {
+        Instant replacedAt =
+                successor.recordedAt().isBefore(prior.recordedAt()) ? prior.recordedAt() : successor.recordedAt();
+        return prior.endReason() == ResultEndReason.REPLACED
+                && replacedAt.equals(prior.endedAt())
+                && Objects.equals(prior.itemVersion(), successor.itemVersion());
     }
 
     private static ReviewOrder order(ResultView view) {
         return new ReviewOrder(
                 view.review().getOrderedAt(),
-                view.result().getRecordedAt(),
+                view.result().recordedAt(),
                 view.review().getId());
     }
 
@@ -430,7 +429,7 @@ public class PracticeStandingService {
 
     private static Map<String, List<ResultView>> byPractice(Stream<ResultView> rows, Set<UUID> readable) {
         Map<String, List<ResultView>> byPractice = new LinkedHashMap<>();
-        rows.filter(view -> readable.contains(view.result().getId()))
+        rows.filter(view -> readable.contains(view.result().id()))
                 .forEach(view -> byPractice
                         .computeIfAbsent(view.practice().getSlug(), ignored -> new ArrayList<>())
                         .add(view));
@@ -475,16 +474,16 @@ public class PracticeStandingService {
         // An observation sealed in feedback mode Off neither decides nor is quoted (ADR 0118 decision 6).
         Map<String, List<ResultView>> current = byPractice(
                 rows.current().stream()
-                        .filter(view -> !view.result().isMigratedHistory())
+                        .filter(view -> !view.result().migratedHistory())
                         .filter(view -> view.sealedFeedbackMode() != FeedbackMode.OFF),
                 readable.standing());
         Map<String, List<ResultView>> earlier = byPractice(
                 Stream.concat(rows.current().stream(), rows.live().stream())
-                        .filter(view -> view.result().isMigratedHistory())
+                        .filter(view -> view.result().migratedHistory())
                         .distinct(),
                 readable.standing());
-        Map<String, List<ResultView>> live = byPractice(
-                rows.live().stream().filter(view -> !view.result().isMigratedHistory()), readable.standing());
+        Map<String, List<ResultView>> live =
+                byPractice(rows.live().stream().filter(view -> !view.result().migratedHistory()), readable.standing());
         int window = practiceTrendService.standingWindow();
 
         List<StandingSnapshot.PracticeStandingSnapshot> standings = new ArrayList<>();
@@ -524,7 +523,7 @@ public class PracticeStandingService {
                         Set.of(),
                         Map.of(),
                         recorded.observed().stream()
-                                        .anyMatch(view -> view.result().getPracticeVersionId() == null)
+                                        .anyMatch(view -> view.result().practiceVersionId() == null)
                                 ? StandingBasis.EARLIER_REVIEWS_CRITERIA_UNKNOWN
                                 : StandingBasis.EARLIER_REVIEWS);
                 standings.add(new StandingSnapshot.PracticeStandingSnapshot(
@@ -563,7 +562,7 @@ public class PracticeStandingService {
     private PracticeStandingDTO silentStanding(Practice practice, List<ResultView> withoutVerdict) {
         boolean exercised = !withoutVerdict.isEmpty();
         boolean doesNotApplyOnly = exercised
-                && withoutVerdict.stream().allMatch(view -> view.result().getOutcome() == ResultOutcome.DOES_NOT_APPLY);
+                && withoutVerdict.stream().allMatch(view -> view.result().outcome() == ResultOutcome.DOES_NOT_APPLY);
         PracticeGroup group = practice.getGroup();
         PracticeDefinition definition = definition(practice);
         return new PracticeStandingDTO(
@@ -612,16 +611,16 @@ public class PracticeStandingService {
     private List<PracticeStandingResultDTO> feedback(
             List<ResultView> practiceResults, int cap, Set<UUID> quotable, Map<UUID, String> deliveredGuidance) {
         return practiceResults.stream()
-                .filter(view -> quotable.contains(view.result().getId()))
+                .filter(view -> quotable.contains(view.result().id()))
                 .limit(cap)
                 .map(view -> new PracticeStandingResultDTO(
-                        view.result().getId(),
-                        view.result().getSummary() == null
+                        view.result().id(),
+                        view.result().summary() == null
                                 ? view.item().label()
-                                : view.result().getSummary(),
-                        deliveredGuidance.get(view.result().getId()),
-                        view.result().getSeverity(),
-                        view.result().getOutcome(),
+                                : view.result().summary(),
+                        deliveredGuidance.get(view.result().id()),
+                        view.result().severity(),
+                        view.result().outcome(),
                         view.item(),
                         view.review().getOrigin()))
                 .toList();
@@ -635,7 +634,7 @@ public class PracticeStandingService {
             List<ResultView> problems, List<ResultView> strengths, List<ResultView> withoutVerdict) {
         static PracticeEvidence classify(List<ResultView> group) {
             Map<ResultOutcome, List<ResultView>> byOutcome = group.stream()
-                    .collect(Collectors.groupingBy(view -> view.result().getOutcome()));
+                    .collect(Collectors.groupingBy(view -> view.result().outcome()));
             return new PracticeEvidence(
                     bucket(byOutcome, ResultOutcome.NOT_MET).stream()
                             .sorted(Comparator.comparingInt(PracticeStandingService::severityRank))
@@ -735,7 +734,7 @@ public class PracticeStandingService {
     }
 
     private static int severityRank(ResultView view) {
-        return rankOf(view.result().getSeverity());
+        return rankOf(view.result().severity());
     }
 
     private static int rankOf(@Nullable Severity severity) {

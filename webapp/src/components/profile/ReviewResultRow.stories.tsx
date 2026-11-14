@@ -379,6 +379,43 @@ export const ExampleFromThisWork: Story = {
 	},
 };
 
+/**
+ * A Does not apply that the practice's Applies when check proved quotes nothing. It shows its own
+ * reason and what was checked, with no evidence section and no word of unavailable text.
+ */
+export const DoesNotApplyByPathCheck: Story = {
+	args: {
+		result: {
+			...strength,
+			id: "00000000-0000-0000-0000-000000000501",
+			outcome: "DOES_NOT_APPLY",
+			summary: "This practice does not apply",
+			explanation: "No changed path is under docs/.",
+			example: null,
+			problems: [],
+			feedback: [],
+			evidence: {
+				search: null,
+				openQuestions: [],
+				citations: [],
+				inapplicability: {
+					consulted: ["scm.pull-request.diff"],
+					prerequisite: "At least one Applies when condition must match",
+					ruledOutBy: "No changed path is under docs/.",
+				},
+			},
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("This practice does not apply")).toBeVisible();
+		await expect(canvas.getByText("What was checked")).toBeVisible();
+		await expect(canvas.getByText("Nothing to judge because")).toBeVisible();
+		await expect(canvas.queryByText("Evidence")).toBeNull();
+		await expect(canvas.queryByText("Observation text unavailable")).toBeNull();
+	},
+};
+
+/** A result whose source check refused its text: the facts stay, the words do not. */
 export const HiddenHistoryText: Story = {
 	args: {
 		result: {

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.result.trend;
 
+import static de.tum.cit.aet.hephaestus.practices.result.ResultTestFixtures.ended;
 import static de.tum.cit.aet.hephaestus.practices.result.trend.TrendResults.clean;
 import static de.tum.cit.aet.hephaestus.practices.result.trend.TrendResults.noVerdict;
 import static de.tum.cit.aet.hephaestus.practices.result.trend.TrendResults.problem;
@@ -42,7 +43,7 @@ class WorkResolutionTest {
         UUID secondRun = UUID.randomUUID();
         UUID otherWork = UUID.randomUUID();
         var prior = clean(11L, firstRun, "2026-05-02T09:00:00Z");
-        prior.result().end(ResultEndReason.REPLACED, Instant.parse("2026-05-03T09:00:00Z"));
+        prior = ended(prior, ResultEndReason.REPLACED, Instant.parse("2026-05-03T09:00:00Z"));
         WorkResolution resolution = resolve(List.of(
                 prior, clean(11L, secondRun, "2026-05-03T09:00:00Z"), clean(12L, otherWork, "2026-05-04T09:00:00Z")));
 

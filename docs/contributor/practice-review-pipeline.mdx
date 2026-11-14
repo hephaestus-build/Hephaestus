@@ -587,6 +587,18 @@ Otherwise admission withholds the result as `undeclared_source_cited`.
 The runner refuses such a result first and gives the session a repair turn, so this reason guards against a runner defect.
 [ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md) decides it.
 
+The same sources decide later whether a page or a delivery may show the result's text.
+These are the sources that the result cites and the sources that it names as consulted.
+Each result records them when it is written.
+A history read checks the recorded sources and does not load the evidence.
+A result without recorded sources, such as one that an older server wrote during an upgrade, has its evidence read instead.
+A new delivery always checks each citation that it sends.
+
+A Does not apply that an Applies when check proved cites nothing, but it names the source that the check read.
+Thus, it shows its own reason.
+The text is hidden only when one of these sources is refused for the purpose, or when a source is not named.
+A result that rests on no source is hidden.
+
 The server verifies shape, outcome requirements, quotations, source permission and claim basis.
 One invalid problem, example or citation withholds the complete candidate.
 Other valid practice candidates can continue.
