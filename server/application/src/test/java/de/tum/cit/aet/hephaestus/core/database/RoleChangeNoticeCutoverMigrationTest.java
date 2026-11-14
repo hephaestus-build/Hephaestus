@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 
 @Tag("database")
 class RoleChangeNoticeCutoverMigrationTest {
-    private static final String CHANGELOG = "20261113222234-harvest-role-change-notifications.xml";
+    private static final String CHANGELOG = "20261114005731-harvest-role-change-notifications.xml";
 
     @Test
     void shouldEndOldRoleNoticesWithoutResendingUncertainWritesOrChangingOtherSecurityMail() throws Exception {

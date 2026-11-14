@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.notification.email.CapturingJavaMailSender;
 import de.tum.cit.aet.hephaestus.notification.email.CapturingMailTestConfiguration;
 import de.tum.cit.aet.hephaestus.notification.email.EmailNotice.Prepared;
+import de.tum.cit.aet.hephaestus.testconfig.AccountFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
@@ -386,7 +387,7 @@ class RoleChangeEmailIntegrationTest extends AbstractWorkspaceIntegrationTest {
     /** Gives the account an active status and a verified address, as a person who signed in has. */
     private long verified(long accountId) {
         Account account = accountRepository.findById(accountId).orElseThrow();
-        account.setStatus(Account.Status.ACTIVE);
+        AccountFixtures.moveTo(account, Account.Status.ACTIVE);
         account.setPrimaryEmail("role-" + UUID.randomUUID() + "@hephaestus.test");
         account.setPrimaryEmailVerifiedAt(Instant.now());
         accountRepository.save(account);
@@ -473,7 +474,7 @@ class RoleChangeEmailIntegrationTest extends AbstractWorkspaceIntegrationTest {
         long witness = verified(
                 Objects.requireNonNull(persistInstanceAdmin("Role witness").getId()));
         var blocked = accountRepository.findById(blockActor ? actor : target).orElseThrow();
-        blocked.setStatus(Account.Status.BLOCKED);
+        blocked.block();
         accountRepository.save(blocked);
         var change = RoleChangedEvent.instanceAdmin(target, true, false, actor, Instant.now());
 
