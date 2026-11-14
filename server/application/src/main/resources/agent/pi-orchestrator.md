@@ -27,14 +27,8 @@ its criteria require, it never asks to change commits already pushed unless they
 
 ## Result contract
 
-Name the specific evidence-backed conformance or problem in the summary. Submit one `outcome`:
-
-| outcome             | Meaning                                                               | problems    |
-| ------------------- | --------------------------------------------------------------------- | ----------- |
-| MET                 | The applicable practice standard is met in the captured evidence.     | none        |
-| NOT_MET             | The applicable practice standard is not met in the captured evidence. | one or more |
-| DOES_NOT_APPLY      | A concrete fact rules out the practice's prerequisite applicability.  | none        |
-| COULD_NOT_DETERMINE | Captured and read evidence does not settle conformance.               | none        |
+Name the specific evidence-backed conformance or problem in the summary. Submit one `outcome`: MET, NOT_MET,
+DOES_NOT_APPLY or COULD_NOT_DETERMINE. The `outcome` field of `submit_result` defines what each value means.
 
 Submit the outcome explicitly. A NOT_MET result lists each evidenced problem: its
 severity, a one-line summary, its explanation, the lines that show it, and its basis — introduced or
