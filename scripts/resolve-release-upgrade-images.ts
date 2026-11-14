@@ -5,7 +5,7 @@ import process from "node:process";
 import { currentReleaseIdentity, releaseIdentityFor } from "./lib/release-identities.ts";
 
 import { isSet, requiredEnv } from "./lib/env.ts";
-import { latestReleaseOf, upgradeFromOf } from "./lib/previous-release.ts";
+import { BASELINE_RELEASE, latestReleaseOf, upgradeFromOf } from "./lib/previous-release.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import { parseVersion } from "./lib/release-version.ts";
 
@@ -90,10 +90,15 @@ if (
 	candidateApplication !== undefined &&
 	postgres !== undefined
 ) {
-	if (parseVersion(suppliedPreviousVersion) === undefined) {
+	const parsedPrevious = parseVersion(suppliedPreviousVersion);
+	if (parsedPrevious === undefined) {
 		throw new Error("Previous version must be X.Y.Z or X.Y.Z-rc.N");
 	}
-	previousApplication = previousApplicationReference(suppliedPreviousVersion);
+	// A promotion names the previous stable release, 0.95.1, for its notes. The 1.0 baseline refuses every 0.x
+	// database, so the upgrade starts from the baseline's release instead, as upgradeFromOf chooses.
+	previousApplication = previousApplicationReference(
+		parsedPrevious.major === 0 ? BASELINE_RELEASE.slice(1) : suppliedPreviousVersion,
+	);
 } else {
 	const requestedPrevious = nonEmpty(process.env.REQUESTED_PREVIOUS);
 	const previous = requestedPrevious ?? upgradeFromOf("HEAD") ?? "";

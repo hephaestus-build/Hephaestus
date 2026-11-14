@@ -33,7 +33,6 @@ await test("release and weekly runs use the supported seeded upgrade", () => {
 			String(step.getIn(["env", "PREVIOUS_VERSION"])).includes("outputs.latest-version"),
 	);
 	assert.ok(isMap(latest));
-	assert.equal(latest.get("if"), "steps.images.outputs.latest-app != ''");
 	const release = parseDocument(readFileSync(".github/workflows/release.yml", "utf8"));
 	assert.equal(
 		release.getIn(["jobs", "upgrade-test", "uses"]),
@@ -41,21 +40,56 @@ await test("release and weekly runs use the supported seeded upgrade", () => {
 	);
 });
 
-for (const version of ["0.95.0", "1.0.0-rc.1"] as const) {
-	for (const source of ["release", "dispatch"] as const) {
-		await test(`${source}: ${version} resolves its immutable image`, () => {
-			const directory = mkdtempSync(path.join(tmpdir(), "upgrade-images-"));
-			try {
-				const preload = path.join(directory, "process.mjs");
-				const output = path.join(directory, "output");
-				const invocations = path.join(directory, "invocations");
-				writeFileSync(
-					preload,
-					`import { appendFileSync } from "node:fs";
+// A release names 0.95.1 for its notes, but the 1.0 baseline refuses every 0.x database; a dispatch starts where asked.
+// The latest published release of the checkout is the second starting point when it differs.
+const resolutions = [
+	{
+		source: "release",
+		version: "0.95.0",
+		tags: "v0.95.0 v1.0.0-rc.1 v1.0.0-rc.8",
+		previous: "1.0.0-rc.1",
+		latest: "1.0.0-rc.8",
+	},
+	{
+		source: "dispatch",
+		version: "0.95.0",
+		tags: "v0.95.0 v1.0.0-rc.1 v1.0.0-rc.8",
+		previous: "0.95.0",
+		latest: "1.0.0-rc.8",
+	},
+	{
+		source: "release",
+		version: "1.0.0-rc.1",
+		tags: "v1.0.0-rc.1 v1.0.0-rc.8",
+		previous: "1.0.0-rc.1",
+		latest: "1.0.0-rc.8",
+	},
+	{
+		source: "dispatch",
+		version: "1.0.0-rc.1",
+		tags: "v0.95.0 v1.0.0-rc.1",
+		previous: "1.0.0-rc.1",
+		latest: "",
+	},
+] as const;
+for (const { source, version, tags, previous, latest } of resolutions) {
+	await test(`${source}: ${version} resolves its immutable image, and ${latest || "no"} latest release`, () => {
+		const directory = mkdtempSync(path.join(tmpdir(), "upgrade-images-"));
+		try {
+			const preload = path.join(directory, "process.mjs");
+			const output = path.join(directory, "output");
+			const invocations = path.join(directory, "invocations");
+			writeFileSync(
+				preload,
+				`import { appendFileSync } from "node:fs";
 import { mock } from "node:test";
 import * as childProcess from "node:child_process";
 mock.module("node:child_process", { exports: {
   ...childProcess,
+  execFileSync(executable, args) {
+    if (executable !== "git" || args[0] !== "tag") throw new Error("Unexpected command: " + executable);
+    return args.includes("--points-at") ? "" : ${JSON.stringify(tags.split(" ").join("\n"))};
+  },
   spawnSync(executable, args) {
     if (executable !== "docker") throw new Error("Unexpected command: " + executable);
     appendFileSync(${JSON.stringify(invocations)}, args.join(" ") + "\\n");
@@ -63,58 +97,57 @@ mock.module("node:child_process", { exports: {
   }
 }});
 `,
-				);
-				const { namespace } = currentReleaseIdentity();
-				const result = spawnSync(
-					process.execPath,
-					[
-						"--experimental-test-module-mocks",
-						"--import",
-						pathToFileURL(preload).href,
-						"scripts/resolve-release-upgrade-images.ts",
-					],
-					{
-						encoding: "utf8",
-						env: {
-							...process.env,
-							INPUT_PREVIOUS_VERSION: source === "release" ? version : "",
-							INPUT_CANDIDATE_APP:
-								source === "release" ? `${namespace}/application-server:candidate` : "",
-							INPUT_POSTGRES: source === "release" ? `${namespace}/postgres:candidate` : "",
-							REQUESTED_PREVIOUS: `v${version}`,
-							GITHUB_REPOSITORY: "hephaestus-build/Hephaestus",
-							GITHUB_SHA: "b".repeat(40),
-							GITHUB_OUTPUT: output,
-						},
+			);
+			const { namespace } = currentReleaseIdentity();
+			const result = spawnSync(
+				process.execPath,
+				[
+					"--experimental-test-module-mocks",
+					"--import",
+					pathToFileURL(preload).href,
+					"scripts/resolve-release-upgrade-images.ts",
+				],
+				{
+					encoding: "utf8",
+					env: {
+						...process.env,
+						INPUT_PREVIOUS_VERSION: source === "release" ? version : "",
+						INPUT_CANDIDATE_APP:
+							source === "release" ? `${namespace}/application-server:candidate` : "",
+						INPUT_POSTGRES: source === "release" ? `${namespace}/postgres:candidate` : "",
+						REQUESTED_PREVIOUS: `v${version}`,
+						GITHUB_REPOSITORY: "hephaestus-build/Hephaestus",
+						GITHUB_SHA: "b".repeat(40),
+						GITHUB_OUTPUT: output,
 					},
-				);
-				assert.equal(result.status, 0, result.stdout + result.stderr);
-				const historicalNamespace = releaseIdentityFor(version).namespace;
-				assert.ok(
-					readFileSync(invocations, "utf8").includes(
-						`${historicalNamespace}/application-server:${version} `,
-					),
-				);
-				assert.match(readFileSync(output, "utf8"), /^previous-app=.*@sha256:[a-f0-9]{64}$/mu);
-				assert.match(
-					readFileSync(output, "utf8"),
-					new RegExp(`^previous-version=${version}$`, "mu"),
-				);
-				assert.match(
-					readFileSync(output, "utf8"),
-					/^previous-agent=.*\/agent-pi@sha256:[a-f0-9]{64}$/mu,
-				);
-				assert.match(readFileSync(output, "utf8"), /^candidate-app=.*@sha256:[a-f0-9]{64}$/mu);
-				// The latest published release of this checkout is resolved as the second starting point, or stays empty.
-				assert.match(
-					readFileSync(output, "utf8"),
-					/^latest-version=(?:|\d+\.\d+\.\d+(?:-rc\.\d+)?)$/mu,
-				);
-			} finally {
-				rmSync(directory, { recursive: true, force: true });
-			}
-		});
-	}
+				},
+			);
+			assert.equal(result.status, 0, result.stdout + result.stderr);
+			const historicalNamespace = releaseIdentityFor(previous).namespace;
+			assert.ok(
+				readFileSync(invocations, "utf8").includes(
+					`${historicalNamespace}/application-server:${previous} `,
+				),
+			);
+			assert.match(readFileSync(output, "utf8"), /^previous-app=.*@sha256:[a-f0-9]{64}$/mu);
+			assert.match(
+				readFileSync(output, "utf8"),
+				new RegExp(`^previous-version=${previous}$`, "mu"),
+			);
+			assert.match(
+				readFileSync(output, "utf8"),
+				/^previous-agent=.*\/agent-pi@sha256:[a-f0-9]{64}$/mu,
+			);
+			assert.match(readFileSync(output, "utf8"), /^candidate-app=.*@sha256:[a-f0-9]{64}$/mu);
+			assert.match(readFileSync(output, "utf8"), new RegExp(`^latest-version=${latest}$`, "mu"));
+			assert.match(
+				readFileSync(output, "utf8"),
+				latest === "" ? /^latest-app=$/mu : /^latest-app=.*@sha256:[a-f0-9]{64}$/mu,
+			);
+		} finally {
+			rmSync(directory, { recursive: true, force: true });
+		}
+	});
 }
 
 // Both upgrade paths, with and without a stopped-upgrade waiver. These stubs prove orchestration; CI runs the

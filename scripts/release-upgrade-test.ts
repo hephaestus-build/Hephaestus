@@ -610,11 +610,13 @@ function appliedChangeCount(database = "hephaestus"): number {
 }
 
 /** A check that passed without testing anything: a warning in the log and a line in the job summary. */
+/** One job can run the upgrade from more than one release, so each line names its starting release. */
 function summarize(line: string): void {
-	console.log(`::warning::${line}`);
+	const named = `From ${previousVersion}: ${line}`;
+	console.log(`::warning::${named}`);
 	const summary = process.env.GITHUB_STEP_SUMMARY;
 	if (summary !== undefined && summary !== "") {
-		appendFileSync(summary, `- ${line}\n`);
+		appendFileSync(summary, `- ${named}\n`);
 	}
 }
 

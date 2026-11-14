@@ -305,7 +305,7 @@ as triggers, partitioning and partial-index predicates. Verify those through dat
 
 ### Previous release on the new schema
 
-After the upgrade from the previous stable release, the driver runs the previous release in two ways:
+After each upgrade, the driver runs the release that the upgrade started from in two ways:
 
 1. **Previous server on the new schema.** The previous release starts while the candidate runs.
    It runs the server and its agent runtime in one process, with the Docker sandbox and its own agent image.

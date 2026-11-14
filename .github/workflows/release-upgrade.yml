@@ -87,7 +87,8 @@ jobs:
         run: node scripts/release-upgrade-test.ts "$PREVIOUS_APP" "$CANDIDATE_APP" "$POSTGRES_IMAGE"
 
       - name: Test seeded upgrade from the latest release
-        if: steps.images.outputs.latest-app != ''
+        # Also after a failed first upgrade, so one run reports both.
+        if: ${{ !cancelled() && steps.images.outputs.latest-app != '' }}
         env:
           PREVIOUS_APP: ${{ steps.images.outputs.latest-app }}
           PREVIOUS_VERSION: ${{ steps.images.outputs.latest-version }}
