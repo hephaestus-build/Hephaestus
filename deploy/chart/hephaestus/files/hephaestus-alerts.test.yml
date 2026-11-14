@@ -325,13 +325,14 @@ tests:
               summary: The provider event backlog gauges failed to refresh for 15 minutes and show old values
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
-  - name: an agent run sampler that keeps failing fires, a single failure does not
+  - name: an agent run sampler that keeps failing fires, nine failures in 15 minutes do not
     interval: 1m
     input_series:
       - series: 'agent_run_sampler_failure_total{job="hephaestus",instance="server-a:9090"}'
         values: "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0+2x20"
+      # Nine failures in 15 minutes stay below the threshold.
       - series: 'agent_run_sampler_failure_total{job="hephaestus",instance="server-b:9090"}'
-        values: "0 1+0x40"
+        values: "0+0.6x40"
     alert_rule_test:
       - eval_time: 15m
         alertname: HephaestusAgentRunsUnsampled
@@ -342,16 +343,17 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              summary: The agent run gauges failed to refresh for 15 minutes and show old values
+              summary: The agent run gauges failed to refresh more than 10 times in 15 minutes and can show old values
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
-  - name: an outbox sampler that keeps failing fires, a single failure does not
+  - name: an outbox sampler that keeps failing fires, nine failures in 15 minutes do not
     interval: 1m
     input_series:
       - series: 'action_backlog_sampler_failures_total{job="hephaestus",instance="server-a:9090"}'
         values: "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0+2x20"
+      # Nine failures in 15 minutes stay below the threshold.
       - series: 'action_backlog_sampler_failures_total{job="hephaestus",instance="server-b:9090"}'
-        values: "0 1+0x40"
+        values: "0+0.6x40"
     alert_rule_test:
       - eval_time: 15m
         alertname: HephaestusOutboxUnsampled
@@ -362,7 +364,7 @@ tests:
           - exp_labels:
               severity: warning
             exp_annotations:
-              summary: The outbox backlog gauges failed to refresh for 15 minutes and show old values
+              summary: The outbox backlog gauges failed to refresh more than 10 times in 15 minutes and can show old values
               runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
 
   - name: a receiver that keeps refusing deliveries for memory fires, one that stops does not

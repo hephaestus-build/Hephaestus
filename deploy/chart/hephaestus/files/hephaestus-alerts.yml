@@ -515,7 +515,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: The agent run gauges failed to refresh for 15 minutes and show old values
+          summary: The agent run gauges failed to refresh more than 10 times in 15 minutes and can show old values
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       # A turn that has not started after 3 minutes ends as NOT_STARTED and leaves the queue, so the hour above never sees it.
       - alert: HephaestusInteractiveRunWaiting
@@ -540,7 +540,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: The outbox backlog gauges failed to refresh for 15 minutes and show old values
+          summary: The outbox backlog gauges failed to refresh more than 10 times in 15 minutes and can show old values
           runbook_url: https://docs.hephaestus.build/admin/production-operations-runbook#alert-response
       - alert: HephaestusOutboxUncertain
         expr: sum by (kind) (increase(action_ended_total{job="hephaestus",state="UNCERTAIN"}[1h])) > 0
