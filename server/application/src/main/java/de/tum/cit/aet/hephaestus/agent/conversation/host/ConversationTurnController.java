@@ -250,7 +250,8 @@ public class ConversationTurnController {
             String detail = request.detail();
             String cause = outcome != ConversationTurn.Status.FAILED
                     ? null
-                    : "its conversation sandbox reported " + reason
+                    : ConversationTurn.SANDBOX_REPORTED_CAUSE
+                            + reason
                             + (detail == null
                                     ? ""
                                     : ": " + (FAILURE_DETAILS.contains(detail) ? detail : "unrecognized"));

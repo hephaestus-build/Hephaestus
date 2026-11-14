@@ -100,6 +100,7 @@ export class ConversationFake {
 			surface: "APP",
 			createdAt: new Date(BASE_TIME).toISOString(),
 			attempt: fields.status === "QUEUED" ? 0 : 1,
+			maxAttempts: 2,
 			...fields,
 		};
 		this.turns.push(turn);

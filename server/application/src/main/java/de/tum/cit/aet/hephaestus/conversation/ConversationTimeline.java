@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestDTO;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestFacts;
 import de.tum.cit.aet.hephaestus.practices.weeklydigest.WeeklyDigestPayload;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -95,12 +96,14 @@ public class ConversationTimeline {
         Conversation main = found.get();
         List<ConversationTurn> activeTurns = turns.findActiveInTree(workspaceId, main.getId());
         Map<UUID, ConversationTurn.WaitingFor> waiting = waits.waits(workspaceId, activeTurns);
+        Set<UUID> working = working(workspaceId, activeTurns);
         List<ConversationTurnDTO> active = activeTurns.stream()
                 .filter(turn -> turn.getSurface() != ConversationTurn.Surface.SYSTEM)
                 .map(turn -> turn(
                         turn,
                         parentEntryId(main, turn.getConversationId()),
                         waiting.get(turn.getId()),
+                        working.contains(turn.getId()),
                         progress.snapshot(turn)))
                 .toList();
         List<ConversationThreadSummaryDTO> threads =
@@ -150,7 +153,12 @@ public class ConversationTimeline {
     public ConversationTurnDTO turn(long workspaceId, long accountId, UUID turnId) {
         ConversationTurn turn = ownedTurn(workspaceId, accountId, turnId);
         Conversation conversation = conversation(workspaceId, turn.getConversationId());
-        return turn(turn, conversation.getParentEntryId(), waitingFor(turn), progress.snapshot(turn));
+        return turn(
+                turn,
+                conversation.getParentEntryId(),
+                waitingFor(turn),
+                working(workspaceId, List.of(turn)).contains(turn.getId()),
+                progress.snapshot(turn));
     }
 
     @Transactional(readOnly = true)
@@ -193,6 +201,7 @@ public class ConversationTimeline {
                                         turn,
                                         conversation.getParentEntryId(),
                                         waitingFor(turn),
+                                        working(workspaceId, List.of(turn)).contains(turn.getId()),
                                         progress.snapshot(turn)))));
     }
 
@@ -497,11 +506,22 @@ public class ConversationTimeline {
         return waits.waits(turn.getWorkspaceId(), List.of(turn)).get(turn.getId());
     }
 
+    /** The running turns among {@code shown} whose current attempt has an admitted model call. */
+    private Set<UUID> working(long workspaceId, Collection<ConversationTurn> shown) {
+        List<UUID> running = shown.stream()
+                .filter(turn -> turn.getStatus() == ConversationTurn.Status.RUNNING)
+                .map(ConversationTurn::getId)
+                .toList();
+        return running.isEmpty() ? Set.of() : Set.copyOf(turns.findWorkingIds(workspaceId, running));
+    }
+
     private static ConversationTurnDTO turn(
             ConversationTurn turn,
             @Nullable UUID parentEntryId,
             ConversationTurn.@Nullable WaitingFor waitingFor,
+            boolean working,
             @Nullable JsonNode partial) {
+        boolean running = turn.getStatus() == ConversationTurn.Status.RUNNING;
         return new ConversationTurnDTO(
                 turn.getId(),
                 turn.getConversationId(),
@@ -511,10 +531,13 @@ public class ConversationTimeline {
                 waitingFor,
                 turn.getAttempt(),
                 turn.getSurface(),
-                partial == null || turn.getStatus() != ConversationTurn.Status.RUNNING
-                        ? null
-                        : ConversationTurnPartialDTO.from(partial),
+                running ? (working ? ConversationTurn.Phase.WORKING : ConversationTurn.Phase.STARTING) : null,
+                ConversationTurn.MAX_ATTEMPTS,
+                partial == null || !running ? null : ConversationTurnPartialDTO.from(partial),
                 turn.getError(),
+                turn.getStatus() == ConversationTurn.Status.FAILED
+                        ? ConversationTurn.FailureReason.of(turn.getFailureCause())
+                        : null,
                 turn.getCreatedAt(),
                 turn.getFinishedAt());
     }

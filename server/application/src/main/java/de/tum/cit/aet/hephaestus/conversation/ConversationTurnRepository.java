@@ -291,6 +291,20 @@ public interface ConversationTurnRepository extends JpaRepository<ConversationTu
                   WHERE held.conversation_id = t.conversation_id)
             """;
 
+    /**
+     * Of {@code ids}, the running turns of the workspace whose current attempt has a model call that the LLM proxy
+     * admitted: the proxy opens a call's row ({@code llm_usage_event}) under the turn's run and the attempt's epoch only
+     * after it admitted the call. Locks nothing.
+     */
+    @Query(value = """
+                SELECT t.id FROM conversation_turn t
+                WHERE t.workspace_id = :workspaceId AND t.id IN (:ids) AND t.status = 'RUNNING'
+                  AND EXISTS (SELECT 1 FROM llm_usage_event e
+                              WHERE e.run_id = t.run_id AND e.workspace_id = t.workspace_id
+                                AND e.lease_epoch = t.attempt)
+                """, nativeQuery = true)
+    List<UUID> findWorkingIds(@Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
+
     /** Of {@code ids}, the turns of the workspace that a worker may start now ({@link #CLAIMABLE}). Locks nothing. */
     @Query(
             value = "SELECT t.id " + CLAIMABLE + " AND t.workspace_id = :workspaceId AND t.id IN (:ids)",

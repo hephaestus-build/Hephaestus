@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.conversation.adapter;
 
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurn;
 import de.tum.cit.aet.hephaestus.conversation.ConversationTurnRepository;
+import de.tum.cit.aet.hephaestus.conversation.ConversationTurnService;
 import de.tum.cit.aet.hephaestus.conversation.spi.ConversationTurnAccess;
 import java.util.Optional;
 import java.util.UUID;
@@ -14,6 +15,7 @@ import tools.jackson.databind.JsonNode;
 @RequiredArgsConstructor
 class ConversationTurnAccessAdapter implements ConversationTurnAccess {
     private final ConversationTurnRepository turns;
+    private final ConversationTurnService service;
 
     @Override
     public Optional<TurnState> find(long workspaceId, UUID turnId) {
@@ -58,6 +60,11 @@ class ConversationTurnAccessAdapter implements ConversationTurnAccess {
     @Override
     public long countQueuedQuestions() {
         return turns.countByStatusAndSurfaceNot(ConversationTurn.Status.QUEUED, ConversationTurn.Surface.SYSTEM);
+    }
+
+    @Override
+    public void modelCallAdmitted(long workspaceId, UUID turnId) {
+        service.modelCallAdmitted(workspaceId, turnId);
     }
 
     // A copy: the entity's own node would carry a consumer's change back into the ledger.

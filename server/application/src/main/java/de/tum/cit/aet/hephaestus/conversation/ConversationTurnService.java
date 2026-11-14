@@ -37,8 +37,6 @@ public class ConversationTurnService {
     /** Shown to the developer as the failed reply, so it is in the product voice. */
     private static final String LEASE_EXPIRED = "Hephaestus could not finish this reply. Try again.";
 
-    private static final String LEASE_EXPIRED_CAUSE = "its lease expired on its last attempt";
-
     private final ConversationRepository conversations;
     private final ConversationEntryRepository entries;
     private final ConversationTurnRepository turns;
@@ -293,7 +291,7 @@ public class ConversationTurnService {
                 contextErased ? ConversationTurn.Status.FAILED : outcome,
                 contextErased ? LEASE_EXPIRED : ending.error(),
                 endedAt);
-        if (contextErased) turn.recordFailure("context_changed", null);
+        if (contextErased) turn.recordFailure(ConversationTurn.CONTEXT_CHANGED_CAUSE, null);
         turns.flush();
         runs.ended(workspaceId, runId, epoch, turn.getStatus());
         changed(turn, true);
@@ -391,7 +389,7 @@ public class ConversationTurnService {
                 retry && locked.getStatus() == ConversationTurn.Status.RUNNING,
                 clock.instant(),
                 LEASE_EXPIRED,
-                LEASE_EXPIRED_CAUSE);
+                ConversationTurn.LEASE_EXPIRED_CAUSE);
     }
 
     /**
@@ -403,7 +401,7 @@ public class ConversationTurnService {
         if (locked.getStatus() != ConversationTurn.Status.QUEUED)
             throw new IllegalStateException("Only a queued turn waits to start");
         locked.end(ConversationTurn.Status.FAILED, error, clock.instant());
-        locked.recordFailure("start_wait_expired", null);
+        locked.recordFailure(ConversationTurn.START_WAIT_EXPIRED_CAUSE, null);
         changed(locked, true);
     }
 
@@ -426,8 +424,12 @@ public class ConversationTurnService {
                         .map(turn -> {
                             int epoch = turn.getAttempt();
                             boolean stopped = turn.getStatus() == ConversationTurn.Status.STOPPED;
-                            LostAttempt taken =
-                                    takeBack(turn, !stopped, clock.instant(), LEASE_EXPIRED, LEASE_EXPIRED_CAUSE);
+                            LostAttempt taken = takeBack(
+                                    turn,
+                                    !stopped,
+                                    clock.instant(),
+                                    LEASE_EXPIRED,
+                                    ConversationTurn.LEASE_EXPIRED_CAUSE);
                             if (stopped) runs.ended(workspaceId, turn.getRunId(), epoch, turn.getStatus());
                             else runs.requeue(workspaceId, turn.getId(), turn.getRunId(), epoch);
                             return taken;
@@ -578,6 +580,18 @@ public class ConversationTurnService {
                 .findAccountIdByIdAndWorkspaceId(turn.getConversationId(), turn.getWorkspaceId())
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Conversation", turn.getConversationId().toString()));
+    }
+
+    /**
+     * The LLM proxy admitted a model call of the turn's attempt: a reader sees a running turn's phase move from
+     * {@link ConversationTurn.Phase#STARTING} to {@link ConversationTurn.Phase#WORKING}. A turn that no longer runs
+     * changes nothing.
+     */
+    @Transactional
+    public void modelCallAdmitted(long workspaceId, UUID turnId) {
+        turns.findByIdAndWorkspaceId(turnId, workspaceId)
+                .filter(turn -> turn.getStatus() == ConversationTurn.Status.RUNNING)
+                .ifPresent(turn -> changed(turn, false));
     }
 
     private void changed(ConversationTurn turn, boolean slotsChanged) {

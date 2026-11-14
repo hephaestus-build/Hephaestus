@@ -13,6 +13,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
+import java.util.Set;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -84,6 +85,62 @@ public class ConversationTurn implements Persistable<UUID> {
         /** The kind, and the status when the provider answered one, for a log line. */
         public String describe() {
             return status == null ? kind : kind + " " + status;
+        }
+    }
+
+    /** The attempts a turn gets: its first, and one retry after its holder is lost. */
+    public static final int MAX_ATTEMPTS = 2;
+
+    /** The cause of a queued turn that waited past its start window. */
+    static final String START_WAIT_EXPIRED_CAUSE = "start_wait_expired";
+
+    /** The cause of a turn whose holder was lost on its last attempt. */
+    static final String LEASE_EXPIRED_CAUSE = "its lease expired on its last attempt";
+
+    /** The cause of a turn whose person was erased while it ran with their context. */
+    static final String CONTEXT_CHANGED_CAUSE = "context_changed";
+
+    /** How the cause of a failure that a turn's sandbox reported starts; its reason and detail follow. */
+    public static final String SANDBOX_REPORTED_CAUSE = "its conversation sandbox reported ";
+
+    /** Where a running turn's current attempt stands. */
+    public enum Phase {
+        /** The attempt prepares: the LLM proxy has admitted none of its model calls yet. */
+        STARTING,
+        /** The LLM proxy admitted a model call of the attempt. */
+        WORKING,
+    }
+
+    /** Why a turn failed, as a client may act on it. {@link #of} maps the operator's free-text cause. */
+    public enum FailureReason {
+        /** The turn waited past its start window for a free Hephaestus. */
+        START_WAIT_EXPIRED,
+        /** The turn's holder was lost on its last attempt. */
+        ATTEMPTS_EXHAUSTED,
+        /** The model or its provider stopped answering. */
+        MODEL_UNAVAILABLE,
+        /** The person was erased while the turn ran with their context. */
+        CONTEXT_ERASED,
+        /** Any other failure, or one whose cause was not recorded. */
+        UNKNOWN;
+
+        /** The sandbox's failure details that name the model or its provider. */
+        private static final Set<String> MODEL_DETAILS =
+                Set.of("provider_unavailable", "upstream_stalled", "upstream_paused", "model_error");
+
+        /** The reason of a failed turn's {@code failureCause}; {@code null} when the turn recorded none. */
+        public static FailureReason of(@Nullable String cause) {
+            if (cause == null) return UNKNOWN;
+            if (cause.equals(START_WAIT_EXPIRED_CAUSE)) return START_WAIT_EXPIRED;
+            if (cause.equals(LEASE_EXPIRED_CAUSE)) return ATTEMPTS_EXHAUSTED;
+            if (cause.equals(CONTEXT_CHANGED_CAUSE)) return CONTEXT_ERASED;
+            if (!cause.startsWith(SANDBOX_REPORTED_CAUSE)) return UNKNOWN;
+            // The sandbox reports STALLED when the model stopped streaming, or ERROR with the kind of failure.
+            String report = cause.substring(SANDBOX_REPORTED_CAUSE.length());
+            int detail = report.indexOf(": ");
+            boolean model = report.startsWith("STALLED")
+                    || (detail >= 0 && MODEL_DETAILS.contains(report.substring(detail + 2)));
+            return model ? MODEL_UNAVAILABLE : UNKNOWN;
         }
     }
 

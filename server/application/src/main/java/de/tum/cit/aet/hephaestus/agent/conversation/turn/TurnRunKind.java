@@ -51,7 +51,7 @@ public class TurnRunKind implements AgentRunHandler {
     /** One automatic retry after a lost holder. */
     @Override
     public int retries() {
-        return 1;
+        return ConversationTurn.MAX_ATTEMPTS - 1;
     }
 
     /** A person waits for the answer, so a lost turn is offered again at once. */

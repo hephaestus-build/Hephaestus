@@ -79,6 +79,7 @@ function turn(
 		requestId: "b0000000-0000-4000-8000-000000000001",
 		status,
 		attempt: status === "QUEUED" ? 0 : 1,
+		maxAttempts: 2,
 		surface: "APP",
 		createdAt: new Date(Date.UTC(2026, 9, 9, 9, 0)),
 		...fields,

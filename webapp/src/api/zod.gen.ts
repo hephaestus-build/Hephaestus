@@ -614,6 +614,14 @@ export const zConversationThreadSummary = z.object({
 	replyCount: z.int(),
 });
 
+export const zConversationTurnFailureReason = z.enum([
+	"START_WAIT_EXPIRED",
+	"ATTEMPTS_EXHAUSTED",
+	"MODEL_UNAVAILABLE",
+	"CONTEXT_ERASED",
+	"UNKNOWN",
+]);
+
 export const zConversationTurnPartialActivity = z.enum(["THINKING", "WRITING", "TOOL"]);
 
 /**
@@ -625,6 +633,8 @@ export const zConversationTurnPartial = z.object({
 	text: z.string(),
 	tool: z.string().optional(),
 });
+
+export const zConversationTurnPhase = z.enum(["STARTING", "WORKING"]);
 
 /**
  * A question to Hephaestus from the app
@@ -660,10 +670,16 @@ export const zConversationTurn = z.object({
 	conversationId: z.uuid(),
 	createdAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()),
 	error: z.string().optional(),
+	failureReason: zConversationTurnFailureReason.optional(),
 	finishedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
 	id: z.uuid(),
+	maxAttempts: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	parentEntryId: z.uuid().optional(),
 	partial: zConversationTurnPartial.optional(),
+	phase: zConversationTurnPhase.optional(),
 	requestId: z.string(),
 	status: zConversationTurnStatus,
 	surface: zConversationTurnSurface,

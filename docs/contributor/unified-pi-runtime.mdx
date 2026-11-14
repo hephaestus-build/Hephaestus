@@ -124,6 +124,15 @@ The publication covers all workspaces, newest turn first, and at most 100 turns.
 A turn past that bound shows its new reason at its next read.
 The process that commits the change publishes it, also a server without the capacity, because the reader computes the reason.
 
+A running turn tells its clients its phase (`ConversationTurnDTO.phase`).
+It is `STARTING` until the LLM proxy admits a model call of the current attempt, and `WORKING` after that.
+The fact is a row: an `llm_usage_event` under the turn's run and the attempt's epoch (`ConversationTurnRepository.findWorkingIds`).
+The proxy publishes the turn change after the call's row commits, so a failed publication cannot refuse the call.
+
+`maxAttempts` is `ConversationTurn.MAX_ATTEMPTS`, the limit that the turn's run kind retries to.
+A failed turn carries a `failureReason` for clients to act on.
+`ConversationTurn.FailureReason.of` maps the recorded `failure_cause` to it, and a cause that it does not know to `UNKNOWN`.
+
 ### Leases and retries
 
 The sandbox driver renews its run lease every 25 seconds with `POST lease` (`RENEW_EVERY_MS` in `driver.ts`).

@@ -339,6 +339,28 @@ class ConversationControllerIntegrationTest extends AbstractWorkspaceIntegration
     }
 
     @Test
+    void shouldSayWhileATurnRunsThatItStartsAndHowManyAttemptsItMayTake() {
+        submit(main(), "What did the review say?");
+        ConversationTurn running = claims.claimNext().orElseThrow();
+
+        get("").jsonPath("$.activeTurns[0].phase")
+                .isEqualTo("STARTING")
+                .jsonPath("$.activeTurns[0].maxAttempts")
+                .isEqualTo(ConversationTurn.MAX_ATTEMPTS);
+        write("PATCH", "/turns/" + running.getId() + "/status", Map.of("status", "STOPPED"))
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$")
+                .value(
+                        TURN_JSON,
+                        turn -> assertThat(turn)
+                                .containsEntry("status", "STOPPED")
+                                .doesNotContainKey("phase")
+                                .doesNotContainKey("failureReason"));
+    }
+
+    @Test
     void shouldOpenAThreadAndCountItsRepliesWhenTheDeveloperRepliesToAMessage() {
         ConversationTurnService.Submission question = submit(main(), "What is a good pull request description?");
         UUID parent = question.question().getId();
