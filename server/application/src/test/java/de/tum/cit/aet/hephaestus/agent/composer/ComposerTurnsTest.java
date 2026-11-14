@@ -85,6 +85,13 @@ class ComposerTurnsTest {
                     .as("the private composer sees %s", id)
                     .contains(id);
         }
+        for (JsonNode queued : scenario.privateHistory().path("queued")) {
+            String id = queued.path("feedbackId").asString();
+            assertThat(review).as("prepared private feedback %s", id).doesNotContain(id);
+            assertThat(scenario.feedbackTurn())
+                    .as("the private composer sees %s", id)
+                    .contains(id);
+        }
         for (JsonNode result : scenario.admitted())
             if (result.path("outcome").asString().equals("MET"))
                 assertThat(review).doesNotContain(result.path("practiceSlug").asString());
