@@ -79,6 +79,7 @@ A flaky test is a broken test ([Flaky tests](#flaky-tests)).
 `vp run report:test-churn` ranks tests and test-resource directories by the number of `refactor` and `perf` commits that modified them, then by all commits that changed them.
 Those commit types declare that behavior stays the same. Thus, a test near the top is a candidate change detector.
 A policy test, such as an architecture rule or the CI contract, changes when its subject changes. That alone does not make it a change detector.
+The report does not find a test that only `fix` and `feat` commits rewrite.
 
 Maintainers run the report each month. They apply the two checks to the top entries, and keep, rewrite or delete each one.
 `--since` sets the start of the window (default: 90 days ago), `--top` the number of rows, and `--ref` the branch.
