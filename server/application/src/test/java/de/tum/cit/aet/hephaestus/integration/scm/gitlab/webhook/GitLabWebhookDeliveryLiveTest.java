@@ -44,8 +44,11 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * Real GitLab webhook delivery, end to end: GitLab sends its own asynchronous events to the connection route of this
  * server, the receiver stores them in the provider event inbox, and the consumer mirrors the work. Nothing is replayed
- * and no sync runs in between. {@code HEPHAESTUS_LIVE_GITLAB_WEBHOOK_HOST} is the address at which the GitLab fixture
- * reaches this test JVM.
+ * and no sync runs in between. {@code HEPHAESTUS_LIVE_GITLAB_WEBHOOK_HOST} is this test JVM's address on the GitLab
+ * fixture's network.
+ *
+ * <p>GitLab CE has no group webhooks: they are a Premium and Ultimate feature. Hephaestus registers a group hook, so on
+ * CE this proof creates a project hook to the same signed connection route, and it does not prove that registration.
  */
 @LiveGitLabTest
 class GitLabWebhookDeliveryLiveTest extends BaseIntegrationTest {
