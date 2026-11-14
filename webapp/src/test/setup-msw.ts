@@ -33,12 +33,9 @@ vi.mock("@/components/common/CodeEditor", async () => import("./code-editor.mock
 // `*/path` wildcards, so this host is matched regardless of its exact value.
 client.setConfig({ baseUrl: "http://localhost:8080" });
 
-// A failed query prints the whole DOM in its error. `waitFor` and every `findBy*` run their callback
-// again on each DOM change and every 50 ms, and they keep only the last error, so the default builds
-// and discards one DOM print per attempt, which costs most on a page that renders a full route.
-// Testing Library runs each attempt with its private `_disableExpensiveErrorDiagnostics`
-// flag set, and it builds the error again, with the DOM, when the wait times out. Only the attempts
-// skip the print. A failed query outside a wait still prints the DOM.
+// A failed query prints the whole DOM into its error, and a wait discards the error of each attempt.
+// Testing Library runs each attempt with its private `_disableExpensiveErrorDiagnostics` flag set and
+// builds the timeout error again outside it, so only the discarded attempts skip the print.
 const { getElementError } = getConfig();
 configure({
 	getElementError(message, container) {
@@ -52,9 +49,9 @@ configure({
 });
 
 // jsdom lays nothing out, but `getComputedStyle` still matches every rule of every stylesheet against
-// the element, and the role queries call it for each candidate and its ancestors. Sonner inserts its
-// toast stylesheet into the document when it is imported. None of its rules hides an element, so
-// without it no role query changes its answer, and each one stops paying for its rules.
+// the element, and the role queries call it for each candidate and its ancestors. This removes every
+// stylesheet that the imports above inserted: today only Sonner's, which `@/lib/toast` loads. None of
+// its rules hides an element, so no role query changes its answer.
 for (const style of document.head.querySelectorAll("style")) {
 	style.remove();
 }
