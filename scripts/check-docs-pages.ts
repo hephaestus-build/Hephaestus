@@ -263,26 +263,6 @@ export function screenshotProblems(
 	return problems;
 }
 
-/**
- * Each migration note must be named on an upgrade page in the admin guide, so that the operator who
- * follows that page meets every required action. The note's heading is its name in the migration guide.
- */
-export function migrationNoteProblems(
-	notes: readonly { file: string; source: string }[],
-	upgradePages: string,
-): string[] {
-	const problems: string[] = [];
-	for (const { file, source } of notes) {
-		const title = /^#### (?:🔴 )?(?<title>.+)$/mu.exec(source)?.groups?.title?.trim();
-		if (title === undefined) {
-			problems.push(`${file}:1: Start the migration note with a "#### " heading.`);
-		} else if (!upgradePages.includes(title)) {
-			problems.push(`${file}:1: Name "${title}" on an upgrade page in docs/admin/.`);
-		}
-	}
-	return problems;
-}
-
 async function pagesOf(directory: string): Promise<string[]> {
 	const entries = await readdir(path.resolve(repositoryRoot, directory), {
 		recursive: true,
@@ -321,21 +301,6 @@ if (import.meta.main) {
 			);
 		}
 	}
-	const adminPages = await pagesOf("docs/admin");
-	const upgradePages = adminPages.filter((file) => /^docs\/admin\/upgrade[^/]*\.mdx?$/u.test(file));
-	const migrationEntries = await readdir(path.resolve(repositoryRoot, ".migration"));
-	const notes = await Promise.all(
-		migrationEntries
-			.filter((name) => name.endsWith(".md") && name !== "README.md")
-			.map(async (name) => {
-				const file = `.migration/${name}`;
-				return { file, source: await readFile(path.resolve(repositoryRoot, file), "utf8") };
-			}),
-	);
-	const upgradeSources = await Promise.all(
-		upgradePages.map(async (file) => readFile(path.resolve(repositoryRoot, file), "utf8")),
-	);
-	problems.push(...migrationNoteProblems(notes, upgradeSources.join("\n")));
 	if (problems.length > 0) {
 		process.stderr.write(
 			`${problems.join("\n")}\nThe rules: docs/contributor/documentation-guide.md.\n`,

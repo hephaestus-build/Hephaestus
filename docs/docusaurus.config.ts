@@ -1,8 +1,13 @@
+import { readdir, readFile } from "node:fs/promises";
+import nodePath from "node:path";
+
 import type { Options as SitemapOptions } from "@docusaurus/plugin-sitemap";
 import type { Options as ThemeOptions } from "@docusaurus/theme-classic";
 import type { UserThemeConfig } from "@docusaurus/theme-common";
 import type { Config, LoadContext, Plugin } from "@docusaurus/types";
 import { themes as prismThemes } from "prism-react-renderer";
+
+import { migrationEntries } from "./plugins/migration-entries.ts";
 
 const REPO_URL = "https://github.com/hephaestus-build/Hephaestus";
 
@@ -120,6 +125,37 @@ const dropHeadingAnchors = () => stripHeadingAnchors;
  * only the build knows, and Docusaurus's own inline script derives it the same way.
  * `src/theme/ColorModeToggle` writes the reader's choice back to the cookie.
  */
+/*
+ * The entries of the migration guide and the pending `.migration` notes, for the `MigrationEntries`
+ * component of an upgrade page. A change writes its operator action once, in its note, and the page
+ * lists it. A note that breaks the rules of `.migration/README.md` fails the build.
+ */
+function migrationEntriesPlugin(context: LoadContext): Plugin {
+	const root = nodePath.resolve(context.siteDir, "..");
+	const notes = nodePath.join(root, ".migration");
+	return {
+		name: "migration-entries",
+		getPathsToWatch: () => [nodePath.join(root, "MIGRATION.md"), nodePath.join(notes, "*.md")],
+		async loadContent() {
+			const files = await readdir(notes);
+			const names = files.filter((name) => name.endsWith(".md") && name !== "README.md");
+			return migrationEntries(
+				await readFile(nodePath.join(root, "MIGRATION.md"), "utf8"),
+				await Promise.all(
+					names.map(async (name) => ({
+						file: `.migration/${name}`,
+						source: await readFile(nodePath.join(notes, name), "utf8"),
+					})),
+				),
+				`${REPO_URL}/blob/main`,
+			);
+		},
+		async contentLoaded({ content, actions }) {
+			actions.setGlobalData(content);
+		},
+	};
+}
+
 function themeCookiePlugin(context: LoadContext): Plugin {
 	const { type, namespace } = context.siteStorage;
 	const storage = `window[${JSON.stringify(type)}]`;
@@ -209,6 +245,7 @@ const config: Config = {
 		["@docusaurus/theme-classic", { customCss: "./src/css/custom.css" } satisfies ThemeOptions],
 		rawMermaidSourcePlugin,
 		themeCookiePlugin,
+		migrationEntriesPlugin,
 		[
 			"@docusaurus/plugin-content-docs",
 			{

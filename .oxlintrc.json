@@ -549,6 +549,12 @@
 			}
 		},
 		{
+			// The docs site parses the migration guide for its upgrade pages and runs no test suite of its
+			// own, so the parser's tests reach it across the two trees.
+			"files": ["scripts/migration-entries.test.ts"],
+			"rules": { "import/no-relative-parent-imports": "off" }
+		},
+		{
 			// The gate hands Vite+ the same lint object the webapp's Vite config builds, so it uses the
 			// loader that builds it, which lives with the house plugin; no alias spans the two trees.
 			"files": ["scripts/check-lint-contract.ts"],
