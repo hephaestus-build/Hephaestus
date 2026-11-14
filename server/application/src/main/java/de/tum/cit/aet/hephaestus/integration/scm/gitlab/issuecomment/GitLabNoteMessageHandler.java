@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment;
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.integration.core.events.BotCommandReceivedEvent;
+import de.tum.cit.aet.hephaestus.integration.core.events.ReviewCommand;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -23,7 +24,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabCommentReplySink;
 import java.time.Instant;
-import java.util.Locale;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,7 +38,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<GitLabNoteEventDTO> {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabNoteMessageHandler.class);
-    private static final String BOT_COMMAND_PREFIX = "/hephaestus ";
 
     private final GitLabIssueCommentProcessor issueCommentProcessor;
     private final GitLabDiffNoteWebhookProcessor diffNoteProcessor;
@@ -151,11 +150,10 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
             return;
         }
 
-        // Bot command detection: check for commands like "/hephaestus review" on MR notes.
-        // Publishes an event so the agent module can process it asynchronously.
+        // A note that is exactly the review command asks for a review, as a GitHub comment does.
         if ("MergeRequest".equals(noteableType)
                 && action == GitLabEventAction.CREATE
-                && isBotCommand(event.objectAttributes().note())) {
+                && ReviewCommand.matches(event.objectAttributes().note())) {
             handleBotCommand(event, context, safeProjectPath);
         }
 
@@ -180,12 +178,6 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
                         noteableType,
                         event.objectAttributes().id());
         }
-    }
-
-    private static boolean isBotCommand(String noteBody) {
-        return noteBody != null
-                && !noteBody.isBlank()
-                && noteBody.strip().toLowerCase(Locale.ROOT).startsWith(BOT_COMMAND_PREFIX);
     }
 
     /**
@@ -267,13 +259,7 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
             return;
         }
 
-        log.info(
-                "Bot command detected: command={}, projectPath={}, mrIid={}, authorNativeId={}, noteId={}",
-                attrs.note().strip(),
-                safeProjectPath,
-                mr.iid(),
-                user.id(),
-                attrs.id());
+        log.debug("Review command detected: scopeId={}, mrIid={}, noteId={}", scopeId, mr.iid(), attrs.id());
 
         String username = user.username();
         if (username == null) {

@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.events.BotCommandReceivedEvent;
+import de.tum.cit.aet.hephaestus.integration.core.events.ReviewCommand;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
@@ -15,7 +16,6 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewRequestStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -31,7 +31,6 @@ import org.springframework.transaction.annotation.Propagation;
 @RequiredArgsConstructor
 public class ReviewCommandListener {
     private static final Logger log = LoggerFactory.getLogger(ReviewCommandListener.class);
-    private static final String REVIEW = "/hephaestus review";
 
     private final ReviewRequestService requests;
     private final List<ScmCommentReplySink> replies;
@@ -41,9 +40,8 @@ public class ReviewCommandListener {
     // Not joined: a review request runs only outside a transaction.
     @ApplicationModuleListener(propagation = Propagation.NOT_SUPPORTED)
     public void on(BotCommandReceivedEvent command) {
-        String text = command.noteBody().strip().toLowerCase(Locale.ROOT);
-        // The comment must hold only the command, on every provider, as the user guide says.
-        if (!text.equals(REVIEW)) {
+        // The listener applies the grammar itself rather than trust each publisher.
+        if (!ReviewCommand.matches(command.noteBody())) {
             log.debug(
                     "Ignored an unknown bot command: workspaceId={}, itemId={}",
                     command.workspaceId(),

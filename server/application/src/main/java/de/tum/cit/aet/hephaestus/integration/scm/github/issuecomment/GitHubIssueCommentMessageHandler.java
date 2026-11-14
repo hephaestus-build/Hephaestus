@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment;
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.integration.core.events.BotCommandReceivedEvent;
+import de.tum.cit.aet.hephaestus.integration.core.events.ReviewCommand;
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.EventPayloadDeserializer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -43,9 +44,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class GitHubIssueCommentMessageHandler extends AbstractIntegrationMessageHandler<GitHubIssueCommentEventDTO> {
 
     private static final Logger log = LoggerFactory.getLogger(GitHubIssueCommentMessageHandler.class);
-
-    /** The one command a pull request comment can carry. Only a comment that is exactly this text counts. */
-    private static final String REVIEW_COMMAND = "/hephaestus review";
 
     private final ProcessingContextFactory contextFactory;
     private final GitHubIssueProcessor issueProcessor;
@@ -131,7 +129,7 @@ public class GitHubIssueCommentMessageHandler extends AbstractIntegrationMessage
      * listener resolves the commenter by the provider's own user id, never by login.
      */
     private void publishReviewCommand(GitHubCommentDTO comment, GitHubIssueDTO pullRequest, ProcessingContext context) {
-        if (comment.body() == null || !comment.body().strip().equalsIgnoreCase(REVIEW_COMMAND)) {
+        if (!ReviewCommand.matches(comment.body())) {
             return;
         }
         var author = comment.author();

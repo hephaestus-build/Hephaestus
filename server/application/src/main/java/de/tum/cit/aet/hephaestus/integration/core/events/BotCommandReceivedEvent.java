@@ -4,8 +4,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Published when a bot command (e.g. {@code /hephaestus review}) is detected on a pull-request / merge-request
- * comment. {@code ReviewCommandListener} in {@code practices/} handles it.
+ * Published when a new pull-request / merge-request comment matches {@link ReviewCommand}. Both adapters apply that one
+ * grammar before they publish. {@code ReviewCommandListener} in {@code practices/} handles it.
  *
  * <p>Vendor-neutral by contract: the publishing adapter resolves the comment to its workspace and canonical item,
  * so the subscriber never names a provider's repository or number. The GitHub and GitLab comment handlers publish it.
