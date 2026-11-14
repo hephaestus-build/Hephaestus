@@ -58,7 +58,7 @@ function OutlineIntegrationPage() {
 					{outline.tokenStatusError && (
 						<QueryErrorAlert
 							error={outline.tokenStatusError}
-							title="We could not verify the Outline token"
+							title="We could not verify the Outline key"
 							onRetry={outline.retryTokenStatus}
 						/>
 					)}
@@ -68,7 +68,11 @@ function OutlineIntegrationPage() {
 							connectionState={outline.connectionState}
 							credentialsUnreadableSince={outline.credentialsUnreadableSince}
 							providerCleanupUnconfirmed={outline.providerCleanupUnconfirmed}
-							credentialRecovery="Enter a new key under Replace API key below"
+							credentialRecovery={
+								outline.isConnectionActive
+									? "Enter a new key under Replace API key below"
+									: "Resume the connection, then enter a new key under Replace API key"
+							}
 							displayName="Outline"
 						/>
 					)}

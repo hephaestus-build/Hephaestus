@@ -138,11 +138,18 @@ export function OutlineConnectCard({
 
 							<OutlineTokenPanel tokenStatus={tokenStatus} isLoading={isTokenStatusLoading} />
 
-							<ReplaceOutlineKeyForm
-								isReplacing={isReplacingToken}
-								error={replaceTokenError}
-								onReplace={onReplaceToken}
-							/>
+							{isConnectionActive ? (
+								<ReplaceOutlineKeyForm
+									isReplacing={isReplacingToken}
+									error={replaceTokenError}
+									onReplace={onReplaceToken}
+								/>
+							) : (
+								// The server stores a key only on an active connection.
+								<p className="text-sm text-muted-foreground">
+									To replace the API key, resume the Outline connection first.
+								</p>
+							)}
 						</>
 					) : (
 						<FieldGroup>
@@ -304,7 +311,7 @@ function OutlineTokenPanel({ tokenStatus, isLoading }: OutlineTokenPanelProps) {
 			<div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
 				<span className="flex items-center gap-1.5">
 					<KeyRoundIcon className="size-4 text-success" aria-hidden />
-					Outline accepts this token
+					Outline accepts this key
 				</span>
 				{hasMetadata && (hasText(tokenStatus.name) || hasText(tokenStatus.last4)) && (
 					<span>
