@@ -30,7 +30,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { problemDetailOf } from "@/lib/problem-detail";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
-import { IntegrationCardHeading } from "./IntegrationCardHeading";
+import { WorkspaceIntegrationCardHeading } from "./WorkspaceIntegrationCardHeading";
 
 export interface WorkspaceStoppedGitLabProjectsProps {
 	/** The stopped projects whose synced work this workspace keeps, as the current list reads them. */
@@ -222,7 +222,7 @@ export function WorkspaceStoppedGitLabProjects({
 	return (
 		<Card>
 			<CardHeader>
-				<IntegrationCardHeading>Stopped projects</IntegrationCardHeading>
+				<WorkspaceIntegrationCardHeading>Stopped projects</WorkspaceIntegrationCardHeading>
 				<CardDescription>
 					Hephaestus no longer syncs these projects, but this workspace keeps the work it already
 					synced from them. To sync a project again, add it under Manage repositories with its

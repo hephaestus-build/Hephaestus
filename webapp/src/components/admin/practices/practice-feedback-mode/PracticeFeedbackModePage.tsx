@@ -7,14 +7,14 @@ import type {
 	PracticeGroup,
 	PracticeReviewSettings,
 } from "@/api/types.gen";
-import { PracticeDetailHoverCard } from "@/components/admin/practice-editor/PracticeDetailHoverCard";
-import {
-	FeedbackSendingSettings,
-	type FeedbackSendingUpdate,
-} from "@/components/admin/practices/FeedbackSendingSettings";
+import { WorkspacePracticeDetailHoverCard } from "@/components/admin/practice-editor/WorkspacePracticeDetailHoverCard";
 import { currentDefinition } from "@/components/admin/practices/practice-definition-fields";
 import { practiceSetupLevel } from "@/components/admin/practices/practice-search";
 import { PracticeTreeSkeleton } from "@/components/admin/practices/PracticeSkeletons";
+import {
+	WorkspaceFeedbackSendingSettings,
+	type FeedbackSendingUpdate,
+} from "@/components/admin/practices/WorkspaceFeedbackSendingSettings";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { detailSearch } from "@/components/layout/detail-drawer/detail-stack";
 import { FEEDBACK_MODE_DEFS } from "@/components/practice-vocabulary/feedback-mode-defs";
@@ -232,7 +232,7 @@ export function PracticeFeedbackModePage({
 				}}
 				onClearWorkspaceDefault={onClearWorkspaceDefault}
 			/>
-			<FeedbackSendingSettings
+			<WorkspaceFeedbackSendingSettings
 				settings={settings}
 				saving={pending.workspace}
 				onSet={onSetSending}
@@ -692,7 +692,7 @@ function PracticeFeedbackModeRow({
 			</ItemMedia>
 			<ItemContent className="min-w-0 gap-0.5">
 				<ItemTitle className="line-clamp-none w-full min-w-0">
-					<PracticeDetailHoverCard practice={practice}>
+					<WorkspacePracticeDetailHoverCard practice={practice}>
 						<Link
 							to="/w/$workspaceSlug/admin/practices"
 							params={{ workspaceSlug }}
@@ -701,7 +701,7 @@ function PracticeFeedbackModeRow({
 						>
 							{name}
 						</Link>
-					</PracticeDetailHoverCard>
+					</WorkspacePracticeDetailHoverCard>
 				</ItemTitle>
 				<ItemDescription className="flex flex-wrap items-center gap-1.5">
 					<WorkTypeLabel itemKind={practice.kind} />

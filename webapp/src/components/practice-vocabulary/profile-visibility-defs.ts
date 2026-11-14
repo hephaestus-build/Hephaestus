@@ -7,7 +7,7 @@ export type ProfileVisibility = "VISIBLE" | "HIDDEN";
 /**
  * Whether a group's practices appear on the practice profiles developers read.
  *
- * A registry rather than a bare `<Badge>` because this sits inches from `CatalogOriginBadge` on the
+ * A registry rather than a bare `<Badge>` because this sits inches from `WorkspaceCatalogOriginBadge` on the
  * same row, and the two mean unrelated things: one is a setting an administrator chose, the other is
  * a relationship to the catalog. Rendered as two identical outline chips they read as one family.
  * The icon is what separates them when colour cannot (WCAG 2.2 SC 1.4.1).

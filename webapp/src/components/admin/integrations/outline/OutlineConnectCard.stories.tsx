@@ -9,7 +9,7 @@ import { OutlineConnectCard } from "./OutlineConnectCard";
  * Outline's token-paste lifecycle card — the one piece with no SCM/Slack analogue. When disconnected
  * it is the connect form (server URL + API token); when connected it names the linked instance and
  * shows the stored token's health plus a guarded disconnect. The connection plane (health, freshness,
- * diagnostics, Sync/Cancel) lives in the shared `SyncStatusHeader` above this card on the real page, so
+ * diagnostics, Sync/Cancel) lives in the shared `WorkspaceSyncStatusHeader` above this card on the real page, so
  * every story here is one immutable snapshot of connect / token / disconnect only.
  */
 const meta = {
@@ -102,7 +102,7 @@ export const ConnectUnavailable: Story = {
 /**
  * Connected and healthy — the linked instance is named and the stored token is accepted, with its
  * metadata and expiry. Health/freshness/webhook and the Sync controls are not here: they live in the
- * shared `SyncStatusHeader` above this card on the page.
+ * shared `WorkspaceSyncStatusHeader` above this card on the page.
  */
 export const Connected: Story = {
 	args: {
@@ -202,7 +202,7 @@ export const ConnectedDisconnectDialog: Story = {
 /**
  * The provider suspended the connection. The identity line lowercases nothing — it reads the wire enum
  * through `CONNECTION_STATE_LABEL` and drops the green check (spent only on ACTIVE). The consequence
- * ("Syncing is paused…") is explained by the shared `ConnectionStateNotice` above this card on the page.
+ * ("Syncing is paused…") is explained by the shared `WorkspaceConnectionStateNotice` above this card on the page.
  */
 export const ConnectedButSuspended: Story = {
 	args: {

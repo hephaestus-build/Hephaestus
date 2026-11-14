@@ -20,7 +20,6 @@ import {
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
-import { IntegrationCardHeading } from "./IntegrationCardHeading";
 import { ActivateChannelDialog } from "./slack-channels/ActivateChannelDialog";
 import { AddChannelDialog, type AddChannelDialogProps } from "./slack-channels/AddChannelDialog";
 import { type ChannelHistory, ChannelHistorySheet } from "./slack-channels/ChannelHistorySheet";
@@ -28,6 +27,7 @@ import type { SlackConsentState } from "./slack-channels/consent-terms";
 import { RemoveChannelAlertDialog } from "./slack-channels/RemoveChannelAlertDialog";
 import { SlackChannelRow } from "./slack-channels/SlackChannelRow";
 import { swallow } from "./swallow";
+import { WorkspaceIntegrationCardHeading } from "./WorkspaceIntegrationCardHeading";
 
 export type { SlackConsentState } from "./slack-channels/consent-terms";
 
@@ -156,7 +156,9 @@ export function WorkspaceSlackChannelsSettings({
 		<>
 			<Card>
 				<CardHeader>
-					<IntegrationCardHeading>Slack channel monitoring</IntegrationCardHeading>
+					<WorkspaceIntegrationCardHeading>
+						Slack channel monitoring
+					</WorkspaceIntegrationCardHeading>
 					<CardDescription>
 						Hephaestus reads the <strong>new</strong> messages in monitored channels and uses AI to
 						write practice feedback. The feedback goes to each author’s Practice profile and

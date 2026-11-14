@@ -36,7 +36,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { problemDetailOf } from "@/lib/problem-detail";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 
-import { IntegrationCardHeading } from "./IntegrationCardHeading";
+import { WorkspaceIntegrationCardHeading } from "./WorkspaceIntegrationCardHeading";
 
 interface RepositoryItem {
 	nameWithOwner: string;
@@ -255,7 +255,7 @@ export function WorkspaceRepositoriesSettings({
 		<div className="space-y-6">
 			<Card>
 				<CardHeader>
-					<IntegrationCardHeading>Manage repositories</IntegrationCardHeading>
+					<WorkspaceIntegrationCardHeading>Manage repositories</WorkspaceIntegrationCardHeading>
 					<CardDescription>
 						Add or remove the repositories that Hephaestus watches for practice reviews and
 						conversations. The sync table above shows how recently each one synced.

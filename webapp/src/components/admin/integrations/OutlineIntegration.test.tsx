@@ -13,11 +13,11 @@ import { SyncLivenessProvider } from "@/hooks/use-sync-liveness";
 import { server } from "@/mocks/server";
 import { type Deferred, deferred } from "@/test/async";
 
-import { ConnectionStateNotice } from "./ConnectionStateNotice";
 import { OutlineCollectionsSection } from "./outline/OutlineCollectionsSection";
 import { OutlineConnectCard } from "./outline/OutlineConnectCard";
-import { SyncResourcesTable } from "./SyncResourcesTable";
-import { SyncStatusHeader } from "./SyncStatusHeader";
+import { WorkspaceConnectionStateNotice } from "./WorkspaceConnectionStateNotice";
+import { WorkspaceSyncResourcesTable } from "./WorkspaceSyncResourcesTable";
+import { WorkspaceSyncStatusHeader } from "./WorkspaceSyncStatusHeader";
 
 vi.mock("@/lib/toast", () => ({
 	toast: { success: vi.fn(), message: vi.fn(), error: vi.fn() },
@@ -61,10 +61,13 @@ function OutlineIntegrationTestContainer() {
 				/>
 			)}
 			{outline.hasConnection && !outline.isConnectionActive && (
-				<ConnectionStateNotice connectionState={outline.connectionState} displayName="Outline" />
+				<WorkspaceConnectionStateNotice
+					connectionState={outline.connectionState}
+					displayName="Outline"
+				/>
 			)}
 			{outline.hasConnection && (
-				<SyncStatusHeader label="Outline" {...outline.syncStatusHeaderProps} />
+				<WorkspaceSyncStatusHeader label="Outline" {...outline.syncStatusHeaderProps} />
 			)}
 			<OutlineConnectCard {...outline.connectCardProps} />
 			{outline.collectionsProps && <OutlineCollectionsSection {...outline.collectionsProps} />}
@@ -452,7 +455,7 @@ describe("Outline integration — with live push down, polling keeps a running s
 
 		renderContainer({ livePushUnavailable: true });
 
-		// Flush the mount fetches: the shared header's ActiveJobProgress narrates the running reconcile.
+		// Flush the mount fetches: the shared header's WorkspaceActiveJobProgress narrates the running reconcile.
 		await act(async () => {
 			await vi.advanceTimersByTimeAsync(50);
 		});
@@ -503,13 +506,15 @@ describe("Outline integration — Outline not enabled on this instance", () => {
 });
 
 /**
- * The shared `SyncResourcesTable`, driven by the one hook. Rendered on its own here because it and
+ * The shared `WorkspaceSyncResourcesTable`, driven by the one hook. Rendered on its own here because it and
  * the management card name the same collection — the count and freshness are printed once, by
  * this one, so they cannot disagree.
  */
 function LedgerContainer() {
 	const outline = useOutlineIntegration("demo");
-	return outline.hasConnection ? <SyncResourcesTable {...outline.syncResourcesProps} /> : null;
+	return outline.hasConnection ? (
+		<WorkspaceSyncResourcesTable {...outline.syncResourcesProps} />
+	) : null;
 }
 
 function renderLedger() {

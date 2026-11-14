@@ -8,7 +8,6 @@ import {
 	getLlmUsageReportQueryKey,
 	updateWorkspaceLlmBudgetMutation,
 } from "@/api/@tanstack/react-query.gen";
-import { SetOwnProviderBudgetDialog } from "@/components/admin/usage/SetOwnProviderBudgetDialog";
 import {
 	monthOf,
 	USAGE_SEARCH_PARAMS,
@@ -19,6 +18,7 @@ import {
 	type UsageView,
 	WorkspaceLlmUsagePage,
 } from "@/components/admin/usage/WorkspaceLlmUsagePage";
+import { WorkspaceSetOwnProviderBudgetDialog } from "@/components/admin/usage/WorkspaceSetOwnProviderBudgetDialog";
 import { useNow } from "@/components/common/use-now";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
@@ -96,7 +96,7 @@ function AdminUsageContainer() {
 				view={view}
 				onEditOwnProviderCap={() => editOwnProviderCap(true)}
 			/>
-			<SetOwnProviderBudgetDialog
+			<WorkspaceSetOwnProviderBudgetDialog
 				open={isEditingOwnProviderCap}
 				currentCapUsd={report?.ownProviderMonthlyBudgetUsd ?? null}
 				fx={report?.fx}

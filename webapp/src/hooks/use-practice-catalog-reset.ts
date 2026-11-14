@@ -9,7 +9,7 @@ import {
 import type { Practice, PracticeGroup } from "@/api/types.gen";
 import { parseGroupAdoptionPreview } from "@/components/admin/practices/catalog-adoption";
 import { currentDefinition } from "@/components/admin/practices/practice-definition-fields";
-import type { ResetToCatalogState } from "@/components/admin/practices/ResetToCatalogDialog";
+import type { ResetToCatalogState } from "@/components/admin/practices/WorkspaceResetToCatalogDialog";
 import { problemStatusOf } from "@/lib/problem-detail";
 
 import {

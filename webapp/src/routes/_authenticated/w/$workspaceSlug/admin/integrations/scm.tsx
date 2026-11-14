@@ -5,15 +5,15 @@ import { WorkspaceProviderRepairs } from "@/routes/_authenticated/-provider-repa
 
 import { getWorkspaceOptions } from "@/api/@tanstack/react-query.gen";
 
-import { ConnectionStateNotice } from "@/components/admin/integrations/ConnectionStateNotice";
-import { IntegrationCardHeading } from "@/components/admin/integrations/IntegrationCardHeading";
-import { JobHistoryCard } from "@/components/admin/integrations/JobHistoryCard";
-import { SyncResourcesTable } from "@/components/admin/integrations/SyncResourcesTable";
-import { SyncStatusHeader } from "@/components/admin/integrations/SyncStatusHeader";
+import { WorkspaceConnectionStateNotice } from "@/components/admin/integrations/WorkspaceConnectionStateNotice";
 import { WorkspaceGitLabProjectSelection } from "@/components/admin/integrations/WorkspaceGitLabProjectSelection";
+import { WorkspaceIntegrationCardHeading } from "@/components/admin/integrations/WorkspaceIntegrationCardHeading";
+import { WorkspaceJobHistoryCard } from "@/components/admin/integrations/WorkspaceJobHistoryCard";
 import { WorkspaceRepositoriesSettings } from "@/components/admin/integrations/WorkspaceRepositoriesSettings";
 import { WorkspaceScmTokenSettings } from "@/components/admin/integrations/WorkspaceScmTokenSettings";
 import { WorkspaceStoppedGitLabProjects } from "@/components/admin/integrations/WorkspaceStoppedGitLabProjects";
+import { WorkspaceSyncResourcesTable } from "@/components/admin/integrations/WorkspaceSyncResourcesTable";
+import { WorkspaceSyncStatusHeader } from "@/components/admin/integrations/WorkspaceSyncStatusHeader";
 import { GitHubIcon, GitLabIcon } from "@/components/icons/brand";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
@@ -69,7 +69,7 @@ function ScmIntegrationPage() {
 			/>
 
 			{hasConnection && (
-				<ConnectionStateNotice
+				<WorkspaceConnectionStateNotice
 					connectionState={scm.connectionState}
 					credentialsUnreadableSince={scm.credentialsUnreadableSince}
 					providerCleanupUnconfirmed={scm.providerCleanupUnconfirmed}
@@ -78,7 +78,7 @@ function ScmIntegrationPage() {
 				/>
 			)}
 
-			<SyncStatusHeader
+			<WorkspaceSyncStatusHeader
 				label={label}
 				actions={
 					isAppInstallationWorkspace ? (
@@ -103,10 +103,10 @@ function ScmIntegrationPage() {
 			{hasConnection && (
 				<Card>
 					<CardHeader>
-						<IntegrationCardHeading>Repository sync state</IntegrationCardHeading>
+						<WorkspaceIntegrationCardHeading>Repository sync state</WorkspaceIntegrationCardHeading>
 					</CardHeader>
 					<CardContent>
-						<SyncResourcesTable {...scm.syncResourcesProps} />
+						<WorkspaceSyncResourcesTable {...scm.syncResourcesProps} />
 					</CardContent>
 				</Card>
 			)}
@@ -119,7 +119,7 @@ function ScmIntegrationPage() {
 
 			{scm.followsGitLabGroup && <WorkspaceStoppedGitLabProjects {...scm.stoppedProjectsProps} />}
 
-			{hasConnection && <JobHistoryCard {...scm.jobHistoryProps} />}
+			{hasConnection && <WorkspaceJobHistoryCard {...scm.jobHistoryProps} />}
 			{typeof repairId === "number" && (
 				<WorkspaceProviderRepairs
 					key={`${slug}/${repairId}`}

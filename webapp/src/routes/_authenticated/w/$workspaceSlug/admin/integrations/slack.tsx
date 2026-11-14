@@ -5,13 +5,13 @@ import { hasText } from "@/lib/text";
 import { toast } from "@/lib/toast";
 import { WorkspaceProviderRepairs } from "@/routes/_authenticated/-provider-repairs";
 
-import { ConnectionStateNotice } from "@/components/admin/integrations/ConnectionStateNotice";
-import { IntegrationCardHeading } from "@/components/admin/integrations/IntegrationCardHeading";
-import { JobHistoryCard } from "@/components/admin/integrations/JobHistoryCard";
-import { SyncResourcesTable } from "@/components/admin/integrations/SyncResourcesTable";
-import { SyncStatusHeader } from "@/components/admin/integrations/SyncStatusHeader";
+import { WorkspaceConnectionStateNotice } from "@/components/admin/integrations/WorkspaceConnectionStateNotice";
+import { WorkspaceIntegrationCardHeading } from "@/components/admin/integrations/WorkspaceIntegrationCardHeading";
+import { WorkspaceJobHistoryCard } from "@/components/admin/integrations/WorkspaceJobHistoryCard";
 import { WorkspaceSlackChannelsSettings } from "@/components/admin/integrations/WorkspaceSlackChannelsSettings";
 import { WorkspaceSlackConnectionSettings } from "@/components/admin/integrations/WorkspaceSlackConnectionSettings";
+import { WorkspaceSyncResourcesTable } from "@/components/admin/integrations/WorkspaceSyncResourcesTable";
+import { WorkspaceSyncStatusHeader } from "@/components/admin/integrations/WorkspaceSyncStatusHeader";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { SlackIcon } from "@/components/icons/brand";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -78,7 +78,7 @@ function SlackIntegrationPage() {
 			)}
 
 			{ready && hasConnection && (
-				<ConnectionStateNotice
+				<WorkspaceConnectionStateNotice
 					connectionState={slack.connectionState}
 					credentialsUnreadableSince={slack.credentialsUnreadableSince}
 					providerCleanupUnconfirmed={slack.providerCleanupUnconfirmed}
@@ -88,16 +88,16 @@ function SlackIntegrationPage() {
 			)}
 
 			{ready && hasConnection && (
-				<SyncStatusHeader label="Slack" {...slack.syncStatusHeaderProps} />
+				<WorkspaceSyncStatusHeader label="Slack" {...slack.syncStatusHeaderProps} />
 			)}
 
 			{hasConnection && (
 				<Card>
 					<CardHeader>
-						<IntegrationCardHeading>Channel sync state</IntegrationCardHeading>
+						<WorkspaceIntegrationCardHeading>Channel sync state</WorkspaceIntegrationCardHeading>
 					</CardHeader>
 					<CardContent>
-						<SyncResourcesTable {...slack.syncResourcesProps} />
+						<WorkspaceSyncResourcesTable {...slack.syncResourcesProps} />
 					</CardContent>
 				</Card>
 			)}
@@ -106,7 +106,7 @@ function SlackIntegrationPage() {
 
 			{manageable && <WorkspaceSlackChannelsSettings {...slack.channelsSettingsProps} />}
 
-			{hasConnection && <JobHistoryCard {...slack.jobHistoryProps} />}
+			{hasConnection && <WorkspaceJobHistoryCard {...slack.jobHistoryProps} />}
 			{typeof repairId === "number" && (
 				<WorkspaceProviderRepairs
 					key={`${slug}/${repairId}`}

@@ -11,7 +11,7 @@ import {
 	LlmConnectionFields,
 	type LlmConnectionFieldsValue,
 	validateConnectionFields,
-} from "@/components/admin/instance-llm/LlmConnectionFields";
+} from "@/components/admin/llm/LlmConnectionFields";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {

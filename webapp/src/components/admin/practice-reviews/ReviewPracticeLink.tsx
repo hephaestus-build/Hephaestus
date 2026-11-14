@@ -2,7 +2,7 @@ import { Link, useParams } from "@tanstack/react-router";
 
 import { cn } from "cn";
 import type { GroupRef, Practice } from "@/api/types.gen";
-import { PracticeDetailHoverCard } from "@/components/admin/practice-editor/PracticeDetailHoverCard";
+import { WorkspacePracticeDetailHoverCard } from "@/components/admin/practice-editor/WorkspacePracticeDetailHoverCard";
 import { InlineLink } from "@/components/common/InlineLink";
 import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 
@@ -42,7 +42,7 @@ export function ReviewPracticeLink({
 	);
 
 	return practice ? (
-		<PracticeDetailHoverCard practice={practice}>{link}</PracticeDetailHoverCard>
+		<WorkspacePracticeDetailHoverCard practice={practice}>{link}</WorkspacePracticeDetailHoverCard>
 	) : (
 		link
 	);

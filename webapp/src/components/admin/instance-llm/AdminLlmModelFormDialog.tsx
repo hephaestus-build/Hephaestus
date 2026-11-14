@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
 	LlmModelCapabilities,
 	type LlmModelCapabilitiesProps,
-} from "@/components/admin/instance-llm/LlmModelCapabilities";
+} from "@/components/admin/llm/LlmModelCapabilities";
 
 import type {
 	CreateLlmModelRequest,
@@ -41,9 +41,9 @@ import {
 	type LlmModelFieldsValue,
 	modelFieldsValueOf,
 	validateModelFields,
-} from "./LlmModelFields";
+} from "../llm/LlmModelFields";
+import type { PriceModeValue } from "../llm/PriceModeEditor";
 import { type ModelAccessScope, ModelAccessScopeChoice } from "./ModelAccessScopeChoice";
-import type { PriceModeValue } from "./PriceModeEditor";
 import { type WorkspaceOption, workspaceFacetOptions } from "./workspace-options";
 
 export interface AdminLlmModelFormDialogProps {

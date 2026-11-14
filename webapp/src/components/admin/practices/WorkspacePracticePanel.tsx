@@ -4,12 +4,12 @@ import { currentDefinition } from "@/components/admin/practices/practice-definit
 
 import { cn } from "cn";
 import type { Practice, PracticeDefinitionOptions } from "@/api/types.gen";
-import { canResetToCatalog } from "@/components/admin/practices/CatalogOriginBadge";
 import {
 	PRACTICE_SETUP_LEVEL_LABELS,
 	practiceFormLevel,
 } from "@/components/admin/practices/practice-search";
 import { PracticeDefinitionSkeleton } from "@/components/admin/practices/PracticeSkeletons";
+import { canResetToCatalog } from "@/components/admin/practices/WorkspaceCatalogOriginBadge";
 import { WorkspacePracticeDefinition } from "@/components/admin/practices/WorkspacePracticeDefinition";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";

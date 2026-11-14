@@ -38,17 +38,6 @@ import {
 	type FeedbackModeTreeState,
 	PracticeFeedbackModePage,
 } from "@/components/admin/practices/practice-feedback-mode/PracticeFeedbackModePage";
-import { PracticeReviewBatch } from "@/components/admin/practices/PracticeReviewBatch";
-import { PracticeReviewSchedule } from "@/components/admin/practices/PracticeReviewSchedule";
-import type {
-	PeopleScopeOptions,
-	RepositoryScopeOptions,
-} from "@/components/admin/practices/PracticeReviewScopeSettings";
-import {
-	type PracticeReviewField,
-	PracticeReviewSettings,
-	type PracticeReviewWorkspaceUpdate,
-} from "@/components/admin/practices/PracticeReviewSettings";
 import {
 	FeedbackModeSkeleton,
 	ReviewSettingsSkeleton,
@@ -59,6 +48,17 @@ import {
 } from "@/components/admin/practices/review/review-sections";
 import { ReviewPage } from "@/components/admin/practices/review/ReviewPage";
 import { ReviewReadinessAction } from "@/components/admin/practices/review/ReviewReadinessAction";
+import { WorkspacePracticeReviewBatch } from "@/components/admin/practices/WorkspacePracticeReviewBatch";
+import { WorkspacePracticeReviewSchedule } from "@/components/admin/practices/WorkspacePracticeReviewSchedule";
+import type {
+	PeopleScopeOptions,
+	RepositoryScopeOptions,
+} from "@/components/admin/practices/WorkspacePracticeReviewScopeSettings";
+import {
+	type PracticeReviewField,
+	WorkspacePracticeReviewSettings,
+	type PracticeReviewWorkspaceUpdate,
+} from "@/components/admin/practices/WorkspacePracticeReviewSettings";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { usePracticeFeedbackModeMutations } from "@/hooks/use-practice-feedback-mode-mutations";
 import { usePracticeReviewSettingsMutation } from "@/hooks/use-practice-review-settings";
@@ -455,7 +455,7 @@ function AutomatedReviewSection({ workspaceSlug }: { workspaceSlug: string }) {
 		);
 	} else {
 		reviewSettings = (
-			<PracticeReviewSettings
+			<WorkspacePracticeReviewSettings
 				workspaceSlug={workspaceSlug}
 				model={
 					settingsReviewModel.status === "error"
@@ -504,7 +504,7 @@ function AutomatedReviewSection({ workspaceSlug }: { workspaceSlug: string }) {
 	return (
 		<div className="max-w-3xl space-y-8">
 			{reviewSettings}
-			<PracticeReviewSchedule
+			<WorkspacePracticeReviewSchedule
 				workspaceSlug={workspaceSlug}
 				schedules={schedulesQuery.data ?? []}
 				recentBatches={scheduledBatchesQuery.data?.content ?? []}
@@ -619,7 +619,7 @@ function PastWorkSection({ workspaceSlug }: { workspaceSlug: string }) {
 
 	return (
 		<div className="max-w-3xl">
-			<PracticeReviewBatch
+			<WorkspacePracticeReviewBatch
 				batches={batchesQuery.data?.content ?? []}
 				totalBatches={batchesQuery.data?.totalElements ?? 0}
 				isLoading={batchesQuery.isLoading}

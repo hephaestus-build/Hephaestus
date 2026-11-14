@@ -49,7 +49,7 @@ export function PracticeTreeSkeleton({ groups, practicesPerGroup }: PracticeTree
 }
 
 /**
- * Mirrors {@link PracticeDefinitionPreview}, so the panel does not reflow when the definition lands.
+ * Mirrors {@link WorkspacePracticeDefinitionPreview}, so the panel does not reflow when the definition lands.
  */
 export function PracticeDefinitionSkeleton() {
 	return (

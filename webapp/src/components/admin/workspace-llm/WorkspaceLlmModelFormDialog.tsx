@@ -2,7 +2,7 @@ import { type ReactNode, useState } from "react";
 import {
 	LlmModelCapabilities,
 	type LlmModelCapabilitiesProps,
-} from "@/components/admin/instance-llm/LlmModelCapabilities";
+} from "@/components/admin/llm/LlmModelCapabilities";
 import { FieldSeparator } from "@/components/ui/field";
 
 import type {
@@ -16,8 +16,8 @@ import {
 	type LlmModelFieldsValue,
 	modelFieldsValueOf,
 	validateModelFields,
-} from "@/components/admin/instance-llm/LlmModelFields";
-import type { PriceModeValue } from "@/components/admin/instance-llm/PriceModeEditor";
+} from "@/components/admin/llm/LlmModelFields";
+import type { PriceModeValue } from "@/components/admin/llm/PriceModeEditor";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,

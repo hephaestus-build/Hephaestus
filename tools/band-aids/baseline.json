@@ -16425,7 +16425,7 @@
 		"reason": "root-cause: Establish the precise boundary contract and remove this failure mask or suppression."
 	},
 	{
-		"file": "webapp/src/components/admin/instance-llm/LlmModelFields.tsx",
+		"file": "webapp/src/components/admin/llm/LlmModelFields.tsx",
 		"category": "debt-marker",
 		"source": "until",
 		"context": "export interface LlmModelFieldsValue -> operatedBy?: OperatedBy;",
@@ -16434,10 +16434,10 @@
 		"reason": "constraint: Absent until the admin declares the model, as the wire carries it."
 	},
 	{
-		"file": "webapp/src/components/admin/integrations/ActiveJobProgress.tsx",
+		"file": "webapp/src/components/admin/integrations/WorkspaceActiveJobProgress.tsx",
 		"category": "debt-marker",
 		"source": "until",
-		"context": "<module> -> export function ActiveJobProgress({ job }: ActiveJobProgressProps) {",
+		"context": "<module> -> export function WorkspaceActiveJobProgress({ job }: WorkspaceActiveJobProgressProps) {",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "constraint: What the running job is doing right now, in two layers matching the server's progress contract: `itemsProcessed`/`itemsTotal` are job-global and drive the bar, while `progress.currentStep` is the phase-local sentence (\"Backfilling ls1intum/Artemis: issues #4812 → #3200\") and `progress.phase` is the chip. `itemsTotal: null` means \"not yet known\" (a backfill has no high-water marks until its first batch lands), and that path stays a spinner rather than inventing a denominator."
@@ -16461,7 +16461,7 @@
 		"reason": "constraint: Nothing is deleted until the confirm — and the copy must state the mirror erase."
 	},
 	{
-		"file": "webapp/src/components/admin/integrations/SyncJobsTable.tsx",
+		"file": "webapp/src/components/admin/integrations/WorkspaceSyncJobsTable.tsx",
 		"category": "debt-marker",
 		"source": "until",
 		"context": "<module> -> function JobProgressPanel({ progress }: { progress: SyncJobProgress }) {",
@@ -16470,7 +16470,7 @@
 		"reason": "constraint: The last progress report the job persisted, as a labelled detail list.  Deliberately absent: \"Triggered by\". `triggeredByUserId` ships on every manual job, but it is an account id and this client has no endpoint that resolves one to a person — there is no account lookup in the generated API at all. Rendering \"Triggered by 42\" would answer the accountability question with a number the admin still has to go look up by hand, so the field stays unrendered until the server either resolves it to a name or exposes a lookup. The Type column already says *how* the job started; only *who* is missing."
 	},
 	{
-		"file": "webapp/src/components/admin/integrations/SyncNowButton.stories.tsx",
+		"file": "webapp/src/components/admin/integrations/WorkspaceSyncNowButton.stories.tsx",
 		"category": "debt-marker",
 		"source": "until",
 		"context": "<module> -> const meta = {",
@@ -16479,7 +16479,7 @@
 		"reason": "constraint: The manual-sync trigger, and the only trigger on its card. Disabled while a job is already running or a trigger is in flight, so a double-click can't enqueue a second run. It owns a visually-hidden `aria-live` region because a plain button-label swap is not reliably announced — the region stays empty until a run begins.  `triggeringType` is a type rather than a flag because the split menu can start a backfill from this same button: the announcement has to be able to name which operation started. Once the server has a job, the announcement switches to naming *that* job — a backfill request that landed behind a running reconciliation must not report the reconciliation as a backfill."
 	},
 	{
-		"file": "webapp/src/components/admin/integrations/SyncNowButton.stories.tsx",
+		"file": "webapp/src/components/admin/integrations/WorkspaceSyncNowButton.stories.tsx",
 		"category": "debt-marker",
 		"source": "until",
 		"context": "<module> -> export const Idle: Story = {",
@@ -16488,10 +16488,10 @@
 		"reason": "constraint: Idle — clickable, and the live region is silent until a run actually starts."
 	},
 	{
-		"file": "webapp/src/components/admin/integrations/SyncNowButton.tsx",
+		"file": "webapp/src/components/admin/integrations/WorkspaceSyncNowButton.tsx",
 		"category": "debt-marker",
 		"source": "until",
-		"context": ": SyncNowButtonProps) > </Button> -> }",
+		"context": ": WorkspaceSyncNowButtonProps) > </Button> -> }",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "constraint: Announce sync start/progress to assistive tech; a plain button-label swap is not reliably announced. Empty when idle, so nothing is spoken until a run begins. Once the server has a job, the announcement names *that* job rather than the trigger's intent — a backfill request that landed behind a running reconciliation must not report the reconciliation as a backfill."
@@ -17118,28 +17118,28 @@
 		"reason": "constraint: The choice lasts until the page closes."
 	},
 	{
-		"file": "webapp/src/components/admin/practices/CatalogUpdatesLink.tsx",
+		"file": "webapp/src/components/admin/practices/WorkspaceCatalogUpdatesLink.tsx",
 		"category": "debt-marker",
 		"source": "until",
-		"context": "export interface CatalogUpdatesLinkProps -> count?: number;",
+		"context": "export interface WorkspaceCatalogUpdatesLinkProps -> count?: number;",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "constraint: How many updates wait. Absent until the inbox has loaded, so no count is guessed."
 	},
 	{
-		"file": "webapp/src/components/admin/practices/PracticeDefinitionPreview.tsx",
+		"file": "webapp/src/components/admin/practices/WorkspacePracticeDefinitionPreview.tsx",
 		"category": "lint-suppression",
 		"source": "// oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex",
-		"context": ": PracticeDefinitionPreviewProps) > </UntrustedMarkdown> </div> </AccordionContent> </AccordionItem> -> tabIndex={0}",
+		"context": ": WorkspacePracticeDefinitionPreviewProps) > </UntrustedMarkdown> </div> </AccordionContent> </AccordionItem> -> tabIndex={0}",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "constraint: Keyboard users must be able to scroll this region."
 	},
 	{
-		"file": "webapp/src/components/admin/practices/PracticeReviewBatch.tsx",
+		"file": "webapp/src/components/admin/practices/WorkspacePracticeReviewBatch.tsx",
 		"category": "debt-marker",
 		"source": "until",
-		"context": ": PracticeReviewBatchProps) -> const unknown = isError && batches.length === 0;",
+		"context": ": WorkspacePracticeReviewBatchProps) -> const unknown = isError && batches.length === 0;",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "constraint: for the history, and a new estimate waits until the page knows nothing is running."
@@ -18228,7 +18228,7 @@
 		"file": "webapp/src/hooks/use-connection-sync.ts",
 		"category": "debt-marker",
 		"source": "until",
-		"context": "export interface ConnectionSyncOptions extends Pick< SyncResourcesTableProps, \"resourceNoun\" | \"resourceNounPlural\" | \"expectedClassKeys\" > -> connectionId: number | undefined;",
+		"context": "export interface ConnectionSyncOptions extends Pick< WorkspaceSyncResourcesTableProps, \"resourceNoun\" | \"resourceNounPlural\" | \"expectedClassKeys\" > -> connectionId: number | undefined;",
 		"count": 1,
 		"owner": "BANDAID",
 		"reason": "constraint: Undefined until the provider's lookup has found a connection; every sync query waits on it."

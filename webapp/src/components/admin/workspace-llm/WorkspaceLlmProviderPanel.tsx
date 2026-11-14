@@ -7,8 +7,8 @@ import type {
 	WorkspaceLlmModel,
 	WorkspaceLlmProbeResult,
 } from "@/api/types.gen";
-import { LlmConnectionApi } from "@/components/admin/instance-llm/LlmConnectionApi";
-import { apiKeyLine } from "@/components/admin/instance-llm/LlmConnectionFields";
+import { LlmConnectionApi } from "@/components/admin/llm/LlmConnectionApi";
+import { apiKeyLine } from "@/components/admin/llm/LlmConnectionFields";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
