@@ -395,7 +395,7 @@ async function withReleaseHistory(
 		? plan
 		: {
 				kind: "refuse",
-				reason: `${problems.join("; ")}. The Version PR folds such a section into the release that shipped it; regenerate it.`,
+				reason: `${problems.join("; ")}. A Version PR regenerated after the last release folds such a section into it; push to main, merge the regenerated Version PR, and cut again.`,
 			};
 }
 

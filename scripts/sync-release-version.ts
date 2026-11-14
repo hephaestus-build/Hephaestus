@@ -29,8 +29,9 @@ if (version.endsWith("-rc.0")) {
 	);
 }
 
-// A cut that failed after its Version PR merged burned its number. Its notes belong to the release that shipped them.
-// Outside a Git checkout there are no tags, so nothing folds.
+// A cut that failed after its Version PR merged burned its number. Its notes belong to the published release that
+// shipped them. Only a later published release proves a number burned, so a cut in progress and a checkout with
+// missing tags fold nothing that a release carries.
 const tags = spawnSync("git", ["tag", "--list", "v*"], { encoding: "utf8" });
 const published = new Set(
 	tags.status === 0
@@ -40,7 +41,7 @@ const published = new Set(
 if (tags.status === 0 && existsSync("CHANGELOG.md")) {
 	writeFileSync(
 		"CHANGELOG.md",
-		foldUnpublished(readFileSync("CHANGELOG.md", "utf8"), CHANGELOG_HEADINGS, published, version),
+		foldUnpublished(readFileSync("CHANGELOG.md", "utf8"), CHANGELOG_HEADINGS, published),
 	);
 }
 
@@ -63,7 +64,7 @@ for (const { file, re, line } of edits) {
 const migrationFile = "MIGRATION.md";
 const rendered = renderMigrationGuide(readFileSync(migrationFile, "utf8"));
 const migration =
-	tags.status === 0 ? foldUnpublished(rendered, MIGRATION_HEADINGS, published, version) : rendered;
+	tags.status === 0 ? foldUnpublished(rendered, MIGRATION_HEADINGS, published) : rendered;
 const sections = migrationGuideSections(migration);
 const pendingSection = sections.find((section) => section.heading === "### Next release");
 if (!pendingSection) {

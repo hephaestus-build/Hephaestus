@@ -56,8 +56,10 @@ sequenceDiagram
    It previews the version bump, `CHANGELOG.md` section, and `MIGRATION.md` section.
    The migration section uses `.migration/` fragments at the `### Next release` anchor.
    A cut that fails after its Version PR merged leaves a number that no release carries.
-   The next Version PR moves that section of both files into the release that shipped its changes.
-   From 1.0.0-rc.1 on, the release planner refuses a cut while either file names an unpublished release.
+   After the next release publishes, the Version PR moves that section of both files into it.
+   The entries keep their text.
+   From 1.0.0-rc.1 on, the release planner refuses a cut while either file still has such a section.
+   It also refuses a cut while `CHANGELOG.md` lacks the section of a published release.
    Updates use `GITHUB_TOKEN`.
    The pull request's own CI/CD run validates its updated head, with approval when GitHub requests it.
    [The Version PR trigger contract](./ci-cd.mdx#merge-policy) owns approval, reruns and manual recovery.
@@ -538,7 +540,7 @@ Commit channels render the source chart with verified image pins. Release channe
 Edit `scripts/templates/migration-guide.md` for current operator instructions, not `MIGRATION.md`.
 `vp run release:version` renders the template in the Version PR. Keep its single
 `<!-- VERSION_HISTORY -->` marker. Released entries retain their original text, image namespaces
-and signing identities. Add new version-specific actions through [migration fragments](#writing-changesets).
+and signing identities. A section whose number no release carries moves under the release that shipped it, as [The flow](#the-flow) step 2 describes. Add new version-specific actions through [migration fragments](#writing-changesets).
 
 Run `vp run gate:changesets` to verify generation and history preservation.
 

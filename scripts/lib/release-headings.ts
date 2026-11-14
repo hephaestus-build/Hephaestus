@@ -3,8 +3,8 @@ import { type Version, compareVersions, formatVersion, parseVersion } from "./re
 
 /**
  * The release headings of CHANGELOG.md (`## 1.0.0-rc.8`) and MIGRATION.md (`### v1.0.0-rc.8`). A Version PR writes
- * the number before the cut, so a cut that fails leaves a heading that no release carries. Release history from the
- * 1.0 baseline on names only published releases and the version being cut.
+ * the number before the cut, so a cut that fails leaves a heading that no release carries. Once a later release is
+ * published, release history from the 1.0 baseline on names only published releases.
  */
 export interface HeadingStyle {
 	readonly depth: 2 | 3;
@@ -29,9 +29,17 @@ function headings(markdown: string): { depth: number; start: number; contentStar
 	let fence: string | undefined;
 	let offset = 0;
 	for (const line of markdown.split("\n")) {
-		const marker = /^ {0,3}(?<fence>`{3,}|~{3,})/u.exec(line)?.groups?.fence;
-		if (marker !== undefined && (fence === undefined || marker.startsWith(fence))) {
-			fence = fence === undefined ? marker : undefined;
+		const marker = /^ {0,3}(?<fence>`{3,}|~{3,})(?<info>.*)$/u.exec(line)?.groups;
+		if (marker?.fence !== undefined && fence === undefined) {
+			fence = marker.fence;
+		} else if (
+			marker?.fence !== undefined &&
+			fence !== undefined &&
+			marker.fence.startsWith(fence) &&
+			marker.info?.trim() === ""
+		) {
+			// Only a bare fence of the same kind, at least as long, closes the block.
+			fence = undefined;
 		} else if (fence === undefined) {
 			const depth = /^(?<hashes>#{1,6})(?: |$)/u.exec(line)?.groups?.hashes?.length;
 			if (depth !== undefined) {
@@ -65,17 +73,38 @@ function releaseSections(markdown: string, style: HeadingStyle): Section[] {
 	});
 }
 
-/** The release headings from the baseline on that name neither a published release nor the version being cut. */
-export function unpublishedHeadings(
+const parsedReleases = (published: ReadonlySet<string>): Version[] =>
+	[...published]
+		.flatMap((version) => {
+			const parsed = parseVersion(version);
+			return parsed === undefined ? [] : [parsed];
+		})
+		.toSorted(compareVersions);
+
+/**
+ * The published release that shipped the changes of a section whose number no release carries: the first published
+ * release after it. A version without a tag and without a later published release can still be a cut in progress,
+ * so it has no target and keeps its section.
+ */
+function shippedBy(version: Version, published: ReadonlySet<string>): string | undefined {
+	if (published.has(formatVersion(version))) {
+		return undefined;
+	}
+	const release = parsedReleases(published).find(
+		(candidate) => compareVersions(candidate, version) > 0,
+	);
+	return release === undefined ? undefined : formatVersion(release);
+}
+
+/** The release headings from the baseline on whose number no release carries, although a later release is published. */
+export function burnedHeadings(
 	markdown: string,
 	style: HeadingStyle,
 	published: ReadonlySet<string>,
-	current: string,
 ): string[] {
 	return releaseSections(markdown, style)
-		.map((section) => formatVersion(section.version))
-		.filter((version) => version !== current && !published.has(version))
-		.map((version) => `${style.prefix}${version}`);
+		.filter((section) => shippedBy(section.version, published) !== undefined)
+		.map((section) => `${style.prefix}${formatVersion(section.version)}`);
 }
 
 // Changesets writes these groups in this order; a merged section keeps it. Text before the first group comes first.
@@ -105,70 +134,54 @@ function mergeBodies(bodies: readonly string[], style: HeadingStyle): string {
 	}
 	return [...groups]
 		.toSorted(([left], [right]) => groupOrder(left) - groupOrder(right))
-		.map(([key, entries]) => [key, ...entries].filter(Boolean).join("\n\n"))
+		.map(([key, entries]) => [key, entries.join("\n")].filter(Boolean).join("\n\n"))
 		.join("\n\n");
 }
 
 /**
- * Moves each section whose version was never published into the section of the release that shipped its changes:
- * the first published release or the version being cut after it. If that release has no section yet, the newest
- * folded section takes its name. Published sections keep their place and their entries.
+ * Moves each burned section into the section of the published release that shipped its changes. If that release has
+ * no section, the newest burned section takes its name. Published sections keep their place and their entries.
  */
 export function foldUnpublished(
 	markdown: string,
 	style: HeadingStyle,
 	published: ReadonlySet<string>,
-	current: string,
 ): string {
-	const releases = [...published, current]
-		.flatMap((version) => {
-			const parsed = parseVersion(version);
-			return parsed === undefined ? [] : [parsed];
-		})
-		.toSorted(compareVersions);
 	const sections = releaseSections(markdown, style);
-	const shipped = (version: Version) => {
-		const name = formatVersion(version);
-		return name === current || published.has(name);
-	};
 	const target = new Map<Section, string>();
-	for (const section of sections.filter((candidate) => !shipped(candidate.version))) {
-		const release = releases.find((version) => compareVersions(version, section.version) > 0);
-		if (release === undefined) {
-			throw new Error(
-				`${style.prefix}${formatVersion(section.version)} is newer than the version being cut, ${current}`,
-			);
+	for (const section of sections) {
+		const release = shippedBy(section.version, published);
+		if (release !== undefined) {
+			target.set(section, release);
 		}
-		target.set(section, formatVersion(release));
 	}
 	if (target.size === 0) {
 		return markdown;
 	}
+	const releaseOf = (section: Section) => target.get(section) ?? formatVersion(section.version);
 	// Each release gets one section: its own, or the newest one that folds into it.
 	const holder = new Map<string, Section>();
 	for (const section of sections) {
-		const release = target.get(section) ?? formatVersion(section.version);
-		const held = holder.get(release);
-		const own = !target.has(section);
+		const held = holder.get(releaseOf(section));
 		if (
 			held === undefined ||
-			own ||
+			!target.has(section) ||
 			(target.has(held) && compareVersions(section.version, held.version) > 0)
 		) {
-			holder.set(release, section);
+			holder.set(releaseOf(section), section);
 		}
 	}
 	let result = "";
 	let cursor = 0;
 	for (const section of sections) {
-		const release = target.get(section) ?? formatVersion(section.version);
+		const release = releaseOf(section);
 		result += markdown.slice(cursor, section.start);
 		cursor = section.end;
 		if (holder.get(release) !== section) {
 			continue;
 		}
 		const members = sections
-			.filter((member) => (target.get(member) ?? formatVersion(member.version)) === release)
+			.filter((member) => releaseOf(member) === release)
 			.toSorted((left, right) => compareVersions(right.version, left.version));
 		const body = mergeBodies(
 			members.map((member) => member.body),
@@ -180,8 +193,8 @@ export function foldUnpublished(
 }
 
 /**
- * What the release history names wrongly at a cut: a heading from the baseline on whose version no published release
- * carries, and a published release without its CHANGELOG section.
+ * What the release history names wrongly at a cut: a burned heading that the Version PR did not fold, and a published
+ * release without its CHANGELOG section.
  */
 export function releaseHistoryProblems(
 	changelog: string,
@@ -205,11 +218,11 @@ export function releaseHistoryProblems(
 		);
 	});
 	return [
-		...unpublishedHeadings(changelog, CHANGELOG_HEADINGS, published, current).map(
-			(heading) => `CHANGELOG.md has "${heading}", which no published release carries`,
+		...burnedHeadings(changelog, CHANGELOG_HEADINGS, published).map(
+			(heading) => `CHANGELOG.md has "${heading}", which no release carries`,
 		),
-		...unpublishedHeadings(migration, MIGRATION_HEADINGS, published, current).map(
-			(heading) => `MIGRATION.md has "${heading}", which no published release carries`,
+		...burnedHeadings(migration, MIGRATION_HEADINGS, published).map(
+			(heading) => `MIGRATION.md has "${heading}", which no release carries`,
 		),
 		...missing.map(
 			(version) => `CHANGELOG.md has no "## ${version}" section for a published release`,
