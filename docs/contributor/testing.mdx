@@ -18,7 +18,8 @@ Apply two checks to each test that you add or change:
 - **Refactor check.** A correct change that keeps the behavior must not break the test.
   A test that breaks anyway is a change detector. Rewrite it against the behavior, or delete it.
 - **Defect check.** A plausible bug in the behavior must break the test.
-  A test that no bug can break is a tautology. A deliberate break or a [mutation run](./security-mutation-testing.md) shows it.
+  A test that no bug can break is a tautology. A deliberate break shows it.
+  For security-boundary classes, a [mutation run](./security-mutation-testing.md) shows it too.
 
 Test through the surface that callers use:
 
@@ -26,21 +27,23 @@ Test through the surface that callers use:
 | --- | --- | --- |
 | Server behavior | HTTP through `WebTestClient`, or the public method of a domain service | The response, and the rows that the test created |
 | A call to a provider | A fake at the process boundary, such as `ScriptedGitHub` | What reached the provider |
-| Component | Its props, in a story | What the component derives and renders |
+| Component | Its props, in a story | What the component derives and renders, and each callback it fires with its arguments |
 | SPA wire contract | The real router, in a route test | The request that it sends |
 | Chart | Values, through `helm template` | The rendered fields that the test name states |
 | Policy over configuration | Every workflow or every manifest | A property that holds for each one |
 
-Mock only at a process boundary. Assert the resulting state, not the calls that produced it.
+Use the real collaborator. Use a test double only at a process boundary, or for time and randomness.
+Assert the resulting state, not the calls that produced it.
 A `verify` of a call on a collaborator in the same process breaks on a correct refactor.
 It also passes when the collaborator does the wrong thing, such as a query without its `TYPE(…)` predicate.
 
 ### Goldens and snapshots
 
-A golden file pins bytes. Use one only for these subjects:
+A golden file or a snapshot pins bytes. Use one only for these subjects:
 
 - A generated artifact whose diff a person reviews, such as the OpenAPI spec, the generated clients or the ERD.
 - A wire contract between two programs. Examples are a tool schema's structure, runner output that the server parses, and a recorded webhook.
+- A rendered story in Chromatic, which a person approves.
 - A characterization of current behavior while a refactor runs. Delete it when the refactor merges.
 
 For other subjects, assert the behavior that the golden shows.
@@ -66,21 +69,24 @@ A safety rule, such as the rule that quoted instructions are data, gets labelled
 ### Delete a test
 
 Delete a test with the same care as you add one.
-The pull request states the behavior that the test protected, and the test that protects it now, or why nothing must.
+The pull request states the behavior that the test protected.
+It names the test that protects that behavior now, or says why no test needs to protect it.
 Improve a test that guards trust, tenancy or the verifiable release. Never weaken it.
 A flaky test is a broken test ([Flaky tests](#flaky-tests)).
 
 ### Test-value review
 
-`vp run report:test-churn` lists the tests and test-resource directories that `refactor` and `perf` commits modified.
-These commit types declare that behavior stays the same. Thus, each test on the list is a candidate change detector.
-Apply the two checks to the top entries, and keep, rewrite or delete each one.
+`vp run report:test-churn` ranks tests and test-resource directories by the number of `refactor` and `perf` commits that modified them, then by all commits that changed them.
+Those commit types declare that behavior stays the same. Thus, a test near the top is a candidate change detector.
+A policy test, such as an architecture rule or the CI contract, changes when its subject changes. That alone does not make it a change detector.
+
+Maintainers run the report each month. They apply the two checks to the top entries, and keep, rewrite or delete each one.
 `--since` sets the start of the window (default: 90 days ago), `--top` the number of rows, and `--ref` the branch.
 
 ## Unit tests
 
 - Extend `BaseUnitTest` for isolated component tests.
-- Use Mockito (`@Mock`, `@InjectMocks`) for dependencies.
+- Use the real collaborator. Use a Mockito double (`@Mock`) only at a process boundary, or for time and randomness.
 - Keep unit tests independent of Spring contexts and Testcontainers.
 
 ## Integration tests

@@ -21,7 +21,7 @@ const BEHAVIOR_PRESERVING = /^(?:refactor|perf)(?:\([^)]*\))?:/u;
 const TEST_FILE = /(?:Test\.java|\.test\.tsx?|\.spec\.ts|\.stories\.tsx)$/u;
 const TEST_RESOURCES = /^(?<suite>.*\/src\/test\/resources\/[^/]+(?:\/[^/]+)?)\//u;
 
-/** The suite a path belongs to: a test file itself, or a test-resource directory two levels deep. */
+/** The suite a path belongs to: a test file itself, or its directory one or two levels below `src/test/resources`. */
 export function suiteOf(path: string): string | undefined {
 	if (TEST_FILE.test(path)) {
 		return path;
@@ -49,14 +49,12 @@ export function rank(commits: Commit[]): SuiteChurn[] {
 			suites.set(suite, churn);
 		}
 	}
-	return [...suites.values()]
-		.filter((churn) => churn.behaviorPreserving > 0)
-		.toSorted(
-			(a, b) =>
-				b.behaviorPreserving - a.behaviorPreserving ||
-				b.commits - a.commits ||
-				a.suite.localeCompare(b.suite),
-		);
+	return [...suites.values()].toSorted(
+		(a, b) =>
+			b.behaviorPreserving - a.behaviorPreserving ||
+			b.commits - a.commits ||
+			a.suite.localeCompare(b.suite),
+	);
 }
 
 const COMMIT_MARKER = "\u0001";
@@ -96,7 +94,11 @@ if (import.meta.main) {
 	]);
 	const commits = parseLog(log);
 	const preserving = commits.filter((commit) => BEHAVIOR_PRESERVING.test(commit.subject)).length;
-	const ranked = rank(commits).slice(0, Number(values.top));
+	const top = Number(values.top);
+	if (!Number.isInteger(top) || top < 1) {
+		throw new Error(`--top takes a positive whole number, not ${values.top}`);
+	}
+	const ranked = rank(commits).slice(0, top);
 	console.log(
 		`${commits.length} commits on ${values.ref} since ${values.since}; ${preserving} are refactor or perf.\n`,
 	);
