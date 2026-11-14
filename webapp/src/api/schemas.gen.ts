@@ -10530,6 +10530,20 @@ export const ReorderRequestSchema = {
 	required: ["slugs"],
 } as const;
 
+export const ReplaceOutlineTokenRequestSchema = {
+	type: "object",
+	description: "A new API key of the connected Outline team",
+	properties: {
+		token: {
+			type: "string",
+			description: "Outline API key",
+			maxLength: 512,
+			minLength: 0,
+		},
+	},
+	required: ["token"],
+} as const;
+
 export const RepositoryInfoSchema = {
 	type: "object",
 	description: "Information about a git repository",

@@ -832,6 +832,7 @@ export { removeResultMarkMutation } from "./react-query/removeResultMark.gen.js"
 export { removeStoppedGitLabProjectMutation } from "./react-query/removeStoppedGitLabProject.gen.js";
 export { reorderCatalogGroupsMutation } from "./react-query/reorderCatalogGroups.gen.js";
 export { reorderPracticeGroupsMutation } from "./react-query/reorderPracticeGroups.gen.js";
+export { replaceOutlineTokenMutation } from "./react-query/replaceOutlineToken.gen.js";
 export { replaceOwnFeedbackResponseMutation } from "./react-query/replaceOwnFeedbackResponse.gen.js";
 export { replayConsumerDeadLetterMutation } from "./react-query/replayConsumerDeadLetter.gen.js";
 export { replayInstallationDeadLetterMutation } from "./react-query/replayInstallationDeadLetter.gen.js";

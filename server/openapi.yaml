@@ -5263,6 +5263,46 @@ paths:
       summary: Live state of the API token behind this workspace's Outline connection
       tags:
       - Connections
+    put:
+      description: "Keeps the connection, its collections and its mirrored documents.\
+        \ Outline must accept the key, and the key must belong to the connected Outline\
+        \ team."
+      operationId: replaceOutlineToken
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReplaceOutlineTokenRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutlineTokenStatus"
+          description: Key replaced; the state of the new key returned
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+          description: "Outline does not accept the key, or the key belongs to another\
+            \ Outline team"
+        "404":
+          description: The workspace has no ACTIVE Outline connection
+      summary: Replace the API key of this workspace's Outline connection
+      tags:
+      - Connections
   /workspaces/{workspaceSlug}/connections/{connectionId}/provider-repairs:
     get:
       operationId: listConnectionProviderRepairs
@@ -21512,6 +21552,17 @@ components:
           minItems: 0
       required:
       - slugs
+    ReplaceOutlineTokenRequest:
+      type: object
+      description: A new API key of the connected Outline team
+      properties:
+        token:
+          type: string
+          description: Outline API key
+          maxLength: 512
+          minLength: 0
+      required:
+      - token
     RepositoryInfo:
       type: object
       description: Information about a git repository

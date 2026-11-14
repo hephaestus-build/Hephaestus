@@ -5057,6 +5057,16 @@ export type ReorderRequest = {
 };
 
 /**
+ * A new API key of the connected Outline team
+ */
+export type ReplaceOutlineTokenRequest = {
+	/**
+	 * Outline API key
+	 */
+	token: string;
+};
+
+/**
  * Information about a git repository
  */
 export type RepositoryInfo = {
@@ -12835,6 +12845,41 @@ export type GetOutlineTokenStatusResponses = {
 
 export type GetOutlineTokenStatusResponse =
 	GetOutlineTokenStatusResponses[keyof GetOutlineTokenStatusResponses];
+
+export type ReplaceOutlineTokenData = {
+	body: ReplaceOutlineTokenRequest;
+	path: {
+		/**
+		 * Workspace slug
+		 */
+		workspaceSlug: string;
+	};
+	query?: never;
+	url: "/workspaces/{workspaceSlug}/connections/outline/token";
+};
+
+export type ReplaceOutlineTokenErrors = {
+	/**
+	 * Outline does not accept the key, or the key belongs to another Outline team
+	 */
+	400: ProblemDetail;
+	/**
+	 * The workspace has no ACTIVE Outline connection
+	 */
+	404: unknown;
+};
+
+export type ReplaceOutlineTokenError = ReplaceOutlineTokenErrors[keyof ReplaceOutlineTokenErrors];
+
+export type ReplaceOutlineTokenResponses = {
+	/**
+	 * Key replaced; the state of the new key returned
+	 */
+	200: OutlineTokenStatus;
+};
+
+export type ReplaceOutlineTokenResponse =
+	ReplaceOutlineTokenResponses[keyof ReplaceOutlineTokenResponses];
 
 export type ListConnectionProviderRepairsData = {
 	body?: never;

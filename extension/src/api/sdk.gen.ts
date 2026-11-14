@@ -615,6 +615,9 @@ import type {
 	ReorderCatalogGroupsResponses,
 	ReorderPracticeGroupsData,
 	ReorderPracticeGroupsResponses,
+	ReplaceOutlineTokenData,
+	ReplaceOutlineTokenErrors,
+	ReplaceOutlineTokenResponses,
 	ReplaceOwnFeedbackResponseData,
 	ReplaceOwnFeedbackResponseErrors,
 	ReplaceOwnFeedbackResponseResponses,
@@ -3328,6 +3331,28 @@ export const getOutlineTokenStatus = <ThrowOnError extends boolean = false>(
 		security: [{ scheme: "bearer", type: "http" }],
 		url: "/workspaces/{workspaceSlug}/connections/outline/token",
 		...options,
+	});
+
+/**
+ * Replace the API key of this workspace's Outline connection
+ *
+ * Keeps the connection, its collections and its mirrored documents. Outline must accept the key, and the key must belong to the connected Outline team.
+ */
+export const replaceOutlineToken = <ThrowOnError extends boolean = false>(
+	options: Options<ReplaceOutlineTokenData, ThrowOnError>,
+): RequestResult<ReplaceOutlineTokenResponses, ReplaceOutlineTokenErrors, ThrowOnError> =>
+	(options.client ?? client).put<
+		ReplaceOutlineTokenResponses,
+		ReplaceOutlineTokenErrors,
+		ThrowOnError
+	>({
+		security: [{ scheme: "bearer", type: "http" }],
+		url: "/workspaces/{workspaceSlug}/connections/outline/token",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const listConnectionProviderRepairs = <ThrowOnError extends boolean = false>(
