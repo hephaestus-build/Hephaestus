@@ -1,0 +1,10 @@
+{
+	"accepted": [
+		{
+			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/settings.tsx?tsr-split=component",
+			"gzipBytes": 39760,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4384",
+			"reason": "A suspended workspace's settings show what suspension stops and offer Resume workspace with the danger zone, so its admins and instance admins can bring it back. The card and its resume read are measured, with no new package."
+		}
+	]
+}
