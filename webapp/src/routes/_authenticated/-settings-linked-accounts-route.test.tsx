@@ -8,16 +8,16 @@ import {
 	within,
 } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { afterEach, assert, describe, expect, it, vi } from "vitest";
+import { afterEach, assert, beforeAll, describe, expect, it } from "vitest";
 
 import type { IdentityProviderView, IdentityView, LinkedProvider } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 import { captureNavigation, restoreNavigation } from "@/test/navigation";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { loadRouteCode, renderRouteAt, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
-vi.setConfig({ testTimeout: 30_000 });
+beforeAll(async () => loadRouteCode("/settings"), ROUTE_RENDER_WAIT.timeout);
 
 afterEach(restoreNavigation);
 

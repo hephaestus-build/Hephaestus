@@ -4,6 +4,7 @@
 
 import path from "node:path";
 
+import { configure, getConfig } from "@testing-library/react";
 import {
 	afterAll,
 	afterEach,
@@ -31,6 +32,32 @@ vi.mock("@/components/common/CodeEditor", async () => import("./code-editor.mock
 // test bundle never imports — so configure an absolute base here. The MSW handlers use
 // `*/path` wildcards, so this host is matched regardless of its exact value.
 client.setConfig({ baseUrl: "http://localhost:8080" });
+
+// A failed query prints the whole DOM in its error. `waitFor` and every `findBy*` run their callback
+// again on each DOM change and every 50 ms, and they keep only the last error, so the default builds
+// and discards one DOM print per attempt, which costs most on a page that renders a full route.
+// Testing Library runs each attempt with its private `_disableExpensiveErrorDiagnostics`
+// flag set, and it builds the error again, with the DOM, when the wait times out. Only the attempts
+// skip the print. A failed query outside a wait still prints the DOM.
+const { getElementError } = getConfig();
+configure({
+	getElementError(message, container) {
+		if (Reflect.get(getConfig(), "_disableExpensiveErrorDiagnostics") !== true) {
+			return getElementError(message, container);
+		}
+		const error = new Error(message ?? "");
+		error.name = "TestingLibraryElementError";
+		return error;
+	},
+});
+
+// jsdom lays nothing out, but `getComputedStyle` still matches every rule of every stylesheet against
+// the element, and the role queries call it for each candidate and its ancestors. Sonner inserts its
+// toast stylesheet into the document when it is imported. None of its rules hides an element, so
+// without it no role query changes its answer, and each one stops paying for its rules.
+for (const style of document.head.querySelectorAll("style")) {
+	style.remove();
+}
 
 // jsdom has no ResizeObserver; Base UI's anchor positioning observes elements to keep a popup
 // pinned to its trigger. A stub that never fires is enough — no assertion depends on the measurements.
