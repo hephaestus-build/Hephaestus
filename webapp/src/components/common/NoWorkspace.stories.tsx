@@ -42,7 +42,7 @@ export const InstanceAdminOnly: Story = {
 	args: { creation: "instance-admin-only" },
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByText(/Ask an instance admin to create a workspace or add you\./u),
+			canvas.getByText(/ask whoever manages your organization or group to add you/u),
 		).toBeVisible();
 		await expect(canvas.queryByRole("link", { name: "Create workspace" })).toBeNull();
 	},

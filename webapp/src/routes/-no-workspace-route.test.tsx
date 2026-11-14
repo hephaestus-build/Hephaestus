@@ -25,7 +25,8 @@ function serveCreationPolicy(initial: PolicyRead) {
 	return read;
 }
 
-const ASK_ADMIN = /Ask an instance admin to create a workspace or add you\./u;
+const ASK_ADMIN =
+	/ask whoever manages your organization or group to add you, or ask an instance admin to create a workspace\./u;
 
 describe("No workspace", () => {
 	beforeEach(() => {
