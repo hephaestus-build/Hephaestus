@@ -50,42 +50,12 @@ RUN test -d /opt/pi-sdk/node_modules/@earendil-works/pi-coding-agent \
       || (echo "Pi SDK not found at /opt/pi-sdk/node_modules" >&2; exit 1) && \
     mkdir -p /workspace && chown 0:0 /workspace && chmod 1777 /workspace
 
-RUN mkdir -p /tmp/abi-check && ln -sf /opt/pi-sdk/node_modules /tmp/abi-check/node_modules && \
-    printf 'const sdk = await import("@earendil-works/pi-coding-agent");\nif (!sdk || typeof sdk !== "object") { throw new Error("Pi SDK import yielded no module namespace"); }\nconsole.log("pi sdk exports:", Object.keys(sdk).length);\n' > /tmp/abi-check/check.ts && \
-    node /tmp/abi-check/check.ts && \
+COPY pi/runner-path-check.ts /tmp/abi-check/
+RUN ln -sf /opt/pi-sdk/node_modules /tmp/abi-check/node_modules && \
     mkdir -p /tmp/abi-check/work/nested /tmp/abi-check/agent /tmp/abi-check/home && \
     printf 'SENTINEL-ORCHESTRATOR\n' > /tmp/abi-check/agent/AGENTS.md && \
     printf '{}\n' > /tmp/abi-check/agent/settings.json && \
     printf 'DECOY\n' > /tmp/abi-check/work/AGENTS.md && \
-    printf '%s\n' \
-      'import { readFileSync } from "node:fs";' \
-      'import { DefaultResourceLoader, ModelRuntime, SettingsManager } from "@earendil-works/pi-coding-agent";' \
-      'const cwd = "/tmp/abi-check/work/nested";' \
-      'const agentDir = "/tmp/abi-check/agent";' \
-      '// Resolves resources exactly the way the runner does: an untrusted' \
-      '// project so the SDK never walks the ancestors of the working directory for skills, discovery of' \
-      '// context files off, and the staged orchestrator handed over by name. The working directory sits' \
-      '// below ancestors beside a decoy AGENTS.md: discovery must stay off.' \
-      '// the build, so does one that discovers the decoy, and so does a loader that carries anything but' \
-      '// the staged orchestrator.' \
-      'const settingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted: false });' \
-      'const orchestratorPath = `${agentDir}/AGENTS.md`;' \
-      'const orchestrator = readFileSync(orchestratorPath, "utf8");' \
-      'const loader = new DefaultResourceLoader({ cwd, agentDir, settingsManager, noContextFiles: true, agentsFilesOverride: (base) => {' \
-      '  // The decoy must not be in the base list: an SDK that discovers context files with discovery off is the regression this gate exists for.' \
-      '  if (base.agentsFiles.length !== 0) { throw new Error(`context files were discovered with discovery off: ${JSON.stringify(base.agentsFiles.map((f) => f.path))}`); }' \
-      '  return { agentsFiles: [{ path: orchestratorPath, content: orchestrator }] };' \
-      '} });' \
-      'await loader.reload();' \
-      'const { agentsFiles } = loader.getAgentsFiles();' \
-      'if (agentsFiles.length !== 1 || !agentsFiles[0].content.includes("SENTINEL-ORCHESTRATOR")) { throw new Error(`expected the staged orchestrator alone, got ${JSON.stringify(agentsFiles.map((f) => f.path))}`); }' \
-      '// Checking a credential takes a lock directory beside auth.json, which the SDK creates on first' \
-      '// use along with its models store: writes in the agent dir that the runner grants and that a' \
-      '// model turn needs. Only settings.json is staged, as the server stages it.' \
-      'const modelRuntime = await ModelRuntime.create({ authPath: `${agentDir}/auth.json`, modelsPath: `${agentDir}/models.json`, allowModelNetwork: false });' \
-      'modelRuntime.registerProvider("gate", { name: "gate", baseUrl: "http://127.0.0.1:9/v1", apiKey: "$GATE_TOKEN", authHeader: true, api: "openai-responses", models: [{ id: "model", name: "model", reasoning: false, input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 1000, maxTokens: 100 }] });' \
-      'if (!(await modelRuntime.checkAuth("gate"))) { throw new Error("the credential of the gate provider did not resolve"); }' \
-      > /tmp/abi-check/runner-path-check.ts && \
     HOME=/tmp/abi-check/home GATE_TOKEN=gate node /tmp/abi-check/runner-path-check.ts && \
     rm -rf /tmp/abi-check
 
@@ -96,19 +66,13 @@ COPY --from=gateway /opt/practice-scripts/dist/ /opt/practice-scripts/
 # (`PracticeRunnerProfile.setupCommands`): `/workspace/work/practice-scripts/lib` → `/opt/practice-scripts/lib`.
 # Resolving it here, as /workspace/.run-pi.js does, proves the toolkit and its own dependencies load beside the
 # Pi SDK, and that a program's process starts under the permissions the host gives it.
-RUN mkdir -p /tmp/host-check/work/practice-scripts/practices && \
+COPY practice-scripts/host-check.ts /tmp/host-check/practice-scripts/host-check.js
+RUN mkdir -p /tmp/host-check/practice-scripts/practices && \
     printf '{"type":"module"}\n' > /tmp/host-check/package.json && \
     ln -s /opt/pi-sdk/node_modules /tmp/host-check/node_modules && \
-    ln -sfn /opt/practice-scripts/lib /tmp/host-check/work/practice-scripts/lib && \
-    ln -sfn /opt/practice-scripts/kits /tmp/host-check/work/practice-scripts/kits && \
-    printf '%s\n' \
-      'import { createAgentSession } from "@earendil-works/pi-coding-agent";' \
-      'import { BUILTIN_SCRIPT, runPracticeProgram } from "./work/practice-scripts/lib/core/program-host.js";' \
-      'import { parseCandidate } from "./work/practice-scripts/lib/core/contract.js";' \
-      'if (typeof createAgentSession !== "function" || typeof runPracticeProgram !== "function") { throw new Error("the host cannot load the Pi SDK and the toolkit together"); }' \
-      'if (typeof BUILTIN_SCRIPT.run !== "function" || parseCandidate({}).ok) { throw new Error("the toolkit contract does not load"); }' \
-      > /tmp/host-check/.run-pi.js && \
-    node --no-experimental-strip-types /tmp/host-check/.run-pi.js && \
+    ln -sfn /opt/practice-scripts/lib /tmp/host-check/practice-scripts/lib && \
+    ln -sfn /opt/practice-scripts/kits /tmp/host-check/practice-scripts/kits && \
+    node --no-experimental-strip-types /tmp/host-check/practice-scripts/host-check.js && \
     rm -rf /tmp/host-check
 
 RUN git config --system core.hooksPath /nonexistent && \

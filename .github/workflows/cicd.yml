@@ -578,7 +578,7 @@ jobs:
               - 'scripts/slack-fake.ts'
               - 'scripts/lib/slack-turn.ts'
               - 'server/application/src/main/java/**/integration/slack/**'
-              - 'scripts/sandbox-isolation.ts'
+              - 'scripts/sandbox-isolation*.ts'
               - 'scripts/sandbox-prepull-drill.ts'
               - 'scripts/crd-schemas.ts'
               - 'scripts/prepare-kubernetes-runner.ts'

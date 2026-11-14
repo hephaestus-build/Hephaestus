@@ -34,6 +34,7 @@ import path from "node:path";
 import { createInterface } from "node:readline";
 import { pipeline } from "node:stream/promises";
 import { setTimeout as sleep } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 import { asRecord, asString, asStringArray, isRecord, parseJson } from "./lib/json.ts";
@@ -533,41 +534,8 @@ function errorMessage(error: unknown): string {
 
 // ---------------------------------------------------------------- sampler
 
-/** Runs as root in the host's PID and cgroup namespaces; reads only. One JSON line per container per tick. */
-const SAMPLER = String.raw`
-const fs = require("node:fs");
-const read = (f) => { try { return fs.readFileSync(f, "utf8"); } catch { return null; } };
-const paths = new Map();
-function find(id) {
-  if (paths.has(id)) return paths.get(id);
-  const roots = ["/sys/fs/cgroup/docker/" + id, "/sys/fs/cgroup/system.slice/docker-" + id + ".scope"];
-  const found = roots.find((p) => fs.existsSync(p)) ?? null;
-  if (found) paths.set(id, found);
-  return found;
-}
-setInterval(() => {
-  const t = Date.now();
-  const ids = (read("/bench/ids") ?? "").split("\n").filter(Boolean);
-  for (const line of ids) {
-    const [label, id] = line.split(" ");
-    const cg = find(id); if (!cg) continue;
-    // A container that exits between these reads takes its cgroup with it: skip that tick.
-    const current = read(cg + "/memory.current"); const memoryStat = read(cg + "/memory.stat"); const cpuStat = read(cg + "/cpu.stat");
-    if (current === null || memoryStat === null || cpuStat === null) continue;
-    const stat = Object.fromEntries(memoryStat.trim().split("\n").map((l) => { const [k, v] = l.split(" "); return [k, Number(v)]; }));
-    const cpu = Object.fromEntries(cpuStat.trim().split("\n").map((l) => { const [k, v] = l.split(" "); return [k, Number(v)]; }));
-    const procs = (read(cg + "/cgroup.procs") ?? "").split("\n").filter(Boolean).map((pid) => {
-      const status = read("/proc/" + pid + "/status") ?? "";
-      const kb = (k) => Number((new RegExp("^" + k + ":\\s+(\\d+)", "m").exec(status) ?? [0, 0])[1]) * 1024;
-      const cmd = (read("/proc/" + pid + "/cmdline") ?? "").split("\0").filter(Boolean).filter((a) => !a.startsWith("--") && a !== "/usr/bin/prlimit").map((a) => a.split("/").pop()).slice(0, 2).join(" ");
-      return { pid: Number(pid), cmd, rss: kb("VmRSS"), hwm: kb("VmHWM"), anon: kb("RssAnon"), file: kb("RssFile"), shmem: kb("RssShmem") };
-    });
-    process.stdout.write(JSON.stringify({ t, label, current: Number(current), peak: Number(read(cg + "/memory.peak") ?? 0),
-      anon: stat.anon, file: stat.file, shmem: stat.shmem, kernel: stat.kernel, sock: stat.sock, activeFile: stat.active_file, inactiveFile: stat.inactive_file,
-      cpuUsec: cpu.usage_usec, throttledUsec: cpu.throttled_usec, pids: Number(read(cg + "/pids.current") ?? 0), procs }) + "\n");
-  }
-}, ${SAMPLE_MS});
-`;
+/** The sampler's source, mounted into its container: Node there runs a `.ts` file as it is. */
+const SAMPLER = fileURLToPath(new URL("sandbox-footprint-sampler.ts", import.meta.url));
 
 const benchDir = path.join(work, "bench");
 const idsFile = path.join(benchDir, "ids");
@@ -598,11 +566,13 @@ function startSampler(): ChildProcess {
 		"/sys/fs/cgroup:/sys/fs/cgroup:ro",
 		"-v",
 		`${benchDir}:/bench:ro`,
+		"-v",
+		`${SAMPLER}:/sampler.ts:ro`,
 		"--entrypoint",
 		"node",
 		image,
-		"-e",
-		SAMPLER,
+		"/sampler.ts",
+		String(SAMPLE_MS),
 	]);
 	sampler.once("error", (error) => {
 		failures.push(`the sampler did not start: ${error.message}`);
