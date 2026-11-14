@@ -5,7 +5,12 @@ import { refLabel, workspaceLabel } from "@/components/admin/audit/ref-label";
 import { formatTimestamp } from "@/components/admin/audit/time-format";
 import { DetailRow } from "@/components/common/DetailRow";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+	CodeBlock,
+	CodeBlockActions,
+	CodeBlockContent,
+	CodeBlockCopyButton,
+} from "@/components/ui/code-block";
 import {
 	Sheet,
 	SheetContent,
@@ -104,9 +109,12 @@ export function AuditEventDetailSheet({
 						</DetailRow>
 						<DetailRow label="Raw data">
 							{hasText(pretty) ? (
-								<ScrollArea viewportClassName="max-h-48">
-									<pre className="rounded bg-muted p-2 text-xs">{pretty}</pre>
-								</ScrollArea>
+								<CodeBlock size="sm">
+									<CodeBlockActions>
+										<CodeBlockCopyButton value={pretty} aria-label="Copy raw data" />
+									</CodeBlockActions>
+									<CodeBlockContent className="max-h-48">{pretty}</CodeBlockContent>
+								</CodeBlock>
 							) : (
 								"—"
 							)}

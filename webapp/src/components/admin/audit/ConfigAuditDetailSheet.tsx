@@ -6,8 +6,15 @@ import { formatTimestamp } from "@/components/admin/audit/time-format";
 import { DetailRow } from "@/components/common/DetailRow";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+	CodeBlock,
+	CodeBlockActions,
+	CodeBlockContent,
+	CodeBlockCopyButton,
+	CodeBlockHeader,
+	CodeBlockTitle,
+} from "@/components/ui/code-block";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
 	Sheet,
 	SheetContent,
@@ -154,22 +161,8 @@ export function ConfigAuditDetailSheet({
 									Show raw snapshots
 								</CollapsibleTrigger>
 								<CollapsibleContent className="mt-2 space-y-2">
-									{hasText(oldRaw) && (
-										<div>
-											<p className="mb-1 text-xs text-muted-foreground">Before</p>
-											<ScrollArea viewportClassName="max-h-48">
-												<pre className="rounded bg-muted p-2 text-xs">{oldRaw}</pre>
-											</ScrollArea>
-										</div>
-									)}
-									{hasText(newRaw) && (
-										<div>
-											<p className="mb-1 text-xs text-muted-foreground">After</p>
-											<ScrollArea viewportClassName="max-h-48">
-												<pre className="rounded bg-muted p-2 text-xs">{newRaw}</pre>
-											</ScrollArea>
-										</div>
-									)}
+									{hasText(oldRaw) && <RawSnapshot title="Before" raw={oldRaw} />}
+									{hasText(newRaw) && <RawSnapshot title="After" raw={newRaw} />}
 								</CollapsibleContent>
 							</Collapsible>
 						)}
@@ -177,6 +170,21 @@ export function ConfigAuditDetailSheet({
 				)}
 			</SheetContent>
 		</Sheet>
+	);
+}
+
+/** One stored snapshot, as JSON, under the side of the change it was taken on. */
+function RawSnapshot({ title, raw }: { title: "Before" | "After"; raw: string }) {
+	return (
+		<CodeBlock size="sm">
+			<CodeBlockHeader>
+				<CodeBlockTitle>{title}</CodeBlockTitle>
+				<CodeBlockActions>
+					<CodeBlockCopyButton value={raw} aria-label={`Copy ${title.toLowerCase()} snapshot`} />
+				</CodeBlockActions>
+			</CodeBlockHeader>
+			<CodeBlockContent className="max-h-48">{raw}</CodeBlockContent>
+		</CodeBlock>
 	);
 }
 

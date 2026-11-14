@@ -1,7 +1,14 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, within } from "storybook/test";
+import { expect, fn, spyOn, userEvent } from "storybook/test";
+
+import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { EvidenceFileBlock } from "./EvidenceFileBlock";
+
+/** What the copy button puts on the clipboard, read back without a clipboard permission. */
+const writeText = fn(async (_text: string) => {
+	await Promise.resolve();
+});
 
 const meta = {
 	component: EvidenceFileBlock,
@@ -11,7 +18,7 @@ const meta = {
 			description: {
 				component:
 					"One quoted citation behind a result or one of its problems: its source as header, the quote beneath. A code " +
-					"source is located by line and keeps a pinned gutter; an object source is named by the " +
+					"source is located by line and numbers its lines; an object source is named by the " +
 					"registry's words alone, because its path and numbers are offsets into the runner's own " +
 					"serialised context rather than a place a reader could open.",
 			},
@@ -45,7 +52,20 @@ export const Default: Story = {
 			].join("\n"),
 		},
 	},
+	play: async ({ canvas }) => {
+		const quote = canvas.getByRole("figure", { name: /ReadyAndTraceableHandoff\.java/u });
+		await expect(quote).toHaveTextContent("var context = contextBuilder.build(request);");
+		await expect(canvas.getByText("lines 60 to 64")).toBeVisible();
+		await expect(
+			canvas.getByRole("button", { name: "Copy passage from ReadyAndTraceableHandoff.java" }),
+		).toBeVisible();
+	},
 };
+
+/**
+ * A citation that kept its place but not its words, as when the quote was withheld: the place is
+ * named, and there is nothing to copy.
+ */
 export const PlaceWithoutQuote: Story = {
 	args: {
 		location: {
@@ -61,10 +81,10 @@ export const PlaceWithoutQuote: Story = {
 			<EvidenceFileBlock location={{ sourceKind: "scm.pull-request.diff" }} />
 		</div>
 	),
-	play: async ({ canvas, canvasElement }) => {
+	play: async ({ canvas }) => {
 		await expect(canvas.getByText("lines 31 to 44")).toBeVisible();
 		await expect(canvas.getByText("The code changes")).toBeVisible();
-		await expect(canvasElement.querySelector("pre")).toBeNull();
+		await expect(canvas.queryByRole("button", { name: /^Copy passage/u })).toBeNull();
 	},
 };
 export const BareFileName: Story = {
@@ -78,7 +98,12 @@ export const BareFileName: Story = {
 		},
 	},
 };
+/**
+ * A long line scrolls inside the quote instead of wrapping, so a line of code still reads as one
+ * line, and the page around it keeps its width at 320px.
+ */
 export const LongLines: Story = {
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	args: {
 		location: {
 			path: "server/src/main/java/de/tum/cit/aet/hephaestus/practices/result/PracticeResultRepository.java",
@@ -90,6 +115,17 @@ export const LongLines: Story = {
 				"WHERE r.developer_id = :developerId AND p.workspace_id = :workspaceId AND g.slug = :groupSlug AND r.outcome <> 'DOES_NOT_APPLY'",
 			].join("\n"),
 		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("PracticeResultRepository.java")).toBeVisible();
+		await expectNoPageOverflow();
+		// The copy button comes first, then the quote itself, which scrolls from the keyboard.
+		await userEvent.tab();
+		await expect(
+			canvas.getByRole("button", { name: "Copy passage from PracticeResultRepository.java" }),
+		).toHaveFocus();
+		await userEvent.tab();
+		await expect(document.activeElement).toHaveTextContent("SELECT r.review_id");
 	},
 };
 /**
@@ -115,8 +151,9 @@ export const ObjectSourceNamesTheSource: Story = {
 };
 
 /**
- * A code citation keeps what a developer can open: the path and the lines in the caption, and the
- * side of the diff on the quoted line itself.
+ * A code citation keeps what a developer can open: the path, the lines and the side of the diff it
+ * was read from. Its lines are numbered as they are in that version of the file. They are not
+ * marked added: a passage of the new version can be a line the change did not touch.
  */
 export const CodeSourceKeepsItsLines: Story = {
 	args: {
@@ -126,19 +163,20 @@ export const CodeSourceKeepsItsLines: Story = {
 			endLine: 4,
 			sourceKind: "scm.pull-request.diff",
 			side: "NEW",
-			snippet: "+export const PAGE_SIZE = 20;",
+			snippet: "export const PAGE_SIZE = 20;",
 		},
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("pagination.ts")).toBeVisible();
 		await expect(canvas.getByText("line 4")).toBeVisible();
-		// The side is the gutter of the line it covers, inside the quote and not above it.
-		const side = canvas.getByText("After");
-		await expect(side).toBeVisible();
-		await expect(side.closest("figcaption")).toBeNull();
+		await expect(canvas.getByText("After")).toBeVisible();
+		await expect(canvas.getByRole("figure", { name: /pagination\.ts/u })).toHaveTextContent(
+			"export const PAGE_SIZE = 20;",
+		);
 	},
 };
 
+/** Both cited versions are shown as passages, without inferring a line diff from the quotes. */
 export const OneChangedLine: Story = {
 	args: {
 		location: {
@@ -147,33 +185,30 @@ export const OneChangedLine: Story = {
 			endLine: 4,
 			sourceKind: "scm.pull-request.diff",
 			change: {
-				before: "-export const PAGE_SIZE = 25;",
-				after: "+export const PAGE_SIZE = 20;",
+				before: "export const PAGE_SIZE = 25;",
+				after: "export const PAGE_SIZE = 20;",
 			},
 		},
 	},
+	beforeEach: () => {
+		const clipboard = spyOn(navigator.clipboard, "writeText").mockImplementation(writeText);
+		return () => clipboard.mockRestore();
+	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("pagination.ts")).toBeVisible();
-		// The file is named once, and neither a line range nor a side word is up there: a range over
-		// two sides would be true of one of them.
-		await expect(canvas.queryByText("line 4")).toBeNull();
-		const caption = canvas.getByText("pagination.ts").closest("figcaption");
-		if (!caption) {
-			throw new Error("The path is the block's caption");
-		}
-		await expect(within(caption).queryByText("Before")).toBeNull();
-		await expect(within(caption).queryByText("After")).toBeNull();
-
-		// Each side is the gutter of its own row.
-		const removed = canvas.getByText("-export const PAGE_SIZE = 25;");
-		const added = canvas.getByText("+export const PAGE_SIZE = 20;");
-		const removedRow = removed.closest<HTMLElement>("span.grid");
-		const addedRow = added.closest<HTMLElement>("span.grid");
-		if (!removedRow || !addedRow) {
-			throw new Error("Every quoted line is a row of the quote");
-		}
-		await expect(within(removedRow).getByText("Before")).toBeVisible();
-		await expect(within(addedRow).getByText("After")).toBeVisible();
+		const quote = canvas.getByRole("figure", { name: /pagination\.ts/u });
+		await expect(canvas.getByText("line 4")).toBeVisible();
+		await expect(canvas.getByText("Before")).toBeVisible();
+		await expect(canvas.getByText("After")).toBeVisible();
+		await expect(quote).toHaveTextContent("export const PAGE_SIZE = 25;");
+		await expect(quote).toHaveTextContent("export const PAGE_SIZE = 20;");
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Copy before passage from pagination.ts" }),
+		);
+		await expect(writeText).toHaveBeenLastCalledWith("export const PAGE_SIZE = 25;");
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Copy after passage from pagination.ts" }),
+		);
+		await expect(writeText).toHaveBeenLastCalledWith("export const PAGE_SIZE = 20;");
 	},
 };
 
@@ -209,10 +244,10 @@ export const FoldedObjectSource: Story = {
 			snippet: ['"title" : "Page size"', '"body" : ""'].join("\n"),
 		},
 	},
-	play: async ({ canvas }) => {
+	play: async ({ canvas, canvasElement }) => {
 		await expect(canvas.getAllByText("The reviewed work itself")).toHaveLength(1);
-		await expect(canvas.getByText('"title" : "Page size"')).toBeVisible();
-		await expect(canvas.getByText('"body" : ""')).toBeVisible();
+		await expect(canvasElement).toHaveTextContent('"title" : "Page size"');
+		await expect(canvasElement).toHaveTextContent('"body" : ""');
 		// An object locator points into the runner's own file, so no line number is shown for either.
 		await expect(canvas.queryByText("line 4")).toBeNull();
 	},
@@ -237,5 +272,41 @@ export const HistoricalSource: Story = {
 		await expect(canvas.getByText("service.ts")).toBeVisible();
 		await expect(canvas.getByText("line 12")).toBeVisible();
 		await expect(canvas.getByText("b".repeat(40))).toBeVisible();
+	},
+};
+
+/** Shared lines remain in their quoted versions, without being labelled removed or added. */
+export const SharedLinesInBothVersions: Story = {
+	args: {
+		location: {
+			path: "src/pagination.ts",
+			startLine: 10,
+			endLine: 12,
+			sourceKind: "scm.pull-request.diff",
+			change: { before: "a\nb\nc\n", after: "a\nB\nc\n" },
+		},
+	},
+	beforeEach: () => {
+		const clipboard = spyOn(navigator.clipboard, "writeText").mockImplementation(writeText);
+		return () => clipboard.mockRestore();
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Before")).toBeVisible();
+		await expect(canvas.getByText("After")).toBeVisible();
+		await expect(canvas.getAllByText("a", { exact: true })).toHaveLength(2);
+		await expect(canvas.getAllByText("c", { exact: true })).toHaveLength(2);
+		await expect(
+			canvas
+				.getByRole("figure", { name: /pagination\.ts/u })
+				.querySelectorAll('[data-variant="removed"], [data-variant="added"]'),
+		).toHaveLength(0);
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Copy before passage from pagination.ts" }),
+		);
+		await expect(writeText).toHaveBeenLastCalledWith("a\nb\nc\n");
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Copy after passage from pagination.ts" }),
+		);
+		await expect(writeText).toHaveBeenLastCalledWith("a\nB\nc\n");
 	},
 };

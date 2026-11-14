@@ -491,6 +491,9 @@ export const DeliveryFailed: Story = {
 		events.getByText("Summary failed");
 		events.getByText("Post the copies · 5 attempts");
 		await expect(events.getAllByText(/Resource not accessible by integration/u).length).toBe(2);
+		// Each error is its own block, titled and copyable as the provider wrote it.
+		await expect(events.getAllByText("Last error")).toHaveLength(2);
+		await expect(events.getAllByRole("button", { name: "Copy last error" })).toHaveLength(2);
 		await expect(events.queryByText(/Next attempt/u)).toBeNull();
 	},
 };

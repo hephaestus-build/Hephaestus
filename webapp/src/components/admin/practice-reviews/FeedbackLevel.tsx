@@ -58,6 +58,14 @@ import {
 } from "@/components/practice-vocabulary/feedback-send-defs";
 import { WITHHOLDING_REASON_DEFS } from "@/components/practice-vocabulary/withholding-defs";
 import { Button } from "@/components/ui/button";
+import {
+	CodeBlock,
+	CodeBlockActions,
+	CodeBlockContent,
+	CodeBlockCopyButton,
+	CodeBlockHeader,
+	CodeBlockTitle,
+} from "@/components/ui/code-block";
 import { DrawerBody, DrawerFooter } from "@/components/ui/drawer";
 import { hasText } from "@/lib/text";
 
@@ -442,11 +450,18 @@ function copyAnchor(copy: FeedbackCopy): string | undefined {
 
 function LastError({ error }: { error: string }) {
 	return (
-		<div className="mt-1">
-			Last error:
-			<pre className="mt-1 max-h-48 overflow-auto rounded-md bg-muted/50 p-2 text-xs break-words whitespace-pre-wrap">
-				{error}
-			</pre>
+		<div className="mt-1 w-full">
+			<CodeBlock size="sm" variant="destructive">
+				<CodeBlockHeader>
+					<CodeBlockTitle>Last error</CodeBlockTitle>
+					<CodeBlockActions>
+						<CodeBlockCopyButton value={error} aria-label="Copy last error" />
+					</CodeBlockActions>
+				</CodeBlockHeader>
+				<CodeBlockContent wrap className="max-h-48">
+					{error}
+				</CodeBlockContent>
+			</CodeBlock>
 		</div>
 	);
 }

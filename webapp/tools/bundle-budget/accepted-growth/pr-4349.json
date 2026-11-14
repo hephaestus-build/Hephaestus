@@ -1,0 +1,88 @@
+{
+	"accepted": [
+		{
+			"load": "monaco-editor/esm/vs/languages/features/css/cssMode.js",
+			"gzipBytes": 1315422,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4349",
+			"reason": "Readers can copy complete code passages, scripts, stored records and provider errors from one shared code block. Recorded source coordinates supply line numbers; paired passages keep separate raw copy controls. This change adds no dependencies or tokenizer chunks."
+		},
+		{
+			"load": "monaco-editor/esm/vs/languages/features/html/htmlMode.js",
+			"gzipBytes": 1315534,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4349",
+			"reason": "Readers can copy complete code passages, scripts, stored records and provider errors from one shared code block. Recorded source coordinates supply line numbers; paired passages keep separate raw copy controls. This change adds no dependencies or tokenizer chunks."
+		},
+		{
+			"load": "monaco-editor/esm/vs/languages/features/json/jsonMode.js",
+			"gzipBytes": 1318735,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4349",
+			"reason": "Readers can copy complete code passages, scripts, stored records and provider errors from one shared code block. Recorded source coordinates supply line numbers; paired passages keep separate raw copy controls. This change adds no dependencies or tokenizer chunks."
+		},
+		{
+			"load": "monaco-editor/esm/vs/languages/features/typescript/tsMode.js",
+			"gzipBytes": 1313296,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4349",
+			"reason": "Readers can copy complete code passages, scripts, stored records and provider errors from one shared code block. Recorded source coordinates supply line numbers; paired passages keep separate raw copy controls. This change adds no dependencies or tokenizer chunks."
+		},
+		{
+			"load": "src/components/tour/PracticeProfileTour.tsx",
+			"gzipBytes": 398415,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4349",
+			"reason": "Readers can copy complete code passages, scripts, stored records and provider errors from one shared code block. Recorded source coordinates supply line numbers; paired passages keep separate raw copy controls. This change adds no dependencies or tokenizer chunks."
+		},
+		{
+			"load": "src/routes/_authenticated/admin.catalog.index.tsx?tsr-split=component",
+			"gzipBytes": 1345152,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4349",
+			"reason": "Readers can copy complete code passages, scripts, stored records and provider errors from one shared code block. Recorded source coordinates supply line numbers; paired passages keep separate raw copy controls. This change adds no dependencies or tokenizer chunks."
+		},
+		{
+			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/practices/index.tsx?tsr-split=component",
+			"gzipBytes": 1360849,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4349",
+			"reason": "Readers can copy complete code passages, scripts, stored records and provider errors from one shared code block. Recorded source coordinates supply line numbers; paired passages keep separate raw copy controls. This change adds no dependencies or tokenizer chunks."
+		},
+		{
+			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/practices/releases.tsx?tsr-split=component",
+			"gzipBytes": 53816,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4349",
+			"reason": "Readers can copy complete code passages, scripts, stored records and provider errors from one shared code block. Recorded source coordinates supply line numbers; paired passages keep separate raw copy controls. This change adds no dependencies or tokenizer chunks."
+		},
+		{
+			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews.tsx?tsr-split=component",
+			"gzipBytes": 375379,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4349",
+			"reason": "Readers can copy complete code passages, scripts, stored records and provider errors from one shared code block. Recorded source coordinates supply line numbers; paired passages keep separate raw copy controls. This change adds no dependencies or tokenizer chunks."
+		},
+		{
+			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/index.tsx?tsr-split=component",
+			"gzipBytes": 446406,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4349",
+			"reason": "Readers can copy complete code passages, scripts, stored records and provider errors from one shared code block. Recorded source coordinates supply line numbers; paired passages keep separate raw copy controls. This change adds no dependencies or tokenizer chunks."
+		},
+		{
+			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/practices/reviews/problems.tsx?tsr-split=component",
+			"gzipBytes": 135188,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4349",
+			"reason": "Readers can copy complete code passages, scripts, stored records and provider errors from one shared code block. Recorded source coordinates supply line numbers; paired passages keep separate raw copy controls. This change adds no dependencies or tokenizer chunks."
+		},
+		{
+			"load": "src/routes/_authenticated/w/$workspaceSlug/admin/practices/scans/$scanId.tsx?tsr-split=component",
+			"gzipBytes": 75911,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4349",
+			"reason": "Readers can copy complete code passages, scripts, stored records and provider errors from one shared code block. Recorded source coordinates supply line numbers; paired passages keep separate raw copy controls. This change adds no dependencies or tokenizer chunks."
+		},
+		{
+			"load": "src/routes/_authenticated/w/$workspaceSlug/feedback.$itemId.tsx?tsr-split=component",
+			"gzipBytes": 207697,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4349",
+			"reason": "Readers can copy complete code passages, scripts, stored records and provider errors from one shared code block. Recorded source coordinates supply line numbers; paired passages keep separate raw copy controls. This change adds no dependencies or tokenizer chunks."
+		},
+		{
+			"load": "src/routes/_authenticated/w/$workspaceSlug/practice-profile.tsx?tsr-split=component",
+			"gzipBytes": 379758,
+			"acceptedBy": "https://github.com/hephaestus-build/Hephaestus/pull/4349",
+			"reason": "Readers can copy complete code passages, scripts, stored records and provider errors from one shared code block. Recorded source coordinates supply line numbers; paired passages keep separate raw copy controls. This change adds no dependencies or tokenizer chunks."
+		}
+	]
+}
