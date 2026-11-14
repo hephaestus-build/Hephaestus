@@ -122,7 +122,9 @@ class GitLabWebhookDeliveryLiveTest extends BaseIntegrationTest {
             String subjectPrefix = "gitlab.?connection." + connectionId + ".";
 
             String issueTitle = "Webhook proof issue " + fixture.groupPath();
-            assertThat(title(repository, "ISSUE", 1)).as("absent before GitLab sends it").isNull();
+            assertThat(title(repository, "ISSUE", 1))
+                    .as("absent before GitLab sends it")
+                    .isNull();
             var issue = fixture.issue(issueTitle);
             awaitMirrored(repository, "ISSUE", issue.iid(), issueTitle);
             assertDelivered(fixture, workspace, subjectPrefix + "issue", "Issue Hook", issue.id());
@@ -131,7 +133,8 @@ class GitLabWebhookDeliveryLiveTest extends BaseIntegrationTest {
             String retitled = "Webhook proof merge request, retitled";
             fixture.retitleMergeRequest(mergeRequest.iid(), retitled);
             awaitMirrored(repository, "PULL_REQUEST", mergeRequest.iid(), retitled);
-            assertDelivered(fixture, workspace, subjectPrefix + "merge_request", "Merge Request Hook", mergeRequest.id());
+            assertDelivered(
+                    fixture, workspace, subjectPrefix + "merge_request", "Merge Request Hook", mergeRequest.id());
 
             assertThat(jdbc.queryForObject(
                             "SELECT count(*) FROM sync_job WHERE workspace_id = ? AND created_at >= ?",
@@ -146,10 +149,8 @@ class GitLabWebhookDeliveryLiveTest extends BaseIntegrationTest {
 
     /** An active GitLab connection on a new workspace, with the probe project synced and monitored. */
     private long connect(GitLabWebhookFixture fixture) {
-        providers
-                .findByTypeAndServerUrl(IdentityProviderType.GITLAB, fixture.server())
-                .orElseGet(() ->
-                        providers.saveAndFlush(new IdentityProvider(IdentityProviderType.GITLAB, fixture.server())));
+        if (providers.findByTypeAndServerUrl(IdentityProviderType.GITLAB, fixture.server()).isEmpty())
+            providers.saveAndFlush(new IdentityProvider(IdentityProviderType.GITLAB, fixture.server()));
         Workspace workspace = WorkspaceTestFixtures.activeWorkspace(fixture.groupPath());
         workspace.setAccountLogin(fixture.groupPath());
         workspace = workspaces.saveAndFlush(workspace);
@@ -177,16 +178,19 @@ class GitLabWebhookDeliveryLiveTest extends BaseIntegrationTest {
 
     /** Claims stored events as a running server does, until the mirror holds the work under {@code title}. */
     private void awaitMirrored(long repository, String type, int number, String title) {
-        await().atMost(Duration.ofSeconds(120)).pollInterval(Duration.ofSeconds(1)).untilAsserted(() -> {
-            while (consumer.claimAndHandle()) {
-                // Handle what is due before the next look.
-            }
-            assertThat(title(repository, type, number)).isEqualTo(title);
-        });
+        await().atMost(Duration.ofSeconds(120))
+                .pollInterval(Duration.ofSeconds(1))
+                .untilAsserted(() -> {
+                    while (consumer.claimAndHandle()) {
+                        // Handle what is due before the next look.
+                    }
+                    assertThat(title(repository, type, number)).isEqualTo(title);
+                });
     }
 
     private @Nullable String title(long repository, String type, int number) {
-        return jdbc.query(
+        return jdbc
+                .query(
                         "SELECT title FROM issue WHERE repository_id = ? AND issue_type = ? AND number = ?",
                         (row, index) -> row.getString(1),
                         repository,
@@ -209,27 +213,36 @@ class GitLabWebhookDeliveryLiveTest extends BaseIntegrationTest {
                         + " FROM provider_event WHERE workspace_id = ? AND subject = ?",
                 workspace,
                 subject);
-        assertThat(stored)
-                .as("a handled inbox row for %s", subject)
-                .anySatisfy(row -> {
-                    assertThat(row.get("state")).isEqualTo("DONE");
-                    assertThat(mapper.readTree((String) row.get("payload"))
-                                    .path("object_attributes")
-                                    .path("id")
-                                    .asLong())
-                            .isEqualTo(objectId);
-                });
+        assertThat(stored).as("a handled inbox row for %s", subject).anySatisfy(row -> {
+            assertThat(row.get("state")).isEqualTo("DONE");
+            assertThat(mapper.readTree((String) row.get("payload"))
+                            .path("object_attributes")
+                            .path("id")
+                            .asLong())
+                    .isEqualTo(objectId);
+        });
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
             JsonNode accepted = null;
             for (JsonNode delivery : fixture.deliveries()) {
-                if (event.equals(delivery.path("request_headers").path("X-Gitlab-Event").asString())
-                        && delivery.path("request_data").path("object_attributes").path("id").asLong() == objectId
+                if (event.equals(delivery.path("request_headers")
+                                .path("X-Gitlab-Event")
+                                .asString())
+                        && delivery.path("request_data")
+                                        .path("object_attributes")
+                                        .path("id")
+                                        .asLong()
+                                == objectId
                         && delivery.path("response_status").asString().startsWith("2")) {
                     accepted = delivery;
                 }
             }
-            assertThat(accepted).as("GitLab's record of an accepted %s delivery", event).isNotNull();
-            String hook = Objects.requireNonNull(accepted).path("request_headers").path("X-Gitlab-Webhook-UUID").asString();
+            assertThat(accepted)
+                    .as("GitLab's record of an accepted %s delivery", event)
+                    .isNotNull();
+            String hook = Objects.requireNonNull(accepted)
+                    .path("request_headers")
+                    .path("X-Gitlab-Webhook-UUID")
+                    .asString();
             assertThat(stored).anySatisfy(row -> assertThat(row.get("hook")).isEqualTo(hook));
         });
     }
@@ -238,7 +251,8 @@ class GitLabWebhookDeliveryLiveTest extends BaseIntegrationTest {
     void removeOnlyThisTestsLocalMirror() {
         Long workspace = workspaceId;
         if (workspace != null)
-            lifecycle.purgeWorkspace(workspaces.findById(workspace).orElseThrow().getWorkspaceSlug());
+            lifecycle.purgeWorkspace(
+                    workspaces.findById(workspace).orElseThrow().getWorkspaceSlug());
         Long repository = repositoryId;
         if (repository != null) repositories.deleteById(repository);
     }

@@ -96,7 +96,8 @@ final class GitLabWebhookFixture implements AutoCloseable {
      */
     void allowLocal(String hostAndPort) throws IOException, InterruptedException {
         List<String> before = new ArrayList<>();
-        for (JsonNode entry : request("GET", "/application/settings", null, 200).path("outbound_local_requests_whitelist"))
+        for (JsonNode entry :
+                request("GET", "/application/settings", null, 200).path("outbound_local_requests_whitelist"))
             before.add(entry.asString());
         allowlistBefore = before;
         List<String> allowed = new ArrayList<>(before);
@@ -136,7 +137,11 @@ final class GitLabWebhookFixture implements AutoCloseable {
     }
 
     Created mergeRequest(String title) throws IOException, InterruptedException {
-        request("POST", "/projects/" + projectId + "/repository/branches", Map.of("branch", "proof", "ref", "main"), 201);
+        request(
+                "POST",
+                "/projects/" + projectId + "/repository/branches",
+                Map.of("branch", "proof", "ref", "main"),
+                201);
         request(
                 "POST",
                 "/projects/" + projectId + "/repository/commits",
