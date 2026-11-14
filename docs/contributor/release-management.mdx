@@ -434,7 +434,9 @@ The webapp Dockerfile fails the build if a `.map` file appears in the output.
 The [release image lock](../admin/release-image-lock) is the canonical verification procedure. It
 verifies the lock signer and release identity before Helm consumes any digest. The remaining
 release assets provide the per-platform SBOM, vulnerability, license, and index-membership evidence.
-From v0.86.2, `SHA256SUMS` covers that evidence set and is signed with the release workflow identity.
+From v0.86.2, `SHA256SUMS` covers that evidence set.
+Operators verify it as [Release evidence and SBOMs](../admin/release-image-lock#release-evidence-and-sboms) describes.
+
 The archived evidence reader verifies its Cosign bundle before checking the bytes or evaluating native file identities, advisory snapshots and policy.
 Trusted capture validation runs before signing and does not authenticate an archive.
 
