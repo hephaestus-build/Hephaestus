@@ -12,7 +12,8 @@ Plan for one outage, from the first stopped role to the last passed check.
 
 The migration entry *Stop conversation work before enabling digest runs* requires matching runtime-contract-19 server and agent images.
 Drain and stop every server, take a verified backup, and remove the stopped release's conversation SandboxClaims.
-Run the sandbox isolation gate before you resume the servers.
+Then start the servers and run the sandbox isolation gate at once: its test sandboxes must reach the gateway, and the server serves the gateway.
+If a check fails, scale the servers to 0 before work resumes.
 A count of zero for conversation turns stops both requested turns and proactive digests.
 
 1.0.0 carries the source and images of the last qualified release candidate.
