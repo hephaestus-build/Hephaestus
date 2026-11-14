@@ -17,7 +17,9 @@ import de.tum.cit.aet.hephaestus.workspace.MembershipService;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProviderAccounts;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.util.HashMap;
@@ -36,7 +38,10 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
 
     private static final Logger log = LoggerFactory.getLogger(WorkspaceOrganizationMembershipAdapter.class);
 
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceLocks workspaceLocks;
+
+    private final WorkspaceLookup workspaceLookup;
+    private final WorkspaceProviderAccounts providerAccounts;
     private final MembershipService workspaceMembershipService;
     private final OrganizationMembershipRepository organizationMembershipRepository;
     private final OrganizationRepository organizationRepository;
@@ -48,14 +53,18 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
     private @Nullable EntityManager entityManager;
 
     public WorkspaceOrganizationMembershipAdapter(
-            WorkspaceRepository workspaceRepository,
+            WorkspaceLocks workspaceLocks,
+            WorkspaceLookup workspaceLookup,
+            WorkspaceProviderAccounts providerAccounts,
             MembershipService workspaceMembershipService,
             OrganizationMembershipRepository organizationMembershipRepository,
             OrganizationRepository organizationRepository,
             TeamMembershipRepository teamMembershipRepository,
             WorkspaceActorSelector actorSelector,
             ConnectionCommands connections) {
-        this.workspaceRepository = workspaceRepository;
+        this.workspaceLocks = workspaceLocks;
+        this.workspaceLookup = workspaceLookup;
+        this.providerAccounts = providerAccounts;
         this.workspaceMembershipService = workspaceMembershipService;
         this.organizationMembershipRepository = organizationMembershipRepository;
         this.organizationRepository = organizationRepository;
@@ -90,7 +99,7 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
             return true;
         }
         long workspaceId = workspace.getId();
-        if (workspaceRepository.findByIdForUpdate(workspaceId).isEmpty()) {
+        if (workspaceLocks.lock(workspaceId).isEmpty()) {
             return false;
         }
         Optional<ConnectionConfig> locked = connections
@@ -127,9 +136,9 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
                         .connectedProviderId(workspaceId)
                         .filter(connected -> connected == providerId)
                         .isPresent()
-                && workspaceRepository
-                        .findMonitorPolicy(workspaceId)
-                        .filter(policy -> policy.getRepositorySelection() != RepositorySelection.SELECTED)
+                && providerAccounts
+                        .providerAccount(workspaceId)
+                        .filter(policy -> policy.repositorySelection() != RepositorySelection.SELECTED)
                         .isPresent();
     }
 
@@ -258,12 +267,12 @@ public class WorkspaceOrganizationMembershipAdapter implements OrganizationMembe
         if (organizationProvider.isEmpty()) {
             return Optional.empty();
         }
-        Optional<Workspace> linked = workspaceRepository.findByOrganizationId(organizationId);
+        Optional<Workspace> linked = workspaceLookup.findByOrganization(organizationId);
         if (linked.isPresent()) {
             return linked.filter(
                     workspace -> organizationProvider.equals(actorSelector.connectedProviderId(workspace.getId())));
         }
-        List<Workspace> unlinked = workspaceRepository.findAllByAccountLoginIgnoreCase(organizationLogin).stream()
+        List<Workspace> unlinked = workspaceLookup.findByAccountLogin(organizationLogin).stream()
                 .filter(workspace -> workspace.getOrganizationId() == null)
                 .filter(workspace -> organizationProvider.equals(actorSelector.connectedProviderId(workspace.getId())))
                 .toList();

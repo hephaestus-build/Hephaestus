@@ -7,7 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.membership.TeamMemb
 import de.tum.cit.aet.hephaestus.integration.scm.workspace.WorkspaceOrganizationLookup;
 import de.tum.cit.aet.hephaestus.workspace.MembershipService;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
 import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
@@ -22,18 +22,18 @@ public class WorkspaceTeamMembershipAdapter implements TeamMembershipListener {
     private static final Logger log = LoggerFactory.getLogger(WorkspaceTeamMembershipAdapter.class);
 
     private final WorkspaceOrganizationLookup organizations;
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceLookup workspaceLookup;
     private final MembershipService workspaceMembershipService;
     private final TeamMembershipRepository teamMembershipRepository;
     private final WorkspaceOrganizationMembershipAdapter organizationMembershipAdapter;
 
     public WorkspaceTeamMembershipAdapter(
-            WorkspaceRepository workspaceRepository,
+            WorkspaceLookup workspaceLookup,
             WorkspaceOrganizationLookup organizations,
             MembershipService workspaceMembershipService,
             TeamMembershipRepository teamMembershipRepository,
             WorkspaceOrganizationMembershipAdapter organizationMembershipAdapter) {
-        this.workspaceRepository = workspaceRepository;
+        this.workspaceLookup = workspaceLookup;
         this.organizations = organizations;
         this.workspaceMembershipService = workspaceMembershipService;
         this.teamMembershipRepository = teamMembershipRepository;
@@ -48,7 +48,7 @@ public class WorkspaceTeamMembershipAdapter implements TeamMembershipListener {
             return;
         }
 
-        Optional<Workspace> workspaceOpt = workspaceRepository.findById(event.scopeId());
+        Optional<Workspace> workspaceOpt = workspaceLookup.find(event.scopeId());
         if (workspaceOpt.isEmpty()) {
             log.debug(
                     "Skipped team membership reconciliation: reason=workspaceNotFound, scopeId={},"

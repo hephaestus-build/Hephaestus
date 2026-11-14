@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.integration.scm.workspace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -16,10 +18,16 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.workspace.MembershipService;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceQueryService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceQueriesAdapter;
+import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceRepositoryMonitorsAdapter;
+import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceRootsAdapter;
+import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.LongStream;
@@ -61,10 +69,19 @@ class ScmWorkspaceContentEraserTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
+        var roots = new WorkspaceRootsAdapter(workspaceRepository, mock(MembershipService.class));
+        var monitors = new WorkspaceRepositoryMonitorsAdapter(repositoryToMonitorRepository, workspaceRepository);
         eraser = new ScmWorkspaceContentEraser(
-                workspaceRepository,
+                roots,
+                roots,
+                new WorkspaceQueriesAdapter(
+                        workspaceRepository,
+                        repositoryToMonitorRepository,
+                        mock(ReviewScopeRepositoryRepository.class),
+                        mock(WorkspaceQueryService.class)),
                 organizations,
-                repositoryToMonitorRepository,
+                monitors,
+                monitors,
                 repositoryRepository,
                 repositoryMonitorService,
                 teamRepository,
@@ -85,6 +102,7 @@ class ScmWorkspaceContentEraserTest extends BaseUnitTest {
                 .toList();
         workspace.getRepositoriesToMonitor().addAll(monitors);
         when(workspaceRepository.findById(WORKSPACE_ID)).thenReturn(Optional.of(workspace));
+        lenient().when(workspaceRepository.findByIdForUpdate(WORKSPACE_ID)).thenReturn(Optional.of(workspace));
         when(repositoryToMonitorRepository.findSourceRepositoryIds(WORKSPACE_ID))
                 .thenReturn(LongStream.range(101L, 101L + namesWithOwner.length)
                         .boxed()

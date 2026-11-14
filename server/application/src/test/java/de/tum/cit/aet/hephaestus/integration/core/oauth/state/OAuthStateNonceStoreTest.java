@@ -13,7 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLocks;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -34,7 +34,7 @@ class OAuthStateNonceStoreTest extends BaseUnitTest {
     private OAuthStateNonceRepository repository;
 
     @Mock
-    private WorkspaceRepository workspaces;
+    private WorkspaceLocks workspaceLocks;
 
     @Mock
     private ConnectionRepository connections;
@@ -48,7 +48,7 @@ class OAuthStateNonceStoreTest extends BaseUnitTest {
     @Test
     void issuePersistsRow() {
         when(repository.existsById("abc")).thenReturn(false);
-        when(workspaces.findByIdForUpdate(7L)).thenReturn(Optional.of(new Workspace()));
+        when(workspaceLocks.lock(7L)).thenReturn(Optional.of(new Workspace()));
         when(connections.findByWorkspaceId(7L)).thenReturn(List.of(pending));
         when(pending.getKind()).thenReturn(IntegrationKind.GITHUB);
         when(pending.getState()).thenReturn(IntegrationState.PENDING);

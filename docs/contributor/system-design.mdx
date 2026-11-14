@@ -214,8 +214,8 @@ Do not keep a hand-drawn copy of the graph. The table below owns the relationshi
 [ADR 0095](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0095-one-adapter-for-each-provider-behind-a-vendor-neutral-spi.md) permits five integration modules to stay open. Their allowed dependencies still constrain their edges.
 The architecture tests guard provider isolation. [ADR 0099](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0099-aggregates-own-their-lifecycle-and-module-boundaries.md) owns the declaration and repository-ownership rules.
 
-Existing repository accesses outside their owning module are listed with owners in `RepositoryOwnershipRatchet`.
-Each removal must also remove its ratchet witness. A new access, stale witness or stable release with remaining debt fails the architecture check.
+`RepositoryOwnershipArchTest` refuses a repository access from outside the repository's module.
+Only the GitHub and GitLab adapters share the SCM mirror. Another module goes through the owner's interface, such as a port in its `spi` package.
 
 ## Sign-in
 

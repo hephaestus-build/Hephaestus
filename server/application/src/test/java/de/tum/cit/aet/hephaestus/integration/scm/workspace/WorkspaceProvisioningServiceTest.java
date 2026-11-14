@@ -11,6 +11,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.security.ScmEgressProperties;
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
@@ -38,6 +39,10 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceSlugHistoryRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceSlugReservationRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceSlugService;
+import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceMembershipsAdapter;
+import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceRepositoryMonitorsAdapter;
+import de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceRootsAdapter;
+import java.time.Clock;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -114,14 +119,15 @@ class WorkspaceProvisioningServiceTest {
 
         provisioningService = new WorkspaceProvisioningService(
                 workspaceProperties,
-                workspaceRepository,
-                repositoryToMonitorRepository,
+                roots(),
+                roots(),
+                monitors(),
                 workspaceService,
                 workspaceSlugs,
                 userRepository,
                 identityProviders,
                 sourceNamespaces,
-                workspaceMembershipRepository,
+                memberships(),
                 workspaceMembershipService,
                 connectionService,
                 List.of(),
@@ -167,6 +173,7 @@ class WorkspaceProvisioningServiceTest {
         when(workspaceService.createWorkspace(anyString(), anyString(), anyString(), any(AccountType.class), anyLong()))
                 .thenReturn(workspace);
         when(workspaceRepository.save(any(Workspace.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(workspace));
         when(userRepository.findByLoginAndProviderId("aet-org", 100L)).thenReturn(Optional.of(owner));
         when(userRepository.findByLogin("admin")).thenReturn(Optional.of(admin));
 
@@ -209,6 +216,7 @@ class WorkspaceProvisioningServiceTest {
         when(workspaceService.createWorkspace(anyString(), anyString(), anyString(), any(AccountType.class), anyLong()))
                 .thenReturn(workspace);
         when(workspaceRepository.save(any(Workspace.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(workspace));
         when(userRepository.findByLoginAndProviderId("aet-org", 100L)).thenReturn(Optional.of(owner));
         when(userRepository.findByLogin("admin")).thenReturn(Optional.empty());
 
@@ -264,14 +272,15 @@ class WorkspaceProvisioningServiceTest {
                 WorkspaceProperties.CreationPolicy.SELF_SERVICE);
         provisioningService = new WorkspaceProvisioningService(
                 workspaceProperties,
-                workspaceRepository,
-                repositoryToMonitorRepository,
+                roots(),
+                roots(),
+                monitors(),
                 workspaceService,
                 workspaceSlugs,
                 userRepository,
                 identityProviders,
                 sourceNamespaces,
-                workspaceMembershipRepository,
+                memberships(),
                 workspaceMembershipService,
                 connectionService,
                 List.of(),
@@ -391,14 +400,15 @@ class WorkspaceProvisioningServiceTest {
                     .isFalse();
             return 42L;
         });
+        Workspace created = new Workspace();
+        created.setId(91L);
         when(workspaceService.createWorkspace(anyString(), anyString(), eq(group), eq(AccountType.ORG), eq(7L)))
                 .thenAnswer(invocation -> {
                     assertThat(TransactionSynchronizationManager.isActualTransactionActive())
                             .isTrue();
-                    Workspace workspace = new Workspace();
-                    workspace.setId(91L);
-                    return workspace;
+                    return created;
                 });
+        when(workspaceRepository.findByIdForUpdate(91L)).thenReturn(Optional.of(created));
         when(workspaceRepository.save(any(Workspace.class))).thenAnswer(invocation -> invocation.getArgument(0));
         var settings = new WorkspaceProperties(
                 false,
@@ -408,14 +418,15 @@ class WorkspaceProvisioningServiceTest {
                 WorkspaceProperties.CreationPolicy.SELF_SERVICE);
         return new WorkspaceProvisioningService(
                 settings,
-                workspaceRepository,
-                repositoryToMonitorRepository,
+                roots(),
+                roots(),
+                monitors(),
                 workspaceService,
                 workspaceSlugs,
                 userRepository,
                 identityProviders,
                 sourceNamespaces,
-                workspaceMembershipRepository,
+                memberships(),
                 workspaceMembershipService,
                 connectionService,
                 List.of(),
@@ -442,5 +453,22 @@ class WorkspaceProvisioningServiceTest {
 
         @Override
         protected void doRollback(DefaultTransactionStatus status) {}
+    }
+
+    private WorkspaceRootsAdapter roots() {
+        return new WorkspaceRootsAdapter(workspaceRepository, workspaceMembershipService);
+    }
+
+    private WorkspaceRepositoryMonitorsAdapter monitors() {
+        return new WorkspaceRepositoryMonitorsAdapter(repositoryToMonitorRepository, workspaceRepository);
+    }
+
+    private WorkspaceMembershipsAdapter memberships() {
+        return new WorkspaceMembershipsAdapter(
+                workspaceMembershipRepository,
+                workspaceRepository,
+                workspaceMembershipService,
+                Clock.systemUTC(),
+                mock(ConfigAuditPort.class));
     }
 }

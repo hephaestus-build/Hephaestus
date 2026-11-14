@@ -3,11 +3,17 @@ package de.tum.cit.aet.hephaestus.workspace;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.spi.RepositoryMonitorCommands;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceCommands;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceMemberships;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProviderAccounts;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRoots;
@@ -30,6 +36,9 @@ class WorkspacePortsIntegrationTest extends BaseIntegrationTest {
     WorkspaceQueries queries;
 
     @Autowired
+    WorkspaceProviderAccounts providerAccounts;
+
+    @Autowired
     WorkspaceCommands commands;
 
     @Autowired
@@ -43,6 +52,12 @@ class WorkspacePortsIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     RepositoryToMonitorRepository monitorRows;
+
+    @Autowired
+    IdentityProviderRepository providers;
+
+    @Autowired
+    OrganizationRepository organizations;
 
     @Autowired
     JdbcClient jdbc;
@@ -216,6 +231,54 @@ class WorkspacePortsIntegrationTest extends BaseIntegrationTest {
                 .extracting(RepositoryToMonitor::getNameWithOwner)
                 .containsExactly("acme/renamed");
         assertThat(monitors.monitors(other)).isEmpty();
+    }
+
+    @Test
+    void shouldAddRemoveAndClearOnlyTheNamedWorkspacesMonitors() {
+        var own = data.scenario().workspace().getId();
+        var other = data.scenario().workspace().getId();
+        var transaction = new TransactionTemplate(transactions);
+        long first = Objects.requireNonNull(
+                        transaction.execute(status -> monitorCommands.add(own, "acme/first-" + own, own + 910_000L)))
+                .getId();
+        long kept = Objects.requireNonNull(transaction.execute(
+                        status -> monitorCommands.add(other, "acme/kept-" + other, other + 920_000L)))
+                .getId();
+        transaction.executeWithoutResult(status -> monitorCommands.add(own, "acme/second-" + own, own + 930_000L));
+
+        transaction.executeWithoutResult(status -> monitorCommands.remove(other, first));
+        assertThat(monitors.monitors(own)).hasSize(2);
+        transaction.executeWithoutResult(status -> monitorCommands.remove(own, first));
+        assertThat(monitors.monitors(own))
+                .extracting(RepositoryToMonitor::getNameWithOwner)
+                .containsExactly("acme/second-" + own);
+        transaction.executeWithoutResult(status -> monitorCommands.clear(own));
+
+        assertThat(monitors.monitors(own)).isEmpty();
+        assertThat(monitors.monitors(other))
+                .extracting(RepositoryToMonitor::getId)
+                .containsExactly(kept);
+    }
+
+    @Test
+    void shouldStoreAndReleaseTheOrganizationLink() {
+        var own = data.scenario().workspace().getId();
+        var provider = providers
+                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
+                .orElseGet(
+                        () -> providers.save(new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")));
+        var organization = new Organization();
+        organization.setNativeId(own + 940_000L);
+        organization.setLogin("org-" + own);
+        organization.setProvider(provider);
+        long organizationId = organizations.save(organization).getId();
+        var transaction = new TransactionTemplate(transactions);
+
+        transaction.executeWithoutResult(status -> roots.linkOrganization(own, organizationId));
+        assertThat(providerAccounts.bindsOrganization(own, organizationId)).isTrue();
+        transaction.executeWithoutResult(status -> roots.unlinkOrganization(own));
+
+        assertThat(providerAccounts.organizationBound(organizationId)).isFalse();
     }
 
     private String column(long workspaceId, String column) {

@@ -11,4 +11,18 @@ public interface WorkspaceLookup {
 
     /** The active workspaces. */
     List<Workspace> active();
+
+    Optional<Workspace> findBySlug(String slug);
+
+    /** The one workspace that binds the organization. */
+    Optional<Workspace> findByOrganization(long organizationId);
+
+    /** The workspaces whose source account has this login, ignoring case. */
+    List<Workspace> findByAccountLogin(String accountLogin);
+
+    /** Whether the instance has any workspace. */
+    boolean anyExists();
+
+    /** Some workspace of the instance, for bootstrapping a single-workspace setup. */
+    Optional<Workspace> findAny();
 }
