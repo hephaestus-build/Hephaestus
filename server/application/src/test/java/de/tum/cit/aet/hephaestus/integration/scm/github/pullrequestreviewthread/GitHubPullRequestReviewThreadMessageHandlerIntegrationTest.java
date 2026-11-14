@@ -242,6 +242,64 @@ class GitHubPullRequestReviewThreadMessageHandlerIntegrationTest extends BaseInt
     }
 
     @Test
+    void shouldKeepTheThreadUnresolvedWhenItsEarlierResolveArrivesAfterTheUnresolve() throws Exception {
+        // GitHub resolved the thread at 12:15:24 and unresolved it at 12:15:37; the resolve is redelivered late.
+        GitHubPullRequestReviewThreadEventDTO resolve = loadPayload("pull_request_review_thread.resolved");
+        GitHubPullRequestReviewThreadEventDTO unresolve = loadPayload("pull_request_review_thread.unresolved");
+        PullRequestReviewThread thread = unresolvedThreadFor(resolve);
+
+        handler.handleEvent(unresolve);
+        handler.handleEvent(resolve);
+
+        assertThat(threadRepository.findById(thread.getId())).get().satisfies(stored -> {
+            assertThat(stored.getState()).isEqualTo(PullRequestReviewThread.State.UNRESOLVED);
+            assertThat(stored.getResolvedAt()).isNull();
+            assertThat(stored.getResolutionChangedAt()).isEqualTo(Instant.parse("2025-11-05T12:15:37Z"));
+        });
+        assertThat(publications.stream(ScmDomainEvent.ReviewThreadResolved.class))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldKeepTheThreadResolvedWhenAnEarlierUnresolveArrivesAfterALaterResolve() throws Exception {
+        GitHubPullRequestReviewThreadEventDTO unresolve = loadPayload("pull_request_review_thread.unresolved");
+        GitHubPullRequestReviewThreadEventDTO recorded = loadPayload("pull_request_review_thread.resolved");
+        Instant resolvedAgainAt = Instant.parse("2025-11-05T12:16:00Z");
+        GitHubPullRequestReviewThreadEventDTO resolveAgain = new GitHubPullRequestReviewThreadEventDTO(
+                recorded.action(),
+                recorded.thread(),
+                recorded.pullRequest(),
+                resolvedAgainAt,
+                recorded.repository(),
+                recorded.sender());
+        PullRequestReviewThread thread = unresolvedThreadFor(resolveAgain);
+
+        handler.handleEvent(resolveAgain);
+        handler.handleEvent(unresolve);
+
+        assertThat(threadRepository.findById(thread.getId())).get().satisfies(stored -> {
+            assertThat(stored.getState()).isEqualTo(PullRequestReviewThread.State.RESOLVED);
+            assertThat(stored.getResolvedAt()).isEqualTo(resolvedAgainAt);
+        });
+        assertThat(publications.stream(ScmDomainEvent.ReviewThreadUnresolved.class))
+                .isEmpty();
+    }
+
+    private PullRequestReviewThread unresolvedThreadFor(GitHubPullRequestReviewThreadEventDTO event) {
+        createTestPullRequest(
+                required(event.pullRequest().getDatabaseId()),
+                event.pullRequest().number());
+        PullRequestReviewThread thread = new PullRequestReviewThread();
+        thread.setNativeId(required(event.thread().getFirstCommentId()));
+        thread.setNodeId(event.thread().nodeId());
+        thread.setPullRequest(testPullRequest);
+        thread.setState(PullRequestReviewThread.State.UNRESOLVED);
+        thread.setPath(event.thread().path());
+        thread.setProvider(gitProvider);
+        return threadRepository.save(thread);
+    }
+
+    @Test
     void shouldResolveThreadWhenIdIsKnown() throws Exception {
         // Given - create a thread directly
         createTestPullRequest(12345L, 1);

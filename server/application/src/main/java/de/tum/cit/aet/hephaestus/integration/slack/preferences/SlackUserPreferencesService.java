@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsen
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackParticipantConsentService;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackPersonErasureService;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -114,14 +115,19 @@ public class SlackUserPreferencesService {
                 .findFirst()
                 .orElseThrow(() -> notFound("Slack account is not linked for this workspace."));
 
-        if (channelMessagesAllowed) {
-            participantConsentService.recordChannelMessageOptIn(workspaceId, slackLink.providerUserKey());
-        } else {
-            participantConsentService.recordChannelMessageOptOut(workspaceId, slackLink.providerUserKey());
-            erasureService.erasePerson(workspaceId, accountId, slackLink.providerUserKey());
+        String slackUserId = slackLink.providerUserKey();
+        Instant decidedAt = Instant.now();
+        boolean recorded = channelMessagesAllowed
+                ? participantConsentService.recordChannelMessageOptIn(workspaceId, slackUserId, decidedAt)
+                : participantConsentService.recordChannelMessageOptOut(workspaceId, slackUserId, decidedAt);
+        if (recorded && !channelMessagesAllowed) {
+            erasureService.erasePerson(workspaceId, accountId, slackUserId);
         }
-        return toDto(connection, slackLink, channelMessagesAllowed)
-                .orElseThrow(() -> notFound("Workspace is not available."));
+        // A choice made in Slack with a later time keeps its place, so the answer shows what is stored.
+        boolean allowed = recorded
+                ? channelMessagesAllowed
+                : participantConsentService.channelMessagesAllowed(workspaceId, slackUserId);
+        return toDto(connection, slackLink, allowed).orElseThrow(() -> notFound("Workspace is not available."));
     }
 
     private Map<String, AccountIdentityQuery.IdentityView> slackLinksByTeam(

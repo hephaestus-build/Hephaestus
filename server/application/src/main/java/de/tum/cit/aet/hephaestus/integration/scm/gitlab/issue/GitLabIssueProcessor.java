@@ -321,17 +321,13 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         // Serialize the version check with webhook writes of this issue.
         issueRepository.lockByRepositoryIdAndNumber(repository.getId(), issueNumber);
         Optional<Issue> existingOpt = issueRepository.findByRepositoryIdAndNumber(repository.getId(), issueNumber);
-        boolean freshEqualRead = existingOpt.isPresent()
-                && ProviderStateVersion.acceptsEqualRead(
+        if (existingOpt.isPresent()
+                && ProviderStateVersion.refuses(
                         parseGitLabTimestamp(data.updatedAt()),
                         existingOpt.get().getUpdatedAt(),
+                        true,
                         context.observedAt(),
-                        existingOpt.get().getLastSyncAt());
-        if (existingOpt.isPresent()
-                && !freshEqualRead
-                && ProviderStateVersion.cannotReplace(
-                        parseGitLabTimestamp(data.updatedAt()),
-                        existingOpt.get().getUpdatedAt())) {
+                        existingOpt.get().getLastSyncAt())) {
             return existingOpt.get();
         }
         boolean isNew = existingOpt.isEmpty();

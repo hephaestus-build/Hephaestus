@@ -381,6 +381,75 @@ class GitLabMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
     }
 
     @Nested
+    class LateDelivery {
+
+        private static final String EARLIER = "2026-02-01T10:00:00Z";
+        private static final String LATER = "2026-02-02T10:00:00Z";
+
+        private GitLabMilestoneDTO snapshot(String title, String state, int closedIssues, String updatedAt) {
+            return new GitLabMilestoneDTO(
+                    18070L, 9, title, null, state, null, null, null, false, closedIssues, 5, EARLIER, updatedAt);
+        }
+
+        private ProcessingContext hook() {
+            return ProcessingContext.forWebhook(testWorkspace.getId(), testRepository, "update");
+        }
+
+        private Milestone stored() {
+            return milestoneRepository
+                    .findByNumberAndRepositoryId(9, testRepository.getId())
+                    .orElseThrow();
+        }
+
+        @Test
+        void shouldKeepTheNewerMilestoneWhenAnOlderHookArrivesLate() {
+            milestoneProcessor.process(snapshot("Release", "closed", 4, LATER), testRepository, hook());
+            Instant closedAt = stored().getClosedAt();
+            eventListener.clear();
+
+            milestoneProcessor.process(snapshot("Draft", "active", 1, EARLIER), testRepository, hook());
+
+            assertThat(stored().getTitle()).isEqualTo("Release");
+            assertThat(stored().getState()).isEqualTo(Milestone.State.CLOSED);
+            assertThat(stored().getClosedAt()).isEqualTo(closedAt);
+            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneUpdated.class))
+                    .isEmpty();
+        }
+
+        @Test
+        void shouldKeepTheStoredMilestoneWhenAHookCarriesTheSameVersion() {
+            milestoneProcessor.process(snapshot("Release", "closed", 4, LATER), testRepository, hook());
+
+            milestoneProcessor.process(snapshot("Draft", "active", 1, LATER), testRepository, hook());
+
+            assertThat(stored().getTitle()).isEqualTo("Release");
+            assertThat(stored().getState()).isEqualTo(Milestone.State.CLOSED);
+        }
+
+        @Test
+        void shouldRefreshTheCountsWhenASyncReadBegunAfterTheLastWriteCarriesTheSameVersion() {
+            milestoneProcessor.process(snapshot("Release", "active", 1, LATER), testRepository, hook());
+            ProcessingContext readAfterTheWrite =
+                    testContext().withObservedAt(Instant.now().plusSeconds(1));
+
+            milestoneProcessor.process(snapshot("Release", "active", 3, LATER), testRepository, readAfterTheWrite);
+
+            assertThat(stored().getClosedIssuesCount()).isEqualTo(3);
+        }
+
+        @Test
+        void shouldKeepTheStoredCountsWhenASyncReadBegunBeforeTheLastWriteCarriesTheSameVersion() {
+            ProcessingContext readBeforeTheWrite =
+                    testContext().withObservedAt(Instant.now().minusSeconds(60));
+            milestoneProcessor.process(snapshot("Release", "active", 1, LATER), testRepository, hook());
+
+            milestoneProcessor.process(snapshot("Release", "active", 3, LATER), testRepository, readBeforeTheWrite);
+
+            assertThat(stored().getClosedIssuesCount()).isEqualTo(1);
+        }
+    }
+
+    @Nested
     class GroupMilestoneFanOut {
 
         @Test

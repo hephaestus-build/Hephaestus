@@ -235,7 +235,7 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
     @DisplayName("an opted-out author is not stored; a non-opted-out author on the same ACTIVE channel is")
     void personFirewall_dropsOptedOutAuthor_keepsAllowedAuthor() {
         // OPTED_OUT_USER has explicitly opted out of ingestion; ALLOWED_USER has no consent row.
-        participantConsentRepository.optOutOfIngestion(workspaceId, OPTED_OUT_USER);
+        participantConsentRepository.decide(workspaceId, OPTED_OUT_USER, true, Instant.now());
 
         ingestService.ingestChannelMessage(TEAM, CHANNEL, "100.1", null, OPTED_OUT_USER, "opted-out says hi");
         ingestService.ingestChannelMessage(TEAM, CHANNEL, "200.1", null, ALLOWED_USER, "allowed says hi");
@@ -252,13 +252,13 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
     @Test
     @DisplayName("opting back in re-allows a previously opted-out author's ingest")
     void personFirewall_optBackIn_reallowsIngest() {
-        participantConsentRepository.optOutOfIngestion(workspaceId, OPTED_OUT_USER);
+        participantConsentRepository.decide(workspaceId, OPTED_OUT_USER, true, Instant.now());
         ingestService.ingestChannelMessage(TEAM, CHANNEL, "100.1", null, OPTED_OUT_USER, "while opted out");
         assertThat(messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(workspaceId, CHANNEL, "100.1"))
                 .isFalse();
 
         // Opt back in (ingestion_opted_out → false), then a fresh message from the same author is now stored.
-        participantConsentRepository.optInToIngestion(workspaceId, OPTED_OUT_USER);
+        participantConsentRepository.decide(workspaceId, OPTED_OUT_USER, false, Instant.now());
         ingestService.ingestChannelMessage(TEAM, CHANNEL, "300.1", null, OPTED_OUT_USER, "after opting back in");
 
         assertThat(messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(workspaceId, CHANNEL, "300.1"))
@@ -277,7 +277,7 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
         IdentityProvider provider = identityProviderRepository.saveAndFlush(
                 new IdentityProvider(IdentityProviderType.SLACK, "https://slack.com"));
         UUID suppressionId = databaseTestUtils.erase(Objects.requireNonNull(provider.getId()), OPTED_OUT_USER, TEAM);
-        participantConsentRepository.optInToIngestion(workspaceId, OPTED_OUT_USER);
+        participantConsentRepository.decide(workspaceId, OPTED_OUT_USER, false, Instant.now());
 
         ingestService.ingestChannelMessage(TEAM, CHANNEL, "100.1", null, OPTED_OUT_USER, "must stay absent");
         ingestService.ingestChannelMessage(TEAM, CHANNEL, "200.1", null, ALLOWED_USER, "unrelated person");

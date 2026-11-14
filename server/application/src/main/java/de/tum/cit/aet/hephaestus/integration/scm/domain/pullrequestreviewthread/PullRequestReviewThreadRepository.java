@@ -28,6 +28,19 @@ public interface PullRequestReviewThreadRepository extends JpaRepository<PullReq
 
     Optional<PullRequestReviewThread> findByNativeIdAndProviderId(Long nativeId, Long providerId);
 
+    /**
+     * Locks the thread without loading it, so a compare with its stored resolution and the write after it are atomic.
+     * It must be the transaction's first read of the thread: the caller then reads it through
+     * {@link #findByNativeIdAndProviderId}, which sees what the last writer committed.
+     */
+    @WorkspaceAgnostic("Sync locks one shared mirror row of a repository taken from the provider event")
+    @Query(
+            value =
+                    "SELECT id FROM pull_request_review_thread WHERE native_id = :nativeId AND provider_id = :providerId"
+                            + " FOR NO KEY UPDATE",
+            nativeQuery = true)
+    Optional<Long> lockByNativeIdAndProviderId(@Param("nativeId") long nativeId, @Param("providerId") long providerId);
+
     Optional<PullRequestReviewThread> findByNodeIdAndProviderId(String nodeId, Long providerId);
 
     @Query("SELECT t.id FROM PullRequestReviewThread t WHERE t.pullRequest.id = :pullRequestId ORDER BY t.id DESC")

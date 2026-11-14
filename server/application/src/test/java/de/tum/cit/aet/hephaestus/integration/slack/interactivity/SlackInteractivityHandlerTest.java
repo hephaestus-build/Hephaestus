@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.slack.interactivity;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -18,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackWeeklyDigestPoint
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackAppHomeService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.AbstractExecutorService;
@@ -112,10 +114,12 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
     @Test
     void appHomeChannelMessageOptOut_recordsIngestion_erasesMemberData_republishesHome() {
         when(identityResolver.resolveAccountId(WORKSPACE_ID, TEAM, USER)).thenReturn(Optional.of(RATER_ID));
+        when(participantConsentService.recordChannelMessageOptOut(eq(WORKSPACE_ID), eq(USER), any(Instant.class)))
+                .thenReturn(true);
 
         handler.handleBlockActions(blockActions(SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_OUT, "false"));
 
-        verify(participantConsentService).recordChannelMessageOptOut(WORKSPACE_ID, USER);
+        verify(participantConsentService).recordChannelMessageOptOut(eq(WORKSPACE_ID), eq(USER), any(Instant.class));
         verify(personErasureService).erasePerson(WORKSPACE_ID, RATER_ID, USER);
         verify(messageService)
                 .sendEphemeralForWorkspace(
@@ -127,7 +131,7 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
     void appHomeChannelMessageOptIn_recordsIngestionOptIn_republishesHome_noErase() {
         handler.handleBlockActions(blockActions(SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_IN, "true"));
 
-        verify(participantConsentService).recordChannelMessageOptIn(WORKSPACE_ID, USER);
+        verify(participantConsentService).recordChannelMessageOptIn(eq(WORKSPACE_ID), eq(USER), any(Instant.class));
         verify(appHomeService).onHomeOpened(TEAM, USER);
         verifyNoInteractions(personErasureService, messageService);
     }
@@ -135,15 +139,38 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
     @Test
     void inMessageOptOut_recordsChannelMessageOptOut_erasesData_andConfirmsEphemerally() {
         when(identityResolver.resolveAccountId(WORKSPACE_ID, TEAM, USER)).thenReturn(Optional.of(RATER_ID));
+        when(participantConsentService.recordChannelMessageOptOut(eq(WORKSPACE_ID), eq(USER), any(Instant.class)))
+                .thenReturn(true);
 
         handler.handleBlockActions(blockActions(SlackConsentBlocks.ACTION_PARTICIPANT_OPT_OUT, ""));
 
-        verify(participantConsentService).recordChannelMessageOptOut(WORKSPACE_ID, USER);
+        verify(participantConsentService).recordChannelMessageOptOut(eq(WORKSPACE_ID), eq(USER), any(Instant.class));
         verify(personErasureService).erasePerson(WORKSPACE_ID, RATER_ID, USER);
         verify(messageService)
                 .sendEphemeralForWorkspace(
                         eq(WORKSPACE_ID), eq(CHANNEL), eq(USER), anyList(), eq(SlackConsentBlocks.confirmationText()));
         verifyNoInteractions(appHomeService);
+    }
+
+    @Test
+    void shouldDateTheChoiceWithTheActionsSlackTime() {
+        ObjectNode payload = blockActions(SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_IN, "true");
+        ((ObjectNode) payload.path("actions").get(0)).put("action_ts", "1793000010.000100");
+
+        handler.handleBlockActions(payload);
+
+        verify(participantConsentService)
+                .recordChannelMessageOptIn(WORKSPACE_ID, USER, Instant.parse("2026-10-26T07:33:30.000100Z"));
+    }
+
+    @Test
+    void shouldEraseNothingWhenALaterChoiceIsStored() {
+        when(participantConsentService.recordChannelMessageOptOut(eq(WORKSPACE_ID), eq(USER), any(Instant.class)))
+                .thenReturn(false);
+
+        handler.handleBlockActions(blockActions(SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_OUT, "false"));
+
+        verifyNoInteractions(personErasureService, messageService, appHomeService);
     }
 
     @Test

@@ -541,6 +541,152 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
         }
     }
 
+    @Nested
+    class LateDelivery {
+
+        private static final long MILESTONE_ID = 14028860L;
+        private static final Instant EARLIER = Instant.parse("2026-02-01T10:00:00Z");
+        private static final Instant LATER = Instant.parse("2026-02-02T10:00:00Z");
+
+        private GitHubMilestoneDTO snapshot(String title, String state, int closedIssues, Instant updatedAt) {
+            return new GitHubMilestoneDTO(
+                    MILESTONE_ID,
+                    9,
+                    title,
+                    null,
+                    state,
+                    null,
+                    "https://github.com/" + FIXTURE_REPO_FULL_NAME + "/milestone/9",
+                    0,
+                    closedIssues,
+                    EARLIER,
+                    updatedAt,
+                    null);
+        }
+
+        private ProcessingContext webhook() {
+            return ProcessingContext.forWebhook(testWorkspace.getId(), testRepository, "edited");
+        }
+
+        private Milestone stored() {
+            return milestoneRepository
+                    .findByNumberAndRepositoryId(9, testRepository.getId())
+                    .orElseThrow();
+        }
+
+        @Test
+        void shouldKeepTheNewerMilestoneWhenAnOlderWebhookArrivesLate() {
+            processor.process(snapshot("Release", "closed", 4, LATER), testRepository, null, webhook());
+            eventListener.clear();
+
+            processor.process(snapshot("Draft", "open", 1, EARLIER), testRepository, null, webhook());
+
+            assertThat(stored().getTitle()).isEqualTo("Release");
+            assertThat(stored().getState()).isEqualTo(Milestone.State.CLOSED);
+            assertThat(stored().getUpdatedAt()).isEqualTo(LATER);
+            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneUpdated.class))
+                    .isEmpty();
+        }
+
+        @Test
+        void shouldKeepTheStoredMilestoneWhenAWebhookCarriesTheSameVersion() {
+            processor.process(snapshot("Release", "closed", 4, LATER), testRepository, null, webhook());
+
+            processor.process(snapshot("Draft", "open", 1, LATER), testRepository, null, webhook());
+
+            assertThat(stored().getTitle()).isEqualTo("Release");
+            assertThat(stored().getState()).isEqualTo(Milestone.State.CLOSED);
+        }
+
+        @Test
+        void shouldRefreshTheCountsWhenASyncReadBegunAfterTheLastWriteCarriesTheSameVersion() {
+            processor.process(snapshot("Release", "open", 1, LATER), testRepository, null, webhook());
+            ProcessingContext readAfterTheWrite =
+                    createContext().withObservedAt(Instant.now().plusSeconds(1));
+
+            processor.process(snapshot("Release", "open", 3, LATER), testRepository, null, readAfterTheWrite);
+
+            assertThat(stored().getClosedIssuesCount()).isEqualTo(3);
+        }
+
+        @Test
+        void shouldSettleAnIdenticalSnapshotWhoseTimeIsFinerThanTheDatabaseKeeps() {
+            // PostgreSQL keeps microseconds and rounds this time up; the identical snapshot must still compare equal.
+            Instant finer = Instant.parse("2026-02-02T10:00:00.000000600Z");
+            processor.process(snapshot("Release", "open", 1, finer), testRepository, null, webhook());
+            eventListener.clear();
+            ProcessingContext readAfterTheWrite =
+                    createContext().withObservedAt(Instant.now().plusSeconds(1));
+
+            processor.process(snapshot("Release", "open", 3, finer), testRepository, null, readAfterTheWrite);
+
+            assertThat(stored().getClosedIssuesCount()).isEqualTo(3);
+            assertThat(eventListener.ofType(ScmDomainEvent.MilestoneUpdated.class))
+                    .hasSize(1);
+        }
+
+        @Test
+        void shouldRecordTheRealIdFromARefusedWebhookSoThatItsDeleteFindsTheMilestone() {
+            GitHubMilestoneDTO synced = new GitHubMilestoneDTO(
+                    null,
+                    9,
+                    "Release",
+                    null,
+                    "open",
+                    null,
+                    "https://github.com/" + FIXTURE_REPO_FULL_NAME + "/milestone/9",
+                    0,
+                    1,
+                    EARLIER,
+                    LATER,
+                    null);
+            processor.process(synced, testRepository, null, createContext());
+            assertThat(stored().getNativeId()).isNegative();
+
+            processor.process(snapshot("Release", "open", 1, LATER), testRepository, null, webhook());
+            processor.delete(MILESTONE_ID, webhook());
+
+            assertThat(milestoneRepository.findByNumberAndRepositoryId(9, testRepository.getId()))
+                    .isEmpty();
+        }
+
+        @Test
+        void shouldRefreshTheCountsOfAMilestoneThatAnIssueWebhookInsertedWhenASyncReadsTheSameVersion() {
+            milestoneRepository.insertIfAbsent(
+                    MILESTONE_ID,
+                    providerId(),
+                    9,
+                    "Release",
+                    null,
+                    "OPEN",
+                    "https://github.com/" + FIXTURE_REPO_FULL_NAME + "/milestone/9",
+                    null,
+                    0,
+                    1,
+                    testRepository.getId(),
+                    EARLIER,
+                    LATER,
+                    Instant.now());
+            ProcessingContext readAfterTheWrite =
+                    createContext().withObservedAt(Instant.now().plusSeconds(1));
+
+            processor.process(snapshot("Release", "open", 3, LATER), testRepository, null, readAfterTheWrite);
+
+            assertThat(stored().getClosedIssuesCount()).isEqualTo(3);
+        }
+
+        @Test
+        void shouldKeepTheStoredCountsWhenASyncReadBegunBeforeTheLastWriteCarriesTheSameVersion() {
+            ProcessingContext readBeforeTheWrite =
+                    createContext().withObservedAt(Instant.now().minusSeconds(60));
+            processor.process(snapshot("Release", "open", 1, LATER), testRepository, null, webhook());
+
+            processor.process(snapshot("Release", "open", 3, LATER), testRepository, null, readBeforeTheWrite);
+
+            assertThat(stored().getClosedIssuesCount()).isEqualTo(1);
+        }
+    }
+
     // Delete Tests
 
     @Nested

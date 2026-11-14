@@ -211,7 +211,7 @@ public class ScmPersonDataCatalog implements PersonDataCatalog {
                         "pull_request_review_thread",
                         "pull_request_review_thread",
                         "t.resolved_by_id = ANY(:users)",
-                        "id,created_at,updated_at,state,pull_request_id,root_comment_id,node_id,path,line,start_line,side,start_side,outdated,collapsed,resolved_by_id,native_id,provider_id,commit_sha,original_commit_sha,resolved_at",
+                        "id,created_at,updated_at,state,pull_request_id,root_comment_id,node_id,path,line,start_line,side,start_side,outdated,collapsed,resolved_by_id,native_id,provider_id,commit_sha,original_commit_sha,resolved_at,resolution_changed_at",
                         "id",
                         "resolved_by_id=NULL",
                         200),

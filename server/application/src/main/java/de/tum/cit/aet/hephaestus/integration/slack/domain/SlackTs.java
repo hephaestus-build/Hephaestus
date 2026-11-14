@@ -54,6 +54,14 @@ public final class SlackTs {
         return compare(left, right) >= 0 ? left : right;
     }
 
+    /** The instant a Slack {@code ts} denotes, or {@code null} when it is absent or malformed. */
+    public static @Nullable Instant toInstant(@Nullable String ts) {
+        Long micros = toEpochMicros(ts);
+        return micros == null
+                ? null
+                : Instant.ofEpochSecond(micros / MICROS_PER_SECOND, (micros % MICROS_PER_SECOND) * 1_000L);
+    }
+
     /** Epoch microseconds for a Slack {@code ts}, or {@code null} when it is absent or malformed. */
     public static @Nullable Long toEpochMicros(@Nullable String ts) {
         if (ts == null || ts.isBlank()) {

@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncExcepti
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.milestone.dto.GitLabMilestoneDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectAdmission;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -127,6 +128,8 @@ public class GitLabMilestoneSyncService {
 
                 HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
 
+                // The processor lets a read begun after a milestone's last write settle an equal version.
+                Instant pageRequestedAt = Instant.now();
                 ClientGraphQlResponse response = client.documentName(GET_PROJECT_MILESTONES_DOCUMENT)
                         .variable("fullPath", projectPath)
                         .variable("first", pageSize)
@@ -155,7 +158,8 @@ public class GitLabMilestoneSyncService {
                     break;
                 }
 
-                ProcessingContext context = ProcessingContext.forSync(scopeId, repository);
+                ProcessingContext context =
+                        ProcessingContext.forSync(scopeId, repository).withObservedAt(pageRequestedAt);
                 for (Map<String, Object> node : nodes) {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> typedNode = node;
@@ -282,6 +286,8 @@ public class GitLabMilestoneSyncService {
         boolean rateLimitAborted = false;
         boolean errorAborted = false;
 
+        // The processor lets a read begun after a milestone's last write settle an equal version.
+        Instant readStartedAt = Instant.now();
         try {
             do {
                 if (page >= GitLabSyncConstants.MAX_PAGINATION_PAGES) {
@@ -376,7 +382,8 @@ public class GitLabMilestoneSyncService {
             for (Repository repo : repositoriesInGroup) {
                 GitLabProjectAdmission.ProjectRead read = reads.get(repo.getId());
                 if (read == null) continue;
-                ProcessingContext context = ProcessingContext.forSync(scopeId, repo);
+                ProcessingContext context =
+                        ProcessingContext.forSync(scopeId, repo).withObservedAt(readStartedAt);
                 for (GitLabMilestoneDTO dto : collected) {
                     try {
                         Milestone saved = admission

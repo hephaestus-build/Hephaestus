@@ -613,7 +613,7 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
             MentorConversation dm = mentorConversations.findOrCreateMain(workspaceId, accountId(owner));
             mentorConversations.bindSlackIdentity(workspaceId, dm.getId(), "T1", "U1", "D" + channelId);
 
-            slackParticipantConsentRepository.optOutOfIngestion(workspaceId, "U1");
+            slackParticipantConsentRepository.decide(workspaceId, "U1", true, Instant.now());
         }
 
         @Test

@@ -179,7 +179,8 @@ public abstract class BaseGitHubProcessor {
                 closedIssuesCount,
                 repository.getId(),
                 dto.createdAt(),
-                dto.updatedAt());
+                dto.updatedAt(),
+                Instant.now());
 
         if (inserted == 0) {
             // Another thread inserted first - fetch the winner
