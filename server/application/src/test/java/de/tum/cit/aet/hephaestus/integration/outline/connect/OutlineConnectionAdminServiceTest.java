@@ -30,6 +30,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.springframework.http.HttpHeaders;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -159,7 +160,7 @@ class OutlineConnectionAdminServiceTest extends BaseUnitTest {
         OutlineConnectionAdminService service = service();
         doThrow(new OutlineApiException(
                         "Outline /api/auth.info failed (HTTP 401)",
-                        WebClientResponseException.create(401, "Unauthorized", null, null, null),
+                        WebClientResponseException.create(401, "Unauthorized", HttpHeaders.EMPTY, new byte[0], null),
                         false))
                 .when(apiClient)
                 .validateToken(SERVER_URL, "ol_typo");
