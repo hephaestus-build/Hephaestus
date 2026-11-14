@@ -73,25 +73,23 @@ Colocation does not change the rule.
 
 ## Which admin console a component belongs to
 
-`src/components/admin/**` holds two different consoles.
-Most directories serve both: `usage`, `audit`, `integrations`, `practices` and `practice-editor` are imported by instance and workspace routes alike.
+`src/components/admin/**` holds two consoles, and most directories serve both, such as `usage` and `practices`.
 In such a directory, the **component name** carries the scope:
 
 - `Admin*` or `Instance*` — instance-wide. Configures the deployment for every workspace.
 - `Workspace*` — scoped to one workspace.
 - **Unprefixed — shared by both, so it must not assume a scope.**
   An `Admin*` dialog *and* a `Workspace*` dialog each render `LlmConnectionFields` and `LlmModelFields`.
-  Adding a scope-specific field, permission check, or copy string to either component silently breaks the other console.
+  A scope-specific field, permission check or copy string in either one silently breaks the other console.
   Nothing in the file says it has two callers.
 
-A directory that only one console imports carries the scope itself, so its components can stay unprefixed.
-`admin/instance-llm/` is the instance console's, and `admin/workspace-llm/` is the workspace console's.
-A shared component never lives in a one-console directory: the shared LLM fields are in `admin/llm/`.
+A directory that one console imports, such as `admin/instance-llm/`, carries the scope, so its components stay unprefixed.
+A shared component never lives in one: the shared LLM fields are in `admin/llm/`.
 
 Name a new component for its scope.
 Before you edit an unprefixed component, check its caller list.
 
-A split into `admin/instance/` and `admin/workspace/` was rejected: the shared components would still need a `shared/` directory.
+A split into `admin/instance/` and `admin/workspace/` was rejected: shared components would still need a third directory.
 The prefix identifies the scope in imports and in the Storybook sidebar.
 
 ## Container/presentation split
