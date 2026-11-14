@@ -8,6 +8,9 @@ import java.util.Optional;
  * for reading and for handing on; only {@link WorkspaceRoots} changes it.
  */
 public interface WorkspaceLocks {
+    /** The workspace, locked. */
+    Optional<Workspace> lock(long workspaceId);
+
     /** The workspace that holds or last held the GitHub App installation, locked. */
     Optional<Workspace> lockByInstallation(long installationId);
 

@@ -63,35 +63,5 @@ final class RepositoryOwnershipRatchet {
                             "integration.scm.workspace.WorkspaceTeamLabelService",
                             "integration.scm.workspace.adapter.WorkspaceOrganizationMembershipAdapter",
                             "integration.scm.workspace.adapter.WorkspaceTeamMembershipAdapter",
-                            "integration.scm.workspace.settings.WorkspaceTeamSettingsService")),
-            new Entry(
-                    "integration.scm.gitlab",
-                    "workspace.RepositoryToMonitorRepository",
-                    "DDD9",
-                    "workspace::spi WorkspaceRepositoryMonitors",
-                    Set.of(
-                            "integration.scm.gitlab.organization.GitLabSelectedMembershipProjection",
-                            "integration.scm.gitlab.sync.status.GitLabConnectionSyncStateProvider",
-                            "integration.scm.gitlab.workspace.GitLabProjectAdmission",
-                            "integration.scm.gitlab.workspace.GitLabRepositoryMonitors",
-                            "integration.scm.gitlab.workspace.GitLabRouteAdmission",
-                            "integration.scm.gitlab.workspace.GitLabWorkspaceInitializationService",
-                            "integration.scm.gitlab.workspace.GitLabWorkspaceLinkService")),
-            new Entry(
-                    "integration.scm.gitlab",
-                    "workspace.WorkspaceRepository",
-                    "DDD9",
-                    "workspace::spi WorkspaceQueries and WorkspaceCommands",
-                    Set.of(
-                            "integration.scm.gitlab.connect.GitLabConnectionStrategy",
-                            "integration.scm.gitlab.credentials.GitLabTokenRotationScheduler",
-                            "integration.scm.gitlab.organization.GitLabMemberMessageHandler",
-                            "integration.scm.gitlab.organization.GitLabSelectedMembershipProjection",
-                            "integration.scm.gitlab.sync.GitLabDataSyncScheduler",
-                            "integration.scm.gitlab.workspace.GitLabProjectAdmission",
-                            "integration.scm.gitlab.workspace.GitLabRepositoryMonitors",
-                            "integration.scm.gitlab.workspace.GitLabWebhookService",
-                            "integration.scm.gitlab.workspace.GitLabWorkspaceDataSyncTrigger",
-                            "integration.scm.gitlab.workspace.GitLabWorkspaceInitializationService",
-                            "integration.scm.gitlab.workspace.GitLabWorkspaceLinkService")));
+                            "integration.scm.workspace.settings.WorkspaceTeamSettingsService")));
 }

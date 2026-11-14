@@ -12,11 +12,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository.MonitorPolicy;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
+import de.tum.cit.aet.hephaestus.workspace.spi.RepositoryMonitorCommands;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProviderAccounts;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceRepositoryMonitors;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -43,23 +43,26 @@ public class GitLabRepositoryMonitors {
     private static final Logger log = LoggerFactory.getLogger(GitLabRepositoryMonitors.class);
 
     private final WorkspaceScopeFilter workspaceScopeFilter;
-    private final RepositoryToMonitorRepository repositoryToMonitorRepository;
+    private final WorkspaceRepositoryMonitors monitors;
+    private final RepositoryMonitorCommands monitorCommands;
     private final RepositoryRepository repositoryRepository;
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceProviderAccounts providerAccounts;
     private final ConnectionCommands connectionCommands;
     private final SyncTargetProvider syncTargetProvider;
 
     public GitLabRepositoryMonitors(
             WorkspaceScopeFilter workspaceScopeFilter,
-            RepositoryToMonitorRepository repositoryToMonitorRepository,
+            WorkspaceRepositoryMonitors monitors,
+            RepositoryMonitorCommands monitorCommands,
             RepositoryRepository repositoryRepository,
-            WorkspaceRepository workspaceRepository,
+            WorkspaceProviderAccounts providerAccounts,
             ConnectionCommands connectionCommands,
             SyncTargetProvider syncTargetProvider) {
         this.workspaceScopeFilter = workspaceScopeFilter;
-        this.repositoryToMonitorRepository = repositoryToMonitorRepository;
+        this.monitors = monitors;
+        this.monitorCommands = monitorCommands;
         this.repositoryRepository = repositoryRepository;
-        this.workspaceRepository = workspaceRepository;
+        this.providerAccounts = providerAccounts;
         this.connectionCommands = connectionCommands;
         this.syncTargetProvider = syncTargetProvider;
     }
@@ -97,15 +100,14 @@ public class GitLabRepositoryMonitors {
                 .filter(GitLabConfig.class::isInstance)
                 .map(GitLabConfig.class::cast)
                 .orElse(null);
-        MonitorPolicy policy =
-                workspaceRepository.findMonitorPolicy(workspaceId).orElse(null);
+        WorkspaceProviderAccounts.ProviderAccount policy =
+                providerAccounts.providerAccount(workspaceId).orElse(null);
         Optional<String> origin = config != null ? ScmOrigin.of(config.serverUrl()) : Optional.empty();
         if (config == null || policy == null || origin.isEmpty()) {
             return 0;
         }
-        String group = policy.getAccountLogin();
-        Workspace workspace = workspaceRepository.getReferenceById(workspaceId);
-        List<RepositoryToMonitor> own = new ArrayList<>(repositoryToMonitorRepository.findByWorkspaceId(workspaceId));
+        String group = policy.accountLogin();
+        List<RepositoryToMonitor> own = new ArrayList<>(monitors.monitors(workspaceId));
         int created = 0;
         // Callers may hand in repositories a finished transaction loaded; they are read again here, as stored now.
         List<Long> ids = repositories.stream().map(Repository::getId).toList();
@@ -128,7 +130,7 @@ public class GitLabRepositoryMonitors {
                     .toList();
             if (same.isEmpty()) {
                 // A workspace that selected its projects monitors only those it already monitors.
-                if (policy.getRepositorySelection() != RepositorySelection.SELECTED
+                if (policy.repositorySelection() != RepositorySelection.SELECTED
                         && (createAll || workspaceScopeFilter.isGroupRepositoryAllowed(group, path))) {
                     if (own.stream().anyMatch(monitor -> path.equals(monitor.getNameWithOwner()))) {
                         log.warn(
@@ -137,11 +139,7 @@ public class GitLabRepositoryMonitors {
                                 repository.getId());
                         continue;
                     }
-                    RepositoryToMonitor monitor = new RepositoryToMonitor();
-                    monitor.setNameWithOwner(path);
-                    monitor.setNativeId(nativeId);
-                    monitor.setWorkspace(workspace);
-                    repositoryToMonitorRepository.saveAndFlush(monitor);
+                    RepositoryToMonitor monitor = monitorCommands.add(workspaceId, path, nativeId);
                     syncTargetProvider.reconcileSyncTargetIdentity(monitor.getId(), nativeId, path);
                     own.add(monitor);
                     created++;
@@ -163,7 +161,6 @@ public class GitLabRepositoryMonitors {
                         duplicate.getId(),
                         kept.getId());
             }
-            repositoryToMonitorRepository.flush();
             syncTargetProvider.reconcileSyncTargetIdentity(kept.getId(), nativeId, path);
         }
         if (created > 0) {

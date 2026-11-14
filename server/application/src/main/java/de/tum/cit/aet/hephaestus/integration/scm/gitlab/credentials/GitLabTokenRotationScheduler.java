@@ -6,7 +6,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWebhookService;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class GitLabTokenRotationScheduler {
     private final ConnectionService connections;
-    private final WorkspaceRepository workspaces;
+    private final WorkspaceLookup workspaceLookup;
     private final GitLabWebhookService webhooks;
 
     @Scheduled(cron = "0 0 3 * * *", zone = "UTC")
@@ -29,8 +29,8 @@ public class GitLabTokenRotationScheduler {
     public void rotateTokens() {
         for (long workspaceId :
                 connections.findWorkspaceIdsWithConnection(IntegrationKind.GITLAB, IntegrationState.ACTIVE)) {
-            workspaces
-                    .findById(workspaceId)
+            workspaceLookup
+                    .find(workspaceId)
                     .filter(workspace -> workspace.getStatus() == Workspace.WorkspaceStatus.ACTIVE)
                     .ifPresent(workspace -> {
                         try {

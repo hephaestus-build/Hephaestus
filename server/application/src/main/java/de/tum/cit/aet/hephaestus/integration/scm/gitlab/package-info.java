@@ -29,6 +29,7 @@
             // GitLab workspace flows depend on the workspace named sub-surfaces.
             "workspace::context",
             "workspace::dto",
+            "workspace::spi",
         })
 @org.jspecify.annotations.NullMarked
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab;

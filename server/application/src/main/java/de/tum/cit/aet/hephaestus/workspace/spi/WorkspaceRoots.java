@@ -7,7 +7,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The tenant root as the source providers bind and shape it. Every command locks the workspace row, changes it inside
- * the workspace module and joins the caller's transaction. {@link WorkspaceLocks} finds it.
+ * the workspace module and joins the caller's transaction. {@link WorkspaceLookup} and {@link WorkspaceLocks} find it.
  */
 public interface WorkspaceRoots {
     /**

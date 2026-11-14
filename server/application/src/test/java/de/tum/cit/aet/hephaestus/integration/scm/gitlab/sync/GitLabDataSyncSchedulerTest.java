@@ -67,7 +67,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -162,7 +162,7 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
                 deletionSweepService,
                 initializationService,
                 mock(GitLabRepositoryMonitors.class),
-                mock(WorkspaceRepository.class),
+                mock(WorkspaceLookup.class),
                 mock(WorkspaceActorSelector.class),
                 projectSyncService,
                 mock(ActivityLedgerRepair.class),

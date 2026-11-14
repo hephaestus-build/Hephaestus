@@ -45,7 +45,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabProjectA
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRepositoryMonitors;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceInitializationService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceLookup;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.time.Instant;
@@ -112,7 +112,7 @@ public class GitLabDataSyncScheduler {
     private final GitLabDeletionSweepService deletionSweepService;
     private final GitLabWorkspaceInitializationService initializationService;
     private final GitLabRepositoryMonitors repositoryMonitors;
-    private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceLookup workspaceLookup;
     private final WorkspaceActorSelector actorSelector;
     private final GitLabProjectSyncService projectSyncService;
     private final GitLabProjectAdmission admission;
@@ -131,7 +131,7 @@ public class GitLabDataSyncScheduler {
             GitLabDeletionSweepService deletionSweepService,
             GitLabWorkspaceInitializationService initializationService,
             GitLabRepositoryMonitors repositoryMonitors,
-            WorkspaceRepository workspaceRepository,
+            WorkspaceLookup workspaceLookup,
             WorkspaceActorSelector actorSelector,
             GitLabProjectSyncService projectSyncService,
             ActivityLedgerRepair activityLedgerRepair,
@@ -149,7 +149,7 @@ public class GitLabDataSyncScheduler {
         this.deletionSweepService = deletionSweepService;
         this.initializationService = initializationService;
         this.repositoryMonitors = repositoryMonitors;
-        this.workspaceRepository = workspaceRepository;
+        this.workspaceLookup = workspaceLookup;
         this.actorSelector = actorSelector;
         this.projectSyncService = projectSyncService;
         this.activityLedgerRepair = activityLedgerRepair;
@@ -394,8 +394,8 @@ public class GitLabDataSyncScheduler {
             if (result.status() == GitLabSyncResult.Status.COMPLETED) {
 
                 // A complete listing also monitors projects created since the workspace was set up.
-                workspaceRepository
-                        .findById(session.scopeId())
+                workspaceLookup
+                        .find(session.scopeId())
                         .ifPresent(workspace -> repositoryMonitors.monitorAllowed(workspace, result.synced()));
             } else {
                 reportWarning(handle);

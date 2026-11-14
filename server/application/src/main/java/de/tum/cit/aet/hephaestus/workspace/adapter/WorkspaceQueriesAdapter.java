@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceQueryService;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeRepositoryRepository;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceProviderAccounts;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceQueries;
 import java.util.List;
 import java.util.Optional;
@@ -20,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class WorkspaceQueriesAdapter implements WorkspaceQueries {
+public class WorkspaceQueriesAdapter implements WorkspaceQueries, WorkspaceProviderAccounts {
     private final WorkspaceRepository workspaces;
     private final RepositoryToMonitorRepository monitors;
     private final ReviewScopeRepositoryRepository targets;
@@ -80,6 +81,23 @@ public class WorkspaceQueriesAdapter implements WorkspaceQueries {
         return workspaces
                 .findById(workspaceId)
                 .map(workspace -> new OrganizationScope(workspace.getOrganizationId(), workspace.getAccountLogin()));
+    }
+
+    @Override
+    public Optional<ProviderAccount> providerAccount(long workspaceId) {
+        return workspaces
+                .findMonitorPolicy(workspaceId)
+                .map(policy -> new ProviderAccount(policy.getAccountLogin(), policy.getRepositorySelection()));
+    }
+
+    @Override
+    public boolean organizationBound(long organizationId) {
+        return workspaces.existsByOrganizationId(organizationId);
+    }
+
+    @Override
+    public boolean bindsOrganization(long workspaceId, long organizationId) {
+        return workspaces.existsByIdAndOrganizationId(workspaceId, organizationId);
     }
 
     private static ReviewWorkspace snapshot(Workspace workspace) {
