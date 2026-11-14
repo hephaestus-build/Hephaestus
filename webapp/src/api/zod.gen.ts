@@ -3360,6 +3360,7 @@ export const zResultExample = z.object({
 
 export const zResultList = z.object({
 	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	capturedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
 	id: z.uuid(),
 	item: zItemRef,
@@ -3373,6 +3374,7 @@ export const zResultList = z.object({
 	reviewId: z.uuid(),
 	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]).nullable(),
 	summary: z.string().nullable(),
+	unverifiableReason: z.enum(["RECORD_MISSING", "WORK_UNREADABLE"]).nullable(),
 });
 
 export const zListedScanReportItem = z.object({
@@ -3563,6 +3565,7 @@ export const zReviewDeveloper = z.object({
 });
 
 export const zReviewBoundResult = z.object({
+	capturedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
 	developer: zReviewDeveloper.nullable(),
 	id: z.uuid(),
@@ -3574,6 +3577,7 @@ export const zReviewBoundResult = z.object({
 	reviewId: z.uuid(),
 	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]).nullable(),
 	summary: z.string().nullable(),
+	unverifiableReason: z.enum(["RECORD_MISSING", "WORK_UNREADABLE"]).nullable(),
 });
 
 export const zFeedbackBasis = z.object({
@@ -3892,6 +3896,7 @@ export const zReviewOn = z.object({
 
 export const zReviewProblem = z.object({
 	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	capturedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
 	developer: zReviewDeveloper.nullable(),
 	disagreedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
@@ -3920,6 +3925,7 @@ export const zReviewProblem = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullable(),
 	summary: z.string(),
+	unverifiableReason: z.enum(["RECORD_MISSING", "WORK_UNREADABLE"]).nullable(),
 });
 
 /**
@@ -4114,6 +4120,7 @@ export const zReviewRequestOutcome = z.object({
 
 export const zReviewResult = z.object({
 	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	capturedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
 	developer: zReviewDeveloper.nullable(),
 	feedback: zReviewFeedbackCounts,
@@ -4133,6 +4140,7 @@ export const zReviewResult = z.object({
 	reviewId: z.uuid(),
 	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]).nullable(),
 	summary: z.string().nullable(),
+	unverifiableReason: z.enum(["RECORD_MISSING", "WORK_UNREADABLE"]).nullable(),
 });
 
 /**
@@ -6648,6 +6656,7 @@ export const zProblem = z.object({
 
 export const zResultDetail = z.object({
 	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	capturedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	coverage: zHostCoverage.nullable(),
 	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
 	endReason: z.enum(["REPLACED", "OUTRANKED", "WORK_CHANGED", "REPAIRED", "REMOVED"]).nullable(),
@@ -6678,10 +6687,12 @@ export const zResultDetail = z.object({
 	reviewId: z.uuid(),
 	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]).nullable(),
 	summary: z.string().nullable(),
+	unverifiableReason: z.enum(["RECORD_MISSING", "WORK_UNREADABLE"]).nullable(),
 });
 
 export const zReviewProblemDetail = z.object({
 	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	capturedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
 	developer: zReviewDeveloper.nullable(),
 	disagreedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
@@ -6712,10 +6723,12 @@ export const zReviewProblemDetail = z.object({
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullable(),
 	summary: z.string(),
+	unverifiableReason: z.enum(["RECORD_MISSING", "WORK_UNREADABLE"]).nullable(),
 });
 
 export const zReviewResultDetail = z.object({
 	acceptedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
+	capturedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable(),
 	coverage: zHostCoverage.nullable(),
 	currentness: z.enum(["CURRENT", "STALE", "UNVERIFIABLE"]),
 	developer: zReviewDeveloper.nullable(),
@@ -6754,6 +6767,7 @@ export const zReviewResultDetail = z.object({
 	reviewId: z.uuid(),
 	severity: z.enum(["CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]).nullable(),
 	summary: z.string().nullable(),
+	unverifiableReason: z.enum(["RECORD_MISSING", "WORK_UNREADABLE"]).nullable(),
 });
 
 export const zScanReportProblem = z.object({

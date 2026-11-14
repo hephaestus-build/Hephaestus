@@ -53,6 +53,8 @@ Spring: "self-invocation (in effect, a method within the target object calling a
 - `JobEvidenceFiles#ensureAttemptFolder` refuses a call that starts in a transaction, because an evidence folder rebuild can fetch from the provider.
   Result admission rebuilds the folder before it takes its locks, or after a seal rolls back.
 - `ScmRepositoryAccess#sync` refuses a call that starts in a transaction, because it mints a token and fetches the repository.
+- `ReviewRepositoryPreparer#fetch` refuses a call that starts in a transaction, because it mints a token and fetches the reviewed repository.
+  A freshness read (`ItemSource#recordFingerprints`) reads only the mirror, so a caller may hold row locks.
 - `ReviewServiceImpl#request` refuses a call that starts in a transaction, because it pins the item and reads its sources.
 - `database_transaction_http_requests_total` counts the HTTP requests that start in a transaction, by boundary.
   It shows which boundaries still break this rule.

@@ -67,7 +67,11 @@ class PracticeReviewOutputControllerIntegrationTest extends BaseIntegrationTest 
                 .jsonPath("$.problems.length()")
                 .isEqualTo(1)
                 .jsonPath("$.currentness")
-                .isEqualTo("UNVERIFIABLE");
+                .isEqualTo("UNVERIFIABLE")
+                .jsonPath("$.unverifiableReason")
+                .isEqualTo("RECORD_MISSING")
+                .jsonPath("$.capturedAt")
+                .isEmpty();
         get("/practices/reviews/problems?resultId=" + r.getId() + "&openOnly=false")
                 .expectStatus()
                 .isOk()

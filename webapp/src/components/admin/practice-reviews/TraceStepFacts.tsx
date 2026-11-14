@@ -91,7 +91,7 @@ function ResultFacts({
 }) {
 	const { result } = entry;
 	const node: TraceNode = { kind: "result", id: result.id };
-	const currentness = claimCurrentnessNote(result.currentness);
+	const currentness = claimCurrentnessNote(result);
 	return (
 		<FactList>
 			{!told && <Fact label="Outcome">{traceVerdict(lineage, node).sentence}</Fact>}

@@ -5146,6 +5146,10 @@ export type ResultCoverage = {
 
 export type ResultDetail = {
 	acceptedAt: string | null;
+	/**
+	 * When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.
+	 */
+	capturedAt: string | null;
 	coverage: HostCoverage | null;
 	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
 	endReason: "REPLACED" | "OUTRANKED" | "WORK_CHANGED" | "REPAIRED" | "REMOVED" | null;
@@ -5169,6 +5173,10 @@ export type ResultDetail = {
 	reviewId: string;
 	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL" | null;
 	summary: string | null;
+	/**
+	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
+	 */
+	unverifiableReason: "RECORD_MISSING" | "WORK_UNREADABLE" | null;
 };
 
 export type ResultEvidence = {
@@ -5185,6 +5193,10 @@ export type ResultExample = {
 
 export type ResultList = {
 	acceptedAt: string | null;
+	/**
+	 * When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.
+	 */
+	capturedAt: string | null;
 	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
 	id: string;
 	item: ItemRef;
@@ -5198,6 +5210,10 @@ export type ResultList = {
 	reviewId: string;
 	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL" | null;
 	summary: string | null;
+	/**
+	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
+	 */
+	unverifiableReason: "RECORD_MISSING" | "WORK_UNREADABLE" | null;
 };
 
 export type ResultMark = {
@@ -5336,6 +5352,10 @@ export type ReviewBoundFeedback = {
 };
 
 export type ReviewBoundResult = {
+	/**
+	 * When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.
+	 */
+	capturedAt: string | null;
 	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
 	developer: ReviewDeveloper | null;
 	id: string;
@@ -5347,6 +5367,10 @@ export type ReviewBoundResult = {
 	reviewId: string;
 	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL" | null;
 	summary: string | null;
+	/**
+	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
+	 */
+	unverifiableReason: "RECORD_MISSING" | "WORK_UNREADABLE" | null;
 };
 
 export type ReviewBucket = {
@@ -5706,6 +5730,10 @@ export type ReviewPracticeCounts = {
 
 export type ReviewProblem = {
 	acceptedAt: string | null;
+	/**
+	 * When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.
+	 */
+	capturedAt: string | null;
 	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
 	developer: ReviewDeveloper | null;
 	disagreedAt: string | null;
@@ -5726,10 +5754,18 @@ export type ReviewProblem = {
 	sourceKind: string | null;
 	startLine: null | number;
 	summary: string;
+	/**
+	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
+	 */
+	unverifiableReason: "RECORD_MISSING" | "WORK_UNREADABLE" | null;
 };
 
 export type ReviewProblemDetail = {
 	acceptedAt: string | null;
+	/**
+	 * When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.
+	 */
+	capturedAt: string | null;
 	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
 	developer: ReviewDeveloper | null;
 	disagreedAt: string | null;
@@ -5752,6 +5788,10 @@ export type ReviewProblemDetail = {
 	sourceKind: string | null;
 	startLine: null | number;
 	summary: string;
+	/**
+	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
+	 */
+	unverifiableReason: "RECORD_MISSING" | "WORK_UNREADABLE" | null;
 };
 
 /**
@@ -5848,6 +5888,10 @@ export type ReviewRequestOutcome = {
 
 export type ReviewResult = {
 	acceptedAt: string | null;
+	/**
+	 * When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.
+	 */
+	capturedAt: string | null;
 	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
 	developer: ReviewDeveloper | null;
 	feedback: ReviewFeedbackCounts;
@@ -5864,6 +5908,10 @@ export type ReviewResult = {
 	reviewId: string;
 	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL" | null;
 	summary: string | null;
+	/**
+	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
+	 */
+	unverifiableReason: "RECORD_MISSING" | "WORK_UNREADABLE" | null;
 };
 
 export type ReviewResultCounts = {
@@ -5875,6 +5923,10 @@ export type ReviewResultCounts = {
 
 export type ReviewResultDetail = {
 	acceptedAt: string | null;
+	/**
+	 * When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.
+	 */
+	capturedAt: string | null;
 	coverage: HostCoverage | null;
 	currentness: "CURRENT" | "STALE" | "UNVERIFIABLE";
 	developer: ReviewDeveloper | null;
@@ -5903,6 +5955,10 @@ export type ReviewResultDetail = {
 	reviewId: string;
 	severity: "CRITICAL" | "MAJOR" | "MINOR" | "TRIVIAL" | null;
 	summary: string | null;
+	/**
+	 * Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.
+	 */
+	unverifiableReason: "RECORD_MISSING" | "WORK_UNREADABLE" | null;
 };
 
 export type ReviewRuntime = {

@@ -2135,6 +2135,48 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     }
 
     @Test
+    void shouldMeasureAPracticeRefusedAtStartOnTheNextEdgeThatDoesNotSelectIt() {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+        long everyPush = practices
+                .findByWorkspaceIdAndSlug(prepared.item().workspaceId(), "event-test")
+                .orElseThrow()
+                .getId();
+        long onlyWhenOpened = practiceOnlyWhenOpened(prepared);
+        long workspace = prepared.item().workspaceId();
+        publish(prepared);
+        var refused = itemReviews(prepared).getFirst();
+        assertThat(membersOf(workspace, refused.getId())).containsOnlyKeys(everyPush, onlyWhenOpened);
+        // Practice start could not verify the sources, as when the mirror sync failed, and the review ended.
+        jdbc.update(
+                "UPDATE review_item SET state='WITHHELD', reason='READINESS_REFUSED', attempted_at=now()"
+                        + " WHERE review_id=? AND practice_id=?",
+                refused.getId(),
+                onlyWhenOpened);
+        jdbc.update(
+                "UPDATE review_item SET state='WITHHELD', reason='EXECUTION_INCOMPLETE', attempted_at=now()"
+                        + " WHERE review_id=? AND practice_id=?",
+                refused.getId(),
+                everyPush);
+        jdbc.update(
+                "UPDATE review SET status='PARTIAL', stop_reason='READINESS_REFUSED', completed_at=now() WHERE id=?",
+                refused.getId());
+
+        deliver(
+                prepared,
+                "synchronize",
+                pullRequestPayload(prepared, "c".repeat(40), Instant.now().plusSeconds(60)));
+        closeWindows(prepared);
+
+        // The push alone selects one practice; the review of its head also measures the one refused at start.
+        var next = reviews.findByWorkspaceIdAndItemIdOrderByOrderedAtDesc(
+                        workspace, prepared.item().itemId())
+                .getFirst();
+        assertThat(next.getId()).isNotEqualTo(refused.getId());
+        assertThat(membersOf(workspace, next.getId())).containsOnlyKeys(everyPush, onlyWhenOpened);
+    }
+
+    @Test
     void shouldLeaveAQueuedReviewWhenNoNewerOccasionMovedTheWork() {
         var prepared = prepare(
                 IdentityProviderType.GITHUB,

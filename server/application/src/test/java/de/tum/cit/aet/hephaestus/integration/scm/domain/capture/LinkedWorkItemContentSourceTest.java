@@ -13,12 +13,15 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.handler.EvidenceSnapshotFixtures;
 import de.tum.cit.aet.hephaestus.evidence.CapturedSource;
+import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureFacts;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
+import de.tum.cit.aet.hephaestus.evidence.SourceFingerprint;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -634,6 +637,22 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
                             .files()))
                     .isSameAs(failure);
             assertThat(files).isEmpty();
+        }
+
+        @Test
+        void shouldRecordNoLinkedWorkWhenTheMirrorLacksTheReviewedRange() {
+            when(gitRepositoryManager.isEnabled()).thenReturn(true);
+            var context = request(sampleMetadata());
+            when(repositoryPreparer.prepare(context))
+                    .thenThrow(new ItemCaptureException(ItemCaptureCode.VERSION_UNAVAILABLE, "range"));
+
+            var captured = provider.capture(context, Set.of(KIND));
+
+            // An answer from the title alone would fingerprint differently from one that read the commits.
+            assertThat(captured.files()).isEmpty();
+            assertThat(captured.stateOverrides().get(KIND))
+                    .isEqualTo(new SourceCaptureState.Unavailable(SourceAbsenceReason.REVIEW_VERSION_UNAVAILABLE));
+            assertThat(SourceFingerprint.of(objectMapper, KIND, captured)).isNull();
         }
 
         @Test

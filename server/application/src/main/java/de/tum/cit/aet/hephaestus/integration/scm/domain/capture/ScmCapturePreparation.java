@@ -15,6 +15,16 @@ public final class ScmCapturePreparation {
     private @Nullable SourceAbsenceReason unavailable;
 
     /**
+     * A preparation that reads the mirror as it is, with no fetch. Commits are content-addressed, so a range that the
+     * mirror holds reads as a fetch would read it; a missing commit makes the clone unavailable.
+     */
+    public static ScmCapturePreparation fromMirror() {
+        var preparation = new ScmCapturePreparation();
+        preparation.fetched = true;
+        return preparation;
+    }
+
+    /**
      * The review prepared so far, or null when no source has asked yet or the preparation failed.
      */
     public synchronized ReviewRepositoryPreparer.@Nullable PreparedReview prepared() {

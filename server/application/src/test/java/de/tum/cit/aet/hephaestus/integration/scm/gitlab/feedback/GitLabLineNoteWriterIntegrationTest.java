@@ -98,7 +98,8 @@ class GitLabLineNoteWriterIntegrationTest extends AbstractFeedbackDeliveryIntegr
                 corrector,
                 new FeedbackReadbackMeters(new SimpleMeterRegistry()),
                 mock(FeedbackProviderReadback.class),
-                mock(FeedbackOwnCopyEditor.class)));
+                mock(FeedbackOwnCopyEditor.class),
+                gate));
         prepare(true);
         sender.send(workspace.getId(), feedbackId);
         if (rejected) {

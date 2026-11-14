@@ -79,7 +79,7 @@ public class ResultViewQuery {
                 .filter(entry -> entry.getValue().active())
                 .collect(Collectors.toMap(
                         Map.Entry::getKey, entry -> entry.getValue().ref()));
-        var sourceStates = freshness.states(workspaceId, results, activeItems);
+        var sourceStates = freshness.freshness(workspaceId, results, activeItems);
         return results.stream()
                 .map(result -> new ResultView(
                         result,

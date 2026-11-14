@@ -20,7 +20,6 @@ import de.tum.cit.aet.hephaestus.practices.result.trend.PracticeTrendService;
 import de.tum.cit.aet.hephaestus.practices.result.trend.TrendProperties;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewTestData;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
-import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackMode;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStanding;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
@@ -169,7 +168,7 @@ class PracticeStandingServiceTest {
                         latest.version(),
                         latest.review(),
                         prior.item(),
-                        Currentness.CURRENT));
+                        Freshness.current(null)));
         assertThat(card().toWorkOn()).isEmpty();
         assertThat(card().strengths()).hasSize(1);
     }
@@ -364,7 +363,7 @@ class PracticeStandingServiceTest {
                         null,
                         view.review(),
                         view.item(),
-                        Currentness.CURRENT));
+                        Freshness.current(null)));
 
         assertThat(card().basis()).isEqualTo(StandingBasis.EARLIER_REVIEWS_CRITERIA_UNKNOWN);
         assertThat(card().toWorkOn()).isEmpty();
@@ -499,7 +498,7 @@ class PracticeStandingServiceTest {
                         view.version(),
                         view.review(),
                         view.item(),
-                        Currentness.CURRENT));
+                        Freshness.current(null)));
     }
 
     private PracticeStandingDTO card() {

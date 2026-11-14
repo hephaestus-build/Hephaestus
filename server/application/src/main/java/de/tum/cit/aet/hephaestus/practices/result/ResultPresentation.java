@@ -59,8 +59,12 @@ public class ResultPresentation {
     }
 
     public Currentness currentness(ResultView view) {
-        return ResultVisibilityPolicy.currentness(
-                view.result(), view.version(), view.practice().getCurrentVersion(), view.sourceCurrentness());
+        return freshness(view).currentness();
+    }
+
+    public Freshness freshness(ResultView view) {
+        return ResultVisibilityPolicy.freshness(
+                view.result(), view.version(), view.practice().getCurrentVersion(), view.sourceFreshness());
     }
 
     public @Nullable Instant markedAt(Result result, ResultMarkKind kind) {
@@ -111,6 +115,7 @@ public class ResultPresentation {
 
     private ResultListDTO list(ResultView v, boolean permitted, List<ResultMark> activeMarks, List<Problem> children) {
         var r = v.result();
+        var freshness = freshness(v);
         return new ResultListDTO(
                 r.getId(),
                 r.getReviewId(),
@@ -122,7 +127,9 @@ public class ResultPresentation {
                 permitted ? r.getSummary() : null,
                 v.review().getOrigin(),
                 r.getRecordedAt(),
-                currentness(v),
+                freshness.currentness(),
+                freshness.unverifiableReason(),
+                freshness.capturedAt(),
                 markTime(activeMarks, ResultMarkKind.INCORRECT),
                 markTime(activeMarks, ResultMarkKind.ACCEPTED),
                 permitted
@@ -142,6 +149,7 @@ public class ResultPresentation {
 
     public ResultDetailDTO detail(ResultView v, boolean permitted) {
         var r = v.result();
+        var freshness = freshness(v);
         return new ResultDetailDTO(
                 r.getId(),
                 r.getReviewId(),
@@ -153,7 +161,9 @@ public class ResultPresentation {
                 permitted ? r.getSummary() : null,
                 v.review().getOrigin(),
                 r.getRecordedAt(),
-                currentness(v),
+                freshness.currentness(),
+                freshness.unverifiableReason(),
+                freshness.capturedAt(),
                 markedAt(r, ResultMarkKind.INCORRECT),
                 markedAt(r, ResultMarkKind.ACCEPTED),
                 r.getPracticeVersionId() == null

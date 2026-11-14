@@ -10695,6 +10695,12 @@ export const ResultDetailSchema = {
 			type: ["string", "null"],
 			format: "date-time",
 		},
+		capturedAt: {
+			type: ["string", "null"],
+			format: "date-time",
+			description:
+				"When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.",
+		},
 		coverage: {
 			anyOf: [
 				{
@@ -10807,9 +10813,16 @@ export const ResultDetailSchema = {
 		summary: {
 			type: ["string", "null"],
 		},
+		unverifiableReason: {
+			type: ["string", "null"],
+			description:
+				"Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.",
+			enum: ["RECORD_MISSING", "WORK_UNREADABLE", null],
+		},
 	},
 	required: [
 		"acceptedAt",
+		"capturedAt",
 		"coverage",
 		"currentness",
 		"endReason",
@@ -10833,6 +10846,7 @@ export const ResultDetailSchema = {
 		"reviewId",
 		"severity",
 		"summary",
+		"unverifiableReason",
 	],
 } as const;
 
@@ -10895,6 +10909,12 @@ export const ResultListSchema = {
 			type: ["string", "null"],
 			format: "date-time",
 		},
+		capturedAt: {
+			type: ["string", "null"],
+			format: "date-time",
+			description:
+				"When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.",
+		},
 		currentness: {
 			type: "string",
 			enum: ["CURRENT", "STALE", "UNVERIFIABLE"],
@@ -10945,9 +10965,16 @@ export const ResultListSchema = {
 		summary: {
 			type: ["string", "null"],
 		},
+		unverifiableReason: {
+			type: ["string", "null"],
+			description:
+				"Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.",
+			enum: ["RECORD_MISSING", "WORK_UNREADABLE", null],
+		},
 	},
 	required: [
 		"acceptedAt",
+		"capturedAt",
 		"currentness",
 		"id",
 		"item",
@@ -10961,6 +10988,7 @@ export const ResultListSchema = {
 		"reviewId",
 		"severity",
 		"summary",
+		"unverifiableReason",
 	],
 } as const;
 
@@ -11436,6 +11464,12 @@ export const ReviewBoundFeedbackSchema = {
 export const ReviewBoundResultSchema = {
 	type: "object",
 	properties: {
+		capturedAt: {
+			type: ["string", "null"],
+			format: "date-time",
+			description:
+				"When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.",
+		},
 		currentness: {
 			type: "string",
 			enum: ["CURRENT", "STALE", "UNVERIFIABLE"],
@@ -11482,8 +11516,15 @@ export const ReviewBoundResultSchema = {
 		summary: {
 			type: ["string", "null"],
 		},
+		unverifiableReason: {
+			type: ["string", "null"],
+			description:
+				"Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.",
+			enum: ["RECORD_MISSING", "WORK_UNREADABLE", null],
+		},
 	},
 	required: [
+		"capturedAt",
 		"currentness",
 		"developer",
 		"id",
@@ -11495,6 +11536,7 @@ export const ReviewBoundResultSchema = {
 		"reviewId",
 		"severity",
 		"summary",
+		"unverifiableReason",
 	],
 } as const;
 
@@ -12599,6 +12641,12 @@ export const ReviewProblemSchema = {
 			type: ["string", "null"],
 			format: "date-time",
 		},
+		capturedAt: {
+			type: ["string", "null"],
+			format: "date-time",
+			description:
+				"When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.",
+		},
 		currentness: {
 			type: "string",
 			enum: ["CURRENT", "STALE", "UNVERIFIABLE"],
@@ -12684,9 +12732,16 @@ export const ReviewProblemSchema = {
 		summary: {
 			type: "string",
 		},
+		unverifiableReason: {
+			type: ["string", "null"],
+			description:
+				"Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.",
+			enum: ["RECORD_MISSING", "WORK_UNREADABLE", null],
+		},
 	},
 	required: [
 		"acceptedAt",
+		"capturedAt",
 		"currentness",
 		"developer",
 		"disagreedAt",
@@ -12707,6 +12762,7 @@ export const ReviewProblemSchema = {
 		"sourceKind",
 		"startLine",
 		"summary",
+		"unverifiableReason",
 	],
 } as const;
 
@@ -12716,6 +12772,12 @@ export const ReviewProblemDetailSchema = {
 		acceptedAt: {
 			type: ["string", "null"],
 			format: "date-time",
+		},
+		capturedAt: {
+			type: ["string", "null"],
+			format: "date-time",
+			description:
+				"When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.",
 		},
 		currentness: {
 			type: "string",
@@ -12808,9 +12870,16 @@ export const ReviewProblemDetailSchema = {
 		summary: {
 			type: "string",
 		},
+		unverifiableReason: {
+			type: ["string", "null"],
+			description:
+				"Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.",
+			enum: ["RECORD_MISSING", "WORK_UNREADABLE", null],
+		},
 	},
 	required: [
 		"acceptedAt",
+		"capturedAt",
 		"currentness",
 		"developer",
 		"disagreedAt",
@@ -12833,6 +12902,7 @@ export const ReviewProblemDetailSchema = {
 		"sourceKind",
 		"startLine",
 		"summary",
+		"unverifiableReason",
 	],
 } as const;
 
@@ -13071,6 +13141,12 @@ export const ReviewResultSchema = {
 			type: ["string", "null"],
 			format: "date-time",
 		},
+		capturedAt: {
+			type: ["string", "null"],
+			format: "date-time",
+			description:
+				"When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.",
+		},
 		currentness: {
 			type: "string",
 			enum: ["CURRENT", "STALE", "UNVERIFIABLE"],
@@ -13138,9 +13214,16 @@ export const ReviewResultSchema = {
 		summary: {
 			type: ["string", "null"],
 		},
+		unverifiableReason: {
+			type: ["string", "null"],
+			description:
+				"Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.",
+			enum: ["RECORD_MISSING", "WORK_UNREADABLE", null],
+		},
 	},
 	required: [
 		"acceptedAt",
+		"capturedAt",
 		"currentness",
 		"developer",
 		"feedback",
@@ -13157,6 +13240,7 @@ export const ReviewResultSchema = {
 		"reviewId",
 		"severity",
 		"summary",
+		"unverifiableReason",
 	],
 } as const;
 
@@ -13189,6 +13273,12 @@ export const ReviewResultDetailSchema = {
 		acceptedAt: {
 			type: ["string", "null"],
 			format: "date-time",
+		},
+		capturedAt: {
+			type: ["string", "null"],
+			format: "date-time",
+			description:
+				"When the observation's capture read the work: the work as of that time. A later check that found the work unchanged is not recorded. Null when the capture record is missing.",
 		},
 		coverage: {
 			anyOf: [
@@ -13331,9 +13421,16 @@ export const ReviewResultDetailSchema = {
 		summary: {
 			type: ["string", "null"],
 		},
+		unverifiableReason: {
+			type: ["string", "null"],
+			description:
+				"Why an unverifiable observation cannot be checked against the work; null unless currentness is UNVERIFIABLE.",
+			enum: ["RECORD_MISSING", "WORK_UNREADABLE", null],
+		},
 	},
 	required: [
 		"acceptedAt",
+		"capturedAt",
 		"coverage",
 		"currentness",
 		"developer",
@@ -13362,6 +13459,7 @@ export const ReviewResultDetailSchema = {
 		"reviewId",
 		"severity",
 		"summary",
+		"unverifiableReason",
 	],
 } as const;
 

@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.dto.GroupRefDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewDeveloperDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
+import de.tum.cit.aet.hephaestus.practices.spi.UnverifiableReason;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.UUID;
@@ -47,6 +48,20 @@ public record ReviewProblemDTO(
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean evidenceHidden,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Currentness currentness,
+
+        @Schema(
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "Why an unverifiable observation cannot be checked against the work; null unless"
+                        + " currentness is UNVERIFIABLE.")
+        @Nullable
+        UnverifiableReason unverifiableReason,
+
+        @Schema(
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "When the observation's capture read the work: the work as of that time. A later check"
+                        + " that found the work unchanged is not recorded. Null when the capture record is missing.")
+        @Nullable
+        Instant capturedAt,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
         Instant markedIncorrectAt,

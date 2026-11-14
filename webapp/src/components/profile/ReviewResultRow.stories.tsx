@@ -3,7 +3,7 @@ import { expect, screen, within } from "storybook/test";
 
 import type { ResultDetail, ResultList } from "@/api/types.gen";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
-import { formatDay } from "@/lib/dates";
+import { formatDate, formatDay, formatTime } from "@/lib/dates";
 import { expectSettledVisible } from "@/stories/overlay";
 import {
 	detailFeedback,
@@ -174,6 +174,45 @@ export const StaleWithoutEvidence: Story = {
 		await expect(canvas.queryByText("Why it was noted")).not.toBeInTheDocument();
 		await expect(canvas.queryByText("Evidence")).not.toBeInTheDocument();
 		await expect(canvas.getByText("Feedback from this observation")).toBeVisible();
+	},
+};
+
+/** Its record is missing or from an earlier review version: no later read can verify it. */
+export const UnverifiableRecordMissing: Story = {
+	args: {
+		result: {
+			...strength,
+			currentness: "UNVERIFIABLE",
+			unverifiableReason: "RECORD_MISSING",
+			capturedAt: null,
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("note")).toHaveTextContent(
+			"We cannot verify what this observation was based on.",
+		);
+	},
+};
+
+/** Its record is there, but the current work could not be read: the note says which work it is based on. */
+export const UnverifiableWorkUnreadable: Story = {
+	args: {
+		result: {
+			...strength,
+			currentness: "UNVERIFIABLE",
+			unverifiableReason: "WORK_UNREADABLE",
+			capturedAt: daysBefore(3),
+		},
+	},
+	play: async ({ canvas }) => {
+		const note = canvas.getByRole("note");
+		await expect(note).toHaveTextContent(
+			"We could not read the current work to check this observation.",
+		);
+		await expect(note).toHaveTextContent(
+			`It is based on the work as of ${formatDate(daysBefore(3))}, ${formatTime(daysBefore(3))}.`,
+		);
+		await expect(note).not.toHaveTextContent(/missing|earlier version/u);
 	},
 };
 

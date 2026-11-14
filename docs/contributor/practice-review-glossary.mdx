@@ -156,6 +156,10 @@ An item event that waits has one of these reasons:
 
 A practice with the withheld membership reason `REPLACED` was in a queued review that a newer event stopped at claim. The next readiness edge of the item selects it again.
 
+A practice with the withheld membership reason `READINESS_REFUSED` was not ready.
+Its sources could not be verified at practice start or seal, its evidence was too little, or the workspace budget was spent.
+The next readiness edge of the item selects it again, also an edge whose events do not select it.
+
 `ALREADY_CURRENT` marks a withheld item event whose selected practices all have a current result.
 Only a continuing occasion can end with it. A milestone measures its practices again.
 
@@ -172,6 +176,35 @@ The next readiness edge of the item selects that practice again.
 The checks event of the head is such an edge.
 A practice that reads the checks as Optional never waits.
 These reasons establish nothing about the work.
+
+## Currentness
+
+Currentness tells whether an observation still describes the work: `CURRENT`, `STALE` or `UNVERIFIABLE`.
+A freshness read compares the source fingerprints that the capture recorded with the work that this server stores now.
+It reads the repository mirror as it is and never calls a provider.
+
+An unverifiable observation has one of these reasons (`unverifiableReason`):
+
+- `RECORD_MISSING`: the record of what the review read is missing, or it comes from an earlier version of the review. No later read can verify the observation. The product shows it as an unverified observation.
+- `WORK_UNREADABLE`: the record exists, but this server cannot read the current work now. For example, the provider no longer has the reviewed commits, or a source is not readable. A later read can verify the observation. The product shows it as an observation that it cannot verify now.
+
+**Captured at** (`capturedAt`) is the time when the observation's capture read the work.
+The observation describes the work as of that time.
+A later check that found the work unchanged is not recorded.
+An observation without its record has no such time.
+
+These reasons establish nothing about the work.
+
+The server syncs the repository mirror with no transaction at three points: practice start, the publish of a feedback package and a send.
+Thus, a server whose mirror was empty or evicted reads current data.
+If that sync fails at practice start, the practice is withheld as `READINESS_REFUSED`.
+The next readiness edge of the item measures it again.
+If it fails when a package is published, a piece whose sources stay unreadable is withheld as `UNCORROBORATED`.
+A send that cannot sync is retried by the outbox.
+
+The practice page, a conversation and the pages that show observations never sync.
+They read the mirror as it is, so an unreadable source shows as "Cannot verify now".
+The practice page or a conversation can then refuse a piece as `UNCORROBORATED`.
 
 ## Legacy history reasons
 

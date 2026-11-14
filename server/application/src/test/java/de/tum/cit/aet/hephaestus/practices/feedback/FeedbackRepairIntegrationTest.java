@@ -371,7 +371,8 @@ class FeedbackRepairIntegrationTest extends AbstractFeedbackDeliveryIntegrationT
                 new PostedCopyCorrector(copies, visibility, List.of(provider), List.of(provider), transactions),
                 new FeedbackReadbackMeters(new SimpleMeterRegistry()),
                 readback,
-                editor);
+                editor,
+                gate);
         return new Transport(sender(sender), readback);
     }
 }

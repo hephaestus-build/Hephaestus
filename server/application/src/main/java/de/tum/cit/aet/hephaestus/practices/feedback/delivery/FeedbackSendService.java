@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.OnWorkPackage;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackCopy;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackGate;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackProviderReadback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSendQueue;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
@@ -45,6 +46,7 @@ public class FeedbackSendService {
     private final FeedbackReadbackMeters readbacks;
     private final FeedbackProviderReadback providerReadback;
     private final FeedbackOwnCopyEditor editor;
+    private final FeedbackGate gate;
 
     /** Carries out one claimed send of a feedback to its work. */
     public ActionResult send(ActionAttempt owner) {
@@ -53,6 +55,11 @@ public class FeedbackSendService {
                 "Feedback provider writes require no active transaction");
         long workspaceId = Objects.requireNonNull(owner.workspaceId());
         UUID feedbackId = FeedbackSendQueue.feedbackOf(owner.idempotencyKey());
+        var action = FeedbackSendQueue.actionOf(owner.idempotencyKey());
+        // The fence checks the sources against this server's mirror under its locks. A provider that cannot be reached
+        // here throws before the claim, which the outbox retries; the piece is never withheld for a cold mirror.
+        if (action == FeedbackSendAction.POST || action == FeedbackSendAction.EDIT)
+            gate.syncSources(workspaceId, feedbackId);
         var attempt = transactions.claim(workspaceId, feedbackId, owner);
         if (attempt == null) return new ActionResult.Cancelled(ActionStopReason.WITHDRAWN);
         try {

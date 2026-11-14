@@ -53,7 +53,7 @@ export const WITHHOLDING_FAMILY_DEFS: StatusDefs<WithholdingFamily> = {
 		icon: BrushCleaningIcon,
 		badgeVariant: "outline",
 		description:
-			"The pipeline dropped it: a duplicate, an empty body, a chat that never came, or feedback it could not write.",
+			"The pipeline dropped it: a duplicate, an empty body, a chat that never came, or feedback it could not write or confirm.",
 	},
 };
 
@@ -106,7 +106,8 @@ const REASON_FAMILY: Record<WithholdingReason, WithholdingFamily> = {
 export const WITHHOLDING_REASON_DEFS: Record<WithholdingReason, string> = {
 	EVIDENCE_NOT_PERMITTED: "The evidence cannot be used for this feedback.",
 	NO_EVIDENCE: "The feedback has no evidence that supports it.",
-	UNCORROBORATED: "The feedback could not be confirmed against its evidence.",
+	UNCORROBORATED:
+		"Hephaestus could not confirm this feedback against its evidence and the current work, so it was not sent.",
 	ITEM_GONE: "The work no longer exists.",
 	ITEM_CLOSED: "The work was closed before the feedback could be posted.",
 	ITEM_MERGED: "The work was already merged, so a note on it would arrive too late.",

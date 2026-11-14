@@ -409,6 +409,8 @@ export const NOT_REVIEWED_ENTRY: ScanReportItem = {
 		summary: "Comments say why the retry waits.",
 		problems: [],
 		currentness: "STALE",
+		unverifiableReason: null,
+		capturedAt: null,
 		markedIncorrectAt: null,
 		acceptedAt: null,
 		recordedAt: daysBefore(14),

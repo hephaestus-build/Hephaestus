@@ -21660,6 +21660,14 @@ components:
           - string
           - "null"
           format: date-time
+        capturedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+          description: "When the observation's capture read the work: the work as\
+            \ of that time. A later check that found the work unchanged is not recorded.\
+            \ Null when the capture record is missing."
         coverage:
           anyOf:
           - oneOf:
@@ -21769,8 +21777,19 @@ components:
           type:
           - string
           - "null"
+        unverifiableReason:
+          type:
+          - string
+          - "null"
+          description: Why an unverifiable observation cannot be checked against the
+            work; null unless currentness is UNVERIFIABLE.
+          enum:
+          - RECORD_MISSING
+          - WORK_UNREADABLE
+          - null
       required:
       - acceptedAt
+      - capturedAt
       - coverage
       - currentness
       - endReason
@@ -21794,6 +21813,7 @@ components:
       - reviewId
       - severity
       - summary
+      - unverifiableReason
     ResultEvidence:
       type: object
       properties:
@@ -21836,6 +21856,14 @@ components:
           - string
           - "null"
           format: date-time
+        capturedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+          description: "When the observation's capture read the work: the work as\
+            \ of that time. A later check that found the work unchanged is not recorded.\
+            \ Null when the capture record is missing."
         currentness:
           type: string
           enum:
@@ -21894,8 +21922,19 @@ components:
           type:
           - string
           - "null"
+        unverifiableReason:
+          type:
+          - string
+          - "null"
+          description: Why an unverifiable observation cannot be checked against the
+            work; null unless currentness is UNVERIFIABLE.
+          enum:
+          - RECORD_MISSING
+          - WORK_UNREADABLE
+          - null
       required:
       - acceptedAt
+      - capturedAt
       - currentness
       - id
       - item
@@ -21909,6 +21948,7 @@ components:
       - reviewId
       - severity
       - summary
+      - unverifiableReason
     ResultMark:
       type: object
       properties:
@@ -22321,6 +22361,14 @@ components:
     ReviewBoundResult:
       type: object
       properties:
+        capturedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+          description: "When the observation's capture read the work: the work as\
+            \ of that time. A later check that found the work unchanged is not recorded.\
+            \ Null when the capture record is missing."
         currentness:
           type: string
           enum:
@@ -22367,7 +22415,18 @@ components:
           type:
           - string
           - "null"
+        unverifiableReason:
+          type:
+          - string
+          - "null"
+          description: Why an unverifiable observation cannot be checked against the
+            work; null unless currentness is UNVERIFIABLE.
+          enum:
+          - RECORD_MISSING
+          - WORK_UNREADABLE
+          - null
       required:
+      - capturedAt
       - currentness
       - developer
       - id
@@ -22379,6 +22438,7 @@ components:
       - reviewId
       - severity
       - summary
+      - unverifiableReason
     ReviewBucket:
       type: object
       properties:
@@ -23297,6 +23357,14 @@ components:
           - string
           - "null"
           format: date-time
+        capturedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+          description: "When the observation's capture read the work: the work as\
+            \ of that time. A later check that found the work unchanged is not recorded.\
+            \ Null when the capture record is missing."
         currentness:
           type: string
           enum:
@@ -23376,8 +23444,19 @@ components:
           format: int32
         summary:
           type: string
+        unverifiableReason:
+          type:
+          - string
+          - "null"
+          description: Why an unverifiable observation cannot be checked against the
+            work; null unless currentness is UNVERIFIABLE.
+          enum:
+          - RECORD_MISSING
+          - WORK_UNREADABLE
+          - null
       required:
       - acceptedAt
+      - capturedAt
       - currentness
       - developer
       - disagreedAt
@@ -23398,6 +23477,7 @@ components:
       - sourceKind
       - startLine
       - summary
+      - unverifiableReason
     ReviewProblemDetail:
       type: object
       properties:
@@ -23406,6 +23486,14 @@ components:
           - string
           - "null"
           format: date-time
+        capturedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+          description: "When the observation's capture read the work: the work as\
+            \ of that time. A later check that found the work unchanged is not recorded.\
+            \ Null when the capture record is missing."
         currentness:
           type: string
           enum:
@@ -23489,8 +23577,19 @@ components:
           format: int32
         summary:
           type: string
+        unverifiableReason:
+          type:
+          - string
+          - "null"
+          description: Why an unverifiable observation cannot be checked against the
+            work; null unless currentness is UNVERIFIABLE.
+          enum:
+          - RECORD_MISSING
+          - WORK_UNREADABLE
+          - null
       required:
       - acceptedAt
+      - capturedAt
       - currentness
       - developer
       - disagreedAt
@@ -23513,6 +23612,7 @@ components:
       - sourceKind
       - startLine
       - summary
+      - unverifiableReason
     ReviewProgress:
       type: object
       description: "How far an active item review got; absent for a scan, which lists\
@@ -23735,6 +23835,14 @@ components:
           - string
           - "null"
           format: date-time
+        capturedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+          description: "When the observation's capture read the work: the work as\
+            \ of that time. A later check that found the work unchanged is not recorded.\
+            \ Null when the capture record is missing."
         currentness:
           type: string
           enum:
@@ -23802,8 +23910,19 @@ components:
           type:
           - string
           - "null"
+        unverifiableReason:
+          type:
+          - string
+          - "null"
+          description: Why an unverifiable observation cannot be checked against the
+            work; null unless currentness is UNVERIFIABLE.
+          enum:
+          - RECORD_MISSING
+          - WORK_UNREADABLE
+          - null
       required:
       - acceptedAt
+      - capturedAt
       - currentness
       - developer
       - feedback
@@ -23820,6 +23939,7 @@ components:
       - reviewId
       - severity
       - summary
+      - unverifiableReason
     ReviewResultCounts:
       type: object
       properties:
@@ -23848,6 +23968,14 @@ components:
           - string
           - "null"
           format: date-time
+        capturedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+          description: "When the observation's capture read the work: the work as\
+            \ of that time. A later check that found the work unchanged is not recorded.\
+            \ Null when the capture record is missing."
         coverage:
           anyOf:
           - oneOf:
@@ -23974,8 +24102,19 @@ components:
           type:
           - string
           - "null"
+        unverifiableReason:
+          type:
+          - string
+          - "null"
+          description: Why an unverifiable observation cannot be checked against the
+            work; null unless currentness is UNVERIFIABLE.
+          enum:
+          - RECORD_MISSING
+          - WORK_UNREADABLE
+          - null
       required:
       - acceptedAt
+      - capturedAt
       - coverage
       - currentness
       - developer
@@ -24004,6 +24143,7 @@ components:
       - reviewId
       - severity
       - summary
+      - unverifiableReason
     ReviewRuntime:
       type: object
       properties:

@@ -17,7 +17,8 @@ import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common
 import { ProblemList } from "@/components/practice-problems/ProblemList";
 import {
 	claimCurrentnessNote,
-	NON_CURRENT,
+	currentnessCopy,
+	type Freshness,
 } from "@/components/practice-vocabulary/claim-currentness";
 import { OUTCOME_DEFS, outcomeLabel } from "@/components/practice-vocabulary/outcome-defs";
 import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
@@ -190,7 +191,7 @@ export function ReviewResultRow({
 }: ReviewResultRowProps) {
 	const outcome = definitionFor(OUTCOME_DEFS, result.outcome);
 	const OutcomeIcon = outcome.icon;
-	const note = claimCurrentnessNote(result.currentness);
+	const note = claimCurrentnessNote(result);
 	const markedIncorrect = result.markedIncorrectAt !== null;
 	const reasons = reasonsOf(result);
 	const feedback = deliveredFeedback(result);
@@ -321,7 +322,7 @@ export function ReviewResultDetails({
 	feedbackLinks?: ObservationFeedbackLinks;
 }) {
 	const markedIncorrect = result.markedIncorrectAt !== null;
-	const note = claimCurrentnessNote(result.currentness);
+	const note = claimCurrentnessNote(result);
 	const reasons = reasonsOf(result);
 	const feedback = deliveredFeedback(result);
 	if (!markedIncorrect && note === undefined && !hasReasons(reasons) && feedback.length === 0) {
@@ -341,9 +342,7 @@ export function ReviewResultDetails({
 					It no longer counts toward your standing or what Hephaestus knows about your work.
 				</p>
 			)}
-			{result.currentness !== "CURRENT" && note !== undefined && (
-				<CurrentnessNotice currentness={result.currentness} note={note} />
-			)}
+			<CurrentnessNotice freshness={result} />
 			<ReasonSections reasons={reasons} />
 			{feedback.length > 0 && (
 				<DetailSection label="Feedback from this observation" className="gap-2">
@@ -388,15 +387,12 @@ function TermList({ pairs }: { pairs: EvidenceCheck[] }) {
  * Why an observation may not describe the work as it stands, as the notice it is: a bordered line
  * led by an icon in the currentness tone, not one more grey line among the details.
  */
-function CurrentnessNotice({
-	currentness,
-	note,
-}: {
-	currentness: Exclude<ResultList["currentness"], "CURRENT">;
-	note: string;
-}) {
-	const def = NON_CURRENT[currentness];
-	const Icon = currentness === "STALE" ? HistoryIcon : CircleHelpIcon;
+function CurrentnessNotice({ freshness }: { freshness: Freshness }) {
+	const def = currentnessCopy(freshness);
+	if (def === undefined) {
+		return null;
+	}
+	const Icon = freshness.currentness === "STALE" ? HistoryIcon : CircleHelpIcon;
 	return (
 		<p
 			role="note"
@@ -406,7 +402,7 @@ function CurrentnessNotice({
 				aria-hidden
 				className={cn("mt-0.5 size-4 shrink-0", statusToneClass(def.badgeVariant))}
 			/>
-			<span className="min-w-0">{note}</span>
+			<span className="min-w-0">{def.note}</span>
 		</p>
 	);
 }

@@ -51,10 +51,13 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.util.Assert;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -62,6 +65,7 @@ import tools.jackson.databind.node.ObjectNode;
 /** Admission is fenced by workspace, review, job, server and exact execution attempt. */
 @Service
 @ConditionalOnServerRole
+@Slf4j
 public class ResultAdmissionService {
     public static final String INADMISSIBLE_REASON_CODE = "inadmissible_results";
     public static final String INTERRUPTED_AFTER_ADMISSION =
@@ -106,7 +110,27 @@ public class ResultAdmissionService {
         this.staging = staging;
     }
 
+    /**
+     * Starts one practice if the sources its capture read still hold. The locked check reads only this server's mirror,
+     * so the mirror is synced first, with no transaction: another server may have captured the work. If the provider
+     * cannot be reached, the check finds the sources unverifiable and withholds the practice as
+     * {@code READINESS_REFUSED}, which is true. That reason is carried, so the item's next readiness edge measures the
+     * practice again, also an edge whose occasions do not select it.
+     */
     public PracticeStartResponseDTO start(AdmissionIdentity identity, PracticeStartRequestDTO request) {
+        Assert.state(
+                !TransactionSynchronizationManager.isActualTransactionActive(),
+                "A practice start syncs its sources with no transaction");
+        try {
+            jobs.findByIdAndWorkspaceId(identity.jobId(), identity.workspaceId())
+                    .ifPresent(job -> assignments.syncSources(job, request.practiceSlug()));
+        } catch (RuntimeException unreachable) {
+            log.warn(
+                    "Practice start could not sync its sources: jobId={}, practiceSlug={}, errorType={}",
+                    identity.jobId(),
+                    request.practiceSlug(),
+                    unreachable.getClass().getName());
+        }
         return Objects.requireNonNull(transactions.execute(status -> {
             var job = ownedJob(identity);
             if (isAdmitted(job)) throw new AdmissionConflictException();
@@ -320,8 +344,27 @@ public class ResultAdmissionService {
         return Objects.requireNonNull(applyPackage(identity, request, true));
     }
 
+    /**
+     * Checks or publishes a feedback package. Publishing decides each piece's fate against the mirror under the
+     * package's locks, so the mirror is synced first, with no transaction, as at practice start: the compose run's
+     * server may have evicted it. If the provider cannot be reached, a piece whose sources stay unreadable is withheld
+     * as {@code UNCORROBORATED}, which is true.
+     */
     private @Nullable PreparedPackage applyPackage(
             AdmissionIdentity identity, FeedbackPackage request, boolean publish) {
+        if (publish) {
+            Assert.state(
+                    !TransactionSynchronizationManager.isActualTransactionActive(),
+                    "A feedback package syncs its sources with no transaction");
+            try {
+                assignments.syncBasis(identity.workspaceId(), request.basisResultIds());
+            } catch (RuntimeException unreachable) {
+                log.warn(
+                        "Feedback package could not sync its sources: jobId={}, errorType={}",
+                        identity.jobId(),
+                        unreachable.getClass().getName());
+            }
+        }
         UUID editTarget = request.editOf();
         if (editTarget != null) {
             var listed = publicFeedbackHistory(identity);

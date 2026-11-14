@@ -18,7 +18,6 @@ import de.tum.cit.aet.hephaestus.practices.result.trend.TrendProperties;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewTestData;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
-import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.DeveloperPracticeStandings.Standing;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
@@ -146,7 +145,7 @@ class DeveloperPracticeStandingsAdapterTest {
                 .completedAt(at);
         if (origin == ReviewOrigin.EVENT) review.eventId(UUID.randomUUID());
         return new ResultView(
-                view.result(), view.practice(), view.version(), review.build(), view.item(), Currentness.CURRENT);
+                view.result(), view.practice(), view.version(), review.build(), view.item(), Freshness.current(null));
     }
 
     private static Object ids(Collection<Result> rows) {

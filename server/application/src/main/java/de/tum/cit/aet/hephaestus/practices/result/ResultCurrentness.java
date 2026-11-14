@@ -31,8 +31,8 @@ public class ResultCurrentness {
     private final Clock clock;
 
     /**
-     * The open results of the item whose captured sources changed. It runs with no transaction because a source read
-     * can fetch from the provider; {@link #end} ends them.
+     * The open results of the item whose captured sources changed. It reads with no transaction and holds no lock;
+     * {@link #end} ends them under the item lock.
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public Set<UUID> stale(long workspaceId, long itemId) {

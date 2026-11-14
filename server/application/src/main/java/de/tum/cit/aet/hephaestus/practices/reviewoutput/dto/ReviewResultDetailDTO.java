@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
+import de.tum.cit.aet.hephaestus.practices.spi.UnverifiableReason;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
@@ -38,6 +39,20 @@ public record ReviewResultDetailDTO(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) ReviewOrigin origin,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Instant recordedAt,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Currentness currentness,
+
+        @Schema(
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "Why an unverifiable observation cannot be checked against the work; null unless"
+                        + " currentness is UNVERIFIABLE.")
+        @Nullable
+        UnverifiableReason unverifiableReason,
+
+        @Schema(
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "When the observation's capture read the work: the work as of that time. A later check"
+                        + " that found the work unchanged is not recorded. Null when the capture record is missing.")
+        @Nullable
+        Instant capturedAt,
 
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
         Instant markedIncorrectAt,

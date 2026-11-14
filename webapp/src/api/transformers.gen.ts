@@ -1792,6 +1792,9 @@ const resultListSchemaResponseTransformer = (data: any) => {
 	if (data.acceptedAt) {
 		data.acceptedAt = new Date(data.acceptedAt);
 	}
+	if (data.capturedAt) {
+		data.capturedAt = new Date(data.capturedAt);
+	}
 	data.item = itemRefSchemaResponseTransformer(data.item);
 	if (data.markedIncorrectAt) {
 		data.markedIncorrectAt = new Date(data.markedIncorrectAt);
@@ -2088,6 +2091,9 @@ const resultDetailSchemaResponseTransformer = (data: any) => {
 	if (data.acceptedAt) {
 		data.acceptedAt = new Date(data.acceptedAt);
 	}
+	if (data.capturedAt) {
+		data.capturedAt = new Date(data.capturedAt);
+	}
 	if (data.endedAt) {
 		data.endedAt = new Date(data.endedAt);
 	}
@@ -2268,6 +2274,9 @@ const feedbackAnswerSchemaResponseTransformer = (data: any) => {
 };
 
 const reviewBoundResultSchemaResponseTransformer = (data: any) => {
+	if (data.capturedAt) {
+		data.capturedAt = new Date(data.capturedAt);
+	}
 	data.item = itemRefSchemaResponseTransformer(data.item);
 	data.recordedAt = new Date(data.recordedAt);
 	return data;
@@ -2422,6 +2431,9 @@ const reviewProblemSchemaResponseTransformer = (data: any) => {
 	if (data.acceptedAt) {
 		data.acceptedAt = new Date(data.acceptedAt);
 	}
+	if (data.capturedAt) {
+		data.capturedAt = new Date(data.capturedAt);
+	}
 	if (data.disagreedAt) {
 		data.disagreedAt = new Date(data.disagreedAt);
 	}
@@ -2448,6 +2460,9 @@ export const listReviewProblemsResponseTransformer = async (
 const reviewProblemDetailSchemaResponseTransformer = (data: any) => {
 	if (data.acceptedAt) {
 		data.acceptedAt = new Date(data.acceptedAt);
+	}
+	if (data.capturedAt) {
+		data.capturedAt = new Date(data.capturedAt);
 	}
 	if (data.disagreedAt) {
 		data.disagreedAt = new Date(data.disagreedAt);
@@ -2494,6 +2509,9 @@ const reviewResultSchemaResponseTransformer = (data: any) => {
 	if (data.acceptedAt) {
 		data.acceptedAt = new Date(data.acceptedAt);
 	}
+	if (data.capturedAt) {
+		data.capturedAt = new Date(data.capturedAt);
+	}
 	data.item = itemRefSchemaResponseTransformer(data.item);
 	if (data.markedIncorrectAt) {
 		data.markedIncorrectAt = new Date(data.markedIncorrectAt);
@@ -2530,6 +2548,9 @@ const resultMarkSchemaResponseTransformer = (data: any) => {
 const reviewResultDetailSchemaResponseTransformer = (data: any) => {
 	if (data.acceptedAt) {
 		data.acceptedAt = new Date(data.acceptedAt);
+	}
+	if (data.capturedAt) {
+		data.capturedAt = new Date(data.capturedAt);
 	}
 	data.disagreements = data.disagreements.map((item: any) =>
 		feedbackDisagreementSchemaResponseTransformer(item),
@@ -2781,6 +2802,13 @@ const scanReportItemSchemaResponseTransformer = (data: any) => {
 			}
 			if (value) {
 				if (value.lastResult) {
+					if (value.lastResult.capturedAt) {
+						value.lastResult.capturedAt = new Date(value.lastResult.capturedAt);
+					}
+				}
+			}
+			if (value) {
+				if (value.lastResult) {
 					if (value.lastResult.item) {
 						if (value.lastResult.item.removedAt) {
 							value.lastResult.item.removedAt = new Date(value.lastResult.item.removedAt);
@@ -2815,6 +2843,13 @@ const scanReportItemSchemaResponseTransformer = (data: any) => {
 				if (value.lastResult) {
 					if (value.lastResult.acceptedAt) {
 						value.lastResult.acceptedAt = new Date(value.lastResult.acceptedAt);
+					}
+				}
+			}
+			if (value) {
+				if (value.lastResult) {
+					if (value.lastResult.capturedAt) {
+						value.lastResult.capturedAt = new Date(value.lastResult.capturedAt);
 					}
 				}
 			}

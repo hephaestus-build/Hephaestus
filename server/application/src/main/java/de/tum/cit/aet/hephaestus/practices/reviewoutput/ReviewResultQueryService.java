@@ -94,6 +94,7 @@ public class ReviewResultQueryService {
                         .map(v -> {
                             var r = v.result();
                             var activeMarks = marked.getOrDefault(r.getId(), Map.of());
+                            var freshness = presentation.freshness(v);
                             return new ReviewResultDTO(
                                     r.getId(),
                                     r.getReviewId(),
@@ -105,7 +106,9 @@ public class ReviewResultQueryService {
                                     permitted.contains(r.getId()) ? r.getSummary() : null,
                                     v.review().getOrigin(),
                                     r.getRecordedAt(),
-                                    presentation.currentness(v),
+                                    freshness.currentness(),
+                                    freshness.unverifiableReason(),
+                                    freshness.capturedAt(),
                                     activeMarks.get(ResultMarkKind.INCORRECT),
                                     activeMarks.get(ResultMarkKind.ACCEPTED),
                                     summaries.getOrDefault(r.getId(), List.of()),
@@ -128,6 +131,7 @@ public class ReviewResultQueryService {
         var r = require(ws, id);
         var v = views.views(ws, List.of(r)).getFirst();
         boolean permitted = authorization.permits(ws, r, SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);
+        var freshness = presentation.freshness(v);
         return new ReviewResultDetailDTO(
                 r.getId(),
                 r.getReviewId(),
@@ -139,7 +143,9 @@ public class ReviewResultQueryService {
                 permitted ? r.getSummary() : null,
                 v.review().getOrigin(),
                 r.getRecordedAt(),
-                presentation.currentness(v),
+                freshness.currentness(),
+                freshness.unverifiableReason(),
+                freshness.capturedAt(),
                 presentation.markedAt(r, ResultMarkKind.INCORRECT),
                 presentation.markedAt(r, ResultMarkKind.ACCEPTED),
                 r.getPracticeVersionId() == null
@@ -194,6 +200,8 @@ public class ReviewResultQueryService {
                 row.sourceKind(),
                 row.evidenceHidden(),
                 row.currentness(),
+                row.unverifiableReason(),
+                row.capturedAt(),
                 row.markedIncorrectAt(),
                 row.acceptedAt(),
                 row.disagreedAt(),
@@ -204,6 +212,7 @@ public class ReviewResultQueryService {
 
     public ReviewBoundResultDTO bound(ResultView v, boolean permitted) {
         var r = v.result();
+        var freshness = presentation.freshness(v);
         return new ReviewBoundResultDTO(
                 r.getId(),
                 r.getReviewId(),
@@ -215,7 +224,9 @@ public class ReviewResultQueryService {
                 v.item(),
                 developer(v),
                 r.getRecordedAt(),
-                presentation.currentness(v));
+                freshness.currentness(),
+                freshness.unverifiableReason(),
+                freshness.capturedAt());
     }
 
     private ReviewProblemDTO problemRow(long ws, Problem p) {
@@ -225,6 +236,7 @@ public class ReviewResultQueryService {
         var dto = presentation.problem(p, permitted);
         var primary = dto.citations().isEmpty() ? null : dto.citations().getFirst();
         var group = v.practice().getGroup();
+        var freshness = presentation.freshness(v);
         return new ReviewProblemDTO(
                 p.getId(),
                 r.getId(),
@@ -244,7 +256,9 @@ public class ReviewResultQueryService {
                 primary == null ? null : primary.side(),
                 primary == null ? null : primary.sourceKind(),
                 !permitted,
-                presentation.currentness(v),
+                freshness.currentness(),
+                freshness.unverifiableReason(),
+                freshness.capturedAt(),
                 presentation.markedAt(r, ResultMarkKind.INCORRECT),
                 presentation.markedAt(r, ResultMarkKind.ACCEPTED),
                 presentation.disagreements(r).stream()

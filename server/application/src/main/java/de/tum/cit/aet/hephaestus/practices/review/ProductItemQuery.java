@@ -139,10 +139,23 @@ public class ProductItemQuery {
             var current = source.current(item);
             return current.isEmpty()
                     ? Map.of()
-                    : ItemSource.recordFingerprints(source, current.orElseThrow(), kinds, occasion, mapper);
+                    // A source without its own reader captures only rows that this server stores.
+                    : ItemSource.recordFingerprints(source::capture, current.orElseThrow(), kinds, occasion, mapper);
         } catch (ItemCaptureException unavailable) {
             return Map.of();
         }
+    }
+
+    /**
+     * Brings this server's copy of what {@link #fingerprints} reads up to date with the provider. It may call the
+     * provider, so it runs with no transaction; the locked read after it stays local.
+     */
+    public void sync(ItemRef item, Set<SourceKind> kinds, @Nullable UUID occasion) {
+        if (kinds.isEmpty()) return;
+        var readers = fingerprintReaders.stream()
+                .filter(reader -> reader.supports(item))
+                .toList();
+        if (readers.size() == 1) readers.getFirst().sync(item, kinds, occasion);
     }
 
     public sealed interface CurrentWorkVersion

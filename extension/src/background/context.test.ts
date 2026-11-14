@@ -329,6 +329,8 @@ function ownRow(overrides: Partial<ResultList> = {}): ResultList {
 		acceptedAt: null,
 		markedIncorrectAt: null,
 		currentness: "CURRENT",
+		unverifiableReason: null,
+		capturedAt: "2026-09-26T10:55:00Z",
 		recordedAt: "2026-09-26T11:00:00Z",
 		practiceName: "Descriptive merge request",
 		practiceSlug: "descriptive-merge-request",
@@ -421,6 +423,8 @@ describe("the reader's own results on the tab's item", () => {
 				outcome: "NOT_MET",
 				severity: "MAJOR",
 				currentness: "CURRENT",
+				unverifiableReason: null,
+				capturedAt: "2026-09-26T10:55:00Z",
 				recordedAt: "2026-09-26T11:00:00Z",
 				problems: [
 					{

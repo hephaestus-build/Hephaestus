@@ -533,6 +533,8 @@ interface ResultSpec {
 	explanation: string;
 	practiceSlug: string;
 	currentness?: ReviewResult["currentness"];
+	unverifiableReason?: ReviewResult["unverifiableReason"];
+	capturedAt?: string;
 	recordedAt: string;
 	item?: ItemRef;
 	aboutTheWork?: true;
@@ -1149,6 +1151,7 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 				practiceSlug: "decisions-are-written-down",
 				outcome: "NOT_MET",
 				currentness: "UNVERIFIABLE",
+				unverifiableReason: "RECORD_MISSING",
 				recordedAt: "2026-07-26T16:02:00Z",
 				problems: [
 					{
@@ -1813,6 +1816,8 @@ function toResult(review: ReviewSpec, spec: ResultSpec): ReviewResult {
 		origin: originOf(review),
 		recordedAt: new Date(spec.recordedAt),
 		currentness: spec.currentness ?? "CURRENT",
+		unverifiableReason: spec.unverifiableReason ?? null,
+		capturedAt: spec.capturedAt === undefined ? null : new Date(spec.capturedAt),
 		markedIncorrectAt: activeMarkAt(spec, "INCORRECT"),
 		acceptedAt: activeMarkAt(spec, "ACCEPTED"),
 		problemCount: problems.length,
@@ -1838,6 +1843,8 @@ export function boundResultOf(result: ReviewBoundResult): ReviewBoundResult {
 		summary: result.summary,
 		recordedAt: result.recordedAt,
 		currentness: result.currentness,
+		unverifiableReason: result.unverifiableReason,
+		capturedAt: result.capturedAt,
 	};
 }
 
@@ -1880,6 +1887,8 @@ function toProblemRows(review: ReviewSpec, spec: ResultSpec): ReviewProblem[] {
 			sourceKind: hidden ? null : (place?.sourceKind ?? null),
 			evidenceHidden: hidden,
 			currentness: result.currentness,
+			unverifiableReason: result.unverifiableReason,
+			capturedAt: result.capturedAt,
 			markedIncorrectAt: result.markedIncorrectAt,
 			acceptedAt: result.acceptedAt,
 			disagreedAt: disagreedAt(result.id),

@@ -174,6 +174,8 @@ class ProfileReviewPaginationTest extends BaseUnitTest {
                                 Currentness.CURRENT,
                                 null,
                                 null,
+                                null,
+                                null,
                                 List.of());
                     })
                     .toList();

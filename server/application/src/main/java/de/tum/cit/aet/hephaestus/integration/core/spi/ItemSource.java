@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -48,21 +49,23 @@ public interface ItemSource {
 
     /**
      * The fingerprints that a capture of {@code current} would record now for these record sources: each source read
-     * alone, as a review's capture reads it, under the occasion that the capture read. A capture of an event review
+     * alone, under the occasion that the capture read. A source that this server cannot read now has no fingerprint, so
+     * the comparison is unverifiable, never current. A capture of an event review
      * reads its occasion's record, and the mirror's later status is not that record, so a read without the occasion
      * would find unchanged work changed.
      *
-     * @param source the source as injected, so its capture runs in its own transaction
+     * @param stored a capture that reads only what this server stores, with no provider call, so that a page load or a
+     *     locked transaction never waits on a provider. It runs in its own transaction, or in the caller's.
      */
     static Map<SourceKind, String> recordFingerprints(
-            ItemSource source,
+            BiFunction<ItemSnapshot, CaptureRequest, CaptureContribution> stored,
             ItemSnapshot current,
             Set<SourceKind> kinds,
             @Nullable UUID occasion,
             ObjectMapper mapper) {
         var fingerprints = new HashMap<SourceKind, String>();
         for (var kind : kinds) {
-            var contribution = source.capture(
+            var contribution = stored.apply(
                     current,
                     new CaptureRequest(
                             new UUID(0, 0),

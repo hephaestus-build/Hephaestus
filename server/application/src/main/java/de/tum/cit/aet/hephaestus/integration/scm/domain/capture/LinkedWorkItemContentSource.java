@@ -118,6 +118,10 @@ public class LinkedWorkItemContentSource {
             ReviewRepositoryPreparer.PreparedReview prepared = null;
             if (gitRepositoryManager.isEnabled()) {
                 prepared = request.preparation().prepare(repositoryPreparer, capture);
+                // Without the commits, the references in their messages are unread: an answer from the title alone
+                // is not the linked work, and a later read with the commits would find unchanged work changed.
+                var unavailable = request.preparation().unavailableReason();
+                if (unavailable != null) return CaptureContribution.unavailable(Set.of(KIND), unavailable);
             } else {
                 repositoryPreparer.authorize(capture);
             }

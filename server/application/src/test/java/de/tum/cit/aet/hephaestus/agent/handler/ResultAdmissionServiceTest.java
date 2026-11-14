@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -24,6 +25,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.proxy.dto.PracticeStartRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRunFence;
 import de.tum.cit.aet.hephaestus.agent.run.AgentRuns;
@@ -149,6 +151,54 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
 
     private ResultAdmissionService.AdmissionIdentity identity() {
         return new ResultAdmissionService.AdmissionIdentity(job.getId(), 1, 0, LEASE);
+    }
+
+    @Test
+    void shouldSyncThePracticeSourcesWithNoTransactionBeforeTheLockedStart() {
+        when(assignments.start(job, "review-ready-work")).thenReturn(true);
+
+        var started = service.start(identity(), new PracticeStartRequestDTO("review-ready-work"));
+
+        assertThat(started.current()).isTrue();
+        var order = inOrder(assignments, manager);
+        order.verify(assignments).syncSources(job, "review-ready-work");
+        order.verify(manager).getTransaction(any());
+        order.verify(assignments).start(job, "review-ready-work");
+    }
+
+    @Test
+    void shouldStillCheckThePracticeWhenItsSourcesCannotBeSynced() {
+        doThrow(new IllegalStateException("The provider cannot be reached"))
+                .when(assignments)
+                .syncSources(job, "review-ready-work");
+        when(assignments.start(job, "review-ready-work")).thenReturn(false);
+
+        var started = service.start(identity(), new PracticeStartRequestDTO("review-ready-work"));
+
+        assertThat(started.current()).isFalse();
+        verify(assignments).start(job, "review-ready-work");
+    }
+
+    @Test
+    void shouldSyncTheBasisSourcesWithNoTransactionBeforeAPackageIsPublished() {
+        var basis = UUID.randomUUID();
+
+        assertThatThrownBy(() ->
+                        service.publishPackage(identity(), new FeedbackPackage(List.of(basis), List.of(), false, null)))
+                .isInstanceOf(AdmissionConflictException.class);
+
+        var order = inOrder(assignments, manager);
+        order.verify(assignments).syncBasis(1L, List.of(basis));
+        order.verify(manager).getTransaction(any());
+    }
+
+    @Test
+    void shouldNotSyncWhenAPackageIsOnlyChecked() {
+        assertThatThrownBy(() -> service.checkPackage(
+                        identity(), new FeedbackPackage(List.of(UUID.randomUUID()), List.of(), false, null)))
+                .isInstanceOf(AdmissionConflictException.class);
+
+        verify(assignments, never()).syncBasis(anyLong(), any());
     }
 
     @Test
