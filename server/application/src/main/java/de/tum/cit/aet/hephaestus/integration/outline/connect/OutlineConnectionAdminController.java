@@ -2,8 +2,8 @@ package de.tum.cit.aet.hephaestus.integration.outline.connect;
 
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
-import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
@@ -78,7 +78,8 @@ public class OutlineConnectionAdminController {
     @Audited(ledger = AuditLedger.CONNECTION_AUDIT)
     public ResponseEntity<OutlineTokenStatusDTO> replaceOutlineToken(
             WorkspaceContext workspace, @Valid @RequestBody ReplaceOutlineTokenRequestDTO request) {
-        return ResponseEntity.ok(
-                adminService.replaceToken(workspace.id(), request.token(), CurrentAccount.requireId()));
+        long actor = SecurityUtils.getCurrentAccountId()
+                .orElseThrow(() -> new IllegalStateException("A key replacement needs a signed-in account."));
+        return ResponseEntity.ok(adminService.replaceToken(workspace.id(), request.token(), actor));
     }
 }
