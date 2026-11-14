@@ -7,13 +7,13 @@ describe("a failed query's error", () => {
 	it("shows the page when a wait gives up", async () => {
 		render(<p>Nothing to press here</p>);
 
-		const error: unknown = await screen
+		const failure: unknown = await screen
 			.findByRole("button", { name: "Save" }, { timeout: 100 })
-			.catch((failure: unknown) => failure);
+			.catch((error_: unknown) => error_);
 
-		assert(error instanceof Error);
-		expect(error.message).toContain('Unable to find role="button" and name "Save"');
-		expect(error.message).toContain("Nothing to press here");
+		assert(failure instanceof Error);
+		expect(failure.message).toContain('Unable to find role="button" and name "Save"');
+		expect(failure.message).toContain("Nothing to press here");
 	});
 
 	it("shows the page when a query fails outside a wait", () => {
