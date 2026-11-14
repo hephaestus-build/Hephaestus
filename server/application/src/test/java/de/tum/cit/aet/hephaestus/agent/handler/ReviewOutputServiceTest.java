@@ -353,17 +353,29 @@ class ReviewOutputServiceTest extends BaseUnitTest {
 
     private static ReadReceipt searchedBytes(
             String version, String pattern, int matches, @Nullable String checkoutDigest) {
+        return searchedBytes(".", ReadReceiptStatus.SEARCHED, version, pattern, matches, checkoutDigest);
+    }
+
+    /** A receipt of the checkout at {@code path}; only a search carries its pattern and match count. */
+    private static ReadReceipt searchedBytes(
+            String path,
+            ReadReceiptStatus status,
+            String version,
+            String pattern,
+            int matches,
+            @Nullable String checkoutDigest) {
+        boolean search = status == ReadReceiptStatus.SEARCHED;
         return new ReadReceipt(
                 TREE,
                 CHECKOUT_ROOT + ".git/HEAD",
-                ".",
+                path,
                 version,
-                ReadReceiptStatus.SEARCHED,
+                status,
                 checkoutDigest,
                 null,
                 null,
-                pattern,
-                matches);
+                search ? pattern : null,
+                search ? matches : null);
     }
 
     /** The diff alone named as searched: the claim now rests on its words. */
@@ -829,6 +841,34 @@ class ReviewOutputServiceTest extends BaseUnitTest {
 
         prepare(job, pr50ErrorHandling(List.of(searched("c".repeat(40))), UnaryOperator.identity()))
                 .record(job);
+
+        assertWithheld(CandidateRefusal.CONSULTED_SOURCE_UNREAD, NAMED + UNSEARCHED);
+    }
+
+    @Test
+    void shouldWithholdAClaimAboutTheCheckoutWhenItsSearchCoveredOnlyOneFolder() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        var folder = searchedBytes(
+                "src/main",
+                ReadReceiptStatus.SEARCHED,
+                PR50_HEAD,
+                "ControllerAdvice|ExceptionHandler",
+                0,
+                CAPTURED_CHECKOUT);
+
+        prepare(job, pr50ErrorHandling(List.of(folder), UnaryOperator.identity()))
+                .record(job);
+
+        assertWithheld(CandidateRefusal.CONSULTED_SOURCE_UNREAD, NAMED + UNSEARCHED);
+    }
+
+    @Test
+    void shouldWithholdAClaimAboutTheCheckoutWhenItsSessionReadTheWholeCheckoutWithoutSearchingIt() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        var read = searchedBytes(
+                ".", ReadReceiptStatus.COMPLETE, PR50_HEAD, "ControllerAdvice|ExceptionHandler", 0, CAPTURED_CHECKOUT);
+
+        prepare(job, pr50ErrorHandling(List.of(read), UnaryOperator.identity())).record(job);
 
         assertWithheld(CandidateRefusal.CONSULTED_SOURCE_UNREAD, NAMED + UNSEARCHED);
     }

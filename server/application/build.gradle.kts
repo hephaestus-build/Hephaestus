@@ -592,6 +592,15 @@ tasks.jacocoTestCoverageVerification {
                 minimum = "0.60".toBigDecimal()
             }
         }
+        rule {
+            element = "PACKAGE"
+            includes = listOf("de.tum.cit.aet.hephaestus.agent.handler")
+            limit {
+                counter = "BRANCH"
+                value = "COVEREDRATIO"
+                minimum = "0.73".toBigDecimal()
+            }
+        }
     }
 }
 

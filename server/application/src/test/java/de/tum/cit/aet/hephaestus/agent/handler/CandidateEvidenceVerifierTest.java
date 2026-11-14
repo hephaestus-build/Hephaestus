@@ -65,6 +65,8 @@ class CandidateEvidenceVerifierTest extends BaseUnitTest {
     private static final SourceKind SOURCE = new SourceKind("docs.document.core");
     private static final ItemKind KIND = new ItemKind("docs.document");
     private static final String TEXT = "Before\nExact quote\nAfter\n";
+    private static final String STATE =
+            "{\"type\":\"state\",\"explanation\":\"The current file contains these words\"}";
     private final ReviewJob job = new ReviewJob();
     private final JobEvidenceFiles files = mock(JobEvidenceFiles.class);
     private final ClasspathSourceCatalogRegistry catalogs = mock(ClasspathSourceCatalogRegistry.class);
@@ -93,6 +95,19 @@ class CandidateEvidenceVerifierTest extends BaseUnitTest {
 
     private ReviewAssignmentSnapshot assignment() {
         var item = new ItemRef(1, 2, KIND, 20L, null, null);
+        var practice = RuntimeReviewTestData.assignment(null, null).practice();
+        return new ReviewAssignmentSnapshot(
+                new ReviewAssignmentId(UUID.randomUUID(), 31, 2),
+                item,
+                new ItemVersion("docs:one", null),
+                null,
+                "one",
+                practice);
+    }
+
+    /** An assignment of one file of a scanned item, at {@code path}. */
+    private ReviewAssignmentSnapshot fileAssignment(String path) {
+        var item = new ItemRef(1, 2, KIND, null, 3L, path);
         var practice = RuntimeReviewTestData.assignment(null, null).practice();
         return new ReviewAssignmentSnapshot(
                 new ReviewAssignmentId(UUID.randomUUID(), 31, 2),
@@ -506,15 +521,59 @@ class CandidateEvidenceVerifierTest extends BaseUnitTest {
     @Test
     void shouldNameAMissingStateWitnessWithoutCallingItAnotherVersion() {
         var verifier = verifier(TEXT);
-        assertThatThrownBy(() -> verifier.verifyCandidate(
-                        job,
-                        assignment(),
-                        ReviewKind.SCAN,
-                        problem("{\"type\":\"state\",\"explanation\":\"The current file contains these words\"}"),
-                        captured(true)))
+        assertThatThrownBy(() ->
+                        verifier.verifyCandidate(job, assignment(), ReviewKind.SCAN, problem(STATE), captured(true)))
                 .isInstanceOfSatisfying(
                         CandidateEvidenceVerifier.Unverified.class,
                         refusal -> assertThat(refusal.refusal()).isEqualTo(CandidateRefusal.BASIS_WITNESS_MISSING));
+    }
+
+    @Test
+    void shouldRefuseAStateClaimWhenNoCitationWitnessesItsAssignedFile() {
+        var verifier = verifier(TEXT);
+        assertThatThrownBy(() -> verifier.verifyCandidate(
+                        job, fileAssignment("document/other"), ReviewKind.SCAN, problem(STATE), captured(true)))
+                .isInstanceOfSatisfying(
+                        CandidateEvidenceVerifier.Unverified.class,
+                        refusal -> assertThat(refusal.refusal()).isEqualTo(CandidateRefusal.BASIS_WITNESS_MISSING));
+    }
+
+    @Test
+    void shouldAcceptAStateClaimWhenACitationWitnessesItsAssignedFile() {
+        var verifier = verifier(TEXT);
+
+        var verified = verifier.verifyCandidate(
+                job, fileAssignment("document/body"), ReviewKind.SCAN, problem(STATE), captured(true));
+
+        assertThat(verified.problems())
+                .singleElement()
+                .satisfies(problem -> assertThat(problem.citations())
+                        .singleElement()
+                        .satisfies(citation -> assertThat(citation.path()).isEqualTo("document/body")));
+    }
+
+    @Test
+    void shouldRefuseAStateClaimWhenTheReviewIsNotAScan() {
+        var verifier = verifier(TEXT);
+        assertThatThrownBy(() -> verifier.verifyCandidate(
+                        job, fileAssignment("document/body"), ReviewKind.ITEM, problem(STATE), captured(true)))
+                .isInstanceOfSatisfying(
+                        CandidateEvidenceVerifier.Unverified.class,
+                        refusal -> assertThat(refusal.refusal()).isEqualTo(CandidateRefusal.BASIS_STATE_UNSUPPORTED));
+    }
+
+    @Test
+    void shouldRefuseAScanProblemWhenItsBasisIsNotAState() {
+        var verifier = verifier(TEXT);
+        assertThatThrownBy(() -> verifier.verifyCandidate(
+                        job,
+                        fileAssignment("document/body"),
+                        ReviewKind.SCAN,
+                        problem("{\"type\":\"introduced\",\"head\":0,\"explanation\":\"The change adds these words\"}"),
+                        captured(true)))
+                .isInstanceOfSatisfying(
+                        CandidateEvidenceVerifier.Unverified.class,
+                        refusal -> assertThat(refusal.refusal()).isEqualTo(CandidateRefusal.BASIS_STATE_UNSUPPORTED));
     }
 
     @Test
