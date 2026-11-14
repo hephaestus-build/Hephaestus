@@ -6,6 +6,8 @@
 | `config.email.fromName` | string | `"Hephaestus"` | yes | — |
 | `config.email.host` | string | `""` | yes | — |
 | `config.email.port` | integer | `587` | yes | `minimum: 1. maximum: 65535` |
+| `config.email.rateLimit.dailyCapacity` | integer | `250` | yes | Most emails that this instance sends per day.<br />`minimum: 2` |
+| `config.email.rateLimit.optionalDailyCapacity` | integer | `200` | yes | Most optional emails, such as digests, that this instance sends per day. Must be lower than dailyCapacity.<br />`minimum: 1` |
 | `config.email.replyTo` | string | `""` | yes | — |
 | `config.email.tls` | string | `"starttls"` | yes | `enum: ["starttls","implicit"]` |
 | `config.email.username` | string | `""` | yes | — |

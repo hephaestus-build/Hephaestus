@@ -1154,7 +1154,7 @@
 				"sync": {
 					"type": "object",
 					"additionalProperties": false,
-					"required": ["runOnStartup", "timeframeDays", "syncCron", "cooldownMinutes"],
+					"required": ["runOnStartup", "timeframeDays", "syncCron", "cooldownMinutes", "backfill"],
 					"properties": {
 						"runOnStartup": {
 							"type": "boolean"
@@ -1175,6 +1175,32 @@
 							"minimum": 1,
 							"maximum": 1440,
 							"description": "Whole minutes, bound to an application integer. This is the minimum interval between syncs."
+						},
+						"backfill": {
+							"type": "object",
+							"additionalProperties": false,
+							"required": ["enabled", "batchSize", "rateLimitThreshold", "intervalSeconds"],
+							"properties": {
+								"enabled": {
+									"type": "boolean",
+									"description": "Turns on the historical backfill of issues and pull requests after the recent sync."
+								},
+								"batchSize": {
+									"type": "integer",
+									"minimum": 1,
+									"description": "Most pages of issues or pull requests that one backfill cycle reads for each repository."
+								},
+								"rateLimitThreshold": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Remaining provider API requests below which the backfill waits for the next cycle."
+								},
+								"intervalSeconds": {
+									"type": "integer",
+									"minimum": 1,
+									"description": "Seconds between backfill cycles. A cycle holds its lock for 30 seconds, so a smaller value runs every 30 seconds."
+								}
+							}
 						}
 					}
 				},
@@ -1324,7 +1350,16 @@
 				"email": {
 					"type": "object",
 					"additionalProperties": false,
-					"required": ["host", "port", "tls", "username", "from", "fromName", "replyTo"],
+					"required": [
+						"host",
+						"port",
+						"tls",
+						"username",
+						"from",
+						"fromName",
+						"replyTo",
+						"rateLimit"
+					],
 					"properties": {
 						"host": {
 							"$ref": "#/definitions/text"
@@ -1346,6 +1381,23 @@
 						},
 						"replyTo": {
 							"$ref": "#/definitions/text"
+						},
+						"rateLimit": {
+							"type": "object",
+							"additionalProperties": false,
+							"required": ["dailyCapacity", "optionalDailyCapacity"],
+							"properties": {
+								"dailyCapacity": {
+									"type": "integer",
+									"minimum": 2,
+									"description": "Most emails that this instance sends per day."
+								},
+								"optionalDailyCapacity": {
+									"type": "integer",
+									"minimum": 1,
+									"description": "Most optional emails, such as digests, that this instance sends per day. Must be lower than dailyCapacity."
+								}
+							}
 						}
 					}
 				},
