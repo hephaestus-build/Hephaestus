@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
-import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.spi.PeopleRegistry;
@@ -41,7 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class MembershipService {
     private final MembershipRepository memberships;
     private final WorkspaceRepository workspaces;
-    private final ConfigAuditPort configAudit;
+    private final MembershipAudit audit;
     private final WorkspaceAccessService access;
     private final ObjectProvider<PeopleRegistry> people;
     private final Clock clock;
@@ -79,7 +78,8 @@ public class MembershipService {
     }
 
     public void syncWorkspaceMembers(Workspace workspace, Map<Long, Membership.WorkspaceRole> providerRoles) {
-        lockForMembershipChange(workspace.getId());
+        Workspace current = lockForMembershipChange(workspace.getId());
+        boolean initialImport = workspaces.isInitialMemberImport(workspace.getId());
         Map<Long, Membership.WorkspaceRole> desired = new HashMap<>();
         for (var entry : providerRoles.entrySet()) {
             var actor = providers.actor(entry.getKey()).filter(GitProviderRegistry.ActorProfile::human);
@@ -90,25 +90,27 @@ public class MembershipService {
             var existing = memberships.findByWorkspace_IdAndId_AccountId(workspace.getId(), entry.getKey());
             if (existing.isEmpty()) {
                 var member = createMembership(workspace, entry.getKey(), entry.getValue());
-                recordProviderGrant(member);
+                recordProviderGrant(member, initialImport);
             } else {
                 var member = existing.get();
                 var before = snapshot(member);
                 boolean rejoining = member.getLeftAt() != null;
                 applyProviderRole(member, entry.getValue(), rejoining);
                 member.setLeftAt(null);
-                if (rejoining) recordProviderGrant(member);
-                else recordProviderRoleChange(member, before);
+                if (rejoining) recordProviderGrant(member, initialImport);
+                else recordProviderRoleChange(member, before, initialImport);
             }
         }
         for (var member : memberships.findByWorkspace_Id(workspace.getId())) {
             if (member.getRole() != Membership.WorkspaceRole.OWNER
                     && !desired.containsKey(member.getAccountId())
                     && member.getLeftAt() == null) {
-                recordProviderDeparture(member);
                 member.setLeftAt(clock.instant());
+                recordProviderDeparture(member);
             }
         }
+        current.setMembersSyncedAt(clock.instant());
+        workspaces.save(current);
     }
 
     public void applyProviderGrant(Workspace workspace, Long scmUserId, Membership.@Nullable WorkspaceRole role) {
@@ -118,8 +120,8 @@ public class MembershipService {
         if (existing.isPresent() && existing.get().getRole() == Membership.WorkspaceRole.OWNER) return;
         if (role == null) {
             existing.filter(member -> member.getLeftAt() == null).ifPresent(member -> {
-                recordProviderDeparture(member);
                 member.setLeftAt(clock.instant());
+                recordProviderDeparture(member);
             });
         } else if (existing.isPresent()) {
             var member = existing.get();
@@ -127,9 +129,9 @@ public class MembershipService {
             boolean rejoining = member.getLeftAt() != null;
             applyProviderRole(member, role, rejoining);
             member.setLeftAt(null);
-            if (rejoining) recordProviderGrant(member);
-            else recordProviderRoleChange(member, before);
-        } else recordProviderGrant(createMembership(workspace, accountId, role));
+            if (rejoining) recordProviderGrant(member, false);
+            else recordProviderRoleChange(member, before, false);
+        } else recordProviderGrant(createMembership(workspace, accountId, role), false);
     }
 
     /**
@@ -142,31 +144,47 @@ public class MembershipService {
         if (member.getRoleSource() == Membership.RoleSource.PROVIDER) member.setRole(role);
     }
 
-    private void recordProviderGrant(Membership member) {
-        configAudit.record(ConfigAuditEntry.created(
+    private void recordProviderGrant(Membership member, boolean initialImport) {
+        var entry = ConfigAuditEntry.created(
                 ConfigAuditEntityType.WORKSPACE_ROLE,
                 Objects.requireNonNull(member.getAccountId()),
                 member.getWorkspace().getId(),
-                snapshot(member)));
+                snapshot(member));
+        // Only the connection's initial full roster import is silent; later discoveries and returns are changes.
+        if (initialImport) audit.record(entry);
+        else audit.roleChanged(entry, member, null, null);
     }
 
     private void recordProviderDeparture(Membership member) {
-        configAudit.record(ConfigAuditEntry.deleted(
-                ConfigAuditEntityType.WORKSPACE_ROLE,
-                Objects.requireNonNull(member.getAccountId()),
-                member.getWorkspace().getId(),
-                snapshot(member)));
+        audit.roleChanged(
+                ConfigAuditEntry.deleted(
+                        ConfigAuditEntityType.WORKSPACE_ROLE,
+                        Objects.requireNonNull(member.getAccountId()),
+                        member.getWorkspace().getId(),
+                        snapshot(member)),
+                member,
+                member.getRole(),
+                null);
     }
 
-    private void recordProviderRoleChange(Membership member, WorkspaceAuditSnapshots.RoleSnapshot before) {
+    private void recordProviderRoleChange(
+            Membership member, WorkspaceAuditSnapshots.RoleSnapshot before, boolean initialImport) {
         var after = snapshot(member);
-        if (!before.equals(after))
-            configAudit.record(ConfigAuditEntry.updated(
+        if (!before.equals(after)) {
+            var entry = ConfigAuditEntry.updated(
                     ConfigAuditEntityType.WORKSPACE_ROLE,
                     Objects.requireNonNull(member.getAccountId()),
                     member.getWorkspace().getId(),
                     before,
-                    after));
+                    after);
+            if (initialImport) audit.record(entry);
+            else
+                audit.roleChanged(
+                        entry,
+                        member,
+                        before.role() == null ? null : Membership.WorkspaceRole.valueOf(before.role()),
+                        null);
+        }
     }
 
     public Membership createMembership(Workspace workspace, Long accountId, Membership.WorkspaceRole role) {
@@ -195,17 +213,26 @@ public class MembershipService {
         if (existing.isEmpty()) {
             var member = createMembership(workspace, accountId, role);
             member.setRoleSource(Membership.RoleSource.PERSON);
-            configAudit.record(ConfigAuditEntry.created(
-                    ConfigAuditEntityType.WORKSPACE_ROLE, accountId, workspaceId, snapshot(member)));
+            audit.roleChanged(
+                    ConfigAuditEntry.created(
+                            ConfigAuditEntityType.WORKSPACE_ROLE, accountId, workspaceId, snapshot(member)),
+                    member,
+                    null,
+                    CurrentAccount.idOrNull());
             return member;
         }
         var member = existing.get();
         var before = snapshot(member);
+        var previousRole = member.getLeftAt() == null ? member.getRole() : null;
         member.setRole(role);
         member.setRoleSource(Membership.RoleSource.PERSON);
         member.setLeftAt(null);
-        configAudit.record(ConfigAuditEntry.updated(
-                ConfigAuditEntityType.WORKSPACE_ROLE, accountId, workspaceId, before, snapshot(member)));
+        audit.roleChanged(
+                ConfigAuditEntry.updated(
+                        ConfigAuditEntityType.WORKSPACE_ROLE, accountId, workspaceId, before, snapshot(member)),
+                member,
+                previousRole,
+                CurrentAccount.idOrNull());
         return memberships.save(member);
     }
 
@@ -225,7 +252,7 @@ public class MembershipService {
         if (member.getRoleSource() == Membership.RoleSource.PROVIDER) return member;
         var before = snapshot(member);
         member.setRoleSource(Membership.RoleSource.PROVIDER);
-        configAudit.record(ConfigAuditEntry.updated(
+        audit.record(ConfigAuditEntry.updated(
                 ConfigAuditEntityType.WORKSPACE_ROLE, accountId, workspaceId, before, snapshot(member)));
         return memberships.save(member);
     }
@@ -236,15 +263,19 @@ public class MembershipService {
         authorizeRoleChange(workspace, accountId, member, null);
         if (member.getLeftAt() != null) return;
         member.setLeftAt(clock.instant());
-        configAudit.record(ConfigAuditEntry.deleted(
-                ConfigAuditEntityType.WORKSPACE_ROLE, accountId, workspaceId, snapshot(member)));
+        audit.roleChanged(
+                ConfigAuditEntry.deleted(
+                        ConfigAuditEntityType.WORKSPACE_ROLE, accountId, workspaceId, snapshot(member)),
+                member,
+                member.getRole(),
+                CurrentAccount.idOrNull());
     }
 
     public Membership updateMemberVisibility(Long workspaceId, Long accountId, boolean hidden) {
         var member = requireMembership(workspaceId, accountId);
         var before = snapshot(member);
         member.setHidden(hidden);
-        configAudit.record(ConfigAuditEntry.updated(
+        audit.record(ConfigAuditEntry.updated(
                 ConfigAuditEntityType.WORKSPACE_ROLE, accountId, workspaceId, before, snapshot(member)));
         return memberships.save(member);
     }

@@ -4,7 +4,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
-import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
+import de.tum.cit.aet.hephaestus.core.event.RoleChangedEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -83,6 +83,9 @@ public class AccountBootstrapService {
             log.warn("auth.bootstrap: rejected bootstrap-admin attempt by accountId={} — bad token", accountId);
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "The bootstrap token is not valid.");
         }
+        // The account precedes the bootstrap lock, as it does during an allowlisted sign-in.
+        accountRepository.lockStatusForUpdate(accountId);
+        boolean hadAdministrator = accountRepository.lockBootstrapAndCheckAdministratorHistory();
         int promoted = accountRepository.promoteToFirstAdminIfNoneExists(accountId);
         if (promoted == 0) {
             // Either an APP_ADMIN already exists (self-disabled) or this account is already one.
@@ -95,8 +98,9 @@ public class AccountBootstrapService {
                 .actingAccount(accountId)
                 .details("{\"from\":\"USER\",\"to\":\"APP_ADMIN\",\"via\":\"bootstrap-token\"}")
                 .record();
-        eventPublisher.publishEvent(new AccountSecurityChangedEvent(
-                accountId, AccountSecurityChangedEvent.Kind.APP_ROLE_CHANGED, clock.instant()));
+        if (hadAdministrator)
+            eventPublisher.publishEvent(
+                    RoleChangedEvent.instanceAdmin(accountId, false, true, accountId, clock.instant()));
         log.warn("auth.bootstrap: accountId={} self-promoted to APP_ADMIN via break-glass token", accountId);
     }
 

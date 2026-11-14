@@ -15,6 +15,12 @@ import java.util.Optional;
  */
 public interface AccountContactQuery {
 
+    /**
+     * Holds the account status until admission commits. A blocked account can be named in another person's
+     * notice, but cannot receive one. Erased and missing accounts can do neither.
+     */
+    boolean lockForNotification(long accountId, boolean addressedRecipient);
+
     Optional<String> activeVerifiedPrimaryEmail(long accountId);
 
     List<Long> activeVerifiedAdministratorIds();

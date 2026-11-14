@@ -234,11 +234,30 @@ public class CorePrivacyPersonDataCatalog implements PersonDataCatalog {
                         "event_publication",
                         "(t.serialized_event::jsonb)->>'accountId' = CAST(:account AS text) OR"
                                 + " (t.serialized_event::jsonb)->>'recipientAccountId' = CAST(:account"
-                                + " AS text)",
+                                + " AS text) OR"
+                                + " (t.serialized_event::jsonb) #>> '{change,accountId}' = CAST(:account AS text) OR"
+                                + " (t.serialized_event::jsonb) #>> '{change,actorAccountId}' = CAST(:account AS text)",
                         "id,event_type,publication_date,completion_date,status",
                         "id",
                         "",
-                        -250),
+                        -250) {
+                    @Override
+                    public long erase(PersonDataSelection selection, PersonScope frozenScope) {
+                        var bindings = parameters(frozenScope, mapper);
+                        int removed = jdbc.update("""
+                                DELETE FROM event_publication t
+                                WHERE t.serialized_event::jsonb ->> 'accountId' = CAST(:account AS text)
+                                   OR t.serialized_event::jsonb ->> 'recipientAccountId' = CAST(:account AS text)
+                                """, bindings);
+                        int anonymized = jdbc.update("""
+                                UPDATE event_publication t SET serialized_event = jsonb_set(t.serialized_event::jsonb,
+                                    '{change}', redact_role_change(t.serialized_event::jsonb -> 'change', :account))::text
+                                WHERE t.serialized_event::jsonb #>> '{change,accountId}' = CAST(:account AS text)
+                                   OR t.serialized_event::jsonb #>> '{change,actorAccountId}' = CAST(:account AS text)
+                                """, bindings);
+                        return (long) removed + anonymized;
+                    }
+                },
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,

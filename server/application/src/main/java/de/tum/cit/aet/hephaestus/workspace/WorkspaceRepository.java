@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
 import java.util.Collection;
@@ -17,6 +18,25 @@ import org.springframework.stereotype.Repository;
 @Repository
 @WorkspaceAgnostic("Workspace is the tenant root - queries manage workspaces themselves")
 public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
+
+    /** A replacement source connection has an initial roster of its own. */
+    @Query(value = """
+            SELECT w.members_synced_at IS NULL OR EXISTS (
+                SELECT 1 FROM connection c WHERE c.workspace_id = w.id
+                  AND c.kind IN ('GITHUB', 'GITLAB') AND c.state IN ('ACTIVE', 'SUSPENDED')
+                  AND c.created_at > w.members_synced_at)
+            FROM workspace w WHERE w.id = :workspaceId
+            """, nativeQuery = true)
+    boolean isInitialMemberImport(@Param("workspaceId") long workspaceId);
+
+    @Query("""
+        SELECT new de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery$WorkspaceView(
+            w.workspaceSlug, w.displayName)
+        FROM Workspace w
+        WHERE w.id = :id
+          AND w.status <> de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus.PURGED
+        """)
+    Optional<AccountMembershipQuery.WorkspaceView> findNotificationViewById(@Param("id") long id);
 
     @Query("""
         SELECT new de.tum.cit.aet.hephaestus.workspace.WorkspaceListData(

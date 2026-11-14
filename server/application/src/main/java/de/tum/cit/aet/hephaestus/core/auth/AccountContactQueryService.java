@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** In-module implementation of {@link AccountContactQuery} over the {@link Account} aggregate. */
@@ -20,6 +21,17 @@ public class AccountContactQueryService implements AccountContactQuery {
 
     public AccountContactQueryService(AccountRepository accountRepository) {
         this.accountRepository = accountRepository;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean lockForNotification(long accountId, boolean addressedRecipient) {
+        return accountRepository
+                .lockStatusForShare(accountId)
+                .map(status -> status.equals(Account.Status.ACTIVE.name())
+                        || status.equals(Account.Status.UNCLAIMED.name())
+                        || (!addressedRecipient && status.equals(Account.Status.BLOCKED.name())))
+                .orElse(false);
     }
 
     @Override

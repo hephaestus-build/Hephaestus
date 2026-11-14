@@ -1,0 +1,10 @@
+[(#{email.role-changed.subject})]
+
+[(${summary})]
+
+[(${attribution})] [(${advice})]
+
+[(${reviewLabel})]: [(${workspaceSlug != null ? workspaceAddress : webappUrl})][(${reviewPath})]
+
+--
+[(#{email.footer(${webappUrl})})]

@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.event.AccountDeletionRequestedEvent;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
+import de.tum.cit.aet.hephaestus.core.event.RoleChangedEvent;
 import de.tum.cit.aet.hephaestus.testconfig.AccountFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
@@ -144,9 +145,12 @@ class AccountServiceTest extends BaseUnitTest {
         service.adminSetRole(2L, "APP_ADMIN", 1L);
 
         assertThat(account.getAppRole()).isEqualTo(Account.AppRole.APP_ADMIN);
-        verify(eventPublisher)
-                .publishEvent(new AccountSecurityChangedEvent(
-                        2L, AccountSecurityChangedEvent.Kind.APP_ROLE_CHANGED, clock.instant()));
+        ArgumentCaptor<RoleChangedEvent> change = ArgumentCaptor.forClass(RoleChangedEvent.class);
+        verify(eventPublisher).publishEvent(change.capture());
+        assertThat(change.getValue())
+                .usingRecursiveComparison()
+                .ignoringFields("changeId")
+                .isEqualTo(RoleChangedEvent.instanceAdmin(2L, false, true, 1L, clock.instant()));
         verify(accountRepository).save(account);
         // Dedicated APP_ROLE_CHANGED type so the most security-sensitive mutation stays queryable
         // on

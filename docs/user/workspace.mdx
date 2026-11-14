@@ -144,6 +144,19 @@ A workspace always keeps at least one owner.
 
 A member who leaves loses access, and their history stays recorded.
 
+When someone grants or removes your admin or owner role, Hephaestus sends you an email.
+The other owners of the workspace also get an email.
+The email names who made the change, or the sync with GitHub or GitLab, when it happened, and where to review it.
+These changes send no email:
+
+- A change that lowers your own role.
+- A member who joins or leaves without the admin or owner role.
+- Roles read from the first member list imported from each GitHub or GitLab connection, including people already in the workspace.
+
+A replacement connection starts with a silent first import too. Later grants and role changes send an email.
+
+These emails go to your verified address. You cannot turn them off.
+
 ## Practices and AI
 
 Workspace admins choose:

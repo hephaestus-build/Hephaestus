@@ -10,7 +10,7 @@ import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 /** The production template engine, assembled by hand so the unit tier renders real templates. */
 public final class EmailTestSupport {
 
-    static final String WEBAPP_URL = "https://hephaestus.example";
+    public static final String WEBAPP_URL = "https://hephaestus.example";
 
     private EmailTestSupport() {}
 

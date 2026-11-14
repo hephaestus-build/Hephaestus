@@ -54,6 +54,15 @@ public interface MembershipRepository extends JpaRepository<Membership, Membersh
     List<Long> findAdministratorAccountIds(@Param("workspaceId") long workspaceId);
 
     @Query("""
+        SELECT m.id.accountId FROM Membership m JOIN Account a ON a.id = m.id.accountId
+        WHERE m.workspace.id = :workspaceId AND m.leftAt IS NULL
+          AND m.role = de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole.OWNER
+          AND a.status = de.tum.cit.aet.hephaestus.core.auth.domain.Account.Status.ACTIVE
+        ORDER BY m.id.accountId
+        """)
+    List<Long> findOwnerAccountIds(@Param("workspaceId") long workspaceId);
+
+    @Query("""
         SELECT COUNT(m) > 0 FROM Membership m JOIN Account a ON a.id = m.id.accountId
         WHERE m.workspace.id = :workspaceId AND m.id.accountId = :accountId
           AND m.leftAt IS NULL AND m.hidden = false

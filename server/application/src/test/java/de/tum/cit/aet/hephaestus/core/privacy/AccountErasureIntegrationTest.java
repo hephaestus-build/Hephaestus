@@ -1185,6 +1185,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
                     contributor.store(),
                     contributor.export(
                             Objects.requireNonNull(otherSelection.get(contributor.store())), otherPrimaryScope));
+        allStores.seedRoleChangeNotifications(subject.account(), Objects.requireNonNull(otherAccount.getId()));
         long administratorId = Objects.requireNonNull(administrator.getId());
         var preview = personData.preview(administratorId, targetAccount.getId(), List.of());
         UUID requestId = preview.request().getId();

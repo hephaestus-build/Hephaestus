@@ -10,7 +10,7 @@ import tools.jackson.databind.JsonNode;
  * @param workspaceId the workspace the effect belongs to; NULL only for an {@link ActionKind#instanceLevel()} kind
  * @param laneKey actions with the same key run one at a time, in enqueue order, such as every write to one comment
  * @param idempotencyKey the natural key of the effect; enqueuing it again returns the existing action
- * @param payload everything the adapter needs, frozen now; it holds personal data only for {@code subjectAccountId}
+ * @param payload everything the adapter needs, frozen now; email notices resolve names and addresses at send time
  * @param subjectAccountId the account the effect addresses, so its erasure cancels the action
  * @param maxAttempts the attempts before the action ends {@link ActionStopReason#ATTEMPTS_EXHAUSTED}
  * @param expiresAt when an action that has not started is no longer worth sending

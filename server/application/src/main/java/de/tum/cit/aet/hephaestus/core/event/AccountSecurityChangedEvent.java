@@ -7,7 +7,6 @@ public record AccountSecurityChangedEvent(long accountId, Kind kind, Instant occ
     public enum Kind {
         IDENTITY_LINKED,
         IDENTITY_UNLINKED,
-        APP_ROLE_CHANGED,
         PASSKEY_CHANGED,
         ACCOUNT_UNBLOCKED
     }
