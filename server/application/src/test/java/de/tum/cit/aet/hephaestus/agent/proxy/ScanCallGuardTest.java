@@ -80,7 +80,7 @@ class ScanCallGuardTest extends BaseUnitTest {
     private final ReviewJob job = RuntimeReviewTestData.job();
     private ReviewSnapshot scan;
     private static final PracticeReviewProperties PRACTICE_REVIEW =
-            new PracticeReviewProperties(false, 15, 5, null, 36, 48_000, 1_152_000, Duration.ofMinutes(10));
+            new PracticeReviewProperties(false, 15, 5, null, 36, 48_000, 342_000, Duration.ofMinutes(10));
     private final ScanCallGuard guard = new ScanCallGuard(
             jobs,
             runs,

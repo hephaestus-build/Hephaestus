@@ -31,7 +31,6 @@ public class ReviewMethodVerifier {
             options.put("temperature", nodes.numberNode(properties.samplingTemperature()));
         options.put("practiceModelCalls", nodes.numberNode(properties.practiceModelCalls()));
         options.put("practiceOutputTokens", nodes.numberNode(properties.practiceOutputTokens()));
-        options.put("practiceInputTokens", nodes.numberNode(properties.practiceInputTokens()));
         return new FrozenModel(
                 ref.scope().name().toLowerCase(Locale.ROOT) + ":" + ref.modelId(),
                 model.apiProtocol(),

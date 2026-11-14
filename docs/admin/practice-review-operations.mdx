@@ -97,7 +97,7 @@ A deadline stops active sessions and leaves queued practices `NOT_REACHED` with 
 The runner retains completed results for admission.
 The debug report and logs include the most sessions that ran at once, and the time for each practice.
 
-`PRACTICE_REVIEW_PRACTICE_MODEL_CALLS` (default 36), `PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS` (default 48000) and `PRACTICE_REVIEW_PRACTICE_INPUT_TOKENS` (default 1152000) set what each practice can spend.
+`PRACTICE_REVIEW_PRACTICE_MODEL_CALLS` (default 36), `PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS` (default 48000) and `PRACTICE_REVIEW_PRACTICE_INPUT_TOKENS` (default 342000) set what each practice can spend.
 Input tokens count every prompt that the practice's model calls send, cached or not.
 A practice that spends one of these budgets ends as `NOT_REACHED` with reason `BUDGET`, and the other practices go on.
 The model proxy also holds each review attempt to twice that budget for all its practices together.

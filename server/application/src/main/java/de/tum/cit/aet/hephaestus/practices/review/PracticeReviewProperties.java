@@ -37,5 +37,5 @@ public record PracticeReviewProperties(
         @Nullable @DecimalMin("0.0") @DecimalMax("2.0") Double samplingTemperature,
         @Min(1) @DefaultValue("36") int practiceModelCalls,
         @Min(1000) @DefaultValue("48000") int practiceOutputTokens,
-        @Min(10000) @DefaultValue("1152000") int practiceInputTokens,
+        @Min(10000) @DefaultValue("342000") int practiceInputTokens,
         @DurationMin(minutes = 1) @DefaultValue("PT10M") Duration compositionTimeout) {}
