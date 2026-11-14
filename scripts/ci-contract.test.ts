@@ -6776,16 +6776,16 @@ void test("each cancel worker calls the one cancel workflow, which runs only gra
 	assert.deepEqual(cancel.permissions, {});
 	const jobs = Object.values(asRecord(cancel.jobs, "cancel jobs"));
 	assert.equal(jobs.length, 1);
-	const job = asRecord(jobs[0], "cancel job");
-	assert.equal(job["runs-on"], "ubuntu-slim");
+	const cancelJob = asRecord(jobs[0], "cancel job");
+	assert.equal(cancelJob["runs-on"], "ubuntu-slim");
 	assert.equal(
-		job.if,
+		cancelJob.if,
 		`\${{ always() }}`,
 		"the caller decided; an implicit success() must not skip",
 	);
-	assert.equal(job.needs, undefined);
-	assert.deepEqual(job.permissions, { actions: "write" });
-	const steps = asArray(job.steps, "cancel steps");
+	assert.equal(cancelJob.needs, undefined);
+	assert.deepEqual(cancelJob.permissions, { actions: "write" });
+	const steps = asArray(cancelJob.steps, "cancel steps");
 	assert.equal(steps.length, 1);
 	const cancelStep = asRecord(steps[0], "cancel step");
 	assert.equal(cancelStep.run, 'gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"');
