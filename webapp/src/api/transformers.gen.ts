@@ -152,6 +152,7 @@ import type {
 	RemoveLabelFromTeamResponse,
 	RemoveResultMarkResponse,
 	ReorderPracticeGroupsResponse,
+	ReplaceOutlineTokenResponse,
 	ReplaceOwnFeedbackResponseResponse,
 	ReplayConsumerDeadLetterResponse,
 	ReplayInstallationDeadLetterResponse,
@@ -1164,6 +1165,13 @@ const outlineTokenStatusSchemaResponseTransformer = (data: any) => {
 export const getOutlineTokenStatusResponseTransformer = async (
 	data: any,
 ): Promise<GetOutlineTokenStatusResponse> => {
+	data = outlineTokenStatusSchemaResponseTransformer(data);
+	return data;
+};
+
+export const replaceOutlineTokenResponseTransformer = async (
+	data: any,
+): Promise<ReplaceOutlineTokenResponse> => {
 	data = outlineTokenStatusSchemaResponseTransformer(data);
 	return data;
 };

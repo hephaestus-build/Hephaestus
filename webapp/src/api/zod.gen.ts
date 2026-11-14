@@ -3287,6 +3287,13 @@ export const zReorderRequest = z.object({
 		.max(10000),
 });
 
+/**
+ * A new API key of the connected Outline team
+ */
+export const zReplaceOutlineTokenRequest = z.object({
+	token: z.string().min(0).max(512),
+});
+
 export const zResearchConsent = z.object({
 	granted: z.boolean(),
 	noticeVersion: z.string(),

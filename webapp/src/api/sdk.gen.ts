@@ -297,6 +297,7 @@ export { removeResultMark } from "./sdk/removeResultMark.gen.js";
 export { removeStoppedGitLabProject } from "./sdk/removeStoppedGitLabProject.gen.js";
 export { reorderCatalogGroups } from "./sdk/reorderCatalogGroups.gen.js";
 export { reorderPracticeGroups } from "./sdk/reorderPracticeGroups.gen.js";
+export { replaceOutlineToken } from "./sdk/replaceOutlineToken.gen.js";
 export { replaceOwnFeedbackResponse } from "./sdk/replaceOwnFeedbackResponse.gen.js";
 export { replayConsumerDeadLetter } from "./sdk/replayConsumerDeadLetter.gen.js";
 export { replayInstallationDeadLetter } from "./sdk/replayInstallationDeadLetter.gen.js";

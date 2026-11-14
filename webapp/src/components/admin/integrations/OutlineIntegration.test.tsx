@@ -56,7 +56,7 @@ function OutlineIntegrationTestContainer() {
 			{outline.tokenStatusError && (
 				<QueryErrorAlert
 					error={outline.tokenStatusError}
-					title="We could not verify the Outline token"
+					title="We could not verify the Outline key"
 					onRetry={outline.retryTokenStatus}
 				/>
 			)}
@@ -387,7 +387,7 @@ describe("Outline integration — token lifecycle", () => {
 
 		renderContainer();
 
-		await screen.findByText(/we could not verify the outline token/iu);
+		await screen.findByText(/we could not verify the outline key/iu);
 		screen.getByRole("button", { name: /retry/iu });
 	});
 
@@ -402,8 +402,68 @@ describe("Outline integration — token lifecycle", () => {
 
 		renderContainer();
 
-		await screen.findByText(/outline no longer accepts this token/iu);
-		expect(screen.queryByText(/outline accepts this token/iu)).toBeNull();
+		await screen.findByText(/outline no longer accepts this key/iu);
+		expect(screen.queryByText(/outline accepts this key/iu)).toBeNull();
+	});
+
+	it("replaces the key on the connection it has, without a disconnect", async () => {
+		const collectionsRef = { current: [engineering] as unknown[] };
+		useConnectedHandlers(collectionsRef);
+		const replaced: unknown[] = [];
+		const statusChanges: unknown[] = [];
+		server.use(
+			http.put("*/workspaces/demo/connections/outline/token", async ({ request }) => {
+				replaced.push(await request.json());
+				const replacedToken = { ...healthyToken, last4: "c0de" };
+				server.use(
+					http.get("*/workspaces/demo/connections/outline/token", () =>
+						HttpResponse.json(replacedToken),
+					),
+				);
+				return HttpResponse.json(replacedToken);
+			}),
+			http.patch("*/workspaces/demo/connections/7/status", async ({ request }) => {
+				statusChanges.push(await request.json());
+				return HttpResponse.json(activeOutlineConnection);
+			}),
+		);
+
+		renderContainer();
+
+		await userEvent.type(await screen.findByLabelText("Replace API key"), "ol_api_new");
+		await userEvent.click(screen.getByRole("button", { name: "Replace key" }));
+
+		await screen.findByText(/…c0de/u);
+		expect(replaced).toStrictEqual([{ token: "ol_api_new" }]);
+		expect(statusChanges).toStrictEqual([]);
+		expect(screen.getByLabelText<HTMLInputElement>("Replace API key").value).toBe("");
+	});
+
+	it("keeps the key it has and says why when the server refuses the new one", async () => {
+		const collectionsRef = { current: [engineering] as unknown[] };
+		useConnectedHandlers(collectionsRef);
+		server.use(
+			http.put("*/workspaces/demo/connections/outline/token", () =>
+				HttpResponse.json(
+					{
+						title: "Bad Request",
+						status: 400,
+						detail: "This key belongs to another Outline team. Use a key of the connected team.",
+					},
+					{ status: 400 },
+				),
+			),
+		);
+
+		renderContainer();
+
+		await userEvent.type(await screen.findByLabelText("Replace API key"), "ol_api_foreign");
+		await userEvent.click(screen.getByRole("button", { name: "Replace key" }));
+
+		await screen.findByText(
+			"This key belongs to another Outline team. Use a key of the connected team.",
+		);
+		screen.getByText(/…9f2c/u);
 	});
 
 	it("names the token and its last4 when Outline lets the key list itself", async () => {
@@ -412,7 +472,7 @@ describe("Outline integration — token lifecycle", () => {
 
 		renderContainer();
 
-		await screen.findByText(/outline accepts this token/iu);
+		await screen.findByText(/outline accepts this key/iu);
 		screen.getByText(/Hephaestus mirror/u);
 		screen.getByText(/…9f2c/u);
 	});

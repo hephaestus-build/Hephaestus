@@ -20,6 +20,7 @@ const meta = {
 		connected: false,
 		onConnect: fn(),
 		onDisconnect: fn(),
+		onReplaceToken: fn(async () => true),
 	},
 } satisfies Meta<typeof OutlineConnectCard>;
 
@@ -115,7 +116,7 @@ export const Connected: Story = {
 	},
 	play: async ({ canvas }) => {
 		canvas.getByText(/outline connected · acme wiki/iu);
-		canvas.getByText(/outline accepts this token/iu);
+		canvas.getByText(/outline accepts this key/iu);
 		canvas.getByText(/hephaestus mirror/iu);
 		canvas.getByText(/…9f2c/u);
 		canvas.getByText(/expires in \d+ days \(on /iu);
@@ -149,13 +150,14 @@ export const TokenExpiringSoon: Story = {
 		tokenStatus: { ...healthyToken, expiresAt: daysAfter(5) },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/this api key expires in [45] days/iu);
-		canvas.getByText(/cannot be rotated through the api/iu);
-		canvas.getByText(/settings → api keys/iu);
+		const alert = within(canvas.getByRole("alert"));
+		alert.getByText(/this api key expires in [45] days/iu);
+		alert.getByText(/cannot be rotated through the api/iu);
+		alert.getByText(/settings → api keys/iu);
 	},
 };
 
-/** Outline rejects the stored token — the mirror is dead until an admin reconnects with a new key. */
+/** Outline rejects the stored token: the mirror waits until an admin enters a new key, which keeps it. */
 export const TokenRejected: Story = {
 	args: {
 		connected: true,
@@ -163,8 +165,54 @@ export const TokenRejected: Story = {
 		tokenStatus: { accepted: false },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/outline no longer accepts this token\. reconnect with a new one/iu);
+		canvas.getByText(/outline no longer accepts this key/iu);
+		canvas.getByText(/your collections and mirrored documents stay/iu);
 		await expect(canvas.queryByText(/expires in/iu)).not.toBeInTheDocument();
+	},
+};
+
+/** A new key replaces the stored one on the same connection; nothing is disconnected. */
+export const ReplaceKey: Story = {
+	args: {
+		connected: true,
+		connectionLabel: "Acme Wiki",
+		tokenStatus: healthyToken,
+	},
+	play: async ({ args, canvas }) => {
+		const replace = canvas.getByRole("button", { name: "Replace key" });
+		await expect(replace).toBeDisabled();
+		await userEvent.type(canvas.getByLabelText("Replace API key"), "ol_api_new");
+		await userEvent.click(replace);
+		await expect(args.onReplaceToken).toHaveBeenCalledWith("ol_api_new");
+		await expect(args.onDisconnect).not.toHaveBeenCalled();
+	},
+};
+
+/** The replacement is under way: the field and the button wait for its answer. */
+export const ReplacingKey: Story = {
+	args: {
+		connected: true,
+		connectionLabel: "Acme Wiki",
+		tokenStatus: healthyToken,
+		isReplacingToken: true,
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Replacing key…" })).toBeDisabled();
+		await expect(canvas.getByLabelText("Replace API key")).toBeDisabled();
+	},
+};
+
+/** The server refused the key and says why, under the field. */
+export const ReplaceKeyRefused: Story = {
+	args: {
+		connected: true,
+		connectionLabel: "Acme Wiki",
+		tokenStatus: healthyToken,
+		replaceTokenError: "This key belongs to another Outline team. Use a key of the connected team.",
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText(/belongs to another outline team/iu)).toBeVisible();
+		await expect(canvas.getByLabelText("Replace API key")).toHaveAttribute("aria-invalid", "true");
 	},
 };
 
@@ -179,7 +227,7 @@ export const TokenMetadataUnavailable: Story = {
 		tokenStatus: { accepted: true },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText(/outline accepts this token/iu);
+		canvas.getByText(/outline accepts this key/iu);
 		await expect(canvas.queryByText(/never expires/iu)).not.toBeInTheDocument();
 		await expect(canvas.queryByText(/expires in/iu)).not.toBeInTheDocument();
 		await expect(canvas.queryByText(/last used/iu)).not.toBeInTheDocument();
@@ -217,7 +265,10 @@ export const ConnectedButSuspended: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByText(/outline suspended · acme wiki/iu);
 		// The token panel still reports the stored key even while syncing is paused.
-		canvas.getByText(/outline accepts this token/iu);
+		canvas.getByText(/outline accepts this key/iu);
+		// The server stores a key only on an active connection, so the card says what comes first.
+		canvas.getByText("To replace the API key, resume the Outline connection first.");
+		await expect(canvas.queryByLabelText("Replace API key")).toBeNull();
 	},
 };
 

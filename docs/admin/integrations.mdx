@@ -144,38 +144,27 @@ A workspace admin cannot approve a new Outline operator through its URL.
 
 ### Replace an Outline key without erasing the mirror
 
-The current UI has no key-replacement form for an existing connection.
-**Disconnect Outline** erases the mirror.
+Do not use **Disconnect Outline** to change the key. Disconnect erases the mirror.
 
 :::caution[CAUTION: Outline key secrecy and connection identity]
 Keep the key out of shell history, logs, and support tickets.
-Use the same origin and a key that belongs to the same Outline team.
-Do not change the origin or team during key rotation.
+Use a key that belongs to the same Outline team as the connected one.
+Hephaestus refuses a key of another team.
 :::
 
-1. To keep the mirror, create a valid API key in Outline.
-2. As a workspace admin, send this authenticated request to the application server's existing connection API with normal CSRF protection:
+1. In Outline, create an API key under **Settings → API Keys**.
+2. Open **Administration → Integrations → Outline**.
+3. Enter the key in **Replace API key**, and select **Replace key**.
+4. Check that the card shows **Outline accepts this key**.
+5. Use **Sync now** to verify that the collections refresh.
+6. Revoke the old key in Outline only after that check succeeds.
 
-   ```http
-   POST /api/workspaces/{workspaceSlug}/connections
-   Content-Type: application/json
+The connection, its collection registrations, its mirrored documents, and its change subscription stay.
 
-   {
-     "kind": "OUTLINE",
-     "userInput": {
-       "server_url": "https://wiki.example.com",
-       "token": "<new API key>"
-     }
-   }
-   ```
-
-3. Check that the response's connection ID matches the existing connection.
-4. Check webhook registration.
-5. Use **Sync now** to verify that collections refresh.
-6. Revoke the old key only after that check succeeds.
-
-The API validates the key and updates the connection's credentials without deletion of documents or collection registrations.
-It resets connection configuration, including subscription metadata.
+GitHub, GitLab, and Slack also keep their data when a credential changes.
+A GitHub App renews its tokens by itself.
+A GitHub or GitLab personal access token uses **Replace token**, as [Replace a refused token](/user/workspace#replace-a-refused-token) describes.
+Slack uses **Reconnect Slack**.
 
 ## Workspace roles from GitHub and GitLab
 
