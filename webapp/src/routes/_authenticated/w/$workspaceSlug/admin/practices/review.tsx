@@ -5,7 +5,7 @@ import {
 	useQuery,
 	useQueryClient,
 } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 import {
 	createReviewBatchMutation,
@@ -105,7 +105,6 @@ const PICKER_PAGE_SIZE = 100;
 function ReviewRoute() {
 	const { workspaceSlug } = Route.useParams();
 	const { section, overrides } = Route.useSearch();
-	const navigate = useNavigate({ from: Route.fullPath });
 	const setSearch = useSearchState();
 
 	const readiness = useReviewReadiness(workspaceSlug);
@@ -115,12 +114,10 @@ function ReviewRoute() {
 		<ReviewPage
 			section={section ?? DEFAULT_REVIEW_SECTION}
 			onSectionChange={(next) => {
-				void navigate({
-					search: (previous) => ({
-						...previous,
-						section: next === DEFAULT_REVIEW_SECTION ? undefined : next,
-					}),
-				});
+				void setSearch((previous) => ({
+					...previous,
+					section: next === DEFAULT_REVIEW_SECTION ? undefined : next,
+				}));
 			}}
 			readiness={readiness}
 			readinessAction={

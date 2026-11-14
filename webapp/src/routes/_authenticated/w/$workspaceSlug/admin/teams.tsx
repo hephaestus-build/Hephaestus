@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { toast } from "@/lib/toast";
 
@@ -22,6 +22,7 @@ import { queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
 import { useWorkspaceAccess } from "@/hooks/use-workspace-access";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
+import { useSearchState } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 import { NoWorkspaceContainer } from "@/routes/-NoWorkspaceContainer";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
@@ -37,7 +38,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/tea
 function AdminTeamsContainer() {
 	const queryClient = useQueryClient();
 	const search = Route.useSearch();
-	const navigate = useNavigate({ from: Route.fullPath });
+	const setSearch = useSearchState();
 	const {
 		adminWorkspaceSlug: workspaceSlug,
 		isLoading: isWorkspaceLoading,
@@ -251,7 +252,7 @@ function AdminTeamsContainer() {
 			}
 			search={search.q ?? ""}
 			onSearchChange={(q) => {
-				void navigate({ search: { q: q || undefined }, replace: true });
+				void setSearch((previous) => ({ ...previous, q: q || undefined }), { replace: true });
 			}}
 			onRetry={retry}
 			onHideTeam={handleHideTeam}

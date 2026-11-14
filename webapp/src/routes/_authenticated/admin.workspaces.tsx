@@ -13,6 +13,7 @@ import { PageLayout } from "@/components/layout/PageLayout";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Label } from "@/components/ui/label";
 import { instanceAdminHead } from "@/lib/page-title";
+import { useSearchState } from "@/lib/search-params";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
 export const Route = createFileRoute("/_authenticated/admin/workspaces")({
@@ -23,6 +24,7 @@ export const Route = createFileRoute("/_authenticated/admin/workspaces")({
 
 function AdminWorkspacesPage() {
 	const navigate = useNavigate({ from: Route.fullPath });
+	const setSearch = useSearchState();
 	const search = Route.useSearch().q ?? "";
 	const deferredSearch = useDeferredValue(search);
 
@@ -79,8 +81,7 @@ function AdminWorkspacesPage() {
 					placeholder="Search by name, short name, owner, provider, or status…"
 					value={search}
 					onChange={(event) => {
-						void navigate({
-							search: { q: event.target.value || undefined },
+						void setSearch((previous) => ({ ...previous, q: event.target.value || undefined }), {
 							replace: true,
 						});
 					}}

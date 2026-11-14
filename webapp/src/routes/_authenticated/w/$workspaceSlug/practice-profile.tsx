@@ -594,6 +594,7 @@ function OwnObservationDetail({
 				practicePage: (feedbackId) => (
 					<Link
 						to="."
+						resetScroll={false}
 						search={(previous) => ({
 							...previous,
 							...observationLinkSearch(result.data),

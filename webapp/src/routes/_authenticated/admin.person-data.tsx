@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
@@ -23,6 +23,7 @@ import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { saveBlobFile } from "@/lib/download";
 import { instanceAdminHead } from "@/lib/page-title";
 import { type StepUpChallenge, stepUpChallengeOf } from "@/lib/problem-detail";
+import { useSearchState } from "@/lib/search-params";
 
 export const Route = createFileRoute("/_authenticated/admin/person-data")({
 	head: instanceAdminHead("Person data"),
@@ -32,7 +33,7 @@ export const Route = createFileRoute("/_authenticated/admin/person-data")({
 
 function PersonDataRoute() {
 	const { requestId } = Route.useSearch();
-	const navigate = useNavigate({ from: Route.fullPath });
+	const setSearch = useSearchState();
 	const [selection, setSelection] = useState<PersonSelectionInput>({
 		accountId: "",
 		identities: [],
@@ -57,7 +58,7 @@ function PersonDataRoute() {
 		...adminPreviewPersonDataMutation(),
 		onError,
 		onSuccess: (data) => {
-			void navigate({ search: { requestId: data.id } });
+			void setSearch(() => ({ requestId: data.id }));
 		},
 	});
 	const erase = useMutation({

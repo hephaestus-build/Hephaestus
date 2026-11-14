@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { ShieldCheck, ShieldOff, UserCog, Users } from "lucide-react";
 import {
 	useDeferredValue,
@@ -46,6 +46,7 @@ import { Label } from "@/components/ui/label";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { instanceAdminHead } from "@/lib/page-title";
 import { problemDetailOf, type StepUpChallenge, stepUpChallengeOf } from "@/lib/problem-detail";
+import { useSearchState } from "@/lib/search-params";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { infiniteListState } from "@/runtime/tanstack-query/infinite-list";
 import { offsetPageParams } from "@/runtime/tanstack-query/list-pages";
@@ -64,7 +65,7 @@ type DialogTarget = { user: AdminAccountView } | null;
 function AdminUsersPage() {
 	const queryClient = useQueryClient();
 	const { getUserId } = useAuth();
-	const navigate = useNavigate({ from: Route.fullPath });
+	const setSearch = useSearchState();
 	const search = Route.useSearch().q ?? "";
 	const userId = getUserId();
 	const currentUserId = userId == null ? undefined : Number(userId);
@@ -268,8 +269,7 @@ function AdminUsersPage() {
 					placeholder="Search by name, email, role, or status…"
 					value={search}
 					onChange={(event) => {
-						void navigate({
-							search: { q: event.target.value || undefined },
+						void setSearch((previous) => ({ ...previous, q: event.target.value || undefined }), {
 							replace: true,
 						});
 					}}

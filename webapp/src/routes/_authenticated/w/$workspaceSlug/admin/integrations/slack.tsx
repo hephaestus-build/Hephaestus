@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSlackIntegration } from "@/hooks/use-slack-integration";
 import { workspaceAdminHead } from "@/lib/page-title";
+import { useSearchState } from "@/lib/search-params";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/integrations/slack")({
 	head: workspaceAdminHead("Slack"),
@@ -36,7 +37,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/int
 function SlackIntegrationPage() {
 	const { workspaceSlug: slug } = Route.useParams();
 	const { status, reason, description, repairConnection } = Route.useSearch();
-	const navigate = Route.useNavigate();
+	const setSearch = useSearchState();
 	useEffect(() => {
 		if (status === undefined) {
 			return;
@@ -49,8 +50,8 @@ function SlackIntegrationPage() {
 				description: hasText(description) ? description : reason,
 			});
 		}
-		void navigate({ search: { repairConnection }, replace: true });
-	}, [status, reason, description, repairConnection, navigate]);
+		void setSearch(() => ({ repairConnection }), { replace: true });
+	}, [status, reason, description, repairConnection, setSearch]);
 	const slack = useSlackIntegration(slug);
 	const repairId = repairConnection ?? slack.repairConnectionId;
 	const { hasConnection } = slack;

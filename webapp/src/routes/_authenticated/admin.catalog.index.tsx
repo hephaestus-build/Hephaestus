@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, retainSearchParams, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, retainSearchParams } from "@tanstack/react-router";
 import { LibraryBig, Plus } from "lucide-react";
 import type { ReactNode } from "react";
 import { toast } from "@/lib/toast";
@@ -44,6 +44,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { filedUnder, pathString, usePendingMutationIds } from "@/hooks/use-pending-mutation-ids";
 import { instanceAdminHead } from "@/lib/page-title";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
+import { useSearchState } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 
 import { CatalogGroupCreateLevel } from "./-CatalogGroupCreateLevel";
@@ -90,7 +91,7 @@ function availabilityMessage(practice: CatalogPractice, groups: Catalog["groups"
 }
 
 function AdminCatalogPage() {
-	const navigate = useNavigate({ from: Route.fullPath });
+	const setSearch = useSearchState();
 	const { detail, ...search } = Route.useSearch();
 	const queryClient = useQueryClient();
 	const detailStack = parseDetailStack(detail, CATALOG_LEVEL_KINDS);
@@ -251,7 +252,7 @@ function AdminCatalogPage() {
 				pendingGroupSlugs={pendingGroupSlugs}
 				writePending={writePending}
 				onSearchChange={(next: CatalogSearch) => {
-					void navigate({ search: (previous) => ({ ...previous, ...next }), replace: true });
+					void setSearch((previous) => ({ ...previous, ...next }), { replace: true });
 				}}
 				onPracticeStatusChange={(practice: CatalogPractice, offered) => {
 					updatePracticeStatus.mutate(

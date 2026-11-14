@@ -241,6 +241,12 @@
 			"rules": { "hephaestus/focus-outline-in-forced-colors": "error" }
 		},
 		{
+			// A test drives the router as a step of its scenario, where no reader scrolls.
+			"files": ["src/**"],
+			"excludeFiles": ["**/*.test.ts", "**/*.test.tsx"],
+			"rules": { "hephaestus/same-page-search-keeps-scroll": "error" }
+		},
+		{
 			// A registry install keeps upstream's classes: `webapp/AGENTS.md` § `src/components/ui/`.
 			"files": ["src/components/ui/**"],
 			"rules": {
