@@ -21,6 +21,8 @@ Set it on the meta to cover a whole file, or on the one story that needs it. Pai
 that re-vendoring overwrites, so a story per primitive documents upstream's API as if it were ours. Do
 not open that as work.
 
+`gate:stories` enforces the loading, error and empty part (`scripts/check-story-states.ts`). `webapp/AGENTS.md` § Component API and Storybook owns its rule.
+
 ## The Controls must drive the real component
 
 - **A `render` that ignores `args` disables the Controls panel**, which is most of a story's

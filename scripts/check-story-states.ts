@@ -1,28 +1,14 @@
 /**
- * A component whose props carry a loading, error, or empty state ships a story for each state it
- * can show (AGENTS.md § Hit every surface, UI states). The gate names the three states for the
- * webapp's components and fails when a sibling `*.stories.tsx` has no story of that name.
+ * A component whose props carry a loading, error or empty state ships a story that sets each state it
+ * can show (AGENTS.md § Hit every surface, UI states). `webapp/AGENTS.md` § Component API and
+ * Storybook owns the rule: which props carry a state, and when a story covers it.
  *
- * A data-region component is a PascalCase `.tsx` file under `webapp/src/components/` (not `ui/`) that
- * exports a component whose props type, read from the declarations alone, carries:
- *
- * - **loading**: a member named `isLoading` or `loading`, or a `status`/`state` of `"loading"`;
- * - **error**: a member named `error` or `isError`, one that ends in `Error` (`serverError`), or a
- *   `status`/`state` of `"error"`;
- * - **empty**: a `status`/`state` of `"empty"`.
- *
- * An empty story is required only where the props name an empty state, because a story renders from
- * props, and a detail view with no list has none to render. A component with no loading signal needs
- * no loading story for the same reason. `isPending` is not a signal: on a form or a dialog it means
- * that a submit is in flight.
- *
- * The check reads declarations with Oxc, as the sibling gates do, and follows a props type through
- * local aliases, interfaces, intersections, unions, generic arguments, and relative or `@/` imports.
- * It descends into a member only when the member is named `state` or `status`, so a nested domain
- * object cannot add a signal. Generated wire types (`@/api/`) are not props and are not read.
- *
- * A component that cannot show a state from its props gets no story for it and no entry anywhere:
- * the gate asks only for what the props can drive.
+ * The check reads declarations with Oxc, as the sibling gates do. On the component side, it follows a
+ * props type through local aliases, interfaces, intersections, unions, generic arguments and relative
+ * or `@/` imports. It descends into a member only when the member is named `state` or `status`, so a
+ * nested domain object cannot add a signal. Generated wire types (`@/api/`) are not read. On the story
+ * side, it reads the properties and JSX attributes that each exported story and the meta set, at any
+ * depth, and follows the module constants and stories that a story references or spreads.
  */
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -48,6 +34,8 @@ const LITERALS: Record<State, readonly string[]> = {
 	error: ["error"],
 	empty: ["empty"],
 };
+/** A member that ends in `Error`, such as `serverError`, carries an error state too. */
+const ERROR_MEMBER = /^[a-z]+Error$/u;
 /** Members whose type is a state, so a nested domain object cannot add a signal. */
 const STATE_MEMBERS = new Set(["state", "status"]);
 
@@ -221,10 +209,7 @@ class Program {
 				continue;
 			}
 			for (const state of STATES) {
-				if (
-					PROP_NAMES[state].includes(name) ||
-					(state === "error" && /^[a-z]+Error$/u.test(name))
-				) {
+				if (PROP_NAMES[state].includes(name) || (state === "error" && ERROR_MEMBER.test(name))) {
 					found.add(state);
 				}
 			}
@@ -320,57 +305,126 @@ function exportedComponents(declaration: Node | undefined): readonly Node[] {
 	});
 }
 
-/** Words of a PascalCase export name: `LoadFailed` is `load`, `failed`. */
-const words = (name: string): string[] =>
-	(name.match(/[A-Z]+(?![a-z])|[A-Z]?[a-z]+|\d+/gu) ?? []).map((word) => word.toLowerCase());
+/** A value that sets a state: anything but `false`, `null`, `undefined` and an absent value. */
+function setsValue(value: Node | undefined): boolean {
+	if (value === undefined) {
+		return false;
+	}
+	if (value.type === "Literal") {
+		return value.value !== false && value.value !== null;
+	}
+	return !(value.type === "Identifier" && value.name === "undefined");
+}
 
-const hasWord = (storyWords: readonly string[], candidates: readonly string[]): boolean =>
-	storyWords.some((word) => candidates.includes(word));
+/** The state that one property or JSX attribute of a story sets, by the rules that read the props. */
+function stateOf(name: string, value: Node | undefined, attribute: boolean): State | undefined {
+	// A bare JSX attribute (`<Table isLoading />`) is `true`.
+	const bare = attribute && value === undefined;
+	if (PROP_NAMES.loading.includes(name)) {
+		return bare || (value?.type === "Literal" && value.value === true) ? "loading" : undefined;
+	}
+	if (PROP_NAMES.error.includes(name) || ERROR_MEMBER.test(name)) {
+		return bare || setsValue(value) ? "error" : undefined;
+	}
+	if (STATE_MEMBERS.has(name) && value?.type === "Literal" && typeof value.value === "string") {
+		return STATES.find((state) => LITERALS[state].includes(String(value.value)));
+	}
+	return undefined;
+}
 
-const FAILURE_WORDS = [
-	"error",
-	"errors",
-	"fail",
-	"fails",
-	"failed",
-	"failing",
-	"failure",
-	"failures",
-	"invalid",
-	"refused",
-	"rejected",
-	"rejection",
-	"unavailable",
-];
-/** A name that is about loading the first time; "LoadingMore" and "LoadFailed" are other states. */
-const STORY_STATES: Record<State, (storyWords: readonly string[]) => boolean> = {
-	loading: (storyWords) =>
-		hasWord(storyWords, ["loading", "load", "loads", "skeleton"]) &&
-		!hasWord(storyWords, [...FAILURE_WORDS, "more"]),
-	error: (storyWords) => hasWord(storyWords, FAILURE_WORDS),
-	empty: (storyWords) => hasWord(storyWords, ["empty", "none"]),
-};
-
-/** The states that the exported story names cover. */
-async function storyStates(storyFile: string, program: Program): Promise<ReadonlySet<State>> {
-	const module = await program.module(storyFile);
-	const covered = new Set<State>();
-	for (const statement of list(module?.src.body)) {
-		const declared = node(statement.declaration);
-		const names =
-			statement.type === "ExportNamedDeclaration" && declared?.type === "VariableDeclaration"
-				? list(declared.declarations).map((declarator) => nameOf(declarator.id))
-				: [];
-		for (const name of names) {
-			if (name === undefined) {
-				continue;
+/**
+ * The states that a story's own code sets: every property and JSX attribute in its args and its
+ * `render`, at any depth. `references` collects the names it uses, so the module constants and
+ * stories it spreads or passes count too. A story's name decides nothing.
+ */
+function setStates(root: Node, references: Set<string>): Set<State> {
+	const found = new Set<State>();
+	const visit = (value: unknown): void => {
+		if (Array.isArray(value)) {
+			value.forEach(visit);
+			return;
+		}
+		const current = node(value);
+		if (current === undefined) {
+			return;
+		}
+		if (current.type === "Property") {
+			const key = node(current.key);
+			const name = nameOf(key) ?? (typeof key?.value === "string" ? key.value : undefined);
+			const state = name === undefined ? undefined : stateOf(name, node(current.value), false);
+			if (state !== undefined) {
+				found.add(state);
 			}
-			for (const state of STATES) {
-				if (STORY_STATES[state](words(name))) {
-					covered.add(state);
-				}
+		} else if (current.type === "JSXAttribute") {
+			const name = asString(asRecord(current.name)?.name);
+			const raw = node(current.value);
+			const value = raw?.type === "JSXExpressionContainer" ? node(raw.expression) : raw;
+			const state = name === undefined ? undefined : stateOf(name, value, true);
+			if (state !== undefined) {
+				found.add(state);
+			}
+		} else if (current.type === "Identifier" && typeof current.name === "string") {
+			// `args: LOADING_ARGS`, `...Loading` or `...Loading.args`: a module constant's states count too.
+			references.add(current.name);
+		}
+		for (const [key, child] of Object.entries(current)) {
+			const skipped =
+				key === "type" ||
+				key === "start" ||
+				key === "end" ||
+				// A property's key and a member's name are names, not references.
+				(current.type === "Property" && key === "key") ||
+				(current.type === "MemberExpression" && key === "property");
+			if (!skipped) {
+				visit(child);
 			}
 		}
+	};
+	visit(root);
+	return found;
+}
+
+/** The states that the sibling stories set, through their args, their `render` or the meta's args. */
+async function storyStates(storyFile: string, program: Program): Promise<ReadonlySet<State>> {
+	const module = await program.module(storyFile);
+	// Every module constant, exported story or not, so that a story's reference to one resolves.
+	const constants = new Map<string, { states: Set<State>; references: Set<string> }>();
+	const exported: string[] = [];
+	const covered = new Set<State>();
+	for (const statement of list(module?.src.body)) {
+		const declared =
+			statement.type === "ExportNamedDeclaration" ? node(statement.declaration) : statement;
+		if (declared?.type !== "VariableDeclaration") {
+			continue;
+		}
+		for (const declarator of list(declared.declarations)) {
+			const name = nameOf(declarator.id);
+			const init = node(declarator.init);
+			if (name === undefined || init === undefined) {
+				continue;
+			}
+			const references = new Set<string>();
+			constants.set(name, { states: setStates(init, references), references });
+			// The meta's args are every story's defaults.
+			if (name === "meta" || statement.type === "ExportNamedDeclaration") {
+				exported.push(name);
+			}
+		}
+	}
+	const resolve = (name: string, seen: Set<string>): Set<State> => {
+		const constant = constants.get(name);
+		if (constant === undefined || seen.has(name)) {
+			return new Set();
+		}
+		seen.add(name);
+		const states = new Set(constant.states);
+		for (const reference of constant.references) {
+			resolve(reference, seen).forEach((state) => states.add(state));
+		}
+		return states;
+	};
+	for (const name of exported) {
+		resolve(name, new Set()).forEach((state) => covered.add(state));
 	}
 	return covered;
 }

@@ -226,8 +226,8 @@ It requires a sibling story for each state that a component's props carry:
 - **Error:** a prop `error` or `isError`, a prop that ends in `Error` (`serverError`), or a `status` or `state` of `"error"`.
 - **Empty:** a `status` or `state` of `"empty"`.
 
-A story name says the state in its words: `Loading`, `LoadFailed`, `Unavailable`, `Refused`, `Empty`.
-`LoadingMore` and `LoadFailed` are not the first load.
+A story covers a state when its args, or the props that its `render` passes, set that state by the same rules.
+Its name decides nothing, so a story keeps the name of its domain state, such as `Checking` or `CheckRefused`.
 A component whose props cannot show a state needs no story for it. Do not add a prop to get one.
 Cover a state that the parent owns in the parent's story.
 

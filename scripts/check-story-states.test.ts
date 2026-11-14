@@ -44,42 +44,63 @@ await test("a state read through an imported type needs a story for each state",
 	});
 });
 
-await test("story names cover a state by their words, not by a substring", async () => {
+await test("a story covers the state its args set, whatever its name", async () => {
 	const component = { [`${COMPONENTS}/Panel.tsx`]: PANEL };
-	const stories = (names: string[]) => ({
-		[`${COMPONENTS}/Panel.stories.tsx`]: names
-			.map((name) => `export const ${name} = {};`)
-			.join("\n"),
-	});
-	assert.deepEqual(
-		await missingOf({ ...component, ...stories(["Loading", "LoadFailed", "Empty"]) }),
-		{},
-	);
+	const stories = (body: string) => ({ [`${COMPONENTS}/Panel.stories.tsx`]: body });
 	assert.deepEqual(
 		await missingOf({
 			...component,
-			...stories(["WhileThePracticesLoad", "Unavailable", "EmptyWithFilter"]),
+			...stories(`
+export const WhileThePracticesLoad = { args: { state: { status: "loading" } } };
+export const Unavailable = { args: { state: { status: "error", error: new Error("x") } } };
+export const NothingYet = { args: { state: { status: "empty" } } };
+`),
 		}),
 		{},
 	);
-	// A failed load and a load of more rows are not the first load.
+	// A name alone covers nothing: the story must set the state.
 	assert.deepEqual(
-		await missingOf({ ...component, ...stories(["LoadFailed", "LoadingMore", "Empty"]) }),
-		{ [`${COMPONENTS}/Panel.tsx`]: ["loading"] },
+		await missingOf({
+			...component,
+			...stories(`
+export const Loading = { args: { state: { status: "ready" } } };
+export const LoadFailed = {};
+export const Empty = { args: { state: { status: "empty" } } };
+`),
+		}),
+		{ [`${COMPONENTS}/Panel.tsx`]: ["loading", "error"] },
 	);
-	assert.deepEqual(await missingOf({ ...component, ...stories(["Loading", "Empty"]) }), {
-		[`${COMPONENTS}/Panel.tsx`]: ["error"],
-	});
 });
 
-await test("a state that the props exclude needs no story", async () => {
+await test("a story's spreads, module constants and rendered props count", async () => {
+	const missing = await missingOf({
+		[`${COMPONENTS}/Panel.tsx`]: PANEL,
+		[`${COMPONENTS}/Panel.stories.tsx`]: `
+const LOADING_ARGS = { state: { status: "loading" } };
+const Failed = { args: { state: { status: "error" } } };
+export const Busy = { args: LOADING_ARGS };
+export const FailedDark = { ...Failed, globals: { theme: "dark" } };
+export const Empty = { render: () => <Panel state={{ status: "empty" }} /> };
+`,
+	});
+	assert.deepEqual(missing, {});
+});
+
+await test("a state that the props exclude or do not extract needs no story", async () => {
 	const missing = await missingOf({
 		[`${COMPONENTS}/Region.tsx`]: `
 import type { PanelState } from "@/lib/panel-state";
 export type RegionState = Exclude<PanelState, { status: "error" | "empty" }>;
 export function Region({ state }: { state: RegionState }) { return null; }
 `,
-		[`${COMPONENTS}/Region.stories.tsx`]: "export const Loading = {};",
+		[`${COMPONENTS}/Region.stories.tsx`]:
+			'export const Pending = { args: { state: { status: "loading" } } };',
+		[`${COMPONENTS}/Picked.tsx`]: `
+import type { PanelState } from "@/lib/panel-state";
+export function Picked({ state }: { state: Extract<PanelState, { status: "error" | "ready" }> }) { return null; }
+`,
+		[`${COMPONENTS}/Picked.stories.tsx`]:
+			'export const Refused = { args: { state: { status: "error" } } };',
 	});
 	assert.deepEqual(missing, {});
 });
@@ -106,12 +127,18 @@ await test("props named isLoading and error each need their own story", async ()
 	const missing = await missingOf({
 		[`${COMPONENTS}/Table.tsx`]:
 			"export const Table = ({ isLoading, error }: { isLoading?: boolean; error?: unknown }) => null;",
-		[`${COMPONENTS}/Table.stories.tsx`]: "export const Loading = {};",
+		[`${COMPONENTS}/Table.stories.tsx`]: `
+const meta = { args: { isLoading: false, error: undefined } };
+export default meta;
+export const Busy = { render: () => <Table isLoading /> };
+export const Settled = { args: { error: null } };
+`,
 	});
+	// `false`, `null` and `undefined` set no state.
 	assert.deepEqual(missing, { [`${COMPONENTS}/Table.tsx`]: ["error"] });
 });
 
-await test("a prop that ends in Error is an error state, and a refusal story covers it", async () => {
+await test("a prop that ends in Error is an error state, and a story that sets it covers it", async () => {
 	const dialog = {
 		[`${COMPONENTS}/AmountDialog.tsx`]: `
 export interface AmountDialogProps { isPending: boolean; serverError?: string | null; }
@@ -122,7 +149,8 @@ export function AmountDialog(props: AmountDialogProps) { return null; }
 	assert.deepEqual(
 		await missingOf({
 			...dialog,
-			[`${COMPONENTS}/AmountDialog.stories.tsx`]: "export const ServerRejection = {};",
+			[`${COMPONENTS}/AmountDialog.stories.tsx`]:
+				'export const ServerRejection = { args: { serverError: "Too large." } };',
 		}),
 		{},
 	);

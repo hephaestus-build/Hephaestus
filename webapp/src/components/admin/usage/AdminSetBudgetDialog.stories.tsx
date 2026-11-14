@@ -65,6 +65,9 @@ export const ServerRejectionSitsAtTheField: Story = {
 	play: async () => {
 		const dialog = within(await screen.findByRole("dialog"));
 		await expect(dialog.getByRole("alert")).toHaveTextContent(/must not exceed/iu);
+		const field = dialog.getByRole("spinbutton", { name: "Monthly budget (USD)" });
+		await expect(field).toHaveAttribute("aria-invalid", "true");
+		await expect(field).toHaveAccessibleDescription(/must not exceed/iu);
 	},
 };
 

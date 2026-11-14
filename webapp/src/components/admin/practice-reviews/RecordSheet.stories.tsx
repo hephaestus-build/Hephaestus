@@ -31,9 +31,12 @@ type Story = StoryObj<typeof meta>;
 export const History: Story = {
 	play: async ({ canvas }) => {
 		const events = within(canvas.getByRole("list", { name: "History" })).getAllByRole("listitem");
-		await expect(
-			events.map((event) => event.querySelector("span.font-medium")?.textContent),
-		).toEqual(["Review created", "Delivered as a summary comment", "Marked incorrect"]);
+		// Oldest first, and the event without a time last.
+		const titles = ["Review created", "Delivered as a summary comment", "Marked incorrect"];
+		await expect(events).toHaveLength(titles.length);
+		for (const [index, title] of titles.entries()) {
+			await expect(events[index]).toHaveTextContent(title);
+		}
 		canvas.getByText("by Ada Lovelace");
 		canvas.getByText("The feedback stands as delivered.");
 	},
