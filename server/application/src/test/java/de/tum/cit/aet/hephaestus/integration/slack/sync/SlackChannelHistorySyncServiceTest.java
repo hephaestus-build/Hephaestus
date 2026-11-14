@@ -104,13 +104,20 @@ class SlackChannelHistorySyncServiceTest extends BaseUnitTest {
                 CLOCK);
     }
 
+    /** An ACTIVE channel whose monitoring period started at its announcement, as activation stamps it. */
     private SlackMonitoredChannel channel(@Nullable Instant announcedAt, @Nullable String watermark) {
+        return channel(announcedAt, announcedAt, watermark);
+    }
+
+    private SlackMonitoredChannel channel(
+            @Nullable Instant announcedAt, @Nullable Instant ingestAfter, @Nullable String watermark) {
         SlackMonitoredChannel c = new SlackMonitoredChannel();
         c.setWorkspaceId(WS);
         c.setSlackTeamId(TEAM);
         c.setSlackChannelId(CHANNEL);
         c.setConsentState(ConsentState.ACTIVE);
         c.setConsentAnnouncedAt(announcedAt);
+        c.setIngestAfter(ingestAfter);
         c.setLastHistorySyncedTs(watermark);
         return c;
     }
@@ -131,6 +138,17 @@ class SlackChannelHistorySyncServiceTest extends BaseUnitTest {
     @Test
     void activeChannelWithoutAnnouncementStamp_isSkipped_failClosed() {
         stubChannels(channel(null, null));
+
+        var summary = service.syncWorkspace(WS);
+
+        assertThat(summary.skipped()).isEqualTo(1);
+        verify(slackMessageService, never()).fetchHistoryPage(anyLong(), any(), any(), any(), any(), anyInt());
+        verify(monitoredChannelRepository, never()).advanceHistoryWatermark(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    void activeChannelWithoutIngestAfter_isSkipped_failClosed() {
+        stubChannels(channel(ANNOUNCED, null, null));
 
         var summary = service.syncWorkspace(WS);
 
@@ -172,6 +190,22 @@ class SlackChannelHistorySyncServiceTest extends BaseUnitTest {
         service.syncWorkspace(WS);
 
         verify(slackMessageService).fetchHistoryPage(eq(WS), eq(CHANNEL), eq(watermark), anyString(), any(), anyInt());
+    }
+
+    @Test
+    void fetchFloor_usesIngestAfterWhenItIsNewerThanAnnouncementAndWatermark() {
+        // A resumed or retried channel's monitoring period starts after its original announcement. The older
+        // reconciliation watermark must not pull the floor back into the gap in which monitoring was off.
+        Instant ingestAfter = NOW.minus(Duration.ofDays(5));
+        stubChannels(channel(ANNOUNCED, ingestAfter, WATERMARK_AFTER_ANNOUNCEMENT));
+        when(slackMessageService.fetchHistoryPage(eq(WS), eq(CHANNEL), anyString(), anyString(), any(), anyInt()))
+                .thenReturn(new HistoryPage(List.of(), null));
+
+        service.syncWorkspace(WS);
+
+        String expectedFloor = SlackTs.ofInstant(ingestAfter);
+        verify(slackMessageService)
+                .fetchHistoryPage(eq(WS), eq(CHANNEL), eq(expectedFloor), anyString(), any(), anyInt());
     }
 
     @Test

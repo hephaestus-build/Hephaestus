@@ -130,6 +130,7 @@ class SlackHistoryReconcilerTest extends BaseUnitTest {
         channel.setSlackChannelId(channelId);
         channel.setConsentState(ConsentState.ACTIVE);
         channel.setConsentAnnouncedAt(ANNOUNCED);
+        channel.setIngestAfter(ANNOUNCED);
         channel.setLastHistorySyncedTs(WATERMARK);
         channel.setHistoryCheckCursorTs(cursor);
         channel.setHistoryCheckedAt(checkedAt);

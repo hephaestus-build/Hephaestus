@@ -646,7 +646,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         objectMapper.valueToTree(new ProductFeedbackDrafts.Payload(report, 1)),
                         account.getId(),
                         3,
-                        Instant.now().plusSeconds(600));
+                        Instant.now().plusSeconds(600),
+                        null);
                 UUID action = Objects.requireNonNull(transactionTemplate.execute(tx -> actions.enqueue(request)));
                 var proxy = proxyService(WebClient.builder().build(), mock(LlmBudgetService.class), admittingPermits());
                 var adapter = DraftReportAdapterFixture.adapter(

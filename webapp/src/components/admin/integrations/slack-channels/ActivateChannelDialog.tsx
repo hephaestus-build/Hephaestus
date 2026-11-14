@@ -24,7 +24,8 @@ export interface ActivateChannelDialogProps {
 /**
  * Deliberate affirmative-consent step (a Dialog, not a Switch): activation posts a public
  * announcement and begins reading new messages, so the three consequences are enumerated
- * before the admin confirms.
+ * before the admin confirms. Also used for the retry flow when a FAILED channel needs a
+ * second activation attempt.
  */
 export function ActivateChannelDialog({
 	channel,
@@ -33,6 +34,8 @@ export function ActivateChannelDialog({
 }: ActivateChannelDialogProps) {
 	const [submitting, setSubmitting] = useState(false);
 	const label = channel ? (channel.channelName ?? channel.slackChannelId) : "";
+	const isRetry = channel?.consentState === "FAILED";
+	const actionLabel = isRetry ? "Retry activation" : "Activate monitoring";
 
 	async function confirm() {
 		if (!channel) {
@@ -65,18 +68,23 @@ export function ActivateChannelDialog({
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2">
 						<MegaphoneIcon className="size-4" aria-hidden />
-						Activate monitoring for #{label}?
+						{isRetry ? `Retry activation for #${label}?` : `Activate monitoring for #${label}?`}
 					</DialogTitle>
-					<DialogDescription>Activating #{label} will:</DialogDescription>
+					<DialogDescription>
+						{isRetry ? `Retrying activation for #${label} will:` : `Activating #${label} will:`}
+					</DialogDescription>
 				</DialogHeader>
 
 				<ul className="list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
 					<li>
-						<strong>Post a visible announcement</strong> in the channel so everyone knows Hephaestus
-						is active.
+						<strong>
+							{isRetry ? "Confirm or post a visible announcement" : "Post a visible announcement"}
+						</strong>{" "}
+						in the channel so everyone knows Hephaestus is active.
 					</li>
 					<li>
-						<strong>Begin reading new messages</strong> from now on. It never reads past history.
+						<strong>Begin reading new messages</strong> after Slack confirms the announcement. It
+						never reads messages from before that post.
 					</li>
 					<li>
 						Let any member <strong>opt out</strong> individually from the app’s Home tab.
@@ -93,7 +101,7 @@ export function ActivateChannelDialog({
 						}}
 						disabled={submitting}
 					>
-						{submitting ? "Activating…" : "Activate monitoring"}
+						{submitting ? "Requesting…" : actionLabel}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

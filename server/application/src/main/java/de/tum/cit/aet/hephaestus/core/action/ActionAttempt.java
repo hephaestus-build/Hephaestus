@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.action;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
@@ -23,7 +24,8 @@ public record ActionAttempt(
         long epoch,
         boolean writeStarted,
         @Nullable String readbackRef,
-        Fence fence) {
+        Fence fence,
+        @Nullable PersonIdentity nativeRecipient) {
 
     /** Commits, under the lease, that a write starts now. */
     @FunctionalInterface

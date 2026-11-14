@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.action;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -177,7 +178,10 @@ public class ActionExecutor {
                     boolean begun = store.beginWrite(claim.id(), claim.epoch(), WRITE_MARGIN);
                     if (begun) fenced.set(true);
                     return begun;
-                });
+                },
+                claim.nativeRecipient() == null
+                        ? null
+                        : mapper.readValue(claim.nativeRecipient(), PersonIdentity.class));
         ActionResult result;
         try {
             result = adapter.execute(attempt);

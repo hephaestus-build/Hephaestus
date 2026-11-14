@@ -79,3 +79,21 @@ export const Closed: Story = {
 		await expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 	},
 };
+
+/**
+ * FAILED — the activation outbox failed; the dialog title and button reflect the retry intent,
+ * and confirming reports the channel back so the activation can be queued again.
+ */
+export const Retry: Story = {
+	args: {
+		channel: { ...channel, consentState: "FAILED" },
+	},
+	play: async ({ args }) => {
+		const dialog = within(await screen.findByRole("dialog"));
+		dialog.getByText(/retry activation for/iu);
+		dialog.getByText(/post a visible announcement/iu);
+
+		await userEvent.click(dialog.getByRole("button", { name: /^retry activation$/iu }));
+		await expect(args.onConfirm).toHaveBeenCalledWith({ ...channel, consentState: "FAILED" });
+	},
+};

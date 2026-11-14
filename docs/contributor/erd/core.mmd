@@ -68,6 +68,7 @@ erDiagram
         TIMESTAMPTZ updated_at "NOT NULL"
         BIGINT workspace_id FK
         TIMESTAMPTZ write_started_at
+        JSONB native_recipient
     }
 
     AuthEvent {

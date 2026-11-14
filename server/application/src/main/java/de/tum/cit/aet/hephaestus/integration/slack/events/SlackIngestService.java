@@ -162,16 +162,12 @@ public class SlackIngestService {
             return null;
         }
 
-        // Forward-only invariant: on an ACTIVE channel, ingestion is bounded to messages that arrived strictly after
-        // the consent announcement was posted (consent_announced_at). Pre-announcement history never enters — a
-        // channel activated today does not retroactively ingest the backlog people wrote before they were told. An
-        // ACTIVE channel is always stamped at activation, so a missing stamp fails closed (store nothing).
-        Instant announcedAt = monitoredChannelRepository
-                .findConsentAnnouncedAt(workspaceId, channelId)
+        // Only the current monitoring period admits new content. A reconciliation watermark can advance
+        // past delayed replies to older threads, so it cannot be the live-delivery floor.
+        Instant ingestAfter = monitoredChannelRepository
+                .readIngestAfter(workspaceId, channelId)
                 .orElse(null);
-        if (announcedAt == null || !isAfterAnnouncement(ts, announcedAt)) {
-            return null;
-        }
+        if (ingestAfter == null || !SlackTs.isAfter(ts, ingestAfter)) return null;
 
         // Person firewall: an opted-out individual is never stored, even on an ACTIVE channel with the capability on.
         // Deny-if-opted-out / allow-if-absent, keyed on the author's Slack id (an unauthored/blank sender has no

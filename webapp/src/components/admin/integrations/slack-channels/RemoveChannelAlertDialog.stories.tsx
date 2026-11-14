@@ -96,6 +96,22 @@ export const NothingCollected: Story = {
 	},
 };
 
+/** FAILED — activation never completed, so nothing was collected; same lighter copy as PENDING. */
+export const ActivationFailed: Story = {
+	args: { channel: { ...active, consentState: "FAILED", consentAnnouncedAt: null } },
+	play: async ({ args }) => {
+		const dialog = within(await screen.findByRole("alertdialog"));
+		dialog.getByText(/nothing has been collected/iu);
+		await expect(dialog.queryByLabelText(/to confirm/iu)).not.toBeInTheDocument();
+
+		await userEvent.click(dialog.getByRole("button", { name: /^remove$/iu }));
+		await expect(args.onConfirm).toHaveBeenCalledWith({
+			slackChannelId: active.slackChannelId,
+			reason: undefined,
+		});
+	},
+};
+
 /** Closed — nothing is rendered until a channel is selected for removal. */
 export const Closed: Story = {
 	args: { channel: null },

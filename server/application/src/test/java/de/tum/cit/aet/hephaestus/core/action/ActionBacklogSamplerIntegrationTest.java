@@ -51,6 +51,7 @@ class ActionBacklogSamplerIntegrationTest extends BaseIntegrationTest {
                 JsonNodeFactory.instance.objectNode().put("n", 1),
                 null,
                 3,
+                null,
                 null));
         jdbc.update("UPDATE agent_action SET next_attempt_at = now() - interval '10 minutes' WHERE id = ?", id);
 
@@ -80,6 +81,7 @@ class ActionBacklogSamplerIntegrationTest extends BaseIntegrationTest {
                 JsonNodeFactory.instance.objectNode().put("n", 1),
                 null,
                 3,
+                null,
                 null));
         // The holder's replica stopped: its claim's lease ended 20 minutes ago, and no replica took the action again.
         jdbc.update(

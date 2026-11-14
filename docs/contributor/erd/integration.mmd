@@ -594,6 +594,8 @@ erDiagram
         VARCHAR(2048) last_sync_error
         VARCHAR(32) history_check_cursor_ts
         TIMESTAMPTZ history_checked_at
+        UUID consent_announcement_id
+        TIMESTAMPTZ ingest_after
     }
 
     SlackParticipantConsent {

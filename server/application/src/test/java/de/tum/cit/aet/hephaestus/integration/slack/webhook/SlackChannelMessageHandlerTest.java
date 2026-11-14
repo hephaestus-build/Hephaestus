@@ -47,6 +47,8 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
     private static final long WORKSPACE = 42L;
     /** Consent announced well before the test ts "100.1" (epoch ~100s), so the forward-only gate passes by default. */
     private static final Instant ANNOUNCED_BEFORE = Instant.ofEpochSecond(50);
+    /** The monitoring period began before the test ts "100.1": live ingest reads this floor, not the announcement. */
+    private static final Instant INGEST_AFTER_BEFORE = Instant.ofEpochSecond(50);
 
     @Mock
     private SlackWorkspaceResolver workspaceResolver;
@@ -147,8 +149,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
     private void stubActiveConsentedChannel() {
         when(workspaceResolver.resolveWorkspaceId("T1")).thenReturn(Optional.of(WORKSPACE));
         when(consentGate.ingestAllowed(WORKSPACE, "C1")).thenReturn(true);
-        when(monitoredChannelRepository.findConsentAnnouncedAt(WORKSPACE, "C1"))
-                .thenReturn(Optional.of(ANNOUNCED_BEFORE));
+        when(monitoredChannelRepository.readIngestAfter(WORKSPACE, "C1")).thenReturn(Optional.of(INGEST_AFTER_BEFORE));
         when(participantConsentGate.ingestionAllowed(WORKSPACE, "U1")).thenReturn(true);
         when(identityResolver.displayName(WORKSPACE, "T1", "U1")).thenReturn(Optional.of("A person"));
         when(identityResolver.humanAccountId(WORKSPACE, "T1", "U1", "A person")).thenReturn(Optional.of(7L));

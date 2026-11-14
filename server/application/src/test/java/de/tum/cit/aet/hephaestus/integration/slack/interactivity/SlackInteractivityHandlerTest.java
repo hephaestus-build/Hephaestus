@@ -15,7 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorPosts;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackWeeklyDigestPointer;
-import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackInteractiveReplyAdapter;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackAppHomeService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
@@ -62,7 +62,7 @@ class SlackInteractivityHandlerTest extends BaseUnitTest {
     private SlackPersonErasureService personErasureService;
 
     @Mock
-    private SlackMessageService messageService;
+    private SlackInteractiveReplyAdapter messageService;
 
     @Mock
     private SlackMentorService mentorService;

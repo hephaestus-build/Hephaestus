@@ -2378,7 +2378,8 @@ describe("Slack channel management reads", () => {
 
 			await user.keyboard("{Escape}");
 			const pending = screen.getByRole("dialog", { name: "Activate monitoring for #team-intro?" });
-			expect(within(pending).getByRole("button", { name: "Activating…" })).toHaveProperty(
+			// The request is pending, not the activation: Slack confirms that later.
+			expect(within(pending).getByRole("button", { name: "Requesting…" })).toHaveProperty(
 				"disabled",
 				true,
 			);

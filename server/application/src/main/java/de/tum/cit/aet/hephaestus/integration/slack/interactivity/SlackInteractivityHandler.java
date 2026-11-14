@@ -13,7 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorPosts;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackWeeklyDigestPointer;
-import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackInteractiveReplyAdapter;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
 import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackAppHomeService;
 import jakarta.annotation.PreDestroy;
@@ -50,7 +50,7 @@ public class SlackInteractivityHandler {
     private final SlackAppHomeService appHomeService;
     private final SlackParticipantConsentService participantConsentService;
     private final SlackPersonErasureService personErasureService;
-    private final SlackMessageService messageService;
+    private final SlackInteractiveReplyAdapter messageService;
     private final SlackMentorService mentorService;
     private final WeeklyDigestSubscriptions weeklyDigests;
 
@@ -61,7 +61,7 @@ public class SlackInteractivityHandler {
             SlackAppHomeService appHomeService,
             SlackParticipantConsentService participantConsentService,
             SlackPersonErasureService personErasureService,
-            SlackMessageService messageService,
+            SlackInteractiveReplyAdapter messageService,
             SlackMentorService mentorService,
             WeeklyDigestSubscriptions weeklyDigests) {
         this(
@@ -82,7 +82,7 @@ public class SlackInteractivityHandler {
             SlackAppHomeService appHomeService,
             SlackParticipantConsentService participantConsentService,
             SlackPersonErasureService personErasureService,
-            SlackMessageService messageService,
+            SlackInteractiveReplyAdapter messageService,
             SlackMentorService mentorService,
             WeeklyDigestSubscriptions weeklyDigests,
             ExecutorService followUpExecutor) {

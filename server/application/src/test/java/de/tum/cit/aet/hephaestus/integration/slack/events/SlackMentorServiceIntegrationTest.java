@@ -1,16 +1,16 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorAdmission;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorRefusal;
+import de.tum.cit.aet.hephaestus.core.action.AgentActions;
+import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ActiveConnectionGuard;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -24,9 +24,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
-import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorPosts;
+import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackNoticeActions;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
-import de.tum.cit.aet.hephaestus.integration.slack.onboarding.SlackOnboardingService;
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackWorkspaceContentEraser;
 import de.tum.cit.aet.hephaestus.integration.slack.webhook.SlackMentorDmMessageHandler;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
@@ -59,6 +58,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -67,6 +67,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /** What the developer does in their Slack DM with Hephaestus, and the ledger rows it writes. */
@@ -131,6 +132,15 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Autowired
     private EventPayloadDeserializer eventPayloads;
 
+    @Autowired
+    private AgentActions actions;
+
+    @Autowired
+    private GitProviderRegistry registry;
+
+    @Autowired
+    private ObjectMapper mapper;
+
     private final SlackMessageService slack = mock(SlackMessageService.class);
     private final SlackMentorIdentityResolver identities = mock(SlackMentorIdentityResolver.class);
     private final MentorReadinessQuery readiness = mock(MentorReadinessQuery.class);
@@ -161,16 +171,34 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
         }
         service = new SlackMentorService(
                 new SlackWorkspaceResolver(connectionService, activeConnections),
-                slack,
+                new SlackNoticeActions(actions, mapper, registry),
                 identities,
                 new KeywordSlackMentorInputGuard(),
-                mock(SlackOnboardingService.class),
                 readiness,
                 admission,
                 conversations,
                 entries,
                 turns,
                 timeline);
+    }
+
+    private void assertNotice(String messageTs, @Nullable String threadTs, String text, boolean linkAccount) {
+        String key = "slack_notice:" + workspace.getId() + ":" + TEAM + ":" + CHANNEL + ":" + messageTs;
+        var rows = jdbc.queryForList(
+                "SELECT kind,state,payload->>'channelId' AS channel,native_recipient->>'subject' AS recipient,payload->>'threadTs' AS thread,payload->>'text' AS text,payload->>'linkAccount' AS link FROM agent_action WHERE workspace_id=? AND idempotency_key=?",
+                workspace.getId(),
+                key);
+        assertThat(rows).hasSize(1);
+        var row = rows.getFirst();
+        assertThat(row)
+                .containsEntry("kind", "SLACK_NOTICE")
+                .containsEntry("state", "ADMITTED")
+                .containsEntry("channel", CHANNEL)
+                .containsEntry("recipient", SLACK_USER)
+                .containsEntry("thread", threadTs)
+                .containsEntry("text", text)
+                .containsEntry("link", Boolean.toString(linkAccount));
+        verifyNoInteractions(slack);
     }
 
     private MentorConversation main() {
@@ -245,6 +273,69 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .hasValueSatisfying(turn -> assertThat(turn.getId()).isEqualTo(question.getTurnId()));
         assertThat(entryRepository.findMaxSeqByWorkspaceIdAndConversationId(workspace.getId(), main().getId()))
                 .isEqualTo(question.getSeq());
+    }
+
+    private ProviderEventStore.Claimed claimedDm() {
+        byte[] payload = """
+                {"team_id":"T1","event":{"type":"message","channel_type":"im","channel":"D9",
+                 "user":"U1","text":"How is my review practice?","ts":"100.1"}}
+                """.getBytes(StandardCharsets.UTF_8);
+        var arrival = new ProviderEventStore.Arrival(
+                workspace.getId(),
+                "slack",
+                "slack.T1.message_im",
+                "slack-notice-" + UUID.randomUUID(),
+                Map.of(),
+                payload);
+        assertThat(providerEvents.store(List.of(arrival))).isOne();
+        return providerEvents.claim(Duration.ofMinutes(2)).orElseThrow();
+    }
+
+    private void dispatchDm(ProviderEventStore.Claimed claimed) {
+        var handler = new SlackMentorDmMessageHandler(service, eventPayloads);
+        assertThat(inbox.dispatch(
+                        claimed.id(),
+                        claimed.leaseEpoch(),
+                        claimed.event().receivedAt(),
+                        () -> handler.onMessage(claimed.event())))
+                .isFalse();
+    }
+
+    @Test
+    void shouldKeepOneAdmissionOutcomeWhenARefusedDmIsRedeliveredAfterReadinessChanges() {
+        when(readiness.isReady(workspace.getId())).thenReturn(false);
+        var claimed = claimedDm();
+        dispatchDm(claimed);
+        assertNotice("100.1", null, MentorRefusal.UNAVAILABLE.userMessage(), false);
+
+        when(readiness.isReady(workspace.getId())).thenReturn(true);
+        dispatchDm(claimed);
+
+        assertNothingStored("100.1");
+        assertNotice("100.1", null, MentorRefusal.UNAVAILABLE.userMessage(), false);
+        assertThat(providerEvents.complete(claimed.id(), claimed.leaseEpoch())).isTrue();
+    }
+
+    @Test
+    void shouldNotRecreateAnErasedNoticeWhenTheSameInboxEventIsRedelivered() {
+        when(readiness.isReady(workspace.getId())).thenReturn(false);
+        var claimed = claimedDm();
+        dispatchDm(claimed);
+        var recipient = new PersonIdentity(registry.resolveProviderId("SLACK", "https://slack.com"), SLACK_USER, TEAM);
+        transactionTemplate.executeWithoutResult(status ->
+                assertThat(actions.eraseRecipient(workspace.getId(), recipient)).isEqualTo(1));
+
+        dispatchDm(claimed);
+
+        String key = "slack_notice:" + workspace.getId() + ":T1:D9:100.1";
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM agent_action WHERE workspace_id=? AND idempotency_key=?",
+                        Integer.class,
+                        workspace.getId(),
+                        key))
+                .isZero();
+        assertThat(providerEvents.complete(claimed.id(), claimed.leaseEpoch())).isTrue();
+        verifyNoInteractions(slack);
     }
 
     @Test
@@ -344,14 +435,7 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
         service.handleDm(TEAM, CHANNEL, SLACK_USER, "Reply under the other one", "500.5", "500.1");
 
         assertThat(maybeQuestion("500.5")).isEmpty();
-        verify(slack)
-                .postMessage(
-                        eq(workspace.getId()),
-                        eq(CHANNEL),
-                        eq("500.1"),
-                        anyList(),
-                        eq(MentorRejectedException.Reason.NOT_A_THREAD_PARENT.userMessage()),
-                        eq(SlackMentorPosts.noticeMetadata()));
+        assertNotice("500.5", "500.1", MentorRejectedException.Reason.NOT_A_THREAD_PARENT.userMessage(), false);
     }
 
     @Test
@@ -461,14 +545,7 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
 
         service.handleDm(TEAM, CHANNEL, SLACK_USER, "Can you review my work?", "100.1", "100.1");
 
-        verify(slack)
-                .postMessage(
-                        workspace.getId(),
-                        CHANNEL,
-                        null,
-                        List.of(),
-                        refusal.userMessage(),
-                        SlackMentorPosts.noticeMetadata());
+        assertNotice("100.1", null, refusal.userMessage(), false);
         assertNothingStored("100.1");
     }
 
@@ -479,14 +556,7 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
 
         service.handleDm(TEAM, CHANNEL, SLACK_USER, "And then?", "100.5", "100.1");
 
-        verify(slack)
-                .postMessage(
-                        workspace.getId(),
-                        CHANNEL,
-                        "100.1",
-                        List.of(),
-                        MentorRefusal.NO_AI.userMessage(),
-                        SlackMentorPosts.noticeMetadata());
+        assertNotice("100.5", "100.1", MentorRefusal.NO_AI.userMessage(), false);
         assertThat(maybeQuestion("100.5")).isEmpty();
         assertThat(conversations.findThread(workspace.getId(), question("100.1").getId()))
                 .isEmpty();
@@ -499,14 +569,7 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
 
         service.handleDm(TEAM, CHANNEL, SLACK_USER, "Can you review my PR practice?", "100.1", "100.1");
 
-        verify(slack)
-                .postMessage(
-                        workspace.getId(),
-                        CHANNEL,
-                        null,
-                        List.of(),
-                        SlackMentorService.NOT_LINKED,
-                        SlackMentorPosts.noticeMetadata());
+        assertNotice("100.1", null, SlackMentorService.NOT_LINKED, true);
         assertNothingStored("100.1");
     }
 
@@ -518,14 +581,7 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
 
         service.handleDm(TEAM, CHANNEL, SLACK_USER, "Can you review my work?", "100.1", threadTs);
 
-        verify(slack)
-                .postMessage(
-                        workspace.getId(),
-                        CHANNEL,
-                        inThread ? threadTs : null,
-                        List.of(),
-                        MentorRefusal.UNAVAILABLE.userMessage(),
-                        SlackMentorPosts.noticeMetadata());
+        assertNotice("100.1", inThread ? threadTs : null, MentorRefusal.UNAVAILABLE.userMessage(), false);
         verifyNoMoreInteractions(slack);
         verifyNoInteractions(identities, admission);
         assertNothingStored("100.1");
@@ -539,14 +595,7 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
 
         service.handleDm(TEAM, CHANNEL, SLACK_USER, "I want to kill myself", "100.1", "100.1");
 
-        verify(slack)
-                .postMessage(
-                        workspace.getId(),
-                        CHANNEL,
-                        null,
-                        List.of(),
-                        KeywordSlackMentorInputGuard.SELF_HARM_RESPONSE,
-                        SlackMentorPosts.noticeMetadata());
+        assertNotice("100.1", null, KeywordSlackMentorInputGuard.SELF_HARM_RESPONSE, false);
         verifyNoMoreInteractions(slack);
         verifyNoInteractions(readiness, identities, admission);
         assertNothingStored("100.1");
@@ -566,14 +615,7 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
     void shouldPointToHelpAndStoreNothingWhenTheDmSpeaksOfSelfHarm() {
         service.handleDm(TEAM, CHANNEL, SLACK_USER, "I want to kill myself", "100.1", "100.1");
 
-        verify(slack)
-                .postMessage(
-                        workspace.getId(),
-                        CHANNEL,
-                        null,
-                        List.of(),
-                        KeywordSlackMentorInputGuard.SELF_HARM_RESPONSE,
-                        SlackMentorPosts.noticeMetadata());
+        assertNotice("100.1", null, KeywordSlackMentorInputGuard.SELF_HARM_RESPONSE, false);
         assertNothingStored("100.1");
     }
 

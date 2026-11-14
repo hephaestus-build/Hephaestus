@@ -24,7 +24,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsen
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorPosts;
-import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
+import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackInteractiveReplyAdapter;
 import de.tum.cit.aet.hephaestus.practices.spi.MentorReadinessQuery;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,7 +51,7 @@ public class SlackAppHomeService {
     private final SlackMonitoredChannelRepository monitoredChannelRepository;
     private final MentorReadinessQuery mentorReadinessQuery;
     private final MentorAdmission mentorAdmission;
-    private final SlackMessageService messageService;
+    private final SlackInteractiveReplyAdapter messageService;
     private final SlackOnboardingService onboardingService;
     private final SlackHephaestusUiLinks uiLinks;
 
@@ -62,7 +62,7 @@ public class SlackAppHomeService {
             SlackMonitoredChannelRepository monitoredChannelRepository,
             MentorReadinessQuery mentorReadinessQuery,
             MentorAdmission mentorAdmission,
-            SlackMessageService messageService,
+            SlackInteractiveReplyAdapter messageService,
             SlackOnboardingService onboardingService,
             SlackHephaestusUiLinks uiLinks) {
         this.workspaceResolver = workspaceResolver;

@@ -72,6 +72,11 @@ public class AgentAction {
     @Column(name = "subject_account_id")
     private @Nullable Long subjectAccountId;
 
+    /** The addressed provider identity, retained for erasure after the delivery payload has been cleared. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "native_recipient", columnDefinition = "jsonb")
+    private @Nullable JsonNode nativeRecipient;
+
     @ColumnDefault("0")
     @Column(name = "attempts", nullable = false)
     private int attempts;

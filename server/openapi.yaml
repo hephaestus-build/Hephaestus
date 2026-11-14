@@ -25472,7 +25472,9 @@ components:
           description: "Existing Hephaestus monitoring state, if already allow-listed"
           enum:
           - PENDING
+          - ACTIVATING
           - ACTIVE
+          - FAILED
           - PAUSED
           - REVOKED
         member:
@@ -25508,7 +25510,9 @@ components:
           description: State the channel left (absent for the very first record)
           enum:
           - PENDING
+          - ACTIVATING
           - ACTIVE
+          - FAILED
           - PAUSED
           - REVOKED
           - null
@@ -25529,7 +25533,9 @@ components:
           description: State the channel entered
           enum:
           - PENDING
+          - ACTIVATING
           - ACTIVE
+          - FAILED
           - PAUSED
           - REVOKED
       required:
@@ -25562,7 +25568,9 @@ components:
           description: Current per-channel consent lifecycle state
           enum:
           - PENDING
+          - ACTIVATING
           - ACTIVE
+          - FAILED
           - PAUSED
           - REVOKED
         createdAt:
@@ -26568,7 +26576,6 @@ components:
           type: string
           description: Target consent state
           enum:
-          - PENDING
           - ACTIVE
           - PAUSED
           - REVOKED

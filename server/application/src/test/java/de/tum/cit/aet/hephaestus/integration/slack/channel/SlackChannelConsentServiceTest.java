@@ -3,18 +3,15 @@ package de.tum.cit.aet.hephaestus.integration.slack.channel;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.slack.api.model.block.LayoutBlock;
 import de.tum.cit.aet.hephaestus.core.event.AgentContextChangedEvent;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -27,16 +24,19 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelR
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackParticipantConsentRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackIngestService;
+import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
-import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
-import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -48,6 +48,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
@@ -82,6 +83,27 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
     @Mock
     private ConnectionService connectionService;
 
+    @Mock
+    private SlackChannelJoinActions joins;
+
+    @Mock
+    private SlackConsentActions announcements;
+
+    @Mock
+    private SlackWorkspaceResolver workspaceResolver;
+
+    @BeforeEach
+    void transactionalCollaborators() {
+        lenient()
+                .when(workspaceResolver.whileConnected(anyLong(), anyString(), any()))
+                .thenAnswer(inv -> Optional.of(((Supplier<?>) inv.getArgument(2)).get()));
+        lenient().when(consentEventRepository.save(any())).thenAnswer(inv -> {
+            SlackChannelConsentEvent event = inv.getArgument(0);
+            ReflectionTestUtils.setField(event, "id", 42L);
+            return event;
+        });
+    }
+
     private SlackChannelConsentService service() {
         return new SlackChannelConsentService(
                 monitoredChannelRepository,
@@ -91,7 +113,10 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
                 slackMessageService,
                 connectionService,
                 inlineTransactionTemplate(),
-                eventPublisher);
+                eventPublisher,
+                joins,
+                announcements,
+                workspaceResolver);
     }
 
     /** Captures what the service publishes; the AFTER_COMMIT hop itself is Spring's, not ours, to test. */
@@ -129,8 +154,10 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
     }
 
     private void stubChannel(SlackMonitoredChannel c) {
-        when(monitoredChannelRepository.findByWorkspaceIdAndSlackChannelId(WS, CHANNEL))
+        lenient()
+                .when(monitoredChannelRepository.findByWorkspaceIdAndSlackChannelId(WS, CHANNEL))
                 .thenReturn(Optional.of(c));
+        lenient().when(monitoredChannelRepository.findForUpdate(WS, CHANNEL)).thenReturn(Optional.of(c));
     }
 
     private void stubActor(long actorId) {
@@ -147,53 +174,38 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void pendingToActive_stampsAnnouncedAt_postsAnnouncement_andWritesAudit() {
+    void activationQueuesAnnouncementBeforeEnablingIngestion() {
         SlackMonitoredChannel c = channel(ConsentState.PENDING, null);
         stubChannel(c);
         stubActor(5L);
 
         SlackMonitoredChannelDTO dto = service().transition(WS, CHANNEL, ConsentState.ACTIVE, "pilot go");
 
-        // Announcement posted as non-empty Block Kit (the one-click opt-out) with the plain-language fallback +
-        // forward-only boundary stamped + state advanced.
-        ArgumentCaptor<List<LayoutBlock>> blocksCaptor = ArgumentCaptor.captor();
-        verify(slackMessageService)
-                .postMessage(
-                        eq(WS),
-                        eq(CHANNEL),
-                        isNull(),
-                        blocksCaptor.capture(),
-                        eq(SlackConsentBlocks.activationFallbackText()),
-                        isNull());
-        assertThat(blocksCaptor.getValue().toString()).doesNotContain("Open Hephaestus", "workspace dashboard");
-        assertThat(c.getConsentAnnouncedAt()).isNotNull();
-        assertThat(c.getConsentState()).isEqualTo(ConsentState.ACTIVE);
-        verify(monitoredChannelRepository).save(c);
-        assertThat(dto.consentState()).isEqualTo(ConsentState.ACTIVE);
-
-        ArgumentCaptor<SlackChannelConsentEvent> captor = ArgumentCaptor.forClass(SlackChannelConsentEvent.class);
-        verify(consentEventRepository).save(captor.capture());
-        SlackChannelConsentEvent event = captor.getValue();
-        assertThat(event.getFromState()).isEqualTo(ConsentState.PENDING);
-        assertThat(event.getToState()).isEqualTo(ConsentState.ACTIVE);
-        assertThat(event.getActorAccountId()).isEqualTo(5L);
-        assertThat(event.getReason()).isEqualTo("pilot go");
+        assertThat(dto.consentState()).isEqualTo(ConsentState.ACTIVATING);
+        assertThat(c.getConsentAnnouncedAt()).isNull();
+        assertThat(c.getConsentAnnouncementId()).isNotNull();
+        verifyNoInteractions(slackMessageService);
+        verify(eventPublisher, never()).publishEvent(ACTIVATION_KICK);
+        ArgumentCaptor<SlackChannelConsentEvent> audit = ArgumentCaptor.captor();
+        verify(consentEventRepository).save(audit.capture());
+        assertThat(audit.getValue().getFromState()).isEqualTo(ConsentState.PENDING);
+        assertThat(audit.getValue().getToState()).isEqualTo(ConsentState.ACTIVATING);
+        assertThat(audit.getValue().getActorAccountId()).isEqualTo(5L);
+        assertThat(audit.getValue().getReason()).isEqualTo("pilot go");
+        verify(announcements).enqueue(c, audit.getValue(), false);
+        // The first activation of a pending channel is the one that may need the public-channel join.
+        verify(joins).enqueue(c, 42L);
     }
 
-    /**
-     * Consent must kick the channel's history sync, not leave it waiting for the {@code 0 0 4 * * *} tick —
-     * the asymmetry every other integration already avoids (Outline kicks on collection registration,
-     * GitHub/GitLab on provision and repo-added). Published rather than called so it runs after this
-     * transaction commits and off the admin's request thread; {@code SlackDataSyncScheduler} consumes it.
-     */
+    // Requesting activation cannot start history sync before the outbox confirms the announcement.
     @Test
-    void pendingToActive_publishesTheInitialHistorySyncKick() {
+    void requestedActivationDoesNotPublishHistorySyncKick() {
         stubChannel(channel(ConsentState.PENDING, null));
         stubActor(5L);
 
         service().transition(WS, CHANNEL, ConsentState.ACTIVE, null);
 
-        verify(eventPublisher).publishEvent(ACTIVATION_KICK);
+        verify(eventPublisher, never()).publishEvent(ACTIVATION_KICK);
     }
 
     /** Every edge into ACTIVE kicks, including a resume — the sync is idempotent and watermark-paced. */
@@ -271,7 +283,7 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
 
     static Stream<Arguments> edgeMatrix() {
         return Stream.of(
-                Arguments.of(ConsentState.PENDING, ConsentState.PENDING, Outcome.NOOP),
+                Arguments.of(ConsentState.PENDING, ConsentState.PENDING, Outcome.ILLEGAL),
                 Arguments.of(ConsentState.PENDING, ConsentState.ACTIVE, Outcome.LEGAL),
                 Arguments.of(ConsentState.PENDING, ConsentState.PAUSED, Outcome.ILLEGAL),
                 Arguments.of(ConsentState.PENDING, ConsentState.REVOKED, Outcome.LEGAL),
@@ -286,16 +298,18 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
                 Arguments.of(ConsentState.REVOKED, ConsentState.PENDING, Outcome.ILLEGAL),
                 Arguments.of(ConsentState.REVOKED, ConsentState.ACTIVE, Outcome.ILLEGAL),
                 Arguments.of(ConsentState.REVOKED, ConsentState.PAUSED, Outcome.ILLEGAL),
-                Arguments.of(ConsentState.REVOKED, ConsentState.REVOKED, Outcome.NOOP));
+                Arguments.of(ConsentState.REVOKED, ConsentState.REVOKED, Outcome.NOOP),
+                Arguments.of(ConsentState.ACTIVATING, ConsentState.ACTIVE, Outcome.NOOP),
+                Arguments.of(ConsentState.ACTIVATING, ConsentState.PAUSED, Outcome.ILLEGAL),
+                Arguments.of(ConsentState.ACTIVATING, ConsentState.REVOKED, Outcome.LEGAL),
+                Arguments.of(ConsentState.FAILED, ConsentState.PAUSED, Outcome.ILLEGAL),
+                Arguments.of(ConsentState.FAILED, ConsentState.REVOKED, Outcome.LEGAL));
     }
 
-    /**
-     * Locks the whole mentoring-only consent state machine (16 cells) in one place. PENDING→REVOKED and
-     * PAUSED→REVOKED are legal and must erase via {@link SlackIngestService#eraseChannel}.
-     */
+    // Each requested outcome either changes state, is idempotent, or is refused before mutation.
     @ParameterizedTest(name = "{0} → {1} is {2}")
     @MethodSource("edgeMatrix")
-    void consentStateMachine_fullEdgeMatrix(ConsentState from, ConsentState target, Outcome outcome) {
+    void requestedConsentTransitions(ConsentState from, ConsentState target, Outcome outcome) {
         SlackMonitoredChannel c =
                 channel(from, from == ConsentState.PENDING ? null : Instant.parse("2020-01-01T00:00:00Z"));
         stubChannel(c);
@@ -330,28 +344,28 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
                         ArgumentCaptor.forClass(SlackChannelConsentEvent.class);
                 verify(consentEventRepository).save(captor.capture());
                 assertThat(captor.getValue().getFromState()).isEqualTo(from);
-                assertThat(captor.getValue().getToState()).isEqualTo(target);
+                assertThat(captor.getValue().getToState())
+                        .isEqualTo(
+                                from == ConsentState.PENDING && target == ConsentState.ACTIVE
+                                        ? ConsentState.ACTIVATING
+                                        : target);
             }
         }
     }
 
     @Test
-    void activate_whenAnnouncementFails_doesNotActivateOrAudit() {
-        // Ingestion must not start without a visible channel disclosure. If Slack rejects the announcement
-        // (not_in_channel / no token), the transition fails and can be retried after fixing Slack configuration.
-        SlackMonitoredChannel c = channel(ConsentState.PENDING, null);
+    void failedActivationCanQueueAnExplicitRetry() {
+        var c = channel(ConsentState.FAILED, null);
+        var marker = UUID.randomUUID();
+        c.setConsentAnnouncementId(marker);
         stubChannel(c);
-        stubActor(5L);
-        doThrow(new SlackSendException(WS, CHANNEL, "not_in_channel"))
-                .when(slackMessageService)
-                .postMessage(eq(WS), eq(CHANNEL), isNull(), anyList(), anyString(), isNull());
-
-        assertThatThrownBy(() -> service().transition(WS, CHANNEL, ConsentState.ACTIVE, "go"))
-                .isInstanceOf(SlackSendException.class);
-
-        assertThat(c.getConsentState()).isEqualTo(ConsentState.PENDING);
-        verify(monitoredChannelRepository, never()).save(c);
-        verify(consentEventRepository, never()).save(any());
+        service().transition(WS, CHANNEL, ConsentState.ACTIVE, "retry");
+        assertThat(c.getConsentState()).isEqualTo(ConsentState.ACTIVATING);
+        assertThat(c.getConsentAnnouncementId()).isEqualTo(marker);
+        verify(announcements).enqueue(eq(c), any(), eq(true));
+        // A retry of a failed announcement never joins: the bot is already in the channel or was removed on purpose.
+        verifyNoInteractions(joins, slackMessageService);
+        assertThat(c.getIngestAfter()).isNull();
     }
 
     @Test
@@ -406,6 +420,8 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
         @Nullable Instant announcedAt = Instant.parse("2020-01-01T00:00:00Z");
         SlackMonitoredChannel existing = channel(ConsentState.REVOKED, announcedAt);
         existing.setChannelName("old-name");
+        existing.setConsentAnnouncementId(UUID.randomUUID());
+        existing.setIngestAfter(announcedAt);
         stubChannel(existing);
 
         SlackChannelConsentService.RegistrationOutcome outcome = service().register(WS, CHANNEL, "new-name");
@@ -413,9 +429,13 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
         assertThat(outcome.created()).isFalse();
         assertThat(existing.getConsentState()).isEqualTo(ConsentState.PENDING);
         assertThat(existing.getConsentAnnouncedAt()).isNull();
+        assertThat(existing.getIngestAfter()).isNull();
+        assertThat(existing.getConsentAnnouncementId()).isNull();
         assertThat(existing.getChannelName()).isEqualTo("new-name");
         assertThat(outcome.channel().consentState()).isEqualTo(ConsentState.PENDING);
         verify(monitoredChannelRepository).save(existing);
+        // Re-adding a revoked channel is a fresh pending channel: it queues its join again.
+        verify(joins).enqueue(existing, 42L);
     }
 
     @Test
@@ -465,9 +485,18 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void channelRemovalDuringActivationFailsItAndCancelsPendingAnnouncement() {
+        var c = channel(ConsentState.ACTIVATING, null);
+        stubChannel(c);
+        service().pauseForPlatformEvent(WS, CHANNEL, "bot removed");
+        assertThat(c.getConsentState()).isEqualTo(ConsentState.FAILED);
+        verify(announcements).cancel(WS, CHANNEL);
+        verify(eventPublisher, never()).publishEvent(ACTIVATION_KICK);
+    }
+
+    @Test
     void pauseForPlatformEvent_absentChannel_isANoOp() {
-        when(monitoredChannelRepository.findByWorkspaceIdAndSlackChannelId(WS, CHANNEL))
-                .thenReturn(Optional.empty());
+        when(monitoredChannelRepository.findForUpdate(WS, CHANNEL)).thenReturn(Optional.empty());
 
         service().pauseForPlatformEvent(WS, CHANNEL, "bot removed from channel");
 
@@ -518,18 +547,23 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void pausedToActive_stampsTheHistoryWatermark_soThePausedGapIsNeverBackfilled() {
-        // Messages sent while paused were written under "monitoring is off"; moving the reconciliation watermark to
-        // the resume instant keeps the nightly history sync from ever fetching them.
-        SlackMonitoredChannel c = channel(ConsentState.PAUSED, Instant.parse("2026-07-01T00:00:00Z"));
-        c.setLastHistorySyncedTs(null);
+    void pausedToActive_startsANewMonitoringPeriodAtOneInstant_soThePausedGapIsNeverBackfilled() {
+        // Messages sent while paused were written under "monitoring is off". Resume moves the live floor and the
+        // reconciliation watermark to the same instant, so neither live ingest nor the nightly sync admits them.
+        Instant pausedPeriodFloor = Instant.parse("2026-07-01T00:00:00Z");
+        SlackMonitoredChannel c = channel(ConsentState.PAUSED, pausedPeriodFloor);
+        c.setIngestAfter(pausedPeriodFloor);
+        c.setLastHistorySyncedTs(SlackTs.ofInstant(Instant.parse("2026-07-02T00:00:00Z")));
         stubChannel(c);
         stubActor(5L);
 
         service().transition(WS, CHANNEL, ConsentState.ACTIVE, null);
 
         assertThat(c.getConsentState()).isEqualTo(ConsentState.ACTIVE);
-        assertThat(c.getLastHistorySyncedTs()).isNotNull();
-        assertThat(SlackTs.toEpochMicros(c.getLastHistorySyncedTs())).isNotNull();
+        Instant ingestAfter = Objects.requireNonNull(c.getIngestAfter());
+        assertThat(ingestAfter).isAfter(pausedPeriodFloor);
+        assertThat(c.getLastHistorySyncedTs()).isEqualTo(SlackTs.ofInstant(ingestAfter));
+        assertThat(c.getConsentAnnouncedAt()).isEqualTo(pausedPeriodFloor);
+        verifyNoInteractions(joins);
     }
 }

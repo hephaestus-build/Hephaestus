@@ -15019,7 +15019,7 @@ export const SlackChannelCandidateSchema = {
 		consentState: {
 			type: "string",
 			description: "Existing Hephaestus monitoring state, if already allow-listed",
-			enum: ["PENDING", "ACTIVE", "PAUSED", "REVOKED"],
+			enum: ["PENDING", "ACTIVATING", "ACTIVE", "FAILED", "PAUSED", "REVOKED"],
 		},
 		member: {
 			type: "boolean",
@@ -15054,7 +15054,7 @@ export const SlackChannelConsentEventSchema = {
 		fromState: {
 			type: ["string", "null"],
 			description: "State the channel left (absent for the very first record)",
-			enum: ["PENDING", "ACTIVE", "PAUSED", "REVOKED", null],
+			enum: ["PENDING", "ACTIVATING", "ACTIVE", "FAILED", "PAUSED", "REVOKED", null],
 		},
 		id: {
 			type: "string",
@@ -15072,7 +15072,7 @@ export const SlackChannelConsentEventSchema = {
 		toState: {
 			type: "string",
 			description: "State the channel entered",
-			enum: ["PENDING", "ACTIVE", "PAUSED", "REVOKED"],
+			enum: ["PENDING", "ACTIVATING", "ACTIVE", "FAILED", "PAUSED", "REVOKED"],
 		},
 	},
 	required: [
@@ -15103,7 +15103,7 @@ export const SlackMonitoredChannelSchema = {
 		consentState: {
 			type: "string",
 			description: "Current per-channel consent lifecycle state",
-			enum: ["PENDING", "ACTIVE", "PAUSED", "REVOKED"],
+			enum: ["PENDING", "ACTIVATING", "ACTIVE", "FAILED", "PAUSED", "REVOKED"],
 		},
 		createdAt: {
 			type: "string",
@@ -16241,7 +16241,7 @@ export const UpdateSlackChannelConsentRequestSchema = {
 		consentState: {
 			type: "string",
 			description: "Target consent state",
-			enum: ["PENDING", "ACTIVE", "PAUSED", "REVOKED"],
+			enum: ["ACTIVE", "PAUSED", "REVOKED"],
 		},
 		reason: {
 			type: "string",

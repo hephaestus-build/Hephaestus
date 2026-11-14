@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.credentials.SlackCredentialPr
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -297,49 +298,79 @@ public class SlackMessageService {
      */
     public Matches readWorkspaceMessages(
             long workspaceId, String channel, @Nullable String threadTs, String oldest, Predicate<Message> match) {
+        return readWorkspaceMessages(workspaceId, channel, threadTs, oldest, match, 1);
+    }
+
+    /** Reads a bounded sequence of pages; an unfinished search never proves absence. */
+    public Matches readWorkspaceMessages(
+            long workspaceId,
+            String channel,
+            @Nullable String threadTs,
+            String oldest,
+            Predicate<Message> match,
+            int maxPages) {
+        if (maxPages < 1) throw new IllegalArgumentException("Readback needs at least one page");
         String token = resolveToken(workspaceId)
                 .orElseThrow(() -> new SlackSendException(workspaceId, channel, "no_active_slack_connection"));
+        long deadline = System.nanoTime() + Duration.ofSeconds(30).toNanos();
+        // Consent readback shares one short budget so a throttled later page leaves time for the write fence.
+        var budget = maxPages == 1
+                ? SlackBackoff.history(rateLimitTracker, workspaceId)
+                : SlackBackoff.interactive(rateLimitTracker, workspaceId);
+        String cursor = null;
         try {
-            List<Message> messages;
-            String error;
-            boolean more;
-            if (threadTs == null) {
-                var r = callHonoringRateLimit(
-                        SlackBackoff.history(rateLimitTracker, workspaceId),
-                        () -> slack.methods(token)
-                                .conversationsHistory(req -> req.channel(channel)
-                                        .oldest(oldest)
-                                        .inclusive(true)
-                                        .includeAllMetadata(true)
-                                        .limit(HISTORY_MATCH_LIMIT)));
-                messages = r.getMessages();
-                error = r.isOk() ? null : Objects.requireNonNullElse(r.getError(), "unknown");
-                more = Matches.holdsMore(r.isHasMore(), r.getResponseMetadata());
-            } else {
-                var r = callHonoringRateLimit(
-                        SlackBackoff.history(rateLimitTracker, workspaceId),
-                        () -> slack.methods(token)
-                                .conversationsReplies(req -> req.channel(channel)
-                                        .ts(threadTs)
-                                        .oldest(oldest)
-                                        .inclusive(true)
-                                        .includeAllMetadata(true)
-                                        .limit(HISTORY_MATCH_LIMIT)));
-                messages = r.getMessages();
-                error = r.isOk() ? null : Objects.requireNonNullElse(r.getError(), "unknown");
-                more = Matches.holdsMore(r.isHasMore(), r.getResponseMetadata());
+            for (int page = 0; page < maxPages; page++) {
+                String pageCursor = cursor;
+                List<Message> messages;
+                String error;
+                boolean more;
+                String nextCursor;
+                if (threadTs == null) {
+                    var r = callHonoringRateLimit(
+                            budget,
+                            () -> slack.methods(token)
+                                    .conversationsHistory(req -> req.channel(channel)
+                                            .oldest(oldest)
+                                            .inclusive(true)
+                                            .includeAllMetadata(true)
+                                            .cursor(pageCursor)
+                                            .limit(HISTORY_MATCH_LIMIT)));
+                    messages = r.getMessages();
+                    error = r.isOk() ? null : Objects.requireNonNullElse(r.getError(), "unknown");
+                    var responseMetadata = r.getResponseMetadata();
+                    more = Matches.holdsMore(r.isHasMore(), responseMetadata);
+                    nextCursor = responseMetadata == null ? null : responseMetadata.getNextCursor();
+                } else {
+                    var r = callHonoringRateLimit(
+                            budget,
+                            () -> slack.methods(token)
+                                    .conversationsReplies(req -> req.channel(channel)
+                                            .ts(threadTs)
+                                            .oldest(oldest)
+                                            .inclusive(true)
+                                            .includeAllMetadata(true)
+                                            .cursor(pageCursor)
+                                            .limit(HISTORY_MATCH_LIMIT)));
+                    messages = r.getMessages();
+                    error = r.isOk() ? null : Objects.requireNonNullElse(r.getError(), "unknown");
+                    var responseMetadata = r.getResponseMetadata();
+                    more = Matches.holdsMore(r.isHasMore(), responseMetadata);
+                    nextCursor = responseMetadata == null ? null : responseMetadata.getNextCursor();
+                }
+                if (error != null) throw new SlackSendException(workspaceId, channel, error);
+                List<String> matched = (messages == null ? List.<Message>of() : messages)
+                        .stream()
+                                .filter(match)
+                                .map(Message::getTs)
+                                .filter(ts -> ts != null && !ts.isBlank())
+                                .sorted(SlackTs::compare)
+                                .toList();
+                if (!matched.isEmpty() || !more) return new Matches(matched, more);
+                if (nextCursor == null || nextCursor.isBlank() || System.nanoTime() >= deadline)
+                    return new Matches(List.of(), true);
+                cursor = nextCursor;
             }
-            if (error != null) {
-                throw new SlackSendException(workspaceId, channel, error);
-            }
-            List<String> matched = (messages == null ? List.<Message>of() : messages)
-                    .stream()
-                            .filter(match)
-                            .map(Message::getTs)
-                            .filter(ts -> ts != null && !ts.isBlank())
-                            .sorted(SlackTs::compare)
-                            .toList();
-            return new Matches(matched, more);
+            return new Matches(List.of(), true);
         } catch (SlackApiException | IOException e) {
             throw new SlackSendException(workspaceId, channel, "transport_failure", e);
         }
@@ -617,13 +648,7 @@ public class SlackMessageService {
     }
 
     public void joinPublicChannel(long workspaceId, String channelId) {
-        try {
-            callWrite(workspaceId, channelId, methods -> methods.conversationsJoin(req -> req.channel(channelId)));
-        } catch (SlackSendException e) {
-            if (!"silent_mode_engaged".equals(e.slackError())) {
-                throw e;
-            }
-        }
+        callWrite(workspaceId, channelId, methods -> methods.conversationsJoin(req -> req.channel(channelId)));
     }
 
     private static SlackConversationInfo toConversationInfo(Conversation conversation) {

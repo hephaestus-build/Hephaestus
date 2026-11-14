@@ -61,11 +61,20 @@ public final class SlackMentorPosts {
     /**
      * Tags a Hephaestus notice in the DM, such as a refusal, so reply readback never takes a notice for an answer.
      */
-    public static Message.Metadata noticeMetadata() {
+    public static Message.Metadata noticeMetadata(UUID actionId) {
         return Message.Metadata.builder()
                 .eventType(NOTICE_EVENT_TYPE)
-                .eventPayload(Map.of("kind", "notice"))
+                .eventPayload(Map.of("action_id", actionId.toString()))
                 .build();
+    }
+
+    static boolean isNoticeOf(Message message, UUID actionId) {
+        var metadata = message.getMetadata();
+        return metadata != null
+                && NOTICE_EVENT_TYPE.equals(metadata.getEventType())
+                && metadata.getEventPayload() != null
+                && actionId.toString()
+                        .equals(String.valueOf(metadata.getEventPayload().get("action_id")));
     }
 
     /** Whether a Slack message is the post of this entry, by its metadata. */

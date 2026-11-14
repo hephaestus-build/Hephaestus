@@ -129,8 +129,9 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
         channel.setSlackChannelId(CHANNEL);
         channel.setConsentState(ConsentState.ACTIVE);
         // Announced well before every test message ts (100.1 / 200.1 / 300.1), so the forward-only ingest invariant
-        // (ts > consent_announced_at) is satisfied and only the person firewall differentiates the two authors.
+        // (ts > ingest_after) is satisfied and only the person firewall differentiates the two authors.
         channel.setConsentAnnouncedAt(Instant.ofEpochSecond(1));
+        channel.setIngestAfter(Instant.ofEpochSecond(1));
         monitoredChannelRepository.save(channel);
 
         // The two resolvers are pure lookups — mocked so the test exercises the REAL gates + REAL persistence.

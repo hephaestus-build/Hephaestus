@@ -111,6 +111,7 @@ class SlackIngestOutsideTransactionsIntegrationTest extends BaseIntegrationTest 
         monitored.setSlackChannelId(channel);
         monitored.setConsentState(SlackMonitoredChannel.ConsentState.ACTIVE);
         monitored.setConsentAnnouncedAt(Instant.ofEpochSecond(1));
+        monitored.setIngestAfter(Instant.ofEpochSecond(1));
         channels.save(monitored);
         if (identityProviders
                 .findByTypeAndServerUrl(IdentityProviderType.SLACK, "https://slack.com")
