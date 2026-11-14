@@ -8,7 +8,7 @@
 
 ## How to test
 
-<!-- List the behavior that you tested. Give the exact steps or commands to reproduce it. -->
+<!-- List the behavior that you tested. Give the exact steps or commands to reproduce it. Name the behavior that each added, changed or deleted test protects. -->
 
 ## Release impact
 

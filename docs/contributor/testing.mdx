@@ -9,10 +9,85 @@ Choose the tier by the behavior under test. [Gradle recipes](#gradle-recipes) li
 JUnit tags select tests independently of filenames. Use descriptive `*Test` and `*IntegrationTest`
 names for readers.
 
+## What a test protects
+
+A test earns its place when it protects a behavior that a user, an operator or a calling program depends on.
+Its name states that behavior.
+Apply two checks to each test that you add or change:
+
+- **Refactor check.** A correct change that keeps the behavior must not break the test.
+  A test that breaks anyway is a change detector. Rewrite it against the behavior, or delete it.
+- **Defect check.** A plausible bug in the behavior must break the test.
+  A test that no bug can break is a tautology. A deliberate break shows it.
+  For security-boundary classes, a [mutation run](./security-mutation-testing.md) shows it too.
+
+Test through the surface that callers use:
+
+| Subject | Surface | Assert |
+| --- | --- | --- |
+| Server behavior | HTTP through `WebTestClient`, or the public method of a domain service | The response, and the rows that the test created |
+| A call to a provider | A fake at the process boundary, such as `ScriptedGitHub` | What reached the provider |
+| Component | Its props, in a story | What the component derives and renders, and each callback it fires with its arguments |
+| SPA wire contract | The real router, in a route test | The request that it sends |
+| Chart | Values, through `helm template` | The rendered fields that the test name states |
+| Policy over configuration | Every workflow or every manifest | A property that holds for each one |
+
+Use the real collaborator. Use a test double only at a process boundary, or for time and randomness.
+Assert the resulting state, not the calls that produced it.
+A `verify` of a call on a collaborator in the same process breaks on a correct refactor.
+It also passes when the collaborator does the wrong thing, such as a query without its `TYPE(…)` predicate.
+
+### Goldens and snapshots
+
+A golden file or a snapshot pins bytes. Use one only for these subjects:
+
+- A generated artifact whose diff a person reviews, such as the OpenAPI spec, the generated clients or the ERD.
+- A wire contract between two programs. Examples are a tool schema's structure, runner output that the server parses, and a recorded webhook.
+- A rendered story in Chromatic, which a person approves.
+- A characterization of current behavior while a refactor runs. Delete it when the refactor merges.
+
+For other subjects, assert the behavior that the golden shows.
+A golden that fails on every edit gives no signal, and the reviewer only regenerates it.
+
+### Prompts and model behavior
+
+Deterministic tests protect the contract that the code depends on:
+
+- The structure of each tool schema: names, types, required fields and allowed values.
+- The prompt sections that the code reads.
+- The data that each turn receives, and the data that it withholds.
+- Every tool and field name that a prompt mentions exists in the schema.
+- The parsing and checking of model output.
+
+Do not test prompt wording.
+A wording pin fails on an improvement and on a removed rule alike, so it cannot tell them apart.
+
+Behavior quality is a measurement on labelled cases ([Feedback quality evaluation](./feedback-quality-evals.md)).
+Label each failure mode pass or fail. Validate a model judge against human labels before you use its result.
+A safety rule, such as the rule that quoted instructions are data, gets labelled cases, not a wording pin.
+
+### Delete a test
+
+Delete a test with the same care as you add one.
+The pull request states the behavior that the test protected.
+It names the test that protects that behavior now, or says why no test needs to protect it.
+Improve a test that guards trust, tenancy or the verifiable release. Never weaken it.
+A flaky test is a broken test ([Flaky tests](#flaky-tests)).
+
+### Test-value review
+
+`vp run report:test-churn` ranks tests and test-resource directories by the number of `refactor` and `perf` commits that modified them, then by all commits that changed them.
+Those commit types declare that behavior stays the same. Thus, a test near the top is a candidate change detector.
+A policy test, such as an architecture rule or the CI contract, changes when its subject changes. That alone does not make it a change detector.
+The report does not find a test that only `fix` and `feat` commits rewrite.
+
+Maintainers run the report each month. They apply the two checks to the top entries, and keep, rewrite or delete each one.
+`--since` sets the start of the window (default: 90 days ago), `--top` the number of rows, and `--ref` the branch.
+
 ## Unit tests
 
 - Extend `BaseUnitTest` for isolated component tests.
-- Use Mockito (`@Mock`, `@InjectMocks`) for dependencies.
+- Use the real collaborator. Use a Mockito double (`@Mock`) only at a process boundary, or for time and randomness.
 - Keep unit tests independent of Spring contexts and Testcontainers.
 
 ## Integration tests
