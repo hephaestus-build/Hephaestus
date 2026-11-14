@@ -174,6 +174,7 @@ public class ReviewCommandListener {
                         : refused(rejected.eventReason(), kind);
             case REQUEST_CONFLICT -> "a review of this " + work(kind) + " is already running.";
             case PRACTICES_CHANGED -> "the practices changed while it was being requested. Ask again.";
+            case VERSION_CHANGED -> "the " + work(kind) + " changed while it was being requested. Ask again.";
             default -> "it could not be started.";
         };
     }
