@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.composer.ComposerTranscript;
 import de.tum.cit.aet.hephaestus.agent.gateway.AgentGatewayErrors;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.AttemptCaptureFailures;
@@ -35,7 +36,8 @@ class SandboxBusyAnswerTest extends BaseUnitTest {
         var proxy = mock(LlmProxyService.class);
         when(proxy.proxy(any(), any(), any(), any())).thenThrow(LOCK_TIMEOUT);
 
-        var response = gateway(new LlmProxyController(proxy))
+        var response = gateway(
+                        new LlmProxyController(proxy, mock(ComposerTranscript.class), mock(ProxyAccounting.class)))
                 .perform(post("/internal/llm/responses")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
