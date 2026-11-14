@@ -10,8 +10,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.AgentWorkspacePurgeAdapter;
 import de.tum.cit.aet.hephaestus.agent.AgentCapacityProperties;
+import de.tum.cit.aet.hephaestus.agent.AgentWorkspacePurgeAdapter;
 import de.tum.cit.aet.hephaestus.agent.catalog.DataHandlingFacts;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPool;
@@ -432,10 +432,9 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 .hasMessageContaining("a review job keeps the run that it handed off");
         var composition = claimLeased(jobs.findById(job.getId()).orElseThrow()).orElseThrow();
         int attempt = jobs.findById(job.getId()).orElseThrow().getAttempt();
-        assertThat(transactions.execute(status -> jobs.handOffToRun(
-                        job.getId(), composition.fence().runId(), attempt, UUID.randomUUID())))
-                .as("a composition cannot hand off again")
-                .isZero();
+        Integer handedOffAgain = transactions.execute(status ->
+                jobs.handOffToRun(job.getId(), composition.fence().runId(), attempt, UUID.randomUUID()));
+        assertThat(handedOffAgain).as("a composition cannot hand off again").isZero();
         assertThatThrownBy(() -> transactions.executeWithoutResult(
                         status -> jdbc.update("DELETE FROM review_job WHERE id=?", job.getId())))
                 .rootCause()

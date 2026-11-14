@@ -305,7 +305,7 @@ public class ReviewRunKind implements AgentRunHandler {
         if (resumable == null) return false;
         AgentRunRef ended = new AgentRunRef(resumable.getRunId(), workspaceId);
         // A review that composed on its review run, before composition had a run of its own, resumes on one. That run
-        // ended COMPLETED long ago and an ended run does not change, so it is resumed work like any other, not a hand-off.
+        // ended COMPLETED long ago and does not change, so it is resumed work like any other, not a hand-off.
         AgentRunRef next = runs.find(ended).map(AgentRun::getKind).orElseThrow() == AgentRunKind.REVIEW_COMPOSE
                 ? runs.continueAfter(ended, resumable.getEpoch(), Duration.ZERO, compositionExecutionWindow())
                 : runs.continueAs(
