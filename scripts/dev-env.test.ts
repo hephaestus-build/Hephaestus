@@ -348,6 +348,42 @@ await describe("the host ports of a worktree", async () => {
 		});
 	});
 
+	await test("an older main checkout keeps the defaults beside a worktree that the old guide set up, in either order", async () => {
+		const handSet = "SERVER_PORT=8090\nSANDBOX_API_PORT=8091\n";
+		// The hand-set worktree runs first, then the main checkout.
+		await checkout(async ({ envFile: worktree }) => {
+			await writeFile(worktree, handSet);
+			await ensurePorts({ envFile: worktree, others: [{}], created: false, environment: {} });
+			const worktreeFile = await readEnvFile(worktree);
+			assert.equal(worktreeFile.POSTGRES_PORT, "5442");
+			await checkout(async ({ envFile: main }) => {
+				await writeFile(main, "COMPOSE_PROJECT_NAME=main\n");
+				assert.deepEqual(
+					await ensurePorts({
+						envFile: main,
+						others: [worktreeFile],
+						created: false,
+						environment: {},
+					}),
+					defaults,
+				);
+			});
+		});
+		// The main checkout runs first, then the hand-set worktree.
+		await checkout(async ({ envFile: main }) => {
+			await writeFile(main, "COMPOSE_PROJECT_NAME=main\n");
+			assert.deepEqual(
+				await ensurePorts({
+					envFile: main,
+					others: [{ SERVER_PORT: "8090", SANDBOX_API_PORT: "8091" }],
+					created: false,
+					environment: {},
+				}),
+				defaults,
+			);
+		});
+	});
+
 	await test("the management port follows a server port the developer set", async () => {
 		await checkout(async ({ envFile }) => {
 			await writeFile(envFile, "SERVER_PORT=18080\n");

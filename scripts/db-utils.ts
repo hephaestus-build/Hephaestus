@@ -7,7 +7,7 @@ import { parseArgs } from "node:util";
 import { XMLParser } from "fast-xml-parser";
 import { SyntaxValidator } from "fast-xml-validator";
 
-import { ensureLocalEnvironment } from "./dev-env.ts";
+import { defaultPort, ensureLocalEnvironment } from "./dev-env.ts";
 import { migrationFilename, NEXT_CHANGELOG_DIRECTORY } from "./lib/changelog.ts";
 import { isSet, positivePort, readEnvFile } from "./lib/env.ts";
 import { asArray, asRecord } from "./lib/json.ts";
@@ -39,7 +39,7 @@ async function config(): Promise<Config> {
 		env,
 		ci: env.CI === "true",
 		host: env.POSTGRES_HOST ?? "localhost",
-		port: positivePort(env.POSTGRES_PORT ?? "5432", "POSTGRES_PORT"),
+		port: positivePort(env.POSTGRES_PORT ?? String(defaultPort("POSTGRES_PORT")), "POSTGRES_PORT"),
 	};
 }
 

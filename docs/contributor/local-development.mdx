@@ -223,8 +223,8 @@ Every consumer reads the same file:
 - `vp run check:ports` checks the ports before you start the stack.
 
 A worktree whose `server/.env` sets no ports runs on the defaults.
-A new `server/.env` avoids those ports, because such a worktree can be running.
-An existing `server/.env` without ports keeps the defaults, unless another worktree already wrote them.
+A new `server/.env`, or one that sets some ports, avoids those ports, because such a worktree can be running.
+An existing `server/.env` without ports keeps the defaults, unless another worktree's `server/.env` sets them.
 Then its ports move once, and its sandbox namespace with them ([Kubernetes](#kubernetes)).
 
 The command does not see other clones or other programs.
