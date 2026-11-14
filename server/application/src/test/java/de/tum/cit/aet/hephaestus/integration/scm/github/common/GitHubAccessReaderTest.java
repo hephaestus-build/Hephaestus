@@ -110,7 +110,10 @@ class GitHubAccessReaderTest extends BaseUnitTest {
                 "/repos/acme/widgets/collaborators/ada",
                 new Answer(HttpStatus.NO_CONTENT, ""),
                 "/repos/acme/widgets/collaborators/ada/permission",
-                new Answer(HttpStatus.OK, "{\"permission\":\"write\",\"role_name\":\"release-manager\"}"),
+                new Answer(
+                        HttpStatus.OK,
+                        "{\"role_name\":\"release-manager\",\"user\":{\"permissions\":"
+                                + "{\"pull\":true,\"triage\":true,\"push\":true,\"maintain\":false}}}"),
                 "/repos/acme/widgets/collaborators/grace/permission",
                 new Answer(HttpStatus.OK, "{\"permission\":\"read\",\"role_name\":\"read\"}")));
 

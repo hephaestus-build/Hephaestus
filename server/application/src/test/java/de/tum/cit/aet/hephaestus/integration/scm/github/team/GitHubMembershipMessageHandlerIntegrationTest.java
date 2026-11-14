@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.team;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -269,6 +270,20 @@ class GitHubMembershipMessageHandlerIntegrationTest extends BaseIntegrationTest 
                 .get()
                 .extracting(TeamMembership::getRole)
                 .isEqualTo(TeamMembership.Role.MAINTAINER);
+    }
+
+    @Test
+    void shouldRemoveTheTeamMemberWhenGitHubCannotBeReadForARemoval() throws Exception {
+        GitHubMembershipEventDTO added = loadPayload("membership.added");
+        createTestTeam(
+                required(required(added.team()).id()), required(added.team()).name());
+        handle(added);
+        when(accessReader.teamRole(anyLong(), anyString(), anyString(), anyLong()))
+                .thenThrow(new IllegalStateException("GitHub unavailable"));
+
+        handle(loadPayload("membership.removed"));
+
+        assertThat(memberIsStored(added)).isFalse();
     }
 
     private void handle(GitHubMembershipEventDTO event) {

@@ -147,16 +147,22 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
         String organization = event.organization().login();
         Long userId = event.membership().user().id();
         Optional<Long> scopeId = scopeIdResolver.findScopeIdByOrgLogin(organization);
-        if (userId == null || scopeId.isEmpty() || !accessReader.isReadable(scopeId.get())) {
-            log.debug("Skipped organization member event: reason=noReadableWorkspace, action={}", event.action());
+        if (userId == null || scopeId.isEmpty()) {
+            log.debug("Skipped organization member event: reason=noWorkspace, action={}", event.action());
             return Optional.empty();
+        }
+        boolean removed = event.actionType() == GitHubEventAction.Organization.MEMBER_REMOVED;
+        if (!accessReader.isReadable(scopeId.get())) {
+            // A workspace that cannot read GitHub still applies a removal: removing access is the safe direction.
+            log.debug("Organization member event without a GitHub read: reason=unreadable, action={}", event.action());
+            return removed ? Optional.of(new CurrentMembership(null)) : Optional.empty();
         }
         try {
             return Optional.of(new CurrentMembership(accessReader
                     .organizationRole(scopeId.get(), organization, userId)
                     .orElse(null)));
         } catch (RuntimeException readFailed) {
-            if (event.actionType() != GitHubEventAction.Organization.MEMBER_REMOVED) throw readFailed;
+            if (!removed) throw readFailed;
             log.warn(
                     "Applied organization member removal without reading GitHub: error={}",
                     readFailed.getClass().getSimpleName());

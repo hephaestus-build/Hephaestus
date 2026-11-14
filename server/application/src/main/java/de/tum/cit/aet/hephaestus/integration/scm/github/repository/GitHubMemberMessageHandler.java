@@ -101,9 +101,14 @@ public class GitHubMemberMessageHandler extends AbstractIntegrationMessageHandle
         }
         String[] ownerAndName = repositoryRef.fullName().split("/", 2);
         Optional<Long> scopeId = scopeIdResolver.findScopeIdByRepositoryName(repositoryRef.fullName());
-        if (ownerAndName.length != 2 || scopeId.isEmpty() || !accessReader.isReadable(scopeId.get())) {
-            log.debug("Skipped member event: reason=noReadableWorkspace, action={}", event.action());
+        if (ownerAndName.length != 2 || scopeId.isEmpty()) {
+            log.debug("Skipped member event: reason=noWorkspace, action={}", event.action());
             return Optional.empty();
+        }
+        if (!accessReader.isReadable(scopeId.get())) {
+            // A workspace that cannot read GitHub still applies a removal: removing access is the safe direction.
+            log.debug("Member event without a GitHub read: reason=unreadable, action={}", event.action());
+            return removed ? Optional.of(new CurrentAccess(null)) : Optional.empty();
         }
         try {
             return Optional.of(new CurrentAccess(accessReader

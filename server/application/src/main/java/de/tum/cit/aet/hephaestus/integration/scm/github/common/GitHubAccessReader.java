@@ -62,8 +62,11 @@ public class GitHubAccessReader {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record RepositoryPermission(
-            @Nullable String permission,
-            @JsonProperty("role_name") @Nullable String roleName) {}
+            @JsonProperty("role_name") @Nullable String roleName,
+            @Nullable Grantee user) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record Grantee(@Nullable Map<String, Boolean> permissions) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record TeamRepository(
@@ -117,8 +120,12 @@ public class GitHubAccessReader {
                         owner,
                         repository,
                         login.get())
-                .flatMap(permission -> Optional.ofNullable(
-                        isBaseRole(permission.roleName()) ? permission.roleName() : permission.permission()));
+                .map(permission -> isBaseRole(permission.roleName())
+                        ? Objects.requireNonNull(permission.roleName())
+                        : highest(
+                                permission.user() == null
+                                        ? null
+                                        : permission.user().permissions()));
     }
 
     /** The team's role on the repository when the team has access to it. */
@@ -139,7 +146,10 @@ public class GitHubAccessReader {
             if (body == null) {
                 throw new IllegalStateException("GitHub answered the team repository check without the repository");
             }
-            return Optional.of(isBaseRole(body.roleName()) ? Objects.requireNonNull(body.roleName()) : highest(body));
+            return Optional.of(
+                    isBaseRole(body.roleName())
+                            ? Objects.requireNonNull(body.roleName())
+                            : highest(body.permissions()));
         } catch (WebClientResponseException.NotFound absent) {
             return Optional.empty();
         }
@@ -149,9 +159,9 @@ public class GitHubAccessReader {
         return role != null && REPOSITORY_ROLES.contains(role);
     }
 
-    /** The highest base role among a repository's permission flags. */
-    private static String highest(TeamRepository repository) {
-        Map<String, Boolean> flags = repository.permissions() == null ? Map.of() : repository.permissions();
+    /** The highest base role among GitHub's permission flags, which name the base role a custom role extends. */
+    private static String highest(@Nullable Map<String, Boolean> permissions) {
+        Map<String, Boolean> flags = permissions == null ? Map.of() : permissions;
         if (Boolean.TRUE.equals(flags.get("admin"))) return "admin";
         if (Boolean.TRUE.equals(flags.get("maintain"))) return "maintain";
         if (Boolean.TRUE.equals(flags.get("push"))) return "write";

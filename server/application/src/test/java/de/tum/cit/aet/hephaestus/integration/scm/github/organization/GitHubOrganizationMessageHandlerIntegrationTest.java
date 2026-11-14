@@ -298,6 +298,19 @@ class GitHubOrganizationMessageHandlerIntegrationTest extends BaseIntegrationTes
     }
 
     @Test
+    void shouldApplyARemovalButNoAdditionWhenTheWorkspaceCannotReadGitHub() throws Exception {
+        handler.dispatchEvent(loadPayload("organization.member_added"));
+        when(accessReader.isReadable(anyLong())).thenReturn(false);
+        long organizationId = required(testOrganization.getId());
+
+        handler.dispatchEvent(loadPayload("organization.member_removed"));
+        handler.dispatchEvent(loadPayload("organization.member_added"));
+
+        assertThat(membershipRepository.findUserIdsByOrganizationId(organizationId))
+                .isEmpty();
+    }
+
+    @Test
     void shouldHandleRenamedEvent() throws Exception {
         GitHubOrganizationEventDTO event = loadPayload("organization.renamed");
 

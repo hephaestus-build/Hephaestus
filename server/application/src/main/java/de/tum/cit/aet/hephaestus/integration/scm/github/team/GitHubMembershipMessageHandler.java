@@ -104,9 +104,14 @@ public class GitHubMembershipMessageHandler extends AbstractIntegrationMessageHa
             return Optional.empty();
         }
         Optional<Long> scopeId = scopeIdResolver.findScopeIdByOrgLogin(organization.login());
-        if (scopeId.isEmpty() || !accessReader.isReadable(scopeId.get())) {
-            log.debug("Skipped membership event: reason=noReadableWorkspace, action={}", event.action());
+        if (scopeId.isEmpty()) {
+            log.debug("Skipped membership event: reason=noWorkspace, action={}", event.action());
             return Optional.empty();
+        }
+        if (!accessReader.isReadable(scopeId.get())) {
+            // A workspace that cannot read GitHub still applies a removal: removing access is the safe direction.
+            log.debug("Membership event without a GitHub read: reason=unreadable, action={}", event.action());
+            return removed ? Optional.of(new CurrentMembership(null)) : Optional.empty();
         }
         try {
             return Optional.of(new CurrentMembership(accessReader

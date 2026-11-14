@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.team;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -292,6 +294,19 @@ class GitHubTeamMessageHandlerIntegrationTest extends BaseIntegrationTest {
         applyInOneTransaction(loadPayload("team.repo.removed_from_repository"));
 
         assertThat(storedPermission(team)).isPresent();
+    }
+
+    @Test
+    void shouldGrantNothingAndFailForARetryWhenGitHubCannotBeReadForAnAddition() throws Exception {
+        Team team = storeFixtureTeam();
+        when(accessReader.isReadable(anyLong())).thenReturn(true);
+        when(accessReader.teamRepositoryRole(anyLong(), anyString(), anyString(), anyString(), anyString()))
+                .thenThrow(new IllegalStateException("GitHub unavailable"));
+        GitHubTeamEventDTO added = loadPayload("team.repo.added_to_repository");
+
+        assertThatThrownBy(() -> applyInOneTransaction(added)).isInstanceOf(IllegalStateException.class);
+
+        assertThat(storedPermission(team)).isEmpty();
     }
 
     private Team storeFixtureTeam() {
