@@ -82,7 +82,10 @@ export const NotCheckedYet: Story = {
 export const Checking: Story = {
 	args: { state: { status: "loading" } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Checking…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Checking…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 
@@ -116,6 +119,9 @@ export const AttestationUnconfirmed: Story = {
 export const ClosureInFlight: Story = {
 	args: { pendingDatasetId: expired.datasetId },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Recording…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Recording…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };

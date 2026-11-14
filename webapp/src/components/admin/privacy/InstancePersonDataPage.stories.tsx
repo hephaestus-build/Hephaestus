@@ -159,7 +159,10 @@ export const ActionRejected: Story = {
 export const Downloading: Story = {
 	args: { state: { ...ready, pendingAction: "export" } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Downloading…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Downloading…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(canvas.getByRole("button", { name: "Erase data…" })).toBeDisabled();
 		await expect(canvas.getByLabelText("Account ID")).toBeDisabled();
 		await expect(canvas.getByRole("cell", { name: "practice_result" })).toBeVisible();
@@ -169,7 +172,10 @@ export const Downloading: Story = {
 export const StartingErasure: Story = {
 	args: { state: { ...ready, pendingAction: "erase" } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Starting erasure…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Starting erasure…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(canvas.getByRole("button", { name: "Download JSON export" })).toBeDisabled();
 	},
 };

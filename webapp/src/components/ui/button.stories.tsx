@@ -5,13 +5,7 @@ import { expect, fn, waitFor } from "storybook/test";
 
 import { Button } from "@/components/ui/button";
 
-/**
- * `pending` marks a button whose action is in flight. It acts at once and shows itself late: the
- * button refuses a second press at once and keeps the focus of the reader who pressed it, but it
- * looks the same until the action has taken a second. Only then does the spinner take the place of
- * the leading icon, because a spinner that appears and vanishes in under a second reads as a fault
- * (`webapp/DESIGN.md` § Loading and errors). The caller owns the label ("Saving…").
- */
+/** `pending` and its timing are described on `Button`; `webapp/DESIGN.md` § Loading and errors owns the rule. */
 const meta = {
 	component: Button,
 	parameters: { layout: "padded" },
@@ -66,8 +60,8 @@ function SaveOnPress({ onClick }: Pick<ComponentProps<typeof Button>, "onClick">
 }
 
 /**
- * The press that starts the action. At once, a second press does nothing and the focus stays on the
- * button, while the button looks as it did. The spinner follows only after the delay.
+ * The press that starts the action. At once, the label says "Saving…", a second press does nothing
+ * and the focus stays on the button. The spinner follows only after the delay.
  */
 export const PendingAfterPress: Story = {
 	render: ({ onClick }) => <SaveOnPress onClick={onClick} />,

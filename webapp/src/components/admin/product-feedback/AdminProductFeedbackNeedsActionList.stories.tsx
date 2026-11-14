@@ -82,7 +82,10 @@ export const Default: Story = {
 export const Retrying: Story = {
 	args: { pendingIds: new Set([refused.id]) },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Retrying…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Retrying…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 
@@ -123,7 +126,10 @@ export const ConfirmingErasedReport: Story = {
 		pendingIds: new Set([scrubbed.id]),
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Confirming…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Confirming…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 

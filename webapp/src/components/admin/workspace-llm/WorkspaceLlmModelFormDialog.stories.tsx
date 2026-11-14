@@ -122,7 +122,10 @@ export const Submitting: Story = {
 	play: async () => {
 		const dialog = await screen.findByRole("dialog");
 		await expectSettledVisible(dialog);
-		await expect(within(dialog).getByRole("button", { name: "Saving…" })).toBeDisabled();
+		await expect(within(dialog).getByRole("button", { name: "Saving…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeEnabled();
 	},
 };
@@ -177,7 +180,10 @@ export const RefreshRetrying: Story = {
 	},
 	play: async () => {
 		const dialog = await screen.findByRole("dialog");
-		await expect(within(dialog).getByRole("button", { name: "Retrying…" })).toBeDisabled();
+		await expect(within(dialog).getByRole("button", { name: "Retrying…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(within(dialog).getByLabelText("Display name")).toBeEnabled();
 	},
 };

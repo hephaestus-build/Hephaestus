@@ -314,7 +314,7 @@ export const FollowProviderPending: Story = {
 	play: async ({ canvas }) => {
 		await expect(
 			canvas.getByRole("button", { name: "Use GitHub role for Alice Johnson" }),
-		).toBeDisabled();
+		).toHaveAttribute("aria-disabled", "true");
 	},
 };
 

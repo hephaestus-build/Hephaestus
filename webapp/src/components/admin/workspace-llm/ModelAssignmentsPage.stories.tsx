@@ -430,7 +430,10 @@ export const Saving: Story = {
 	play: async ({ canvas }) => {
 		const reviews = within(canvas.getByRole("region", { name: "Practice reviews" }));
 		const inHouse = row(reviews, "In-house");
-		await expect(inHouse.getByRole("button", { name: "Saving… for In-house" })).toBeDisabled();
+		await expect(inHouse.getByRole("button", { name: "Saving… for In-house" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(inHouse.getByRole("button", { name: /^Clear assignment/u })).toBeDisabled();
 		await expect(
 			row(reviews, "Cloud").getByRole("button", { name: /^Save assignment/u }),
@@ -452,7 +455,10 @@ export const Clearing: Story = {
 	play: async ({ canvas }) => {
 		const reviews = within(canvas.getByRole("region", { name: "Practice reviews" }));
 		const inHouse = row(reviews, "In-house");
-		await expect(inHouse.getByRole("button", { name: "Clearing… for In-house" })).toBeDisabled();
+		await expect(inHouse.getByRole("button", { name: "Clearing… for In-house" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(inHouse.getByRole("button", { name: /^Save assignment/u })).toBeDisabled();
 		await expect(
 			row(reviews, "Cloud").getByRole("button", { name: /^Clear assignment/u }),
@@ -566,6 +572,9 @@ export const RefreshRetrying: Story = {
 		refreshFailure: { error: { status: 503 }, pending: true, onRetry: fn() },
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Retrying…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Retrying…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };

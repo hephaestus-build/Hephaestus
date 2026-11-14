@@ -316,7 +316,10 @@ export const ScopePreviewPending: Story = {
 		await userEvent.click(canvas.getByRole("radio", { name: "All monitored repositories" }));
 		await userEvent.click(canvas.getByRole("button", { name: "Review changes" }));
 		await expect(canvas.getByRole("status")).toHaveTextContent("Checking impact…");
-		await expect(canvas.getByRole("button", { name: "Checking impact…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Checking impact…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 
@@ -362,7 +365,10 @@ export const ScopeSavePending: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: "Review changes" }));
 		await expect(args.policy.onUpdate).toHaveBeenCalledTimes(1);
 		await expect(canvas.getByText("Saving review scope…")).toBeVisible();
-		await expect(canvas.getByRole("button", { name: "Saving…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Saving…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 

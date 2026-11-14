@@ -27,7 +27,10 @@ export const Default: Story = {
 export const Sending: Story = {
 	args: { isPending: true },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: /sending/iu })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: /sending/iu })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 

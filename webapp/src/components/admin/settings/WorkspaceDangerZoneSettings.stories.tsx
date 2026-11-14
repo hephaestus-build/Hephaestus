@@ -77,7 +77,10 @@ export const PermissionCheckFailed: Story = {
 export const RetryingPermissionCheck: Story = {
 	args: { ownerCheck: { status: "failed", retrying: true, onRetry: fn() } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: /retrying/iu })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: /retrying/iu })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 

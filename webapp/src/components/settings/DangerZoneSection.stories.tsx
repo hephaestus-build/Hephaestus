@@ -49,7 +49,10 @@ export const RequestingExport: Story = {
 	args: { dataExport: exportIn("requesting") },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Requesting export…")).toBeVisible();
-		await expect(canvas.getByRole("button", { name: "Request export" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Request export" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 
@@ -73,7 +76,10 @@ export const ExportReady: Story = {
 export const Downloading: Story = {
 	args: { dataExport: exportIn("ready", true) },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Download" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Download" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 

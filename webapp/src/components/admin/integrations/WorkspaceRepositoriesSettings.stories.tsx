@@ -136,7 +136,7 @@ export const RemoveInProgress: Story = {
 
 		const dialog = await screen.findByRole("alertdialog");
 		const confirm = within(dialog).getByRole("button", { name: /stopping/iu });
-		await expect(confirm).toBeDisabled();
+		await expect(confirm).toHaveAttribute("aria-disabled", "true");
 		await expect(within(dialog).getByRole("button", { name: /cancel/iu })).toBeDisabled();
 	},
 };
@@ -232,7 +232,10 @@ export const RefreshRetrying: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Retrying…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Retrying…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		canvas.getByText("acme/platform/api");
 	},
 };

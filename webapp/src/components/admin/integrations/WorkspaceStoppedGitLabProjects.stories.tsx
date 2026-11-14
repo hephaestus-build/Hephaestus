@@ -88,7 +88,10 @@ export const RemovePending: Story = {
 		const dialog = await openRemove(canvas, "acme/platform/api");
 		await userEvent.click(within(dialog).getByRole("button", { name: "Remove synced work" }));
 
-		await expect(within(dialog).getByRole("button", { name: "Removing…" })).toBeDisabled();
+		await expect(within(dialog).getByRole("button", { name: "Removing…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeDisabled();
 		await userEvent.keyboard("{Escape}");
 		await expectSettledVisible(

@@ -27,7 +27,10 @@ export const OneReport: Story = { args: { count: 1 } };
 export const Moving: Story = {
 	args: { moving: true },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Moving…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Moving…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 	},
 };
 

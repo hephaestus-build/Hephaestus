@@ -98,7 +98,9 @@ const readyProposal = {
 export const Accepting: Story = {
 	args: { proposal: readyProposal, pending: "accept" },
 	play: async () => {
-		await expect(screen.getByRole("button", { name: "Accepting selected fields…" })).toBeDisabled();
+		await expect(
+			screen.getByRole("button", { name: "Accepting selected fields…" }),
+		).toHaveAttribute("aria-disabled", "true");
 		await expect(screen.getByRole("button", { name: "Decline this update" })).toBeDisabled();
 		for (const choice of screen.getAllByRole("radio")) {
 			await expect(choice).toHaveAttribute("aria-disabled", "true");
@@ -138,7 +140,10 @@ export const UnsavedDraft: Story = {
 export const Declining: Story = {
 	args: { proposal: readyProposal, pending: "decline" },
 	play: async () => {
-		await expect(screen.getByRole("button", { name: "Declining update…" })).toBeDisabled();
+		await expect(screen.getByRole("button", { name: "Declining update…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(screen.getByRole("button", { name: "Accept selected fields" })).toBeDisabled();
 		await expect(screen.getByText(/Reset to catalog stays available/u)).toBeVisible();
 		for (const choice of screen.getAllByRole("radio")) {

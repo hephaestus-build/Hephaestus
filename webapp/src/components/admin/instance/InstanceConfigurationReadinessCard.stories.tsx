@@ -156,7 +156,10 @@ export const RefreshRetrying: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Retrying…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Retrying…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(
 			canvas.getByText("Every check that applies to this instance passes."),
 		).toBeVisible();

@@ -41,7 +41,10 @@ export const EmptyTitle: Story = {
 export const Saving: Story = {
 	args: { saving: true },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Saving…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Saving…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expect(canvas.getByRole("textbox", { name: "Issue title" })).toBeDisabled();
 	},
 };

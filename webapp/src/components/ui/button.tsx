@@ -1,9 +1,9 @@
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import { cva, type VariantProps } from "class-variance-authority";
-import { useSpinDelay } from "spin-delay";
 
 import { cn } from "cn";
 import { Spinner } from "@/components/ui/spinner";
+import { usePendingSpinner } from "@/lib/use-pending-spinner";
 
 /**
  * ⚠️ Diverges from the shadcn registry — `shadcn add button` drops the following; re-apply them.
@@ -85,10 +85,9 @@ const buttonVariants = cva(
  * `pending` acts at once and shows itself late. At once, the button ignores activation, so a second
  * press cannot send the action twice. It stays focusable through Base UI's `focusableWhenDisabled`
  * (https://base-ui.com/react/components/button#loading-states): a native `disabled` would drop the
- * focus of the reader who just pressed it. Its look does not change, because a state that appears and
- * vanishes in under a second reads as a fault. Only after `spin-delay`'s second does the `<Spinner />`
- * take the place of the leading icon, and it then stays for at least half a second. The caller owns
- * the label ("Saving…").
+ * focus of the reader who just pressed it. The caller's label confirms the press at once ("Saving…").
+ * The `<Spinner />` takes the place of the leading icon only after a second, then stays for at least
+ * half a second (`usePendingSpinner`), because a spinner that appears and vanishes reads as a fault.
  */
 function Button({
 	className,
@@ -101,8 +100,7 @@ function Button({
 	children,
 	...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants> & { pending?: boolean }) {
-	// `ssr: false`: with the default, a button that mounts pending shows its spinner at once.
-	const showSpinner = useSpinDelay(pending, { delay: 1000, minDuration: 500, ssr: false });
+	const showSpinner = usePendingSpinner(pending);
 	return (
 		<ButtonPrimitive
 			data-slot="button"

@@ -258,7 +258,10 @@ export const RefreshRetrying: Story = {
 		refreshFailure: { error: { status: 503 }, pending: true, onRetry: fn() },
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Retrying…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Retrying…" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		canvas.getByRole("button", { name: "Show error for sync 30" });
 	},
 };

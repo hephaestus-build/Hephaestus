@@ -216,7 +216,10 @@ export const RefreshFailed: Story = {
 	},
 	play: async ({ canvas }) => {
 		canvas.getByText("We could not refresh the audit log");
-		await expect(canvas.getByRole("button", { name: /Retrying/u })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: /Retrying/u })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		canvas.getByText(/cooldownMinutes: 30 → 10/u);
 	},
 };
@@ -225,7 +228,10 @@ export const RefreshFailed: Story = {
 export const LoadMore: Story = {
 	args: { state: { ...loaded(entries), hasMore: true, isLoadingMore: true } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: /Load more/iu })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: /Load more/iu })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
 		await expectTablePlaceholders(canvas.getByRole("table"));
 	},
 };
