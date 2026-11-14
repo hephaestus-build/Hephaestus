@@ -193,9 +193,11 @@ Rehearse a restore on a copy of the instance before you need one.
 4. Do not apply `restore-clone-lockdown.sql` to the live recovery database.
    Verify silent mode, delivery status, review triggers and conversation bindings against the intended live settings.
 5. Plan the provider reconciliation, as [Reconcile external writes after restore](./production-operations-runbook#reconcile-external-writes-after-a-database-restore) describes.
-6. Enable migrations and start the server alone. Verify readiness, authenticated reads and encrypted values.
-7. Before access or delivery resumes, reapply post-backup security and privacy decisions from the restricted incident record.
-   [Before restarting services](./backup-restore#before-restarting-services) gives the required suspension, session, consent and deletion checks.
+6. Enable migrations and start the server alone through the `erasure-recovery` profile, as [Reapply erasure decisions before processing resumes](#reapply-erasure-decisions-before-processing-resumes) describes.
+   Do not start it without the profile first. That section owns the order of the erasure steps.
+7. Remove the profile and start the server normally. Verify readiness, authenticated reads and encrypted values.
+   Before access or delivery resumes, reapply the other post-backup decisions from the restricted incident record.
+   [Before restarting services](./backup-restore#before-restarting-services) gives the required suspension, session and consent checks.
 8. Start the worker and require its isolation probe.
    Permit only the approved model endpoint for the controlled test while provider writes remain blocked.
    Test an approved practice review and conversation with delivery paused.
@@ -209,10 +211,16 @@ Rehearse a restore on a copy of the instance before you need one.
 Keep the normal server Deployment stopped while PostgreSQL is restored.
 Keep public access and provider egress closed.
 Before replay or normal processing, the server must pass the `erasure-recovery` startup profile.
-This profile runs the existing person-erasure service before lifecycle workers, scheduled tasks or inbox consumers start.
-A missing or invalid manifest, an unknown provider instance, or an incomplete erasure stops startup.
+The profile turns background work off: no scheduled task, claimer or inbox consumer runs while it is active.
+Startup stops if anything turns background work on again beside it.
+The profile then reapplies every erasure after the recovery point, in this order: disconnects, workspace purges, then people.
+Each step is idempotent, so a restart with the same manifest is safe.
+A missing or invalid manifest, a manifest of version 1, an unknown provider instance, or an incomplete erasure stops startup.
 
 1. From the restricted incident record, prepare a JSON manifest of every erasure after the chosen recovery point.
+   The server's log events `workspace.purged` (with `workspace.id`) and `connection.erased` (with `connection.id` and `workspace.id`) cross-check the record.
+   List each disconnected connection with its workspace ID and connection ID, and each purged workspace with its ID.
+   List each erased person, including an account deleted by its owner, under `people`.
    Include each person's account ID, when known, and all known exact native identities.
    Use numeric user IDs for GitHub and GitLab.
    Use a user ID and team ID for Slack.
@@ -244,10 +252,16 @@ The manifest uses this structure:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "restorePoint": "2026-11-01T00:00:00Z",
   "administratorAccountId": 10,
   "noLaterErasures": false,
+  "disconnects": [
+    {"workspaceId": 3, "connectionId": 17}
+  ],
+  "workspacePurges": [
+    {"workspaceId": 5}
+  ],
   "people": [
     {
       "accountId": 42,
@@ -263,7 +277,10 @@ The manifest uses this structure:
 }
 ```
 
-The administrator must be active and have instance-admin rights in the restored database.
+A disconnect erases the connection's local data and records the removal of what it installed at the provider. That removal runs after provider egress opens again.
+A purge deletes the workspace's data, as the original purge did. It does not wait for work that the restore brought back, because no background work runs.
+A connection or workspace that the restored database does not have, or that is erased already, needs nothing more.
+The administrator must be active and have instance-admin rights in the restored database. Only `people` needs the administrator.
 Another administrator must authorize that administrator's own erasure.
 Set `externalCopiesRemoved` to `true` only after checking the provider locators and confirming removal as the [un-deliver procedure](./production-operations-runbook#un-deliver-external-feedback-then-purge) requires.
 Recovery does not delete provider-hosted copies itself.
@@ -272,14 +289,16 @@ If no erasure happened after the recovery point, the operator must declare that 
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "restorePoint": "2026-11-01T00:00:00Z",
   "noLaterErasures": true,
+  "disconnects": [],
+  "workspacePurges": [],
   "people": []
 }
 ```
 
-An empty list without this declaration does not permit startup.
+Empty lists without this declaration do not permit startup.
 The file itself is never stored in the database or logged.
 The existing erasure workflow temporarily keeps its frozen subject scope while a request is active.
 After completion, only its normal suppression controls and erasure receipts remain.
@@ -297,7 +316,6 @@ The mounted Secret contains private identities.
 Restrict its namespace access to recovery operators.
 This Secret procedure requires a manifest below 1 MiB.
 For a larger manifest, mount a protected read-only volume at the same path instead of a Secret.
-Reapply every later decision in one startup before you permit processing.
 
 Set `NAMESPACE`, `SERVER_DEPLOYMENT` and `ERASURE_MANIFEST` to the namespace, server Deployment and private manifest file.
 
@@ -354,6 +372,7 @@ Ingest deduplication cannot prevent external duplicates after PostgreSQL loses d
 Scheduled sync cannot recover all events in the gap.
 
 1. Reapply post-backup security and privacy decisions before access or delivery resumes.
+   [Reapply erasure decisions before processing resumes](#reapply-erasure-decisions-before-processing-resumes) owns the erasures.
 2. Keep the signing keys. Diagnose missing encryption keys separately from corrupt signing data.
 3. Recover the provider gap, as [Reconcile external writes after restore](./production-operations-runbook#reconcile-external-writes-after-a-database-restore) describes.
 4. Restore with the backup's signed release lock. Then upgrade.

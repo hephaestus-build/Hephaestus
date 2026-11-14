@@ -128,7 +128,8 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
                         IntegrationState.UNINSTALLED,
                         "DISCONNECT",
                         "ADMIN",
-                        persistAccount("restore administrator " + UUID.randomUUID()).getId(),
+                        persistAccount("restore administrator " + UUID.randomUUID())
+                                .getId(),
                         UUID.randomUUID().toString(),
                         null),
                 strategy(IntegrationKind.GITHUB));
@@ -166,7 +167,12 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         assertThat(memberships()).isPositive();
         // Work in flight at the recovery point stays in the restore; the guards that would wait for it do not run.
         syncJobs.saveAndFlush(new SyncJob(
-                workspace, connection, IntegrationKind.GITHUB, SyncJobType.RECONCILIATION, SyncJobTrigger.MANUAL, null));
+                workspace,
+                connection,
+                IntegrationKind.GITHUB,
+                SyncJobType.RECONCILIATION,
+                SyncJobTrigger.MANUAL,
+                null));
 
         String manifest = """
                 {"version":2,"restorePoint":"2026-01-01T00:00:00Z","noLaterErasures":false,"people":[],
@@ -231,18 +237,13 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
      * deletes the repairs that the workspace's links name and the backup did not hold.
      */
     private record Backup(
-            JdbcTemplate jdbc,
-            long workspaceId,
-            Map<String, List<Map<String, Object>>> rows,
-            Set<String> generated) {
+            JdbcTemplate jdbc, long workspaceId, Map<String, List<Map<String, Object>>> rows, Set<String> generated) {
 
         static Backup of(JdbcTemplate jdbc, long workspaceId) {
-            var generated = Set.copyOf(jdbc.queryForList(
-                    """
+            var generated = Set.copyOf(jdbc.queryForList("""
                     SELECT table_name || '.' || column_name FROM information_schema.columns
                      WHERE table_schema = current_schema() AND is_generated = 'ALWAYS'
-                    """,
-                    String.class));
+                    """, String.class));
             var rows = new LinkedHashMap<String, List<Map<String, Object>>>();
             rows.put("workspace", jdbc.queryForList("SELECT * FROM workspace WHERE id = ?", workspaceId));
             for (String table : workspaceTables(jdbc)) {
@@ -252,15 +253,13 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
         }
 
         private static List<String> workspaceTables(JdbcTemplate jdbc) {
-            return jdbc.queryForList(
-                    """
+            return jdbc.queryForList("""
                     SELECT c.table_name FROM information_schema.columns c
                       JOIN information_schema.tables t ON t.table_schema = c.table_schema AND t.table_name = c.table_name
                      WHERE c.table_schema = current_schema() AND c.column_name = 'workspace_id'
                        AND t.table_type = 'BASE TABLE'
                      ORDER BY c.table_name
-                    """,
-                    String.class);
+                    """, String.class);
         }
 
         void restore() throws SQLException {
@@ -273,7 +272,8 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
                 session.setAutoCommit(false);
                 var restore = new JdbcTemplate(new SingleConnectionDataSource(session, true));
                 restore.execute("SET LOCAL session_replication_role = replica");
-                restore.execute("SET LOCAL search_path TO " + jdbc.queryForObject("SELECT current_schema()", String.class));
+                restore.execute(
+                        "SET LOCAL search_path TO " + jdbc.queryForObject("SELECT current_schema()", String.class));
                 for (UUID recorded : restore.queryForList(
                         "SELECT repair_id FROM connection_provider_repair WHERE workspace_id = ?",
                         UUID.class,
@@ -295,8 +295,8 @@ class ErasureRecoveryRestoreIntegrationTest extends AbstractWorkspaceIntegration
             var stored = row.entrySet().stream()
                     .filter(column -> !generated.contains(table + "." + column.getKey()))
                     .toList();
-            var columns = String.join(
-                    ", ", stored.stream().map(Map.Entry::getKey).toList());
+            var columns =
+                    String.join(", ", stored.stream().map(Map.Entry::getKey).toList());
             var values = String.join(", ", stored.stream().map(column -> "?").toList());
             restore.update(
                     "INSERT INTO " + table + " (" + columns + ") OVERRIDING SYSTEM VALUE VALUES (" + values + ")",

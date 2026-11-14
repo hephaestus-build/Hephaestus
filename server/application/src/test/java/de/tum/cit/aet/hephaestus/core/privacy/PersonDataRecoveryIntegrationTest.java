@@ -230,11 +230,13 @@ class PersonDataRecoveryIntegrationTest extends BaseIntegrationTest {
             }
         }
         Path manifest = manifest(mapper.writeValueAsString(new PersonDataRecovery.Manifest(
-                1,
+                2,
                 Instant.parse("2026-01-01T00:00:00Z"),
                 false,
                 administratorId,
-                List.of(new PersonDataRecovery.Person(null, identities, false)))));
+                List.of(new PersonDataRecovery.Person(null, identities, false)),
+                List.of(),
+                List.of())));
         var processing = new AtomicBoolean();
         try (var context = context(manifest, processing)) {
             context.refresh();

@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.RestoredDisconnects;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import java.util.EnumMap;
@@ -22,7 +22,9 @@ class RestoredConnectionErasure implements RestoredDisconnects {
     private final Map<IntegrationKind, ConnectionStrategy> strategies = new EnumMap<>(IntegrationKind.class);
 
     RestoredConnectionErasure(
-            ConnectionRepository connections, ConnectionService connectionService, List<ConnectionStrategy> strategies) {
+            ConnectionRepository connections,
+            ConnectionService connectionService,
+            List<ConnectionStrategy> strategies) {
         this.connections = connections;
         this.connectionService = connectionService;
         for (ConnectionStrategy strategy : strategies) this.strategies.put(strategy.kind(), strategy);
@@ -30,7 +32,8 @@ class RestoredConnectionErasure implements RestoredDisconnects {
 
     @Override
     public boolean disconnectAgain(long workspaceId, long connectionId) {
-        var connection = connections.findByIdAndWorkspaceId(connectionId, workspaceId).orElse(null);
+        var connection =
+                connections.findByIdAndWorkspaceId(connectionId, workspaceId).orElse(null);
         if (connection == null || connection.getState() == IntegrationState.UNINSTALLED) return false;
         ConnectionStrategy strategy = strategies.get(connection.getKind());
         // Without its strategy nothing can erase the connection's data, so recovery stops rather than skip it.
@@ -44,8 +47,8 @@ class RestoredConnectionErasure implements RestoredDisconnects {
                         "erasure-recovery",
                         "erasure-recovery-" + connectionId,
                         "Disconnected again after a database restore"),
-                () -> strategy.eraseLocalData(
-                        new IntegrationRef(connection.getKind(), workspaceId, connection.getInstanceKey(), connectionId)));
+                () -> strategy.eraseLocalData(new IntegrationRef(
+                        connection.getKind(), workspaceId, connection.getInstanceKey(), connectionId)));
         return true;
     }
 }

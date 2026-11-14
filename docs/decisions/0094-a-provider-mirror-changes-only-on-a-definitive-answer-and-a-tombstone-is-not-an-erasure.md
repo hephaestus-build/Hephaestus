@@ -69,9 +69,10 @@ A rule that main does not satisfy yet says "1.0 target".
     Enforced by: `AccountErasureIntegrationTest#erasesTargetAcrossTwoWorkspacesAndEveryRegisteredStoreWithoutTouchingAnotherPerson`.
 15. **A restore reapplies person erasures before work resumes.** Off-host pgBackRest backups are optional and off by default. Erased data stays in a backup until that backup expires. After a restore, the `erasure-recovery` profile reapplies each later person erasure from a private manifest. It does this before schedulers and consumers start.
     Enforced by: `PersonDataRecoveryIntegrationTest#shouldReapplyAnErasureLostByARestoreBeforeProcessingStarts`, `PersonDataRecoveryStartupIntegrationTest#shouldBindTheRecoveryProfileAndCompleteBeforeSchedulersAndConsumersStart`.
-16. **An erasure survives a backup restore.** The `erasure-recovery` profile reapplies every erasure made after the recovery point: person erasures, workspace purges and disconnect erasures.
-    Decided, not shipped: on main it reapplies person erasures only. [Backup and restore](../admin/backup-restore.mdx) tells the operator to reapply the others by hand. No pull request delivers it yet.
-    Not enforced until it ships.
+16. **An erasure survives a backup restore.** The `erasure-recovery` profile reapplies every erasure made after the recovery point: person erasures, including accounts deleted by their owners, workspace purges and disconnect erasures.
+    The operator lists them in a version 2 manifest outside the database. The profile runs with background work off and refuses to start beside it, so the purge needs no quiescence guard.
+    [Backup and restore](../admin/backup-restore.mdx#reapply-erasure-decisions-before-processing-resumes) owns the procedure.
+    Enforced by: `ErasureRecoveryRestoreIntegrationTest#shouldPurgeAgainAWorkspaceThatARestoreBroughtBack`, `ErasureRecoveryRestoreIntegrationTest#shouldDisconnectAgainAConnectionThatARestoreBroughtBack`, `PersonDataRecoveryIntegrationTest#shouldRefuseToRecoverBesideBackgroundWork`.
 
 ## What changed, and why
 
