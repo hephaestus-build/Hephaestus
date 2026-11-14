@@ -58,6 +58,7 @@ public class ActionExecutor {
     private final ObjectMapper mapper;
     private final Map<ActionKind, ActionAdapter> adapters = new EnumMap<>(ActionKind.class);
     private final MeterRegistry meters;
+    private final ActionAdmission admission;
 
     public ActionExecutor(ActionStore store, ObjectMapper mapper, List<ActionAdapter> adapters, MeterRegistry meters) {
         this.store = store;
@@ -68,6 +69,7 @@ public class ActionExecutor {
                 throw new IllegalStateException("Two adapters carry out " + adapter.kind());
         for (ActionKind kind : ActionKind.values())
             if (!this.adapters.containsKey(kind)) throw new IllegalStateException("No adapter carries out " + kind);
+        admission = ActionAdmission.of(adapters);
         // Alerts read an uncertain end and a failed record. A counter that first appears at 1 shows no increase to
         // Prometheus, so each of these series exists at 0 from the start.
         for (ActionKind kind : ActionKind.values())
@@ -82,9 +84,9 @@ public class ActionExecutor {
      */
     @Scheduled(fixedDelayString = "PT1S", initialDelayString = "PT10S")
     public void runDue() {
-        for (UUID id : store.findStale(SLOTS * 4)) {
+        for (UUID id : store.findStale(SLOTS * 4, admission)) {
             try {
-                store.endStale(id, this::ended).ifPresent(this::recordEnd);
+                store.endStale(id, admission, this::ended).ifPresent(this::recordEnd);
             } catch (RuntimeException failed) {
                 // The action stays stale and is ended again on the next run; the others go on.
                 log.atWarn()
@@ -97,7 +99,7 @@ public class ActionExecutor {
             }
         }
         store.deleteEnded(RETENTION);
-        var claims = store.claim(SLOTS, LEASE);
+        var claims = store.claim(SLOTS, LEASE, admission);
         if (!claims.isEmpty()) runBatch(claims, LEASE);
     }
 
@@ -131,7 +133,7 @@ public class ActionExecutor {
 
     /** Carries out an admitted lane head now with its registered adapter. */
     public Optional<ActionResult> runNow(UUID id) {
-        return store.claim(id, LEASE).map(this::run);
+        return store.claim(id, LEASE, admission).map(this::run);
     }
 
     ActionResult run(ActionStore.Claim claim) {

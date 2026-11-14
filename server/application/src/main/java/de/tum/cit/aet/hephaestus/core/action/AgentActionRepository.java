@@ -16,8 +16,26 @@ import org.springframework.data.repository.query.Param;
  * The compare-and-set statements of the outbox. Every time is the database clock, so replicas with drifting clocks
  * agree on a lease. Every write after a claim names the claim's epoch and changes nothing when another claim took the
  * row. The trigger {@code guard_agent_action} refuses what {@link ActionState} does not allow.
+ *
+ * <p>During a rolling update, a newer replica may write a row that this build cannot decode: a kind that it does not
+ * declare, or a known kind with a variant that its adapter does not declare ({@link ActionVariants}). The executor's
+ * claims, the reaper and the backlog gauges select only {@link #DECODABLE} rows, so such a row stays as it is. The
+ * retention sweep reads ended rows, which have no payload, and takes {@link ActionKind#names()}. An undecodable row
+ * still holds its lane: the statements that look for a blocker do not filter. A statement of one claimed attempt (id
+ * and epoch), a lane withdrawal, an erasure and a read of one lane or of named keys do not filter. A lane read that
+ * skipped a newer build's row would let its caller enqueue under that row's generation.
  */
 interface AgentActionRepository extends Repository<AgentAction, UUID> {
+
+    /**
+     * Whether this build can decode the row, for a live row (it has a payload): the JSON path of its kind in
+     * {@code :decodable} ({@link ActionAdmission}) must select {@code {key, payload}}. A kind without a path, and a row
+     * that the path does not select, give no match.
+     */
+    String DECODABLE = """
+            jsonb_path_exists(jsonb_build_object('key', idempotency_key, 'payload', payload),
+              CAST(CAST(:decodable AS jsonb) ->> kind AS jsonpath), '{}', true)
+            """;
 
     String CLAIMED = """
             SELECT a.id AS "id", a.workspace_id AS "workspaceId", a.kind AS "kind", a.idempotency_key AS "idempotencyKey",
@@ -113,7 +131,8 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
               UPDATE agent_action c
                  SET state = 'EXECUTING', lease_epoch = c.lease_epoch + 1, attempts = c.attempts + 1,
                      leased_until = clock_timestamp() + make_interval(secs => :lease), updated_at = clock_timestamp()
-               WHERE c.id = :id AND c.state = 'ADMITTED' AND c.next_attempt_at <= clock_timestamp()
+               WHERE c.id = :id AND c.state = 'ADMITTED' AND\s""" + DECODABLE + """
+                 AND c.next_attempt_at <= clock_timestamp()
                  AND (c.expires_at IS NULL OR c.expires_at > clock_timestamp())
                  AND NOT EXISTS (
                    SELECT 1 FROM agent_action b
@@ -121,7 +140,8 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
                       AND (b.state = 'EXECUTING' OR (b.id < c.id AND b.state IN ('PROPOSED', 'ADMITTED'))))
               RETURNING c.*)
             """ + CLAIMED + " FROM a", nativeQuery = true)
-    Optional<ClaimRow> claimById(@Param("id") UUID id, @Param("lease") long leaseSeconds);
+    Optional<ClaimRow> claimById(
+            @Param("id") UUID id, @Param("lease") long leaseSeconds, @Param("decodable") String decodable);
 
     @WorkspaceAgnostic("The idempotency key is unique across the instance and names one action")
     @Query(value = "SELECT id FROM agent_action WHERE idempotency_key = :key", nativeQuery = true)
@@ -240,10 +260,10 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
                        FILTER (WHERE (state = 'ADMITTED' AND next_attempt_at <= clock_timestamp())
                                   OR (state = 'EXECUTING' AND leased_until <= clock_timestamp()))), 0)::bigint
                        AS "oldestDueSeconds"
-              FROM agent_action WHERE state IN ('PROPOSED', 'ADMITTED', 'EXECUTING')
+              FROM agent_action WHERE state IN ('PROPOSED', 'ADMITTED', 'EXECUTING') AND\s""" + DECODABLE + """
              GROUP BY kind, state
             """, nativeQuery = true)
-    List<BacklogRow> backlog();
+    List<BacklogRow> backlog(@Param("decodable") String decodable);
 
     /**
      * Takes up to {@code limit} due lane heads: an admitted action whose time has come, or one whose lease expired.
@@ -257,7 +277,8 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
     @Query(value = """
             WITH due AS (
               SELECT d.id FROM agent_action d
-               WHERE ((d.state = 'ADMITTED' AND d.next_attempt_at <= clock_timestamp()
+               WHERE\s""" + DECODABLE + """
+                 AND ((d.state = 'ADMITTED' AND d.next_attempt_at <= clock_timestamp()
                        AND (d.expires_at IS NULL OR d.expires_at > clock_timestamp()))
                    OR (d.state = 'EXECUTING' AND d.leased_until <= clock_timestamp()
                        AND d.attempts < d.max_attempts
@@ -280,7 +301,8 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
     List<ClaimRow> claim(
             @Param("limit") int limit,
             @Param("lease") long leaseSeconds,
-            @Param("atMostOnce") Collection<String> atMostOnceKinds);
+            @Param("atMostOnce") Collection<String> atMostOnceKinds,
+            @Param("decodable") String decodable);
 
     /**
      * Records that the provider call starts now. Refused when another claim took the action, when an erasure deleted
@@ -372,10 +394,11 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
             WITH ended AS (
               UPDATE agent_action SET state = 'CANCELLED', stop_reason = 'EXPIRED', payload = NULL,
                      ended_at = clock_timestamp(), updated_at = clock_timestamp()
-               WHERE id = :id AND state IN ('PROPOSED', 'ADMITTED') AND expires_at <= clock_timestamp()
+               WHERE id = :id AND state IN ('PROPOSED', 'ADMITTED') AND\s""" + DECODABLE + """
+                 AND expires_at <= clock_timestamp()
               RETURNING id, workspace_id, kind, idempotency_key, state, stop_reason, readback_ref)
             """ + ENDED, nativeQuery = true)
-    Optional<SettledRow> endExpired(@Param("id") UUID id);
+    Optional<SettledRow> endExpired(@Param("id") UUID id, @Param("decodable") String decodable);
 
     /**
      * Ends an attempt whose lease expired when no other attempt may follow: the last attempt, or an at-most-once kind
@@ -389,11 +412,15 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
                      stop_reason = CASE WHEN write_started_at IS NULL THEN 'ATTEMPTS_EXHAUSTED'
                        ELSE 'LEASE_LOST_AFTER_WRITE' END,
                      payload = NULL, leased_until = NULL, ended_at = clock_timestamp(), updated_at = clock_timestamp()
-               WHERE id = :id AND state = 'EXECUTING' AND leased_until <= clock_timestamp()
+               WHERE id = :id AND state = 'EXECUTING' AND\s""" + DECODABLE + """
+                 AND leased_until <= clock_timestamp()
                  AND (attempts >= max_attempts OR (write_started_at IS NOT NULL AND kind IN (:atMostOnce)))
               RETURNING id, workspace_id, kind, idempotency_key, state, stop_reason, readback_ref)
             """ + ENDED, nativeQuery = true)
-    Optional<SettledRow> endLost(@Param("id") UUID id, @Param("atMostOnce") Collection<String> atMostOnceKinds);
+    Optional<SettledRow> endLost(
+            @Param("id") UUID id,
+            @Param("atMostOnce") Collection<String> atMostOnceKinds,
+            @Param("decodable") String decodable);
 
     /**
      * Up to {@code limit} actions that can no longer run: expired before they started, or lost their lease when no
@@ -402,12 +429,16 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
     @WorkspaceAgnostic("The reaper finds stale actions of every workspace")
     @Query(value = """
             SELECT id FROM agent_action
-             WHERE (state IN ('PROPOSED', 'ADMITTED') AND expires_at <= clock_timestamp())
-                OR (state = 'EXECUTING' AND leased_until <= clock_timestamp()
-                    AND (attempts >= max_attempts OR (write_started_at IS NOT NULL AND kind IN (:atMostOnce))))
+             WHERE\s""" + DECODABLE + """
+               AND ((state IN ('PROPOSED', 'ADMITTED') AND expires_at <= clock_timestamp())
+                 OR (state = 'EXECUTING' AND leased_until <= clock_timestamp()
+                     AND (attempts >= max_attempts OR (write_started_at IS NOT NULL AND kind IN (:atMostOnce)))))
              ORDER BY id LIMIT :limit
             """, nativeQuery = true)
-    List<UUID> findStale(@Param("atMostOnce") Collection<String> atMostOnceKinds, @Param("limit") int limit);
+    List<UUID> findStale(
+            @Param("atMostOnce") Collection<String> atMostOnceKinds,
+            @Param("decodable") String decodable,
+            @Param("limit") int limit);
 
     /** Waits for an in-flight settlement before checking which scoped outcomes can be forgotten. */
     @Query(
@@ -424,11 +455,16 @@ interface AgentActionRepository extends Repository<AgentAction, UUID> {
             nativeQuery = true)
     int deleteEndedByKeys(@Param("workspaceId") long workspaceId, @Param("keys") Collection<String> keys);
 
-    /** Deletes ended actions after retention, except Slack outcomes needed by their conversation and replay key. */
+    /**
+     * Deletes ended actions of a known kind after retention, except Slack outcomes needed by their conversation and
+     * replay key. A newer build's kind may keep its outcomes longer or shorter, so this build never decides it.
+     */
     @WorkspaceAgnostic("The retention sweep deletes ended actions of every workspace")
     @Modifying
     @Query(value = """
-            DELETE FROM agent_action WHERE ended_at < clock_timestamp() - make_interval(days => :days) AND kind <> 'SLACK_POST'
+            DELETE FROM agent_action
+             WHERE ended_at < clock_timestamp() - make_interval(days => :days)
+               AND kind IN (:kinds) AND kind <> 'SLACK_POST'
             """, nativeQuery = true)
-    int deleteEndedBefore(@Param("days") int retentionDays);
+    int deleteEndedBefore(@Param("days") int retentionDays, @Param("kinds") Collection<String> kinds);
 }

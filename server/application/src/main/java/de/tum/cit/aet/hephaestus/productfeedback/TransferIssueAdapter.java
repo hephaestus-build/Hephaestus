@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionRequest;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.action.ActionState;
 import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
+import de.tum.cit.aet.hephaestus.core.action.ActionVariants;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssueUpdates;
 import de.tum.cit.aet.hephaestus.integration.scm.spi.ProductFeedbackIssues;
@@ -100,6 +101,11 @@ class TransferIssueAdapter implements ActionAdapter {
     @Override
     public ActionKind kind() {
         return ActionKind.TRANSFER_ISSUE;
+    }
+
+    @Override
+    public ActionVariants variants() {
+        return ActionVariants.one(Payload.class);
     }
 
     @Override

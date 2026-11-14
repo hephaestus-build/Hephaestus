@@ -2,8 +2,11 @@ package de.tum.cit.aet.hephaestus.core.action;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Stream;
 import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -117,10 +120,50 @@ public final class ActionTestSupport {
         });
     }
 
+    /** A payload that names no variant. */
+    public record Untyped() {}
+
+    /** An adapter that carries out one kind with {@code execute} and decodes any payload. */
+    public static ActionAdapter adapter(ActionKind kind, Function<ActionAttempt, ActionResult> execute) {
+        return new ActionAdapter() {
+            @Override
+            public ActionKind kind() {
+                return kind;
+            }
+
+            @Override
+            public ActionVariants variants() {
+                return ActionVariants.one(Untyped.class);
+            }
+
+            @Override
+            public ActionResult execute(ActionAttempt attempt) {
+                return execute.apply(attempt);
+            }
+        };
+    }
+
+    /** One adapter for every kind, as the server has. */
+    public static List<ActionAdapter> adapters(Function<ActionAttempt, ActionResult> execute) {
+        return Arrays.stream(ActionKind.values())
+                .map(kind -> adapter(kind, execute))
+                .toList();
+    }
+
+    /** Admits every kind with any payload, for a test of the outbox's own lifecycle. */
+    static ActionAdmission untyped() {
+        return ActionAdmission.of(adapters(attempt -> new ActionResult.Done(null)));
+    }
+
+    /** What the adapters of the context decode. */
+    static ActionAdmission admission(ApplicationContext context) {
+        return ActionAdmission.of(context.getBeansOfType(ActionAdapter.class).values());
+    }
+
     /** Ends one action that can no longer run, as the executor's reaper would; its kind's adapters learn of the end. */
     public static void endStale(ApplicationContext context, UUID id) {
         var adapters = context.getBeansOfType(ActionAdapter.class).values();
-        context.getBean(ActionStore.class).endStale(id, ended -> {
+        context.getBean(ActionStore.class).endStale(id, admission(context), ended -> {
             for (ActionAdapter adapter : adapters) if (adapter.kind() == ended.kind()) adapter.ended(ended);
         });
     }

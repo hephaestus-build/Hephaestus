@@ -54,6 +54,7 @@ The executor claims due lane heads with `FOR UPDATE SKIP LOCKED`.
 A lane head is an action with no executing action in its lane.
 An admitted action also waits for an earlier action of its lane that has not started.
 A reclaim does not wait, so a lane whose holder crashed does not stall.
+This holds for a kind that the replica knows (see [Rows from a newer build](#rows-from-a-newer-build)).
 The unique index `ux_agent_action_lane_executing` allows one executing action per lane, also when two replicas claim at the same moment.
 Every time is the database clock, so replicas with different clocks agree on a lease.
 There is no leader.
@@ -178,11 +179,34 @@ A new kind gets its series and alerts without a change there: each is labelled b
 The executor's log events, such as `action.ended.uncertain`, are in the [Log records](/admin/log-records#agent-run-and-outbox-events).
 Each names `action.id` and `action.kind`, never the payload.
 
+## Rows from a newer build
+
+During a rolling update, a newer replica can write a row that an older replica cannot decode.
+The row has a kind that the older build lacks, or a known kind with a variant that its adapter lacks.
+Examples are an email of a new notice, an enum value in an email's event, and a send action in a feedback's key.
+The older replica does not claim, reclaim, reap or count such a row. It never ends it as failed.
+The newer replica decides it.
+The row still holds its lane: a supported action behind it waits until a replica that knows the row ends it.
+
+Each adapter declares what it decodes, in `ActionAdapter.variants()`. There is no default:
+
+- `ActionVariants.one(Payload.class)` states that the payload names no variant. Its enum components are still checked.
+- `ActionVariants.tagged(tag, body, bodies)` states that a string property of the payload selects the variant, with one body record for each tag.
+- `ActionVariants.keySuffix(values)` states that the last segment of the idempotency key selects the variant.
+
+Each declaration becomes one JSON path. The claims, the reaper and the backlog gauges select only the rows that the path of their kind selects.
+The path derives from the declared types, so the values that an adapter decodes have one home.
+A new variant ships as a new kind, or as a new tag or suffix value that its adapter declares. A new field of an existing variant is optional.
+The retention sweep reads ended rows, which have no payload, so it selects by kind only.
+
+A read of one lane or of named keys does not filter, because a skipped row would let the caller enqueue under its generation.
+A reader that decodes the row, such as the feedback send lane, fails on an unknown kind or variant instead.
+
 ## Add a kind
 
 1. Add the value to `ActionKind`. Set `atMostOnce` and `instanceLevel`.
 2. Add the value to `ck_agent_action_kind` in your branch's changelog. If the kind is at most once, add it to `guard_agent_action`. If it is instance-level, add it to `ck_agent_action_workspace`.
-3. Write the adapter in the module that owns the effect.
+3. Write the adapter in the module that owns the effect. Declare what it decodes in `variants()` ([Rows from a newer build](#rows-from-a-newer-build)).
 4. Keep the domain lifecycle, such as a feedback's state, on the domain row. The outbox owns only the delivery of the effect. Move the domain row in `ended`.
 5. Delete the delivery code that the kind replaces, in the same pull request.
 

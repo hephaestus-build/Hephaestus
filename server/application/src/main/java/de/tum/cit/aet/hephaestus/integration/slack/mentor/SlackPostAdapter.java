@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.action.ActionState;
 import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
+import de.tum.cit.aet.hephaestus.core.action.ActionVariants;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ModelLinkHosts;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
@@ -66,6 +67,11 @@ class SlackPostAdapter implements ActionAdapter {
     @Override
     public ActionKind kind() {
         return ActionKind.SLACK_POST;
+    }
+
+    @Override
+    public ActionVariants variants() {
+        return ActionVariants.one(MentorSlackReplies.Payload.class);
     }
 
     @Override

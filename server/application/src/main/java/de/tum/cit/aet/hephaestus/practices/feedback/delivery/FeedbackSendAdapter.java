@@ -5,7 +5,10 @@ import de.tum.cit.aet.hephaestus.core.action.ActionAttempt;
 import de.tum.cit.aet.hephaestus.core.action.ActionEnded;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
+import de.tum.cit.aet.hephaestus.core.action.ActionVariants;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSendQueue;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -14,6 +17,14 @@ import java.util.Objects;
  */
 public record FeedbackSendAdapter(ActionKind kind, FeedbackSendService sender, FeedbackSendTransactions transactions)
         implements ActionAdapter {
+
+    /** The send actions of this kind: the key of an action names its send, and the service decodes it by name. */
+    @Override
+    public ActionVariants variants() {
+        return ActionVariants.keySuffix(Arrays.stream(FeedbackSendAction.values())
+                .filter(action -> FeedbackSendQueue.kindOf(action) == kind)
+                .toList());
+    }
 
     @Override
     public ActionResult execute(ActionAttempt attempt) {

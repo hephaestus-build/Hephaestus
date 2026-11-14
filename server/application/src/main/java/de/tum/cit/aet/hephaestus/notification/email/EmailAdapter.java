@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.action.ActionExecutor;
 import de.tum.cit.aet.hephaestus.core.action.ActionKind;
 import de.tum.cit.aet.hephaestus.core.action.ActionResult;
 import de.tum.cit.aet.hephaestus.core.action.ActionStopReason;
+import de.tum.cit.aet.hephaestus.core.action.ActionVariants;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGateway;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
@@ -20,6 +21,7 @@ import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -91,6 +93,14 @@ public class EmailAdapter implements ActionAdapter {
     @Override
     public ActionKind kind() {
         return ActionKind.EMAIL;
+    }
+
+    /** The kinds whose notice this build has, each with the event that it decodes, enum values included. */
+    @Override
+    public ActionVariants variants() {
+        Map<String, Class<?>> events = new LinkedHashMap<>();
+        notices.forEach((kind, notice) -> events.put(kind.name(), notice.eventType()));
+        return ActionVariants.tagged(PAYLOAD_KIND, PAYLOAD_EVENT, events);
     }
 
     @Override
