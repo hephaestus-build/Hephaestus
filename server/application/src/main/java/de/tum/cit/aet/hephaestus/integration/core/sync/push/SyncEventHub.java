@@ -72,7 +72,7 @@ public class SyncEventHub implements SmartLifecycle {
 
     private final ExecutorService writerExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
-    private final Map<CoalesceKey, SyncEventHint> pendingHints = new ConcurrentHashMap<>();
+    private final Map<CoalesceKey, SyncEventHintDTO> pendingHints = new ConcurrentHashMap<>();
     private final Set<CoalesceKey> pendingFlushes = ConcurrentHashMap.newKeySet();
 
     /** Selects the production constructor when the package-private test constructor is also present. */
@@ -156,7 +156,7 @@ public class SyncEventHub implements SmartLifecycle {
     }
 
     /** Coalesces the latest hint per workspace, connection, and scope. */
-    public void publish(long workspaceId, SyncEventHint hint) {
+    public void publish(long workspaceId, SyncEventHintDTO hint) {
         CoalesceKey key = new CoalesceKey(workspaceId, hint.connectionId(), hint.scope());
         pendingHints.put(key, hint);
         if (pendingFlushes.add(key)) {
@@ -176,13 +176,13 @@ public class SyncEventHub implements SmartLifecycle {
 
     private void flush(CoalesceKey key) {
         pendingFlushes.remove(key);
-        SyncEventHint hint = pendingHints.remove(key);
+        SyncEventHintDTO hint = pendingHints.remove(key);
         if (hint != null) {
             fanOut(key.workspaceId(), hint);
         }
     }
 
-    private void fanOut(long workspaceId, SyncEventHint hint) {
+    private void fanOut(long workspaceId, SyncEventHintDTO hint) {
         Set<Subscriber> subscribers = subscribersByWorkspace.get(workspaceId);
         if (subscribers == null || subscribers.isEmpty()) {
             return;
@@ -192,7 +192,7 @@ public class SyncEventHub implements SmartLifecycle {
         }
     }
 
-    private void enqueueHint(Subscriber subscriber, SyncEventHint hint) {
+    private void enqueueHint(Subscriber subscriber, SyncEventHintDTO hint) {
         if (subscriber.closed.get()) {
             return;
         }
@@ -220,7 +220,7 @@ public class SyncEventHub implements SmartLifecycle {
         subscriber.writeLock.lock();
         try {
             while (true) {
-                SyncEventHint hint;
+                SyncEventHintDTO hint;
                 synchronized (subscriber.queue) {
                     hint = subscriber.queue.pollFirst();
                 }
@@ -244,7 +244,7 @@ public class SyncEventHub implements SmartLifecycle {
         }
     }
 
-    private boolean sendHint(Subscriber subscriber, SyncEventHint hint) {
+    private boolean sendHint(Subscriber subscriber, SyncEventHintDTO hint) {
         try {
             String json = objectMapper.writeValueAsString(hint);
             subscriber.emitter.send(SseEmitter.event().name(EVENT_NAME).data(json));
@@ -397,7 +397,7 @@ public class SyncEventHub implements SmartLifecycle {
 
         final long workspaceId;
         final SseEmitter emitter;
-        final Deque<SyncEventHint> queue = new ArrayDeque<>();
+        final Deque<SyncEventHintDTO> queue = new ArrayDeque<>();
         final ReentrantLock writeLock = new ReentrantLock();
         final AtomicBoolean draining = new AtomicBoolean(false);
         final AtomicBoolean heartbeatPending = new AtomicBoolean(false);

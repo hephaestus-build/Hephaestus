@@ -71,7 +71,7 @@ class SyncPushServiceTest extends BaseUnitTest {
     @Test
     void shouldDeliverAnInboundNotificationToOnlyItsWorkspace() {
         service().onNotification("{\"workspaceId\":42,\"connectionId\":7,\"scope\":\"JOB\"}");
-        verify(hub).publish(42, new SyncEventHint("job", 7L));
+        verify(hub).publish(42, new SyncEventHintDTO("job", 7L));
         assertThat(counter("postgres_receive", "success")).isEqualTo(1);
         verifyNoInteractions(syncJobs);
     }

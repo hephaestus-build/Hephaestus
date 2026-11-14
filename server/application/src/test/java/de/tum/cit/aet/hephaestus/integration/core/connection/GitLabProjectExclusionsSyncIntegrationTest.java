@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.sync.push.SyncEventHint;
+import de.tum.cit.aet.hephaestus.integration.core.sync.push.SyncEventHintDTO;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -127,7 +127,7 @@ class GitLabProjectExclusionsSyncIntegrationTest extends AbstractWorkspaceIntegr
     private boolean isResourcesHint(ServerSentEvent<String> event, long connectionId) {
         String data = event.data();
         if (!"sync".equals(event.event()) || data == null) return false;
-        SyncEventHint hint = objectMapper.readValue(data, SyncEventHint.class);
+        SyncEventHintDTO hint = objectMapper.readValue(data, SyncEventHintDTO.class);
         return "resources".equals(hint.scope()) && hint.connectionId() == connectionId;
     }
 }

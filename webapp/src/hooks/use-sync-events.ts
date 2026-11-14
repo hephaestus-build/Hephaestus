@@ -15,31 +15,13 @@ import {
 	listSlackChannelCandidatesQueryKey,
 	listSlackChannelsQueryKey,
 } from "@/api/@tanstack/react-query.gen";
-import type { ConnectionSummary, IntegrationCatalogEntry } from "@/api/types.gen";
+import type { ConnectionSummary, IntegrationCatalogEntry, SyncEventHint } from "@/api/types.gen";
+import { zSyncEventHint } from "@/api/zod.gen";
 import environment from "@/environment";
 import { usePageVisible } from "@/hooks/use-page-visible";
 import { openEventStream } from "@/lib/event-stream";
-import { isRecord } from "@/lib/is-record";
 import { hasText } from "@/lib/text";
 import { invalidateWorkspaceReads } from "@/runtime/tanstack-query/invalidate-workspace-reads";
-
-type SyncEventScope = "job" | "resources" | "connection" | "activity";
-
-interface SyncEventHint {
-	scope: SyncEventScope;
-	connectionId: number;
-}
-
-const SYNC_EVENT_SCOPES = {
-	job: true,
-	resources: true,
-	connection: true,
-	activity: true,
-} satisfies Record<SyncEventScope, true>;
-
-function isSyncEventScope(value: unknown): value is SyncEventScope {
-	return typeof value === "string" && Object.hasOwn(SYNC_EVENT_SCOPES, value);
-}
 
 /** Drops malformed hints; the section's REST backstop repairs a missed invalidation. */
 function parseHint(payload: string): SyncEventHint | undefined {
@@ -49,14 +31,8 @@ function parseHint(payload: string): SyncEventHint | undefined {
 	} catch {
 		return undefined;
 	}
-	if (!isRecord(decoded)) {
-		return undefined;
-	}
-	const { scope, connectionId } = decoded;
-	if (!isSyncEventScope(scope) || typeof connectionId !== "number") {
-		return undefined;
-	}
-	return { scope, connectionId };
+	const hint = zSyncEventHint.safeParse(decoded);
+	return hint.success ? hint.data : undefined;
 }
 
 /** Floor between catch-up resyncs, so a flapping stream cannot storm the cache. */

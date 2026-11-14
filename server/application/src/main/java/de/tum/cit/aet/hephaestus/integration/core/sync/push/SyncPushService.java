@@ -173,7 +173,7 @@ public class SyncPushService {
                     || notification.scope() == null) throw new IllegalArgumentException("Invalid routing hint");
             hub.publish(
                     notification.workspaceId(),
-                    new SyncEventHint(notification.scope().wireValue(), notification.connectionId()));
+                    new SyncEventHintDTO(notification.scope().wireValue(), notification.connectionId()));
             receiveSuccess.increment();
         } catch (JacksonException | IllegalArgumentException failed) {
             receiveFailure.increment();

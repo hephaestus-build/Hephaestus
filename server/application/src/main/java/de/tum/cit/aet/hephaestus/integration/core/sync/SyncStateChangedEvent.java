@@ -10,7 +10,7 @@ public record SyncStateChangedEvent(long workspaceId, long connectionId, Integra
         CONNECTION,
         ACTIVITY;
 
-        /** Stable lowercase token carried on the wire ({@code SyncEventHint.scope()}); the frontend keys off it. */
+        /** Stable lowercase token carried on the wire ({@code SyncEventHintDTO.scope()}); the frontend keys off it. */
         public String wireValue() {
             return switch (this) {
                 case JOB -> "job";

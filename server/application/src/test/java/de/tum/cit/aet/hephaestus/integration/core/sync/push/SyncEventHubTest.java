@@ -61,7 +61,7 @@ class SyncEventHubTest extends BaseUnitTest {
         hub.subscribe(WORKSPACE_ID);
         RecordingEmitter emitter = createdEmitters.get(0);
 
-        hub.publish(WORKSPACE_ID, new SyncEventHint("job", CONNECTION_ID));
+        hub.publish(WORKSPACE_ID, new SyncEventHintDTO("job", CONNECTION_ID));
 
         await().atMost(Duration.ofSeconds(2))
                 .untilAsserted(() -> assertThat(emitter.dataFrames()).hasSize(1));
@@ -76,7 +76,7 @@ class SyncEventHubTest extends BaseUnitTest {
         RecordingEmitter emitter = createdEmitters.get(0);
         emitter.failOnNextSend();
 
-        hub.publish(WORKSPACE_ID, new SyncEventHint("job", CONNECTION_ID));
+        hub.publish(WORKSPACE_ID, new SyncEventHintDTO("job", CONNECTION_ID));
 
         await().atMost(Duration.ofSeconds(2))
                 .untilAsserted(() -> assertThat(emitter.completed()).isTrue());
@@ -102,9 +102,9 @@ class SyncEventHubTest extends BaseUnitTest {
         hub.subscribe(WORKSPACE_ID);
         RecordingEmitter emitter = createdEmitters.get(0);
 
-        hub.publish(WORKSPACE_ID, new SyncEventHint("job", CONNECTION_ID));
-        hub.publish(WORKSPACE_ID, new SyncEventHint("job", CONNECTION_ID));
-        hub.publish(WORKSPACE_ID, new SyncEventHint("job", CONNECTION_ID));
+        hub.publish(WORKSPACE_ID, new SyncEventHintDTO("job", CONNECTION_ID));
+        hub.publish(WORKSPACE_ID, new SyncEventHintDTO("job", CONNECTION_ID));
+        hub.publish(WORKSPACE_ID, new SyncEventHintDTO("job", CONNECTION_ID));
 
         await().atMost(Duration.ofSeconds(2))
                 .untilAsserted(() -> assertThat(emitter.dataFrames()).hasSize(1));
@@ -117,8 +117,8 @@ class SyncEventHubTest extends BaseUnitTest {
         hub.subscribe(WORKSPACE_ID);
         RecordingEmitter emitter = createdEmitters.get(0);
 
-        hub.publish(WORKSPACE_ID, new SyncEventHint("job", CONNECTION_ID));
-        hub.publish(WORKSPACE_ID, new SyncEventHint("resources", CONNECTION_ID));
+        hub.publish(WORKSPACE_ID, new SyncEventHintDTO("job", CONNECTION_ID));
+        hub.publish(WORKSPACE_ID, new SyncEventHintDTO("resources", CONNECTION_ID));
 
         await().atMost(Duration.ofSeconds(2))
                 .untilAsserted(() -> assertThat(emitter.dataFrames()).hasSize(2));
