@@ -14,11 +14,18 @@ import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
+import de.tum.cit.aet.hephaestus.architecture.conditions.WorkspaceParameters;
 import de.tum.cit.aet.hephaestus.architecture.conditions.WorkspaceQueryParameters;
 import de.tum.cit.aet.hephaestus.core.RequireInstanceAdmin;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
+import de.tum.cit.aet.hephaestus.core.web.OffsetPageDTO;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -26,6 +33,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.NativeQuery;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.scheduling.annotation.Async;
@@ -685,60 +693,56 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
     @Nested
     class ServiceWorkspaceAwarenessTests {
 
+        /**
+         * Lists that span workspaces inside a class that otherwise serves one workspace. A method-level
+         * {@code @WorkspaceAgnostic} would also suspend the statement inspector for every query of the call, so these
+         * stay unannotated and the inspector keeps checking each one.
+         */
+        private static final Map<String, String> CROSS_WORKSPACE_LISTS = Map.of(
+                "ConnectionService.findWorkspaceIdsWithConnection",
+                "finds the workspaces with a connection of one kind, for instance-wide scheduling",
+                "ReviewScanStoreService.active",
+                "the scan scheduler claims active scans across workspaces; each snapshot reads in its review's workspace",
+                "PracticeGroupStandingService.summarize",
+                "summarizes a standing snapshot that its caller read in one workspace, and reads nothing itself");
+
         @Test
         void serviceListMethodsAreWorkspaceScoped() {
-            ArchCondition<JavaMethod> beWorkspaceScopedIfReturningList =
-                    new ArchCondition<>("be workspace-scoped if returning a list of entities") {
-                        @Override
-                        public void check(JavaMethod method, ConditionEvents events) {
-                            if (!method.getModifiers().contains(JavaModifier.PUBLIC)) {
-                                return;
-                            }
-
-                            String returnType = method.getRawReturnType().getName();
-                            boolean returnsList = returnType.contains("List")
-                                    || returnType.contains("Set")
-                                    || returnType.contains("Collection")
-                                    || returnType.contains("Page");
-
-                            if (!returnsList) {
-                                return;
-                            }
-
-                            String methodName = method.getName();
-                            boolean isWorkspaceAware = methodName.contains("Workspace")
-                                    || methodName.contains("workspace")
-                                    || methodName.contains("ByTeam")
-                                    || // Team implies workspace scope
-                                    methodName.contains("ForUser"); // User in workspace context
-
-                            boolean hasWorkspaceParam = method.getRawParameterTypes().stream()
-                                    .anyMatch(p -> p.getSimpleName().contains("WorkspaceContext")
-                                            || p.getSimpleName().contains("Workspace")
-                                            || p.isEquivalentTo(Long.class)
-                                            || p.isEquivalentTo(long.class));
-
-                            if (!isWorkspaceAware && !hasWorkspaceParam) {
-                                // This is informational - services may have internal methods
-                                // that are called with workspace context already established
-                                String ownerName = method.getOwner().getSimpleName();
-
-                                if (method.getOwner().isAnnotatedWith(WorkspaceAgnostic.class)) {
-                                    return;
-                                }
-
-                                if (methodName.startsWith("get") || methodName.startsWith("find")) {
-                                    events.add(SimpleConditionEvent.violated(
-                                            method,
-                                            String.format(
-                                                    "SERVICE WORKSPACE RISK: %s.%s returns a list but has no obvious"
-                                                            + " workspace parameter. Add workspace parameter or document"
-                                                            + " that scoping is applied internally.",
-                                                    ownerName, methodName)));
-                                }
-                            }
-                        }
-                    };
+            Set<String> listed = new HashSet<>();
+            ArchCondition<JavaMethod> takeTheWorkspace = new ArchCondition<>("take the workspace if returning a list") {
+                @Override
+                public void check(JavaMethod method, ConditionEvents events) {
+                    String name = method.getOwner().getSimpleName() + "." + method.getName();
+                    if (CROSS_WORKSPACE_LISTS.containsKey(name)) {
+                        listed.add(name);
+                        return;
+                    }
+                    if (!method.getModifiers().contains(JavaModifier.PUBLIC)
+                            || method.getModifiers().contains(JavaModifier.STATIC)
+                            || method.isAnnotatedWith(WorkspaceAgnostic.class)
+                            || method.getOwner().isAnnotatedWith(WorkspaceAgnostic.class)) {
+                        return;
+                    }
+                    JavaClass returned = method.getRawReturnType();
+                    boolean returnsList = returned.isAssignableTo(Collection.class)
+                            || returned.isAssignableTo(Slice.class)
+                            || returned.isEquivalentTo(CursorPageDTO.class)
+                            || returned.isEquivalentTo(OffsetPageDTO.class);
+                    if (!returnsList
+                            || Arrays.stream(method.reflect().getParameters())
+                                    .anyMatch(WorkspaceParameters::scopesToWorkspace)) {
+                        return;
+                    }
+                    events.add(SimpleConditionEvent.violated(
+                            method,
+                            String.format(
+                                    "SERVICE WORKSPACE RISK: %s.%s returns a list but takes no workspace. Take a"
+                                            + " WorkspaceContext, a Workspace, a long named workspaceId or a value"
+                                            + " that carries its workspace id. A list that belongs to no workspace"
+                                            + " carries @WorkspaceAgnostic with its reason.",
+                                    method.getOwner().getSimpleName(), method.getName())));
+                }
+            };
 
             ArchRule rule = methods()
                     .that()
@@ -747,10 +751,13 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                     .and()
                     .areDeclaredInClassesThat()
                     .areAnnotatedWith(Service.class)
-                    .should(beWorkspaceScopedIfReturningList)
-                    .because("Services returning lists should be workspace-scoped");
+                    .should(takeTheWorkspace)
+                    .because("A service list names its workspace by type or by the name workspaceId, not by any long");
 
             rule.check(classes);
+            assertThat(listed)
+                    .as("Remove a cross-workspace list entry whose method no longer exists")
+                    .containsExactlyInAnyOrderElementsOf(CROSS_WORKSPACE_LISTS.keySet());
         }
     }
 

@@ -27,7 +27,7 @@ public class ResultQueryService {
     private final ResultPresentation presentation;
     private final EvidenceAuthorization authorization;
 
-    public Page<ResultListDTO> listOwnResults(long ws, ResultFeedQuery query, Pageable page) {
+    public Page<ResultListDTO> listOwnResults(long workspaceId, ResultFeedQuery query, Pageable page) {
         long developer = this.developer.currentDeveloperIdElseThrow();
         var filter = new ResultQueryFilter(
                 null,
@@ -44,9 +44,10 @@ public class ResultQueryService {
                 null,
                 null,
                 null);
-        var rows = results.list(ws, filter, query.sort(), query.displayableOnly(), page);
-        var permitted = authorization.permitsAll(ws, rows.getContent(), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
-        var projected = presentation.lists(ws, views.views(ws, rows.getContent()), permitted);
+        var rows = results.list(workspaceId, filter, query.sort(), query.displayableOnly(), page);
+        var permitted =
+                authorization.permitsAll(workspaceId, rows.getContent(), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        var projected = presentation.lists(workspaceId, views.views(workspaceId, rows.getContent()), permitted);
         return new PageImpl<>(projected, page, rows.getTotalElements());
     }
 

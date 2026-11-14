@@ -136,13 +136,13 @@ public class ItemTraceQueryService {
         return item;
     }
 
-    public List<Review> reviewsForItem(long ws, long itemId) {
-        return ledger.reviewsForItem(ws, itemId);
+    public List<Review> reviewsForItem(long workspaceId, long itemId) {
+        return ledger.reviewsForItem(workspaceId, itemId);
     }
 
-    public Page<ItemEventDTO> events(long ws, long itemId, Pageable page) {
-        requireItem(ws, itemId);
-        return ledger.events(ws, itemId, page)
+    public Page<ItemEventDTO> events(long workspaceId, long itemId, Pageable page) {
+        requireItem(workspaceId, itemId);
+        return ledger.events(workspaceId, itemId, page)
                 .map(row -> new ItemEventDTO(
                         row.getId(),
                         Long.toString(itemId),

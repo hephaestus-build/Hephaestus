@@ -29,18 +29,24 @@ public class ActivityService {
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public CursorPageDTO<ActivityWorkDTO> personWork(
-            long workspace,
+            long workspaceId,
             long userId,
             ActivityPeopleRangeParams params,
             @Nullable String team,
             Set<String> repositoryKeys,
             ActivityWorkFilterParams page) {
         peopleQueries.contributor(
-                workspace, userId, CurrentScmIdentityHolder.getAccountActorIds().contains(userId));
+                workspaceId,
+                userId,
+                CurrentScmIdentityHolder.getAccountActorIds().contains(userId));
         var selected = people.select(
-                workspace, team, repositoryKeys, peopleQueries.teams(workspace), peopleQueries.repositories(workspace));
+                workspaceId,
+                team,
+                repositoryKeys,
+                peopleQueries.teams(workspaceId),
+                peopleQueries.repositories(workspaceId));
         return work(
-                new ActivityScope(workspace, Set.of(userId), selected.teamIds(), selected.repositoryIds()),
+                new ActivityScope(workspaceId, Set.of(userId), selected.teamIds(), selected.repositoryIds()),
                 page.range(params, clock, () -> peopleQueries.findEarliest(selected)),
                 page);
     }

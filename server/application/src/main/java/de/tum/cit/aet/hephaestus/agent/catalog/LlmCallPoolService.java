@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.LlmSettingsAudit;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import java.net.URI;
@@ -24,6 +25,7 @@ import org.springframework.web.server.ResponseStatusException;
 /** The instance admin's pools of provider capacity and the models in them. */
 @Service
 @RequiredArgsConstructor
+@WorkspaceAgnostic("Model capacity pools belong to the instance")
 public class LlmCallPoolService {
 
     /** What the database's trigger starts the slug of a model's own pool with. */

@@ -4,6 +4,7 @@ import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSync
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.security.ScmServerEndpointPolicy;
 import de.tum.cit.aet.hephaestus.core.web.CursorPageDTO;
 import de.tum.cit.aet.hephaestus.integration.core.connection.identity.GitLabWorkspaceInstance;
@@ -51,6 +52,7 @@ import reactor.core.publisher.Mono;
  * @see ScmServerEndpointPolicy for SSRF protection on user-provided server URLs
  */
 @Service
+@WorkspaceAgnostic("Checks a GitLab token against GitLab before a workspace exists, and reads no workspace data")
 public class GitLabPreflightService implements SelectedRepositoryVerifier {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabPreflightService.class);

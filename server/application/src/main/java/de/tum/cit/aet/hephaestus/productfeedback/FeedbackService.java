@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.exception.DataIntegrityViolationConstraints;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -31,6 +32,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @ConditionalOnServerRole
+@WorkspaceAgnostic("Product feedback belongs to the instance: filed from any workspace and triaged by instance admins")
 class FeedbackService {
     static final int ACCOUNT_DAILY_REPORTS = 5;
     private final ProductFeedbackRepository feedback;

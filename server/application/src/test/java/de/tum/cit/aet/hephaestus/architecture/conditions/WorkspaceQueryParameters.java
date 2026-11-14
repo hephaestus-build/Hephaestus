@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.architecture.conditions;
 
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.regex.Pattern;
@@ -17,10 +16,7 @@ public final class WorkspaceQueryParameters {
         return Arrays.stream(method.getParameters()).anyMatch(parameter -> {
             Param annotation = parameter.getAnnotation(Param.class);
             String name = annotation == null ? parameter.getName() : annotation.value();
-            boolean workspace = parameter.getType().equals(Workspace.class)
-                    || (name.equals("workspaceId")
-                            && (parameter.getType().equals(long.class)
-                                    || parameter.getType().equals(Long.class)));
+            boolean workspace = WorkspaceParameters.namesWorkspace(parameter.getType(), name);
             return workspace
                     && (query == null
                             || Pattern.compile(Pattern.quote(":" + name) + "(?![A-Za-z0-9_])")
