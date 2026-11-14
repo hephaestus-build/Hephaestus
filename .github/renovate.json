@@ -84,6 +84,25 @@
 			"groupName": "webapp and extension dependencies"
 		},
 		{
+			"description": "Catalog packages are shared by the webapp, the extension, the docs and the tooling, so they move in the webapp batch",
+			"matchManagers": ["npm"],
+			"matchFileNames": ["pnpm-workspace.yaml"],
+			"matchDepTypes": ["pnpm.catalog.default"],
+			"matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+			"groupName": "webapp and extension dependencies"
+		},
+		{
+			"description": "Held at 19.2 for the entry bundle budget: docs/contributor/dependencies.md § Held versions",
+			"matchPackageNames": ["react", "react-dom"],
+			"allowedVersions": "<19.3"
+		},
+		{
+			"description": "The Pi image compiles with the catalog's TypeScript, and gate:toolchain requires the two to match",
+			"matchPackageNames": ["typescript"],
+			"matchFileNames": ["pnpm-workspace.yaml", "docker/agents/pi/package.json"],
+			"groupName": "TypeScript"
+		},
+		{
 			"description": "A Gradle wrapper update moves the build-script locks and verification metadata, as a server dependency does",
 			"matchManagers": ["gradle", "gradle-wrapper"],
 			"matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
