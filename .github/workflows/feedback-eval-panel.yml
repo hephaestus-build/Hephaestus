@@ -12,16 +12,21 @@ on:
   workflow_dispatch:
   pull_request:
     types: [opened, reopened, synchronize, labeled]
-    # What the composer reads: its prompts, the writing guide they include, the composer itself and
-    # the practice catalog. Keep in step with the feedback-eval filter in cicd.yml.
+    # What the composer reads, and what composes the panel: the prompts, the writing guide they
+    # include, the composer, the practice catalog and the eval runner. ci-contract.test.ts keeps each
+    # path inside the feedback-eval filter of cicd.yml.
     paths:
       - "server/application/src/main/resources/agent/*.md"
       - "server/application/src/main/resources/agent/mentor/**"
       - "server/application/src/main/resources/agent/review-composer*.ts"
       - "server/application/src/main/java/de/tum/cit/aet/hephaestus/agent/composer/**"
       - "server/application/src/main/resources/practices/**"
+      - "server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/composer/CompositionEval*.java"
+      - "server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/composer/LiveChatTransport*.java"
       - "docs/contributor/practice-feedback-language.md"
+      - "scripts/feedback-eval-gate.ts"
       - "scripts/feedback-eval/**"
+      - ".github/workflows/feedback-eval-panel.yml"
 
 permissions: {}
 

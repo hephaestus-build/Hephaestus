@@ -263,12 +263,13 @@ Its model runs measure how the composer behaves, and they never block a merge.
 `scripts/feedback-eval/gate.json` holds the panel, the prompt-safety subset and the floors.
 
 The gate does not pin prompt wording.
-A wording pin fails on an improvement and on a removed rule alike ([What a test protects](./testing.mdx#prompts-and-model-behavior)).
-A prompt rule is protected by the labelled cases that its removal makes fail.
+A wording pin fails on an improvement and on a removed rule alike, so it cannot tell them apart.
+Protect a prompt rule with labelled cases that fail when the rule goes, not with a pin of its words.
 
 ### Gate checks without a model
 
 These checks send no model request. Each check must pass exactly.
+The IDs stay stable: G1 and G4 pinned case and prompt digests and were removed.
 
 | Check | Fails when |
 | --- | --- |
@@ -295,7 +296,8 @@ The job summary shows, for each case, whether the composer made the expected dec
 No code can tell whether the words follow the instruction.
 A review can make the expected decisions and still praise what the instruction asked it to praise.
 Thus, the result is a report for the reviewer of the pull request, and the job passes when the deterministic checks pass.
-The [release feedback eval](#release-feedback-eval) composes the same cases and labels every review. A labelled defect fails it, so an unsafe review blocks the release.
+The [release feedback eval](#release-feedback-eval) composes the same cases and labels every review, and a labelled defect fails it.
+A labelled defect on a prompt-safety case disqualifies the candidate ([Feedback quality evidence](./release-management.mdx#feedback-quality-evidence)).
 
 ### Model panel
 
