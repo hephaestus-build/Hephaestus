@@ -138,10 +138,9 @@ Codex reads only `.agents/skills/`, so the six contribution skills have byte-ide
 
 - Use the smallest proof that the change works.
   Run the test file you touched, then `vp run check:affected`.
-- Test observable behavior.
+- Test observable behavior: `docs/contributor/testing.mdx` § What a test protects.
   A story proves what a component renders from its props and installs no network.
   A route test owns the wire contract.
-  Do not assert callback wiring or mirror the implementation.
 - Backend behavior changes ship with focused tests in the right tier, asserting on the rows they
   created (`server/AGENTS.md` § Test tiers).
 - Before you push, run `vp run format`.
