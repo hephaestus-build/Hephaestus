@@ -63,7 +63,113 @@ Entries exist only for releases that need operator action. Everything else is in
 
 ### Next release
 
-### v1.0.0-rc.7
+### v1.0.0-rc.9
+
+#### 🔴 Drain legacy reviews
+
+Before this first upgrade, stop the old servers and let their review drain finish. Keep PostgreSQL running.
+Do not start target servers until no `REVIEW_COMPOSE` run has a live lease.
+Follow [Drain legacy reviews before removing gateway affinity](https://docs.hephaestus.build/admin/upgrade#drain-legacy-reviews-before-removing-gateway-affinity).
+An old server held each claim decision in its own memory, so the target cannot read it. Later rolling upgrades keep the same decision across server replicas.
+
+Set `server.databasePool.maximumPoolSize` to `auto`, or raise an explicit override to the chart's validated floor.
+Keep `postgresql.parameters.max_connections` at the derived setting or a larger validated value.
+The existing budget helper now reserves three connections for each concurrent capture. It remains the only connection-budget source.
+The derived `max_connections` for `cluster.yaml` rises from 240 to 300, and PostgreSQL restarts to apply it. `small.yaml` stays at 120.
+
+#### 🔴 Write erasure recovery manifests as version 2
+
+Erasure recovery now reapplies workspace purges and disconnects, not only person erasures.
+A recovery manifest uses version 2 and lists `disconnects` and `workspacePurges` beside `people`. A version 1 manifest stops startup.
+
+**Operators:** After a workspace purge or a disconnect, save the workspace ID and the connection ID in the restricted incident record, as you do for a person erasure.
+Convert any prepared version 1 manifest before a recovery.
+[Reapply erasure decisions before processing resumes](https://docs.hephaestus.build/admin/backup-restore#reapply-erasure-decisions-before-processing-resumes) gives the format.
+
+#### 🔴 Stop every role before clearing personal logins from GitHub App installation records
+
+1. Stop every server before the migration, then deploy the matching release.
+   After the upgrade, a deleted workspace or an erasure clears a personal account's login from its adopted installation record.
+   The previous server reads that login as always present, and it does not know the setup answer for a declined installation.
+2. No other action is necessary. The migration only allows the login to be empty.
+
+#### 🔴 Stop every role before the repository enumeration upgrade
+
+Stop every server before upgrading, then start all servers with the new release.
+The new code records repository access events in the connection revision, including events that do not change a monitor.
+Every replica must record that revision before repository discovery can trust it.
+An older server does not record a removal for a repository that is not monitored yet.
+Mixing releases can therefore restore a revoked repository monitor from an earlier discovery answer.
+
+This change adds no database migration.
+Use the stopped upgrade procedure in [Upgrade to 1.0](https://docs.hephaestus.build/admin/upgrade-to-1-0).
+After startup, confirm that GitHub discovery completes on the current connection.
+A superseded discovery ends with a warning, and a restart repeats startup discovery.
+
+#### 🔴 Check database connection limits for review recovery
+
+Before the upgrade, render the target release's chart with your normal values.
+Set `server.databasePool.maximumPoolSize` to `auto`, or raise a fixed value to the minimum that the chart reports.
+Review preparation now holds a capture lease, a preparation lock and a publication transaction.
+The pool also reserves a connection for boot work.
+
+If you set `postgresql.parameters.max_connections`, check it against the target chart's complete rollout budget.
+Raise it before the new servers start if the chart reports that it is too small.
+The automatic value includes the old servers while they drain, the replacement servers, and five dedicated listeners per server.
+[Database connections](https://docs.hephaestus.build/admin/sizing#database-connections) gives the calculation.
+
+#### 🔴 Stop every role before recording failed and handed-off run outcomes
+
+Runs now record a failed outcome, and a review keeps the run that measured it after its composition starts. The migration corrects old runs that recorded a completed outcome for failed, timed-out or cancelled work. It keeps their identities, epochs, times and usage.
+
+**Operators:** Use [Stopped schema upgrades](https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades). Drain work and stop every runtime role before the migration, then start only the upgraded roles. The previous server cannot read a run with a failed or handed-off outcome, so do not run old and new servers together during this change. If the migration reports a review or turn that still disagrees with its completed run, it stops and changes nothing.
+
+To roll back, stop every role and restore the verified backup from before the migration before starting the previous version.
+
+#### 🔴 Stop every role before changing role-notice delivery
+
+Role-change emails now tell the affected person and the other administrators who made the change and where to review it. The migration closes queued copies of the previous general notice. It keeps completed receipts and does not repeat a send whose outcome is unknown.
+
+**Operators:** Apply this change in the stopped window before the 1.0.0 cut. Use [Stopped schema upgrades](https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades). Stop every runtime role before the migration and start only the upgraded roles afterward. An old server can queue a previous notice after the migration has closed it, so do not run old and new servers together during this change.
+
+To roll back, stop every role and restore the verified backup from before the migration before starting the previous version.
+
+#### 🔴 Change the queries that read the agent queue and claim meters
+
+The agent run gauges replace the queue gauges, and the claim wait of a run replaces the claim latency of a job.
+The bundled alert `HephaestusAgentQueueStalled` and the **Overview** dashboard read the new names.
+If you have your own queries, alerts or dashboards on these meters, change them:
+
+| Old | New |
+| --- | --- |
+| `agent_queue_oldest_age_seconds` | `agent_run_oldest_due_age_seconds`, with the labels `kind` and `band` |
+| `agent_queue_depth` | `agent_run_due`, with the labels `kind` and `band` |
+| `agent_queue_running` | `agent_run_runs{state="leased"}` |
+| `agent_queue_held` | `agent_run_runs{state="queued",hold_reason="budget"}` |
+| `agent_queue_health_sampler_failures_total` | `agent_run_sampler_failure_total` |
+| `agent_job_claim_latency_seconds` | `agent_run_claim_wait_seconds`, with the labels `kind` and `band` |
+
+`agent_run_runs` has the labels `kind`, `band`, `state` and `hold_reason`.
+`state` is `queued` or `leased`. `hold_reason` is `none`, `budget` or `sandbox_room`.
+Sum over the labels that you do not need.
+A held run is not due: `agent_run_due` and `agent_run_oldest_due_age_seconds` leave it out.
+
+The claim wait counts from the time that the run became due, and each claim of a returned run counts again from its new due time.
+The old latency counted once, from the submission of the job.
+Series with the old names stop at the upgrade.
+
+#### 🔴 Drain legacy reviews before removing gateway affinity
+
+Follow [Drain legacy reviews before removing gateway affinity](https://docs.hephaestus.build/admin/upgrade#drain-legacy-reviews-before-removing-gateway-affinity). The drain now also covers `REVIEW` runs. One stopped window serves both this change and the durable composition claim.
+Do not start the target servers until no `REVIEW` or `REVIEW_COMPOSE` run has a live lease.
+A rolling update is not safe for this first upgrade: an older active attempt has no published preparation checkpoint, so another server cannot continue it. Queued work stays queued.
+The upgrade changes no schema. Later rolling upgrades keep every active run and lease.
+
+With `postgresql.bundled=false`, Helm does not check the external database's limit.
+Set it to the release's ordinary clients, plus that server's own reserved slots and your operator margin, plus the clients of any other tenant.
+Follow [Database connections](https://docs.hephaestus.build/admin/sizing#database-connections).
+
+### v1.0.0-rc.8
 
 #### 🔴 Stop every role before the provider resource repair upgrade
 
@@ -85,8 +191,6 @@ Replace `integration_provider_teardown_total` in custom dashboards with `integra
 Route `HephaestusProviderRemovalNeedsConfirmation` to an instance administrator.
 
 While repairs remain unresolved, or after a provider release is audited, rollback refuses to remove that evidence. Keep the matching release and apply a forward fix.
-
-### v1.0.0-rc.6
 
 #### 🔴 Stop every role before moving review leases to agent runs
 
@@ -1064,8 +1168,6 @@ The chart no longer reads a review count per worker. It derives the reviews that
 **Action:** remove `worker.reviews` from your values file. To keep the same number of reviews, set `worker.sandbox.reviewMemory` to your old `worker.reviews` times `worker.replicas` times 384Mi. For example, 2 workers of 5 reviews become `reviewMemory: 3840Mi`, which is the default. With a RuntimeClass overhead in `worker.runtime.podOverhead`, add that overhead to the 384Mi.
 
 The check on `worker.resources.limits.memory` now also counts the worker's 128 MiB of direct memory, which the JVM takes from the heap. One review needs at least 1023 MiB, and each further review 18 MiB. A limit that the old check passed can now hold fewer reviews per worker, and a limit below 1023 MiB stops the render with `worker.resources.limits.memory must be at least 1023Mi`. To keep the same reviews per worker, raise the limit by 128 MiB.
-
-### v1.0.0-rc.2
 
 #### 🔴 Check practice scripts that decide after a failed read
 
