@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.slack.item;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.SweepRowFailures;
 import de.tum.cit.aet.hephaestus.integration.chat.item.ThreadEvents;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemIndexService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FoundBy;
@@ -17,6 +18,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -28,6 +31,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @ConditionalOnBooleanProperty(value = "hephaestus.integration.slack.conversation-ingest.enabled", matchIfMissing = true)
 @ConditionalOnBooleanProperty("hephaestus.integration.slack.enabled")
 public class SlackThreadEventScheduler {
+    private static final Logger log = LoggerFactory.getLogger(SlackThreadEventScheduler.class);
     private static final int MIN_TURNS = 4;
     private static final int MIN_GROWTH = 2;
     private static final Duration QUIESCENCE = Duration.ofMinutes(10);
@@ -68,33 +72,39 @@ public class SlackThreadEventScheduler {
         Instant now = clock.instant();
         long offered = 0;
         for (var candidate : candidates.settledCandidates(MIN_TURNS)) {
-            Long last = SlackTs.toEpochMicros(candidate.lastTs());
-            if (last == null || Instant.EPOCH.plus(last, ChronoUnit.MICROS).isAfter(now.minus(QUIESCENCE))) continue;
-            if (candidates.liveTurnCount(candidate.workspaceId(), candidate.channelId(), candidate.threadTs())
-                            < MIN_TURNS
-                    || candidates.liveTurnCountSince(
-                                    candidate.workspaceId(),
-                                    candidate.channelId(),
-                                    candidate.threadTs(),
-                                    candidate.lastReviewedTs())
-                            < MIN_GROWTH) continue;
-            Boolean recorded = transactions.execute(status -> {
-                var item = items.upsert(new ItemRegistration(
-                        candidate.workspaceId(), ThreadEvents.THREAD, candidate.threadId(), null, null));
-                var pinned = source.current(item);
-                if (pinned.isEmpty()) return false;
-                items.record(new ItemEventInput(
-                        candidate.workspaceId(),
-                        item.itemId(),
-                        ThreadEvents.SETTLED,
-                        pinned.get().version().value(),
-                        now,
-                        FoundBy.SYNC,
-                        null,
-                        null));
-                return true;
-            });
-            if (Boolean.TRUE.equals(recorded)) offered++;
+            try {
+                Long last = SlackTs.toEpochMicros(candidate.lastTs());
+                if (last == null || Instant.EPOCH.plus(last, ChronoUnit.MICROS).isAfter(now.minus(QUIESCENCE)))
+                    continue;
+                if (candidates.liveTurnCount(candidate.workspaceId(), candidate.channelId(), candidate.threadTs())
+                                < MIN_TURNS
+                        || candidates.liveTurnCountSince(
+                                        candidate.workspaceId(),
+                                        candidate.channelId(),
+                                        candidate.threadTs(),
+                                        candidate.lastReviewedTs())
+                                < MIN_GROWTH) continue;
+                Boolean recorded = transactions.execute(status -> {
+                    var item = items.upsert(new ItemRegistration(
+                            candidate.workspaceId(), ThreadEvents.THREAD, candidate.threadId(), null, null));
+                    var pinned = source.current(item);
+                    if (pinned.isEmpty()) return false;
+                    items.record(new ItemEventInput(
+                            candidate.workspaceId(),
+                            item.itemId(),
+                            ThreadEvents.SETTLED,
+                            pinned.get().version().value(),
+                            now,
+                            FoundBy.SYNC,
+                            null,
+                            null));
+                    return true;
+                });
+                if (Boolean.TRUE.equals(recorded)) offered++;
+            } catch (RuntimeException failure) {
+                SweepRowFailures.skipUnlessTransient(
+                        log, "conversation-thread-review", candidate.workspaceId(), candidate.threadId(), failure);
+            }
         }
         return offered;
     }

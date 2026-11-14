@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.SweepRowFailures;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairDispatcher;
 import de.tum.cit.aet.hephaestus.integration.core.connection.repair.ProviderResourceRepairs;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -13,6 +14,8 @@ import java.time.Instant;
 import java.util.Objects;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -26,6 +29,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 @ConditionalOnServerRole
 @WorkspaceAgnostic("Credential expiry names each connection and workspace; unresolved provider identity remains global")
 public class ProviderTeardown {
+    private static final Logger log = LoggerFactory.getLogger(ProviderTeardown.class);
+
     @PersistenceContext
     private @Nullable EntityManager entityManager;
 
@@ -91,22 +96,29 @@ public class ProviderTeardown {
     public void expire() {
         Instant cutoff = clock.instant().minus(WINDOW);
         for (Connection expired :
-                connections.findByStateAndProviderTeardownRequestedAtBefore(IntegrationState.UNINSTALLED, cutoff)) {
-            transactions.executeWithoutResult(status -> {
-                repairs.coordinate(expired);
-                connections.acquireLifecycleLock(
-                        expired.getId(), expired.getWorkspace().getId());
-                connections
-                        .findByIdAndWorkspaceId(
-                                expired.getId(), expired.getWorkspace().getId())
-                        .filter(connection -> connection.getState() == IntegrationState.UNINSTALLED)
-                        .filter(connection -> connection.getProviderTeardownRequestedAt() != null
-                                && connection.getProviderTeardownRequestedAt().isBefore(cutoff))
-                        .ifPresent(connection -> {
-                            captureIfNeeded(connection);
-                            connection.releaseProviderFootprint(converter);
-                        });
-            });
+                connections.findByStateAndProviderTeardownRequestedAtBeforeOrderByProviderTeardownRequestedAtAsc(
+                        IntegrationState.UNINSTALLED, cutoff)) {
+            long workspaceId = expired.getWorkspace().getId();
+            try {
+                transactions.executeWithoutResult(status -> {
+                    repairs.coordinate(expired);
+                    connections.acquireLifecycleLock(expired.getId(), workspaceId);
+                    connections
+                            .findByIdAndWorkspaceId(expired.getId(), workspaceId)
+                            .filter(connection -> connection.getState() == IntegrationState.UNINSTALLED)
+                            .filter(connection -> connection.getProviderTeardownRequestedAt() != null
+                                    && connection
+                                            .getProviderTeardownRequestedAt()
+                                            .isBefore(cutoff))
+                            .ifPresent(connection -> {
+                                captureIfNeeded(connection);
+                                connection.releaseProviderFootprint(converter);
+                            });
+                });
+            } catch (RuntimeException failure) {
+                SweepRowFailures.skipUnlessTransient(
+                        log, "provider-teardown-expiry", workspaceId, expired.getId(), failure);
+            }
         }
     }
 
