@@ -244,8 +244,8 @@ management:
             # answer a provider's delivery with the 503 that makes the provider retry. `integrationConsumer`
             # stays in /actuator/health and the metrics.
             #
-            # `practiceReview` and `kubernetesSandbox` (the sandbox isolation probe) stay out too: the server
-            # serves its API whether or not it may start sandboxes, and no sandbox starts without the proof.
+            # `practiceReview` and `llmModelLimits` stay out too: the server serves its API whether or not it may
+            # start sandboxes, and whether or not each model has a known output limit.
             group:
                 readiness:
                     include: readinessState
