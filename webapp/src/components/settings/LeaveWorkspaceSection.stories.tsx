@@ -34,7 +34,7 @@ export const Leave: Story = {
 	},
 };
 
-/** The leave is under way: neither button in the confirmation sends it again or closes it. */
+/** A leave is under way: its row cannot start it again, and the other rows still can. */
 export const Leaving: Story = {
 	args: { leavingSlug: "ase", onLeave: fn(async () => new Promise<void>(() => undefined)) },
 	play: async ({ canvas }) => {

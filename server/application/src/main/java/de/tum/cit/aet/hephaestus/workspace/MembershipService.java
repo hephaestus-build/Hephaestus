@@ -132,10 +132,6 @@ public class MembershipService {
     }
 
     /**
-     * Sets the provider's role unless a person decided this member's role. A member who comes back starts again from
-     * the provider's role: an override does not outlive the membership it was made for. An owner keeps the role.
-     */
-    /**
      * A person ended this membership in Hephaestus: the member left, or a workspace admin removed them. Provider sync
      * does not bring it back. A workspace admin can, by giving the person a role again.
      */
@@ -153,6 +149,10 @@ public class MembershipService {
         recordProviderDeparture(member);
     }
 
+    /**
+     * Sets the provider's role unless a person decided this member's role. A member who comes back starts again from
+     * the provider's role: an override does not outlive the membership it was made for. An owner keeps the role.
+     */
     private static void applyProviderRole(Membership member, Membership.WorkspaceRole role, boolean rejoining) {
         if (member.getRole() == Membership.WorkspaceRole.OWNER) return;
         if (rejoining) member.setRoleSource(Membership.RoleSource.PROVIDER);
