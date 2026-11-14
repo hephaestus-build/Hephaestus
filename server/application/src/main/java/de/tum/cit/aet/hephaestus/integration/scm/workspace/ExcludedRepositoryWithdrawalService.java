@@ -2,16 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.workspace;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.event.RepositoryExcludedFromWorkspacesEvent;
-import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
-import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
-import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
-import java.util.EnumSet;
+import de.tum.cit.aet.hephaestus.workspace.spi.RepositoryMonitorQuery;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -30,10 +21,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class ExcludedRepositoryWithdrawalService {
     private static final Logger log = LoggerFactory.getLogger(ExcludedRepositoryWithdrawalService.class);
 
-    private final RepositoryToMonitorRepository repositoryToMonitorRepository;
-    private final WorkspaceRepository workspaceRepository;
-    private final ConnectionRepository connectionRepository;
-    private final WorkspaceScopeFilter workspaceScopeFilter;
+    private final RepositoryMonitorQuery monitors;
     private final WorkspaceRepositoryMonitorService repositoryMonitors;
     private final TransactionTemplate transactionTemplate;
 
@@ -46,13 +34,13 @@ public class ExcludedRepositoryWithdrawalService {
     public void onExcludedFromWorkspaces(RepositoryExcludedFromWorkspacesEvent event) {
         // Each workspace in its own transaction: one that fails must not keep the repository in all the others.
         int failed = 0;
-        for (RepositoryToMonitor found :
-                repositoryToMonitorRepository.findAllWithWorkspaceByNameIgnoringCase(event.nameWithOwner())) {
-            Long workspaceId = Objects.requireNonNull(
-                    Objects.requireNonNull(found.getWorkspace()).getId());
-            Long monitorId = found.getId();
+        for (var found : monitors.findByNameIgnoringCase(event.nameWithOwner())) {
+            long workspaceId = found.workspaceId();
+            long monitorId = found.monitorId();
             try {
-                ownTransaction().executeWithoutResult(status -> withdrawFrom(workspaceId, monitorId));
+                ownTransaction()
+                        .executeWithoutResult(
+                                status -> repositoryMonitors.withdrawExcludedRepository(workspaceId, monitorId));
             } catch (RuntimeException failure) {
                 failed++;
                 log.error(
@@ -73,33 +61,5 @@ public class ExcludedRepositoryWithdrawalService {
         var own = new TransactionTemplate(Objects.requireNonNull(transactionTemplate.getTransactionManager()));
         own.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         return own;
-    }
-
-    private void withdrawFrom(Long workspaceId, Long monitorId) {
-        // A live GitLab connection, suspended too: its project on the same path is another repository, and is kept.
-        // An uninstalled one is history, and its workspace may monitor GitHub now.
-        boolean gitLab = EnumSet.of(IntegrationState.ACTIVE, IntegrationState.SUSPENDED).stream()
-                .anyMatch(state -> connectionRepository
-                        .findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
-                                workspaceId, IntegrationKind.GITLAB, state)
-                        .isPresent());
-        if (gitLab) return;
-        Workspace workspace = workspaceRepository
-                .findByIdForUpdate(workspaceId)
-                .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
-        // Re-read under the workspace lock, and ask the exclusion again: the destination may have been replaced, or the
-        // monitor renamed, since the caller looked.
-        repositoryToMonitorRepository
-                .findById(monitorId)
-                .filter(monitor -> Objects.equals(
-                        Objects.requireNonNull(monitor.getWorkspace()).getId(), workspaceId))
-                .filter(monitor -> workspaceScopeFilter.isExcluded(monitor.getNameWithOwner()))
-                .ifPresent(monitor -> {
-                    log.info(
-                            "Removed an excluded repository from a workspace: workspaceId={}, syncTargetId={}",
-                            workspaceId,
-                            monitorId);
-                    repositoryMonitors.withdrawRepository(workspace, monitor);
-                });
     }
 }

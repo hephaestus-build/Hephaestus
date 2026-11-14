@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import io.micrometer.common.util.StringUtils;
 import java.util.Collection;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -288,8 +289,36 @@ public class WorkspaceRepositoryMonitorService {
         repositoryIds.forEach(this::deleteRepositoryIfOrphaned);
     }
 
+    void withdrawExcludedRepository(Long workspaceId, Long monitorId) {
+        // A live GitLab connection, suspended too: its project on the same path is another repository, and is kept.
+        // An uninstalled one is history, and its workspace may monitor GitHub now.
+        boolean gitLab = EnumSet.of(IntegrationState.ACTIVE, IntegrationState.SUSPENDED).stream()
+                .anyMatch(state -> connectionRepository
+                        .findFirstByWorkspaceIdAndKindAndStateOrderByCreatedAtDesc(
+                                workspaceId, IntegrationKind.GITLAB, state)
+                        .isPresent());
+        if (gitLab) return;
+        Workspace workspace = workspaceRepository
+                .findByIdForUpdate(workspaceId)
+                .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
+        // Re-read under the workspace lock, and ask the exclusion again: the destination may have been replaced, or the
+        // monitor renamed, since the caller looked.
+        repositoryToMonitorRepository
+                .findById(monitorId)
+                .filter(monitor -> Objects.equals(
+                        Objects.requireNonNull(monitor.getWorkspace()).getId(), workspaceId))
+                .filter(monitor -> workspaceScopeFilter.isExcluded(monitor.getNameWithOwner()))
+                .ifPresent(monitor -> {
+                    log.info(
+                            "Removed an excluded repository from a workspace: workspaceId={}, syncTargetId={}",
+                            workspaceId,
+                            monitorId);
+                    withdrawRepository(workspace, monitor);
+                });
+    }
+
     /** Unlike a stopped monitor, this also removes the history, so the workspace keeps nothing of the repository. */
-    void withdrawRepository(Workspace workspace, RepositoryToMonitor monitor) {
+    private void withdrawRepository(Workspace workspace, RepositoryToMonitor monitor) {
         List<Long> repositoryIds = repositoryToMonitorRepository.findSourceRepositoryIdsForWithdrawal(monitor.getId());
         eventPublisher.publishEvent(new RepositoryWithdrawnFromWorkspaceEvent(workspace.getId(), repositoryIds));
         deleteRepositoryMonitor(workspace, monitor, false);

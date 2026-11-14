@@ -6,6 +6,7 @@
             "core::auth-reference",
             "core::auth-spi",
             "core::current-account",
+            "core::event",
             "core::exception",
             "core::person-data",
             "core::runtime",
