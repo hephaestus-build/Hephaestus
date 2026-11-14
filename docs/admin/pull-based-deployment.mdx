@@ -167,7 +167,7 @@ helm upgrade --install <release> /var/lib/hephaestus/chart/hephaestus-<version>.
   --values /var/lib/hephaestus/releases/<tag>/deploy/chart/hephaestus/profiles/<profile>.yaml \
   --values /etc/hephaestus/chart.yaml \
   --values /var/lib/hephaestus/chart/<tag>.images.yaml \
-  --set server.replicas=1 \
+  --set server.stopped=false \
   --wait=watcher --wait-for-jobs --timeout <timeout>s
 ```
 
@@ -363,21 +363,23 @@ Restart the timer for phase 2 only after the channel names the target.
 A tick before that applies your edited file to the source release and starts the writers again.
 
 The reconciler checks both its applied record and the installed chart version.
-For a major transition, it requires zero server replicas in the installed values and no remaining writer workloads.
+For a major transition, it requires `server.stopped: true` in the installed values and no remaining writer workloads.
+For a source chart without `server.stopped`, such as `1.0.0-rc.8`, it requires zero server replicas instead.
 The step from a release candidate to its major's first stable release, such as `1.0.0-rc.6` to `1.0.0`, is a major transition too.
-After that check, the reconciler applies the verified target chart with one server.
+After that check, the reconciler applies the verified target chart with `server.stopped=false`.
+The target starts the server count of your site values.
+
+The installed tooling runs the cutover, and the reconciler advances its tooling only after the apply.
+Tooling from `1.0.0-rc.8` and earlier requires zero server replicas and starts the target with one server.
+After such a cutover, pause the timer and restore the recorded server count with the verified target chart, as phase 3 describes.
+Then resume the timer.
 
 If Helm finished before the applied record was written, the next tick checks the target identity and image pins.
 A matching deployed target completes its record without running the migration hooks again.
-This also applies after you restore the server count.
 
 It omits `--rollback-on-failure` because Helm cannot restore the old schema.
 A pending cutover stops reconciliation and requires database recovery.
 It never rolls old workloads onto a migrated database.
-
-After the server is ready, pause the timer and restore the recorded server count with the verified target chart, as phase 3 describes.
-Keep the desired server count in `/etc/hephaestus/chart.yaml`, then resume the timer.
-After the cutover succeeds, a change to `/etc/hephaestus/chart.yaml` or a new promotion of the same target also restores that count.
 
 The reconciler removes no image on a chart host.
 The kubelet's image garbage collection removes unused images.
@@ -402,12 +404,12 @@ If a stopped cutover fails or remains pending:
    Restore the pre-upgrade database with steps 1 to 14 of [If migration fails](./upgrade#if-migration-fails).
    Defer its application startup and checks in steps 9 to 12 until the selected release succeeds in step 7 below.
 6. Run `helm rollback <release> <phase-1-revision> --namespace <namespace> --wait`.
-   Use the recorded source revision with zero replicas of every role.
+   Use the recorded source revision with every role stopped.
 7. To retry the target, resume the timer.
    To return to the source release, first restore `applied-before-cutover.json` to `applied.json` if the completed target already has an applied record.
    Then promote the signed source release with rollback enabled and resume the timer.
 8. Complete the deferred startup and checks under pre-boot isolation.
-   Then restore the server count as phase 3 describes.
+   Then start the servers as phase 3 describes.
 
 A signed rollback request does not permit an automatic major release downgrade.
 A commit channel must descend from the recorded release source.
