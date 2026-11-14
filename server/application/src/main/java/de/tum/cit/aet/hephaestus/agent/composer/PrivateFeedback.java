@@ -1057,7 +1057,10 @@ final class PrivateFeedback {
                     notes = new LinkedHashMap<>();
                     for (String field : NOTE_FIELDS) {
                         String note = text(notesNode, field, issues, "notes." + field);
-                        if (note != null) notes.put(field, note);
+                        if (note == null) continue;
+                        notes.put(field, note);
+                        for (String problem : NoteWording.problems(note, practiceSlugs))
+                            issues.add("notes." + field + ": " + problem);
                     }
                 }
             }
