@@ -123,6 +123,8 @@ Eight more checks need a read before the window:
 These migration entries also apply to a host that upgrades to 1.0:
 
 - *Stop every role before changing role-notice delivery*: use the procedure in that entry.
+- *Stop every role to drain legacy reviews*: use the procedure in that entry.
+- *Stop every role to drain legacy reviews before removing gateway affinity*: use the procedure in that entry.
 - *Stop every role before replacing live Slack replies*: stop all replicas and keep a verified pre-upgrade backup. Existing replies with an unknown Slack outcome stay unconfirmed.
 - *Refresh the internal PostgreSQL certificate*: on one host, restart PostgreSQL after cert-manager issues the new certificate.
 - *Stop every role before correcting unknown issue comment counts*: the migration changes stored issue comment counts of zero to unknown.

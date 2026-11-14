@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 import {
 	checkPage,
 	type Guide,
+	headingAnchors,
 	migrationNoteProblems,
 	screenshotProblems,
 } from "./check-docs-pages.ts";
@@ -208,24 +209,113 @@ await describe("screenshotProblems", async () => {
 });
 
 const note = (heading: string) => ({ file: ".migration/a.md", source: `${heading}\n\nText.\n` });
+const noPages = () => undefined;
 
 await describe("migrationNoteProblems", async () => {
 	await test("accepts a note that an upgrade page names by its heading", () => {
 		assert.deepEqual(
-			migrationNoteProblems([note("#### 🔴 Stop every role")], "See *Stop every role*."),
+			migrationNoteProblems([note("#### 🔴 Stop every role")], "See *Stop every role*.", noPages),
 			[],
 		);
 	});
 
 	await test("asks to name a note that no upgrade page names", () => {
-		assert.deepEqual(migrationNoteProblems([note("#### Rename a setting")], "Nothing here."), [
-			'.migration/a.md:1: Name "Rename a setting" on an upgrade page in docs/admin/.',
-		]);
+		assert.deepEqual(
+			migrationNoteProblems([note("#### Rename a setting")], "Nothing here.", noPages),
+			['.migration/a.md:1: Name "Rename a setting" on an upgrade page in docs/admin/.'],
+		);
 	});
 
 	await test("asks for the heading that names the note", () => {
-		assert.deepEqual(migrationNoteProblems([note("No heading")], ""), [
+		assert.deepEqual(migrationNoteProblems([note("No heading")], "", noPages), [
 			'.migration/a.md:1: Start the migration note with a "#### " heading.',
 		]);
+	});
+});
+
+const anchors = (docsPage: string) =>
+	docsPage === "admin/upgrade"
+		? headingAnchors(
+				"## Stopped schema upgrades\n\n```md\n## Not a heading\n```\n## Drain {/*#drain-queues*/}\n",
+			)
+		: undefined;
+const linking = (link: string) => [
+	{ file: "n.md", source: `#### 🔴 Drain the queues\n\nSee [it](${link}).\n` },
+];
+
+await describe("migration note stops and links", async () => {
+	const named = "*Stop every role to drain* *Drain the queues*";
+	await test("a note that stops servers starts with the stop heading", () => {
+		assert.match(
+			migrationNoteProblems(
+				[{ file: "n.md", source: "#### 🔴 Drain the queues\n\nStop the old servers first.\n" }],
+				named,
+				anchors,
+			).join("\n"),
+			/start its heading with "#### 🔴 Stop every role"/u,
+		);
+		assert.deepEqual(
+			migrationNoteProblems(
+				[
+					{
+						file: "n.md",
+						source: "#### 🔴 Stop every role to drain\n\nStop the old servers first.\n",
+					},
+				],
+				named,
+				anchors,
+			),
+			[],
+		);
+	});
+	await test("rollback and recovery text, and other wording, do not count as a stop", () => {
+		for (const [source, stops] of [
+			["Stop every runtime role first.", true],
+			["Stop all application replicas, then migrate.", true],
+			["To roll back, stop every role and restore the backup.", false],
+			["Keep PostgreSQL running and stop nothing.", false],
+			["Do not stop the servers.", false],
+		] as const) {
+			const problems = migrationNoteProblems(
+				[{ file: "n.md", source: `#### 🔴 Drain the queues\n\n${source}\n` }],
+				named,
+				anchors,
+			);
+			assert.equal(problems.length > 0, stops, source);
+		}
+	});
+	await test("each docs link and anchor in a note resolves", () => {
+		assert.deepEqual(
+			migrationNoteProblems(
+				linking("https://docs.hephaestus.build/admin/upgrade#stopped-schema-upgrades"),
+				named,
+				anchors,
+			),
+			[],
+		);
+		assert.deepEqual(
+			migrationNoteProblems(
+				linking("https://docs.hephaestus.build/admin/upgrade#drain-queues"),
+				named,
+				anchors,
+			),
+			[],
+		);
+		assert.deepEqual(
+			migrationNoteProblems(
+				linking("https://docs.hephaestus.build/admin/upgrade#not-a-heading"),
+				named,
+				anchors,
+			),
+			["n.md:3: docs/admin/upgrade has no heading with the anchor #not-a-heading."],
+		);
+		assert.deepEqual(
+			migrationNoteProblems(
+				linking("https://docs.hephaestus.build/admin/kubernetes#x"),
+				named,
+				anchors,
+			),
+			["n.md:3: No docs page serves https://docs.hephaestus.build/admin/kubernetes#x."],
+		);
 	});
 });

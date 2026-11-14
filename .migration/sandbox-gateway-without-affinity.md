@@ -1,4 +1,4 @@
-#### 🔴 Drain legacy reviews before removing gateway affinity
+#### 🔴 Stop every role to drain legacy reviews before removing gateway affinity
 
 Follow [Drain legacy reviews before removing gateway affinity](https://docs.hephaestus.build/admin/upgrade#drain-legacy-reviews-before-removing-gateway-affinity). The drain now also covers `REVIEW` runs. One stopped window serves both this change and the durable composition claim.
 Do not start the target servers until no `REVIEW` or `REVIEW_COMPOSE` run has a live lease.

@@ -270,6 +270,7 @@ export function screenshotProblems(
 export function migrationNoteProblems(
 	notes: readonly { file: string; source: string }[],
 	upgradePages: string,
+	anchorsOf: (page: string) => ReadonlySet<string> | undefined,
 ): string[] {
 	const problems: string[] = [];
 	for (const { file, source } of notes) {
@@ -279,8 +280,74 @@ export function migrationNoteProblems(
 		} else if (!upgradePages.includes(title)) {
 			problems.push(`${file}:1: Name "${title}" on an upgrade page in docs/admin/.`);
 		}
+		// The upgrade test and the compatibility guard choose a stopped upgrade only from the heading.
+		if (title !== undefined && !title.startsWith("Stop every role") && stopsRoles(source)) {
+			problems.push(
+				`${file}:1: The note stops servers, so start its heading with "#### 🔴 Stop every role".`,
+			);
+		}
+		problems.push(...docsLinkProblems(file, source, anchorsOf));
 	}
 	return problems;
+}
+
+/** Wording that stops running servers before an upgrade, which only a stopped upgrade permits. */
+const STOPS_ROLES =
+	/\bstop (?:the |every |all |each )?(?:(?:old|runtime|application|running) )*(?:servers?|roles?|replicas)\b|\bdo not start (?:the )?target servers\b/iu;
+
+/** A rollback or recovery also stops servers, but it does not make the upgrade a stopped one. */
+const RECOVERY =
+	/^(?:[-*\d.\s]*)(?:to roll back|to recover|recovery|rollback)\b|\b(?:do|need) not stop\b/iu;
+
+const stopsRoles = (source: string): boolean =>
+	source
+		.split(/\n|(?<=[.!?])\s+/u)
+		.some((sentence) => !RECOVERY.test(sentence) && STOPS_ROLES.test(sentence));
+
+/**
+ * Each link to a docs page, and its anchor, must resolve. A note becomes released migration-guide text that never
+ * changes, so a broken link there stays broken.
+ */
+function docsLinkProblems(
+	file: string,
+	source: string,
+	anchorsOf: (page: string) => ReadonlySet<string> | undefined,
+): string[] {
+	return [...source.matchAll(/https:\/\/docs\.hephaestus\.build\/[^\s)>"'`\]]+/gu)].flatMap(
+		(match) => {
+			const link = match[0].replace(/[.,;:!?]+$/u, "");
+			const [page = "", anchor] = link.slice("https://docs.hephaestus.build/".length).split("#");
+			const line = source.slice(0, match.index).split("\n").length;
+			const anchors = anchorsOf(page.replace(/\/$/u, ""));
+			if (anchors === undefined) {
+				return [`${file}:${line}: No docs page serves ${link}.`];
+			}
+			return anchor === undefined || anchors.has(anchor)
+				? []
+				: [`${file}:${line}: docs/${page} has no heading with the anchor #${anchor}.`];
+		},
+	);
+}
+
+// The anchors of a page: an explicit MDX id comment, else the slug of the heading text.
+export function headingAnchors(source: string): Set<string> {
+	return new Set(
+		readPage(source).body.flatMap(({ text }) => {
+			const heading = /^#{1,6}\s+(?<heading>.+)$/u.exec(text)?.groups?.heading;
+			if (heading === undefined) {
+				return [];
+			}
+			const explicit = /\{\/\*#(?<id>[^*]+)\*\/\}/u.exec(heading)?.groups?.id;
+			return [
+				explicit ??
+					heading
+						.trim()
+						.toLowerCase()
+						.replaceAll(/[^\p{L}\p{N}\s_-]/gu, "")
+						.replaceAll(/\s/gu, "-"),
+			];
+		}),
+	);
 }
 
 async function pagesOf(directory: string): Promise<string[]> {
@@ -335,7 +402,21 @@ if (import.meta.main) {
 	const upgradeSources = await Promise.all(
 		upgradePages.map(async (file) => readFile(path.resolve(repositoryRoot, file), "utf8")),
 	);
-	problems.push(...migrationNoteProblems(notes, upgradeSources.join("\n")));
+	// A page is served under its path, or under the `id` in its front matter.
+	const served = new Map<string, string>();
+	for (const guide of GUIDES) {
+		for (const file of await pagesOf(`docs/${guide}`)) {
+			const source = await readFile(path.resolve(repositoryRoot, file), "utf8");
+			const route = file.slice("docs/".length).replace(/\.mdx?$/u, "");
+			const id = textField(readPage(source).frontMatter, "id");
+			served.set(id === undefined ? route : `${path.posix.dirname(route)}/${id}`, source);
+		}
+	}
+	const anchorsOf = (page: string) => {
+		const source = served.get(page);
+		return source === undefined ? undefined : headingAnchors(source);
+	};
+	problems.push(...migrationNoteProblems(notes, upgradeSources.join("\n"), anchorsOf));
 	if (problems.length > 0) {
 		process.stderr.write(
 			`${problems.join("\n")}\nThe rules: docs/contributor/documentation-guide.md.\n`,
