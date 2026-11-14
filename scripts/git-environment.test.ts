@@ -113,12 +113,22 @@ void test("a gate that runs git the wrong way cannot reach the repository being 
 		GIT_INDEX_FILE: path.join(decoy, ".git", "index"),
 		GIT_WORK_TREE: decoy,
 	});
-	execFileSync("sh", ["-e", path.join(checkout, ".vite-hooks", "pre-push")], {
-		cwd: temporaryDirectory("git-environment-worktree-"),
-		encoding: "utf8",
-		env: environment,
-		stdio: ["ignore", "pipe", "pipe"],
-	});
+	// Git passes the remote's name and URL; the hook runs its checks only for GitHub.
+	execFileSync(
+		"sh",
+		[
+			"-e",
+			path.join(checkout, ".vite-hooks", "pre-push"),
+			"origin",
+			"https://github.com/hephaestus-build/Hephaestus",
+		],
+		{
+			cwd: temporaryDirectory("git-environment-worktree-"),
+			encoding: "utf8",
+			env: environment,
+			stdio: ["ignore", "pipe", "pipe"],
+		},
+	);
 
 	assert.equal(readFileSync(marker, "utf8"), "ran");
 	assert.deepEqual(fingerprint(decoy), before);
