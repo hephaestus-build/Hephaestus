@@ -214,6 +214,69 @@ const initialSyncJob = (status: SyncJob["status"]): Wire<SyncJob> => ({
 	createdAt: "2026-10-01T00:00:00Z",
 });
 
+describe("a suspended workspace", () => {
+	function serveSuspended() {
+		const list = { status: "SUSPENDED" as WorkspaceListItem["status"] };
+		const resumed: unknown[] = [];
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/members/me", () =>
+				HttpResponse.json(ownMembership("OWNER")),
+			),
+			http.get("*/workspaces", () =>
+				HttpResponse.json([
+					workspaceListItem("acme", { displayName: "Acme", status: list.status }),
+				]),
+			),
+			http.get("*/workspaces/:workspaceSlug/connections/catalog", () => HttpResponse.json([])),
+			http.patch("*/workspaces/acme/status", async ({ request }) => {
+				resumed.push(await request.json());
+				list.status = "ACTIVE";
+				return HttpResponse.json(workspaceListItem("acme", { status: "ACTIVE" }));
+			}),
+		);
+		return resumed;
+	}
+
+	it("sends its admin from any page to its settings, which offer only resume and deletion", async () => {
+		serveSuspended();
+		const { router } = renderRouteAtWithRouter("/w/acme/practice-profile");
+		await screen.findByText("Acme is suspended", { exact: false }, ROUTE_RENDER_WAIT);
+		expect(router.state.location.pathname).toBe("/w/acme/admin/settings");
+		expect(screen.getByRole("button", { name: "Delete workspace" })).toBeTruthy();
+		expect(screen.queryByRole("heading", { name: "Capabilities" })).toBeNull();
+	});
+
+	it("shows the settings again once the admin resumes it", async () => {
+		const resumed = serveSuspended();
+		renderRouteAt("/w/acme/admin/settings");
+		await userEvent.click(
+			await screen.findByRole("button", { name: "Resume workspace" }, ROUTE_RENDER_WAIT),
+		);
+		await screen.findByRole("heading", { name: "Capabilities" }, ROUTE_RENDER_WAIT);
+		expect(resumed).toStrictEqual([{ status: "ACTIVE" }]);
+		expect(screen.queryByText("Acme is suspended", { exact: false })).toBeNull();
+	});
+
+	it("says why a resume failed and keeps the workspace suspended", async () => {
+		serveSuspended();
+		server.use(
+			http.patch("*/workspaces/acme/status", () =>
+				HttpResponse.json(
+					{ status: 409, title: "Conflict", detail: "This workspace is being deleted." },
+					{ status: 409 },
+				),
+			),
+		);
+		renderRouteAt("/w/acme/admin/settings");
+		await userEvent.click(
+			await screen.findByRole("button", { name: "Resume workspace" }, ROUTE_RENDER_WAIT),
+		);
+		const alert = await screen.findByRole("alert", undefined, ROUTE_RENDER_WAIT);
+		within(alert).getByText("This workspace is being deleted.");
+		screen.getByText("Acme is suspended", { exact: false });
+	});
+});
+
 describe("the setup summary", () => {
 	it("states each fact from the admin reads, and a fact that could not be read as Unknown", async () => {
 		serveSetupReads("acme");
@@ -1264,21 +1327,33 @@ describe("instance administrator workspace settings", () => {
 		expect(router.state.location.pathname).toBe("/w/tutors/admin/settings");
 	});
 
-	it.each([
-		{ status: "SUSPENDED", allowed: true },
-		{ status: "ACTIVE", allowed: false },
-	] satisfies { status: WorkspaceListItem["status"]; allowed: boolean }[])(
-		"does not claim public publication for $status with instance policy $allowed",
-		async ({ status, allowed }) => {
-			serveTarget(status);
-			server.use(
-				http.get("*/admin/settings/public-activity", () => HttpResponse.json({ allowed })),
-			);
-			renderRouteAt("/w/tutors/admin/settings");
-			await screen.findByText("On for this workspace.", undefined, ROUTE_RENDER_WAIT);
-			expect(screen.queryByText("On. Anyone can see it at", { exact: false })).toBeNull();
-		},
-	);
+	it("does not claim public publication when the instance does not allow it", async () => {
+		serveTarget();
+		server.use(
+			http.get("*/admin/settings/public-activity", () => HttpResponse.json({ allowed: false })),
+		);
+		renderRouteAt("/w/tutors/admin/settings");
+		await screen.findByText("On for this workspace.", undefined, ROUTE_RENDER_WAIT);
+		expect(screen.queryByText("On. Anyone can see it at", { exact: false })).toBeNull();
+	});
+
+	it("opens a suspended workspace's administration on its resume, from any address in it", async () => {
+		serveTarget("SUSPENDED");
+		const resumed: unknown[] = [];
+		server.use(
+			http.patch("*/workspaces/tutors/status", async ({ request }) => {
+				resumed.push(await request.json());
+				return HttpResponse.json({ status: "ACTIVE" });
+			}),
+		);
+		const { router } = renderRouteAtWithRouter("/w/tutors/admin/members");
+		await screen.findByText("Tutors is suspended", { exact: false }, ROUTE_RENDER_WAIT);
+		expect(router.state.location.pathname).toBe("/w/tutors/admin/settings");
+		await userEvent.click(screen.getByRole("button", { name: "Resume workspace" }));
+		await waitFor(() => {
+			expect(resumed).toStrictEqual([{ status: "ACTIVE" }]);
+		});
+	});
 
 	it("withdraws refused instance publication policy instead of showing cached public status", async () => {
 		serveTarget();

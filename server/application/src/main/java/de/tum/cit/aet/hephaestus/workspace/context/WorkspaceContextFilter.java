@@ -148,7 +148,10 @@ public class WorkspaceContextFilter implements Filter {
 
             boolean isReadRequest = "GET".equalsIgnoreCase(method) || "HEAD".equalsIgnoreCase(method);
             boolean allowLifecycleDelete = isBasePath && "DELETE".equalsIgnoreCase(method);
-            boolean allowNonActive = isStatusPath || (isBasePath && isReadRequest) || allowLifecycleDelete;
+            // The web app reads the caller's own role to open the administration of a suspended workspace.
+            boolean isOwnMembershipRead = isReadRequest && "/members/me".equals(remainingPath);
+            boolean allowNonActive =
+                    isStatusPath || (isBasePath && isReadRequest) || allowLifecycleDelete || isOwnMembershipRead;
 
             if (workspace.getStatus() != WorkspaceStatus.ACTIVE && !allowNonActive) {
                 log.debug(

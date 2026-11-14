@@ -1312,6 +1312,63 @@ class WorkspaceControllerIntegrationTest extends AbstractWorkspaceIntegrationTes
     }
 
     @Test
+    @WithMentorUser
+    void shouldListASuspendedWorkspaceOnlyForTheAdminsAndOwnersWhoCanResumeIt() {
+        User mentor = persistUser("mentor");
+        User owner = persistUser("listing-owner");
+        Workspace joined = createWorkspace("listing-member", "Listing member", "listing-m", AccountType.ORG, owner);
+        ensureMembership(joined, mentor, Membership.WorkspaceRole.MEMBER);
+        Workspace administered = createWorkspace("listing-admin", "Listing admin", "listing-a", AccountType.ORG, owner);
+        ensureMembership(administered, mentor, Membership.WorkspaceRole.ADMIN);
+        Workspace owned = createWorkspace("listing-owned", "Listing owned", "listing-o", AccountType.ORG, owner);
+        ensureMembership(owned, mentor, Membership.WorkspaceRole.OWNER);
+        Workspace active = createWorkspace("listing-active", "Listing active", "listing-x", AccountType.ORG, owner);
+        ensureMembership(active, mentor, Membership.WorkspaceRole.MEMBER);
+        for (Workspace workspace : List.of(joined, administered, owned)) {
+            workspaceLifecycleService.suspendWorkspace(workspace.getWorkspaceSlug());
+        }
+
+        List<WorkspaceListItemDTO> listed = webTestClient
+                .get()
+                .uri("/workspaces")
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBodyList(WorkspaceListItemDTO.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(listed)
+                .extracting(WorkspaceListItemDTO::workspaceSlug, WorkspaceListItemDTO::status)
+                .contains(
+                        tuple("listing-admin", Workspace.WorkspaceStatus.SUSPENDED),
+                        tuple("listing-owned", Workspace.WorkspaceStatus.SUSPENDED),
+                        tuple("listing-active", Workspace.WorkspaceStatus.ACTIVE));
+        assertThat(listed).extracting(WorkspaceListItemDTO::workspaceSlug).doesNotContain("listing-member");
+
+        // The admin can open the administration: their own role answers, the workspace's data does not.
+        webTestClient
+                .get()
+                .uri("/workspaces/{workspaceSlug}/members/me", administered.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.role")
+                .isEqualTo("ADMIN");
+        webTestClient
+                .get()
+                .uri("/workspaces/{workspaceSlug}/members", administered.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody(Void.class);
+    }
+
+    @Test
     @WithAdminUser
     void suspendedWorkspaceCanBePurgedViaDeleteEndpoint() {
         User owner = persistUser("purge-suspended-owner");

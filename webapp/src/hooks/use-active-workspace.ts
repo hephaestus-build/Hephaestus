@@ -6,6 +6,14 @@ import type { WorkspaceListItem } from "@/api/types.gen";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
 import { useAuth } from "@/runtime/auth/AuthContext";
 
+/**
+ * The workspace to open when no address names one: the first active one. A suspended workspace, which
+ * only its admins find, opens only when it is the reader's only workspace.
+ */
+export function defaultWorkspace(workspaces: readonly WorkspaceListItem[]) {
+	return workspaces.find((workspace) => workspace.status === "ACTIVE") ?? workspaces[0];
+}
+
 /** Shared so an unloaded query keeps the same `workspaces` identity across renders. */
 const NO_WORKSPACES: WorkspaceListItem[] = [];
 
@@ -36,7 +44,7 @@ export function useActiveWorkspaceSlug() {
 		? undefined
 		: (workspaceSlug ??
 			(chromeContext === undefined
-				? workspaces[0]?.workspaceSlug
+				? defaultWorkspace(workspaces)?.workspaceSlug
 				: contextWorkspace?.workspaceSlug));
 	const chromeWorkspace = workspaces.find(
 		(workspace) => workspace.workspaceSlug === chromeWorkspaceSlug,

@@ -107,9 +107,11 @@ export class WorkspaceDirectory {
 
 	static async #load(api: ContextApi): Promise<WorkspaceSite[]> {
 		const workspaces = await api.workspaces();
+		// The list also names a suspended workspace to its admins; it answers no lookup.
 		const scm = workspaces.filter(
 			(workspace): workspace is WorkspaceListItem & { providerType: "GITHUB" | "GITLAB" } =>
-				workspace.providerType === "GITHUB" || workspace.providerType === "GITLAB",
+				workspace.status === "ACTIVE" &&
+				(workspace.providerType === "GITHUB" || workspace.providerType === "GITLAB"),
 		);
 		const details = await Promise.all(
 			scm.map(async (workspace) => api.workspace(workspace.workspaceSlug)),

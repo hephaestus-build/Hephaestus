@@ -247,6 +247,22 @@ A successful check clears the error and resumes sync.
 
 If the workspace does not need the repository, remove it as [Repositories](#repositories) describes.
 
+## Resume a suspended workspace
+
+A suspended workspace syncs nothing, runs no practice reviews, and sends no feedback.
+Its members cannot open it, and its data stays.
+A workspace is suspended when GitHub suspends the Hephaestus app installation, or when an admin suspends it through the API.
+
+Only its admins and owners still see it in the workspace switcher.
+Any page of it opens its **Workspace settings**, which say that it is suspended.
+
+1. Open the workspace.
+2. Select **Resume workspace**.
+
+If GitHub suspended the app, unsuspend the installation in the GitHub settings of the organization or account instead.
+The workspace then resumes by itself.
+A resume in Hephaestus does not last while GitHub keeps the installation suspended.
+
 ## More admin tasks
 
 - [Connect Slack or Outline](/admin/integrations#slack) to a workspace.
