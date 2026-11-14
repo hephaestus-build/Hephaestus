@@ -102,7 +102,7 @@ export interface CatalogPractice {
  * only rules out a change that cannot hold the subject, and a scan section covers only a scan, so neither replaces it.
  * The gate checks that the section is there; whether its words are right is a question for labelled cases.
  */
-export function occasionStatement(practice: CatalogPractice): string {
+function occasionStatement(practice: CatalogPractice): string {
 	const section = /^## Applicability\n(?<body>[\s\S]*?)(?=^## |(?![\s\S]))/mu.exec(
 		practice.criteria,
 	)?.groups?.body;

@@ -100,7 +100,7 @@ void test("invalid fixtures fail G2 and leave the checks that need them unchecke
 	assert.match(problems(checks, "G3")[0] ?? "", /Not checked/u);
 });
 
-void test("a practice without an Applicability section fails G5, whatever its gate or scan section says", () => {
+void test("a practice without an Applicability section fails G5, even with a scan section", () => {
 	const silent = {
 		slug: "new-practice",
 		automated: true,
