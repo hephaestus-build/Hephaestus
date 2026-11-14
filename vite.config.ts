@@ -525,7 +525,9 @@ export default defineConfig({
 
 			// Local development
 			dev: run("mprocs"),
-			// `dev-env.ts` gives the checkout its Compose project and its database password before Compose reads `server/.env`.
+			// `dev-env.ts` is the one writer of `server/.env`: it creates the file and adds its generated values before
+			// Compose or Spring Boot read it.
+			"dev:env": run("node scripts/dev-env.ts"),
 			"dev:compose": run("node ../scripts/dev-env.ts && docker compose up -d --wait", {
 				cwd: "server",
 			}),
