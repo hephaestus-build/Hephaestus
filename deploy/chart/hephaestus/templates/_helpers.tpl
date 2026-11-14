@@ -897,7 +897,7 @@ are unchanged. Steady includes one backup; upgrade includes migration/stanza Job
 {{/*
 The same inbox and review caps that the server reads size its pool. Review preparation can hold its
 capture lease, preparation ClusterLock and publication transaction together. A composition can also
-hold three connections while it records withholding. Long loads retain at most two such pairs (TurnContextLoads),
+hold three connections while it records withholding. Long loads retain at most two capture/transaction pairs (TurnContextLoads),
 and LlmCallPermits has two maintenance threads. Model streaming itself holds no pooled connection.
 Boot has one pooled connection of its own. The reserve is eight connections for four syncs with two holders each and four for HTTP/control work.
 Hikari queues excess callers, then throws SQLException at connection-timeout (45000 ms in application.yml).

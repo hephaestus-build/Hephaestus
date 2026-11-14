@@ -52,6 +52,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.MDC;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.TransactionStatus;
@@ -73,8 +74,9 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
         return locks;
     }
 
-    @Test
-    void shouldRemoveTheGatewayArchiveBeforeReleasingTheAttemptsInputFolder() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldRetryBusyPreparationBeforeRemovingTheArchiveAndInputs(boolean lockTimeout) throws Exception {
         var mapper = JsonMapper.builder().build();
         var runs = mock(AgentRuns.class);
         when(runs.isCurrent(any(), eq(1))).thenReturn(true);
@@ -149,8 +151,10 @@ class ReviewSandboxRunsTest extends BaseUnitTest {
                 UUID.randomUUID(), 7, "review:" + UUID.randomUUID(), AgentSandboxKind.REVIEW);
         var run = new SandboxRun(sandbox, fence, AgentRunKind.REVIEW, 0);
 
-        when(preparation.prepare(eq(jobId), eq(job), eq(fence), any(), any()))
-                .thenThrow(new AttemptFolderBusyException("Another local request holds the folder"));
+        RuntimeException contention = lockTimeout
+                ? new CannotAcquireLockException("canceling statement due to lock timeout")
+                : new AttemptFolderBusyException("Another local request holds the folder");
+        when(preparation.prepare(eq(jobId), eq(job), eq(fence), any(), any())).thenThrow(contention);
         assertThatThrownBy(() -> runtime.context(run)).isInstanceOfSatisfying(ErrorResponseException.class, busy -> {
             assertThat(busy.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
             assertThat(busy.getHeaders().getFirst("Retry-After")).isEqualTo("1");

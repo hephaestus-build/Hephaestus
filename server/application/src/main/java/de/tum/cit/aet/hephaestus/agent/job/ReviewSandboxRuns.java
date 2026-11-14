@@ -286,7 +286,9 @@ public class ReviewSandboxRuns implements SandboxRunKind {
                                             run, job(run).orElseThrow(() -> new StaleRunException(run.fence())), key))
                             .orElseThrow(() ->
                                     new AttemptFolderBusyException("Another server is preparing this review attempt")));
-        } catch (AttemptFolderBusyException | ClusterLock.UnavailableException unavailable) {
+        } catch (AttemptFolderBusyException
+                | ClusterLock.UnavailableException
+                | PessimisticLockingFailureException unavailable) {
             throw preparationUnavailable(unavailable);
         }
     }
@@ -303,7 +305,7 @@ public class ReviewSandboxRuns implements SandboxRunKind {
                     prepared = preparation.prepare(job.getId(), job, run.fence(), snapshot, stage);
                 } catch (ReviewAttemptPreparation.FreshEpochRequired incomplete) {
                     throw restart(run, job, attempt, incomplete);
-                } catch (AttemptFolderBusyException busy) {
+                } catch (AttemptFolderBusyException | PessimisticLockingFailureException busy) {
                     throw busy;
                 } catch (ResultAdmissionService.StaleAttemptException lost) {
                     throw new StaleRunException(run.fence(), lost);
